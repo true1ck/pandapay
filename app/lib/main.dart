@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import 'features/home/home_screen.dart';
+
 void main() {
-  runApp(const PandaPayApp());
+  runApp(const ProviderScope(child: PandaPayApp()));
 }
 
 class PandaPayApp extends StatelessWidget {
@@ -18,9 +21,9 @@ class PandaPayApp extends StatelessWidget {
   }
 }
 
-/// UA-0.4.2 bottom nav stub: Home · Cards · raised SCAN FAB · Activity · More.
-/// Screens are placeholders until UA-1..UA-4 land; this just proves the shell
-/// and the shared pandapay_domain dependency wire up correctly end to end.
+/// UA-0.4.2 bottom nav: Home · Cards · raised SCAN FAB · Activity · More.
+/// Home (chunk 5) is wired to the real engine + api/ fetch; the other three
+/// tabs are still placeholders — not built yet, not faked as built.
 class _AppShell extends StatefulWidget {
   const _AppShell();
   @override
@@ -30,22 +33,25 @@ class _AppShell extends StatefulWidget {
 class _AppShellState extends State<_AppShell> {
   int _tab = 0;
 
-  static const _tabs = ['Home', 'Cards', 'Activity', 'More'];
+  static const _tabLabels = ['Home', 'Cards', 'Activity', 'More'];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('PandaPay — ${_tabs[_tab]}')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(_tabs[_tab], style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            MoneyText(Money.fromRupees(1234567), confidence: Confidence.estimated),
-          ],
-        ),
-      ),
+      appBar: AppBar(title: Text('PandaPay — ${_tabLabels[_tab]}')),
+      body: switch (_tab) {
+        0 => const HomeScreen(),
+        _ => Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(_tabLabels[_tab], style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 8),
+                MoneyText(Money.fromRupees(1234567), confidence: Confidence.estimated),
+              ],
+            ),
+          ),
+      },
       floatingActionButton: FloatingActionButton.large(
         onPressed: () {},
         tooltip: 'Scan QR',

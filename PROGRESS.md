@@ -287,6 +287,46 @@ Extended `packages/pandapay_domain`'s engine with the rest of UA-2.2/UA-2.4:
   for; performance test (rank 15 cards <16ms, UA-2.5.3); regression harness for
   user-reported wrong recommendations (UA-2.5.4, not applicable yet — no users).
 
+### Chunk 5 — app/ Home wired to the real engine + live API (not fixtures)
+- `packages/pandapay_domain`: new `card_rules_json.dart` — `fromJson` for every card-rules
+  type, matching `v_card_catalogue_export`'s exact shape. Handles the real quirk that `pg`
+  returns top-level `numeric` columns as JSON strings (`"499.00"`) but numerics nested
+  inside `jsonb_agg`'d blobs as native JSON numbers — found by testing against a **captured
+  live API response** (`test/fixtures_catalogue_response.json`, real output from
+  `GET /catalogue` against the seeded DB), not hand-written JSON. 6 new tests, 45/45 total.
+- `api/`: added `GET /categories` (public read of `spend_categories`) — needed once the
+  slug→UUID bug below was found.
+- `app/`: `data/catalogue_repository.dart` (`HttpCatalogueRepository`,
+  `HttpCategoryRepository`), `app/providers.dart` (riverpod: fetch catalogue + categories,
+  resolve the selected category chip's slug to the UUID `reward_rules.category_id` actually
+  needs, run `RecommendationEngine.rank()`), `features/home/home_screen.dart` (category
+  chips + ranked list with reason lines, loading/error states via `AsyncValue.when`). Home
+  tab in `main.dart` now renders this instead of the static shell; widget tests updated to
+  override both repositories with fakes (no real network call in the test suite).
+- **Two real bugs found by testing against the live stack, not by unit tests alone:**
+  1. The category chip's *slug* (`'online'`) was being passed straight through as
+     `RecommendationContext.categoryId`, but `reward_rules.category_id` is a UUID FK —
+     every card came back excluded when checked against real seeded data
+     (`app/tool/verify_live_catalogue.dart`, a manual script hitting the real
+     `HttpCatalogueRepository` against a running `api/`). Fixed by adding the
+     `/categories` endpoint and resolving slug→id before building the context.
+  2. **Not fixed, documented instead**: `CapRule.capValue`/`capRemaining` are always
+     treated as spend-amount headroom in the engine's blending logic, regardless of the
+     cap's actual `measure` (`spend_amount` vs `reward_value` vs `txn_count` — see
+     `database.sql`'s `cap_measure` enum). HDFC Millennia's seeded cap is
+     `measure = 'reward_value'` (cap ₹1,000 of *cashback earned*, not ₹1,000 of spend) —
+     the engine currently blends it as if it were a spend cap. The live-verification output
+     looks plausible but is not semantically correct for that measure. Flagged inline in
+     `engine.dart` and here rather than left silently wrong.
+- `flutter analyze`: clean on both `app/` and `packages/pandapay_domain`. `flutter test`:
+  3/3 passing on `app/` (fakes only). Separately ran `dart run
+  tool/verify_live_catalogue.dart` against a genuinely running `api/` + seeded `pandapay`
+  DB to confirm the real fetch → parse → rank chain works end to end.
+- **Not done**: no drift/local-cache (still a live network fetch every time, no offline
+  path — UA-0.3/UA-1.2 territory); no user_cards wiring (ranks the *whole* catalogue, not
+  a signed-in user's actual cards); no amount entry (fixed ₹1,000 demo amount); cap-measure
+  gap above; the other 3 bottom-nav tabs are still placeholders.
+
 ## What's NOT done (next steps, roughly in priority order)
 
 1. **Restart local Postgres** before resuming DB work (see note above) — both the `pandapay` and

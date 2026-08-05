@@ -145,6 +145,16 @@ class RecommendationEngine {
         rule.unit.effectiveRatePerRupee(rule.rate, pointValueInr: card.pointValueInr);
 
     // UA-2.2.3 cap blending: split spend across pre-cap and post-cap rates
+    // KNOWN GAP: capRemaining/capValue are always treated as spend-amount
+    // headroom here, regardless of CapRule's actual `measure` (spend_amount
+    // vs reward_value vs txn_count — see database.sql cap_measure enum).
+    // A reward_value cap (e.g. "capped at ₹1,000 of cashback", not "capped
+    // at ₹1,000 of spend") is currently blended as if it were a spend cap,
+    // which is wrong for that measure — caught via
+    // app/tool/verify_live_catalogue.dart against the real seeded
+    // HDFC Millennia card (db/seed/0001_demo_cards.sql), not by a unit test.
+    // Needs measure-aware headroom tracking before this is trustworthy for
+    // reward_value-measured caps.
     // when cap_remaining < amount.
     final capRule = card.capRules.where((c) => c.rewardRuleId == rule.id).firstOrNull;
     Money value;

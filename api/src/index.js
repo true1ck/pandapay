@@ -71,5 +71,24 @@ app.get('/catalogue', async (req, res) => {
   }
 });
 
+/**
+ * GET /categories — spend_categories, slug -> id. The engine's
+ * RecommendationContext.categoryId is the UUID FK reward_rules.category_id
+ * actually uses, but every client-facing surface (chips, seed data docs)
+ * refers to categories by slug — this is the lookup that bridges the two.
+ * Public read, same policy shape as /catalogue.
+ */
+app.get('/categories', async (req, res) => {
+  try {
+    const result = await withUserClient(null, (client) =>
+      client.query('SELECT id, slug, name FROM spend_categories ORDER BY sort_order')
+    );
+    res.json({ categories: result.rows });
+  } catch (err) {
+    console.error('GET /categories error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));
