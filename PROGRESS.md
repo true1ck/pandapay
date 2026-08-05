@@ -1016,29 +1016,52 @@ rather than changing the engine.
 **All five suites now: 83 (`pandapay_domain`) + 9 (`app`) + 8 (`console`) + 19 (`scraper`,
 Python) + 12 (`api`) = 131 tests total.**
 
+### Chunk 22 — UA-1.1: 16 more real cards (user-approved expansion)
+
+Per explicit user go-ahead (recommended option: "add ~15-20 more well-known cards"),
+`db/seed/0002_more_demo_cards.sql` adds 16 more real Indian credit cards across 8 new issuers
+(Kotak, Yes Bank, IDFC FIRST, IndusInd, AU Small Finance, Standard Chartered, RBL, Amex) plus
+more from the original 4 issuers — same honesty contract as `0001_demo_cards.sql`: real
+issuers/product names/network/reward shapes, approximate publicly-known rates, every row
+`status = 'draft'` (UA-1.1.4 human verification explicitly not done, not claimed). Deliberately
+varied the *shapes* exercised, not just the names: a flat-rate no-reward-rule card
+(`yes-paisasave`), an uncapped category-rate card (`idfc-first-select`), a `flat_points` base
+unit with no category rules at all (`amex-membership-rewards`), a `txn_count`-measure cap
+outside the one card that already had one (`rbl-world-safari`), and a fuel-surcharge-waiver
+card outside the domain package's own fixtures (`indusind-tiger`).
+
+**Verified live, not just "the SQL ran without error"**: applied against the real local
+Postgres (20 cards total, up from 4), re-ran the same file to confirm the upsert-by-slug
+pattern is still idempotent (no duplicates, count unchanged). Confirmed via `/admin/cards`
+that all 16 land as `status: 'draft'` — not silently published. Then temporarily flipped all
+16 to `published` + `verified_at` (a scoped, reverted-immediately test operation, not a real
+verification claim) and ran `app/tool/verify_live_catalogue.dart` — the same tool used in
+Chunk 5 — against the real `/catalogue` endpoint: all 20 cards fetched and parsed through
+`CardProductJson.fromJson` without throwing, and `RecommendationEngine.rank()` ranked all 20
+sensibly (base-rate cards at the top for an online spend, `flat_points`/no-matching-rule cards
+correctly excluded, not silently zero-valued). Reverted every one of the 16 back to `draft`/
+`verified_at = null` immediately after — confirmed via a fresh `select status, count(*) ...
+group by status` (4 published, 16 draft) before moving on. `dart test` in `pandapay_domain`:
+still 83/83 passing (this chunk touched only seed data, not `packages/`).
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-21 (see sections above) are complete and verified. Every item that didn't require an
-external legal/product/cost decision is now done. Remaining, in priority order:
+Chunks 1-22 (see sections above) are complete and verified. Remaining, in priority order —
+items 1-2 are explicitly on hold per user decision (2026-08-05: stay on test fixtures for AD-3,
+no real LLM key available for AD-4.3); item 3 is next up, user has approved doing it "one by
+one, non-stop":
 
-1. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
-   per source (a product/legal decision, not something to fabricate) — today there's one
-   `sources` row (Chunk 8, still correctly disabled) and the whole pipeline (scrape → diff →
-   alert → heuristic proposal → console review → decide) has only ever been proven against safe
-   test fetches (`example.com`, a local test server under my own control), never real targets.
-2. **A real AD-4.3 (LLM-backed extraction)**, if/when there's a key and a cost decision — would
-   let alerts carry field-level `field_path`s instead of the current page-level ones, and would
-   let `extraction_proposals` actually understand prose instead of pattern-matching numbers next
-   to `%`/`Rs.` tokens.
-3. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
-   import tool (UA-1.1.2). Deliberately not expanded unprompted — the existing 4 are already
-   labeled "approximate, not verified against current bank T&C" (`db/seed/0001_demo_cards.sql`),
-   and asserting real reward rates/fees/caps for ~40 more real bank products at that scale is a
-   content-accuracy decision, not a mechanical one.
-4. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
-   data quality dashboard, anonymization audit automation — none started. Each is a substantial
-   new surface (new tables already exist in schema for some of these, e.g. `merchants`/
-   `acceptance_summary`/`effective_rate_summary` from 0011, but no API routes or UI).
+1. **AD-3's real pilot set** — user explicitly chose to stay on test fixtures for now (no real
+   bank/news source added). Still one `sources` row (Chunk 8, correctly disabled); pipeline
+   still only proven against `example.com`/a local test server.
+2. **A real AD-4.3 (LLM-backed extraction)** — still blocked on an `ANTHROPIC_API_KEY` and a
+   cost decision; no change.
+3. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
+   data quality dashboard, anonymization audit automation — none started yet. User has approved
+   doing all four, one by one. Backing tables already exist in schema (`merchants`/
+   `merchant_contributions`/`acceptance_reports`/`acceptance_summary`/`effective_rate_samples`/
+   `effective_rate_summary`/`anonymization_audit_runs` from migration 0011), but no API routes
+   or UI for any of them yet.
 
 ## Sandbox limitations
 
