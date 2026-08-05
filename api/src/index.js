@@ -218,10 +218,14 @@ app.get('/admin/card-requests', requireAdmin, async (req, res) => {
                 count(*) AS distinct_reporters,
                 bool_or(state = 'pending') AS has_pending,
                 min(created_at) AS first_requested_at,
-                max(created_at) AS last_requested_at
+                max(created_at) AS last_requested_at,
+                extract(day FROM now() - min(created_at) FILTER (WHERE state = 'pending'))
+                  AS oldest_pending_age_days,
+                bool_or(state = 'pending' AND created_at < now() - interval '14 days')
+                  AS is_stale
            FROM card_requests
           GROUP BY issuer_name, product_name, network_guess
-          ORDER BY sum(request_count) DESC, max(created_at) DESC`
+          ORDER BY is_stale DESC, sum(request_count) DESC, max(created_at) DESC`
       )
     );
     res.json({ requestGroups: result.rows });
@@ -295,10 +299,12 @@ app.get('/admin/error-reports', requireAdmin, async (req, res) => {
       client.query(
         `SELECT er.id, er.card_product_id, cp.name AS card_name, er.field_path,
                 er.shown_value, er.claimed_value, er.source_url, er.attachment_path,
-                er.state, er.created_at
+                er.state, er.created_at,
+                extract(day FROM now() - er.created_at) AS age_days,
+                (er.state = 'pending' AND er.created_at < now() - interval '7 days') AS is_stale
            FROM data_error_reports er
            JOIN card_products cp ON cp.id = er.card_product_id
-          ORDER BY er.state = 'pending' DESC, er.created_at DESC`
+          ORDER BY is_stale DESC, er.state = 'pending' DESC, er.created_at DESC`
       )
     );
     res.json({ errorReports: result.rows });

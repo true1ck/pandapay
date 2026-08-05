@@ -76,6 +76,7 @@ class _CardRequestGroupTileState extends ConsumerState<_CardRequestGroupTile> {
   @override
   Widget build(BuildContext context) {
     final g = widget.group;
+    final isStale = g['is_stale'] == true;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -83,8 +84,23 @@ class _CardRequestGroupTileState extends ConsumerState<_CardRequestGroupTile> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${g['issuer_name']} — ${g['product_name']}',
-                style: Theme.of(context).textTheme.titleMedium),
+            Row(
+              children: [
+                Flexible(
+                  child: Text('${g['issuer_name']} — ${g['product_name']}',
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium),
+                ),
+                if (isStale) ...[
+                  const SizedBox(width: 8),
+                  Chip(
+                    label: Text('Stale · ${g['oldest_pending_age_days']}d'),
+                    backgroundColor: Colors.orange.shade100,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ],
+            ),
             Text('${g['total_requests']} requests · ${g['distinct_reporters']} reporters'
                 '${g['network_guess'] != null ? ' · ${g['network_guess']}' : ''}'),
             const SizedBox(height: 8),

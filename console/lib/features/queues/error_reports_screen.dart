@@ -63,6 +63,7 @@ class _ErrorReportTileState extends ConsumerState<_ErrorReportTile> {
   Widget build(BuildContext context) {
     final r = widget.report;
     final isPending = r['state'] == 'pending';
+    final isStale = r['is_stale'] == true;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -70,8 +71,23 @@ class _ErrorReportTileState extends ConsumerState<_ErrorReportTile> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${r['card_name']} — ${r['field_path']}',
-                style: Theme.of(context).textTheme.titleMedium),
+            Row(
+              children: [
+                Flexible(
+                  child: Text('${r['card_name']} — ${r['field_path']}',
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium),
+                ),
+                if (isStale) ...[
+                  const SizedBox(width: 8),
+                  Chip(
+                    label: Text('Stale · ${r['age_days']}d'),
+                    backgroundColor: Colors.orange.shade100,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ],
+            ),
             Text('state: ${r['state']}'),
             const SizedBox(height: 8),
             Row(

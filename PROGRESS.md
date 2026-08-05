@@ -1239,8 +1239,31 @@ decision (2026-08-05):
 
 Both of these need a decision from the user (legal/ToS review for real scrape targets; an API
 key + cost sign-off for LLM extraction) before more code can responsibly be written against
-them — there is no further mechanical work left on the backlog that doesn't first require one
-of those two calls.
+them.
+
+There was, however, real mechanical work left that didn't require either of those decisions —
+picked back up starting with Chunk 27 below.
+
+### Chunk 27 — AD-2: stale-queue flagging for card requests and error reports
+
+Both AD-2 queues (Chunk 8) showed every open item with equal visual weight regardless of age,
+so an old, unresolved request could sit unnoticed behind newer ones. Added age-awareness
+without inventing a notification channel that doesn't exist (same honesty rule as AD-8.4/AD-9.4):
+
+`api/`: `GET /admin/card-requests` now returns `oldest_pending_age_days` and `is_stale`
+(`true` when the oldest pending request in the group is >14 days old) per group, and orders
+stale groups first. `GET /admin/error-reports` now returns `age_days` and `is_stale`
+(pending + >7 days old) per report, same stale-first ordering. Thresholds are plain SQL
+`interval` literals, not configurable yet — no settings UI exists to change them.
+
+`console/`: both `card_requests_screen.dart` and `error_reports_screen.dart` show an orange
+"Stale · Nd" `Chip` next to the title when `is_stale` is true.
+
+**Verified**: ran both new SQL fragments directly against the live local Postgres (`psql`) to
+confirm they execute and return sane values before trusting the API route; `flutter analyze`
+clean; all 13 console widget tests still pass unchanged (no test exercises stale data yet,
+since none of the seeded rows are actually old enough to trip the threshold — this is UI/query
+plumbing verified structurally, not a new stale-item test case).
 
 ## Sandbox limitations
 
