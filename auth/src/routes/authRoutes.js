@@ -1397,7 +1397,7 @@ router.post(
 
       // Check if user already exists
       const existingUser = await db.query(
-        `SELECT id, phone_number, name, role, NULL::user_type_enum as user_type, 
+        `SELECT id, phone_number, name, role, NULL::text as user_type, 
                 COALESCE(token_version, 1) as token_version
          FROM users
          WHERE (phone_number = $1 OR phone_number = $2)
@@ -1406,7 +1406,7 @@ router.post(
       ).catch(async (err) => {
         if (err.code === '42703' && err.message.includes('token_version')) {
           return await db.query(
-            `SELECT id, phone_number, name, role, NULL::user_type_enum as user_type, 1 as token_version
+            `SELECT id, phone_number, name, role, NULL::text as user_type, 1 as token_version
              FROM users
              WHERE (phone_number = $1 OR phone_number = $2)
                AND deleted = FALSE`,
@@ -1430,7 +1430,7 @@ router.post(
             `UPDATE users 
              SET name = $1, country_code = $2, language = $4, timezone = $5
              WHERE id = $3
-             RETURNING id, phone_number, name, role, NULL::user_type_enum as user_type, 
+             RETURNING id, phone_number, name, role, NULL::text as user_type, 
                        COALESCE(token_version, 1) as token_version, country_code, created_at`,
             [
               name,
@@ -1445,7 +1445,7 @@ router.post(
                 `UPDATE users 
                  SET name = $1, country_code = $2, language = $4, timezone = $5
                  WHERE id = $3
-                 RETURNING id, phone_number, name, role, NULL::user_type_enum as user_type, 
+                 RETURNING id, phone_number, name, role, NULL::text as user_type, 
                            1 as token_version, country_code, created_at`,
                 [
                   name,
@@ -1590,7 +1590,7 @@ router.post(
       const newUser = await db.query(
         `INSERT INTO users (phone_number, name, country_code, language, timezone)
          VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, phone_number, name, role, NULL::user_type_enum as user_type, 
+         RETURNING id, phone_number, name, role, NULL::text as user_type, 
                    COALESCE(token_version, 1) as token_version, country_code, created_at`,
         [
           encryptedPhone,
@@ -1604,7 +1604,7 @@ router.post(
           const result = await db.query(
             `INSERT INTO users (phone_number, name, country_code, language, timezone)
              VALUES ($1, $2, $3, $4, $5)
-             RETURNING id, phone_number, name, role, NULL::user_type_enum as user_type, 
+             RETURNING id, phone_number, name, role, NULL::text as user_type, 
                        1 as token_version, country_code, created_at`,
             [
               encryptedPhone,

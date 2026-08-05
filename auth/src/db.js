@@ -49,9 +49,12 @@ async function initializeDb() {
       console.log('ℹ️  Using DATABASE_URL from environment (USE_AWS_SSM not enabled)');
     }
 
+    // Local Postgres (docker-compose / dev machine) has no TLS listener at all;
+    // only require SSL when talking to a managed instance (AWS SSM path).
+    const useSsl = process.env.USE_AWS_SSM === 'true' || process.env.USE_AWS_SSM === '1';
     pool = new Pool({
       connectionString,
-      ssl: { rejectUnauthorized: false }
+      ssl: useSsl ? { rejectUnauthorized: false } : false
     });
 
     pool.on('error', (err) => {
@@ -108,7 +111,7 @@ if (process.env.USE_AWS_SSM === 'true' || process.env.USE_AWS_SSM === '1') {
 
   pool = new Pool({
     connectionString: config.databaseUrl,
-    ssl: { rejectUnauthorized: false }
+    ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false }
   });
 
   pool.on('error', (err) => {

@@ -114,6 +114,26 @@ pandapay-docs/
   (`custom_lint`, `riverpod_lint`) but the plugin rules themselves are **not implemented
   yet**. Enforce by review until then.
 
+### `packages/pandapay_domain` — card rules + recommendation engine (UA-2, "the product")
+- `card_rules.dart`: `RewardUnit` (with `effectiveRatePerRupee` normalizing cashback/points-per-100/150/200/miles
+  to a comparable fraction), `RewardRule`, `CapRule`, `MilestoneRule`, `ForexRule`, `FuelSurchargeRule`, `CardProduct`
+  — a direct mirror of `database.sql` §0003.
+- `engine.dart`: `RecommendationEngine.rank()` — pure Dart, zero IO, per UA-2.1's contract
+  (`RecommendationContext` in, `CardSnapshot` list in, `Recommendation` list out, engine never queries).
+  Implements: RuPay/UPI exclusion gate (excluded cards are returned greyed with a reason, never
+  dropped), P2P exclusion, cap blending (splits spend across pre-cap/post-cap rates), travel-mode
+  forex markup subtraction (incl. GST), fuel surcharge waiver, manual override forcing to top,
+  deterministic tie-break (value → confirmed confidence → card id), and a `reasonLines` explanation
+  generator built from the same arithmetic used for the value (never re-derived).
+- **13 new tests, 26/26 total passing**, including: cap boundary crossed by exactly 1 paisa (blends
+  correctly), RuPay exclusion on UPI-QR vs eligible on swipe, P2P exclusion, travel-mode markup math,
+  override forcing, ranking totality (every input card appears exactly once in the output), and
+  reason-line reconciliation.
+- **Not yet implemented from UA-2**: milestone bonus contribution to expected value (rule model
+  exists, engine doesn't use it yet), multi-card split optimizer, billing-cycle float, EMI advisor,
+  UPI-vs-swipe comparison, the 30-scenario golden fixture set, and the `flutter analyze` "no bare
+  `Text` for Money" enforcement. This is a real slice of UA-2, not all of it.
+
 ### `console/` (Flutter Web admin console)
 - Scaffolded (`app.pandapay` org, web platform only), depends on `pandapay_domain` by path.
 - AD-0.2 route guard stub: `go_router` redirects any session where
@@ -123,24 +143,68 @@ pandapay-docs/
   Dashboard) with stub screens, dense/compact visual density per AD-0.2.3.
 - `flutter analyze`: clean. `flutter test`: 1/1 passing (asserts the dead-end redirect fires).
 
+### `auth/` — verified end-to-end against the live `pandapay_auth` database
+Booted the real Node service (`node src/index.js`, port 3210, `DB_SSL=false`, `DATABASE_MODE=local`)
+against the actual `pandapay_auth` Postgres database and drove a full login through the real HTTP
+routes — not a syntax check:
+1. `POST /auth/request-otp` → `{"ok":true}`, OTP hashed and stored in `otp_requests`.
+2. `POST /auth/verify-otp` → bcrypt-compares the code, finds-or-creates the `users` row, upserts
+   `user_devices`, issues real signed access + refresh JWTs.
+
+Getting there required **iteratively widening `auth/db/pandapay-auth/init.sql`** to match columns
+the (battle-tested, security-hardened) route code actually reads/writes — my first-pass schema was
+too thin. Every column added this way is commented in `init.sql` as inherited from the source app,
+not something PandaPay actually needs:
+- `otp_requests`: added `email`, `type`, `country_code`, `deleted` (the real service soft-deletes
+  OTP rows and supports both phone and email OTP, not just phone).
+- `users`: added `deleted`, `is_phone_verified`, `is_email_verified`, `token_version`,
+  `country_code`, and two fields that are **pure leftover from the source app's other product**
+  ("Urban Link" marketplace tiers) and should be removed once the route code is trimmed down for
+  PandaPay specifically: `partner_tier_id` (nullable, unused), `active_role` (nullable, unused —
+  the source app's seller/buyer/service-provider profile-type concept, `src/middleware/validation.js`
+  `validateMarketplaceRole`, has no PandaPay equivalent).
+- `user_devices`: added `fcm_token`.
+- `src/db.js`: was hardcoded to always require TLS (`ssl: { rejectUnauthorized: false }`) in two
+  places — fine for the source app's managed AWS RDS, wrong for any local/self-hosted Postgres.
+  Made conditional on `USE_AWS_SSM`/`DB_SSL` env vars.
+- `src/routes/authRoutes.js`: six raw-SQL `NULL::user_type_enum` casts referenced a Postgres enum
+  type that no longer exists (I'd renamed it `user_role_enum` and dropped the marketplace-specific
+  one) — changed to `NULL::text`.
+- `src/services/jwtKeys.js`, `src/config.js`: JWT issuer default rebranded from `farm-auth-service`
+  to `pandapay-auth`.
+
+**The user explicitly flagged mid-session that this must keep diverging** — the auth service's
+database and environment were built for a different product ("Urban Link"/FarmMarket, and reused
+once already for a separate "PandaPath AI" app) and should not be treated as a template PandaPay
+just inherits as-is. The columns/fields marked "unused, kept for compatibility" above are exactly
+the parts still owed that further divergence — a follow-up pass should trim `authRoutes.js` itself
+(currently ~2000 lines, written for a different app's marketplace + partner-tier model) down to
+what PandaPay actually needs, then drop `partner_tier_id`/`active_role`/the unused enum casts
+entirely rather than carrying them as dead columns.
+
 ## What's NOT done (next steps, roughly in priority order)
 
-1. **Restart local Postgres** (see note above) before resuming DB work; consider adding
-   a `docker-compose.yml` for the product DB matching the auth DB's pattern.
-2. **Wire `auth/` service code to its new schema.** The Node routes/services still
-   reference some farm-app-specific fields; needs a pass to confirm nothing references
-   dropped tables/columns, then get it actually running (`npm install && npm run dev`)
-   against `pandapay_auth`.
-3. **Implement `set_config('app.user_id', ...)` middleware** in whatever backend sits
-   between the Flutter apps and Postgres — nothing calls this yet, so RLS is currently
-   unreachable by any real request path (this is expected at this stage, just flagging
-   it's the next hard dependency for any authenticated feature).
-4. **UA-1: card catalogue + card management** — next real feature slice once the above
-   is stable. This is explicitly the critical-path item in `Userappimplementation_plan.md`
-   (blocks UA-2 the recommendation engine, which is the actual product).
-5. **AD-0.3 console auth** — wire real session state into `ConsoleSession` so the route
-   guard does something beyond "always false".
-6. The custom_lint rules mentioned above (DateTime.now() ban, bare Money Text ban).
+1. **Restart local Postgres** before resuming DB work (see note above) — both the `pandapay` and
+   `pandapay_auth` databases were live and verified this session but are not running as background
+   services; also restart the `auth/` Node service the same way if resuming API testing
+   (`cd auth && DB_SSL=false node src/index.js`, needs a `.env` — see `auth/db/pandapay-auth/init.sql`
+   for the schema it now expects). Consider a `docker-compose.yml` for the product DB matching the
+   auth DB's pattern.
+2. **Trim `authRoutes.js` for PandaPay specifically** — remove the marketplace/partner-tier logic
+   and its now-dead columns (`partner_tier_id`, `active_role`), per the user's explicit direction
+   that this environment must diverge from the source app, not just patch around its shape.
+3. **Implement `set_config('app.user_id', ...)` middleware** in whatever backend sits between the
+   Flutter apps and the *product* Postgres DB (`pandapay`, not `pandapay_auth`) — nothing calls
+   this yet, so RLS is correctly designed but unreachable by any real request path. This is also
+   where the `auth/` service's issued JWT needs to be verified before every product-DB transaction.
+4. **UA-1: card catalogue + card management** — next real feature slice once the above is stable.
+   Explicitly the critical-path item in `Userappimplementation_plan.md` (blocks UA-2, see below).
+5. **UA-2 remainder**: milestone bonus value, split optimizer, billing-cycle float, EMI advisor,
+   UPI-vs-swipe comparison, the full 30-scenario golden fixture set (engine skeleton is built and
+   tested, see `packages/pandapay_domain` section above).
+6. **AD-0.3 console auth** — wire real session state into `ConsoleSession` so the route guard does
+   something beyond "always false".
+7. The custom_lint rules mentioned above (DateTime.now() ban, bare Money Text ban).
 
 ## Sandbox limitations
 

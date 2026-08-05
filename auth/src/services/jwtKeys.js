@@ -15,7 +15,7 @@
  * - JWT_ACTIVE_KEY_ID: The key ID to use for signing new tokens (default: '1')
  * - JWT_KEYS_JSON: JSON object mapping key IDs to secrets
  *   Example: {"1": "secret1", "2": "secret2"}
- * - JWT_ISSUER: Issuer claim (iss) for tokens (default: 'farm-auth-service')
+ * - JWT_ISSUER: Issuer claim (iss) for tokens (default: 'pandapay-auth')
  * - JWT_AUDIENCE: Audience claim (aud) for tokens (default: 'mobile-app')
  * 
  * TODO: In production, load keys from a secrets manager (AWS Secrets Manager, 
@@ -27,7 +27,7 @@ const crypto = require('crypto');
 // === SECURITY HARDENING: JWT KEY ROTATION ===
 // Load keys from environment
 const ACTIVE_KEY_ID = process.env.JWT_ACTIVE_KEY_ID || '1';
-const JWT_ISSUER = process.env.JWT_ISSUER || 'farm-auth-service';
+const JWT_ISSUER = process.env.JWT_ISSUER || 'pandapay-auth';
 const JWT_AUDIENCE = process.env.JWT_AUDIENCE || 'mobile-app';
 
 // Parse keys from environment

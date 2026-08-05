@@ -19,7 +19,7 @@
 // - JWT_KEYS_JSON: JSON object mapping key IDs to secrets, e.g. '{"1":"secret1","2":"secret2"}'
 //   OR use legacy: JWT_ACCESS_SECRET, JWT_REFRESH_SECRET
 // - JWT_REFRESH_KEY_ID: Key ID for refresh tokens (default: same as active key)
-// - JWT_ISSUER: Issuer claim (iss) for tokens (default: 'farm-auth-service')
+// - JWT_ISSUER: Issuer claim (iss) for tokens (default: 'pandapay-auth')
 // - JWT_AUDIENCE: Audience claim (aud) for tokens (default: 'mobile-app')
 //
 // === SECURITY HARDENING: IP/DEVICE RISK ===

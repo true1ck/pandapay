@@ -19,10 +19,15 @@ END $$;
 -- =========================
 -- users table (persistent)
 -- =========================
+-- phone_number/email are stored encrypted by src/utils/fieldEncryption.js —
+-- widened past a plain E.164 VARCHAR(20) to hold ciphertext, and no longer
+-- UNIQUE at the column level since encryption isn't deterministic here;
+-- src/utils/encryptedPhoneSearch.js is what enforces lookup uniqueness.
 CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    phone_number    VARCHAR(20) UNIQUE,            -- e.g. +919876543210
-    email           VARCHAR(255) UNIQUE,
+    phone_number    VARCHAR(255),
+    email           VARCHAR(255),
+    country_code    VARCHAR(10),
     name            VARCHAR(255),                  -- allow NULL until profile completed
 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -30,7 +35,21 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at   TIMESTAMPTZ,
 
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    deleted         BOOLEAN NOT NULL DEFAULT FALSE,  -- soft delete; auth routes filter on this
+    is_phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    is_email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
     role            user_role_enum NOT NULL DEFAULT 'user',  -- system role
+    -- Carried over from the source service's marketplace profile-type concept
+    -- (validateMarketplaceRole in src/middleware/validation.js); PandaPay has
+    -- no such concept but the field/edit-profile endpoints still read/write it.
+    active_role     TEXT,
+    token_version   INT NOT NULL DEFAULT 1,          -- bump to invalidate all outstanding JWTs
+
+    -- Carried over from the source service's "Urban Link" marketplace tiers.
+    -- PandaPay has no partner-tier concept; column kept nullable so the
+    -- shared find-or-create-user query (authRoutes.js) still runs unmodified.
+    -- Safe to drop once that query is trimmed down for PandaPay specifically.
+    partner_tier_id UUID,
 
     avatar_url      TEXT,
     language        VARCHAR(10),
@@ -57,12 +76,18 @@ EXECUTE FUNCTION set_updated_at();
 -- =========================
 -- otp_requests (phone/email OTP login)
 -- =========================
+-- Shape matches src/services/otpService.js exactly (phone_number is stored
+-- encrypted by that service, not plaintext, despite the column name).
 CREATE TABLE IF NOT EXISTS otp_requests (
     id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    phone_number  VARCHAR(20) NOT NULL,
+    phone_number  VARCHAR(255),
+    email         VARCHAR(255),
+    type          VARCHAR(10) NOT NULL DEFAULT 'phone' CHECK (type IN ('phone','email')),
+    country_code  VARCHAR(10),
     otp_hash      VARCHAR(255) NOT NULL, -- store hashed OTP only
     expires_at    TIMESTAMPTZ NOT NULL,
     consumed_at   TIMESTAMPTZ,
+    deleted       BOOLEAN NOT NULL DEFAULT FALSE,
     attempt_count INT NOT NULL DEFAULT 0,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -72,7 +97,11 @@ CREATE INDEX IF NOT EXISTS idx_otp_phone_created
 
 CREATE INDEX IF NOT EXISTS idx_otp_phone_unconsumed
     ON otp_requests (phone_number)
-    WHERE consumed_at IS NULL;
+    WHERE deleted = FALSE AND consumed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_otp_email_unconsumed
+    ON otp_requests (email)
+    WHERE deleted = FALSE AND consumed_at IS NULL;
 
 -- =========================
 -- otp_codes (legacy/simple OTP storage — kept for parity with source service)
@@ -104,6 +133,7 @@ CREATE TABLE IF NOT EXISTS user_devices (
     app_version         TEXT,
     language_code       TEXT,
     timezone            TEXT,
+    fcm_token           TEXT,
 
     first_seen_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at        TIMESTAMPTZ,
