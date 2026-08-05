@@ -18,6 +18,7 @@ import httpx
 from . import db
 from .alerts import record_diff_as_alert_signal
 from .diff import compute_diff
+from .extraction import propose_from_diff
 from .extractor import extract
 from .fetcher import fetch_static
 from .rate_limit import PerHostRateLimiter
@@ -85,6 +86,21 @@ def run_source(conn, client: httpx.Client, robots: RobotsChecker, limiter: PerHo
                 )
                 if alert_id:
                     print(f"  -> policy_change_alerts row touched: {alert_id}")
+
+                    # AD-4.3 (heuristic stand-in, see extraction.py) — only
+                    # attempted when there's actually an alert/card to
+                    # attach the proposal to.
+                    proposal = propose_from_diff(diff)
+                    if proposal is not None:
+                        proposal_id = db.insert_extraction_proposal(
+                            conn,
+                            snapshot_id=new_snapshot_id,
+                            card_product_id=page["card_product_id"],
+                            proposed_fields=proposal.proposed_fields,
+                            model_confidence=proposal.model_confidence,
+                            evidence_excerpt=proposal.evidence_excerpt,
+                        )
+                        print(f"  -> extraction_proposals row (heuristic, not AI): {proposal_id}")
                 elif diff.has_meaningful_change:
                     print("  -> content changed but page isn't linked to a card_product_id, no alert raised")
             changed += 1

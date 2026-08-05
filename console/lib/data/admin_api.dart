@@ -164,6 +164,35 @@ class AdminApi {
       throw AdminApiException('reject failed: ${response.statusCode} ${response.body}');
     }
   }
+
+  /// AD-4.2/AD-5: the unified policy-change alert queue.
+  Future<List<Map<String, dynamic>>> fetchAlerts() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/alerts'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/alerts failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['alerts'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> fetchAlertDetail(String alertId) async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/alerts/$alertId'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/alerts/$alertId failed: ${response.statusCode} ${response.body}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<void> decideAlert(String alertId, String decision, {String? note}) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/alerts/$alertId/decide'),
+      headers: _headers,
+      body: jsonEncode({'decision': decision, 'note': ?note}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('decide failed: ${response.statusCode} ${response.body}');
+    }
+  }
 }
 
 class AdminApiException implements Exception {

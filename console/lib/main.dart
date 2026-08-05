@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/providers.dart';
+import 'features/alerts/alerts_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/catalogue/catalogue_screen.dart';
 import 'features/queues/card_requests_screen.dart';
@@ -83,6 +84,7 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     (label: 'Catalogue', screen: CatalogueScreen()),
     (label: 'Card Requests', screen: CardRequestsScreen()),
     (label: 'Error Reports', screen: ErrorReportsScreen()),
+    (label: 'Policy Alerts', screen: AlertsScreen()),
   ];
 
   @override

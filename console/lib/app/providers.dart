@@ -71,3 +71,9 @@ final errorReportsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) as
   if (api == null) return const [];
   return api.fetchErrorReports();
 });
+
+final alertsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchAlerts();
+});

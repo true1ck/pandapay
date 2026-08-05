@@ -228,6 +228,31 @@ def insert_alert_evidence(
     conn.commit()
 
 
+def insert_extraction_proposal(
+    conn: psycopg.Connection,
+    *,
+    snapshot_id: str,
+    card_product_id: str,
+    proposed_fields: dict,
+    model_confidence: float,
+    evidence_excerpt: str,
+) -> str:
+    import json
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO extraction_proposals
+                 (snapshot_id, card_product_id, model_name, proposed_fields,
+                  model_confidence, evidence_excerpt)
+               VALUES (%s, %s, 'heuristic-regex-v1', %s, %s, %s)
+               RETURNING id""",
+            (snapshot_id, card_product_id, json.dumps(proposed_fields), model_confidence, evidence_excerpt),
+        )
+        proposal_id = cur.fetchone()["id"]
+    conn.commit()
+    return str(proposal_id)
+
+
 def mark_page_failed(conn: psycopg.Connection, source_page_id: str) -> int:
     """AD-3.2.5: failure alerting after 3 consecutive failures — returns the
     new failure count so the caller can decide whether to alert.

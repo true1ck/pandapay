@@ -715,30 +715,76 @@ AD-4.3's structured output existing), field-level `field_path`s (currently page-
 above), the diff review UI in the console (AD-4.2's "side-by-side diff view in Flutter Web" —
 this chunk built the data pipeline feeding it, not the screen itself).
 
+### Chunk 14 — AD-4.2 console diff-review UI + honestly-scoped AD-4.3 (no LLM key available)
+
+**AD-4.3, scoped honestly**: this environment has no `ANTHROPIC_API_KEY` (or equivalent)
+configured — `env | grep ANTHROPIC` shows only `ANTHROPIC_BASE_URL`. Real AI-assisted structured
+extraction needs a real LLM call, which needs a key and a cost decision nobody has made for this
+project. Rather than fabricate that decision, skip AD-4.3 silently, or (worse) claim something
+is "AI" when it isn't, built `scraper/pandapay_scraper/extraction.py`: a deterministic
+regex-based first pass — labeled `model_name = 'heuristic-regex-v1'` everywhere it appears, in
+the DB, the API response, and the console UI, never anything implying AI. It extracts a clean
+1-for-1 percentage or rupee-amount swap from a diff (`5% → 3%`), deliberately refuses to guess
+when there's more than one candidate of the same kind in a diff (two categories' rates changing
+at once), and returns nothing rather than a low-confidence non-answer when nothing regex-shaped
+is found. 5 new tests. Wired into `run.py`: only attempted when an alert was actually raised
+(needs a card to attach the proposal to).
+
+**AD-4.2**: `api/` gained three routes — `GET /admin/alerts` (the queue, ordered by
+`corroboration_score` then recency), `GET /admin/alerts/:id` (full detail: the alert, every
+`policy_alert_evidence` row with its actual excerpt, and up to 5 recent `extraction_proposals`
+for that card), `POST /admin/alerts/:id/decide` (approve/reject/needs_more_evidence — **only
+ever changes the alert's own state, never card data**, audited in `admin_audit_log`). This
+keeps the plan's "AI extracts, you verify" rule structurally true: even a *correct* heuristic
+proposal can't auto-write a `reward_rules.rate` — applying a correction still goes through the
+existing typed writer (`PUT /admin/reward-rules/:id`, Chunk 6) or the error-queue's typed
+approve path (Chunk 8), both requiring a human to actually invoke them.
+
+`console/`: `features/alerts/alerts_screen.dart` (new) — expandable alert list, each tile
+lazy-loads its evidence excerpts and any heuristic proposals on expand, with
+Approve/Reject/Needs-more-evidence actions. Wired into the `NavigationRail` as a 4th tab
+("Policy Alerts") alongside Catalogue/Card Requests/Error Reports.
+
+**Verified end to end against the live DB with a real generated alert, not mocked**: reused the
+Chunk 13 local-test-server technique (not a real bank) to produce a genuine alert + a real
+heuristic proposal for the seeded HDFC Millennia card, then hit every new endpoint with a real
+admin token: `GET /admin/alerts` listed it, `GET /admin/alerts/:id` returned the actual diff
+excerpt and both extracted fields (`rate_percent`, `cap_value_inr`) with confidence 0.25 (two
+fields changed at once, correctly the lower-confidence case), `POST .../decide` flipped the
+alert to `approved` with a real `admin_audit_log` row — confirmed via direct psql, not assumed.
+A real non-admin token got 403 on `GET /admin/alerts`. Deleted all test fixtures afterward.
+`flutter analyze`: clean, 1 new console widget test (8/8 passing, was 7) using the same
+`MockClient` fake pattern as the rest of the suite — confirms list → expand → evidence/proposal
+render → approve → callback fires, without a real network call in the automated suite.
+
+**All four suites green: 50 (`pandapay_domain`) + 3 (`app`) + 8 (`console`) + 19 (`scraper`,
+Python) = 80 tests total.**
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-13 (see sections above) are complete and verified. Next:
+Chunks 1-14 (see sections above) are complete and verified. Next:
 
-1. **AD-4.2's console diff-review UI** — the alert queue now has real rows with real evidence
-   (Chunk 13), but nothing in `console/` displays them yet. This is probably the highest-leverage
-   next slice: it's pure UI work on top of data that already exists and is already proven, no new
-   backend risk.
-2. **AD-4.3/4.4 (AI-assisted extraction)** — needs an explicit decision on LLM usage/cost before
-   building; the page-level `field_path` scope limit (Chunk 13) stays permanent until this exists.
-3. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
+1. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
    per source (a product/legal decision, not something to fabricate) — today there's one
-   `sources` row (Chunk 8, still correctly disabled) and the pipeline was proven against safe
-   test fetches only (`example.com`, a local test server), never real targets.
-4. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
+   `sources` row (Chunk 8, still correctly disabled) and the whole pipeline (scrape → diff →
+   alert → heuristic proposal → console review → decide) has only ever been proven against safe
+   test fetches (`example.com`, a local test server under my own control), never real targets.
+2. **A real AD-4.3 (LLM-backed extraction)**, if/when there's a key and a cost decision — would
+   let alerts carry field-level `field_path`s instead of the current page-level ones, and would
+   let `extraction_proposals` actually understand prose instead of pattern-matching numbers next
+   to `%`/`Rs.` tokens.
+3. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
    import tool (UA-1.1.2).
-5. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
+4. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
    feature, not the consolidated fixture file the plan describes).
-6. **`app/` has no auth/login flow (UA-3) at all** — Home only hits public endpoints. This blocks
+5. **`app/` has no auth/login flow (UA-3) at all** — Home only hits public endpoints. This blocks
    user_cards/transaction wiring (the engine still ranks the whole catalogue, not a signed-in
    user's actual cards), any local drift/cache, and app-side token persistence (Chunk 10 only
    covered `console/`, which already had a login flow to persist a session for).
-7. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
+6. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
    data quality dashboard, anonymization audit automation — none started.
+7. **A scheduler for the scraper** (AD-3.2.5's "weekly default crawl") — `scraper/run.py` is
+   invoked manually today, no cron/systemd-timer wiring.
 8. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
    `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus
    `support_tickets` pre-emptively fixed in the same migration once the pattern was clear) — a

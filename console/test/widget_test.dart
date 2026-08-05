@@ -238,6 +238,89 @@ void main() {
     expect(find.text('Catalogue'), findsOneWidget);
   });
 
+  testWidgets('AD-4.2: admin sees a policy alert with evidence and heuristic proposals, can approve',
+      (tester) async {
+    var decideCalled = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                if (request.url.path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (request.url.path.endsWith('/decide')) {
+                  decideCalled = true;
+                  return http.Response(jsonEncode({'ok': true}), 200);
+                }
+                if (request.url.path == '/admin/alerts/alert-1') {
+                  return http.Response(
+                    jsonEncode({
+                      'alert': {'id': 'alert-1', 'card_name': 'HDFC Millennia', 'state': 'open'},
+                      'evidence': [
+                        {'signal': 'scrape_diff', 'excerpt': '- 5%\n+ 3%'},
+                      ],
+                      'proposals': [
+                        {
+                          'model_name': 'heuristic-regex-v1',
+                          'model_confidence': 0.4,
+                          'proposed_fields': {
+                            'rate_percent': {'old': 5, 'new': 3},
+                          },
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                if (request.url.path == '/admin/alerts') {
+                  return http.Response(
+                    jsonEncode({
+                      'alerts': [
+                        {
+                          'id': 'alert-1',
+                          'card_name': 'HDFC Millennia',
+                          'field_label': 'reward_tnc page changed',
+                          'signal_count': 1,
+                          'distinct_signal_kinds': 1,
+                          'corroboration_score': '0.250',
+                          'state': 'open',
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Policy Alerts'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('HDFC Millennia — reward_tnc page changed'), findsOneWidget);
+
+    await tester.tap(find.textContaining('HDFC Millennia — reward_tnc page changed'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('5%'), findsOneWidget);
+    expect(find.textContaining('heuristic-regex-v1'), findsOneWidget);
+
+    await tester.tap(find.text('Approve'));
+    await tester.pumpAndSettle();
+    expect(decideCalled, isTrue);
+  });
+
   testWidgets('Chunk 10: an invalid stored refresh token falls back to the login screen',
       (tester) async {
     SharedPreferences.setMockInitialValues({

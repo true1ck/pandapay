@@ -424,5 +424,115 @@ app.post('/admin/error-reports/:id/reject', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * GET /admin/alerts — AD-4.2/AD-5: the unified policy-change alert queue.
+ * Ordered by corroboration_score so the strongest-evidence alerts (multiple
+ * agreeing signal kinds) surface first, per §4's "queue ordering" framing.
+ */
+app.get('/admin/alerts', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT a.id, a.card_product_id, cp.name AS card_name, a.field_path, a.field_label,
+                a.signal_count, a.distinct_signal_kinds, a.corroboration_score, a.state,
+                a.first_signal_at, a.last_signal_at, a.decision_note
+           FROM policy_change_alerts a
+           JOIN card_products cp ON cp.id = a.card_product_id
+          ORDER BY a.state = 'open' DESC, a.corroboration_score DESC, a.last_signal_at DESC`
+      )
+    );
+    res.json({ alerts: result.rows });
+  } catch (err) {
+    console.error('GET /admin/alerts error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /admin/alerts/:id — AD-4.2's side-by-side diff view backend: every
+ * piece of evidence (the actual excerpt, not just a signal count) plus any
+ * heuristic extraction_proposals (Chunk 14 — explicitly NOT AI, see
+ * scraper/pandapay_scraper/extraction.py) for the same card, so the
+ * operator sees "why" this alert exists, not just "an alert exists."
+ */
+app.get('/admin/alerts/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const alert = await client.query(
+        `SELECT a.*, cp.name AS card_name FROM policy_change_alerts a
+           JOIN card_products cp ON cp.id = a.card_product_id
+          WHERE a.id = $1`,
+        [req.params.id]
+      );
+      if (alert.rows.length === 0) return null;
+
+      const evidence = await client.query(
+        `SELECT id, signal, excerpt, weight, created_at FROM policy_alert_evidence
+          WHERE alert_id = $1 ORDER BY created_at`,
+        [req.params.id]
+      );
+
+      const proposals = await client.query(
+        `SELECT id, model_name, proposed_fields, model_confidence, evidence_excerpt, created_at
+           FROM extraction_proposals
+          WHERE card_product_id = $1
+          ORDER BY created_at DESC LIMIT 5`,
+        [alert.rows[0].card_product_id]
+      );
+
+      return { alert: alert.rows[0], evidence: evidence.rows, proposals: proposals.rows };
+    });
+
+    if (!result) return res.status(404).json({ error: 'alert not found' });
+    res.json(result);
+  } catch (err) {
+    console.error('GET /admin/alerts/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /admin/alerts/:id/decide — AD-4.4's "operator corrects rather than
+ * retypes": this route only ever changes the ALERT's state
+ * (open/approved/rejected/needs_more_evidence), never card data directly.
+ * Applying a correction to reward_rules/etc still goes through the
+ * existing typed writers (PUT /admin/reward-rules/:id, Chunk 6, or the C7
+ * error-queue's approve route, Chunk 8) — this route can't, by
+ * construction, silently write a heuristic guess into live card data.
+ */
+app.post('/admin/alerts/:id/decide', requireAdmin, async (req, res) => {
+  const { decision, note } = req.body || {};
+  const validDecisions = ['approved', 'rejected', 'needs_more_evidence'];
+  if (!validDecisions.includes(decision)) {
+    return res.status(400).json({ error: `decision must be one of: ${validDecisions.join(', ')}` });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const updated = await client.query(
+        `UPDATE policy_change_alerts
+            SET state = $1, decided_by = $2, decided_at = now(), decision_note = $3
+          WHERE id = $4 AND state = 'open'
+          RETURNING id`,
+        [decision, req.userId, note || null, req.params.id]
+      );
+      if (updated.rows.length === 0) return null;
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+         VALUES ($1, 'decide_policy_alert', 'policy_change_alerts', $2, $3, $4)`,
+        [req.userId, req.params.id, JSON.stringify({ decision }), note || null]
+      );
+
+      return updated.rows[0];
+    });
+
+    if (!result) return res.status(404).json({ error: 'alert not found or not open' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /admin/alerts/:id/decide error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));

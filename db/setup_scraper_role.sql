@@ -26,6 +26,7 @@ grant select, insert, update on scrape_runs to scraper_role;
 grant select, insert on page_snapshots to scraper_role;
 grant select, insert, update on policy_change_alerts to scraper_role;
 grant select, insert on policy_alert_evidence to scraper_role;
+grant select, insert on extraction_proposals to scraper_role;
 
 -- Production: use a real generated password via your secrets manager, never
 -- this literal. This file is for local/dev reproducibility only.
