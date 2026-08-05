@@ -1091,9 +1091,54 @@ admin route in this codebase).
 **All five suites now: 83 (`pandapay_domain`) + 9 (`app`) + 10 (`console`) + 19 (`scraper`,
 Python) + 12 (`api`) = 133 tests total.**
 
+### Chunk 24 — AD-7 acceptance map & effective rate monitor
+
+Same scope note as AD-6 (Chunk 23): a filtered table over `acceptance_summary`/
+`effective_rate_summary`, not a real `flutter_map`/OSM view — stated up front, not
+substituted silently.
+
+`api/`: 5 new admin routes — `GET /admin/acceptance-summary` (AD-7.1, filtered by network/
+rail/published), `GET /admin/acceptance-summary/:merchantId` (AD-7.2 detail: raw
+`acceptance_reports` counts, not just the pre-aggregated summary), `POST .../publish`
+(AD-7.2's publish gate, mirroring the merchant gate — a toggle, not always-unpublish, since
+these rows start `is_published = false`), `GET /admin/effective-rate-summary` (AD-7.3/7.4:
+observed vs published rate, sample count + distinct-device count always alongside the number
+per the plan's provenance requirement, and the observed-vs-published cap ceiling), and
+`GET .../samples` (the raw `effective_rate_samples` behind one summary row).
+
+**AD-7.5 ("divergence rows link straight to their alert, not a standalone dead end")**:
+implemented as a best-effort `LEFT JOIN LATERAL` onto the most recent *open*
+`policy_change_alerts` row for the same `card_product_id` — genuinely useful when one exists,
+but flagged honestly in the route's doc comment that nothing in this codebase automatically
+*raises* an alert from a detected divergence yet (`effective_rate_summary.is_divergent`/
+`alert_raised_at` exist in schema but no job writes them from a real computation — the
+`is_divergent`/`alert_raised_at` values used in this chunk's live verification were hand-set
+via SQL to prove the join and the console rendering, not produced by an inference pipeline).
+
+`console/`: one new nav tab, **Acceptance & Rates**, two sub-tabs — Acceptance (filter bar +
+list + publish/unpublish toggle) and Effective rate monitor (divergence-only filter, each row
+showing observed/published rate + sample provenance + cap-ceiling comparison, with a linked-
+alert chip when AD-7.5's join found one).
+
+**Verified end to end against the live services**: inserted a real merchant + acceptance
+summary + acceptance report + effective-rate sample + effective-rate summary row + a real
+`policy_change_alerts` row via direct SQL, then exercised all 5 routes with real curl calls —
+list, detail (confirmed real report rows returned), publish toggle (confirmed `is_published`
+flipped in the DB), effective-rate list with `divergentOnly=true` (confirmed the linked-alert
+join correctly resolved `linked_alert_id`/`linked_alert_state` for the real alert row), and
+the samples endpoint. Deleted every fixture afterward.
+
+`flutter analyze`/`dart run custom_lint`: clean. One new widget test (acceptance publish +
+effective-rate tab with a linked alert chip) against `MockClient` fixtures shaped like the
+live API's real response shape. 11/11 console tests passing (was 10). `api/`'s existing 12
+tests unaffected.
+
+**All five suites now: 83 (`pandapay_domain`) + 9 (`app`) + 11 (`console`) + 19 (`scraper`,
+Python) + 12 (`api`) = 134 tests total.**
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-23 (see sections above) are complete and verified. Remaining, in priority order —
+Chunks 1-24 (see sections above) are complete and verified. Remaining, in priority order —
 items 1-2 are explicitly on hold per user decision (2026-08-05: stay on test fixtures for AD-3,
 no real LLM key available for AD-4.3); item 3 is next up, user has approved doing it "one by
 one, non-stop":
@@ -1103,11 +1148,12 @@ one, non-stop":
    still only proven against `example.com`/a local test server.
 2. **A real AD-4.3 (LLM-backed extraction)** — still blocked on an `ANTHROPIC_API_KEY` and a
    cost decision; no change.
-3. **AD-7 through AD-9**: acceptance map/effective-rate monitor, data quality dashboard,
-   anonymization audit automation — not started yet (AD-6 is now done, Chunk 23 above). User
-   has approved doing all remaining ones, one by one. Backing tables already exist
-   (`acceptance_reports`/`acceptance_summary`/`effective_rate_samples`/`effective_rate_summary`/
-   `anonymization_audit_runs` from migration 0011), but no API routes or UI yet.
+3. **AD-8 and AD-9**: data quality dashboard, anonymization audit automation — not started yet
+   (AD-6 and AD-7 are now done, Chunks 23-24 above). User has approved doing all remaining
+   ones, one by one. AD-9 in particular is flagged ⭐ non-negotiable in the plan (wiring
+   `pandapay.run_anonymization_audit()` into CI as a deploy-blocking gate) — worth flagging to
+   the user once reached, since "deploy-blocking CI gate" is a claim about a CI system this
+   session has not touched or verified exists.
 
 ## Sandbox limitations
 

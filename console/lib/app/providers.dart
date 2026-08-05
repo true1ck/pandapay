@@ -120,3 +120,26 @@ final categoriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
   final body = jsonDecode(response.body) as Map<String, dynamic>;
   return (body['categories'] as List).cast<Map<String, dynamic>>();
 });
+
+/// AD-7.1: acceptance-summary filter state, same shape as the merchant
+/// filters above.
+final acceptanceNetworkFilterProvider = StateProvider<String?>((ref) => null);
+final acceptancePublishedFilterProvider = StateProvider<bool?>((ref) => null);
+
+final acceptanceSummaryProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchAcceptanceSummary(
+    network: ref.watch(acceptanceNetworkFilterProvider),
+    published: ref.watch(acceptancePublishedFilterProvider),
+  );
+});
+
+/// AD-7.3: effective-rate monitor filter state.
+final effectiveRateDivergentOnlyProvider = StateProvider<bool>((ref) => false);
+
+final effectiveRateSummaryProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchEffectiveRateSummary(divergentOnly: ref.watch(effectiveRateDivergentOnlyProvider));
+});

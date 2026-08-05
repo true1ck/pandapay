@@ -498,4 +498,95 @@ void main() {
 
     expect(resolveCalled, isTrue);
   });
+
+  testWidgets('AD-7: admin sees acceptance data and effective-rate divergence with a linked alert',
+      (tester) async {
+    var publishCalled = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                if (request.url.path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (request.url.path.endsWith('/publish')) {
+                  publishCalled = true;
+                  return http.Response(jsonEncode({'acceptanceSummary': {}}), 200);
+                }
+                if (request.url.path == '/admin/acceptance-summary') {
+                  return http.Response(
+                    jsonEncode({
+                      'acceptanceSummary': [
+                        {
+                          'merchant_id': 'merchant-1',
+                          'vpa': 'store@okamex',
+                          'display_name': 'Test Store',
+                          'network': 'amex',
+                          'rail': 'swipe',
+                          'accepted_count': 2,
+                          'declined_count': 8,
+                          'confidence_score': '0.600',
+                          'is_published': false,
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                if (request.url.path == '/admin/effective-rate-summary') {
+                  return http.Response(
+                    jsonEncode({
+                      'effectiveRateSummary': [
+                        {
+                          'card_product_id': 'card-1',
+                          'category_id': 'cat-1',
+                          'period_month': '2026-08-01',
+                          'sample_count': 12,
+                          'distinct_devices': 9,
+                          'observed_rate_mean': '4.0000',
+                          'published_rate': '5.0000',
+                          'divergence_pct': '-20.0000',
+                          'observed_cap_ceiling': '800.00',
+                          'published_cap_value': '1000.00',
+                          'is_divergent': true,
+                          'card_name': 'HDFC Millennia',
+                          'category_name': 'Online',
+                          'linked_alert_id': 'alert-1',
+                          'linked_alert_state': 'open',
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Acceptance & Rates'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Test Store — amex / swipe'), findsOneWidget);
+
+    await tester.tap(find.text('Publish'));
+    await tester.pumpAndSettle();
+    expect(publishCalled, isTrue);
+
+    await tester.tap(find.text('Effective rate monitor'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('HDFC Millennia — Online'), findsOneWidget);
+    expect(find.text('Alert: open'), findsOneWidget);
+  });
 }

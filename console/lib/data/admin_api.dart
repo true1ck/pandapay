@@ -307,6 +307,95 @@ class AdminApi {
       throw AdminApiException('block failed: ${response.statusCode} ${response.body}');
     }
   }
+
+  /// AD-7.1: acceptance-summary rows filtered by network/rail/published —
+  /// same "filtered table, not a real map" scope note as fetchMerchants.
+  Future<List<Map<String, dynamic>>> fetchAcceptanceSummary({String? network, String? rail, bool? published}) async {
+    final params = <String, String>{
+      'network': ?network,
+      'rail': ?rail,
+      'published': ?published?.toString(),
+    };
+    final uri = Uri.parse('$apiBaseUrl/admin/acceptance-summary').replace(queryParameters: params);
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/acceptance-summary failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['acceptanceSummary'] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// AD-7.2: one acceptance-summary row's detail — report counts + confidence.
+  Future<Map<String, dynamic>> fetchAcceptanceDetail(String merchantId, String network, String rail) async {
+    final uri = Uri.parse('$apiBaseUrl/admin/acceptance-summary/$merchantId')
+        .replace(queryParameters: {'network': network, 'rail': rail});
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET acceptance detail failed: ${response.statusCode} ${response.body}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// AD-7.2: publish gate mirroring the merchant gate.
+  Future<void> publishAcceptanceSummary(
+    String merchantId,
+    String network,
+    String rail, {
+    required bool published,
+    String? reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/acceptance-summary/publish'),
+      headers: _headers,
+      body: jsonEncode({
+        'merchantId': merchantId,
+        'network': network,
+        'rail': rail,
+        'published': published,
+        'reason': ?reason,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('publish failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// AD-7.3/7.4: effective rate monitor + cap-ceiling detection, with a
+  /// best-effort AD-5/AD-6-alert link per row (AD-7.5).
+  Future<List<Map<String, dynamic>>> fetchEffectiveRateSummary({
+    String? cardProductId,
+    String? categoryId,
+    bool? divergentOnly,
+  }) async {
+    final params = <String, String>{
+      'cardProductId': ?cardProductId,
+      'categoryId': ?categoryId,
+      if (divergentOnly == true) 'divergentOnly': 'true',
+    };
+    final uri = Uri.parse('$apiBaseUrl/admin/effective-rate-summary').replace(queryParameters: params);
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/effective-rate-summary failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['effectiveRateSummary'] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// AD-7.3 detail: the raw samples behind one summary row.
+  Future<List<Map<String, dynamic>>> fetchEffectiveRateSamples(
+    String cardProductId,
+    String categoryId,
+    String periodMonth,
+  ) async {
+    final uri = Uri.parse('$apiBaseUrl/admin/effective-rate-summary/$cardProductId/$categoryId/samples')
+        .replace(queryParameters: {'periodMonth': periodMonth});
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET effective-rate samples failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['samples'] as List).cast<Map<String, dynamic>>();
+  }
 }
 
 class AdminApiException implements Exception {

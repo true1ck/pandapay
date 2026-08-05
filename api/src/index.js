@@ -1125,5 +1125,214 @@ app.post('/admin/abuse-signals/:id/block', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * AD-7 Acceptance Map & Effective Rate Monitor.
+ *
+ * Same scope note as AD-6 (Chunk 23): AD-7.1's map filtered to
+ * acceptance_summary is a filtered table here, not a real flutter_map view
+ * — same reasoning (a real map is a separate UI investment), same
+ * grid-snapped-coordinates-only constraint (inherited automatically since
+ * this reads acceptance_summary joined to merchants, not a new location
+ * source).
+ */
+app.get('/admin/acceptance-summary', requireAdmin, async (req, res) => {
+  const { network, rail, published } = req.query;
+  const conditions = [];
+  const params = [];
+  if (network) {
+    params.push(network);
+    conditions.push(`a.network = $${params.length}`);
+  }
+  if (rail) {
+    params.push(rail);
+    conditions.push(`a.rail = $${params.length}`);
+  }
+  if (published === 'true' || published === 'false') {
+    params.push(published === 'true');
+    conditions.push(`a.is_published = $${params.length}`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT a.merchant_id, a.network, a.rail, a.accepted_count, a.declined_count,
+                a.confidence_score, a.is_published, a.last_updated_on,
+                m.vpa, m.display_name
+           FROM acceptance_summary a
+           JOIN merchants m ON m.id = a.merchant_id
+           ${where}
+          ORDER BY a.last_updated_on DESC LIMIT 200`,
+        params
+      )
+    );
+    res.json({ acceptanceSummary: result.rows });
+  } catch (err) {
+    console.error('GET /admin/acceptance-summary error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * AD-7.2 acceptance record detail: report counts (from the raw
+ * acceptance_reports, not just the pre-aggregated summary) and confidence.
+ */
+app.get('/admin/acceptance-summary/:merchantId', requireAdmin, async (req, res) => {
+  const { network, rail } = req.query;
+  if (!network || !rail) {
+    return res.status(400).json({ error: 'network and rail query params are required' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const summary = await client.query(
+        `SELECT a.*, m.vpa, m.display_name
+           FROM acceptance_summary a
+           JOIN merchants m ON m.id = a.merchant_id
+          WHERE a.merchant_id = $1 AND a.network = $2 AND a.rail = $3`,
+        [req.params.merchantId, network, rail]
+      );
+      if (summary.rows.length === 0) return null;
+
+      const reports = await client.query(
+        `SELECT id, result, device_hash, submitted_on FROM acceptance_reports
+          WHERE merchant_id = $1 AND network = $2 AND rail = $3
+          ORDER BY submitted_on DESC LIMIT 100`,
+        [req.params.merchantId, network, rail]
+      );
+
+      return { summary: summary.rows[0], reports: reports.rows };
+    });
+    if (!result) return res.status(404).json({ error: 'acceptance summary not found' });
+    res.json(result);
+  } catch (err) {
+    console.error('GET /admin/acceptance-summary/:merchantId error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * AD-7.2's "publish gate mirroring the merchant gate" — same shape as
+ * POST /admin/merchants/:id/unpublish, just a boolean toggle rather than
+ * always-unpublish, since acceptance rows start unpublished (default
+ * false) and need an explicit publish action too, not only an unpublish one.
+ */
+app.post('/admin/acceptance-summary/publish', requireAdmin, async (req, res) => {
+  const { merchantId, network, rail, published, reason } = req.body || {};
+  if (!merchantId || !network || !rail || typeof published !== 'boolean') {
+    return res.status(400).json({ error: 'merchantId, network, rail, and published (boolean) are required' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const before = await client.query(
+        'SELECT is_published FROM acceptance_summary WHERE merchant_id = $1 AND network = $2 AND rail = $3',
+        [merchantId, network, rail]
+      );
+      if (before.rows.length === 0) return null;
+
+      const updated = await client.query(
+        `UPDATE acceptance_summary SET is_published = $1, last_updated_on = CURRENT_DATE
+          WHERE merchant_id = $2 AND network = $3 AND rail = $4
+      RETURNING *`,
+        [published, merchantId, network, rail]
+      );
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'acceptance_summary_publish', 'acceptance_summary', $2, $3, $4, $5)`,
+        [
+          req.userId,
+          merchantId,
+          JSON.stringify({ is_published: before.rows[0].is_published }),
+          JSON.stringify({ is_published: published }),
+          reason || null,
+        ]
+      );
+
+      return updated.rows[0];
+    });
+    if (!result) return res.status(404).json({ error: 'acceptance summary not found' });
+    res.json({ acceptanceSummary: result });
+  } catch (err) {
+    console.error('POST /admin/acceptance-summary/publish error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * AD-7.3/7.4 effective rate monitor + cap-ceiling detection, AD-7.5 linked
+ * to AD-5 (here: AD-6's policy_change_alerts queue) so a divergent row is
+ * never a dead end — `linked_alert_id` is a best-effort match (most recent
+ * open alert for the same card_product_id, since effective_rate_summary
+ * has no direct FK to policy_change_alerts and nothing in this codebase
+ * automatically raises an alert from a divergence yet — see `is_divergent`/
+ * `alert_raised_at` columns, which exist in schema but are never written by
+ * any job here; this view surfaces the divergence, it does not yet trigger
+ * one).
+ */
+app.get('/admin/effective-rate-summary', requireAdmin, async (req, res) => {
+  const { cardProductId, categoryId, divergentOnly } = req.query;
+  const conditions = [];
+  const params = [];
+  if (cardProductId) {
+    params.push(cardProductId);
+    conditions.push(`s.card_product_id = $${params.length}`);
+  }
+  if (categoryId) {
+    params.push(categoryId);
+    conditions.push(`s.category_id = $${params.length}`);
+  }
+  if (divergentOnly === 'true') {
+    conditions.push('s.is_divergent = true');
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT s.card_product_id, s.category_id, s.period_month, s.sample_count, s.distinct_devices,
+                s.observed_rate_mean, s.observed_rate_p50, s.published_rate, s.divergence_pct,
+                s.observed_cap_ceiling, s.published_cap_value, s.is_divergent, s.alert_raised_at,
+                cp.name AS card_name, sc.name AS category_name,
+                la.id AS linked_alert_id, la.state AS linked_alert_state
+           FROM effective_rate_summary s
+           JOIN card_products cp ON cp.id = s.card_product_id
+           LEFT JOIN spend_categories sc ON sc.id = s.category_id
+           LEFT JOIN LATERAL (
+             SELECT id, state FROM policy_change_alerts
+              WHERE card_product_id = s.card_product_id AND state = 'open'
+              ORDER BY last_signal_at DESC LIMIT 1
+           ) la ON true
+           ${where}
+          ORDER BY s.period_month DESC, s.divergence_pct DESC NULLS LAST LIMIT 200`,
+        params
+      )
+    );
+    res.json({ effectiveRateSummary: result.rows });
+  } catch (err) {
+    console.error('GET /admin/effective-rate-summary error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** AD-7.3 detail: the raw samples behind one card+category+month summary row. */
+app.get('/admin/effective-rate-summary/:cardProductId/:categoryId/samples', requireAdmin, async (req, res) => {
+  const { periodMonth } = req.query;
+  if (!periodMonth) return res.status(400).json({ error: 'periodMonth query param is required' });
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT id, spend_bucket_inr, observed_reward_inr, observed_rate, device_hash, submitted_on
+           FROM effective_rate_samples
+          WHERE card_product_id = $1 AND category_id = $2
+            AND date_trunc('month', period_month) = date_trunc('month', $3::date)
+          ORDER BY submitted_on DESC LIMIT 200`,
+        [req.params.cardProductId, req.params.categoryId, periodMonth]
+      )
+    );
+    res.json({ samples: result.rows });
+  } catch (err) {
+    console.error('GET /admin/effective-rate-summary/:cardProductId/:categoryId/samples error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));
