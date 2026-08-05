@@ -76,6 +76,7 @@ void main() {
         rewardRuleId: 'card-rule',
         label: '5% groceries cap',
         capValue: Money.fromRupees(3000),
+        measure: CapMeasure.spendAmount,
         period: CapPeriod.statementCycle,
         postCapUnit: RewardUnit.cashbackPercent,
         postCapRate: 1,
@@ -110,6 +111,7 @@ void main() {
         rewardRuleId: 'card-rule',
         label: '5% groceries cap',
         capValue: Money.fromRupees(3000),
+        measure: CapMeasure.spendAmount,
         period: CapPeriod.statementCycle,
         postCapUnit: RewardUnit.cashbackPercent,
         postCapRate: 1,
@@ -143,6 +145,7 @@ void main() {
         rewardRuleId: 'card-rule',
         label: 'cap',
         capValue: Money.fromRupees(3000),
+        measure: CapMeasure.spendAmount,
         period: CapPeriod.statementCycle,
         postCapUnit: RewardUnit.cashbackPercent,
         postCapRate: 1,
@@ -162,6 +165,151 @@ void main() {
 
       final result = engine.rank(ctx, [snapshot]).first;
       expect(result.expectedValue, Money.fromRupees(1000) * 0.01);
+    });
+  });
+
+  group('UA-2.2.3b cap blending — reward_value measure (Chunk 9 fix)', () {
+    // Mirrors the real seeded HDFC Millennia card: 5% online cashback,
+    // capped at ₹1,000 of *cashback earned* per cycle (not ₹1,000 of
+    // spend) — this is exactly the case that was blended incorrectly
+    // before the fix (see PROGRESS.md Chunk 9 / db/seed/0001_demo_cards.sql).
+    CardProduct hdfcLikeCard(CapRule capRule) => CardProduct(
+          id: 'hdfc-like',
+          name: 'hdfc-like',
+          network: CardNetwork.rupay,
+          isUpiLinkable: true,
+          rewardRules: [
+            RewardRule(id: 'card-rule', unit: RewardUnit.cashbackPercent, rate: 5),
+          ],
+          capRules: [capRule],
+        );
+
+    test('spend whose reward stays within reward-value headroom uses the base rate', () {
+      final capRule = CapRule(
+        id: 'cap1',
+        rewardRuleId: 'card-rule',
+        label: '5% online — capped at ₹1,000 cashback/cycle',
+        capValue: Money.fromRupees(1000),
+        measure: CapMeasure.rewardValue,
+        period: CapPeriod.statementCycle,
+        postCapUnit: RewardUnit.cashbackPercent,
+        postCapRate: 1,
+      );
+      final snapshot = CardSnapshot(
+        product: hdfcLikeCard(capRule),
+        capRemaining: {'cap1': Money.fromRupees(1000)}, // full headroom
+      );
+      // ₹10,000 spend at 5% = ₹500 reward — well within ₹1,000 headroom.
+      final ctx = RecommendationContext(amount: Money.fromRupees(10000), rail: TxnRail.swipe);
+
+      final result = engine.rank(ctx, [snapshot]).first;
+      expect(result.expectedValue, Money.fromRupees(10000) * 0.05);
+    });
+
+    test('spend whose reward would exceed reward-value headroom blends pre/post cap correctly '
+        '(the bug: this used to be blended as spend headroom, not reward headroom)', () {
+      final capRule = CapRule(
+        id: 'cap1',
+        rewardRuleId: 'card-rule',
+        label: '5% online — capped at ₹1,000 cashback/cycle',
+        capValue: Money.fromRupees(1000),
+        measure: CapMeasure.rewardValue,
+        period: CapPeriod.statementCycle,
+        postCapUnit: RewardUnit.cashbackPercent,
+        postCapRate: 1,
+      );
+      // ₹800 of reward-value headroom left == ₹16,000 of spend-equivalent at 5%.
+      final snapshot = CardSnapshot(
+        product: hdfcLikeCard(capRule),
+        capRemaining: {'cap1': Money.fromRupees(800)},
+      );
+      // ₹20,000 spend: first ₹16,000 earns 5% (=₹800, exhausting the cap),
+      // remaining ₹4,000 earns the 1% post-cap rate (=₹40). Total ₹840.
+      //
+      // The pre-fix (spend-headroom) bug would have instead treated ₹800 as
+      // *spend* headroom: ₹800 at 5% (=₹40) + ₹19,200 at 1% (=₹192) = ₹232 —
+      // wildly different and wrong.
+      final ctx = RecommendationContext(amount: Money.fromRupees(20000), rail: TxnRail.swipe);
+
+      final result = engine.rank(ctx, [snapshot]).first;
+      expect(result.expectedValue, Money.fromRupees(840));
+    });
+
+    test('reward-value cap already exhausted applies the post-cap rate to the full amount', () {
+      final capRule = CapRule(
+        id: 'cap1',
+        rewardRuleId: 'card-rule',
+        label: '5% online — capped at ₹1,000 cashback/cycle',
+        capValue: Money.fromRupees(1000),
+        measure: CapMeasure.rewardValue,
+        period: CapPeriod.statementCycle,
+        postCapUnit: RewardUnit.cashbackPercent,
+        postCapRate: 1,
+      );
+      final snapshot = CardSnapshot(
+        product: hdfcLikeCard(capRule),
+        capRemaining: {'cap1': const Money.zero()},
+      );
+      final ctx = RecommendationContext(amount: Money.fromRupees(1000), rail: TxnRail.swipe);
+
+      final result = engine.rank(ctx, [snapshot]).first;
+      expect(result.expectedValue, Money.fromRupees(1000) * 0.01);
+    });
+  });
+
+  group('UA-2.2.3c cap blending — txn_count measure (Chunk 9 fix)', () {
+    CardProduct countCappedCard(CapRule capRule) => CardProduct(
+          id: 'count-capped',
+          name: 'count-capped',
+          network: CardNetwork.rupay,
+          isUpiLinkable: true,
+          rewardRules: [
+            RewardRule(id: 'card-rule', unit: RewardUnit.cashbackPercent, rate: 5),
+          ],
+          capRules: [capRule],
+        );
+
+    test('a transaction within the remaining count gets the full base rate, not blended', () {
+      final capRule = CapRule(
+        id: 'cap1',
+        rewardRuleId: 'card-rule',
+        label: 'first 5 transactions at 5x',
+        capValue: Money.fromRupees(5), // 5 transactions, encoded as a count
+        measure: CapMeasure.txnCount,
+        period: CapPeriod.statementCycle,
+        postCapUnit: RewardUnit.cashbackPercent,
+        postCapRate: 1,
+      );
+      final snapshot = CardSnapshot(
+        product: countCappedCard(capRule),
+        capRemaining: {'cap1': Money.fromRupees(2)}, // 2 transactions left
+      );
+      final ctx = RecommendationContext(amount: Money.fromRupees(50000), rail: TxnRail.swipe);
+
+      final result = engine.rank(ctx, [snapshot]).first;
+      // Whole transaction at the base rate — count caps never partially blend.
+      expect(result.expectedValue, Money.fromRupees(50000) * 0.05);
+    });
+
+    test('a transaction once the count is exhausted gets the full post-cap rate', () {
+      final capRule = CapRule(
+        id: 'cap1',
+        rewardRuleId: 'card-rule',
+        label: 'first 5 transactions at 5x',
+        capValue: Money.fromRupees(5),
+        measure: CapMeasure.txnCount,
+        period: CapPeriod.statementCycle,
+        postCapUnit: RewardUnit.cashbackPercent,
+        postCapRate: 1,
+      );
+      final snapshot = CardSnapshot(
+        product: countCappedCard(capRule),
+        capRemaining: {'cap1': const Money.zero()},
+      );
+      final ctx = RecommendationContext(amount: Money.fromRupees(50000), rail: TxnRail.swipe);
+
+      final result = engine.rank(ctx, [snapshot]).first;
+      expect(result.expectedValue, Money.fromRupees(50000) * 0.01);
     });
   });
 

@@ -144,45 +144,91 @@ class RecommendationEngine {
     final baseRatePerRupee =
         rule.unit.effectiveRatePerRupee(rule.rate, pointValueInr: card.pointValueInr);
 
-    // UA-2.2.3 cap blending: split spend across pre-cap and post-cap rates
-    // KNOWN GAP: capRemaining/capValue are always treated as spend-amount
-    // headroom here, regardless of CapRule's actual `measure` (spend_amount
-    // vs reward_value vs txn_count — see database.sql cap_measure enum).
-    // A reward_value cap (e.g. "capped at ₹1,000 of cashback", not "capped
-    // at ₹1,000 of spend") is currently blended as if it were a spend cap,
-    // which is wrong for that measure — caught via
-    // app/tool/verify_live_catalogue.dart against the real seeded
-    // HDFC Millennia card (db/seed/0001_demo_cards.sql), not by a unit test.
-    // Needs measure-aware headroom tracking before this is trustworthy for
-    // reward_value-measured caps.
-    // when cap_remaining < amount.
+    // UA-2.2.3 cap blending: split spend across pre-cap and post-cap rates,
+    // measure-aware (fixed — see PROGRESS.md Chunk 9; was previously always
+    // treated as spend-amount headroom regardless of CapRule.measure).
     final capRule = card.capRules.where((c) => c.rewardRuleId == rule.id).firstOrNull;
     Money value;
     if (capRule != null) {
-      final remaining = snapshot.capRemaining[capRule.id] ?? capRule.capValue;
-      if (remaining >= context.amount) {
-        value = context.amount * baseRatePerRupee;
-        reasons.add(
-            'Base rate ${(baseRatePerRupee * 100).toStringAsFixed(1)}% on ${context.amount.format()}');
-      } else if (remaining.isZero || remaining.isNegative) {
-        final postRate = capRule.postCapUnit
-                ?.effectiveRatePerRupee(capRule.postCapRate, pointValueInr: card.pointValueInr) ??
-            0;
-        value = context.amount * postRate;
-        reasons.add('Cap already reached — post-cap rate '
-            '${(postRate * 100).toStringAsFixed(1)}% applies to the full amount');
-      } else {
-        final preCapPortion = remaining;
-        final postCapPortion = context.amount - remaining;
-        final postRate = capRule.postCapUnit
-                ?.effectiveRatePerRupee(capRule.postCapRate, pointValueInr: card.pointValueInr) ??
-            0;
-        final preValue = preCapPortion * baseRatePerRupee;
-        final postValue = postCapPortion * postRate;
-        value = preValue + postValue;
-        reasons.add('${preCapPortion.format()} at ${(baseRatePerRupee * 100).toStringAsFixed(1)}% '
-            '(cap headroom) + ${postCapPortion.format()} at '
-            '${(postRate * 100).toStringAsFixed(1)}% (post-cap)');
+      final postRate = capRule.postCapUnit
+              ?.effectiveRatePerRupee(capRule.postCapRate, pointValueInr: card.pointValueInr) ??
+          0;
+
+      switch (capRule.measure) {
+        case CapMeasure.spendAmount:
+          // capRemaining/capValue are literally spend headroom — blend the
+          // amount directly against it, same as pre-fix behaviour.
+          final remaining = snapshot.capRemaining[capRule.id] ?? capRule.capValue;
+          if (remaining >= context.amount) {
+            value = context.amount * baseRatePerRupee;
+            reasons.add('Base rate ${(baseRatePerRupee * 100).toStringAsFixed(1)}% on '
+                '${context.amount.format()}');
+          } else if (remaining.isZero || remaining.isNegative) {
+            value = context.amount * postRate;
+            reasons.add('Cap already reached — post-cap rate '
+                '${(postRate * 100).toStringAsFixed(1)}% applies to the full amount');
+          } else {
+            final preCapPortion = remaining;
+            final postCapPortion = context.amount - remaining;
+            value = preCapPortion * baseRatePerRupee + postCapPortion * postRate;
+            reasons.add('${preCapPortion.format()} at ${(baseRatePerRupee * 100).toStringAsFixed(1)}% '
+                '(cap headroom) + ${postCapPortion.format()} at '
+                '${(postRate * 100).toStringAsFixed(1)}% (post-cap)');
+          }
+
+        case CapMeasure.rewardValue:
+          // capRemaining/capValue are reward-VALUE headroom (e.g. "₹1,000 of
+          // cashback left this cycle"), not spend headroom — a spend of ₹X
+          // at baseRatePerRupee only consumes X*baseRatePerRupee of it. Find
+          // the spend-equivalent of the remaining reward headroom, blend on
+          // that, and let the reward-value portion be exactly `remaining`
+          // (never re-derived from spend*rate, which would round differently).
+          final remaining = snapshot.capRemaining[capRule.id] ?? capRule.capValue;
+          if (remaining.isZero || remaining.isNegative) {
+            value = context.amount * postRate;
+            reasons.add('Cap already reached — post-cap rate '
+                '${(postRate * 100).toStringAsFixed(1)}% applies to the full amount');
+          } else if (baseRatePerRupee <= 0) {
+            // Base rate is 0 (or the rule is a flat bonus) — no spend can
+            // consume reward-value headroom, so the whole amount stays at
+            // whatever "base" rate that is (0), never falls through to post-cap.
+            value = context.amount * baseRatePerRupee;
+            reasons.add('Base rate ${(baseRatePerRupee * 100).toStringAsFixed(1)}% on '
+                '${context.amount.format()}');
+          } else {
+            final preCapSpend = Money.fromRupees(remaining.rupees / baseRatePerRupee);
+            if (preCapSpend >= context.amount) {
+              value = context.amount * baseRatePerRupee;
+              reasons.add('Base rate ${(baseRatePerRupee * 100).toStringAsFixed(1)}% on '
+                  '${context.amount.format()} (within ${remaining.format()} reward-value headroom)');
+            } else {
+              final postCapPortion = context.amount - preCapSpend;
+              final postValue = postCapPortion * postRate;
+              value = remaining + postValue;
+              reasons.add('${remaining.format()} reward-value headroom exhausted by '
+                  '${preCapSpend.format()} of this spend, remaining '
+                  '${postCapPortion.format()} at ${(postRate * 100).toStringAsFixed(1)}% (post-cap)');
+            }
+          }
+
+        case CapMeasure.txnCount:
+          // capValue/capRemaining encode a transaction COUNT (see
+          // card_rules_json.dart), not a money amount — .rupees is reused
+          // purely as the numeric carrier. A single transaction can't be
+          // split across pre/post-cap, unlike a spend or reward-value cap:
+          // either this transaction is within the remaining count (full base
+          // rate) or it isn't (full post-cap rate).
+          final remainingCount =
+              (snapshot.capRemaining[capRule.id] ?? capRule.capValue).rupees;
+          if (remainingCount >= 1) {
+            value = context.amount * baseRatePerRupee;
+            reasons.add('Base rate ${(baseRatePerRupee * 100).toStringAsFixed(1)}% on '
+                '${context.amount.format()} (txn ${remainingCount.toStringAsFixed(0)} of cap remaining)');
+          } else {
+            value = context.amount * postRate;
+            reasons.add('Transaction-count cap reached — post-cap rate '
+                '${(postRate * 100).toStringAsFixed(1)}% applies to this transaction');
+          }
       }
     } else {
       value = context.amount * baseRatePerRupee;

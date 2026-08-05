@@ -151,6 +151,7 @@ void main() {
         rewardRuleId: 'high-rule',
         label: 'cap',
         capValue: Money.fromRupees(400),
+        measure: CapMeasure.spendAmount,
         period: CapPeriod.statementCycle,
         postCapUnit: RewardUnit.cashbackPercent,
         postCapRate: 0,

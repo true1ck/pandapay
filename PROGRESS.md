@@ -502,9 +502,41 @@ propagation-resolver work, not a queue-UI task); AD-2.3's "emits a `policy_alert
 with signal `user_report`" (the fourth signal into the AD-5 unified queue) is not wired — AD-5
 itself doesn't exist yet, so there's nowhere for that evidence row to feed into.
 
+### Chunk 9 — fixed the cap-measure gap flagged since Chunk 5
+
+`packages/pandapay_domain`: `CapMeasure` enum added (`rewardValue`/`spendAmount`/`txnCount`,
+mirroring `cap_measure`), `CapRule.measure` now required, `card_rules_json.dart` parses it
+(no view change needed — `to_jsonb(k)` in `v_card_catalogue_export` already exported the
+column, it just wasn't being read). `engine.dart`'s cap-blending block is now a `switch` on
+`measure` instead of one spend-headroom-shaped code path used for everything:
+- `spendAmount` — unchanged behaviour, this was always correct.
+- `rewardValue` — the actual bug. `capRemaining`/`capValue` are reward-**value** headroom
+  (e.g. "₹1,000 of cashback left this cycle"), not spend headroom, so a ₹X spend at
+  `baseRatePerRupee` only consumes `X * baseRatePerRupee` of it, not `X`. Fixed by converting
+  the remaining reward-value headroom to its spend-equivalent (`remaining.rupees /
+  baseRatePerRupee`) before splitting the transaction into pre/post-cap portions, and letting
+  the pre-cap reward be exactly `remaining` rather than re-derived from spend×rate (avoids a
+  second rounding step producing a slightly different number than the headroom it's supposed
+  to exhaust).
+- `txnCount` — new case, no seed data exercises it yet but the enum value exists in the DB.
+  A count cap can't partially blend a single transaction the way money-based caps can: either
+  the transaction is within the remaining count (full base rate) or it isn't (full post-cap
+  rate). `capValue`/`capRemaining` reuse the `Money` type purely as a numeric carrier for the
+  count (documented inline in `card_rules_json.dart` — no separate DB column per measure).
+- 5 new tests (2 pre-fix-shaped `spendAmount` boundary tests untouched, 3 new `rewardValue`
+  cases mirroring the real seeded HDFC Millennia card exactly — including one that shows the
+  actual before/after numbers: pre-fix would have computed ₹232 for a scenario where the
+  correct answer is ₹840 — plus 2 `txnCount` cases). 50/50 domain tests passing (was 45).
+- **Verified against the live seeded DB, not just unit tests**: re-ran
+  `app/tool/verify_live_catalogue.dart` against the real running `api/` + `pandapay` DB;
+  HDFC Millennia's reason line now reads "Base rate 7.0% on ₹2,000.00 (within ₹1,000.00
+  reward-value headroom)" — correctly labeled and no longer silently wrong for that measure.
+- `dart analyze`/`flutter analyze`: clean on all three packages. All suites green: 50
+  (`pandapay_domain`) + 3 (`app`) + 5 (`console`) = 58.
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-8 (see sections above) are complete and verified. Next:
+Chunks 1-9 (see sections above) are complete and verified. Next:
 
 1. **AD-3 through AD-9** (admin console's remaining core purpose per `adminimplementation_plan.md`):
    the scraper engine, diff review + AI extraction, and especially the unified policy-change
@@ -513,21 +545,18 @@ Chunks 1-8 (see sections above) are complete and verified. Next:
    sources AD-5 is meant to unify.
 2. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
    import tool (UA-1.1.2).
-3. **The cap-measure gap** (Chunk 5): `CapRule` blending doesn't distinguish `spend_amount` vs
-   `reward_value` vs `txn_count` caps — flagged inline in `engine.dart`.
-4. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
+3. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
    feature, not the consolidated fixture file the plan describes).
-5. **No user_cards/transaction wiring anywhere** — the engine ranks the whole catalogue, not a
+4. **No user_cards/transaction wiring anywhere** — the engine ranks the whole catalogue, not a
    signed-in user's actual cards; no drift/local cache in the app (always a live fetch, no offline
    path); no token persistence in either Flutter app (refresh loses the session).
-6. The custom_lint rules mentioned in the app section (DateTime.now() ban, bare Money Text ban).
-7. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
+5. The custom_lint rules mentioned in the app section (DateTime.now() ban, bare Money Text ban).
+6. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
    `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus
-   `support_tickets` pre-emptively fixed in the same migration once the pattern was clear —
-   0011's `tickets_owner`/`card_requests_owner`/`error_reports_owner` policies were all written
-   at the same time with the same missing-admin-policy oversight). `card_requests_owner` was
-   the last one of that trio; worth a final grep across 0011 for any other `_owner`-only policy
-   on a table an admin will eventually need to read.
+   `support_tickets` pre-emptively fixed in the same migration once the pattern was clear) — a
+   final grep across 0011 for any other `_owner`-only policy on a table an admin will eventually
+   need to read turned up nothing else (checked: `profiles`/`transaction_splits` are legitimately
+   user-only by design, not a gap).
 
 ## Sandbox limitations
 

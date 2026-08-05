@@ -42,6 +42,14 @@ enum TxnRail { upiQr, swipe, online, contactless, atm, emi, unknown }
 
 enum CapPeriod { statementCycle, calendarMonth, quarter, halfYear, annual, lifetime }
 
+/// Mirrors `cap_measure` (database.sql §0001). What [CapRule.capValue] and
+/// the engine's `capRemaining` headroom actually count — critical, because
+/// blending a spend cap and a reward-value cap the same way is wrong: ₹1,000
+/// of *spend* headroom at 5% is worth ₹50 of reward before hitting the post-
+/// cap rate, but ₹1,000 of *reward-value* headroom is worth ₹1,000 of
+/// cashback regardless of the rate that earned it.
+enum CapMeasure { rewardValue, spendAmount, txnCount }
+
 /// A single reward rule (`reward_rules` table). `categoryId == null` means
 /// "all other spends" — the base rate.
 class RewardRule {
@@ -74,7 +82,8 @@ class CapRule {
   final String? rewardRuleId;
   final String? categoryId;
   final String label;
-  final Money capValue; // in the rule's measure unit (spend/reward)
+  final Money capValue; // in the unit [measure] names — spend, reward value, or (as a count) txn_count
+  final CapMeasure measure;
   final RewardUnit? postCapUnit;
   final double postCapRate;
   final CapPeriod period;
@@ -85,6 +94,7 @@ class CapRule {
     this.categoryId,
     required this.label,
     required this.capValue,
+    required this.measure,
     this.postCapUnit,
     this.postCapRate = 0,
     required this.period,

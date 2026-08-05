@@ -41,6 +41,9 @@ TxnRail? _parseRailOrNull(String? value) {
 CapPeriod _parseCapPeriod(String value) =>
     CapPeriod.values.firstWhere((p) => p.name == _camelFromSnake(value));
 
+CapMeasure _parseCapMeasure(String value) =>
+    CapMeasure.values.firstWhere((m) => m.name == _camelFromSnake(value));
+
 String _camelFromSnake(String snake) {
   final parts = snake.split('_');
   return parts.first + parts.skip(1).map((p) => p.isEmpty ? '' : p[0].toUpperCase() + p.substring(1)).join();
@@ -69,7 +72,14 @@ extension CapRuleJson on CapRule {
       rewardRuleId: json['reward_rule_id'] as String?,
       categoryId: json['category_id'] as String?,
       label: json['label'] as String,
+      // cap_value is a plain numeric column regardless of measure — for
+      // spend_amount/reward_value it's rupees, for txn_count it's a raw
+      // transaction count encoded the same way (no separate DB type per
+      // measure). _moneyFromRupees is just the numeric parse; engine.dart
+      // reads .paise back out as a count when measure == txnCount rather
+      // than treating it as currency.
       capValue: _moneyFromRupees(json['cap_value']),
+      measure: _parseCapMeasure(json['measure'] as String),
       postCapUnit: json['post_cap_unit'] != null ? _parseRewardUnit(json['post_cap_unit'] as String) : null,
       postCapRate: _num(json['post_cap_rate']),
       period: _parseCapPeriod(json['period'] as String),
