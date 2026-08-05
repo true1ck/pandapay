@@ -1165,21 +1165,82 @@ with `Flexible` + `TextOverflow.ellipsis`. 12/12 console tests passing (was 11).
 **All five suites now: 83 (`pandapay_domain`) + 9 (`app`) + 12 (`console`) + 19 (`scraper`,
 Python) + 12 (`api`) = 135 tests total.**
 
-Chunks 1-25 (see sections above) are complete and verified. Remaining, in priority order —
-items 1-2 are explicitly on hold per user decision (2026-08-05: stay on test fixtures for AD-3,
-no real LLM key available for AD-4.3); item 3 is next up, user has approved doing it "one by
-one, non-stop":
+### Chunk 26 — AD-9 anonymization audit automation (AD-6/7/8/9 all done — the full crowdsourced-data backlog is now cleared)
+
+The 6-check function itself, `pandapay.run_anonymization_audit()`, and the `anonymization_audit_runs`
+table already existed (`db/supabase/migrations/0010_functions_and_views.sql` — not written this
+chunk). What's new:
+
+`api/`: 3 routes — `GET /admin/anonymization-audit-runs` (AD-9.1 history), `.../latest`
+(convenience for the summary card), `POST .../run` (AD-9.4's manual/cron entrypoint — calls
+the SQL function through a DB client, not a shell-out).
+
+`console/`: one new nav tab, **Anonymization Audit** — latest-result banner (pass/fail, check
+counts, git SHA), a "Run now" button, and history list with findings.
+
+**AD-9.2 ("wire into CI as a deploy-blocking gate") — the actual gate**: added
+`.github/workflows/anonymization-audit.yml`, the *first* CI workflow this repo has ever had
+(no `.github/` existed before this chunk; confirmed via `git remote -v` that the repo has a
+real GitHub remote, `github.com/true1ck/pandapay`, so this isn't a guess at an unused feature).
+Runs on every push/PR against a throwaway `postgres:16` service container: applies all 16
+migrations for real (skipping only `0013_cron_jobs.sql`, which needs `pg_cron` — not present
+on the plain Postgres image, same known gap as local dev), then calls
+`pandapay.run_anonymization_audit()` directly via `psql` (not through `api/`'s HTTP layer, so
+a broken `api/` deploy can never mask a real audit failure) and fails the build (`exit 1`) on
+any check failure.
+
+**A real bug caught and fixed while writing the workflow, not after**: the first draft combined
+the audit call and its result check into one SQL statement
+(`... WHERE id = pandapay.run_anonymization_audit(...)`) — tested that exact query locally
+first (this chunk's now-standing practice: prove CI logic against the real local Postgres
+before trusting it to GitHub's runners) and it silently returned zero rows. Root cause: under
+READ COMMITTED, a single statement's own side effects (the function's `INSERT`) aren't visible
+to that same statement's snapshot. Fixed by splitting into two separate `psql` calls — verified
+the fix, then additionally replicated the *entire* migration-apply-and-audit shell loop
+verbatim against a disposable scratch database (`pandapay_ci_test`, created and dropped for
+this purpose) to prove the exact script text CI will run, not just the SQL logic in isolation.
+
+**AD-9.4 nightly cron**: `db/scripts/run_nightly_audit.sh` (+ `pandapay-audit.service`/
+`.timer` for systemd), same pattern as Chunk 20's scraper scheduler — this exists *in addition
+to* the CI gate because the plan explicitly calls for catching a regression "even without a
+deploy." Alerting is explicitly NOT implemented (same honest gap as AD-8.4 — no notification
+channel exists); the script fails loudly and logs, ready to wire up the moment one does.
+
+**Incidental infra note**: this chunk's local Postgres cluster (port 55432, scratchpad-based)
+had been torn down between sessions (expected — it lives in a session-scoped scratchpad
+directory, not committed anywhere) and was rebuilt from scratch: `initdb` + all 16 migrations
++ both seed files + `setup_app_role.sql`/`setup_scraper_role.sql` + a fresh admin user via a
+real OTP signup. This surfaced one real, previously-undocumented gap in `db/setup_app_role.sql`:
+it granted `execute on all functions in schema pandapay` but never `usage on schema pandapay`
+itself, so `app_user` got `permission denied for schema pandapay` the moment any endpoint
+called `pandapay.is_admin()` — every admin route was silently broken on a truly fresh
+database. Fixed by adding the missing `grant usage on schema pandapay to app_user;` line.
+This bug existed on day one (Chunk 1) and was masked all along by the original session's
+Postgres cluster never having been rebuilt from a clean `setup_app_role.sql` run since some
+earlier one-off manual grant — worth knowing if this repo is ever cloned fresh.
+
+`flutter analyze`/`dart run custom_lint`: clean. One new widget test (latest-result display +
+run-now flow). 13/13 console tests passing (was 12). Re-ran all five suites after the
+environment rebuild to confirm nothing regressed: 83 (`pandapay_domain`) + 9 (`app`) — both
+unaffected by this chunk, confirmed passing again from a cold environment, not assumed.
+
+**All five suites now: 83 (`pandapay_domain`) + 9 (`app`) + 13 (`console`) + 19 (`scraper`,
+Python) + 12 (`api`) = 136 tests total.**
+
+Chunks 1-26 (see sections above) are complete and verified. **AD-6 through AD-9 — the entire
+crowdsourced-data backlog — is now done.** Remaining, both explicitly on hold per user
+decision (2026-08-05):
 
 1. **AD-3's real pilot set** — user explicitly chose to stay on test fixtures for now (no real
    bank/news source added). Still one `sources` row (Chunk 8, correctly disabled); pipeline
    still only proven against `example.com`/a local test server.
 2. **A real AD-4.3 (LLM-backed extraction)** — still blocked on an `ANTHROPIC_API_KEY` and a
    cost decision; no change.
-3. **AD-9**: anonymization audit automation — not started yet (AD-6/7/8 are now done, Chunks
-   23-25 above). User has approved doing it next. Flagged ⭐ non-negotiable in the plan
-   (wiring `pandapay.run_anonymization_audit()` into CI as a deploy-blocking gate) — the repo
-   has a real GitHub remote (`github.com/true1ck/pandapay`) and no existing CI config
-   (`.github/workflows` doesn't exist yet), so this chunk will be the one that adds it.
+
+Both of these need a decision from the user (legal/ToS review for real scrape targets; an API
+key + cost sign-off for LLM extraction) before more code can responsibly be written against
+them — there is no further mechanical work left on the backlog that doesn't first require one
+of those two calls.
 
 ## Sandbox limitations
 

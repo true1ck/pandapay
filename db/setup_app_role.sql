@@ -14,6 +14,7 @@ do $$ begin
 end $$;
 
 grant usage on schema public to app_user;
+grant usage on schema pandapay to app_user;
 grant select, insert, update, delete on all tables in schema public to app_user;
 grant usage, select on all sequences in schema public to app_user;
 grant execute on all functions in schema pandapay to app_user;

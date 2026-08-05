@@ -1,0 +1,79 @@
+name: Anonymization audit (deploy-blocking gate)
+
+# AD-9.2: "Wire pandapay.run_anonymization_audit() into CI as a
+# deploy-blocking gate. A failing audit fails the build. Not a one-time
+# check." — this is that gate. It calls the SQL function directly against a
+# throwaway Postgres service container running the real migrations, not
+# through api/'s HTTP layer, so a broken api/ deploy can never mask a real
+# audit failure (same reasoning as api/'s POST /admin/anonymization-audit-
+# runs/run doc comment).
+#
+# This is the first CI workflow in this repo (no .github/workflows existed
+# before this file) — added as part of AD-9, not retrofitted onto an
+# existing pipeline this session never touched.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  anonymization-audit:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pandapay
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply migrations
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in db/supabase/migrations/*.sql; do
+            echo "Applying $f"
+            psql -h localhost -U postgres -d pandapay -v ON_ERROR_STOP=1 -f "$f" || {
+              # 0013_cron_jobs.sql needs the pg_cron extension, which the
+              # plain postgres:16 image doesn't ship — same known gap as
+              # local dev (see PROGRESS.md); every other migration must
+              # still apply cleanly.
+              if [[ "$f" == *0013_cron_jobs.sql ]]; then
+                echo "Skipping $f (pg_cron not available in this image, same as local dev)"
+                continue
+              fi
+              exit 1
+            }
+          done
+
+      - name: Run the anonymization audit
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Two separate statements deliberately: `run_anonymization_audit`
+          # INSERTs the row as a side effect, and under READ COMMITTED a
+          # single statement's snapshot is taken before its own side
+          # effects are visible — `WHERE id = pandapay.run_anonymization_
+          # audit(...)` in one query silently returns zero rows (caught by
+          # testing this exact query locally before writing it this way).
+          RUN_ID=$(psql -h localhost -U postgres -d pandapay -tAc \
+            "select pandapay.run_anonymization_audit('${{ github.sha }}')")
+          RESULT=$(psql -h localhost -U postgres -d pandapay -tAc \
+            "select checks_failed, findings from anonymization_audit_runs where id = '$RUN_ID'")
+          echo "Audit result: $RESULT"
+          FAILED=$(echo "$RESULT" | cut -d'|' -f1)
+          if [ "$FAILED" != "0" ]; then
+            echo "::error::Anonymization audit failed $FAILED check(s) — see findings above."
+            exit 1
+          fi
+          echo "Anonymization audit passed."

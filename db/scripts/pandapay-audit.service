@@ -1,0 +1,19 @@
+# AD-9.4 nightly audit — systemd (Linux prod) variant. Pair with
+# pandapay-audit.timer alongside this file. Install:
+#   sudo cp pandapay-audit.service pandapay-audit.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pandapay-audit.timer
+# Set AUDIT_DATABASE_URL for the target host — this is a placeholder, not
+# tuned for any specific deployment (none exists yet, same as
+# scraper/scripts/pandapay-scraper.service).
+[Unit]
+Description=PandaPay nightly anonymization audit
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pandapay
+Environment=AUDIT_DATABASE_URL=postgresql://app_user:CHANGE_ME@localhost:5432/pandapay
+Environment=PANDAPAY_AUDIT_LOG_DIR=/var/log/pandapay-audit
+ExecStart=/opt/pandapay/db/scripts/run_nightly_audit.sh

@@ -1360,5 +1360,69 @@ app.get('/admin/data-quality-dashboard', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * AD-9 Anonymization Audit Automation.
+ *
+ * `pandapay.run_anonymization_audit()` (the 6-check function itself) already
+ * existed in db/supabase/migrations/0010_functions_and_views.sql — not
+ * written this chunk. What's new here: exposing its run history to the
+ * console (AD-9.1), and — separately, see .github/workflows/anonymization-
+ * audit.yml added alongside this route — actually calling it from CI on
+ * every push/PR and failing the build on any check failure (AD-9.2).
+ */
+app.get('/admin/anonymization-audit-runs', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query('SELECT * FROM anonymization_audit_runs ORDER BY ran_at DESC LIMIT 50')
+    );
+    res.json({ auditRuns: result.rows });
+  } catch (err) {
+    console.error('GET /admin/anonymization-audit-runs error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * AD-9.1 "latest result" convenience — same data as the list's first row,
+ * as its own endpoint so the console's summary card doesn't need to fetch
+ * and re-sort the whole history just to show the current state.
+ */
+app.get('/admin/anonymization-audit-runs/latest', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query('SELECT * FROM anonymization_audit_runs ORDER BY ran_at DESC LIMIT 1')
+    );
+    res.json({ latestRun: result.rows[0] || null });
+  } catch (err) {
+    console.error('GET /admin/anonymization-audit-runs/latest error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * AD-9.4 nightly cron entrypoint, and also usable for a manual "run now"
+ * console button. Not itself the CI gate (that calls the SQL function
+ * directly, no HTTP round-trip, so a broken api/ deploy can't mask a real
+ * audit failure) — this route exists for scheduled/manual runs that do go
+ * through the API layer, same shape as every other admin action here.
+ */
+app.post('/admin/anonymization-audit-runs/run', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const run = await client.query(
+        `SELECT pandapay.run_anonymization_audit($1) AS id`,
+        [req.body?.gitSha || null]
+      );
+      const runId = run.rows[0].id;
+      const detail = await client.query('SELECT * FROM anonymization_audit_runs WHERE id = $1', [runId]);
+      return detail.rows[0];
+    });
+    res.status(201).json({ auditRun: result });
+  } catch (err) {
+    console.error('POST /admin/anonymization-audit-runs/run error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));

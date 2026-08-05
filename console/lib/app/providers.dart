@@ -149,3 +149,9 @@ final dataQualityDashboardProvider = FutureProvider<Map<String, dynamic>?>((ref)
   if (api == null) return null;
   return api.fetchDataQualityDashboard();
 });
+
+final anonymizationAuditRunsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchAnonymizationAuditRuns();
+});

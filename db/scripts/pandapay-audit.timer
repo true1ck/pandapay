@@ -1,0 +1,12 @@
+# AD-9.4's "nightly cron run" — fires pandapay-audit.service every night at
+# 02:00 server time, ±15min randomized delay.
+[Unit]
+Description=Nightly anonymization audit schedule
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target

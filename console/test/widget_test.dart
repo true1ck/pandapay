@@ -640,4 +640,79 @@ void main() {
     expect(find.text('20'), findsOneWidget); // cards_published
     expect(find.text('1'), findsNWidgets(2)); // merchants_published + alerts_open both 1
   });
+
+  testWidgets('AD-9: admin sees the latest anonymization audit result and can run a new one',
+      (tester) async {
+    var runCalled = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                if (request.url.path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (request.url.path.endsWith('/run')) {
+                  runCalled = true;
+                  return http.Response(
+                    jsonEncode({
+                      'auditRun': {
+                        'id': 'run-2',
+                        'run_by': 'ci',
+                        'checks_total': 6,
+                        'checks_failed': 0,
+                        'findings': <Map<String, dynamic>>[],
+                        'passed': true,
+                        'git_sha': 'manual-run',
+                        'ran_at': '2026-08-06T00:00:00Z',
+                      },
+                    }),
+                    201,
+                  );
+                }
+                if (request.url.path == '/admin/anonymization-audit-runs') {
+                  return http.Response(
+                    jsonEncode({
+                      'auditRuns': [
+                        {
+                          'id': 'run-1',
+                          'run_by': 'ci',
+                          'checks_total': 6,
+                          'checks_failed': 1,
+                          'findings': [
+                            {'check': 'no_identity_columns', 'violations': 1},
+                          ],
+                          'passed': false,
+                          'git_sha': 'abc123',
+                          'ran_at': '2026-08-05T12:00:00Z',
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Anonymization Audit'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Latest: FAILED'), findsOneWidget);
+    expect(find.textContaining('no_identity_columns (1)'), findsOneWidget);
+
+    await tester.tap(find.text('Run now'));
+    await tester.pumpAndSettle();
+    expect(runCalled, isTrue);
+  });
 }

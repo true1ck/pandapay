@@ -408,6 +408,32 @@ class AdminApi {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['dashboard'] as Map<String, dynamic>;
   }
+
+  /// AD-9.1: full anonymization-audit run history.
+  Future<List<Map<String, dynamic>>> fetchAnonymizationAuditRuns() async {
+    final response =
+        await _client.get(Uri.parse('$apiBaseUrl/admin/anonymization-audit-runs'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/anonymization-audit-runs failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['auditRuns'] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// AD-9.4: trigger a run now (also used by the nightly cron script and,
+  /// separately, the CI gate — see .github/workflows/anonymization-audit.yml,
+  /// which calls the SQL function directly rather than through this route).
+  Future<Map<String, dynamic>> runAnonymizationAuditNow() async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/anonymization-audit-runs/run'),
+      headers: _headers,
+    );
+    if (response.statusCode != 201) {
+      throw AdminApiException('run failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['auditRun'] as Map<String, dynamic>;
+  }
 }
 
 class AdminApiException implements Exception {
