@@ -10,6 +10,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/auth_api.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/main.dart';
 
 /// Chunk 15 added a startup session-resume step (sessionInitProvider) that
@@ -81,16 +82,78 @@ void main() {
     expect(find.text('No applicable reward rule.'), findsOneWidget);
   });
 
-  testWidgets('bottom nav switches away from Home to a placeholder tab', (tester) async {
+  testWidgets('bottom nav switches away from Home to a placeholder tab (Activity)', (tester) async {
+    await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.receipt_long));
+    await tester.pump();
+
+    expect(find.text('PandaPay — Activity'), findsOneWidget);
+    expect(find.text('₹12,34,567.00'), findsOneWidget);
+  });
+
+  testWidgets('Chunk 16: Cards tab shows the login screen when signed out', (tester) async {
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
     await tester.pump();
     await tester.pump();
 
     await tester.tap(find.byIcon(Icons.credit_card));
     await tester.pump();
+    await tester.pump();
 
-    expect(find.text('PandaPay — Cards'), findsOneWidget);
-    expect(find.text('₹12,34,567.00'), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
+  });
+
+  testWidgets('Chunk 16: Cards tab shows a real owned card and lets it be archived', (tester) async {
+    var archiveCalled = false;
+    await tester.pumpWidget(
+      _appWithFakeCatalogue(
+        [_rupayCard()],
+        extraOverrides: [
+          accessTokenProvider.overrideWith((ref) => 'fake-access-token'),
+          userCardsRepositoryProvider.overrideWithValue(
+            UserCardsRepository(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-access-token',
+              client: MockClient((request) async {
+                if (request.method == 'POST' && request.url.path.endsWith('/archive')) {
+                  archiveCalled = true;
+                  return http.Response(jsonEncode({'ok': true}), 200);
+                }
+                return http.Response(
+                  jsonEncode({
+                    'userCards': [
+                      {
+                        'id': 'user-card-1',
+                        'card_product_id': 'test-rupay',
+                        'nickname': null,
+                        'card_name': 'Test RuPay Card',
+                        'is_default': false,
+                      },
+                    ],
+                  }),
+                  200,
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.credit_card));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Test RuPay Card'), findsWidgets);
+
+    await tester.tap(find.byIcon(Icons.archive_outlined));
+    await tester.pump();
+    expect(archiveCalled, isTrue);
   });
 
   testWidgets('Chunk 15: More tab shows the login screen when signed out', (tester) async {

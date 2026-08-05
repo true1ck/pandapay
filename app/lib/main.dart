@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'features/account/account_screen.dart';
+import 'features/cards/cards_screen.dart';
 import 'features/home/home_screen.dart';
 
 void main() {
@@ -24,8 +25,9 @@ class PandaPayApp extends StatelessWidget {
 
 /// UA-0.4.2 bottom nav: Home · Cards · raised SCAN FAB · Activity · More.
 /// Home (Chunk 5) is wired to the real engine + api/ fetch; More (Chunk 15)
-/// is UA-3's real OTP login + profile. Cards/Activity are still
-/// placeholders — not built yet, not faked as built.
+/// is UA-3's real OTP login + profile; Cards (Chunk 16) is the signed-in
+/// user's real wallet (add/archive via api/'s /user-cards). Activity is
+/// still a placeholder — not built yet, not faked as built.
 class _AppShell extends StatefulWidget {
   const _AppShell();
   @override
@@ -43,6 +45,7 @@ class _AppShellState extends State<_AppShell> {
       appBar: AppBar(title: Text('PandaPay — ${_tabLabels[_tab]}')),
       body: switch (_tab) {
         0 => const HomeScreen(),
+        1 => const CardsScreen(),
         3 => const AccountScreen(),
         _ => Center(
             child: Column(

@@ -534,5 +534,90 @@ app.post('/admin/alerts/:id/decide', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * GET /user-cards — UA-3+: the signed-in user's own wallet. Owner-scoped by
+ * RLS (0011's user_cards_owner policy), joined to v_card_catalogue_export's
+ * underlying card_products for the display fields the app needs — never
+ * includes archived cards (R4: user_cards are archived, never deleted, so
+ * "my wallet" must filter is_archived itself; the DB doesn't do that for
+ * you).
+ */
+app.get('/user-cards', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT uc.id, uc.card_product_id, uc.nickname, uc.is_default, uc.sort_order,
+                uc.created_at, cp.name AS card_name, cp.network, cp.is_upi_linkable
+           FROM user_cards uc
+           JOIN card_products cp ON cp.id = uc.card_product_id
+          WHERE uc.is_archived = false
+          ORDER BY uc.sort_order, uc.created_at`
+      )
+    );
+    res.json({ userCards: result.rows });
+  } catch (err) {
+    console.error('GET /user-cards error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /user-cards — add a card to the signed-in user's wallet.
+ * profile_id is always req.userId, never taken from the body — same
+ * pattern as POST /profile, so a user can never add a card to someone
+ * else's wallet even if they tampered with the request.
+ */
+app.post('/user-cards', requireAuth, async (req, res) => {
+  const { cardProductId, nickname } = req.body || {};
+  if (!cardProductId || typeof cardProductId !== 'string') {
+    return res.status(400).json({ error: 'cardProductId is required' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const card = await client.query(
+        `SELECT id FROM card_products WHERE id = $1 AND status = 'published'`,
+        [cardProductId]
+      );
+      if (card.rows.length === 0) return null;
+
+      const inserted = await client.query(
+        `INSERT INTO user_cards (profile_id, card_product_id, nickname)
+         VALUES ($1, $2, $3)
+         RETURNING id, card_product_id, nickname, is_default, sort_order, created_at`,
+        [req.userId, cardProductId, nickname || null]
+      );
+      return inserted.rows[0];
+    });
+
+    if (!result) return res.status(404).json({ error: 'card_product not found or not published' });
+    res.status(201).json({ userCard: result });
+  } catch (err) {
+    console.error('POST /user-cards error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /user-cards/:id/archive — R4: "archive, never delete." There is
+ * deliberately no DELETE /user-cards/:id route.
+ */
+app.post('/user-cards/:id/archive', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `UPDATE user_cards SET is_archived = true, archived_at = now()
+          WHERE id = $1 AND profile_id = $2
+          RETURNING id`,
+        [req.params.id, req.userId]
+      )
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'user_card not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /user-cards/:id/archive error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));

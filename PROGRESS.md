@@ -799,14 +799,60 @@ user's actual cards (that needs user_cards to exist first).
 **All four suites now: 50 (`pandapay_domain`) + 5 (`app`) + 8 (`console`) + 19 (`scraper`,
 Python) = 82 tests total.**
 
+### Chunk 16 — user_cards wiring: a real wallet, ranking scoped to it
+
+`api/`: `GET /user-cards` (owner-scoped via RLS's existing `user_cards_owner` policy — 0011
+already covered this table, this is the first code that ever calls it), `POST /user-cards`
+(validates the card exists and is `published` before inserting; `profile_id` is always
+`req.userId`, never taken from the request body — same anti-tampering pattern as `POST
+/profile`), `POST /user-cards/:id/archive` (**R4: archive, never delete — there is deliberately
+no `DELETE /user-cards/:id` route**).
+
+`app/`: `data/user_cards_repository.dart` (`UserCard`, `UserCardsRepository`),
+`features/cards/cards_screen.dart` (wallet list + archive button + an add-from-catalogue
+dropdown, reusing the already-fetched `catalogueProvider`), wired into the previously-placeholder
+**Cards** tab. `rankedRecommendationsProvider` (in `providers.dart`) now scopes the catalogue to
+the signed-in user's wallet **when they own any cards**, falling back to the whole catalogue
+when signed out or before a first card is added — so Home is never empty just because nobody's
+built onboarding yet, but a user who's actually added cards sees ranking against what they
+really have, not the full 4-card demo catalogue.
+
+**Verified end to end against the live DB/RLS with a real signed-in user, not mocked**:
+requested a real OTP, added a real `user_cards` row for HDFC Millennia, confirmed `GET
+/user-cards` returns exactly that card with correct joined display fields. **Confirmed RLS
+isolation directly**: a second, different real user (separate OTP login) hit the same `GET
+/user-cards` and got an empty wallet — never saw the first user's card. **Confirmed R4
+directly**: archived the card via the real endpoint, confirmed it disappeared from `GET
+/user-cards`, then queried the DB directly and confirmed the row still exists with
+`is_archived = true` and a real `archived_at` timestamp — archived, not deleted, verified at
+the data layer, not just by trusting the route's own name.
+
+`flutter analyze` and `dart run custom_lint`: both clean. The pre-existing "bottom nav switches
+to a placeholder tab" test targeted the Cards tab, which is no longer a placeholder — retargeted
+it to the still-placeholder Activity tab instead of leaving a stale assertion, and added 2 new
+Cards-tab tests (signed-out shows login; signed-in shows a real owned card and archiving it
+calls through to the repository). 7/7 app tests passing (was 5).
+
+**Not done**: no reordering/default-card UI (`sort_order`/`is_default` exist in the schema and
+API response, unused in the UI); no credit-limit/statement-day/due-day capture (`user_cards` has
+columns for all of it, UA-3's onboarding flow for those fields doesn't exist); no
+cap-consumption or milestone-progress tracking per user (a separate, larger surface — this
+chunk is "which cards does this person have," not "how much have they spent on each this
+cycle," so the engine still evaluates every owned card as if its caps/milestones are fully
+fresh).
+
+**All four suites now: 50 (`pandapay_domain`) + 7 (`app`) + 8 (`console`) + 19 (`scraper`,
+Python) = 84 tests total.**
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-15 (see sections above) are complete and verified. Next:
+Chunks 1-16 (see sections above) are complete and verified. Next:
 
-1. **user_cards wiring** — now that `app/` has real auth (Chunk 15), the natural next step is
-   letting a signed-in user actually own/track cards, so the engine can rank against a real
-   wallet instead of the whole catalogue. This is probably the highest-leverage next slice: real
-   identity already exists, this is the thing it was missing in order to matter.
+1. **Cap-consumption/milestone-progress tracking per user** — now that a real wallet exists
+   (Chunk 16), the next thing that would make the engine's cap-blending/milestone-bonus logic
+   (already correct per-card since Chunk 9) actually personalized is tracking *this specific
+   user's* spend against each owned card's caps/milestones this cycle, instead of evaluating
+   every card as freshly-uncapped.
 2. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
    per source (a product/legal decision, not something to fabricate) — today there's one
    `sources` row (Chunk 8, still correctly disabled) and the whole pipeline (scrape → diff →

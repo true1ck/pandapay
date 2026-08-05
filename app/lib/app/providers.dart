@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../data/auth_api.dart';
 import '../data/catalogue_repository.dart';
 import '../data/token_store.dart';
+import '../data/user_cards_repository.dart';
 
 /// api/'s and auth/'s default local dev ports. Overridden per-flavor once
 /// flavors exist (UA-0.1.2) — there is only one build target today.
@@ -54,6 +55,22 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   return api.fetchProfile();
 });
 
+final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return UserCardsRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// The signed-in user's own wallet — empty (not an error) when signed out,
+/// so rankedRecommendationsProvider below can fall back to the whole
+/// catalogue without a special-cased branch for "not signed in" vs.
+/// "signed in but owns nothing yet."
+final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  if (repo == null) return const [];
+  return repo.fetchUserCards();
+});
+
 final catalogueRepositoryProvider = Provider<CatalogueRepository>((ref) {
   return HttpCatalogueRepository(baseUrl: _apiBaseUrl);
 });
@@ -84,28 +101,40 @@ final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
   return const RecommendationEngine();
 });
 
-/// Ranks the fetched catalogue for the selected category. No user_cards,
-/// cap-consumption, or milestone-progress state exists yet (that's the
-/// backend surface chunk 6+ would add) — every card is evaluated as if its
-/// caps/milestones are fully fresh. This is a real ranking over real data,
-/// just not yet personalized to an actual signed-in user's usage.
+/// Ranks the fetched catalogue for the selected category, scoped to the
+/// signed-in user's own wallet (Chunk 16's user_cards) when they own any —
+/// falling back to the whole catalogue when signed out or before they've
+/// added a first card, so Home is never empty just because nobody's built
+/// UA-1.2's onboarding flow yet. Still no cap-consumption or
+/// milestone-progress state (that's user-usage tracking, a separate,
+/// larger surface than "which cards does this person actually have") —
+/// every card is evaluated as if its caps/milestones are fully fresh.
 final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>((ref) {
   final catalogue = ref.watch(catalogueProvider);
   final categories = ref.watch(categoriesProvider);
+  final userCards = ref.watch(userCardsProvider);
   final selectedSlug = ref.watch(selectedCategoryProvider);
   final engine = ref.watch(recommendationEngineProvider);
 
-  if (catalogue.isLoading || categories.isLoading) {
+  if (catalogue.isLoading || categories.isLoading || userCards.isLoading) {
     return const AsyncValue.loading();
   }
-  final combinedError = catalogue.error ?? categories.error;
+  final combinedError = catalogue.error ?? categories.error ?? userCards.error;
   if (combinedError != null) {
-    return AsyncValue.error(combinedError, catalogue.stackTrace ?? categories.stackTrace!);
+    return AsyncValue.error(
+      combinedError,
+      catalogue.stackTrace ?? categories.stackTrace ?? userCards.stackTrace!,
+    );
   }
 
-  final cards = catalogue.requireValue;
+  final allCards = catalogue.requireValue;
   final categoryList = categories.requireValue;
+  final wallet = userCards.requireValue;
   final categoryId = categoryList.firstWhereOrNull((c) => c.slug == selectedSlug)?.id;
+
+  final cards = wallet.isEmpty
+      ? allCards
+      : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
 
   final context = RecommendationContext(
     amount: _defaultDemoAmount,
