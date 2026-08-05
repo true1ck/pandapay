@@ -1,0 +1,18 @@
+# AD-3.2.5 scheduler — systemd (Linux prod) variant. Pair with
+# pandapay-scraper.timer in this directory. Install:
+#   sudo cp pandapay-scraper.service pandapay-scraper.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pandapay-scraper.timer
+# Adjust User=/WorkingDirectory=/Environment= for the target host; these are
+# placeholders, not tuned for any specific deployment (none exists yet).
+[Unit]
+Description=PandaPay scraper — one AD-3 crawl pass
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pandapay
+WorkingDirectory=/opt/pandapay/scraper
+Environment=PANDAPAY_SCRAPER_LOG_DIR=/var/log/pandapay-scraper
+ExecStart=/opt/pandapay/scraper/scripts/run_weekly.sh

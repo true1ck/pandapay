@@ -962,11 +962,64 @@ tests passing (was 8).
 **All five suites now: 50 (`pandapay_domain`) + 9 (`app`) + 8 (`console`) + 19 (`scraper`,
 Python) + 12 (`api`) = 98 tests total.**
 
+### Chunk 20 — RLS re-audit + scraper scheduler
+
+**RLS re-audit** (item 7 from the old list): grepped every migration under `db/supabase/
+migrations/` for `using (true)` and for the owner-policy-only gap pattern that bit us three
+times already (Chunk 7: `card_products`; Chunk 8: `card_requests`/`data_error_reports`/
+`support_tickets`). Findings: the one remaining unconditional `using (true)` block (0011's
+catalogue-tables loop) covers reference/config data — `issuers`, `spend_categories`,
+`feature_flags`, `changelog_entries`, etc. — that's meant to be world-readable by design, not a
+missed admin gap; `card_products` and its 9 status-bearing children were already fixed in 0015.
+The owner-only tables from 0011's first loop (`user_cards`, `transactions`, `cap_states`,
+`milestone_states`, `points_ledger`, `lounge_usage`, `needs_review_items`, etc.) have no admin
+policy — but the console has no screen that reads any of them yet (unlike the Chunk 7/8 cases,
+where the console *did* have a screen silently getting empty results), so this isn't a live gap,
+just user-private data nothing has asked to read across users yet. No new migration needed.
+
+**Scraper scheduler** (item 6): `scraper/scripts/run_weekly.sh` — a wrapper that activates the
+venv, runs `python -m pandapay_scraper.run`, and logs to `scraper/logs/` (gitignored). Paired
+with `pandapay-scraper.service` + `pandapay-scraper.timer` (systemd, `OnCalendar=Mon 03:00` with
+a 30-min randomized delay) for AD-3.2.5's "weekly default crawl." Not wired into cron/systemd on
+this dev machine (no target host to install it on) — the files are ready to `cp` into
+`/etc/systemd/system/` on a real deployment.
+
+**Verified live**: ran `run_weekly.sh` against the actual local Postgres — `main()` exits 0 with
+"No enabled+ToS-reviewed sources to crawl." (correct: the `sources` table is still empty per
+item 1 below) and a real log file was written. Confirms the scheduler is safe to enable right
+now without accidentally hitting anything, and will start crawling automatically the moment a
+real source is added and ToS-reviewed.
+
+### Chunk 21 — UA-2.5.1 golden fixture set
+
+`packages/pandapay_domain/test/golden_fixtures_test.dart`: a single consolidated file with 33
+scenarios (plan asks for ≥30) covering every rule interaction in one sweep — distinct from
+`engine_test.dart`'s existing per-bug regression tests, which stay in place. Covers: cap
+boundary × all 3 measures (spend_amount/reward_value/txn_count, 9 scenarios), milestone flip
+(not-material/material-partial/completes/already-achieved, 4), manual override (2), P2P/UPI
+exclusion gate (4), travel forex (2), fuel surcharge waiver (2), no-cap card / bare card /
+category mismatch (3), reward-rule priority ordering (1), tie-break and ranking totality
+(4, including a zero-cards scenario), and two "kitchen sink" scenarios where cap blending, the
+fuel waiver, and a milestone bonus all combine on one transaction.
+
+Building scenario 12 (milestone-completion bonus) surfaced a fact about the existing engine
+worth flagging, not a bug: the bonus is pro-rated to *this transaction's own share* of the
+threshold (`closedPortion / thresholdSpend`), not to however much of the remaining gap it
+closes — a milestone crossed by a series of small transactions pays out a little on each one
+that clears the material-fraction bar, not one lump sum on whichever transaction happens to
+tip it over. My first draft of the test assumed the latter and failed against the real engine;
+fixed the test's expected values to match actual (already-correct, already-shipped) behavior
+rather than changing the engine.
+
+`dart test`: 83/83 passing in `pandapay_domain` (was 50 — +33 new, 0 regressions).
+
+**All five suites now: 83 (`pandapay_domain`) + 9 (`app`) + 8 (`console`) + 19 (`scraper`,
+Python) + 12 (`api`) = 131 tests total.**
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-19 (see sections above) are complete and verified. All four of `app/`'s bottom-nav
-tabs are real and fed by real user input; the remaining gaps are mostly outside `app/` itself.
-Next:
+Chunks 1-21 (see sections above) are complete and verified. Every item that didn't require an
+external legal/product/cost decision is now done. Remaining, in priority order:
 
 1. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
    per source (a product/legal decision, not something to fabricate) — today there's one
@@ -978,19 +1031,14 @@ Next:
    let `extraction_proposals` actually understand prose instead of pattern-matching numbers next
    to `%`/`Rs.` tokens.
 3. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
-   import tool (UA-1.1.2).
-4. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
-   feature, not the consolidated fixture file the plan describes).
-5. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
-   data quality dashboard, anonymization audit automation — none started.
-6. **A scheduler for the scraper** (AD-3.2.5's "weekly default crawl") — `scraper/run.py` is
-   invoked manually today, no cron/systemd-timer wiring.
-7. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
-   `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus
-   `support_tickets` pre-emptively fixed in the same migration once the pattern was clear) — a
-   final grep across 0011 for any other `_owner`-only policy on a table an admin will eventually
-   need to read turned up nothing else (checked: `profiles`/`transaction_splits` are legitimately
-   user-only by design, not a gap).
+   import tool (UA-1.1.2). Deliberately not expanded unprompted — the existing 4 are already
+   labeled "approximate, not verified against current bank T&C" (`db/seed/0001_demo_cards.sql`),
+   and asserting real reward rates/fees/caps for ~40 more real bank products at that scale is a
+   content-accuracy decision, not a mechanical one.
+4. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
+   data quality dashboard, anonymization audit automation — none started. Each is a substantial
+   new surface (new tables already exist in schema for some of these, e.g. `merchants`/
+   `acceptance_summary`/`effective_rate_summary` from 0011, but no API routes or UI).
 
 ## Sandbox limitations
 

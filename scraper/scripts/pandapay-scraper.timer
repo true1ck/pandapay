@@ -1,0 +1,13 @@
+# AD-3.2.5's "weekly default crawl" — fires pandapay-scraper.service every
+# Monday 03:00 server time, ±30min randomized delay so a fleet of hosts
+# (if there ever is one) doesn't all hit sources in the same instant.
+[Unit]
+Description=Weekly AD-3 crawl schedule
+
+[Timer]
+OnCalendar=Mon *-*-* 03:00:00
+RandomizedDelaySec=1800
+Persistent=true
+
+[Install]
+WantedBy=timers.target
