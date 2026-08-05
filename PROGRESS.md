@@ -1265,6 +1265,45 @@ clean; all 13 console widget tests still pass unchanged (no test exercises stale
 since none of the seeded rows are actually old enough to trip the threshold — this is UI/query
 plumbing verified structurally, not a new stale-item test case).
 
+### Chunk 28 — AD-1.1.4: draft→in_review→published→archived state machine UI
+
+Flagged as missing since Chunk 6: the console could edit reward-rule rates but had no way to
+actually move a card through its publish lifecycle — `card_products.status` could only be
+changed by hand in SQL. The DB had already been enforcing
+`card_published_needs_verification` (`status <> 'published' OR verified_at IS NOT NULL`) since
+early on, so publishing without verification was already structurally impossible — this chunk
+is what makes reaching 'published' possible at all through the app.
+
+`api/`: `POST /admin/cards/:id/status`, restricted to the explicit transition table
+`draft→in_review`, `in_review→draft` (send back) or `in_review→published`, `published→archived`
+— any other pair is rejected with 409, not silently coerced. Moving to `published` sets
+`verified_at`/`verified_by` server-side (only if not already set) — this *is* the human
+verification pass (a human clicked "Verify & publish"), not an automated check. Same
+typed-writer + `admin_audit_log`-in-the-same-transaction pattern as every other mutating route
+in this file.
+
+`console/`: `catalogue_screen.dart`'s card tiles now show `verified $timestamp` / `not
+verified` in the subtitle and a row of transition buttons scoped to the card's current status
+(`Move to in_review`, `Move to draft`, `Verify & publish`, `Move to archived`).
+
+**A real bug caught while wiring the route, not after**: the first version used two different
+SQL text branches (one setting `verified_by`, one not) sharing a positional `$2` that was
+unreferenced in the non-verifying branch — Postgres couldn't infer that parameter's type
+(`error 42P18, could not determine data type of parameter $2`) since the code path taken at
+runtime depends on data, but the query plan is chosen from the query *text* alone. Fixed by
+using one query with a `CASE WHEN $2 THEN ... ELSE ...` and always passing all four params, so
+every parameter is referenced regardless of branch.
+
+**Verified live end-to-end via curl** (real admin JWT from a real OTP round-trip) against the
+live local Postgres: draft→in_review→draft (send-back, allowed) →in_review→published (set
+`verified_at`/`verified_by` for real) →confirmed a same-state invalid transition (`draft`→
+`archived`) correctly 409s. Reverted the test card back to `draft`/`verified_at = NULL`
+afterward so seed data wasn't left mutated. `flutter analyze` clean; added a new console
+widget test (mock client simulates the draft→in_review round trip); 14/14 console tests
+passing (was 13). `api/`'s existing 12-test suite (pure period-bounds logic, no route tests)
+unaffected — this route is verified live via curl, same pattern as every other admin route in
+this codebase, not via a Node test file.
+
 ## Sandbox limitations
 
 This is a Mac dev machine with Flutter, Dart, Postgres, and Docker all available and

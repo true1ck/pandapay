@@ -109,6 +109,22 @@ class AdminApi {
     }
   }
 
+  /// AD-1.1.4 state machine transition: draft->in_review->published->archived
+  /// (and in_review->draft to send back). Publishing sets verified_at/by
+  /// server-side — this is the human verification pass, not automatic.
+  Future<Map<String, dynamic>> changeCardStatus(String cardId, String status, {String? reason}) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/cards/$cardId/status'),
+      headers: _headers,
+      body: jsonEncode({'status': status, 'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('POST /admin/cards/$cardId/status failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['card'] as Map<String, dynamic>;
+  }
+
   /// AD-2.1: card requests grouped by issuer+product with counts.
   Future<List<Map<String, dynamic>>> fetchCardRequestGroups() async {
     final response = await _client.get(Uri.parse('$apiBaseUrl/admin/card-requests'), headers: _headers);

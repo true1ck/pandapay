@@ -98,6 +98,71 @@ void main() {
     expect(find.text('Test Card — draft'), findsOneWidget);
   });
 
+  testWidgets('AD-1.1.4: admin moves a draft card to in_review via the status button',
+      (tester) async {
+    var cardsCallCount = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                if (request.url.path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (request.url.path.startsWith('/admin/cards/') && request.method == 'POST') {
+                  return http.Response(
+                    jsonEncode({
+                      'card': {'id': 'card-1', 'status': 'in_review', 'verified_at': null, 'verified_by': null},
+                    }),
+                    200,
+                  );
+                }
+                cardsCallCount++;
+                final status = cardsCallCount == 1 ? 'draft' : 'in_review';
+                return http.Response(
+                  jsonEncode({
+                    'cards': [
+                      {
+                        'id': 'card-1',
+                        'name': 'Test Card',
+                        'status': status,
+                        'network': 'rupay',
+                        'data_version': 1,
+                        'is_upi_linkable': true,
+                        'verified_at': null,
+                        'reward_rules': [
+                          {'id': 'rule-1', 'unit': 'cashback_percent', 'rate': 5},
+                        ],
+                      },
+                    ],
+                  }),
+                  200,
+                );
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test Card — draft'), findsOneWidget);
+    await tester.tap(find.text('Test Card — draft'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Move to in_review'), findsOneWidget);
+    await tester.tap(find.text('Move to in_review'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test Card — in_review'), findsOneWidget);
+  });
+
   testWidgets('AD-2.1: admin sees card requests grouped by issuer+product with counts',
       (tester) async {
     await tester.pumpWidget(

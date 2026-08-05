@@ -185,6 +185,81 @@ app.put('/admin/reward-rules/:id', requireAdmin, async (req, res) => {
 });
 
 /**
+ * POST /admin/cards/:id/status — AD-1.1.4's draft->in_review->published
+ * state machine (was UI-less since Chunk 6; the DB already enforced the
+ * `card_published_needs_verification` CHECK — publishing without
+ * `verified_at` set was always impossible, this route is just the first
+ * thing that can legally reach 'published'). Allowed transitions only:
+ * draft->in_review, in_review->draft (send back), in_review->published
+ * (sets verified_at/verified_by if not already set — this is the human
+ * verification pass, not automatic), published->archived. Any other
+ * transition is rejected rather than silently allowed.
+ */
+const CARD_STATUS_TRANSITIONS = {
+  draft: ['in_review'],
+  in_review: ['draft', 'published'],
+  published: ['archived'],
+  archived: [],
+};
+
+app.post('/admin/cards/:id/status', requireAdmin, async (req, res) => {
+  const { status: nextStatus, reason } = req.body || {};
+  if (!Object.keys(CARD_STATUS_TRANSITIONS).includes(nextStatus)) {
+    return res.status(400).json({ error: 'status must be one of draft/in_review/published/archived' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const before = await client.query(
+        'SELECT id, status, verified_at, verified_by FROM card_products WHERE id = $1',
+        [req.params.id]
+      );
+      if (before.rows.length === 0) return { notFound: true };
+
+      const currentStatus = before.rows[0].status;
+      if (!CARD_STATUS_TRANSITIONS[currentStatus].includes(nextStatus)) {
+        return { invalidTransition: true, currentStatus };
+      }
+
+      const setVerification = nextStatus === 'published' && !before.rows[0].verified_at;
+      const updated = await client.query(
+        `UPDATE card_products
+            SET status = $1,
+                verified_at = CASE WHEN $2 THEN now() ELSE verified_at END,
+                verified_by = CASE WHEN $2 THEN $3::uuid ELSE verified_by END
+          WHERE id = $4
+          RETURNING id, status, verified_at, verified_by`,
+        [nextStatus, setVerification, req.userId, req.params.id]
+      );
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'change_card_status', 'card_products', $2, $3, $4, $5)`,
+        [
+          req.userId,
+          req.params.id,
+          JSON.stringify({ status: currentStatus, verified_at: before.rows[0].verified_at }),
+          JSON.stringify(updated.rows[0]),
+          reason || null,
+        ]
+      );
+
+      return { card: updated.rows[0] };
+    });
+
+    if (result.notFound) return res.status(404).json({ error: 'card_product not found' });
+    if (result.invalidTransition) {
+      return res
+        .status(409)
+        .json({ error: `cannot transition from ${result.currentStatus} to ${nextStatus}` });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/cards/:id/status error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * GET /categories — spend_categories, slug -> id. The engine's
  * RecommendationContext.categoryId is the UUID FK reward_rules.category_id
  * actually uses, but every client-facing surface (chips, seed data docs)
