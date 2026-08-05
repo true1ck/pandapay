@@ -5,6 +5,7 @@ import '../../app/providers.dart';
 import '../auth/login_screen.dart';
 import '../geofence/nearby_merchants_screen.dart';
 import '../home_widget/widget_settings_screen.dart';
+import '../sms_import/sms_import_screen.dart';
 
 /// UA-3's "More" tab account section: signed-out shows the login flow,
 /// signed-in shows the profile row api/'s GET /profile actually returns
@@ -55,6 +56,18 @@ class AccountScreen extends ConsumerWidget {
               label: const Text('Home-screen widget'),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const WidgetSettingsScreen()),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // UA-5.3 (Chunk 31): built but never wired into any navigation
+            // entry point at the time — the building agent's own report
+            // flagged this gap explicitly. Fixed here, same pattern as the
+            // two UA-8 entries above.
+            OutlinedButton.icon(
+              icon: const Icon(Icons.sms_outlined),
+              label: const Text('SMS transaction import'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SmsImportScreen()),
               ),
             ),
             const SizedBox(height: 24),

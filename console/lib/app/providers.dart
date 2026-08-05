@@ -155,3 +155,9 @@ final anonymizationAuditRunsProvider = FutureProvider<List<Map<String, dynamic>>
   if (api == null) return const [];
   return api.fetchAnonymizationAuditRuns();
 });
+
+final parserPatternsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchParserPatterns();
+});

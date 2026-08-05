@@ -1725,3 +1725,68 @@ extraction.py`, `scraper/pandapay_scraper/db.py`, `scraper/pandapay_scraper/run.
 `scraper/tests/test_llm_extraction.py` (new), `scraper/requirements.txt`,
 `scraper/requirements-lock.txt`, `scraper/example.env`, `PROGRESS.md`. No commit made — left
 staged/unstaged per instructions.
+
+### Chunk 35 — connectivity audit: three real "built but unreachable" gaps found and fixed
+
+Requested explicitly: "go through the entire application and check if anything is remaining
+to be implemented, anything which is not connected." A read-only audit agent checked every
+recent feature's actual navigation reachability (not just that the file compiles) and found
+three real gaps — all from Chunks 30/31/32, each built by a separate parallel agent that
+never saw what the other two were doing:
+
+1. **`app/lib/main.dart`'s central scan FAB was a literal no-op** (`onPressed: () {}`) —
+   this predates Chunk 30 (it was a placeholder from the very first scaffold), but Chunk 30
+   built a real `ScanCardScreen` without anyone going back to wire the app's single most
+   prominent scan entry point to it. Fixed by having the FAB push `ScanCardScreen` directly
+   (using `catalogueProvider`) and, on a pick, hand it to Cards' `_AddCardForm` via a new
+   `pendingScannedCardIdProvider` (`app/lib/app/providers.dart`) — the FAB itself has no add
+   form of its own, so it switches to the Cards tab and pre-fills the dropdown, same
+   "scan sets a candidate, Add still has to be pressed" contract the in-form scan button
+   already had. The provider is consumed once and cleared post-frame, not left sticky.
+2. **UA-5.3 SMS import was completely unreachable** — `sms_import_screen.dart` (Chunk 31)
+   was never imported by anything in `app/lib`, confirmed independently by the audit (the
+   building agent's own report had already flagged this, but PROGRESS.md hadn't been
+   updated to reflect it was still true). Fixed by adding a "SMS transaction import" entry
+   to `account_screen.dart`'s More tab, alongside Chunk 32's two UA-8 entries (same pattern).
+3. **`parser_patterns` admin CRUD had no console UI at all** — 4 routes (Chunk 31), fully
+   built and curl-verified server-side, had zero callers anywhere in `console/`. Without a
+   way to add a pattern, SMS import had no data to match against even once reachable. Fixed
+   with a new `console/lib/features/parser_patterns/parser_patterns_screen.dart` (list +
+   add-pattern form + activate/deactivate/delete), matching client methods in
+   `admin_api.dart`, a `parserPatternsProvider`, and a 10th `main.dart` nav destination.
+
+**A second, independent real bug fell out of fixing #3**: adding a 10th `NavigationRail`
+destination pushed the console's left rail past the available height on a short/narrow
+viewport — caught immediately by `flutter test` (11 of 14 console tests started failing
+with a genuine `RenderFlex overflowed` exception, not a flaky test), the same overflow class
+already fixed three separate times earlier in this project (Chunks 23/24/25's dropdown/header
+overflows). `NavigationRail` has no built-in scrolling, so it's now wrapped in a
+`SingleChildScrollView`, with the sign-out button moved from the rail's `trailing` slot to a
+fixed footer below the scroll area (so it stays reachable without scrolling to the bottom of
+a long destination list). One existing test (`AD-9`) needed `scrollUntilVisible` added before
+its tap, since that destination is now genuinely below the fold in the test viewport — a real
+UX consequence of the extra tab, not a workaround for a test artifact.
+
+**Verified, not assumed**: the audit agent ran static analysis only (no live servers); this
+session then live-verified the actual fix by curling the full SMS-import round trip against
+the real local Postgres with a real admin JWT — created a real `parser_patterns` row via
+`POST /admin/parser-patterns`, confirmed a case-mismatched regex correctly produced a
+`parser_failures` row (`no_regex_match`, not a silent guess), then confirmed a case-correct
+version of the same pattern produced a real `transactions` row (`source='sms'`) with fee-waiver
+state updated through the same shared helper Chunk 31 built — the entire SMS-import pipeline,
+end to end, for the first time since it was built. All test data was cleaned up afterward.
+
+Added one new console widget test (Parser Patterns list + add-pattern flow). All three
+non-scraper suites re-run clean after every fix: 33 `app/` (unchanged count, existing suite
+still covers the FAB/nav changes structurally via `flutter analyze`, no dedicated new app test
+added for the FAB rewire itself), 15 `console/` (was 14, +1), 25 `api/` (unaffected, no API
+changes this chunk). `flutter analyze`/`dart run custom_lint` clean on both `app/` and
+`console/`.
+
+No other gaps survived the audit: `ScanCardScreen`, `NearbyMerchantsScreen`, and
+`WidgetSettingsScreen` were all already correctly wired (contrary to the audit brief's initial
+suspicion); every other API route has a real caller in one of the two Flutter clients; no
+TODO/FIXME/stub markers exist anywhere except the one already-documented intentional
+`NotImplementedError` in `scraper/pandapay_scraper/fetcher.py` (Chunk 12's Playwright
+fallback). No commit made yet — left
+staged/unstaged per instructions.

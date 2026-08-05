@@ -450,6 +450,85 @@ class AdminApi {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['auditRun'] as Map<String, dynamic>;
   }
+
+  /// UA-5.3/AD-4.3 follow-up (Chunk 35): the parser_patterns CRUD routes
+  /// (built in Chunk 31 alongside SMS import) had no console client at all
+  /// — sms_parser.js can't parse a single real SMS without at least one
+  /// active pattern to match against, so this is what actually makes that
+  /// feature reachable end to end, not just its own screen.
+  Future<List<Map<String, dynamic>>> fetchParserPatterns({String? channel, bool? isActive}) async {
+    final query = {
+      'channel': ?channel,
+      if (isActive != null) 'isActive': isActive.toString(),
+    };
+    final uri = Uri.parse('$apiBaseUrl/admin/parser-patterns').replace(queryParameters: query.isEmpty ? null : query);
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/parser-patterns failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['parserPatterns'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> createParserPattern({
+    required String channel,
+    required String regex,
+    required Map<String, dynamic> fieldMap,
+    String? issuerId,
+    String? senderPattern,
+    String? sampleText,
+    String? reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/parser-patterns'),
+      headers: _headers,
+      body: jsonEncode({
+        'channel': channel,
+        'regex': regex,
+        'fieldMap': fieldMap,
+        'issuerId': ?issuerId,
+        'senderPattern': ?senderPattern,
+        'sampleText': ?sampleText,
+        'reason': ?reason,
+      }),
+    );
+    if (response.statusCode != 201) {
+      throw AdminApiException('POST /admin/parser-patterns failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  Future<void> updateParserPattern(
+    String id, {
+    String? regex,
+    Map<String, dynamic>? fieldMap,
+    bool? isActive,
+    String? reason,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$apiBaseUrl/admin/parser-patterns/$id'),
+      headers: _headers,
+      body: jsonEncode({
+        'regex': ?regex,
+        'fieldMap': ?fieldMap,
+        'isActive': ?isActive,
+        'reason': ?reason,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('PUT /admin/parser-patterns/$id failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  Future<void> deleteParserPattern(String id, {String? reason}) async {
+    final response = await _client.delete(
+      Uri.parse('$apiBaseUrl/admin/parser-patterns/$id'),
+      headers: _headers,
+      body: jsonEncode({'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('DELETE /admin/parser-patterns/$id failed: ${response.statusCode} ${response.body}');
+    }
+  }
 }
 
 class AdminApiException implements Exception {

@@ -115,6 +115,14 @@ final selectedCategoryProvider = StateProvider<String?>((ref) => 'online');
 /// logged if they then tap "log spend" on a card.
 final enteredAmountProvider = StateProvider<Money>((ref) => const Money.fromPaise(100000));
 
+/// Bridges the app shell's central scan FAB (main.dart, tab-agnostic) to
+/// Cards' `_AddCardForm` (Chunk 30's scan flow was originally only reachable
+/// from inside that form). The FAB pushes ScanCardScreen itself, switches to
+/// the Cards tab on a pick, and sets this; the form listens and pre-fills
+/// its dropdown selection from it, then clears it back to null so it's a
+/// one-shot handoff, not a sticky value that reappears on next visit.
+final pendingScannedCardIdProvider = StateProvider<String?>((ref) => null);
+
 final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
   return const RecommendationEngine();
 });

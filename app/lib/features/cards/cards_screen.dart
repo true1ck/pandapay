@@ -143,6 +143,22 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
 
   @override
   Widget build(BuildContext context) {
+    // Chunk 30 follow-up: the app shell's central scan FAB (main.dart) has
+    // no Add Card form of its own — it hands a pick to this form via
+    // pendingScannedCardIdProvider and switches to the Cards tab. This form
+    // mounts fresh on every tab switch (it's a whole new widget subtree, not
+    // just a rebuild), so the pending value must be read directly here, not
+    // just watched for future changes — a plain ref.listen would miss a
+    // value that was already set before this widget existed. Consumed once,
+    // then cleared post-frame so it doesn't reapply or reappear later.
+    final pendingScan = ref.watch(pendingScannedCardIdProvider);
+    if (pendingScan != null && pendingScan != _selectedCardId) {
+      _selectedCardId = pendingScan;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.read(pendingScannedCardIdProvider.notifier).state = null;
+      });
+    }
+
     final catalogue = ref.watch(catalogueProvider);
     return catalogue.when(
       loading: () => const SizedBox.shrink(),

@@ -10,6 +10,7 @@ import 'features/crowdsource/conflicts_screen.dart';
 import 'features/crowdsource/merchants_screen.dart';
 import 'features/dashboard/anonymization_audit_screen.dart';
 import 'features/dashboard/data_quality_dashboard_screen.dart';
+import 'features/parser_patterns/parser_patterns_screen.dart';
 import 'features/queues/card_requests_screen.dart';
 import 'features/queues/error_reports_screen.dart';
 
@@ -95,6 +96,7 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     (label: 'Acceptance & Rates', screen: AcceptanceRatesScreen()),
     (label: 'Data Quality', screen: DataQualityDashboardScreen()),
     (label: 'Anonymization Audit', screen: AnonymizationAuditScreen()),
+    (label: 'Parser Patterns', screen: ParserPatternsScreen()),
   ];
 
   @override
@@ -102,32 +104,47 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     return Scaffold(
       body: Row(
         children: [
-          NavigationRail(
-            selectedIndex: _selected,
-            onDestinationSelected: (i) => setState(() => _selected = i),
-            labelType: NavigationRailLabelType.all,
-            destinations: [
-              for (final d in _destinations) NavigationRailDestination(icon: const Icon(Icons.circle), label: Text(d.label)),
-            ],
-            trailing: Expanded(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Consumer(
-                    builder: (context, ref, _) => IconButton(
-                      icon: const Icon(Icons.logout),
-                      tooltip: 'Sign out',
-                      onPressed: () async {
-                        final store = await ref.read(tokenStoreProvider.future);
-                        await store.clear();
-                        ref.read(accessTokenProvider.notifier).state = null;
-                      },
+          // Chunk 35: the rail grew past 9 destinations (added Parser
+          // Patterns) and now genuinely overflows a short/narrow viewport —
+          // same overflow class as Chunk 23-25's dropdown/header fixes,
+          // caught here by a real test failure, not just eyeballing it.
+          // NavigationRail has no built-in scrolling, so wrap it directly;
+          // its own `trailing` sign-out button moves into a fixed footer
+          // below the scroll area instead, so it stays reachable without
+          // scrolling to the very bottom of a long destination list.
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  child: IntrinsicHeight(
+                    child: NavigationRail(
+                      selectedIndex: _selected,
+                      onDestinationSelected: (i) => setState(() => _selected = i),
+                      labelType: NavigationRailLabelType.all,
+                      destinations: [
+                        for (final d in _destinations)
+                          NavigationRailDestination(icon: const Icon(Icons.circle), label: Text(d.label)),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Consumer(
+                  builder: (context, ref, _) => IconButton(
+                    icon: const Icon(Icons.logout),
+                    tooltip: 'Sign out',
+                    onPressed: () async {
+                      final store = await ref.read(tokenStoreProvider.future);
+                      await store.clear();
+                      ref.read(accessTokenProvider.notifier).state = null;
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
           const VerticalDivider(width: 1),
           Expanded(child: _destinations[_selected].screen),

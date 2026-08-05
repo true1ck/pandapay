@@ -770,6 +770,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // Chunk 35: the rail grew to 10 destinations and is now genuinely
+    // scrollable on a short viewport (see main.dart) — this one needs
+    // scrolling into view before it's tappable, unlike the earlier tabs.
+    await tester.scrollUntilVisible(find.text('Anonymization Audit'), 100);
     await tester.tap(find.text('Anonymization Audit'));
     await tester.pumpAndSettle();
 
@@ -779,5 +783,69 @@ void main() {
     await tester.tap(find.text('Run now'));
     await tester.pumpAndSettle();
     expect(runCalled, isTrue);
+  });
+
+  testWidgets('Chunk 35: admin sees parser patterns and can add a new one',
+      (tester) async {
+    var createCalled = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                if (request.url.path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (request.url.path == '/admin/parser-patterns' && request.method == 'POST') {
+                  createCalled = true;
+                  return http.Response(jsonEncode({'parserPattern': {}}), 201);
+                }
+                if (request.url.path == '/admin/parser-patterns') {
+                  return http.Response(
+                    jsonEncode({
+                      'parserPatterns': [
+                        {
+                          'id': 'pp-1',
+                          'issuer_id': null,
+                          'channel': 'sms',
+                          'sender_pattern': 'HDFCBK',
+                          'regex': r'spent Rs\.(\d+)',
+                          'field_map': {'amount': 1},
+                          'version': 1,
+                          'is_active': true,
+                          'sample_text': 'You spent Rs.500',
+                          'success_count': 3,
+                          'failure_count': 1,
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Parser Patterns'), 100);
+    await tester.tap(find.text('Parser Patterns'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('sms · HDFCBK · v1'), findsOneWidget);
+    expect(find.textContaining('3 matched · 1 failed'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Regex'), r'debited Rs\.(\d+)');
+    await tester.tap(find.text('Add pattern'));
+    await tester.pumpAndSettle();
+    expect(createCalled, isTrue);
   });
 }

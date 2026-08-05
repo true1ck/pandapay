@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import 'app/providers.dart';
 import 'features/account/account_screen.dart';
 import 'features/activity/activity_screen.dart';
 import 'features/cards/cards_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/scan/scan_card_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: PandaPayApp()));
@@ -29,16 +31,43 @@ class PandaPayApp extends StatelessWidget {
 /// catalogue/wallet, Cards (Chunk 16) the signed-in user's wallet,
 /// Activity (Chunk 18) their logged transactions, More (Chunk 15) OTP
 /// login + profile.
-class _AppShell extends StatefulWidget {
+class _AppShell extends ConsumerStatefulWidget {
   const _AppShell();
   @override
-  State<_AppShell> createState() => _AppShellState();
+  ConsumerState<_AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<_AppShell> {
+class _AppShellState extends ConsumerState<_AppShell> {
   int _tab = 0;
+  bool _scanning = false;
 
   static const _tabLabels = ['Home', 'Cards', 'Activity', 'More'];
+
+  /// UA-4 (Chunk 30 built the scanner; this shell-level FAB was still a
+  /// no-op placeholder from the original scaffold until now). Pushes the
+  /// same ScanCardScreen the Cards tab's Add Card form uses, then hands any
+  /// pick to Cards via pendingScannedCardIdProvider and switches to that
+  /// tab — the FAB itself has no "add a card" form of its own to fill in.
+  Future<void> _scanFromFab() async {
+    setState(() => _scanning = true);
+    try {
+      final catalogue = await ref.read(catalogueProvider.future);
+      if (!mounted) return;
+      final picked = await Navigator.of(context).push<CardProduct>(
+        MaterialPageRoute(builder: (_) => ScanCardScreen(catalogue: catalogue)),
+      );
+      if (picked != null && mounted) {
+        ref.read(pendingScannedCardIdProvider.notifier).state = picked.id;
+        setState(() => _tab = 1);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not load catalogue to scan against: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,9 +80,11 @@ class _AppShellState extends State<_AppShell> {
         _ => const AccountScreen(),
       },
       floatingActionButton: FloatingActionButton.large(
-        onPressed: () {},
+        onPressed: _scanning ? null : _scanFromFab,
         tooltip: 'Scan QR',
-        child: const Icon(Icons.qr_code_scanner),
+        child: _scanning
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.qr_code_scanner),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
