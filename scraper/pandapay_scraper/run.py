@@ -2,7 +2,10 @@
 runs every enabled+ToS-reviewed source (or one specific source for manual
 "run now"), respecting the robots gate and rate limiter for every single
 fetch, logging a scrape_runs row, and persisting a page_snapshots row only
-when content_hash actually changed (AD-3.2.3 skip_unchanged).
+when content_hash actually changed (AD-3.2.3 skip_unchanged). A genuine
+change also feeds AD-4.1/4.5's diff into the unified policy_change_alerts
+queue (alerts.py) — see that module's docstring for the AD-4.3 scope limit
+(page-level signal, not field-level, until AI extraction exists).
 """
 
 from __future__ import annotations
@@ -13,6 +16,8 @@ import sys
 import httpx
 
 from . import db
+from .alerts import record_diff_as_alert_signal
+from .diff import compute_diff
 from .extractor import extract
 from .fetcher import fetch_static
 from .rate_limit import PerHostRateLimiter
@@ -47,14 +52,14 @@ def run_source(conn, client: httpx.Client, robots: RobotsChecker, limiter: PerHo
 
             fetched += 1
             extracted = extract(result.html, selector_hint=page["selector_hint"])
-            previous_hash = db.last_snapshot_hash(conn, page["id"])
+            previous = db.last_snapshot(conn, page["id"])
 
-            if extracted.content_hash == previous_hash:
+            if previous is not None and extracted.content_hash == previous["content_hash"]:
                 db.mark_page_crawled(conn, page["id"], changed=False)
                 print(f"  unchanged: {url}")
                 continue
 
-            db.insert_snapshot(
+            new_snapshot_id = db.insert_snapshot(
                 conn,
                 source_page_id=page["id"],
                 scrape_run_id=run_id,
@@ -63,6 +68,25 @@ def run_source(conn, client: httpx.Client, robots: RobotsChecker, limiter: PerHo
                 http_status=result.status_code,
             )
             db.mark_page_crawled(conn, page["id"], changed=True)
+
+            # AD-4.1/4.5: only a genuine second-or-later observation is a
+            # "change" worth alerting on — the very first time we ever see
+            # a page has nothing to diff against, so it's cold-start
+            # baselining, not a policy change.
+            if previous is not None and new_snapshot_id:
+                diff = compute_diff(previous["extracted_text"], extracted.text)
+                alert_id = record_diff_as_alert_signal(
+                    conn,
+                    card_product_id=page["card_product_id"],
+                    page_role=page["page_role"],
+                    page_url=url,
+                    new_snapshot_id=new_snapshot_id,
+                    diff=diff,
+                )
+                if alert_id:
+                    print(f"  -> policy_change_alerts row touched: {alert_id}")
+                elif diff.has_meaningful_change:
+                    print("  -> content changed but page isn't linked to a card_product_id, no alert raised")
             changed += 1
             print(f"  CHANGED (new snapshot): {url}")
 

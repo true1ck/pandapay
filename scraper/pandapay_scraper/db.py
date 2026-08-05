@@ -92,16 +92,15 @@ def finish_scrape_run(
     conn.commit()
 
 
-def last_snapshot_hash(conn: psycopg.Connection, source_page_id: str) -> str | None:
+def last_snapshot(conn: psycopg.Connection, source_page_id: str) -> dict[str, Any] | None:
     with conn.cursor() as cur:
         cur.execute(
-            """SELECT content_hash FROM page_snapshots
+            """SELECT id, content_hash, extracted_text FROM page_snapshots
                 WHERE source_page_id = %s
                 ORDER BY captured_at DESC LIMIT 1""",
             (source_page_id,),
         )
-        row = cur.fetchone()
-        return row["content_hash"] if row else None
+        return cur.fetchone()
 
 
 def insert_snapshot(
@@ -141,6 +140,91 @@ def mark_page_crawled(conn: psycopg.Connection, source_page_id: str, *, changed:
                 "UPDATE source_pages SET last_crawled_at = now(), consecutive_failures = 0 WHERE id = %s",
                 (source_page_id,),
             )
+    conn.commit()
+
+
+def find_open_alert(conn: psycopg.Connection, card_product_id: str, field_path: str) -> dict | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT * FROM policy_change_alerts
+                WHERE card_product_id = %s AND field_path = %s AND state = 'open'""",
+            (card_product_id, field_path),
+        )
+        return cur.fetchone()
+
+
+def create_alert(
+    conn: psycopg.Connection,
+    *,
+    card_product_id: str,
+    field_path: str,
+    field_label: str,
+) -> str:
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO policy_change_alerts
+                 (card_product_id, field_path, field_label, signal_count,
+                  distinct_signal_kinds, corroboration_score)
+               VALUES (%s, %s, %s, 1, 1, 0.25)
+               RETURNING id""",
+            (card_product_id, field_path, field_label),
+        )
+        alert_id = cur.fetchone()["id"]
+    conn.commit()
+    return str(alert_id)
+
+
+def reinforce_alert(conn: psycopg.Connection, alert_id: str, *, new_signal_kind: bool) -> None:
+    """AD-4.5: a second signal on the SAME (card, field) corroborates the
+    existing alert rather than fanning out into a new one — signal_count
+    always increments, distinct_signal_kinds and corroboration_score only
+    move when this is a genuinely different *kind* of signal (two
+    scrape_diffs on the same page in a row shouldn't out-weigh one scrape
+    agreeing with one user_report).
+    """
+    with conn.cursor() as cur:
+        if new_signal_kind:
+            cur.execute(
+                """UPDATE policy_change_alerts
+                      SET signal_count = signal_count + 1,
+                          distinct_signal_kinds = distinct_signal_kinds + 1,
+                          corroboration_score = LEAST(corroboration_score + 0.25, 1.0),
+                          last_signal_at = now()
+                    WHERE id = %s""",
+                (alert_id,),
+            )
+        else:
+            cur.execute(
+                """UPDATE policy_change_alerts
+                      SET signal_count = signal_count + 1, last_signal_at = now()
+                    WHERE id = %s""",
+                (alert_id,),
+            )
+    conn.commit()
+
+
+def alert_has_signal_kind(conn: psycopg.Connection, alert_id: str, signal: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM policy_alert_evidence WHERE alert_id = %s AND signal = %s LIMIT 1",
+            (alert_id, signal),
+        )
+        return cur.fetchone() is not None
+
+
+def insert_alert_evidence(
+    conn: psycopg.Connection,
+    *,
+    alert_id: str,
+    snapshot_id: str,
+    excerpt: str,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO policy_alert_evidence (alert_id, signal, snapshot_id, excerpt)
+               VALUES (%s, 'scrape_diff', %s, %s)""",
+            (alert_id, snapshot_id, excerpt),
+        )
     conn.commit()
 
 

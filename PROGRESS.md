@@ -664,29 +664,82 @@ default crawl" — `run.py` is invoked manually today); AD-4 (diff review UI, AI
 AD-5 (the unified alert queue this scraper is meant to feed) don't exist yet — this chunk is the
 data-collection half of AD-3/AD-4/AD-5's pipeline, not the review/propagation half.
 
+### Chunk 13 — AD-4.1/4.2/4.5: diff computation feeding the unified alert queue
+
+`scraper/pandapay_scraper/diff.py` (new) — word-level diff between two snapshots via
+`difflib.SequenceMatcher`, with noise suppression (AD-4.1) for rotating dates and small
+standalone counters ("128 people viewed this today") so cosmetic churn doesn't manufacture a
+false policy change on every crawl — while still catching a real change sitting right next to
+suppressed noise in the same sentence (tested explicitly, not just assumed compatible).
+
+`scraper/pandapay_scraper/alerts.py` (new) — turns a genuine diff into (or reinforces) a
+`policy_change_alerts` row. **Explicit, permanent scope limit, not a placeholder**: without
+AD-4.3's AI-assisted structured extraction (needs a real LLM call — a cost/scope decision that
+wasn't made this session, so not built), this cannot know *which field* changed (a cap? a rate?
+just marketing copy?) — it raises one **page-level** signal
+(`field_path = 'page_content:<page_role>'`), not the field-level path the full plan describes
+(`cap_rules.<id>.cap_value`). AD-4.5's actual point — merging corroborating signals into one row
+instead of fanning into separate queues — is implemented for real: a second `scrape_diff` on
+the same (card, field) increments `signal_count` and adds evidence without creating a duplicate
+`policy_change_alerts` row; `distinct_signal_kinds` only moves when the evidence is a genuinely
+different *kind* of signal, not just another instance of the same one.
+
+`run.py` wires this in: a snapshot change only produces a diff/alert when there was a *previous*
+snapshot to diff against (first-ever observation of a page is baselining, not a policy change).
+`db/setup_scraper_role.sql` grants `scraper_role` access to the two new tables (missed on the
+first pass — found immediately by actually running the second crawl and hitting a real
+`permission denied`, fixed and re-verified, not caught only in review).
+
+**Verified end to end against the real DB with a real change, not a mocked one**: stood up a
+local HTTP server under my own control (`python -m http.server`, not a real bank — same
+reasoning as Chunk 12 about not scraping real production sites for verification), pointed a
+test `source_pages` row at it with `card_product_id` set to the real seeded HDFC Millennia
+card, and:
+1. First crawl: baseline snapshot, correctly produced **zero** alerts (nothing to diff against).
+2. Changed the served content (5% → 3%), second crawl: a real `policy_change_alerts` row was
+   created, correctly attributed to HDFC Millennia, with a `policy_alert_evidence` row whose
+   `excerpt` is the actual diff (`- 3%` / `+ 1%` — confirmed via direct psql, not assumed).
+3. Changed the content again (1% → still 1%, but cap ₹1,000 → ₹500), third crawl: confirmed the
+   **same** alert row was reinforced (`signal_count` 1→2, still exactly one
+   `policy_change_alerts` row, two `policy_alert_evidence` rows), not a duplicate — proving
+   AD-4.5's merge behavior for real.
+4. Deleted all test fixtures (source, pages, the test alert and its evidence) afterward;
+   `sources`/`policy_change_alerts` both back to their real pre-chunk state (1 row, 0 rows).
+- 5 new pure-logic tests for `diff.py` (no-change, real-change-detected, date-noise-suppressed,
+  counter-noise-suppressed, real-change-not-hidden-by-adjacent-noise). 14/14 scraper tests
+  passing (was 9).
+
+**Not done**: AD-4.3 (AI-assisted structured extraction — needs an LLM call, a decision not
+made this session), AD-4.4 (pre-filled editable form over the real card-rule model — depends on
+AD-4.3's structured output existing), field-level `field_path`s (currently page-level only, see
+above), the diff review UI in the console (AD-4.2's "side-by-side diff view in Flutter Web" —
+this chunk built the data pipeline feeding it, not the screen itself).
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-12 (see sections above) are complete and verified. Next:
+Chunks 1-13 (see sections above) are complete and verified. Next:
 
-1. **AD-4/AD-5** — diff review + AI extraction (AD-4) and the unified policy-change alert queue
-   (AD-5, "the core requirement driving this entire application" per the plan's own words) — the
-   scraper (Chunk 12) now produces `page_snapshots`, but nothing diffs them against the previous
-   snapshot, proposes structured extractions, or feeds `policy_change_alerts` yet.
-2. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
+1. **AD-4.2's console diff-review UI** — the alert queue now has real rows with real evidence
+   (Chunk 13), but nothing in `console/` displays them yet. This is probably the highest-leverage
+   next slice: it's pure UI work on top of data that already exists and is already proven, no new
+   backend risk.
+2. **AD-4.3/4.4 (AI-assisted extraction)** — needs an explicit decision on LLM usage/cost before
+   building; the page-level `field_path` scope limit (Chunk 13) stays permanent until this exists.
+3. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
    per source (a product/legal decision, not something to fabricate) — today there's one
-   `sources` row (Chunk 8, still correctly disabled) and the pipeline was proven against a single
-   safe test fetch, not real targets.
-3. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
+   `sources` row (Chunk 8, still correctly disabled) and the pipeline was proven against safe
+   test fetches only (`example.com`, a local test server), never real targets.
+4. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
    import tool (UA-1.1.2).
-4. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
+5. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
    feature, not the consolidated fixture file the plan describes).
-5. **`app/` has no auth/login flow (UA-3) at all** — Home only hits public endpoints. This blocks
+6. **`app/` has no auth/login flow (UA-3) at all** — Home only hits public endpoints. This blocks
    user_cards/transaction wiring (the engine still ranks the whole catalogue, not a signed-in
    user's actual cards), any local drift/cache, and app-side token persistence (Chunk 10 only
    covered `console/`, which already had a login flow to persist a session for).
-6. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
+7. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
    data quality dashboard, anonymization audit automation — none started.
-7. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
+8. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
    `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus
    `support_tickets` pre-emptively fixed in the same migration once the pattern was clear) — a
    final grep across 0011 for any other `_owner`-only policy on a table an admin will eventually
