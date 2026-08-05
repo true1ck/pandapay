@@ -14,8 +14,24 @@ language sql stable as $$
   select nullif(current_setting('app.user_id', true), '')::uuid;
 $$;
 
+-- SECURITY DEFINER is load-bearing, not decoration: admin_users' own RLS
+-- policy (below) calls is_admin() to decide access, so a plain
+-- `language sql stable` version of this function recurses forever the
+-- moment it's evaluated by a real non-superuser role (is_admin() queries
+-- admin_users -> triggers admin_users' RLS -> calls is_admin() again ->
+-- ... -> "stack depth limit exceeded"). This only ever appeared to work
+-- during development because the app connected as the Postgres superuser,
+-- which bypasses RLS entirely (rolbypassrls) and never exercises this path
+-- — caught only once the app was pointed at a real non-superuser role
+-- (db/setup_app_role.sql). SECURITY DEFINER makes this one query run with
+-- the function owner's privileges (whoever ran this migration — expected
+-- to be a superuser/bypassrls role in every environment, same as any other
+-- migration), which is a superuser-level RLS bypass scoped to just this
+-- function body, not granted to the calling role in general.
 create or replace function pandapay.is_admin() returns boolean
-language sql stable as $$
+language sql stable security definer
+set search_path = public, pandapay
+as $$
   select exists (select 1 from admin_users a where a.id = pandapay.uid() and a.is_active);
 $$;
 

@@ -183,6 +183,14 @@ what PandaPay actually needs, then drop `partner_tier_id`/`active_role`/the unus
 entirely rather than carrying them as dead columns.
 
 ### `api/` — new: minimal product API, RLS proven end-to-end (not just wired)
+**⚠️ CORRECTED IN CHUNK 6 BELOW — read that section.** The claim in this section that
+"isolation is enforced by Postgres RLS" was wrong: the database connection was
+`postgres`, a superuser, which unconditionally bypasses RLS. What was actually proven
+here was the API's `WHERE id = $1` filter working correctly, not RLS. Chunk 6 found
+this, created a real non-superuser role (`db/setup_app_role.sql`), and re-proved
+isolation for real. Left this section otherwise unedited so the corrected write-up in
+Chunk 6 is legible as a correction rather than silently rewriting history.
+
 Chunk 1 of the task breakdown. New Node/Express service (`api/`, port 4000) sitting
 between the Flutter apps and the `pandapay` product database:
 - `src/auth.js`: verifies the JWT `auth/` issues (same `JWT_ACCESS_SECRET`). **Important
@@ -327,29 +335,124 @@ Extended `packages/pandapay_domain`'s engine with the rest of UA-2.2/UA-2.4:
   a signed-in user's actual cards); no amount entry (fixed ₹1,000 demo amount); cap-measure
   gap above; the other 3 bottom-nav tabs are still placeholders.
 
+### Chunk 6 — Console AD-0.3 real auth + AD-1 catalogue manager (and two critical DB findings)
+
+**⚠️ Most important finding of the whole session, read this first:** every "RLS isolation
+proven" claim in this file up through Chunk 5 was tested by connecting as the `postgres`
+role — which is a **Postgres superuser**, and **superusers unconditionally bypass Row
+Level Security**, regardless of `FORCE ROW LEVEL SECURITY` on the tables. That means the
+earlier two-users-can't-see-each-other's-profile test was real (it worked), but it was
+proven by the API's `WHERE id = $1` filter, **not by Postgres RLS** — RLS was never
+actually being exercised. Found while building the admin auth check for this chunk, fixed
+properly, and re-verified for real:
+- `db/setup_app_role.sql` (new): creates `app_user`, a genuine non-superuser,
+  non-RLS-bypassing role, granted exactly the privileges an application needs. `api/`'s
+  `DATABASE_URL` now points at `app_user`, not `postgres` (`api/example.env` documents
+  why, in bold, so this can't silently regress).
+- **Re-verified profile isolation as `app_user` directly via psql** (not through the API,
+  to isolate exactly what RLS itself does): with no `app.user_id` set, `SELECT * FROM
+  profiles` returns **zero rows**; with it set to a real user's id, returns **exactly
+  that user's row**. This is RLS actually enforcing the policy, confirmed independent of
+  any application code.
+- **Then re-ran the full two-user API isolation test from Chunk 1 against the real
+  `app_user`-backed API** — same result as before, but now genuinely proven by Postgres,
+  not just by API discipline that happened not to have a bug.
+- **A second, more serious bug fell out of the same investigation**: `pandapay.is_admin()`
+  (`0011_rls_policies.sql`) queries `admin_users` to check admin status, but
+  `admin_users`' own RLS policy calls `is_admin()` to decide access — under a real
+  non-superuser role this recurses infinitely (`ERROR: stack depth limit exceeded`). It
+  only ever appeared to work because `postgres` bypasses RLS and never actually
+  triggered the recursive policy check. **Fixed** by making `is_admin()` `SECURITY
+  DEFINER` (scopes a superuser-level RLS bypass to just that one function body, not to
+  the calling role) — verified an admin's `is_admin()` returns `true` and they can read
+  `admin_users`, a non-admin's returns `false` and they see zero rows, both under the
+  real `app_user` role.
+- **Not fixed, documented**: `card_products`' own RLS policy is `public_read using
+  (true)` — unconditional, not filtered to `status = 'published'`. So Postgres RLS alone
+  does not hide draft/in_review cards from a non-admin querying the table directly; only
+  `v_card_catalogue_export`'s explicit `WHERE status = 'published'` does that, and only
+  for callers going through that specific view. The new `/admin/cards` endpoint's
+  `requireAdmin` check (see below) is therefore doing real, load-bearing access control
+  itself, not just being defense-in-depth on top of RLS. Flagged inline in `api/src/index.js`.
+
+**AD-0.3 / AD-1 build, on top of the above:**
+- `api/`: `requireAdmin` middleware (`GET /admin/me`, `GET /admin/cards`,
+  `PUT /admin/reward-rules/:id`) — checks `pandapay.is_admin()` for real per request.
+  `v_admin_card_catalogue_export` (new view, `0010_functions_and_views.sql`): same shape
+  as the public export view, minus the published-only filter, so admins can see drafts.
+  `PUT /admin/reward-rules/:id` is a real typed writer (AD-1.1.3): only ever accepts a
+  numeric `rate`, writes `admin_audit_log` in the *same transaction* as the update
+  (AD-0.3.4 — a write that reaches the table but skips the audit is impossible, the
+  transaction rolls back together), and **verified the existing `bump_card_data_version`
+  trigger fires from this path too**: edited HDFC Millennia's online rate from 5→7 through
+  a real admin token, confirmed the audit row (before/after values, admin id, reason) and
+  confirmed `data_version` bumped 4→5, both via direct psql against the live DB.
+  Verified end-to-end with two real users from `auth/`'s live OTP flow: the actual admin
+  gets `isAdmin: true` and successful reads/writes; a genuine non-admin gets
+  `isAdmin: false` and a real `403` on both `GET /admin/cards` and the `PUT` — not mocked.
+- `console/`: `data/admin_api.dart` (`AuthApi` for OTP login, `AdminApi` for
+  `/admin/*`), `app/providers.dart` (real `accessTokenProvider`/`isAdminProvider`,
+  restructured so `isAdminProvider` depends on the overridable `adminApiProvider` for
+  testability), `features/auth/login_screen.dart` (phone+OTP, same flow as the user app
+  — AD-0.3.1's "no signup path" holds because whether the resulting session is an
+  operator is decided entirely server-side by `requireAdmin`, not by anything
+  client-side), `features/catalogue/catalogue_screen.dart` (card list + inline reward-rate
+  editor calling the real typed-writer endpoint). `main.dart` now gates on real
+  auth/admin state instead of the `ConsoleSession.signedOut` stub; `app/router.dart`'s
+  go_router shell from earlier in the session is **not wired into this build** (kept as
+  reference for the intended nav shape, not silently presented as load-bearing).
+- 3 widget tests using `package:http/testing.dart`'s `MockClient` (signed-out → login
+  screen; signed-in non-admin → dead end; signed-in admin → real catalogue data
+  including a draft card) — no real network call in the automated suite.
+- **Manually built and ran the actual Flutter Web console** (`flutter build web` +
+  `python3 -m http.server`) against the live `auth/` + `api/` + seeded DB, confirmed the
+  real login screen renders correctly in a browser. Could not complete a full click-through
+  login in the automated browser tool — Flutter's CanvasKit web renderer draws to a single
+  `<canvas>` and exposes no DOM/accessibility nodes for generic browser automation to
+  target (confirmed: `read_page` found zero interactive elements) — this is a tooling
+  limitation of the verification environment, not a defect in the app; backend
+  correctness for the whole login→admin-check→catalogue-edit path is independently
+  verified via curl with real tokens against the real database (above), and the widget
+  test suite covers the same paths with fakes.
+- `flutter analyze`/`dart analyze`: clean on all three packages (`pandapay_domain`,
+  `app`, `console`). All test suites green: 45 (`pandapay_domain`) + 3 (`app`) + 3
+  (`console`) = 51.
+- **Not done**: AD-1.1.4 (draft→in_review→published state machine UI), AD-1.2 (impact
+  preview, structural validation beyond "rate is a non-negative number"), AD-1.3 (YAML
+  bulk import/export), AD-2 through AD-9 (request/error queues, scraper, policy-change
+  alert queue — the actual core of the admin console per its own plan — none of this
+  exists yet); no token persistence in the console (refresh loses the session); the
+  go_router-based nav shell isn't wired to the real auth-gated app.
+
 ## What's NOT done (next steps, roughly in priority order)
 
-1. **Restart local Postgres** before resuming DB work (see note above) — both the `pandapay` and
-   `pandapay_auth` databases were live and verified this session but are not running as background
-   services; also restart the `auth/` Node service the same way if resuming API testing
-   (`cd auth && DB_SSL=false node src/index.js`, needs a `.env` — see `auth/db/pandapay-auth/init.sql`
-   for the schema it now expects). Consider a `docker-compose.yml` for the product DB matching the
-   auth DB's pattern.
-2. **Trim `authRoutes.js` for PandaPay specifically** — remove the marketplace/partner-tier logic
-   and its now-dead columns (`partner_tier_id`, `active_role`), per the user's explicit direction
-   that this environment must diverge from the source app, not just patch around its shape.
-3. **Implement `set_config('app.user_id', ...)` middleware** in whatever backend sits between the
-   Flutter apps and the *product* Postgres DB (`pandapay`, not `pandapay_auth`) — nothing calls
-   this yet, so RLS is correctly designed but unreachable by any real request path. This is also
-   where the `auth/` service's issued JWT needs to be verified before every product-DB transaction.
-4. **UA-1: card catalogue + card management** — next real feature slice once the above is stable.
-   Explicitly the critical-path item in `Userappimplementation_plan.md` (blocks UA-2, see below).
-5. **UA-2 remainder**: milestone bonus value, split optimizer, billing-cycle float, EMI advisor,
-   UPI-vs-swipe comparison, the full 30-scenario golden fixture set (engine skeleton is built and
-   tested, see `packages/pandapay_domain` section above).
-6. **AD-0.3 console auth** — wire real session state into `ConsoleSession` so the route guard does
-   something beyond "always false".
-7. The custom_lint rules mentioned above (DateTime.now() ban, bare Money Text ban).
+All 6 originally-planned chunks (see chunk sections above) are complete and verified. Next:
+
+1. **Restart local services** before resuming — nothing runs as a background service.
+   `pandapay`/`pandapay_auth` Postgres: `LC_ALL=C pg_ctl -D <scratchpad>/pgdata -o "-p 55432" start`
+   (see the DB section above for why `LC_ALL=C` is needed on this machine). `auth/`: needs a
+   `.env` (`DATABASE_URL=postgresql://postgres@localhost:55432/pandapay_auth`, `DB_SSL=false`,
+   `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`, `JWT_AUDIENCE=authenticated` — see
+   `auth/example.env`). `api/`: needs a `.env` pointed at `app_user`, NOT `postgres` — see
+   `api/example.env` and `db/setup_app_role.sql` (run once per fresh database).
+2. **Fix the card_products RLS gap** flagged in Chunk 6: `card_products_public_read` is
+   `using (true)`, unconditional — Postgres RLS itself doesn't hide drafts from a direct table
+   query, only `v_card_catalogue_export`'s view-level filter does. Either add a status-aware
+   policy for non-admins or accept that `/admin/*`'s `requireAdmin` check is the real gate (and
+   audit every other place that might read `card_products` directly without going through a view).
+3. **AD-2 through AD-9** (admin console's actual core purpose per `adminimplementation_plan.md`):
+   request/error queues, the scraper, and especially the unified policy-change alert queue — none
+   of this exists. What's built (Chunk 6) is only AD-0.3/AD-1's foundation.
+4. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
+   import tool (UA-1.1.2).
+5. **The cap-measure gap** (Chunk 5): `CapRule` blending doesn't distinguish `spend_amount` vs
+   `reward_value` vs `txn_count` caps — flagged inline in `engine.dart`.
+6. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
+   feature, not the consolidated fixture file the plan describes).
+7. **No user_cards/transaction wiring anywhere** — the engine ranks the whole catalogue, not a
+   signed-in user's actual cards; no drift/local cache in the app (always a live fetch, no offline
+   path); no token persistence in either Flutter app (refresh loses the session).
+8. The custom_lint rules mentioned in the app section (DateTime.now() ban, bare Money Text ban).
 
 ## Sandbox limitations
 

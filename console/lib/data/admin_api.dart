@@ -1,0 +1,88 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+/// Talks to auth/ (OTP + JWT) and api/'s /admin/* surface. AD-0.3.1: no
+/// signup path — this only ever calls the OTP login flow, same as the user
+/// app; whether the resulting account is actually an operator is entirely
+/// determined server-side by api/'s requireAdmin (pandapay.is_admin()), not
+/// by anything client-side.
+class AuthApi {
+  final String authBaseUrl;
+  final http.Client _client;
+  AuthApi({required this.authBaseUrl, http.Client? client}) : _client = client ?? http.Client();
+
+  Future<void> requestOtp(String phoneNumber) async {
+    final response = await _client.post(
+      Uri.parse('$authBaseUrl/auth/request-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone_number': phoneNumber}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('OTP request failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// Returns the access token on success.
+  Future<String> verifyOtp(String phoneNumber, String code, String deviceId) async {
+    final response = await _client.post(
+      Uri.parse('$authBaseUrl/auth/verify-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone_number': phoneNumber, 'code': code, 'device_id': deviceId}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('OTP verify failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['access_token'] as String;
+  }
+}
+
+class AdminApi {
+  final String apiBaseUrl;
+  final String accessToken;
+  final http.Client _client;
+
+  AdminApi({required this.apiBaseUrl, required this.accessToken, http.Client? client})
+      : _client = client ?? http.Client();
+
+  Map<String, String> get _headers => {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      };
+
+  Future<bool> isAdmin() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/me'), headers: _headers);
+    if (response.statusCode != 200) return false;
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['isAdmin'] as bool? ?? false;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAdminCards() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/cards'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/cards failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['cards'] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// AD-1.1.3 typed writer, client side: only ever sends `rate` (+ optional
+  /// audit reason), never a raw JSON blob of the whole rule.
+  Future<void> updateRewardRuleRate(String ruleId, double rate, {String? reason}) async {
+    final response = await _client.put(
+      Uri.parse('$apiBaseUrl/admin/reward-rules/$ruleId'),
+      headers: _headers,
+      body: jsonEncode({'rate': rate, 'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('PUT /admin/reward-rules/$ruleId failed: ${response.statusCode} ${response.body}');
+    }
+  }
+}
+
+class AdminApiException implements Exception {
+  final String message;
+  AdminApiException(this.message);
+  @override
+  String toString() => message;
+}

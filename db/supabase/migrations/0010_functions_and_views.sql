@@ -200,6 +200,33 @@ from card_products c
 join issuers i on i.id = c.issuer_id
 where c.status = 'published' and c.is_active;
 
+-- AD-1.1.1 catalogue browse: same shape as v_card_catalogue_export but
+-- without the published-only filter, so the console can see (and edit)
+-- draft/in_review cards too — this view is gated to admins only by RLS
+-- (0011: card_products_admin_write / the underlying table policies), it is
+-- not itself a public-read view like its sibling above.
+create or replace view v_admin_card_catalogue_export as
+select
+  c.id, c.slug, c.name, c.network, c.card_type, c.status, c.data_version,
+  c.verified_at, c.annual_fee_inr, c.joining_fee_inr, c.is_upi_linkable,
+  c.art_asset, c.art_primary_color, c.point_value_inr,
+  i.slug as issuer_slug, i.name as issuer_name,
+  coalesce((select jsonb_agg(to_jsonb(r) - 'card_product_id') from reward_rules r
+             where r.card_product_id = c.id), '[]'::jsonb) as reward_rules,
+  coalesce((select jsonb_agg(to_jsonb(k) - 'card_product_id') from cap_rules k
+             where k.card_product_id = c.id), '[]'::jsonb) as cap_rules,
+  coalesce((select jsonb_agg(to_jsonb(m) - 'card_product_id') from milestone_rules m
+             where m.card_product_id = c.id), '[]'::jsonb) as milestone_rules,
+  coalesce((select jsonb_agg(to_jsonb(f) - 'card_product_id') from fee_waiver_rules f
+             where f.card_product_id = c.id), '[]'::jsonb) as fee_waiver_rules,
+  coalesce((select jsonb_agg(to_jsonb(b) - 'card_product_id') from card_benefits b
+             where b.card_product_id = c.id), '[]'::jsonb) as benefits,
+  (select to_jsonb(x) - 'card_product_id' from forex_rules x where x.card_product_id = c.id) as forex,
+  (select to_jsonb(y) - 'card_product_id' from fuel_surcharge_rules y where y.card_product_id = c.id) as fuel
+from card_products c
+join issuers i on i.id = c.issuer_id
+where c.is_active;
+
 -- Console: §6.6 Data Quality Dashboard, single query.
 create or replace view v_data_quality_dashboard as
 select
