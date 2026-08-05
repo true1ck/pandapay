@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Dashboard - Admin</title>
+  <style>
+    /* === ADMIN SECURITY VISUALIZER === */
+    /* Dark theme with modern UI */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #0a0e27;
+      color: #e0e0e0;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #1a1f3a;
+    }
+
+    h1 {
+      color: #4fc3f7;
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #90a4ae;
+      font-size: 14px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-bottom: 25px;
+      padding: 20px;
+      background: #141b2d;
+      border-radius: 8px;
+      border: 1px solid #1a1f3a;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+      min-width: 150px;
+    }
+
+    label {
+      font-size: 12px;
+      color: #90a4ae;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, select, button {
+      padding: 10px 12px;
+      background: #1a1f3a;
+      border: 1px solid #2a3a5a;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: #4fc3f7;
+      box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
+    }
+
+    button {
+      background: #4fc3f7;
+      color: #0a0e27;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      min-width: 120px;
+    }
+
+    button:hover {
+      background: #29b6f6;
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+
+    .stat-card {
+      background: #141b2d;
+      border: 1px solid #1a1f3a;
+      border-radius: 8px;
+      padding: 20px;
+      border-left: 4px solid #4fc3f7;
+    }
+
+    .stat-card.high-risk {
+      border-left-color: #f44336;
+    }
+
+    .stat-card.suspicious {
+      border-left-color: #ff9800;
+    }
+
+    .stat-card.info {
+      border-left-color: #4caf50;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #90a4ae;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #e0e0e0;
+    }
+
+    .table-container {
+      background: #141b2d;
+      border: 1px solid #1a1f3a;
+      border-radius: 8px;
+      overflow: hidden;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1000px;
+    }
+
+    thead {
+      background: #1a1f3a;
+      position: sticky;
+      top: 0;
+    }
+
+    th {
+      padding: 15px 12px;
+      text-align: left;
+      font-size: 12px;
+      color: #90a4ae;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      border-bottom: 2px solid #2a3a5a;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #1a1f3a;
+      font-size: 14px;
+    }
+
+    tbody tr {
+      transition: background 0.2s;
+    }
+
+    tbody tr:hover {
+      background: #1a1f3a;
+    }
+
+    .risk-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .risk-high {
+      background: #f44336;
+      color: #fff;
+    }
+
+    .risk-suspicious {
+      background: #ff9800;
+      color: #fff;
+    }
+
+    .risk-info {
+      background: #4caf50;
+      color: #fff;
+    }
+
+    .status-success {
+      color: #4caf50;
+    }
+
+    .status-failed {
+      color: #f44336;
+    }
+
+    .status-blocked {
+      color: #ff9800;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #90a4ae;
+    }
+
+    .error {
+      background: #1a1f3a;
+      border: 1px solid #f44336;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      color: #f44336;
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+
+    .status-indicator.active {
+      background: #4caf50;
+      box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+    }
+
+    .status-indicator.inactive {
+      background: #90a4ae;
+    }
+
+    .footer-info {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #1a1f3a;
+      text-align: center;
+      color: #90a4ae;
+      font-size: 12px;
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 20px;
+      background: #1a1f3a;
+      border-top: 1px solid #2a3a5a;
+    }
+
+    .pagination-info {
+      color: #90a4ae;
+      font-size: 13px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #90a4ae;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🔒 Security Dashboard</h1>
+      <p class="subtitle">Real-time authentication event monitoring</p>
+    </header>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="riskFilter">Risk Level</label>
+        <select id="riskFilter">
+          <option value="">All Levels</option>
+          <option value="HIGH_RISK">High Risk</option>
+          <option value="SUSPICIOUS">Suspicious</option>
+          <option value="INFO">Info</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="searchInput">Search</label>
+        <input type="text" id="searchInput" placeholder="User ID, Phone, or IP">
+      </div>
+      <div class="control-group">
+        <label for="limitInput">Limit</label>
+        <input type="number" id="limitInput" value="200" min="1" max="1000">
+      </div>
+      <div class="control-group" style="justify-content: flex-end;">
+        <label>&nbsp;</label>
+        <button id="refreshBtn">Refresh</button>
+      </div>
+    </div>
+
+    <div class="stats" id="statsContainer">
+      <!-- Stats will be inserted here via textContent -->
+    </div>
+
+    <div class="table-container">
+      <div id="loadingIndicator" class="loading">Loading events...</div>
+      <div id="errorContainer"></div>
+      <table id="eventsTable" style="display: none;">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Action</th>
+            <th>Status</th>
+            <th>Risk Level</th>
+            <th>User ID</th>
+            <th>Phone</th>
+            <th>IP Address</th>
+            <th>Device ID</th>
+          </tr>
+        </thead>
+        <tbody id="eventsTableBody">
+          <!-- Events will be inserted here via textContent -->
+        </tbody>
+      </table>
+      <div id="emptyState" class="empty-state" style="display: none;">
+        <div class="empty-state-icon">📭</div>
+        <p>No events found</p>
+      </div>
+    </div>
+
+    <div class="pagination" id="paginationContainer" style="display: none;">
+      <div class="pagination-info" id="paginationInfo"></div>
+    </div>
+
+    <div class="footer-info">
+      <span class="status-indicator active" id="statusIndicator"></span>
+      <span id="lastUpdate">Last updated: Never</span>
+      <span style="margin: 0 10px;">|</span>
+      <span>Auto-refresh: <span id="autoRefreshStatus">On (15s)</span></span>
+    </div>
+  </div>
+
+  <script>
+    // === ADMIN SECURITY VISUALIZER ===
+    // All DOM manipulation uses textContent only (NO innerHTML)
+    // Prevents XSS attacks
+
+    (function() {
+      'use strict';
+
+      // State
+      let autoRefreshInterval = null;
+      let currentFilters = {
+        risk_level: '',
+        search: '',
+        limit: 200,
+        offset: 0,
+      };
+
+      // DOM elements (cached)
+      const riskFilter = document.getElementById('riskFilter');
+      const searchInput = document.getElementById('searchInput');
+      const limitInput = document.getElementById('limitInput');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const statsContainer = document.getElementById('statsContainer');
+      const loadingIndicator = document.getElementById('loadingIndicator');
+      const errorContainer = document.getElementById('errorContainer');
+      const eventsTable = document.getElementById('eventsTable');
+      const eventsTableBody = document.getElementById('eventsTableBody');
+      const emptyState = document.getElementById('emptyState');
+      const paginationContainer = document.getElementById('paginationContainer');
+      const paginationInfo = document.getElementById('paginationInfo');
+      const statusIndicator = document.getElementById('statusIndicator');
+      const lastUpdate = document.getElementById('lastUpdate');
+      const autoRefreshStatus = document.getElementById('autoRefreshStatus');
+
+      // === SECURITY: Get auth token from localStorage (set by login)
+      function getAuthToken() {
+        const token = localStorage.getItem('admin_token');
+        if (!token) {
+          const errorMsg = 'Authentication required. ' +
+            'Please authenticate via /auth/verify-otp and set your access token: ' +
+            'localStorage.setItem("admin_token", "YOUR_ACCESS_TOKEN")';
+          showError(errorMsg);
+          return null;
+        }
+        return token;
+      }
+
+      // === SECURITY: Safe text formatting (no innerHTML)
+      function formatTime(isoString) {
+        if (!isoString) return 'N/A';
+        try {
+          const date = new Date(isoString);
+          return date.toLocaleString();
+        } catch (e) {
+          return isoString;
+        }
+      }
+
+      function createElement(tag, className, textContent) {
+        const el = document.createElement(tag);
+        if (className) el.className = className;
+        if (textContent !== undefined) el.textContent = textContent;
+        return el;
+      }
+
+      function createTableCell(text) {
+        const td = document.createElement('td');
+        td.textContent = text || '';
+        return td;
+      }
+
+      // === SECURITY: Safe DOM manipulation
+      function showError(message) {
+        errorContainer.textContent = '';
+        const errorDiv = createElement('div', 'error', message);
+        errorContainer.appendChild(errorDiv);
+        loadingIndicator.style.display = 'none';
+        eventsTable.style.display = 'none';
+        emptyState.style.display = 'none';
+      }
+
+      function clearError() {
+        errorContainer.textContent = '';
+      }
+
+      function renderStats(stats) {
+        statsContainer.textContent = '';
+        
+        const last24h = stats.last_24h || {};
+        
+        const totalCard = createElement('div', 'stat-card');
+        const totalLabel = createElement('div', 'stat-label', 'Total Events (24h)');
+        const totalValue = createElement('div', 'stat-value', String(last24h.total || 0));
+        totalCard.appendChild(totalLabel);
+        totalCard.appendChild(totalValue);
+        statsContainer.appendChild(totalCard);
+
+        const highRiskCard = createElement('div', 'stat-card high-risk');
+        const highRiskLabel = createElement('div', 'stat-label', 'High Risk');
+        const highRiskValue = createElement('div', 'stat-value', String(last24h.high_risk || 0));
+        highRiskCard.appendChild(highRiskLabel);
+        highRiskCard.appendChild(highRiskValue);
+        statsContainer.appendChild(highRiskCard);
+
+        const suspiciousCard = createElement('div', 'stat-card suspicious');
+        const suspiciousLabel = createElement('div', 'stat-label', 'Suspicious');
+        const suspiciousValue = createElement('div', 'stat-value', String(last24h.suspicious || 0));
+        suspiciousCard.appendChild(suspiciousLabel);
+        suspiciousCard.appendChild(suspiciousValue);
+        statsContainer.appendChild(suspiciousCard);
+
+        const infoCard = createElement('div', 'stat-card info');
+        const infoLabel = createElement('div', 'stat-label', 'Info');
+        const infoValue = createElement('div', 'stat-value', String(last24h.info || 0));
+        infoCard.appendChild(infoLabel);
+        infoCard.appendChild(infoValue);
+        statsContainer.appendChild(infoCard);
+      }
+
+      function renderEvents(events, pagination) {
+        eventsTableBody.textContent = '';
+        
+        if (events.length === 0) {
+          eventsTable.style.display = 'none';
+          emptyState.style.display = 'block';
+          paginationContainer.style.display = 'none';
+          return;
+        }
+
+        eventsTable.style.display = 'table';
+        emptyState.style.display = 'none';
+
+        events.forEach(function(event) {
+          const row = document.createElement('tr');
+          
+          row.appendChild(createTableCell(formatTime(event.created_at)));
+          row.appendChild(createTableCell(event.action || ''));
+          
+          const statusCell = createTableCell('');
+          statusCell.textContent = event.status || '';
+          if (event.status === 'success') {
+            statusCell.className = 'status-success';
+          } else if (event.status === 'failed') {
+            statusCell.className = 'status-failed';
+          } else if (event.status === 'blocked') {
+            statusCell.className = 'status-blocked';
+          }
+          row.appendChild(statusCell);
+          
+          const riskCell = createTableCell('');
+          const riskBadge = createElement('span', 'risk-badge');
+          const riskLevel = event.risk_level || 'INFO';
+          riskBadge.textContent = riskLevel;
+          if (riskLevel === 'HIGH_RISK') {
+            riskBadge.className = 'risk-badge risk-high';
+          } else if (riskLevel === 'SUSPICIOUS') {
+            riskBadge.className = 'risk-badge risk-suspicious';
+          } else {
+            riskBadge.className = 'risk-badge risk-info';
+          }
+          riskCell.appendChild(riskBadge);
+          row.appendChild(riskCell);
+          
+          row.appendChild(createTableCell(event.user_id ? event.user_id.substring(0, 8) + '...' : 'N/A'));
+          row.appendChild(createTableCell(event.phone || 'N/A'));
+          row.appendChild(createTableCell(event.ip_address || 'N/A'));
+          row.appendChild(createTableCell(event.device_id ? event.device_id.substring(0, 12) + '...' : 'N/A'));
+          
+          eventsTableBody.appendChild(row);
+        });
+
+        // Pagination info
+        if (pagination) {
+          paginationContainer.style.display = 'flex';
+          const info = 'Showing ' + (pagination.offset + 1) + ' - ' + 
+                      Math.min(pagination.offset + pagination.limit, pagination.total) + 
+                      ' of ' + pagination.total + ' events';
+          paginationInfo.textContent = info;
+        } else {
+          paginationContainer.style.display = 'none';
+        }
+      }
+
+      async function fetchEvents() {
+        const token = getAuthToken();
+        if (!token) return;
+
+        loadingIndicator.style.display = 'block';
+        eventsTable.style.display = 'none';
+        clearError();
+
+        try {
+          const params = new URLSearchParams();
+          if (currentFilters.risk_level) {
+            params.append('risk_level', currentFilters.risk_level);
+          }
+          if (currentFilters.search) {
+            params.append('search', currentFilters.search);
+          }
+          params.append('limit', String(currentFilters.limit));
+          params.append('offset', String(currentFilters.offset));
+
+          const response = await fetch('/admin/security-events?' + params.toString(), {
+            headers: {
+              'Authorization': 'Bearer ' + token,
+            },
+          });
+
+          if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+              throw new Error('Unauthorized. Please check your admin token.');
+            }
+            throw new Error('Failed to fetch events: ' + response.status);
+          }
+
+          const data = await response.json();
+          
+          renderStats(data.stats || {});
+          renderEvents(data.events || [], data.pagination);
+          
+          lastUpdate.textContent = 'Last updated: ' + formatTime(new Date().toISOString());
+          statusIndicator.className = 'status-indicator active';
+          
+        } catch (error) {
+          showError('Error: ' + error.message);
+          statusIndicator.className = 'status-indicator inactive';
+        } finally {
+          loadingIndicator.style.display = 'none';
+        }
+      }
+
+      function updateFilters() {
+        currentFilters.risk_level = riskFilter.value || '';
+        currentFilters.search = searchInput.value.trim();
+        currentFilters.limit = parseInt(limitInput.value, 10) || 200;
+        currentFilters.offset = 0;
+        fetchEvents();
+      }
+
+      function startAutoRefresh() {
+        if (autoRefreshInterval) {
+          clearInterval(autoRefreshInterval);
+        }
+        autoRefreshInterval = setInterval(fetchEvents, 15000);
+        autoRefreshStatus.textContent = 'On (15s)';
+      }
+
+      function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+          clearInterval(autoRefreshInterval);
+          autoRefreshInterval = null;
+        }
+        autoRefreshStatus.textContent = 'Off';
+      }
+
+      // Event listeners
+      refreshBtn.addEventListener('click', function() {
+        updateFilters();
+      });
+
+      riskFilter.addEventListener('change', function() {
+        updateFilters();
+      });
+
+      searchInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          updateFilters();
+        }
+      });
+
+      limitInput.addEventListener('change', function() {
+        updateFilters();
+      });
+
+      // Initialize
+      startAutoRefresh();
+      fetchEvents();
+
+      // Cleanup on page unload
+      window.addEventListener('beforeunload', function() {
+        stopAutoRefresh();
+      });
+    })();
+  </script>
+</body>
+</html>
+

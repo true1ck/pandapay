@@ -1,0 +1,22 @@
+# This file configures the analyzer, which statically analyzes Dart code to
+# check for errors, warnings, and lints.
+#
+# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
+# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
+# invoked from the command line by running `flutter analyze`.
+
+# The following line activates a set of recommended lints for Flutter apps,
+# packages, and plugins designed to encourage good coding practices.
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    avoid_print: true # UA-0.1.3: no print — use core/logging instead.
+
+# UA-0.1.3 also bans `DateTime.now()` outside `core/clock` and any bare
+# `Text` widget rendering a `Money` value directly. Those two rules need a
+# custom_lint plugin (custom_lint/riverpod_lint are wired as dev deps) —
+# the plugin itself is not implemented yet; enforce by review until it is.
+
+# Additional information about this file can be found at
+# https://dart.dev/guides/language/analysis-options

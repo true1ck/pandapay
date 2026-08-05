@@ -1,1 +1,15 @@
 testfile.tmp
+
+# Original source repo the user supplied for auth — adapted copy lives in auth/,
+# this stays local as reference material and is not part of the app going forward.
+PandaPal_Auth_Service/
+
+# Node
+node_modules/
+
+# Flutter/Dart (top-level catch-all; each package also has its own)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+

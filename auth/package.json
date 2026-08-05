@@ -1,0 +1,30 @@
+{
+  "name": "pandapay-auth",
+  "version": "1.0.0",
+  "description": "PandaPay identity service — phone/email OTP, Google Sign-In, JWT access+refresh, device tracking, audit log",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.948.0",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "google-auth-library": "^10.6.2",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^8.0.9",
+    "pg": "^8.16.3",
+    "redis": "^4.7.0",
+    "twilio": "^5.10.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
