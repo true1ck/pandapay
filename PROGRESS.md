@@ -906,34 +906,62 @@ nothing in the UI calls it yet).
 **All five suites now: 50 (`pandapay_domain`) + 7 (`app`) + 8 (`console`) + 19 (`scraper`,
 Python) + 12 (`api`, new) = 96 tests total.**
 
+### Chunk 18 — Activity tab: the last placeholder tab is now real
+
+`api/`: `GET /transactions` extended with `LEFT JOIN`s to `user_cards`/`card_products`/
+`spend_categories` so the response carries display-ready `card_name`/`card_nickname`/
+`category_name` instead of raw ids the client would've had to resolve itself.
+
+`app/`: `UserCardsRepository.fetchTransactions()` + `TransactionEntry` (nickname-preferred
+display name — matches the same "nickname if set, else the card's own name" pattern
+`CardsScreen` already used), `transactionsProvider`, `features/activity/activity_screen.dart`
+wired into the previously-placeholder **Activity** tab. Signed-out shows the same login flow as
+Cards/More; signed-in shows a real list (merchant, card, category, amount via `MoneyText`).
+
+**All four bottom-nav tabs are now real, not placeholders** — Home (Chunk 5), Cards (Chunk 16),
+Activity (this chunk), More (Chunk 15).
+
+**Verified end to end against the live services**: added a real wallet card with a nickname,
+logged a real ₹500 transaction with a merchant name, confirmed `GET /transactions` returns
+exactly the shape `TransactionEntry.fromJson` expects — including the nickname
+(`"My HDFC"`) correctly taking priority over the card's own name (`"HDFC Millennia"`) in
+`card_display_name`'s resolution, the same precedence rule already used elsewhere. All test
+fixtures deleted afterward.
+
+Retargeted the test that used to assert Activity was a placeholder (now that it's real, that
+assertion would be testing a lie) and added a second test for the signed-in real-data path.
+`flutter analyze`/`dart run custom_lint`: clean. 8/8 app tests passing (was 7).
+
+**All five suites now: 50 (`pandapay_domain`) + 8 (`app`) + 8 (`console`) + 19 (`scraper`,
+Python) + 12 (`api`) = 97 tests total.**
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-17 (see sections above) are complete and verified. Next:
+Chunks 1-18 (see sections above) are complete and verified. All four of `app/`'s bottom-nav
+tabs are now real; the remaining gaps are mostly outside `app/` itself. Next:
 
-1. **An Activity tab showing real logged transactions** (`GET /transactions` already exists and
-   works; the UI just doesn't call it yet) — the natural companion to Chunk 17's transaction
-   logging, and the last of the four bottom-nav tabs to go from placeholder to real.
-2. **Real amount-entry UI** — every ranking/logging flow still uses a fixed ₹1,000 (or ₹20,000 in
+1. **Real amount-entry UI** — every ranking/logging flow still uses a fixed ₹1,000 (or ₹20,000 in
    verification scripts) demo amount; there's no text field anywhere for a user to type a real
-   spend amount.
-3. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
+   spend amount. This is probably the highest-leverage remaining `app/` gap: everything downstream
+   (ranking, cap tracking, activity) already works correctly, it's just fed a placeholder number.
+2. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
    per source (a product/legal decision, not something to fabricate) — today there's one
    `sources` row (Chunk 8, still correctly disabled) and the whole pipeline (scrape → diff →
    alert → heuristic proposal → console review → decide) has only ever been proven against safe
    test fetches (`example.com`, a local test server under my own control), never real targets.
-4. **A real AD-4.3 (LLM-backed extraction)**, if/when there's a key and a cost decision — would
+3. **A real AD-4.3 (LLM-backed extraction)**, if/when there's a key and a cost decision — would
    let alerts carry field-level `field_path`s instead of the current page-level ones, and would
    let `extraction_proposals` actually understand prose instead of pattern-matching numbers next
    to `%`/`Rs.` tokens.
-5. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
+4. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
    import tool (UA-1.1.2).
-6. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
+5. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
    feature, not the consolidated fixture file the plan describes).
-7. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
+6. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
    data quality dashboard, anonymization audit automation — none started.
-8. **A scheduler for the scraper** (AD-3.2.5's "weekly default crawl") — `scraper/run.py` is
+7. **A scheduler for the scraper** (AD-3.2.5's "weekly default crawl") — `scraper/run.py` is
    invoked manually today, no cron/systemd-timer wiring.
-9. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
+8. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
    `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus
    `support_tickets` pre-emptively fixed in the same migration once the pattern was clear) — a
    final grep across 0011 for any other `_owner`-only policy on a table an admin will eventually

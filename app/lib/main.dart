@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'features/account/account_screen.dart';
+import 'features/activity/activity_screen.dart';
 import 'features/cards/cards_screen.dart';
 import 'features/home/home_screen.dart';
 
@@ -24,10 +25,10 @@ class PandaPayApp extends StatelessWidget {
 }
 
 /// UA-0.4.2 bottom nav: Home · Cards · raised SCAN FAB · Activity · More.
-/// Home (Chunk 5) is wired to the real engine + api/ fetch; More (Chunk 15)
-/// is UA-3's real OTP login + profile; Cards (Chunk 16) is the signed-in
-/// user's real wallet (add/archive via api/'s /user-cards). Activity is
-/// still a placeholder — not built yet, not faked as built.
+/// All four tabs are real as of Chunk 18: Home (Chunk 5) the ranked
+/// catalogue/wallet, Cards (Chunk 16) the signed-in user's wallet,
+/// Activity (Chunk 18) their logged transactions, More (Chunk 15) OTP
+/// login + profile.
 class _AppShell extends StatefulWidget {
   const _AppShell();
   @override
@@ -46,17 +47,8 @@ class _AppShellState extends State<_AppShell> {
       body: switch (_tab) {
         0 => const HomeScreen(),
         1 => const CardsScreen(),
-        3 => const AccountScreen(),
-        _ => Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(_tabLabels[_tab], style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 8),
-                MoneyText(Money.fromRupees(1234567), confidence: Confidence.estimated),
-              ],
-            ),
-          ),
+        2 => const ActivityScreen(),
+        _ => const AccountScreen(),
       },
       floatingActionButton: FloatingActionButton.large(
         onPressed: () {},

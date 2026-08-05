@@ -773,9 +773,15 @@ app.get('/transactions', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `SELECT id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, status
-           FROM transactions WHERE profile_id = $1 AND status = 'active'
-          ORDER BY occurred_at DESC LIMIT 50`,
+        `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
+                t.category_id, sc.name AS category_name, t.rail, t.status,
+                cp.name AS card_name, uc.nickname AS card_nickname
+           FROM transactions t
+           LEFT JOIN user_cards uc ON uc.id = t.user_card_id
+           LEFT JOIN card_products cp ON cp.id = uc.card_product_id
+           LEFT JOIN spend_categories sc ON sc.id = t.category_id
+          WHERE t.profile_id = $1 AND t.status = 'active'
+          ORDER BY t.occurred_at DESC LIMIT 50`,
         [req.userId]
       )
     );

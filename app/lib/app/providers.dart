@@ -71,6 +71,14 @@ final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   return repo.fetchUserCards();
 });
 
+/// UA-3+ (Chunk 18): the Activity tab's data — empty (not an error) when
+/// signed out, same reasoning as userCardsProvider above.
+final transactionsProvider = FutureProvider<List<TransactionEntry>>((ref) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  if (repo == null) return const [];
+  return repo.fetchTransactions();
+});
+
 final catalogueRepositoryProvider = Provider<CatalogueRepository>((ref) {
   return HttpCatalogueRepository(baseUrl: _apiBaseUrl);
 });

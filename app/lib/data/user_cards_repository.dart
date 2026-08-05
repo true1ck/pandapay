@@ -121,6 +121,50 @@ class UserCardsRepository {
       throw UserCardsException('POST /transactions failed: ${response.statusCode} ${response.body}');
     }
   }
+
+  /// UA-3+ (Chunk 18): the Activity tab's data source.
+  Future<List<TransactionEntry>> fetchTransactions() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/transactions'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw UserCardsException('GET /transactions failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['transactions'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(TransactionEntry.fromJson)
+        .toList();
+  }
+}
+
+class TransactionEntry {
+  final String id;
+  final Money amount;
+  final DateTime occurredAt;
+  final String? merchantName;
+  final String? categoryName;
+  final String? cardDisplayName; // nickname if set, else the card's own name
+
+  const TransactionEntry({
+    required this.id,
+    required this.amount,
+    required this.occurredAt,
+    this.merchantName,
+    this.categoryName,
+    this.cardDisplayName,
+  });
+
+  factory TransactionEntry.fromJson(Map<String, dynamic> json) {
+    final nickname = json['card_nickname'] as String?;
+    final cardName = json['card_name'] as String?;
+    return TransactionEntry(
+      id: json['id'] as String,
+      amount: Money.fromRupees(_num(json['amount_inr'])),
+      occurredAt: DateTime.parse(json['occurred_at'] as String),
+      merchantName: json['merchant_name'] as String?,
+      categoryName: json['category_name'] as String?,
+      cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
+    );
+  }
 }
 
 class UserCardsException implements Exception {

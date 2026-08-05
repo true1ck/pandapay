@@ -82,16 +82,64 @@ void main() {
     expect(find.text('No applicable reward rule.'), findsOneWidget);
   });
 
-  testWidgets('bottom nav switches away from Home to a placeholder tab (Activity)', (tester) async {
+  testWidgets('Chunk 18: bottom nav switches away from Home to Activity, which shows login when signed out',
+      (tester) async {
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
     await tester.pump();
     await tester.pump();
 
     await tester.tap(find.byIcon(Icons.receipt_long));
     await tester.pump();
+    await tester.pump();
 
     expect(find.text('PandaPay — Activity'), findsOneWidget);
-    expect(find.text('₹12,34,567.00'), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
+  });
+
+  testWidgets('Chunk 18: Activity tab shows real logged transactions when signed in', (tester) async {
+    await tester.pumpWidget(
+      _appWithFakeCatalogue(
+        [_rupayCard()],
+        extraOverrides: [
+          accessTokenProvider.overrideWith((ref) => 'fake-access-token'),
+          userCardsRepositoryProvider.overrideWithValue(
+            UserCardsRepository(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-access-token',
+              client: MockClient((request) async {
+                return http.Response(
+                  jsonEncode({
+                    'transactions': [
+                      {
+                        'id': 'txn-1',
+                        'amount_inr': '1000.00',
+                        'occurred_at': '2026-08-05T10:00:00Z',
+                        'merchant_name': null,
+                        'category_name': 'Online',
+                        'card_name': 'Test RuPay Card',
+                        'card_nickname': null,
+                      },
+                    ],
+                    'userCards': <Map<String, dynamic>>[],
+                  }),
+                  200,
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.receipt_long));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Test RuPay Card · Online'), findsOneWidget);
+    expect(find.text('₹1,000.00'), findsOneWidget);
   });
 
   testWidgets('Chunk 16: Cards tab shows the login screen when signed out', (tester) async {
