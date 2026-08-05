@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -343,5 +344,158 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Send OTP'), findsOneWidget);
+  });
+
+  testWidgets('AD-6: admin sees crowdsourced merchants and can override a name', (tester) async {
+    var overrideCalled = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          categoriesProvider.overrideWith((ref) async => const []),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                if (request.url.path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (request.url.path.endsWith('/override')) {
+                  overrideCalled = true;
+                  return http.Response(jsonEncode({'merchant': {}}), 200);
+                }
+                if (request.url.path == '/admin/merchants') {
+                  return http.Response(
+                    jsonEncode({
+                      'merchants': [
+                        {
+                          'id': 'merchant-1',
+                          'vpa': 'chaicorner@okaxis',
+                          'display_name': 'Chai Corner',
+                          'category_name': 'Dining',
+                          'confidence': 'medium',
+                          'confidence_score': '0.550',
+                          'confirmation_count': 3,
+                          'distinct_device_count': 3,
+                          'is_published': true,
+                          'operator_locked': false,
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                if (request.url.path == '/admin/merchants/merchant-1') {
+                  return http.Response(
+                    jsonEncode({
+                      'merchant': {
+                        'id': 'merchant-1',
+                        'vpa': 'chaicorner@okaxis',
+                        'display_name': 'Chai Corner',
+                        'confidence': 'medium',
+                        'confidence_score': '0.550',
+                        'confirmation_count': 3,
+                        'distinct_device_count': 3,
+                        'is_published': true,
+                        'operator_locked': false,
+                      },
+                      'locations': <Map<String, dynamic>>[],
+                      'contributions': <Map<String, dynamic>>[],
+                      'conflicts': <Map<String, dynamic>>[],
+                    }),
+                    200,
+                  );
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Merchants'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chai Corner'), findsOneWidget);
+
+    await tester.tap(find.text('Chai Corner'));
+    await tester.pumpAndSettle();
+
+    // Detail dialog opened — the merchant's confidence line is real detail
+    // data, not just the list row repeated.
+    expect(find.textContaining('Confidence: medium'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'New display name'), 'Chai Corner (Verified)');
+    await tester.pump();
+    await tester.tap(find.text('Override name'));
+    await tester.pumpAndSettle();
+
+    expect(overrideCalled, isTrue);
+  });
+
+  testWidgets('AD-6.3: admin resolves a merchant conflict by picking a competing value', (tester) async {
+    var resolveCalled = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                if (request.url.path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (request.url.path.endsWith('/resolve')) {
+                  resolveCalled = true;
+                  return http.Response(jsonEncode({'conflict': {}}), 200);
+                }
+                if (request.url.path == '/admin/merchant-conflicts') {
+                  return http.Response(
+                    jsonEncode({
+                      'conflicts': [
+                        {
+                          'id': 'conflict-1',
+                          'vpa': 'chaicorner@okaxis',
+                          'merchant_display_name': 'Chai Corner',
+                          'field': 'display_name',
+                          'competing_values': [
+                            {'value': 'Chai Corner', 'count': 3},
+                            {'value': 'Chai Point', 'count': 2},
+                          ],
+                          'state': 'pending',
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                if (request.url.path == '/admin/abuse-signals') {
+                  return http.Response(jsonEncode({'abuseSignals': <Map<String, dynamic>>[]}), 200);
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Conflicts'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Chai Corner (3×)'), findsOneWidget);
+
+    await tester.tap(find.textContaining('Chai Corner (3×)'));
+    await tester.pumpAndSettle();
+
+    expect(resolveCalled, isTrue);
   });
 }

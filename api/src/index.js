@@ -792,5 +792,338 @@ app.get('/transactions', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * AD-6 Crowdsourced Data Visibility.
+ *
+ * Scope note vs the full ui-spec: AD-6.1.1's `flutter_map`/OSM pin-cluster
+ * map is NOT built here — this is a filtered table over the same data
+ * (`merchants` + `merchant_locations`), same filters (AD-6.1.4: category,
+ * confidence, published), same grid-snapped-only coordinates (AD-6.1.5 —
+ * `grid_lat`/`grid_lng` are the only columns that exist, so there is
+ * nothing more precise to leak even from a table view). A real interactive
+ * map is a genuinely separate, larger UI investment (new Flutter Web
+ * dependency, tile layer, clustering) not attempted in this pass — noted
+ * in PROGRESS.md, not silently substituted.
+ */
+app.get('/admin/merchants', requireAdmin, async (req, res) => {
+  const { categoryId, minConfidenceScore, published, q } = req.query;
+  const conditions = [];
+  const params = [];
+  if (categoryId) {
+    params.push(categoryId);
+    conditions.push(`m.category_id = $${params.length}`);
+  }
+  if (minConfidenceScore) {
+    params.push(Number(minConfidenceScore));
+    conditions.push(`m.confidence_score >= $${params.length}`);
+  }
+  if (published === 'true' || published === 'false') {
+    params.push(published === 'true');
+    conditions.push(`m.is_published = $${params.length}`);
+  }
+  if (q) {
+    params.push(`%${q}%`);
+    conditions.push(`(m.display_name ILIKE $${params.length} OR m.vpa ILIKE $${params.length})`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT m.id, m.vpa, m.display_name, m.mcc, m.category_id, sc.name AS category_name,
+                m.confidence, m.confidence_score, m.confirmation_count, m.distinct_device_count,
+                m.is_p2p, m.is_published, m.operator_locked, m.first_seen_on, m.last_confirmed_on,
+                l.grid_lat, l.grid_lng, l.geohash6
+           FROM merchants m
+           LEFT JOIN spend_categories sc ON sc.id = m.category_id
+           LEFT JOIN LATERAL (
+             SELECT grid_lat, grid_lng, geohash6 FROM merchant_locations
+              WHERE merchant_id = m.id ORDER BY confirmation_count DESC LIMIT 1
+           ) l ON true
+           ${where}
+          ORDER BY m.last_confirmed_on DESC LIMIT 200`,
+        params
+      )
+    );
+    res.json({ merchants: result.rows });
+  } catch (err) {
+    console.error('GET /admin/merchants error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * AD-6.2.1 merchant record detail: contribution history, locations, and
+ * confidence breakdown. "Confidence breakdown" here is the raw inputs the
+ * confidence score is presumably computed from (confirmation_count,
+ * distinct_device_count, operator_locked) — the actual scoring function
+ * lives in a not-yet-written batch job (nothing in this codebase computes
+ * confidence_score today; it's written directly by contributions/manual
+ * override only), so this endpoint surfaces the inputs, not a re-derivation.
+ */
+app.get('/admin/merchants/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const merchant = await client.query(
+        `SELECT m.*, sc.name AS category_name FROM merchants m
+          LEFT JOIN spend_categories sc ON sc.id = m.category_id
+         WHERE m.id = $1`,
+        [req.params.id]
+      );
+      if (merchant.rows.length === 0) return null;
+
+      const [locations, contributions, conflicts] = await Promise.all([
+        client.query(
+          'SELECT * FROM merchant_locations WHERE merchant_id = $1 ORDER BY confirmation_count DESC',
+          [req.params.id]
+        ),
+        client.query(
+          'SELECT * FROM merchant_contributions WHERE merchant_id = $1 ORDER BY submitted_on DESC LIMIT 100',
+          [req.params.id]
+        ),
+        client.query(
+          'SELECT * FROM merchant_conflicts WHERE merchant_id = $1 ORDER BY detected_at DESC',
+          [req.params.id]
+        ),
+      ]);
+
+      return {
+        merchant: merchant.rows[0],
+        locations: locations.rows,
+        contributions: contributions.rows,
+        conflicts: conflicts.rows,
+      };
+    });
+
+    if (!result) return res.status(404).json({ error: 'merchant not found' });
+    res.json(result);
+  } catch (err) {
+    console.error('GET /admin/merchants/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * AD-6.2.2 manual override/merge — sets whichever fields are provided plus
+ * `operator_locked = true`, so a later automated recomputation (AD-6.3.3,
+ * conflict auto-resolution) cannot silently undo an operator's decision.
+ * Typed writer, same pattern as PUT /admin/reward-rules/:id — no raw JSON
+ * passthrough, only the specific fields this action is allowed to touch.
+ */
+app.post('/admin/merchants/:id/override', requireAdmin, async (req, res) => {
+  const { displayName, categoryId, mcc, reason } = req.body || {};
+  if (displayName === undefined && categoryId === undefined && mcc === undefined) {
+    return res.status(400).json({ error: 'at least one of displayName/categoryId/mcc is required' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const before = await client.query('SELECT * FROM merchants WHERE id = $1', [req.params.id]);
+      if (before.rows.length === 0) return null;
+
+      const updated = await client.query(
+        `UPDATE merchants
+            SET display_name = COALESCE($1, display_name),
+                category_id = COALESCE($2, category_id),
+                mcc = COALESCE($3, mcc),
+                operator_locked = true,
+                updated_at = now()
+          WHERE id = $4
+      RETURNING *`,
+        [displayName ?? null, categoryId ?? null, mcc ?? null, req.params.id]
+      );
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'merchant_override', 'merchants', $2, $3, $4, $5)`,
+        [req.userId, req.params.id, JSON.stringify(before.rows[0]), JSON.stringify(updated.rows[0]), reason || null]
+      );
+
+      return updated.rows[0];
+    });
+
+    if (!result) return res.status(404).json({ error: 'merchant not found' });
+    res.json({ merchant: result });
+  } catch (err) {
+    console.error('POST /admin/merchants/:id/override error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** AD-6.2.3 unpublish — for a record found to be wrong or poisoned. */
+app.post('/admin/merchants/:id/unpublish', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const updated = await client.query(
+        `UPDATE merchants SET is_published = false, updated_at = now() WHERE id = $1 RETURNING id, is_published`,
+        [req.params.id]
+      );
+      if (updated.rows.length === 0) return null;
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'merchant_unpublish', 'merchants', $2, $3, $4, $5)`,
+        [
+          req.userId,
+          req.params.id,
+          JSON.stringify({ is_published: true }),
+          JSON.stringify({ is_published: false }),
+          req.body?.reason || null,
+        ]
+      );
+      return updated.rows[0];
+    });
+    if (!result) return res.status(404).json({ error: 'merchant not found' });
+    res.json({ merchant: result });
+  } catch (err) {
+    console.error('POST /admin/merchants/:id/unpublish error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * AD-6.3.1/6.3.2 conflict resolution queue — only the cases the automatic
+ * majority-wins-weighted-toward-recency rule (mentioned in the plan, not
+ * implemented anywhere in this codebase as an automated job — that rule
+ * lives entirely in this screen's human operator today) doesn't confidently
+ * resolve, i.e. every row with state = 'pending'.
+ */
+app.get('/admin/merchant-conflicts', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT c.*, m.vpa, m.display_name AS merchant_display_name
+           FROM merchant_conflicts c
+           JOIN merchants m ON m.id = c.merchant_id
+          WHERE c.state = 'pending'
+          ORDER BY c.detected_at ASC`
+      )
+    );
+    res.json({ conflicts: result.rows });
+  } catch (err) {
+    console.error('GET /admin/merchant-conflicts error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * AD-6.3.3: resolution writes the value, locks the record, and audits.
+ * "Recomputes confidence" per the plan text is skipped for the same reason
+ * noted on GET /admin/merchants/:id — no confidence-scoring job exists yet
+ * to call; bumping to 'operator_verified' (the enum's own explicit
+ * human-decided tier, distinct from the automated unverified/low/medium/
+ * high ladder) is the honest representation of "an operator just decided
+ * this," not a stand-in for a real recomputation.
+ */
+app.post('/admin/merchant-conflicts/:id/resolve', requireAdmin, async (req, res) => {
+  const { resolvedValue, reason } = req.body || {};
+  if (resolvedValue === undefined) {
+    return res.status(400).json({ error: 'resolvedValue is required' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const conflict = await client.query('SELECT * FROM merchant_conflicts WHERE id = $1', [req.params.id]);
+      if (conflict.rows.length === 0) return null;
+      const { merchant_id: merchantId, field } = conflict.rows[0];
+
+      if (!['display_name', 'mcc', 'category_id'].includes(field)) {
+        throw new Error(`unsupported conflict field: ${field}`);
+      }
+
+      await client.query(
+        `UPDATE merchants SET ${field} = $1, operator_locked = true, confidence = 'operator_verified', updated_at = now() WHERE id = $2`,
+        [resolvedValue, merchantId]
+      );
+
+      const updated = await client.query(
+        `UPDATE merchant_conflicts
+            SET state = 'resolved', resolved_value = $1, resolved_by = $2, resolved_at = now()
+          WHERE id = $3
+      RETURNING *`,
+        [JSON.stringify(resolvedValue), req.userId, req.params.id]
+      );
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'merchant_conflict_resolve', 'merchant_conflicts', $2, $3, $4, $5)`,
+        [
+          req.userId,
+          req.params.id,
+          JSON.stringify(conflict.rows[0].competing_values),
+          JSON.stringify(resolvedValue),
+          reason || null,
+        ]
+      );
+
+      return updated.rows[0];
+    });
+    if (!result) return res.status(404).json({ error: 'conflict not found' });
+    res.json({ conflict: result });
+  } catch (err) {
+    console.error('POST /admin/merchant-conflicts/:id/resolve error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** AD-6.4.1 abuse & quality controls: unresolved (not yet blocked) signals. */
+app.get('/admin/abuse-signals', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT * FROM abuse_signals WHERE is_blocked = false ORDER BY severity DESC, detected_at DESC LIMIT 200`
+      )
+    );
+    res.json({ abuseSignals: result.rows });
+  } catch (err) {
+    console.error('GET /admin/abuse-signals error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * AD-6.4.2: block a device hash from contributing, and bulk-revert its
+ * contributions by marking them `is_counted = false` so any consumer of
+ * merchant_contributions (a future confidence-recomputation job) excludes
+ * them going forward. Marks every abuse_signals row for the same device
+ * hash as blocked too, not just the one that was clicked — a device
+ * flagged for burst submissions and impossible geography on separate rows
+ * should not need two separate block clicks.
+ */
+app.post('/admin/abuse-signals/:id/block', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const signal = await client.query('SELECT * FROM abuse_signals WHERE id = $1', [req.params.id]);
+      if (signal.rows.length === 0) return null;
+      const { device_hash: deviceHash } = signal.rows[0];
+
+      await client.query('UPDATE abuse_signals SET is_blocked = true WHERE device_hash = $1', [deviceHash]);
+      const reverted = await client.query(
+        `UPDATE merchant_contributions
+            SET is_counted = false, rejected_reason = 'device_hash blocked (abuse signal)'
+          WHERE device_hash = $1 AND is_counted = true
+      RETURNING id`,
+        [deviceHash]
+      );
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'device_block', 'abuse_signals', $2, $3, $4, $5)`,
+        [
+          req.userId,
+          req.params.id,
+          JSON.stringify({ device_hash: deviceHash, is_blocked: false }),
+          JSON.stringify({ device_hash: deviceHash, is_blocked: true, contributions_reverted: reverted.rows.length }),
+          req.body?.reason || null,
+        ]
+      );
+
+      return { deviceHash, contributionsReverted: reverted.rows.length };
+    });
+    if (!result) return res.status(404).json({ error: 'abuse signal not found' });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /admin/abuse-signals/:id/block error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));

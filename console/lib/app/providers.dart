@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 
 import '../data/admin_api.dart';
 import '../data/token_store.dart';
@@ -76,4 +79,44 @@ final alertsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const [];
   return api.fetchAlerts();
+});
+
+/// AD-6.1: merchant table filter state — plain fields, not a class, so
+/// merchantsProvider (below) can .watch() each one independently and only
+/// the filters that actually changed trigger a refetch.
+final merchantCategoryFilterProvider = StateProvider<String?>((ref) => null);
+final merchantMinConfidenceFilterProvider = StateProvider<double?>((ref) => null);
+final merchantPublishedFilterProvider = StateProvider<bool?>((ref) => null);
+final merchantSearchFilterProvider = StateProvider<String>((ref) => '');
+
+final merchantsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchMerchants(
+    categoryId: ref.watch(merchantCategoryFilterProvider),
+    minConfidenceScore: ref.watch(merchantMinConfidenceFilterProvider),
+    published: ref.watch(merchantPublishedFilterProvider),
+    query: ref.watch(merchantSearchFilterProvider),
+  );
+});
+
+final merchantConflictsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchMerchantConflicts();
+});
+
+final abuseSignalsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchAbuseSignals();
+});
+
+/// AD-6.1.4's category filter needs id->name; /categories is public
+/// (same policy as /catalogue) so this doesn't need the admin API wrapper.
+final categoriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final response = await http.get(Uri.parse('$apiBaseUrl/categories'));
+  if (response.statusCode != 200) return const [];
+  final body = jsonDecode(response.body) as Map<String, dynamic>;
+  return (body['categories'] as List).cast<Map<String, dynamic>>();
 });

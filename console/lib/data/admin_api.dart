@@ -193,6 +193,120 @@ class AdminApi {
       throw AdminApiException('decide failed: ${response.statusCode} ${response.body}');
     }
   }
+
+  /// AD-6.1: merchant list, filterable — see api/'s GET /admin/merchants for
+  /// the scope note (a filtered table, not a real flutter_map/OSM view).
+  Future<List<Map<String, dynamic>>> fetchMerchants({
+    String? categoryId,
+    double? minConfidenceScore,
+    bool? published,
+    String? query,
+  }) async {
+    final params = <String, String>{
+      'categoryId': ?categoryId,
+      'minConfidenceScore': ?minConfidenceScore?.toString(),
+      'published': ?published?.toString(),
+      if (query != null && query.isNotEmpty) 'q': query,
+    };
+    final uri = Uri.parse('$apiBaseUrl/admin/merchants').replace(queryParameters: params);
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/merchants failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['merchants'] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// AD-6.2.1: full detail for one merchant — locations, contribution
+  /// history, and any conflicts.
+  Future<Map<String, dynamic>> fetchMerchantDetail(String merchantId) async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/merchants/$merchantId'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/merchants/$merchantId failed: ${response.statusCode} ${response.body}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// AD-6.2.2: manual override/merge — sets operator_locked server-side.
+  Future<void> overrideMerchant(
+    String merchantId, {
+    String? displayName,
+    String? categoryId,
+    String? mcc,
+    String? reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/merchants/$merchantId/override'),
+      headers: _headers,
+      body: jsonEncode({
+        'displayName': ?displayName,
+        'categoryId': ?categoryId,
+        'mcc': ?mcc,
+        'reason': ?reason,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('override failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// AD-6.2.3: unpublish a record found to be wrong or poisoned.
+  Future<void> unpublishMerchant(String merchantId, {String? reason}) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/merchants/$merchantId/unpublish'),
+      headers: _headers,
+      body: jsonEncode({'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('unpublish failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// AD-6.3.1: pending merchant conflicts — cases the automatic
+  /// majority-wins rule doesn't confidently resolve.
+  Future<List<Map<String, dynamic>>> fetchMerchantConflicts() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/merchant-conflicts'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/merchant-conflicts failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['conflicts'] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// AD-6.3.3: resolve a conflict — writes the value, locks the record.
+  Future<void> resolveMerchantConflict(String conflictId, String resolvedValue, {String? reason}) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/merchant-conflicts/$conflictId/resolve'),
+      headers: _headers,
+      body: jsonEncode({'resolvedValue': resolvedValue, 'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('resolve failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// AD-6.4.1: unresolved abuse signals (burst submissions, impossible
+  /// geography, high conflict rate) awaiting an operator's block decision.
+  Future<List<Map<String, dynamic>>> fetchAbuseSignals() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/abuse-signals'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/abuse-signals failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['abuseSignals'] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// AD-6.4.2: block a device hash, bulk-reverting its contributions.
+  Future<void> blockAbuseSignal(String abuseSignalId, {String? reason}) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/abuse-signals/$abuseSignalId/block'),
+      headers: _headers,
+      body: jsonEncode({'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('block failed: ${response.statusCode} ${response.body}');
+    }
+  }
 }
 
 class AdminApiException implements Exception {

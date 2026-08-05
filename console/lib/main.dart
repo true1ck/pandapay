@@ -5,6 +5,8 @@ import 'app/providers.dart';
 import 'features/alerts/alerts_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/catalogue/catalogue_screen.dart';
+import 'features/crowdsource/conflicts_screen.dart';
+import 'features/crowdsource/merchants_screen.dart';
 import 'features/queues/card_requests_screen.dart';
 import 'features/queues/error_reports_screen.dart';
 
@@ -85,6 +87,8 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     (label: 'Card Requests', screen: CardRequestsScreen()),
     (label: 'Error Reports', screen: ErrorReportsScreen()),
     (label: 'Policy Alerts', screen: AlertsScreen()),
+    (label: 'Merchants', screen: MerchantsScreen()),
+    (label: 'Conflicts', screen: ConflictsScreen()),
   ];
 
   @override
