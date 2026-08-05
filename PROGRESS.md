@@ -235,6 +235,28 @@ Removed the leftover "Urban Link" marketplace logic flagged in the previous sess
   request-otp → verify-otp → JWT issuance → `GET /users/me` → `PUT /users/me`, all
   200s, response shape now free of dead marketplace fields.
 
+### Chunk 3 — UA-1 card catalogue: real seed data, verified through the full stack
+`db/seed/0001_demo_cards.sql`: 4 real Indian cards (HDFC Millennia, SBI Cashback Card,
+Axis Ace, ICICI Amazon Pay) with structurally-real mechanics — a RuPay/UPI-linkable
+card, statement-cycle vs calendar-month caps, a milestone rule, a forex rule — not just
+synthetic engine-test fixtures. Reward *rates* are approximate public figures, **not**
+verified against current bank T&C (every row starts `status = 'draft'`; the UA-1.1.4
+human-verification pass is still owed before these could be real user-facing data).
+- **Idempotent, verified by actually re-running it**: second run inserted 0 rows,
+  card/reward-rule counts unchanged.
+- **Verified the whole chain end-to-end**, not just the SQL: seeded → published (sets
+  `verified_at`, which the DB CHECK constraint requires) → `data_version` bump trigger
+  fired correctly across multi-row inserts (not just my earlier single-row test) →
+  booted `api/` for real → `GET /catalogue` returned all 4 cards through
+  `v_card_catalogue_export`, correctly nesting `reward_rules`/`cap_rules`/
+  `milestone_rules`/`forex` — the exact shape `packages/pandapay_domain`'s
+  `CardProduct`/`RewardRule`/`CapRule` model expects. This is the device-sync contract
+  (admin-console-plan §4.5) working for real, not just documented.
+- **Not yet done**: no Dart-side deserializer turning this JSON into `CardProduct`
+  instances yet (that's chunk 5, wiring the app's Home screen to real data); no YAML
+  import tool (`tools/card_import.dart`, UA-1.1.2); only 4 of the ~40-50 cards UA-1.1
+  calls for; no admin console UI to edit these (chunk 6).
+
 ## What's NOT done (next steps, roughly in priority order)
 
 1. **Restart local Postgres** before resuming DB work (see note above) — both the `pandapay` and
