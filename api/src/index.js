@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { withUserClient } = require('./db');
 const { optionalAuth, requireAuth } = require('./auth');
+const { periodBounds, effectiveRatePerRupee } = require('./cycles');
 
 const app = express();
 app.use(cors());
@@ -544,17 +545,40 @@ app.post('/admin/alerts/:id/decide', requireAdmin, async (req, res) => {
  */
 app.get('/user-cards', requireAuth, async (req, res) => {
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
+    const result = await withUserClient(req.userId, async (client) => {
+      const cards = await client.query(
         `SELECT uc.id, uc.card_product_id, uc.nickname, uc.is_default, uc.sort_order,
                 uc.created_at, cp.name AS card_name, cp.network, cp.is_upi_linkable
            FROM user_cards uc
            JOIN card_products cp ON cp.id = uc.card_product_id
           WHERE uc.is_archived = false
           ORDER BY uc.sort_order, uc.created_at`
-      )
-    );
-    res.json({ userCards: result.rows });
+      );
+
+      // Chunk 17: the CURRENTLY-ACTIVE period's cap/milestone state, so the
+      // app can build real CardSnapshot.capRemaining/milestoneProgress
+      // instead of always evaluating every owned card as freshly-uncapped.
+      // No row for a (cap_rule, current period) means no spend has been
+      // logged against it yet this period — full headroom, which is
+      // exactly what the engine already defaults to when a key is absent.
+      for (const card of cards.rows) {
+        const capStates = await client.query(
+          `SELECT cap_rule_id, consumed, cap_value_snapshot FROM cap_states
+            WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
+          [card.id]
+        );
+        const milestoneStates = await client.query(
+          `SELECT milestone_rule_id, qualified_spend FROM milestone_states
+            WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
+          [card.id]
+        );
+        card.cap_states = capStates.rows;
+        card.milestone_states = milestoneStates.rows;
+      }
+
+      return cards.rows;
+    });
+    res.json({ userCards: result });
   } catch (err) {
     console.error('GET /user-cards error', err);
     res.status(500).json({ error: 'internal_error' });
@@ -615,6 +639,149 @@ app.post('/user-cards/:id/archive', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('POST /user-cards/:id/archive error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /transactions — UA-3+ (Chunk 17): manual transaction entry
+ * (source='manual', reward_state='estimated' — R3, nothing here is ever
+ * 'confirmed' without a real statement/SMS reconciliation path, which
+ * doesn't exist yet). Updates cap_states.consumed and
+ * milestone_states.qualified_spend in the SAME transaction as the insert,
+ * so a transaction that's recorded but doesn't update state is impossible
+ * — same "whole thing rolls back together" pattern as the AD-1 typed
+ * writer's audit-log guarantee.
+ */
+app.post('/transactions', requireAuth, async (req, res) => {
+  const { userCardId, amountInr, occurredAt, categoryId, rail, merchantName } = req.body || {};
+  const amount = Number(amountInr);
+  if (!userCardId || typeof userCardId !== 'string') {
+    return res.status(400).json({ error: 'userCardId is required' });
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'amountInr must be a positive number' });
+  }
+  const occurred = occurredAt ? new Date(occurredAt) : new Date();
+  if (Number.isNaN(occurred.getTime())) {
+    return res.status(400).json({ error: 'occurredAt is not a valid date' });
+  }
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const cardResult = await client.query(
+        `SELECT uc.id, uc.card_product_id, uc.statement_day, uc.opened_on, uc.created_at,
+                cp.point_value_inr
+           FROM user_cards uc
+           JOIN card_products cp ON cp.id = uc.card_product_id
+          WHERE uc.id = $1 AND uc.profile_id = $2 AND uc.is_archived = false`,
+        [userCardId, req.userId]
+      );
+      if (cardResult.rows.length === 0) return { status: 404, error: 'user_card not found' };
+      const userCard = cardResult.rows[0];
+
+      // The same rule the engine uses to pick a reward rule for a spend:
+      // highest-priority (lowest number) match on category (or the
+      // category-agnostic base rate). Needed to convert a spend amount into
+      // an actual reward VALUE for reward_value-measure caps below.
+      const matchingRule = await client.query(
+        `SELECT unit, rate FROM reward_rules
+          WHERE card_product_id = $1 AND (category_id IS NULL OR category_id = $2)
+          ORDER BY priority ASC LIMIT 1`,
+        [userCard.card_product_id, categoryId || null]
+      );
+      const rewardRate = matchingRule.rows[0]
+        ? effectiveRatePerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate), Number(userCard.point_value_inr) || 0)
+        : 0;
+
+      const txn = await client.query(
+        `INSERT INTO transactions
+           (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, reward_state)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'manual', 'estimated')
+         RETURNING id, amount_inr, occurred_at`,
+        [req.userId, userCardId, amount, occurred, merchantName || null, categoryId || null, rail || 'unknown']
+      );
+
+      const capRules = await client.query(
+        `SELECT id, period, cap_value, measure FROM cap_rules
+          WHERE card_product_id = $1 AND (category_id IS NULL OR category_id = $2)`,
+        [userCard.card_product_id, categoryId || null]
+      );
+      const capStateUpdates = [];
+      for (const cap of capRules.rows) {
+        // Chunk 17 fix (same bug class as Chunk 9's engine fix): a
+        // reward_value cap's headroom is consumed by the REWARD earned on
+        // this spend, not the spend itself; a txn_count cap is consumed by
+        // 1 transaction, not any money amount at all. Only spend_amount
+        // caps are consumed by the raw amount.
+        let consumedDelta;
+        if (cap.measure === 'reward_value') {
+          consumedDelta = amount * rewardRate;
+        } else if (cap.measure === 'txn_count') {
+          consumedDelta = 1;
+        } else {
+          consumedDelta = amount;
+        }
+
+        const { start, end } = periodBounds(cap.period, occurred, { statementDay: userCard.statement_day });
+        const upserted = await client.query(
+          `INSERT INTO cap_states (profile_id, user_card_id, cap_rule_id, period_start, period_end, consumed, cap_value_snapshot)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (user_card_id, cap_rule_id, period_start)
+           DO UPDATE SET consumed = cap_states.consumed + EXCLUDED.consumed, updated_at = now()
+           RETURNING cap_rule_id, period_start, period_end, consumed, cap_value_snapshot`,
+          [req.userId, userCardId, cap.id, start, end, consumedDelta, cap.cap_value]
+        );
+        capStateUpdates.push(upserted.rows[0]);
+      }
+
+      const milestoneRules = await client.query(
+        `SELECT id, period, anchor FROM milestone_rules WHERE card_product_id = $1`,
+        [userCard.card_product_id]
+      );
+      const milestoneStateUpdates = [];
+      for (const milestone of milestoneRules.rows) {
+        const anchorDate = userCard.opened_on || userCard.created_at;
+        const { start, end } = periodBounds(milestone.period, occurred, {
+          statementDay: userCard.statement_day,
+          anchor: milestone.anchor,
+          anchorDate,
+        });
+        const upserted = await client.query(
+          `INSERT INTO milestone_states (profile_id, user_card_id, milestone_rule_id, period_start, period_end, qualified_spend)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (user_card_id, milestone_rule_id, period_start)
+           DO UPDATE SET qualified_spend = milestone_states.qualified_spend + EXCLUDED.qualified_spend, updated_at = now()
+           RETURNING milestone_rule_id, period_start, period_end, qualified_spend`,
+          [req.userId, userCardId, milestone.id, start, end, amount]
+        );
+        milestoneStateUpdates.push(upserted.rows[0]);
+      }
+
+      return { status: 201, transaction: txn.rows[0], capStates: capStateUpdates, milestoneStates: milestoneStateUpdates };
+    });
+
+    if (result.status !== 201) return res.status(result.status).json({ error: result.error });
+    res.status(201).json(result);
+  } catch (err) {
+    console.error('POST /transactions error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+app.get('/transactions', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, status
+           FROM transactions WHERE profile_id = $1 AND status = 'active'
+          ORDER BY occurred_at DESC LIMIT 50`,
+        [req.userId]
+      )
+    );
+    res.json({ transactions: result.rows });
+  } catch (err) {
+    console.error('GET /transactions error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });

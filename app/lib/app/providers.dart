@@ -141,7 +141,23 @@ final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>
     categoryId: categoryId,
     rail: TxnRail.swipe,
   );
-  final snapshots = cards.map((c) => CardSnapshot(product: c)).toList();
+  // Chunk 17: real capRemaining/milestoneProgress for owned cards, derived
+  // from cap_states.consumed / milestone_states.qualified_spend — a card
+  // not in the wallet (whole-catalogue fallback above) has no state to
+  // look up, so it's evaluated as freshly-uncapped, same as before Chunk 17.
+  final snapshots = cards.map((c) {
+    final owned = wallet.firstWhereOrNull((w) => w.cardProductId == c.id);
+    if (owned == null) return CardSnapshot(product: c);
+    final capRemaining = {
+      for (final cap in c.capRules)
+        if (owned.capConsumed.containsKey(cap.id)) cap.id: cap.capValue - owned.capConsumed[cap.id]!,
+    };
+    return CardSnapshot(
+      product: c,
+      capRemaining: capRemaining,
+      milestoneProgress: owned.milestoneQualifiedSpend,
+    );
+  }).toList();
   return AsyncValue.data(engine.rank(context, snapshots));
 });
 

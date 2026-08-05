@@ -844,33 +844,96 @@ fresh).
 **All four suites now: 50 (`pandapay_domain`) + 7 (`app`) + 8 (`console`) + 19 (`scraper`,
 Python) = 84 tests total.**
 
+### Chunk 17 — real cap/milestone tracking per user (transactions -> cap_states/milestone_states)
+
+`api/src/cycles.js` (new): period-bounds computation for all 6 `cap_period` values —
+`calendar_month`/`quarter`/`half_year`/`annual` are calendar-anchored (documented simplification:
+`cap_rules` carries no anchor column, so there's nothing else to anchor to); `statement_cycle`
+uses `user_cards.statement_day`; `annual` additionally respects `milestone_rules.anchor`
+(`card_anniversary`/`fiscal_year`/`statement_cycle`/`calendar_year`) since that table *does*
+carry an anchor column. 12 unit tests (Node's built-in `node --test`, no new dependency) —
+leap-year February, quarter/half-year boundaries, fiscal year (Apr-Mar), anniversary wrap-around,
+statement-cycle before/after the statement day, lifetime, and an unknown period throwing rather
+than silently defaulting. `api/`'s first test suite; added `npm test`.
+
+`api/`: `POST /transactions` (manual entry — `source='manual'`, `reward_state='estimated'`, R3's
+"nothing is 'confirmed' without real reconciliation" holds structurally since there's no other
+write path yet) updates `cap_states.consumed` and `milestone_states.qualified_spend` in the same
+transaction as the insert. **Found and fixed a bug from first principles, the same class as
+Chunk 9's engine fix, before it ever shipped**: the first version incremented `cap_states.consumed`
+by the raw spend amount regardless of the cap's `measure` — verified live against the real seeded
+HDFC Millennia card (`reward_value` cap, 7% online rate, ₹1,000 cap) and caught immediately: a
+₹20,000 spend produced `consumed: 20000.00` against a ₹1,000 cap, obviously wrong. Fixed by adding
+`effectiveRatePerRupee` to `cycles.js` (a hand-kept mirror of `pandapay_domain`'s
+`RewardUnit.effectiveRatePerRupee` — no shared package between the Node and Dart sides) and
+computing the actual reward value earned for `reward_value` caps, `+1` for `txn_count` caps, and
+only the raw amount for `spend_amount` caps. Re-verified: the same ₹20,000 spend now correctly
+produces `consumed: 1400.00` (₹20,000 × 7%). `GET /user-cards` extended to include each owned
+card's *currently-active-period* `cap_states`/`milestone_states` (a missing row means nothing's
+been logged yet this period — full headroom, matching the engine's own default).
+
+`app/`: `UserCard` gained `capConsumed`/`milestoneQualifiedSpend` maps parsed from the new
+response fields; `UserCardsRepository.logTransaction()`. `rankedRecommendationsProvider` now
+builds real `CardSnapshot.capRemaining`/`milestoneProgress` for wallet cards from this state
+(non-wallet cards, i.e. the whole-catalogue fallback, are still evaluated fresh — there's no
+per-user state for a card nobody's added). `cards_screen.dart` gained a "log a ₹1,000 demo spend"
+button per card (real transaction, fixed demo amount — UA's actual amount-entry UI doesn't exist
+yet, same honesty pattern as the existing `_defaultDemoAmount` placeholder elsewhere).
+
+**Verified end to end against the live DB with a real signed-in user and the exact Dart classes
+the app uses, not fixtures**: added a real wallet card, logged a ₹1,000 transaction via the app's
+own `UserCardsRepository.logTransaction()` request shape, confirmed `GET /user-cards` returned
+`consumed: 70.00` (₹1,000 × 7%). Wrote `app/tool/verify_live_wallet.dart` (new manual verification
+script, same pattern as Chunk 5's `verify_live_catalogue.dart`) that fetches the real wallet via
+the real repository classes and runs it through `RecommendationEngine.rank()` — a further
+₹20,000 spend against the ₹930 real remaining reward-value headroom (₹1,000 cap − ₹70 already
+consumed) produced `₹997.14` with the reason line "₹930.00 reward-value headroom exhausted by
+₹13,285.71 of this spend, remaining ₹6,714.29 at 1.0% (post-cap)" — the exact Chunk 9 blending
+math, now fed by real per-user consumption data instead of always-fresh state. All test fixtures
+deleted afterward.
+
+`flutter analyze`/`dart run custom_lint`: clean. All 7 pre-existing app tests still pass
+unmodified (the new `UserCard.fromJson` fields default to empty maps when absent, so the Chunk 16
+test fixture — which has no `cap_states`/`milestone_states` keys — still parses correctly).
+
+**Not done**: no amount-entry UI (fixed ₹1,000 demo amount, same placeholder pattern used
+elsewhere); no SMS/email/statement-import transaction sources (`txn_source` enum has them, only
+`manual` is wired); no points_ledger/fee_waiver_states wiring (this chunk did caps and milestones
+only — fee-waiver progress tracking is the same shape of work, not done); no transaction editing
+or a real Activity-tab list view of logged transactions (`GET /transactions` exists and works,
+nothing in the UI calls it yet).
+
+**All five suites now: 50 (`pandapay_domain`) + 7 (`app`) + 8 (`console`) + 19 (`scraper`,
+Python) + 12 (`api`, new) = 96 tests total.**
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-16 (see sections above) are complete and verified. Next:
+Chunks 1-17 (see sections above) are complete and verified. Next:
 
-1. **Cap-consumption/milestone-progress tracking per user** — now that a real wallet exists
-   (Chunk 16), the next thing that would make the engine's cap-blending/milestone-bonus logic
-   (already correct per-card since Chunk 9) actually personalized is tracking *this specific
-   user's* spend against each owned card's caps/milestones this cycle, instead of evaluating
-   every card as freshly-uncapped.
-2. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
+1. **An Activity tab showing real logged transactions** (`GET /transactions` already exists and
+   works; the UI just doesn't call it yet) — the natural companion to Chunk 17's transaction
+   logging, and the last of the four bottom-nav tabs to go from placeholder to real.
+2. **Real amount-entry UI** — every ranking/logging flow still uses a fixed ₹1,000 (or ₹20,000 in
+   verification scripts) demo amount; there's no text field anywhere for a user to type a real
+   spend amount.
+3. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
    per source (a product/legal decision, not something to fabricate) — today there's one
    `sources` row (Chunk 8, still correctly disabled) and the whole pipeline (scrape → diff →
    alert → heuristic proposal → console review → decide) has only ever been proven against safe
    test fetches (`example.com`, a local test server under my own control), never real targets.
-3. **A real AD-4.3 (LLM-backed extraction)**, if/when there's a key and a cost decision — would
+4. **A real AD-4.3 (LLM-backed extraction)**, if/when there's a key and a cost decision — would
    let alerts carry field-level `field_path`s instead of the current page-level ones, and would
    let `extraction_proposals` actually understand prose instead of pattern-matching numbers next
    to `%`/`Rs.` tokens.
-4. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
+5. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
    import tool (UA-1.1.2).
-5. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
+6. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
    feature, not the consolidated fixture file the plan describes).
-6. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
+7. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
    data quality dashboard, anonymization audit automation — none started.
-7. **A scheduler for the scraper** (AD-3.2.5's "weekly default crawl") — `scraper/run.py` is
+8. **A scheduler for the scraper** (AD-3.2.5's "weekly default crawl") — `scraper/run.py` is
    invoked manually today, no cron/systemd-timer wiring.
-8. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
+9. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
    `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus
    `support_tickets` pre-emptively fixed in the same migration once the pattern was clear) — a
    final grep across 0011 for any other `_owner`-only policy on a table an admin will eventually

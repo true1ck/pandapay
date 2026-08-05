@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/providers.dart';
 import '../../data/user_cards_repository.dart';
@@ -44,28 +45,81 @@ class CardsScreen extends ConsumerWidget {
   }
 }
 
-class _UserCardTile extends ConsumerWidget {
+class _UserCardTile extends ConsumerStatefulWidget {
   final UserCard card;
   const _UserCardTile(this.card);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_UserCardTile> createState() => _UserCardTileState();
+}
+
+class _UserCardTileState extends ConsumerState<_UserCardTile> {
+  bool _logging = false;
+
+  Future<void> _logDemoTransaction() async {
+    setState(() => _logging = true);
+    try {
+      final categoryId = ref.read(_resolvedSelectedCategoryIdProvider);
+      await ref.read(userCardsRepositoryProvider)!.logTransaction(
+            userCardId: widget.card.id,
+            amount: _defaultDemoAmount,
+            categoryId: categoryId,
+          );
+      ref.invalidate(userCardsProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to log spend: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _logging = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final card = widget.card;
     return Card(
       child: ListTile(
         title: Text(card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName),
         subtitle: card.nickname?.isNotEmpty == true ? Text(card.cardName) : null,
-        trailing: IconButton(
-          icon: const Icon(Icons.archive_outlined),
-          tooltip: 'Archive (never deleted)',
-          onPressed: () async {
-            await ref.read(userCardsRepositoryProvider)!.archiveCard(card.id);
-            ref.invalidate(userCardsProvider);
-          },
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(_logging ? Icons.hourglass_top : Icons.add_card),
+              tooltip: 'Log a ₹1,000 spend on this card (demo amount)',
+              onPressed: _logging ? null : _logDemoTransaction,
+            ),
+            IconButton(
+              icon: const Icon(Icons.archive_outlined),
+              tooltip: 'Archive (never deleted)',
+              onPressed: () async {
+                await ref.read(userCardsRepositoryProvider)!.archiveCard(card.id);
+                ref.invalidate(userCardsProvider);
+              },
+            ),
+          ],
         ),
       ),
     );
   }
 }
+
+const _defaultDemoAmount = Money.fromPaise(100000); // ₹1,000 — same placeholder as Home's ranking amount
+
+/// Reuses Home's selectedCategoryProvider (a slug) resolved to the UUID
+/// reward_rules.category_id/cap_rules.category_id actually need — same
+/// slug->id bridge providers.dart's rankedRecommendationsProvider already
+/// does, so a logged spend is attributed to the same category Home is
+/// currently showing recommendations for.
+final _resolvedSelectedCategoryIdProvider = Provider<String?>((ref) {
+  final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+  final selectedSlug = ref.watch(selectedCategoryProvider);
+  for (final c in categories) {
+    if (c.slug == selectedSlug) return c.id;
+  }
+  return null;
+});
 
 class _AddCardForm extends ConsumerStatefulWidget {
   const _AddCardForm();
