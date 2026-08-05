@@ -22,8 +22,9 @@ class AuthApi {
     }
   }
 
-  /// Returns the access token on success.
-  Future<String> verifyOtp(String phoneNumber, String code, String deviceId) async {
+  /// Returns both tokens — AD-0.3's session needs the refresh token too, to
+  /// survive a page reload without asking for OTP again (Chunk 10).
+  Future<AuthTokens> verifyOtp(String phoneNumber, String code, String deviceId) async {
     final response = await _client.post(
       Uri.parse('$authBaseUrl/auth/verify-otp'),
       headers: {'Content-Type': 'application/json'},
@@ -33,8 +34,37 @@ class AuthApi {
       throw AdminApiException('OTP verify failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return body['access_token'] as String;
+    return AuthTokens(
+      accessToken: body['access_token'] as String,
+      refreshToken: body['refresh_token'] as String?,
+    );
   }
+
+  /// Exchanges a stored refresh token for a fresh access token on startup —
+  /// the real auth/'s POST /auth/refresh, not a stub. A 401 here means the
+  /// refresh token is invalid/expired/reused; callers should treat that as
+  /// signed-out, not retry.
+  Future<AuthTokens> refresh(String refreshToken) async {
+    final response = await _client.post(
+      Uri.parse('$authBaseUrl/auth/refresh'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'refresh_token': refreshToken}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('Refresh failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return AuthTokens(
+      accessToken: body['access_token'] as String,
+      refreshToken: body['refresh_token'] as String? ?? refreshToken,
+    );
+  }
+}
+
+class AuthTokens {
+  final String accessToken;
+  final String? refreshToken;
+  const AuthTokens({required this.accessToken, this.refreshToken});
 }
 
 class AdminApi {

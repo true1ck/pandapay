@@ -40,6 +40,14 @@ class _AuthGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Chunk 10: wait for a stored refresh token to resolve (or fail) before
+    // deciding — otherwise a valid session flashes the login screen first
+    // on every reload while sessionInitProvider is still in flight.
+    final sessionInit = ref.watch(sessionInitProvider);
+    if (sessionInit.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final token = ref.watch(accessTokenProvider);
     if (token == null) return const LoginScreen();
 
@@ -89,6 +97,25 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
             destinations: [
               for (final d in _destinations) NavigationRailDestination(icon: const Icon(Icons.circle), label: Text(d.label)),
             ],
+            trailing: Expanded(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Consumer(
+                    builder: (context, ref, _) => IconButton(
+                      icon: const Icon(Icons.logout),
+                      tooltip: 'Sign out',
+                      onPressed: () async {
+                        final store = await ref.read(tokenStoreProvider.future);
+                        await store.clear();
+                        ref.read(accessTokenProvider.notifier).state = null;
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
           const VerticalDivider(width: 1),
           Expanded(child: _destinations[_selected].screen),

@@ -534,9 +534,36 @@ column, it just wasn't being read). `engine.dart`'s cap-blending block is now a 
 - `dart analyze`/`flutter analyze`: clean on all three packages. All suites green: 50
   (`pandapay_domain`) + 3 (`app`) + 5 (`console`) = 58.
 
+### Chunk 10 — console token persistence (survives reload); app/ has no auth yet to persist
+
+`console/`: `data/token_store.dart` (new) wraps `SharedPreferences` (works on Flutter Web via
+localStorage — fine for an internal admin tool's refresh token, not a payment credential).
+`AdminApi.verifyOtp` now returns both tokens (was access-only), plus a new
+`AdminApi.refresh(refreshToken)` calling `auth/`'s real `POST /auth/refresh` (confirmed it
+exists and takes `{refresh_token}` before building against it — this wasn't a guess).
+`sessionInitProvider` (new, in `app/providers.dart`) runs once on startup: loads a stored
+refresh token, exchanges it for a fresh access token, seeds `accessTokenProvider`; on any
+failure (expired/reused/invalid — a real 401 from `auth/`) clears storage and falls back to
+signed-out, doesn't retry-loop. `_AuthGate` in `main.dart` now waits on `sessionInitProvider`
+before deciding whether to show the login screen, so a valid stored session doesn't flash
+the login screen first. `login_screen.dart` persists both tokens on a fresh OTP sign-in.
+Added a sign-out button (was previously impossible to sign out at all — closing the tab was
+the only way to end a session).
+
+**Verified with two new widget tests using `SharedPreferences.setMockInitialValues` (not just
+that the code compiles)**: a stored refresh token silently resumes straight to the catalogue
+screen with no login screen shown; an invalid/expired stored refresh token (mocked 401 from
+`auth/`) correctly falls back to the login screen rather than hanging or crashing. 7/7 console
+tests passing (was 5), `flutter analyze` clean.
+
+**`app/` scope note**: `app/` has no auth flow at all yet — Chunk 5's Home screen only calls
+the public, unauthenticated `/catalogue` and `/categories` endpoints, so there is no token to
+persist there. Token persistence for `app/` is real work but blocked on UA-3's login screen
+existing first, not something to fake here.
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-9 (see sections above) are complete and verified. Next:
+Chunks 1-10 (see sections above) are complete and verified. Next:
 
 1. **AD-3 through AD-9** (admin console's remaining core purpose per `adminimplementation_plan.md`):
    the scraper engine, diff review + AI extraction, and especially the unified policy-change
@@ -547,9 +574,10 @@ Chunks 1-9 (see sections above) are complete and verified. Next:
    import tool (UA-1.1.2).
 3. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
    feature, not the consolidated fixture file the plan describes).
-4. **No user_cards/transaction wiring anywhere** — the engine ranks the whole catalogue, not a
-   signed-in user's actual cards; no drift/local cache in the app (always a live fetch, no offline
-   path); no token persistence in either Flutter app (refresh loses the session).
+4. **`app/` has no auth/login flow (UA-3) at all** — Home only hits public endpoints. This blocks
+   user_cards/transaction wiring (the engine still ranks the whole catalogue, not a signed-in
+   user's actual cards), any local drift/cache, and app-side token persistence (Chunk 10 only
+   covered `console/`, which already had a login flow to persist a session for).
 5. The custom_lint rules mentioned in the app section (DateTime.now() ban, bare Money Text ban).
 6. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
    `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus

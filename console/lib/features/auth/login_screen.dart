@@ -42,12 +42,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
     try {
-      final token = await ref.read(authApiProvider).verifyOtp(
+      final tokens = await ref.read(authApiProvider).verifyOtp(
             _phoneController.text.trim(),
             _codeController.text.trim(),
             'console-web',
           );
-      ref.read(accessTokenProvider.notifier).state = token;
+      final store = await ref.read(tokenStoreProvider.future);
+      await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+      ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {

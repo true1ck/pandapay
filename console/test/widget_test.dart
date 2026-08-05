@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:pandapay_console/app/providers.dart';
 import 'package:pandapay_console/data/admin_api.dart';
@@ -16,10 +17,17 @@ http.Client _mockClient(Map<String, dynamic> Function(Uri) responder) {
   });
 }
 
+/// Chunk 10 added a startup session-resume step (sessionInitProvider) that
+/// resolves a stored refresh token via a real SharedPreferences instance —
+/// overridden to a no-op in every test here so these stay pure UI tests of
+/// the already-signed-in-or-not state, not persistence-layer tests (that
+/// would need SharedPreferences.setMockInitialValues, a separate concern).
+final _noSessionInit = sessionInitProvider.overrideWith((ref) async {});
+
 void main() {
   testWidgets('signed-out (no token) shows the login screen, not the console shell',
       (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: PandaPayConsoleApp()));
+    await tester.pumpWidget(ProviderScope(overrides: [_noSessionInit], child: const PandaPayConsoleApp()));
     await tester.pumpAndSettle();
 
     expect(find.text('PandaPay Console'), findsOneWidget);
@@ -31,6 +39,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          _noSessionInit,
           accessTokenProvider.overrideWith((ref) => 'fake-non-admin-token'),
           adminApiProvider.overrideWithValue(
             AdminApi(
@@ -53,6 +62,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          _noSessionInit,
           accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
           adminApiProvider.overrideWithValue(
             AdminApi(
@@ -92,6 +102,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          _noSessionInit,
           accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
           adminApiProvider.overrideWithValue(
             AdminApi(
@@ -134,6 +145,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          _noSessionInit,
           accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
           adminApiProvider.overrideWithValue(
             AdminApi(
@@ -184,5 +196,69 @@ void main() {
     await tester.tap(find.text('Approve'));
     await tester.pumpAndSettle();
     expect(approveCalled, isTrue);
+  });
+
+  testWidgets('Chunk 10: a stored refresh token resumes the session without asking for OTP again',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'pandapay_console.refresh_token': 'stored-refresh-token',
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authApiProvider.overrideWithValue(
+            AuthApi(
+              authBaseUrl: 'http://test',
+              client: MockClient((request) async {
+                expect(request.url.path, '/auth/refresh');
+                expect(jsonDecode(request.body), {'refresh_token': 'stored-refresh-token'});
+                return http.Response(
+                  jsonEncode({'access_token': 'refreshed-access-token', 'refresh_token': 'new-refresh-token'}),
+                  200,
+                );
+              }),
+            ),
+          ),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'refreshed-access-token',
+              client: _mockClient((uri) => {'isAdmin': true}),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Never shows the login screen — session resumed silently.
+    expect(find.text('Send OTP'), findsNothing);
+    expect(find.text('Catalogue'), findsOneWidget);
+  });
+
+  testWidgets('Chunk 10: an invalid stored refresh token falls back to the login screen',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'pandapay_console.refresh_token': 'expired-refresh-token',
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authApiProvider.overrideWithValue(
+            AuthApi(
+              authBaseUrl: 'http://test',
+              client: MockClient((request) async => http.Response(jsonEncode({'error': 'Invalid refresh token'}), 401)),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Send OTP'), findsOneWidget);
   });
 }
