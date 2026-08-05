@@ -424,35 +424,54 @@ properly, and re-verified for real:
   exists yet); no token persistence in the console (refresh loses the session); the
   go_router-based nav shell isn't wired to the real auth-gated app.
 
+### Chunk 7 — fixed the card_products RLS gap flagged in Chunk 6
+
+`db/supabase/migrations/0015_card_products_rls_fix.sql` (new, applied on top of 0011 rather
+than editing it in place, so the history of what changed and why stays legible):
+- `card_products_public_read` was `for select to public using (true)` — Postgres RLS itself
+  never filtered by `status`, only `v_card_catalogue_export`'s `WHERE status = 'published'`
+  did, and only for callers going through that view. Replaced with
+  `using (status = 'published' or pandapay.is_admin())`.
+- The catalogue child tables (`reward_rules`, `cap_rules`, `milestone_rules`,
+  `fee_waiver_rules`, `card_benefits`, `forex_rules`, `fuel_surcharge_rules`,
+  `billing_cycle_rules`, `redemption_options`) had the same unconditional `using (true)` —
+  they don't carry their own `status`, so a direct `select * from reward_rules` leaked a
+  draft card's rates even with the `card_products` fix alone. Rewrote each to check its
+  parent's status via an `exists` subquery against `card_products`.
+- **Verified for real, not just applied**: inserted a genuine `draft`-status card with a
+  reward rule, confirmed as the real non-superuser `app_user` role (no admin identity set)
+  that both the card and its reward rule return **zero rows** — not filtered by the API, by
+  RLS itself. Then set `app.user_id` to a real admin's id in the same session and confirmed
+  the draft card becomes visible. Cleaned up the test row afterward; catalogue count back to
+  the real 4 published cards, `GET /catalogue` unaffected (was never exposing drafts, since
+  it goes through the view — this fix closes the *direct table access* hole, which matters
+  for the console's future non-view admin queries and any other code that might query
+  `card_products` directly without going through `v_card_catalogue_export`).
+- All three test suites re-run clean after the fix: 45 (`pandapay_domain`) + 3 (`app`) + 3
+  (`console`) = 51/51.
+- **Restarted `auth/` and `api/` as background processes** against the already-running local
+  Postgres (`pg_ctl` was already up from a prior session), recreating `auth/.env` and
+  `api/.env` from their `example.env` templates (these are gitignored and get wiped between
+  sessions by design — not a regression, matches the "removed .env files" cleanup step from
+  Chunk 6).
+
 ## What's NOT done (next steps, roughly in priority order)
 
-All 6 originally-planned chunks (see chunk sections above) are complete and verified. Next:
+All 6 originally-planned chunks, plus Chunk 7's RLS fix, are complete and verified. Next:
 
-1. **Restart local services** before resuming — nothing runs as a background service.
-   `pandapay`/`pandapay_auth` Postgres: `LC_ALL=C pg_ctl -D <scratchpad>/pgdata -o "-p 55432" start`
-   (see the DB section above for why `LC_ALL=C` is needed on this machine). `auth/`: needs a
-   `.env` (`DATABASE_URL=postgresql://postgres@localhost:55432/pandapay_auth`, `DB_SSL=false`,
-   `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`, `JWT_AUDIENCE=authenticated` — see
-   `auth/example.env`). `api/`: needs a `.env` pointed at `app_user`, NOT `postgres` — see
-   `api/example.env` and `db/setup_app_role.sql` (run once per fresh database).
-2. **Fix the card_products RLS gap** flagged in Chunk 6: `card_products_public_read` is
-   `using (true)`, unconditional — Postgres RLS itself doesn't hide drafts from a direct table
-   query, only `v_card_catalogue_export`'s view-level filter does. Either add a status-aware
-   policy for non-admins or accept that `/admin/*`'s `requireAdmin` check is the real gate (and
-   audit every other place that might read `card_products` directly without going through a view).
-3. **AD-2 through AD-9** (admin console's actual core purpose per `adminimplementation_plan.md`):
+1. **AD-2 through AD-9** (admin console's actual core purpose per `adminimplementation_plan.md`):
    request/error queues, the scraper, and especially the unified policy-change alert queue — none
    of this exists. What's built (Chunk 6) is only AD-0.3/AD-1's foundation.
-4. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
+2. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
    import tool (UA-1.1.2).
-5. **The cap-measure gap** (Chunk 5): `CapRule` blending doesn't distinguish `spend_amount` vs
+3. **The cap-measure gap** (Chunk 5): `CapRule` blending doesn't distinguish `spend_amount` vs
    `reward_value` vs `txn_count` caps — flagged inline in `engine.dart`.
-6. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
+4. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
    feature, not the consolidated fixture file the plan describes).
-7. **No user_cards/transaction wiring anywhere** — the engine ranks the whole catalogue, not a
+5. **No user_cards/transaction wiring anywhere** — the engine ranks the whole catalogue, not a
    signed-in user's actual cards; no drift/local cache in the app (always a live fetch, no offline
    path); no token persistence in either Flutter app (refresh loses the session).
-8. The custom_lint rules mentioned in the app section (DateTime.now() ban, bare Money Text ban).
+6. The custom_lint rules mentioned in the app section (DateTime.now() ban, bare Money Text ban).
 
 ## Sandbox limitations
 
