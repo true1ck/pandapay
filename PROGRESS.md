@@ -209,6 +209,32 @@ between the Flutter apps and the `pandapay` product database:
   tests (verified manually via curl this session — should get a real test suite before
   much more is built on top of it).
 
+### Chunk 2 — trimmed `auth/`'s marketplace/partner-tier cruft
+Removed the leftover "Urban Link" marketplace logic flagged in the previous session:
+- `tokenService.js`: no longer signs `partner_tier_id` into the JWT.
+- `authRoutes.js`: stripped `partner_tier_id`/`referral_code` from ~10 raw SQL
+  SELECT/RETURNING column lists (all via targeted sed, verified with `node --check`
+  and a live re-run of the OTP flow after each pass).
+- `validation.js`: deleted the entire dead `validateMarketplaceRole`/
+  `validateUpdateProfileBody` pair — imported but never actually wired to any route.
+- `userRoutes.js`: `GET /users/me` had a whole partner-tier-name lookup block
+  (querying a `partner_tiers` table that doesn't exist in this schema) and returned
+  `referral_code`/`profile_image_url` — none of which PandaPay has a concept of.
+  Trimmed to the fields that exist: id, phone, name, role, avatar_url, language,
+  timezone, country_code, timestamps, active device count.
+- `db/pandapay-auth/init.sql`: dropped the now-dead `partner_tier_id`/`active_role`
+  columns from `users` entirely (both in the file and on the live database).
+- **Found and fixed a real, pre-existing bug while re-testing**, unrelated to the
+  trim itself: `tokenService.js` signs `aud: 'authenticated'` into every token, but
+  `jwtKeys.js`'s claims validator defaulted `JWT_AUDIENCE` to `'mobile-app'` — so
+  every `authMiddleware`-protected route (`GET`/`PUT /users/me`, device management,
+  etc.) 401'd with "Invalid token claims" the moment you tried to use them, even
+  though `/auth/*` itself worked fine. Fixed by setting `JWT_AUDIENCE=authenticated`
+  in `.env`, documented in `example.env` so this doesn't silently reappear.
+- Re-verified the full flow against the live, trimmed database after each change:
+  request-otp → verify-otp → JWT issuance → `GET /users/me` → `PUT /users/me`, all
+  200s, response shape now free of dead marketplace fields.
+
 ## What's NOT done (next steps, roughly in priority order)
 
 1. **Restart local Postgres** before resuming DB work (see note above) — both the `pandapay` and

@@ -330,44 +330,6 @@ function validateLogoutBody(req, res, next) {
 // === VALIDATION: USER ROUTES ===
 
 /**
- * Validate marketplace role (for active_role field)
- * Maps old values to new schema:
- * - 'seller' or 'buyer' -> 'seller_buyer'
- * - 'service_provider' -> 'service_provider'
- * 
- * Database: active_role uses listing_role_enum: ('seller_buyer', 'service_provider')
- */
-function validateMarketplaceRole(role) {
-  if (role === undefined || role === null) {
-    return { valid: true }; // Optional field
-  }
-  if (typeof role !== 'string') {
-    return { valid: false, error: 'user_type must be a string' };
-  }
-  // Normalize to lowercase for comparison
-  const normalized = role.toLowerCase();
-  
-  // Map old values to new schema
-  const roleMapping = {
-    'seller': 'seller_buyer',
-    'buyer': 'seller_buyer',
-    'service_provider': 'service_provider'
-  };
-  
-  if (roleMapping[normalized]) {
-    return { valid: true, mappedValue: roleMapping[normalized] };
-  }
-  
-  // Also accept new values directly
-  const allowedValues = ['seller_buyer', 'service_provider'];
-  if (allowedValues.includes(normalized)) {
-    return { valid: true, mappedValue: normalized };
-  }
-  
-  return { valid: false, error: `user_type must be one of: seller, buyer, service_provider, seller_buyer` };
-}
-
-/**
  * Validate name string (optional, trimmed, max 100)
  */
 function validateName(name) {
@@ -384,58 +346,6 @@ function validateName(name) {
   return { valid: true };
 }
 
-/**
- * Middleware: Validate PUT /users/me request body
- * Validates: name (required string, trimmed, max 100), user_type (marketplace role: seller/buyer/service_provider)
- * Maps user_type to active_role field in database
- * Rejects: unknown extra fields, invalid types, overly long strings
- */
-function validateUpdateProfileBody(req, res, next) {
-  const { name, user_type } = req.body;
-
-  // Check body size
-  const sizeCheck = validateBodySize(req.body, 1000);
-  if (!sizeCheck.valid) {
-    return res.status(400).json({ error: sizeCheck.error });
-  }
-
-  // Check for unknown fields (only allow 'name' and 'user_type')
-  const allowedFields = ['name', 'user_type'];
-  const bodyKeys = Object.keys(req.body);
-  const unknownFields = bodyKeys.filter(key => !allowedFields.includes(key));
-  if (unknownFields.length > 0) {
-    return res.status(400).json({ 
-      error: `Unknown fields not allowed: ${unknownFields.join(', ')}` 
-    });
-  }
-
-  // Validate name (required)
-  if (!name) {
-    return res.status(400).json({ error: 'name is required' });
-  }
-  const nameCheck = validateName(name);
-  if (!nameCheck.valid) {
-    return res.status(400).json({ error: nameCheck.error });
-  }
-
-  // Validate user_type (required) - maps to active_role in database
-  if (!user_type) {
-    return res.status(400).json({ error: 'user_type is required' });
-  }
-  const roleCheck = validateMarketplaceRole(user_type);
-  if (!roleCheck.valid) {
-    return res.status(400).json({ error: roleCheck.error });
-  }
-
-  // Trim name and store mapped role value
-  if (name && typeof name === 'string') {
-    req.body.name = name.trim();
-  }
-  // Store the mapped marketplace role value for the route handler
-  req.body.active_role = roleCheck.mappedValue;
-
-  next();
-}
 
 /**
  * Middleware: Validate DELETE /users/me/devices/:device_id param
@@ -600,7 +510,6 @@ module.exports = {
   validateLogoutBody,
   validateSignupBody,
   // === VALIDATION: USER ROUTES ===
-  validateUpdateProfileBody,
   validateDeviceIdParam,
   validateLogoutOthersBody,
 };

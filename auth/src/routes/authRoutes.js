@@ -528,9 +528,8 @@ router.post(
 
       let user;
       // Check if token_version column exists, use it if available, otherwise default to 1
-      // Urban Link: Query user with partner_tier_id instead of user_type
       const found = await db.query(
-        `SELECT id, phone_number, name, role, partner_tier_id,
+        `SELECT id, phone_number, name, role,
               COALESCE(token_version, 1) as token_version
        FROM users
        WHERE (phone_number = $1 OR phone_number = $2)
@@ -546,12 +545,10 @@ router.post(
           : '+91';
 
         // Create new user with minimal data (name will be added via signup endpoint)
-        // Urban Link: Create user with is_phone_verified = TRUE
-        // Database triggers will auto-create wallet, trust score, and referral code
         const newUserResult = await db.query(
           `INSERT INTO users (phone_number, country_code, language, timezone, is_phone_verified)
          VALUES ($1, $2, $3, $4, TRUE)
-         RETURNING id, phone_number, name, role, partner_tier_id,
+         RETURNING id, phone_number, name, role,
                    COALESCE(token_version, 1) as token_version`,
           [
             encryptedPhone,
@@ -691,7 +688,6 @@ router.post(
         ip: clientIp,
       });
 
-      // Urban Link: Only name is required for profile completion
       const needsProfile = !user.name;
 
       // Get count of active devices
@@ -870,14 +866,14 @@ router.post(
       // === SECURITY HARDENING: CROSS-ACCOUNT UNIQUE CHECK ===
       // Ensure that email and phone number are not registered to DIFFERENT accounts.
       const foundByEmail = await db.query(
-        `SELECT id, email, phone_number, name, role, partner_tier_id, COALESCE(token_version, 1) as token_version
+        `SELECT id, email, phone_number, name, role, COALESCE(token_version, 1) as token_version
          FROM users WHERE email = $1 AND deleted = FALSE`,
         [normalizedEmail]
       );
       
       const phoneSearchParams = preparePhoneSearchParams(phone_number);
       const foundByPhone = await db.query(
-        `SELECT id, email, phone_number, name, role, partner_tier_id, COALESCE(token_version, 1) as token_version
+        `SELECT id, email, phone_number, name, role, COALESCE(token_version, 1) as token_version
          FROM users WHERE (phone_number = $1 OR phone_number = $2) AND deleted = FALSE`,
         phoneSearchParams
       );
@@ -909,7 +905,7 @@ router.post(
         const newUserResult = await db.query(
           `INSERT INTO users (email, phone_number, language, timezone, is_email_verified)
            VALUES ($1, $2, $3, $4, TRUE)
-           RETURNING id, email, name, role, partner_tier_id, COALESCE(token_version, 1) as token_version`,
+           RETURNING id, email, name, role, COALESCE(token_version, 1) as token_version`,
           [normalizedEmail, encryptedPhone, device_info?.language_code || null, device_info?.timezone || null]
         );
         user = newUserResult.rows[0];
@@ -1025,7 +1021,7 @@ router.post(
 
       let user;
       const found = await db.query(
-        `SELECT id, email, name, role, partner_tier_id, COALESCE(token_version, 1) as token_version
+        `SELECT id, email, name, role, COALESCE(token_version, 1) as token_version
          FROM users WHERE email = $1 AND deleted = FALSE`,
         [email]
       );
@@ -1034,7 +1030,7 @@ router.post(
         const newUserResult = await db.query(
           `INSERT INTO users (email, name, avatar_url, google_id, language, timezone, is_email_verified)
            VALUES ($1, $2, $3, $4, $5, $6, TRUE)
-           RETURNING id, email, name, role, partner_tier_id, COALESCE(token_version, 1) as token_version`,
+           RETURNING id, email, name, role, COALESCE(token_version, 1) as token_version`,
           [email, name, picture, googleId, device_info?.language_code || null, device_info?.timezone || null]
         );
         user = newUserResult.rows[0];
@@ -1162,9 +1158,8 @@ router.post(
 
       // === GUEST LOGIN SUPPORT ===
       // Check if user exists in database (guests don't have user records)
-      // Urban Link: Query partner_tier_id instead of user_type
       const { rows } = await db.query(
-        `SELECT id, phone_number, name, role, partner_tier_id, COALESCE(token_version, 1) as token_version FROM users WHERE id = $1`,
+        `SELECT id, phone_number, name, role, COALESCE(token_version, 1) as token_version FROM users WHERE id = $1`,
         [userId]
       );
 
@@ -1177,7 +1172,6 @@ router.post(
           phone_number: null,
           name: null,
           role: 'user',
-          partner_tier_id: 1,
           token_version: 1,
           is_guest: true
         };
@@ -1544,7 +1538,6 @@ router.post(
             ip: clientIp,
           });
 
-          // Urban Link: Only name is required for profile completion
           const needsProfile = !user.name;
 
           // Get count of active devices
@@ -1725,7 +1718,6 @@ router.post(
         ip: clientIp,
       });
 
-      // Urban Link: Only name is required for profile completion
       const needsProfile = !user.name;
 
       // Get count of active devices

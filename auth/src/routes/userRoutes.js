@@ -17,7 +17,6 @@ const {
 
 // === VALIDATION: USER ROUTES ===
 const {
-  validateUpdateProfileBody,
   validateDeviceIdParam,
   validateLogoutOthersBody,
 } = require('../middleware/validation');
@@ -26,14 +25,11 @@ const router = express.Router();
 
 // GET /users/me
 // Rate limited: Read operation (100 requests per 15 minutes per user)
-// Urban Link: Returns basic user info. Full stats (earnings, leads) come from backend service.
 router.get('/me', auth, userRateLimitRead, async (req, res) => {
   try {
-    // Urban Link: Get user basic information
     const { rows } = await db.query(
-      `SELECT id, phone_number, name, role, partner_tier_id, referral_code,
-              profile_image_url, language, timezone, country_code,
-              created_at, last_login_at
+      `SELECT id, phone_number, name, role, avatar_url, language, timezone,
+              country_code, created_at, last_login_at
        FROM users
        WHERE id = $1 AND deleted = FALSE`,
       [req.user.id]
@@ -58,29 +54,12 @@ router.get('/me', auth, userRateLimitRead, async (req, res) => {
     );
     const activeDevicesCount = parseInt(deviceCountResult.rows[0].count, 10);
 
-    // Get partner tier name
-    let partnerTierName = 'Starter';
-    if (user.partner_tier_id) {
-      const tierResult = await db.query(
-        `SELECT name FROM partner_tiers WHERE id = $1`,
-        [user.partner_tier_id]
-      );
-      if (tierResult.rows.length > 0) {
-        partnerTierName = tierResult.rows[0].name;
-      }
-    }
-
     return res.json({
       id: user.id,
       phone_number: user.phone_number,
       name: user.name,
       role: user.role,
-      partner_tier: {
-        id: user.partner_tier_id || 1,
-        name: partnerTierName,
-      },
-      referral_code: user.referral_code,
-      avatar_url: user.profile_image_url,
+      avatar_url: user.avatar_url,
       language: user.language,
       timezone: user.timezone,
       country_code: user.country_code || '+91',
@@ -96,7 +75,7 @@ router.get('/me', auth, userRateLimitRead, async (req, res) => {
 
 
 // PUT /users/me
-// Urban Link: Update user profile (name only - partner tier is earned, not selected)
+// Update user profile (name only).
 router.put(
   '/me',
   auth,
@@ -113,7 +92,7 @@ router.put(
         `UPDATE users
          SET name = $1, updated_at = NOW()
          WHERE id = $2 AND deleted = FALSE
-         RETURNING id, phone_number, name, role, partner_tier_id, referral_code`,
+         RETURNING id, phone_number, name, role`,
         [name.trim(), req.user.id]
       );
 
@@ -429,7 +408,7 @@ router.put(
   }
 );
 
-// NOTE: Location management is handled by the Urban Link Backend Service
+// NOTE: Location management is out of scope for this identity service.
 // Auth service only handles authentication, sessions, and basic profile
 
 module.exports = router;

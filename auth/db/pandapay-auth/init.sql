@@ -39,17 +39,7 @@ CREATE TABLE IF NOT EXISTS users (
     is_phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
     is_email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
     role            user_role_enum NOT NULL DEFAULT 'user',  -- system role
-    -- Carried over from the source service's marketplace profile-type concept
-    -- (validateMarketplaceRole in src/middleware/validation.js); PandaPay has
-    -- no such concept but the field/edit-profile endpoints still read/write it.
-    active_role     TEXT,
     token_version   INT NOT NULL DEFAULT 1,          -- bump to invalidate all outstanding JWTs
-
-    -- Carried over from the source service's "Urban Link" marketplace tiers.
-    -- PandaPay has no partner-tier concept; column kept nullable so the
-    -- shared find-or-create-user query (authRoutes.js) still runs unmodified.
-    -- Safe to drop once that query is trimmed down for PandaPay specifically.
-    partner_tier_id UUID,
 
     avatar_url      TEXT,
     language        VARCHAR(10),

@@ -20,8 +20,6 @@ function signAccessToken(user, options = {}) {
     role: 'authenticated',
     // Our custom app role:
     user_role: user.role,
-    // Urban Link: Include partner tier in JWT
-    partner_tier_id: user.partner_tier_id || 1,
     // === SECURITY HARDENING: GLOBAL LOGOUT ===
     // Include token_version to support logout-all-devices functionality
     token_version: user.token_version || 1,
@@ -47,7 +45,7 @@ function signAccessToken(user, options = {}) {
 
   const token = jwt.sign(payload, ACCESS_SECRET, { expiresIn });
   console.log(
-    `[TOKEN_SERVICE] signAccessToken: Generated access token - userId=${user.id}, tokenVersion=${payload.token_version}, partnerTier=${payload.partner_tier_id}, deviceId=${payload.device_id || 'none'}, isGuest=${payload.is_guest}, expiresIn=${expiresIn}`
+    `[TOKEN_SERVICE] signAccessToken: Generated access token - userId=${user.id}, tokenVersion=${payload.token_version}, deviceId=${payload.device_id || 'none'}, isGuest=${payload.is_guest}, expiresIn=${expiresIn}`
   );
   return token;
 }
