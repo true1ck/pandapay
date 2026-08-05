@@ -71,6 +71,26 @@ void main() {
     expect(find.textContaining('Base rate 5.0%'), findsOneWidget);
   });
 
+  testWidgets('Chunk 19: typing a real amount into Home updates the ranking amount', (tester) async {
+    final container = ProviderContainer(overrides: [
+      catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_rupayCard()])),
+      categoryRepositoryProvider.overrideWithValue(_FakeCategoryRepository()),
+      _noSessionInit,
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const PandaPayApp()));
+    await tester.pump();
+    await tester.pump();
+
+    expect(container.read(enteredAmountProvider), const Money.fromPaise(100000));
+
+    await tester.enterText(find.byType(TextField).first, '2500');
+    await tester.pump();
+
+    expect(container.read(enteredAmountProvider), Money.fromRupees(2500));
+  });
+
   testWidgets('a card with no matching-category reward rule renders its exclusion reason, not a value',
       (tester) async {
     final noRuleCard = CardProduct(id: 'bare', name: 'Bare Card', network: CardNetwork.rupay);

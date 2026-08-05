@@ -29,6 +29,10 @@ class HomeScreen extends ConsumerWidget {
 
     return Column(
       children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: _AmountField(),
+        ),
         SizedBox(
           height: 48,
           child: ListView(
@@ -50,6 +54,52 @@ class HomeScreen extends ConsumerWidget {
         ),
         Expanded(child: _RankedList(ranked: ranked)),
       ],
+    );
+  }
+}
+
+/// Chunk 19: the real amount-entry field — everything downstream (ranking
+/// here, and Cards' "log spend" button via the same enteredAmountProvider)
+/// was already correct, it was just fed a hardcoded ₹1,000 placeholder.
+class _AmountField extends ConsumerStatefulWidget {
+  const _AmountField();
+  @override
+  ConsumerState<_AmountField> createState() => _AmountFieldState();
+}
+
+class _AmountFieldState extends ConsumerState<_AmountField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = ref.read(enteredAmountProvider);
+    _controller = TextEditingController(text: initial.rupees.toStringAsFixed(0));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(
+        labelText: 'Amount',
+        prefixText: '₹ ',
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+      onChanged: (value) {
+        final parsed = double.tryParse(value);
+        if (parsed != null && parsed >= 0) {
+          ref.read(enteredAmountProvider.notifier).state = Money.fromRupees(parsed);
+        }
+      },
     );
   }
 }

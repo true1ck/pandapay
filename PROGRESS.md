@@ -935,33 +935,57 @@ assertion would be testing a lie) and added a second test for the signed-in real
 **All five suites now: 50 (`pandapay_domain`) + 8 (`app`) + 8 (`console`) + 19 (`scraper`,
 Python) + 12 (`api`) = 97 tests total.**
 
+### Chunk 19 — real amount-entry UI
+
+Replaced the fixed ₹1,000/₹20,000 demo amounts that had been hardcoded in three separate
+places (`app/lib/app/providers.dart`'s `_defaultDemoAmount`, `app/lib/features/cards/
+cards_screen.dart`'s own copy, and the verification scripts) with a single shared
+`enteredAmountProvider` (`StateProvider<Money>`, default ₹1,000) and a real `TextField` at the
+top of the Home screen.
+
+`rankedRecommendationsProvider` now reads `enteredAmountProvider` instead of the removed
+constant, so ranking reacts live to what's typed. Cards' "log spend" button reads the same
+provider, so whatever amount is currently entered on Home is exactly what gets logged if the
+user then taps the log-spend icon on an owned card — no separate, disconnected amount exists
+anymore. The button's tooltip now shows the live formatted amount instead of a fixed string.
+
+**Verified end to end against the live services**: real OTP login (`+919876500002`), added a
+real wallet card (Axis Ace), then called `POST /transactions` with `amountInr: 2500` — the exact
+kind of non-default value the new text field now sends — and confirmed `GET /transactions`
+returned `amount_inr: "2500.00"` correctly, not a hardcoded placeholder. Test fixtures deleted
+afterward.
+
+Added a widget test that types "2500" into the new field and asserts `enteredAmountProvider`
+updates to `Money.fromRupees(2500)`. `flutter analyze`/`dart run custom_lint`: clean. 9/9 app
+tests passing (was 8).
+
+**All five suites now: 50 (`pandapay_domain`) + 9 (`app`) + 8 (`console`) + 19 (`scraper`,
+Python) + 12 (`api`) = 98 tests total.**
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-18 (see sections above) are complete and verified. All four of `app/`'s bottom-nav
-tabs are now real; the remaining gaps are mostly outside `app/` itself. Next:
+Chunks 1-19 (see sections above) are complete and verified. All four of `app/`'s bottom-nav
+tabs are real and fed by real user input; the remaining gaps are mostly outside `app/` itself.
+Next:
 
-1. **Real amount-entry UI** — every ranking/logging flow still uses a fixed ₹1,000 (or ₹20,000 in
-   verification scripts) demo amount; there's no text field anywhere for a user to type a real
-   spend amount. This is probably the highest-leverage remaining `app/` gap: everything downstream
-   (ranking, cap tracking, activity) already works correctly, it's just fed a placeholder number.
-2. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
+1. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
    per source (a product/legal decision, not something to fabricate) — today there's one
    `sources` row (Chunk 8, still correctly disabled) and the whole pipeline (scrape → diff →
    alert → heuristic proposal → console review → decide) has only ever been proven against safe
    test fetches (`example.com`, a local test server under my own control), never real targets.
-3. **A real AD-4.3 (LLM-backed extraction)**, if/when there's a key and a cost decision — would
+2. **A real AD-4.3 (LLM-backed extraction)**, if/when there's a key and a cost decision — would
    let alerts carry field-level `field_path`s instead of the current page-level ones, and would
    let `extraction_proposals` actually understand prose instead of pattern-matching numbers next
    to `%`/`Rs.` tokens.
-4. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
+3. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
    import tool (UA-1.1.2).
-5. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
+4. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
    feature, not the consolidated fixture file the plan describes).
-6. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
+5. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
    data quality dashboard, anonymization audit automation — none started.
-7. **A scheduler for the scraper** (AD-3.2.5's "weekly default crawl") — `scraper/run.py` is
+6. **A scheduler for the scraper** (AD-3.2.5's "weekly default crawl") — `scraper/run.py` is
    invoked manually today, no cron/systemd-timer wiring.
-8. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
+7. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
    `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus
    `support_tickets` pre-emptively fixed in the same migration once the pattern was clear) — a
    final grep across 0011 for any other `_owner`-only policy on a table an admin will eventually

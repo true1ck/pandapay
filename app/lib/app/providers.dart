@@ -105,6 +105,14 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) {
 /// (every card came back excluded against live data) before this existed.
 final selectedCategoryProvider = StateProvider<String?>((ref) => 'online');
 
+/// Chunk 19: the real user-entered spend amount, typed into Home's amount
+/// field — replaces the fixed ₹1,000/₹20,000 demo amounts previously
+/// hardcoded everywhere ranking or "log a spend" needed a number. Both
+/// rankedRecommendationsProvider (below) and Cards' log-spend button read
+/// this same provider, so what a user types on Home is exactly what gets
+/// logged if they then tap "log spend" on a card.
+final enteredAmountProvider = StateProvider<Money>((ref) => const Money.fromPaise(100000));
+
 final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
   return const RecommendationEngine();
 });
@@ -145,7 +153,7 @@ final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>
       : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
 
   final context = RecommendationContext(
-    amount: _defaultDemoAmount,
+    amount: ref.watch(enteredAmountProvider),
     categoryId: categoryId,
     rail: TxnRail.swipe,
   );
@@ -177,7 +185,3 @@ extension _FirstWhereOrNull<T> on List<T> {
     return null;
   }
 }
-
-// Placeholder until B6 quick-add / B1 amount entry exists — a fixed ₹1,000
-// demo amount so ranking has something concrete to show.
-const _defaultDemoAmount = Money.fromPaise(100000);

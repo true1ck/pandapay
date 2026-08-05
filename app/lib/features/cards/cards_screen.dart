@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/providers.dart';
 import '../../data/user_cards_repository.dart';
@@ -56,13 +55,14 @@ class _UserCardTile extends ConsumerStatefulWidget {
 class _UserCardTileState extends ConsumerState<_UserCardTile> {
   bool _logging = false;
 
-  Future<void> _logDemoTransaction() async {
+  Future<void> _logTransaction() async {
     setState(() => _logging = true);
     try {
       final categoryId = ref.read(_resolvedSelectedCategoryIdProvider);
+      final amount = ref.read(enteredAmountProvider);
       await ref.read(userCardsRepositoryProvider)!.logTransaction(
             userCardId: widget.card.id,
-            amount: _defaultDemoAmount,
+            amount: amount,
             categoryId: categoryId,
           );
       ref.invalidate(userCardsProvider);
@@ -78,6 +78,7 @@ class _UserCardTileState extends ConsumerState<_UserCardTile> {
   @override
   Widget build(BuildContext context) {
     final card = widget.card;
+    final amount = ref.watch(enteredAmountProvider);
     return Card(
       child: ListTile(
         title: Text(card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName),
@@ -87,8 +88,8 @@ class _UserCardTileState extends ConsumerState<_UserCardTile> {
           children: [
             IconButton(
               icon: Icon(_logging ? Icons.hourglass_top : Icons.add_card),
-              tooltip: 'Log a ₹1,000 spend on this card (demo amount)',
-              onPressed: _logging ? null : _logDemoTransaction,
+              tooltip: 'Log a ${amount.format()} spend on this card (enter amount on Home)',
+              onPressed: _logging ? null : _logTransaction,
             ),
             IconButton(
               icon: const Icon(Icons.archive_outlined),
@@ -104,8 +105,6 @@ class _UserCardTileState extends ConsumerState<_UserCardTile> {
     );
   }
 }
-
-const _defaultDemoAmount = Money.fromPaise(100000); // ₹1,000 — same placeholder as Home's ranking amount
 
 /// Reuses Home's selectedCategoryProvider (a slug) resolved to the UUID
 /// reward_rules.category_id/cap_rules.category_id actually need — same
