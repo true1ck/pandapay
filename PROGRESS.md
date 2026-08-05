@@ -1138,7 +1138,34 @@ Python) + 12 (`api`) = 134 tests total.**
 
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-24 (see sections above) are complete and verified. Remaining, in priority order —
+### Chunk 25 — AD-8 data quality dashboard
+
+`api/`: one route, `GET /admin/data-quality-dashboard`, wrapping `v_data_quality_dashboard` —
+a view that already existed in `db/supabase/migrations/0010_functions_and_views.sql` (not
+written this chunk, just exposed for the first time). Scope note stated up front in the
+route's doc comment: **AD-8.3** ("trend lines, not just current values") and **AD-8.4**
+("operator alerting when any backlog crosses a threshold") are NOT implemented — trends need
+a time-series snapshot table + scheduled job that don't exist, alerting needs a notification
+channel this codebase has never had. Both flagged explicitly rather than faked with one data
+point pretending to be a trend or a silent no-op "alert."
+
+`console/`: one new nav tab, **Data Quality** — a stat-card grid over every field the view
+returns (cards published/stale, merchants total/published/high-confidence, open alerts,
+pending queues, scrape failures), with the same "no trends, no alerting yet" note visible in
+the UI itself, not just in a code comment nobody using the console will ever read.
+
+**Verified live**: `curl`'d the real route against the actual local Postgres and got real
+counts back (`cards_published: 20` matching Chunk 22's expanded seed data, `card_requests_pending: 2`
+matching real queue rows) — not a stub response.
+
+Caught and fixed a real overflow bug while writing the widget test (the dashboard's header
+`Row` didn't wrap its `Text`, same overflow class as Chunk 23/24's dropdown fixes) — fixed
+with `Flexible` + `TextOverflow.ellipsis`. 12/12 console tests passing (was 11).
+
+**All five suites now: 83 (`pandapay_domain`) + 9 (`app`) + 12 (`console`) + 19 (`scraper`,
+Python) + 12 (`api`) = 135 tests total.**
+
+Chunks 1-25 (see sections above) are complete and verified. Remaining, in priority order —
 items 1-2 are explicitly on hold per user decision (2026-08-05: stay on test fixtures for AD-3,
 no real LLM key available for AD-4.3); item 3 is next up, user has approved doing it "one by
 one, non-stop":
@@ -1148,12 +1175,11 @@ one, non-stop":
    still only proven against `example.com`/a local test server.
 2. **A real AD-4.3 (LLM-backed extraction)** — still blocked on an `ANTHROPIC_API_KEY` and a
    cost decision; no change.
-3. **AD-8 and AD-9**: data quality dashboard, anonymization audit automation — not started yet
-   (AD-6 and AD-7 are now done, Chunks 23-24 above). User has approved doing all remaining
-   ones, one by one. AD-9 in particular is flagged ⭐ non-negotiable in the plan (wiring
-   `pandapay.run_anonymization_audit()` into CI as a deploy-blocking gate) — worth flagging to
-   the user once reached, since "deploy-blocking CI gate" is a claim about a CI system this
-   session has not touched or verified exists.
+3. **AD-9**: anonymization audit automation — not started yet (AD-6/7/8 are now done, Chunks
+   23-25 above). User has approved doing it next. Flagged ⭐ non-negotiable in the plan
+   (wiring `pandapay.run_anonymization_audit()` into CI as a deploy-blocking gate) — the repo
+   has a real GitHub remote (`github.com/true1ck/pandapay`) and no existing CI config
+   (`.github/workflows` doesn't exist yet), so this chunk will be the one that adds it.
 
 ## Sandbox limitations
 

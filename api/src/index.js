@@ -1334,5 +1334,31 @@ app.get('/admin/effective-rate-summary/:cardProductId/:categoryId/samples', requ
   }
 });
 
+/**
+ * AD-8 Data Quality Dashboard — a single query over v_data_quality_dashboard
+ * (already defined in db/supabase/migrations/0010_functions_and_views.sql,
+ * this route just exposes it; the view was not written this chunk).
+ *
+ * Scope note: AD-8.3 ("trend lines, not just current values") and AD-8.4
+ * ("operator alerting when any backlog crosses a threshold") are NOT
+ * implemented. Trend lines need a time-series table snapshotting these
+ * numbers over time — none exists, and adding one plus a scheduled
+ * snapshot job is a separate, real piece of work, not a one-line addition.
+ * Alerting needs a notification channel (email/Slack/etc.) this codebase
+ * has never had. Both are flagged here rather than faked with a single
+ * fabricated data point pretending to be a trend.
+ */
+app.get('/admin/data-quality-dashboard', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query('SELECT * FROM v_data_quality_dashboard')
+    );
+    res.json({ dashboard: result.rows[0] });
+  } catch (err) {
+    console.error('GET /admin/data-quality-dashboard error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));

@@ -143,3 +143,9 @@ final effectiveRateSummaryProvider = FutureProvider<List<Map<String, dynamic>>>(
   if (api == null) return const [];
   return api.fetchEffectiveRateSummary(divergentOnly: ref.watch(effectiveRateDivergentOnlyProvider));
 });
+
+final dataQualityDashboardProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return null;
+  return api.fetchDataQualityDashboard();
+});

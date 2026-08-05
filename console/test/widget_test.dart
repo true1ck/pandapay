@@ -589,4 +589,55 @@ void main() {
     expect(find.textContaining('HDFC Millennia — Online'), findsOneWidget);
     expect(find.text('Alert: open'), findsOneWidget);
   });
+
+  testWidgets('AD-8: admin sees the data quality dashboard snapshot', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                if (request.url.path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (request.url.path == '/admin/data-quality-dashboard') {
+                  return http.Response(
+                    jsonEncode({
+                      'dashboard': {
+                        'merchants_total': '4',
+                        'merchants_published': '1',
+                        'merchants_high_conf': '0',
+                        'locations_total': '2',
+                        'alerts_open': '1',
+                        'error_reports_pending': '0',
+                        'card_requests_pending': '3',
+                        'conflicts_pending': '0',
+                        'scrape_failures_7d': '0',
+                        'cards_published': '20',
+                        'cards_stale_180d': '0',
+                      },
+                    }),
+                    200,
+                  );
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Data Quality'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Data quality snapshot'), findsOneWidget);
+    expect(find.text('20'), findsOneWidget); // cards_published
+    expect(find.text('1'), findsNWidgets(2)); // merchants_published + alerts_open both 1
+  });
 }

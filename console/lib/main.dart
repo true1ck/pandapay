@@ -8,6 +8,7 @@ import 'features/catalogue/catalogue_screen.dart';
 import 'features/crowdsource/acceptance_rates_screen.dart';
 import 'features/crowdsource/conflicts_screen.dart';
 import 'features/crowdsource/merchants_screen.dart';
+import 'features/dashboard/data_quality_dashboard_screen.dart';
 import 'features/queues/card_requests_screen.dart';
 import 'features/queues/error_reports_screen.dart';
 
@@ -91,6 +92,7 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     (label: 'Merchants', screen: MerchantsScreen()),
     (label: 'Conflicts', screen: ConflictsScreen()),
     (label: 'Acceptance & Rates', screen: AcceptanceRatesScreen()),
+    (label: 'Data Quality', screen: DataQualityDashboardScreen()),
   ];
 
   @override

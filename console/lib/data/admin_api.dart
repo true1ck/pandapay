@@ -396,6 +396,18 @@ class AdminApi {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['samples'] as List).cast<Map<String, dynamic>>();
   }
+
+  /// AD-8.1: single-query dashboard over v_data_quality_dashboard. See
+  /// api/'s GET /admin/data-quality-dashboard doc comment for what's
+  /// explicitly NOT here (trend lines, alerting) and why.
+  Future<Map<String, dynamic>> fetchDataQualityDashboard() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/data-quality-dashboard'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/data-quality-dashboard failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['dashboard'] as Map<String, dynamic>;
+  }
 }
 
 class AdminApiException implements Exception {
