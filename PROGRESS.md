@@ -598,24 +598,95 @@ use `Money` or call `DateTime.now()` anywhere yet, so it wasn't wired there — 
 no-op until it has code the rules apply to. `dart run custom_lint`: clean on the real
 codebase. `flutter analyze`/`flutter test`: unaffected, still green.
 
+### Chunk 12 — AD-3 scraper engine: legal gate, static fetch, extraction, snapshots
+
+New `scraper/` (Python, separate from the Node/Dart stack per the plan's own stack choice
+— §"Scraper Engine ... Python + Playwright"), a standalone venv at `scraper/.venv/`:
+- `robots.py` (AD-3.1.1) — fetches and parses `robots.txt` per host via stdlib
+  `urllib.robotparser`, cached in-memory per process. **Fails closed, not open**: a network
+  error fetching `robots.txt` itself is treated as "everything disallowed," not "assume
+  allowed" — the one case this matters is exactly the one where you can't prove you're allowed.
+  A missing (404) `robots.txt` correctly defaults to allowed, per the actual standard's
+  semantics (absence isn't disallowal). Honest identifiable `User-Agent` with a contact URL
+  (AD-3.1.4).
+- `rate_limit.py` (AD-3.1.3) — ≥5s between requests per host, enforced with a real
+  `time.sleep`, not just documented as a policy.
+- `fetcher.py` (AD-3.2.1) — static fetch via `httpx`. Playwright fallback (`fetch_with_js`) is
+  a deliberate `NotImplementedError`, not a silent no-op: this sandbox doesn't have
+  `playwright install chromium`'s browser binaries provisioned, and a JS-heavy page silently
+  falling through to a thin static fetch would look like "the page has no reward info" instead
+  of "this page needs the unbuilt path" — the loud failure is the honest one.
+- `extractor.py` (AD-3.2.2/3.2.3) — strips `script`/`style`/`nav`/`footer`/`header` before
+  hashing (via `selectolax`), optional `selector_hint` CSS scoping, `content_hash` (sha256) —
+  the exact mechanism `AD-3.2.3` needs to skip unchanged pages.
+- `db.py`/`run.py` (AD-3.2.4/3.2.5) — `page_snapshots` persistence, `scrape_runs` job
+  bookkeeping (status/pages_fetched/pages_changed/duration/error), `--source-id` for manual
+  "run now", failure-alert threshold at 3 consecutive failures per `source_pages`.
+- `db/setup_scraper_role.sql` (new) — a dedicated `scraper_role` with `BYPASSRLS`, deliberately
+  and narrowly scoped (only `SELECT`/`UPDATE` on `sources`/`source_pages`, `SELECT`/`INSERT` on
+  `scrape_runs`/`page_snapshots`, nothing else, no superuser). This is *not* a repeat of the
+  Chunk 7 `postgres`-superuser bug — that was accidental blanket bypass discovered as a defect;
+  this is a documented, single-purpose bypass for a background service with no admin session to
+  impersonate, choosing between two legitimate options (BYPASSRLS vs. per-write
+  `SET LOCAL app.user_id` impersonation) rather than stumbling into it.
+- 9 unit tests (`extractor`/`robots`, pure logic, no network — boilerplate stripping,
+  selector-hint scoping, hash stability across whitespace differences, hash sensitivity to real
+  content changes, robots allow/disallow/missing/network-failure/caching). All passing.
+
+**Verified end to end against the real running DB with one real, low-risk live fetch — not
+just unit tests.** Deliberately did **not** point this at a real bank's production site for
+verification: AD-3.1 frames the legal gate as non-negotiable, and standing up genuine ToS
+review for a real bank isn't something this session can respect properly. Instead pointed a
+temporary test `sources`/`source_pages` row at `https://example.com` (IANA's domain reserved
+specifically for illustrative/documentation use, single low-volume fetch) and ran the full
+pipeline:
+- First run: robots.txt fetched and allowed, page fetched (HTTP 200), content extracted and
+  hashed, a new `page_snapshots` row inserted, `scrape_runs` recorded `status='success'`,
+  `pages_fetched=1`, `pages_changed=1`. Confirmed via direct psql.
+- Second run: same page, `content_hash` matched the stored one — **no duplicate snapshot
+  inserted**, printed `unchanged`, `page_snapshots` count stayed at 1. Confirmed
+  `skip_unchanged` genuinely works, not just in a mocked test.
+- Separately verified the ToS gate at the DB layer itself: tried to `UPDATE sources SET
+  is_enabled = true` on a `tos_reviewed = false` row directly via psql — the `0008` migration's
+  `enabled_requires_tos_review` CHECK constraint rejected it, confirming the console (or this
+  scraper, or anything else) genuinely cannot be the weak link here, exactly as AD-3.1.2 asks.
+  Also confirmed the orchestrator's own source-selection query independently refuses to run a
+  disabled/non-ToS-reviewed source — belt and suspenders, not just the DB constraint alone.
+- Deleted both temporary test `sources` rows afterward; the only real `sources` row left is the
+  one Chunk 8's "start scraping" flow created (still correctly `is_enabled=false`,
+  `tos_reviewed=false` — nothing in this chunk touched it).
+
+**Not done**: Playwright/JS-rendering fallback (documented `NotImplementedError`, needs browser
+binaries); AD-3.3's actual pilot set (2-3 real banks + 2-3 news sources with real ToS review) —
+this chunk built and proved the pipeline mechanics, not the real-world crawl targets, which is
+a legal/product decision, not an engineering one; no scheduler/cron wiring (AD-3.2.5's "weekly
+default crawl" — `run.py` is invoked manually today); AD-4 (diff review UI, AI extraction) and
+AD-5 (the unified alert queue this scraper is meant to feed) don't exist yet — this chunk is the
+data-collection half of AD-3/AD-4/AD-5's pipeline, not the review/propagation half.
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-11 (see sections above) are complete and verified. Next:
+Chunks 1-12 (see sections above) are complete and verified. Next:
 
-1. **AD-3 through AD-9** (admin console's remaining core purpose per `adminimplementation_plan.md`):
-   the scraper engine, diff review + AI extraction, and especially the unified policy-change
-   alert queue (AD-5, "the core requirement driving this entire application" per the plan's own
-   words) — none of this exists yet. AD-2's queues (Chunk 8) only handle two of the four signal
-   sources AD-5 is meant to unify.
-2. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
+1. **AD-4/AD-5** — diff review + AI extraction (AD-4) and the unified policy-change alert queue
+   (AD-5, "the core requirement driving this entire application" per the plan's own words) — the
+   scraper (Chunk 12) now produces `page_snapshots`, but nothing diffs them against the previous
+   snapshot, proposes structured extractions, or feeds `policy_change_alerts` yet.
+2. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
+   per source (a product/legal decision, not something to fabricate) — today there's one
+   `sources` row (Chunk 8, still correctly disabled) and the pipeline was proven against a single
+   safe test fetch, not real targets.
+3. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
    import tool (UA-1.1.2).
-3. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
+4. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
    feature, not the consolidated fixture file the plan describes).
-4. **`app/` has no auth/login flow (UA-3) at all** — Home only hits public endpoints. This blocks
+5. **`app/` has no auth/login flow (UA-3) at all** — Home only hits public endpoints. This blocks
    user_cards/transaction wiring (the engine still ranks the whole catalogue, not a signed-in
    user's actual cards), any local drift/cache, and app-side token persistence (Chunk 10 only
    covered `console/`, which already had a login flow to persist a session for).
-5. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
+6. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
+   data quality dashboard, anonymization audit automation — none started.
+7. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
    `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus
    `support_tickets` pre-emptively fixed in the same migration once the pattern was clear) — a
    final grep across 0011 for any other `_owner`-only policy on a table an admin will eventually

@@ -17,3 +17,10 @@ build/
 # Node service secrets — never commit real or dev JWT secrets
 auth/.env
 api/.env
+scraper/.env
+
+# Python
+scraper/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
