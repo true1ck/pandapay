@@ -4,6 +4,7 @@ const cors = require('cors');
 const { withUserClient } = require('./db');
 const { optionalAuth, requireAuth } = require('./auth');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
+const { parseSmsAgainstPatterns, redactSmsShape } = require('./sms_parser');
 
 const app = express();
 app.use(cors());
@@ -185,6 +186,200 @@ app.put('/admin/reward-rules/:id', requireAdmin, async (req, res) => {
 });
 
 /**
+ * UA-5.3 admin CRUD for `parser_patterns` — the per-issuer SMS regex
+ * catalogue the sms_parser.js engine reads at parse time. Mirrors the
+ * PUT /admin/reward-rules/:id typed-writer shape: every writable field is
+ * individually validated (never a raw JSON passthrough), and every mutation
+ * writes admin_audit_log in the SAME transaction as the write, so an
+ * audit-less mutation is impossible by construction, same as every other
+ * admin route in this file.
+ */
+app.get('/admin/parser-patterns', requireAdmin, async (req, res) => {
+  const { channel, isActive } = req.query;
+  const conditions = [];
+  const params = [];
+  if (channel) {
+    params.push(channel);
+    conditions.push(`channel = $${params.length}`);
+  }
+  if (isActive === 'true' || isActive === 'false') {
+    params.push(isActive === 'true');
+    conditions.push(`is_active = $${params.length}`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT id, issuer_id, channel, sender_pattern, regex, field_map, version,
+                is_active, sample_text, success_count, failure_count, created_at, updated_at
+           FROM parser_patterns
+           ${where}
+          ORDER BY updated_at DESC`,
+        params
+      )
+    );
+    res.json({ parserPatterns: result.rows });
+  } catch (err) {
+    console.error('GET /admin/parser-patterns error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /admin/parser-patterns — create a new pattern. channel/regex/
+ * field_map are required; a pattern with no way to identify the sender
+ * (sender_pattern) is legal (senderMatches() treats a missing pattern as
+ * "no restriction") but every other field is validated by type.
+ */
+app.post('/admin/parser-patterns', requireAdmin, async (req, res) => {
+  const { issuerId, channel, senderPattern, regex, fieldMap, sampleText, reason } = req.body || {};
+  const VALID_CHANNELS = ['manual', 'sms', 'email', 'statement', 'sms_bulk', 'imported'];
+  if (!VALID_CHANNELS.includes(channel)) {
+    return res.status(400).json({ error: `channel must be one of ${VALID_CHANNELS.join('/')}` });
+  }
+  if (typeof regex !== 'string' || !regex.trim()) {
+    return res.status(400).json({ error: 'regex is required' });
+  }
+  try {
+    new RegExp(regex);
+  } catch (err) {
+    return res.status(400).json({ error: 'regex is not a valid JS regular expression' });
+  }
+  if (typeof fieldMap !== 'object' || fieldMap === null || Array.isArray(fieldMap)) {
+    return res.status(400).json({ error: 'fieldMap must be an object' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO parser_patterns (issuer_id, channel, sender_pattern, regex, field_map, sample_text)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, issuer_id, channel, sender_pattern, regex, field_map, version, is_active, sample_text, success_count, failure_count`,
+        [issuerId || null, channel, senderPattern || null, regex, JSON.stringify(fieldMap), sampleText || null]
+      );
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+         VALUES ($1, 'create_parser_pattern', 'parser_patterns', $2, $3, $4)`,
+        [req.userId, inserted.rows[0].id, JSON.stringify(inserted.rows[0]), reason || null]
+      );
+
+      return inserted.rows[0];
+    });
+    res.status(201).json({ parserPattern: result });
+  } catch (err) {
+    console.error('POST /admin/parser-patterns error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * PUT /admin/parser-patterns/:id — updates the pattern's content fields and
+ * bumps `version` (parser_patterns.version exists precisely to distinguish
+ * pattern revisions — a content edit without a version bump would make
+ * that column meaningless), same before/after audit-log pattern as
+ * PUT /admin/reward-rules/:id.
+ */
+app.put('/admin/parser-patterns/:id', requireAdmin, async (req, res) => {
+  const { senderPattern, regex, fieldMap, isActive, sampleText, reason } = req.body || {};
+  if (regex !== undefined) {
+    if (typeof regex !== 'string' || !regex.trim()) {
+      return res.status(400).json({ error: 'regex must be a non-empty string' });
+    }
+    try {
+      new RegExp(regex);
+    } catch (err) {
+      return res.status(400).json({ error: 'regex is not a valid JS regular expression' });
+    }
+  }
+  if (fieldMap !== undefined && (typeof fieldMap !== 'object' || fieldMap === null || Array.isArray(fieldMap))) {
+    return res.status(400).json({ error: 'fieldMap must be an object' });
+  }
+  if (isActive !== undefined && typeof isActive !== 'boolean') {
+    return res.status(400).json({ error: 'isActive must be a boolean' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const before = await client.query(
+        `SELECT id, sender_pattern, regex, field_map, version, is_active, sample_text
+           FROM parser_patterns WHERE id = $1`,
+        [req.params.id]
+      );
+      if (before.rows.length === 0) return null;
+      const prior = before.rows[0];
+
+      const contentChanged = regex !== undefined || fieldMap !== undefined || senderPattern !== undefined;
+      const updated = await client.query(
+        `UPDATE parser_patterns
+            SET sender_pattern = COALESCE($1, sender_pattern),
+                regex          = COALESCE($2, regex),
+                field_map      = COALESCE($3, field_map),
+                is_active      = COALESCE($4, is_active),
+                sample_text    = COALESCE($5, sample_text),
+                version        = version + CASE WHEN $6 THEN 1 ELSE 0 END,
+                updated_at     = now()
+          WHERE id = $7
+          RETURNING id, issuer_id, channel, sender_pattern, regex, field_map, version, is_active, sample_text, success_count, failure_count`,
+        [
+          senderPattern === undefined ? null : senderPattern,
+          regex === undefined ? null : regex,
+          fieldMap === undefined ? null : JSON.stringify(fieldMap),
+          isActive === undefined ? null : isActive,
+          sampleText === undefined ? null : sampleText,
+          contentChanged,
+          req.params.id,
+        ]
+      );
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'update_parser_pattern', 'parser_patterns', $2, $3, $4, $5)`,
+        [req.userId, req.params.id, JSON.stringify(prior), JSON.stringify(updated.rows[0]), reason || null]
+      );
+
+      return updated.rows[0];
+    });
+
+    if (!result) return res.status(404).json({ error: 'parser_pattern not found' });
+    res.json({ parserPattern: result });
+  } catch (err) {
+    console.error('PUT /admin/parser-patterns/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * DELETE /admin/parser-patterns/:id — hard delete (this catalogue table has
+ * no soft-delete/status column like card_products does, so unlike
+ * POST /admin/cards/:id/status there is no archived state to move to).
+ * Logged in admin_audit_log with the deleted row as before_value so the
+ * content isn't lost from the audit trail even though the row is gone.
+ */
+app.delete('/admin/parser-patterns/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const before = await client.query(`SELECT * FROM parser_patterns WHERE id = $1`, [req.params.id]);
+      if (before.rows.length === 0) return null;
+
+      await client.query(`DELETE FROM parser_patterns WHERE id = $1`, [req.params.id]);
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, reason)
+         VALUES ($1, 'delete_parser_pattern', 'parser_patterns', $2, $3, $4)`,
+        [req.userId, req.params.id, JSON.stringify(before.rows[0]), req.body?.reason || null]
+      );
+
+      return { deleted: true };
+    });
+
+    if (!result) return res.status(404).json({ error: 'parser_pattern not found' });
+    res.json(result);
+  } catch (err) {
+    console.error('DELETE /admin/parser-patterns/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * POST /admin/cards/:id/status — AD-1.1.4's draft->in_review->published
  * state machine (was UI-less since Chunk 6; the DB already enforced the
  * `card_published_needs_verification` CHECK — publishing without
@@ -274,6 +469,68 @@ app.get('/categories', async (req, res) => {
     res.json({ categories: result.rows });
   } catch (err) {
     console.error('GET /categories error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /merchants/nearby — UA-8.3: foreground-triggered "check nearby
+ * merchants" (see PROGRESS.md's UA-8 chunk for the explicit scope
+ * reduction — no always-on background geofence monitoring, just this
+ * one-shot lookup off a location read once). Public read, same shape/
+ * policy pattern as GET /catalogue and GET /categories — no auth
+ * required, only `is_published` merchants are ever returned (same
+ * published-only filter AD-6's console table applies for admin viewing,
+ * applied here unconditionally since this route has no admin gate at all).
+ *
+ * Distance filtering is done in SQL with a real haversine expression over
+ * `merchant_locations.grid_lat`/`grid_lng` (AD-6/Chunk 23's grid-snapped
+ * columns — nothing more precise exists to query), not the
+ * packages/pandapay_domain haversine (that copy is for the pure-Dart
+ * client-side matching path — app/lib/features/geofence/ — this SQL copy
+ * is deliberately independent so the API doesn't need a Dart runtime).
+ */
+app.get('/merchants/nearby', async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  const radiusM = req.query.radiusM !== undefined ? Number(req.query.radiusM) : 2000;
+
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+    return res.status(400).json({ error: 'lat is required and must be between -90 and 90' });
+  }
+  if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: 'lng is required and must be between -180 and 180' });
+  }
+  if (!Number.isFinite(radiusM) || radiusM <= 0 || radiusM > 50000) {
+    return res.status(400).json({ error: 'radiusM must be a positive number, max 50000' });
+  }
+
+  try {
+    const result = await withUserClient(null, (client) =>
+      client.query(
+        `SELECT merchant_id, display_name, category_id, confidence,
+                grid_lat, grid_lng, distance_meters
+           FROM (
+             SELECT m.id AS merchant_id, m.display_name, m.category_id, m.confidence,
+                    ml.grid_lat, ml.grid_lng,
+                    2 * 6371000 * asin(sqrt(
+                      sin(radians(ml.grid_lat - $1) / 2) ^ 2 +
+                      cos(radians($1)) * cos(radians(ml.grid_lat)) *
+                      sin(radians(ml.grid_lng - $2) / 2) ^ 2
+                    )) AS distance_meters
+               FROM merchant_locations ml
+               JOIN merchants m ON m.id = ml.merchant_id
+              WHERE m.is_published = true
+           ) nearby
+          WHERE distance_meters <= $3
+          ORDER BY distance_meters ASC
+          LIMIT 100`,
+        [lat, lng, radiusM]
+      )
+    );
+    res.json({ merchants: result.rows });
+  } catch (err) {
+    console.error('GET /merchants/nearby error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -755,6 +1012,174 @@ app.post('/user-cards/:id/archive', requireAuth, async (req, res) => {
  * update state is impossible — same "whole thing rolls back together"
  * pattern as the AD-1 typed writer's audit-log guarantee.
  */
+/**
+ * UA-5.3: the insert-and-update-all-state logic that used to live directly
+ * inline in POST /transactions, factored out so POST /transactions/from-sms
+ * (Chunk 31) can call the exact same cap/milestone/points/fee-waiver
+ * machinery instead of re-implementing it — a transaction recorded via SMS
+ * gets identical downstream state updates to one entered manually, by
+ * construction, not by keeping two copies in sync by hand. Must be called
+ * with a `client` already inside a withUserClient(userId, ...) transaction;
+ * this function does not open its own.
+ */
+async function insertTransactionAndUpdateState(client, userId, {
+  userCardId, amount, occurred, categoryId, rail, merchantName, source,
+}) {
+  const cardResult = await client.query(
+    `SELECT uc.id, uc.card_product_id, uc.statement_day, uc.opened_on, uc.created_at,
+            cp.point_value_inr
+       FROM user_cards uc
+       JOIN card_products cp ON cp.id = uc.card_product_id
+      WHERE uc.id = $1 AND uc.profile_id = $2 AND uc.is_archived = false`,
+    [userCardId, userId]
+  );
+  if (cardResult.rows.length === 0) return { status: 404, error: 'user_card not found' };
+  const userCard = cardResult.rows[0];
+
+  // The same rule the engine uses to pick a reward rule for a spend:
+  // highest-priority (lowest number) match on category (or the
+  // category-agnostic base rate). Needed to convert a spend amount into
+  // an actual reward VALUE for reward_value-measure caps below.
+  const matchingRule = await client.query(
+    `SELECT unit, rate FROM reward_rules
+      WHERE card_product_id = $1 AND (category_id IS NULL OR category_id = $2)
+      ORDER BY priority ASC LIMIT 1`,
+    [userCard.card_product_id, categoryId || null]
+  );
+  const rewardRate = matchingRule.rows[0]
+    ? effectiveRatePerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate), Number(userCard.point_value_inr) || 0)
+    : 0;
+
+  const txn = await client.query(
+    `INSERT INTO transactions
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, reward_state)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'estimated')
+     RETURNING id, amount_inr, occurred_at`,
+    [userId, userCardId, amount, occurred, merchantName || null, categoryId || null, rail || 'unknown', source || 'manual']
+  );
+
+  const capRules = await client.query(
+    `SELECT id, period, cap_value, measure FROM cap_rules
+      WHERE card_product_id = $1 AND (category_id IS NULL OR category_id = $2)`,
+    [userCard.card_product_id, categoryId || null]
+  );
+  const capStateUpdates = [];
+  for (const cap of capRules.rows) {
+    // Chunk 17 fix (same bug class as Chunk 9's engine fix): a
+    // reward_value cap's headroom is consumed by the REWARD earned on
+    // this spend, not the spend itself; a txn_count cap is consumed by
+    // 1 transaction, not any money amount at all. Only spend_amount
+    // caps are consumed by the raw amount.
+    let consumedDelta;
+    if (cap.measure === 'reward_value') {
+      consumedDelta = amount * rewardRate;
+    } else if (cap.measure === 'txn_count') {
+      consumedDelta = 1;
+    } else {
+      consumedDelta = amount;
+    }
+
+    const { start, end } = periodBounds(cap.period, occurred, { statementDay: userCard.statement_day });
+    const upserted = await client.query(
+      `INSERT INTO cap_states (profile_id, user_card_id, cap_rule_id, period_start, period_end, consumed, cap_value_snapshot)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (user_card_id, cap_rule_id, period_start)
+       DO UPDATE SET consumed = cap_states.consumed + EXCLUDED.consumed, updated_at = now()
+       RETURNING cap_rule_id, period_start, period_end, consumed, cap_value_snapshot`,
+      [userId, userCardId, cap.id, start, end, consumedDelta, cap.cap_value]
+    );
+    capStateUpdates.push(upserted.rows[0]);
+  }
+
+  const milestoneRules = await client.query(
+    `SELECT id, period, anchor FROM milestone_rules WHERE card_product_id = $1`,
+    [userCard.card_product_id]
+  );
+  const milestoneStateUpdates = [];
+  for (const milestone of milestoneRules.rows) {
+    const anchorDate = userCard.opened_on || userCard.created_at;
+    const { start, end } = periodBounds(milestone.period, occurred, {
+      statementDay: userCard.statement_day,
+      anchor: milestone.anchor,
+      anchorDate,
+    });
+    const upserted = await client.query(
+      `INSERT INTO milestone_states (profile_id, user_card_id, milestone_rule_id, period_start, period_end, qualified_spend)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_card_id, milestone_rule_id, period_start)
+       DO UPDATE SET qualified_spend = milestone_states.qualified_spend + EXCLUDED.qualified_spend, updated_at = now()
+       RETURNING milestone_rule_id, period_start, period_end, qualified_spend`,
+      [userId, userCardId, milestone.id, start, end, amount]
+    );
+    milestoneStateUpdates.push(upserted.rows[0]);
+  }
+
+  // Points ledger: one entry per transaction, in the reward's own
+  // native unit (points/miles/cashback-rupees), separate from the cap
+  // machinery's INR-value accounting above. flat_points rules earn 0
+  // per this helper (a fixed bonus isn't a per-transaction rate) so no
+  // ledger noise is written for them.
+  let pointsLedgerEntry = null;
+  if (matchingRule.rows[0]) {
+    const pointsPerRupee = effectivePointsPerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate));
+    if (pointsPerRupee > 0) {
+      const deltaPoints = amount * pointsPerRupee;
+      const inserted = await client.query(
+        `INSERT INTO points_ledger (profile_id, user_card_id, transaction_id, delta_points, reason, state, occurred_at)
+         VALUES ($1, $2, $3, $4, $5, 'estimated', $6)
+         RETURNING id, delta_points, reason, occurred_at`,
+        [userId, userCardId, txn.rows[0].id, deltaPoints, `${matchingRule.rows[0].unit} earned on transaction`, occurred]
+      );
+      pointsLedgerEntry = inserted.rows[0];
+    }
+  }
+
+  // Fee-waiver progress: same "which rules apply to this card" +
+  // "accumulate qualified spend in the right period" shape as the cap
+  // loop above, but against fee_waiver_rules/fee_waiver_states instead.
+  // A category on fee_waiver_rules.excluded_categories doesn't count
+  // toward the threshold at all (not even partially).
+  const feeWaiverRules = await client.query(
+    `SELECT id, threshold_spend_inr, period, excluded_categories FROM fee_waiver_rules
+      WHERE card_product_id = $1`,
+    [userCard.card_product_id]
+  );
+  const feeWaiverStateUpdates = [];
+  for (const rule of feeWaiverRules.rows) {
+    if (categoryId && rule.excluded_categories && rule.excluded_categories.includes(categoryId)) {
+      continue;
+    }
+    const { start, end } = periodBounds(rule.period, occurred, { statementDay: userCard.statement_day });
+    const upserted = await client.query(
+      `INSERT INTO fee_waiver_states (profile_id, user_card_id, fee_waiver_rule_id, period_start, period_end, qualified_spend)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_card_id, fee_waiver_rule_id, period_start)
+       DO UPDATE SET qualified_spend = fee_waiver_states.qualified_spend + EXCLUDED.qualified_spend, updated_at = now()
+       RETURNING id, fee_waiver_rule_id, period_start, period_end, qualified_spend, waived_at`,
+      [userId, userCardId, rule.id, start, end, amount]
+    );
+    let state = upserted.rows[0];
+    if (!state.waived_at && Number(state.qualified_spend) >= Number(rule.threshold_spend_inr)) {
+      const marked = await client.query(
+        `UPDATE fee_waiver_states SET waived_at = now() WHERE id = $1
+         RETURNING id, fee_waiver_rule_id, period_start, period_end, qualified_spend, waived_at`,
+        [state.id]
+      );
+      state = marked.rows[0];
+    }
+    feeWaiverStateUpdates.push(state);
+  }
+
+  return {
+    status: 201,
+    transaction: txn.rows[0],
+    capStates: capStateUpdates,
+    milestoneStates: milestoneStateUpdates,
+    pointsLedgerEntry,
+    feeWaiverStates: feeWaiverStateUpdates,
+  };
+}
+
 app.post('/transactions', requireAuth, async (req, res) => {
   const { userCardId, amountInr, occurredAt, categoryId, rail, merchantName } = req.body || {};
   const amount = Number(amountInr);
@@ -770,166 +1195,100 @@ app.post('/transactions', requireAuth, async (req, res) => {
   }
 
   try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const cardResult = await client.query(
-        `SELECT uc.id, uc.card_product_id, uc.statement_day, uc.opened_on, uc.created_at,
-                cp.point_value_inr
-           FROM user_cards uc
-           JOIN card_products cp ON cp.id = uc.card_product_id
-          WHERE uc.id = $1 AND uc.profile_id = $2 AND uc.is_archived = false`,
-        [userCardId, req.userId]
-      );
-      if (cardResult.rows.length === 0) return { status: 404, error: 'user_card not found' };
-      const userCard = cardResult.rows[0];
-
-      // The same rule the engine uses to pick a reward rule for a spend:
-      // highest-priority (lowest number) match on category (or the
-      // category-agnostic base rate). Needed to convert a spend amount into
-      // an actual reward VALUE for reward_value-measure caps below.
-      const matchingRule = await client.query(
-        `SELECT unit, rate FROM reward_rules
-          WHERE card_product_id = $1 AND (category_id IS NULL OR category_id = $2)
-          ORDER BY priority ASC LIMIT 1`,
-        [userCard.card_product_id, categoryId || null]
-      );
-      const rewardRate = matchingRule.rows[0]
-        ? effectiveRatePerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate), Number(userCard.point_value_inr) || 0)
-        : 0;
-
-      const txn = await client.query(
-        `INSERT INTO transactions
-           (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, reward_state)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'manual', 'estimated')
-         RETURNING id, amount_inr, occurred_at`,
-        [req.userId, userCardId, amount, occurred, merchantName || null, categoryId || null, rail || 'unknown']
-      );
-
-      const capRules = await client.query(
-        `SELECT id, period, cap_value, measure FROM cap_rules
-          WHERE card_product_id = $1 AND (category_id IS NULL OR category_id = $2)`,
-        [userCard.card_product_id, categoryId || null]
-      );
-      const capStateUpdates = [];
-      for (const cap of capRules.rows) {
-        // Chunk 17 fix (same bug class as Chunk 9's engine fix): a
-        // reward_value cap's headroom is consumed by the REWARD earned on
-        // this spend, not the spend itself; a txn_count cap is consumed by
-        // 1 transaction, not any money amount at all. Only spend_amount
-        // caps are consumed by the raw amount.
-        let consumedDelta;
-        if (cap.measure === 'reward_value') {
-          consumedDelta = amount * rewardRate;
-        } else if (cap.measure === 'txn_count') {
-          consumedDelta = 1;
-        } else {
-          consumedDelta = amount;
-        }
-
-        const { start, end } = periodBounds(cap.period, occurred, { statementDay: userCard.statement_day });
-        const upserted = await client.query(
-          `INSERT INTO cap_states (profile_id, user_card_id, cap_rule_id, period_start, period_end, consumed, cap_value_snapshot)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           ON CONFLICT (user_card_id, cap_rule_id, period_start)
-           DO UPDATE SET consumed = cap_states.consumed + EXCLUDED.consumed, updated_at = now()
-           RETURNING cap_rule_id, period_start, period_end, consumed, cap_value_snapshot`,
-          [req.userId, userCardId, cap.id, start, end, consumedDelta, cap.cap_value]
-        );
-        capStateUpdates.push(upserted.rows[0]);
-      }
-
-      const milestoneRules = await client.query(
-        `SELECT id, period, anchor FROM milestone_rules WHERE card_product_id = $1`,
-        [userCard.card_product_id]
-      );
-      const milestoneStateUpdates = [];
-      for (const milestone of milestoneRules.rows) {
-        const anchorDate = userCard.opened_on || userCard.created_at;
-        const { start, end } = periodBounds(milestone.period, occurred, {
-          statementDay: userCard.statement_day,
-          anchor: milestone.anchor,
-          anchorDate,
-        });
-        const upserted = await client.query(
-          `INSERT INTO milestone_states (profile_id, user_card_id, milestone_rule_id, period_start, period_end, qualified_spend)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (user_card_id, milestone_rule_id, period_start)
-           DO UPDATE SET qualified_spend = milestone_states.qualified_spend + EXCLUDED.qualified_spend, updated_at = now()
-           RETURNING milestone_rule_id, period_start, period_end, qualified_spend`,
-          [req.userId, userCardId, milestone.id, start, end, amount]
-        );
-        milestoneStateUpdates.push(upserted.rows[0]);
-      }
-
-      // Points ledger: one entry per transaction, in the reward's own
-      // native unit (points/miles/cashback-rupees), separate from the cap
-      // machinery's INR-value accounting above. flat_points rules earn 0
-      // per this helper (a fixed bonus isn't a per-transaction rate) so no
-      // ledger noise is written for them.
-      let pointsLedgerEntry = null;
-      if (matchingRule.rows[0]) {
-        const pointsPerRupee = effectivePointsPerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate));
-        if (pointsPerRupee > 0) {
-          const deltaPoints = amount * pointsPerRupee;
-          const inserted = await client.query(
-            `INSERT INTO points_ledger (profile_id, user_card_id, transaction_id, delta_points, reason, state, occurred_at)
-             VALUES ($1, $2, $3, $4, $5, 'estimated', $6)
-             RETURNING id, delta_points, reason, occurred_at`,
-            [req.userId, userCardId, txn.rows[0].id, deltaPoints, `${matchingRule.rows[0].unit} earned on transaction`, occurred]
-          );
-          pointsLedgerEntry = inserted.rows[0];
-        }
-      }
-
-      // Fee-waiver progress: same "which rules apply to this card" +
-      // "accumulate qualified spend in the right period" shape as the cap
-      // loop above, but against fee_waiver_rules/fee_waiver_states instead.
-      // A category on fee_waiver_rules.excluded_categories doesn't count
-      // toward the threshold at all (not even partially).
-      const feeWaiverRules = await client.query(
-        `SELECT id, threshold_spend_inr, period, excluded_categories FROM fee_waiver_rules
-          WHERE card_product_id = $1`,
-        [userCard.card_product_id]
-      );
-      const feeWaiverStateUpdates = [];
-      for (const rule of feeWaiverRules.rows) {
-        if (categoryId && rule.excluded_categories && rule.excluded_categories.includes(categoryId)) {
-          continue;
-        }
-        const { start, end } = periodBounds(rule.period, occurred, { statementDay: userCard.statement_day });
-        const upserted = await client.query(
-          `INSERT INTO fee_waiver_states (profile_id, user_card_id, fee_waiver_rule_id, period_start, period_end, qualified_spend)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (user_card_id, fee_waiver_rule_id, period_start)
-           DO UPDATE SET qualified_spend = fee_waiver_states.qualified_spend + EXCLUDED.qualified_spend, updated_at = now()
-           RETURNING id, fee_waiver_rule_id, period_start, period_end, qualified_spend, waived_at`,
-          [req.userId, userCardId, rule.id, start, end, amount]
-        );
-        let state = upserted.rows[0];
-        if (!state.waived_at && Number(state.qualified_spend) >= Number(rule.threshold_spend_inr)) {
-          const marked = await client.query(
-            `UPDATE fee_waiver_states SET waived_at = now() WHERE id = $1
-             RETURNING id, fee_waiver_rule_id, period_start, period_end, qualified_spend, waived_at`,
-            [state.id]
-          );
-          state = marked.rows[0];
-        }
-        feeWaiverStateUpdates.push(state);
-      }
-
-      return {
-        status: 201,
-        transaction: txn.rows[0],
-        capStates: capStateUpdates,
-        milestoneStates: milestoneStateUpdates,
-        pointsLedgerEntry,
-        feeWaiverStates: feeWaiverStateUpdates,
-      };
-    });
+    const result = await withUserClient(req.userId, (client) =>
+      insertTransactionAndUpdateState(client, req.userId, {
+        userCardId, amount, occurred, categoryId, rail, merchantName, source: 'manual',
+      })
+    );
 
     if (result.status !== 201) return res.status(result.status).json({ error: result.error });
     res.status(201).json(result);
   } catch (err) {
     console.error('POST /transactions error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /transactions/from-sms — UA-5.3 auto-import. Takes a raw SMS
+ * sender+body, finds active `parser_patterns` for channel='sms' whose
+ * sender_pattern matches, parses via sms_parser.js, and on success calls
+ * the SAME insertTransactionAndUpdateState() helper POST /transactions
+ * uses (source='sms' instead of 'manual') — no duplicated cap/milestone/
+ * points/fee-waiver logic. On parse failure, per parser_failures' evident
+ * intent (its `redacted_shape_has_no_digits` CHECK — the table is designed
+ * to hold NO raw SMS content, only a redacted shape for admin triage), we
+ * insert a parser_failures row built from sms_parser.redactSmsShape()
+ * rather than storing the raw body, and return 200 with parsed:false
+ * rather than an error — a failed auto-parse is an expected, logged
+ * outcome for this route, not a server error.
+ */
+app.post('/transactions/from-sms', requireAuth, async (req, res) => {
+  const { sender, body, userCardId, occurredAt, categoryId, rail } = req.body || {};
+  if (!body || typeof body !== 'string' || !body.trim()) {
+    return res.status(400).json({ error: 'body is required' });
+  }
+  if (!userCardId || typeof userCardId !== 'string') {
+    // The parser extracts amount/merchant/last4/date, not which of the
+    // user's cards the SMS belongs to (last4 alone is not a safe/unique
+    // match key across issuers) — same "caller supplies userCardId"
+    // contract as POST /transactions, not a guess this route makes itself.
+    return res.status(400).json({ error: 'userCardId is required' });
+  }
+  const occurred = occurredAt ? new Date(occurredAt) : new Date();
+  if (Number.isNaN(occurred.getTime())) {
+    return res.status(400).json({ error: 'occurredAt is not a valid date' });
+  }
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const patterns = await client.query(
+        `SELECT id, issuer_id, sender_pattern, regex, field_map
+           FROM parser_patterns
+          WHERE channel = 'sms' AND is_active = true
+          ORDER BY version DESC`
+      );
+
+      const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
+
+      if (!parsed.ok) {
+        const failure = await client.query(
+          `INSERT INTO parser_failures (channel, sender_pattern, redacted_shape, occurrences)
+           VALUES ('sms', $1, $2, 1)
+           RETURNING id, redacted_shape, occurrences`,
+          [sender || null, redactSmsShape(body)]
+        );
+        return { status: 200, parsed: false, reason: parsed.reason, parserFailure: failure.rows[0] };
+      }
+
+      // Bump the winning pattern's telemetry in the same transaction as the
+      // insert it enabled — success_count/failure_count are evidently meant
+      // to track a pattern's live hit rate, not just exist unused.
+      await client.query(
+        `UPDATE parser_patterns SET success_count = success_count + 1, updated_at = now() WHERE id = $1`,
+        [parsed.patternId]
+      );
+
+      const inserted = await insertTransactionAndUpdateState(client, req.userId, {
+        userCardId,
+        amount: parsed.fields.amountInr,
+        occurred,
+        categoryId: categoryId || null,
+        rail: rail || 'unknown',
+        merchantName: parsed.fields.merchant || null,
+        source: 'sms',
+      });
+
+      if (inserted.status !== 201) return inserted;
+      return { status: 201, parsed: true, patternId: parsed.patternId, ...inserted };
+    });
+
+    if (result.status !== 201 && result.status !== 200) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    res.status(result.status).json(result);
+  } catch (err) {
+    console.error('POST /transactions/from-sms error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });

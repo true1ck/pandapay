@@ -5,6 +5,8 @@ import '../data/auth_api.dart';
 import '../data/catalogue_repository.dart';
 import '../data/token_store.dart';
 import '../data/user_cards_repository.dart';
+import '../features/geofence/nearby_merchants_repository.dart';
+import '../features/home_widget/home_widget_service.dart';
 
 /// api/'s and auth/'s default local dev ports. Overridden per-flavor once
 /// flavors exist (UA-0.1.2) — there is only one build target today.
@@ -175,6 +177,79 @@ final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>
     );
   }).toList();
   return AsyncValue.data(engine.rank(context, snapshots));
+});
+
+/// UA-8 (Chunk 32): the app's first use of injectable `Clock` outside
+/// pandapay_domain itself — `HomeWidgetService.updateBestCardWidget` needs a
+/// timestamp and the `no_datetime_now_outside_clock` custom_lint rule
+/// forbids a bare `DateTime.now()` call in app/, so this is the one place
+/// that source of truth lives for the whole app, ready for other screens to
+/// share instead of each hand-rolling their own.
+final clockProvider = Provider<Clock>((ref) => const Clock.system());
+
+/// UA-8: public read, no auth needed — same shape as catalogueRepositoryProvider/
+/// categoryRepositoryProvider above.
+final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((ref) {
+  return HttpNearbyMerchantsRepository(baseUrl: _apiBaseUrl);
+});
+
+final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {
+  return BestCardForWidget(engine: ref.watch(recommendationEngineProvider));
+});
+
+/// UA-8.1/8.3: "which card should I use at *this* merchant" — the
+/// geofence screen's per-tile ranking. Deliberately reuses the same
+/// catalogue/userCards state rankedRecommendationsProvider already
+/// fetches, and the same BestCardForWidget.pickBestCard the home-screen
+/// widget uses (packages/pandapay_domain/lib/src/geo/best_card_for_widget.dart)
+/// — one "pick the best card" implementation, called from two different
+/// UI entry points (a nearby-merchant tile here, a home-screen widget
+/// there), not two competing ranking paths.
+final bestCardForMerchantProvider =
+    Provider.family<AsyncValue<Recommendation?>, String?>((ref, categoryId) {
+  final catalogue = ref.watch(catalogueProvider);
+  final userCards = ref.watch(userCardsProvider);
+  final picker = ref.watch(_bestCardForWidgetProvider);
+
+  if (catalogue.isLoading || userCards.isLoading) {
+    return const AsyncValue.loading();
+  }
+  final combinedError = catalogue.error ?? userCards.error;
+  if (combinedError != null) {
+    return AsyncValue.error(combinedError, catalogue.stackTrace ?? userCards.stackTrace!);
+  }
+
+  final allCards = catalogue.requireValue;
+  final wallet = userCards.requireValue;
+  final cards = wallet.isEmpty
+      ? allCards
+      : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
+
+  final snapshots = cards.map((c) {
+    final owned = wallet.firstWhereOrNull((w) => w.cardProductId == c.id);
+    if (owned == null) return CardSnapshot(product: c);
+    final capRemaining = {
+      for (final cap in c.capRules)
+        if (owned.capConsumed.containsKey(cap.id)) cap.id: cap.capValue - owned.capConsumed[cap.id]!,
+    };
+    return CardSnapshot(
+      product: c,
+      capRemaining: capRemaining,
+      milestoneProgress: owned.milestoneQualifiedSpend,
+    );
+  }).toList();
+
+  return AsyncValue.data(picker.pickBestCard(cards: snapshots, categoryId: categoryId));
+});
+
+final homeWidgetServiceProvider = Provider<HomeWidgetService>((ref) => HomeWidgetService());
+
+/// UA-8.2: "top overall card" default the widget falls back to when there's
+/// no last-used-category context — reuses bestCardForMerchantProvider(null),
+/// which already collapses to "no category filter" when its family
+/// argument is null.
+final bestOverallCardProvider = Provider<AsyncValue<Recommendation?>>((ref) {
+  return ref.watch(bestCardForMerchantProvider(null));
 });
 
 extension _FirstWhereOrNull<T> on List<T> {

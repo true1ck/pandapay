@@ -4,6 +4,19 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- UA-4 (Chunk 30): camera/QR card scanning. Usage-description plumbing
+	     only — could not be verified to actually prompt/grant on a real
+	     device/simulator in this sandbox. See PROGRESS.md. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Pandapay uses the camera to scan a QR/barcode on a card mailer or statement to help identify which card you're adding.</string>
+	<!-- UA-8 (Chunk 32): foreground-only "check nearby merchants" geofencing.
+	     Deliberately only the WhenInUse key — no NSLocationAlwaysAndWhenInUseUsageDescription/
+	     always-on background location, matching this chunk's explicit scope
+	     reduction to a one-shot foreground location read. Same "could not
+	     verify prompting on a real simulator/device" caveat as UA-4's camera
+	     key above. See PROGRESS.md. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Pandapay checks your current location, once, when you tap "check nearby merchants" to suggest which card to use there.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

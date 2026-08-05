@@ -10,3 +10,5 @@ export 'src/card_rules/card_rules.dart';
 export 'src/card_rules/card_rules_json.dart';
 export 'src/engine/engine.dart';
 export 'src/engine/calculators.dart';
+export 'src/geo/geo.dart';
+export 'src/geo/best_card_for_widget.dart';

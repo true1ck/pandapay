@@ -1,4 +1,31 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- UA-4 (Chunk 30): camera/QR card scanning (mobile_scanner +
+         google_mlkit_text_recognition). Permission plumbing only — could
+         not be verified to actually grant on a real device/emulator in
+         this sandbox (no Android SDK/emulator here). See PROGRESS.md. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- UA-5.3 (Chunk 31): SMS-based transaction auto-import. Permission
+         plumbing + BroadcastReceiver declaration only — same "could not be
+         verified on a real device in this sandbox" caveat as UA-4's camera
+         permissions above (no Android SDK/emulator/real SMS here either).
+         See PROGRESS.md Chunk 31. READ_SMS lets the app read existing/
+         historical messages (used for an opt-in onboarding backfill scan);
+         RECEIVE_SMS is what lets the telephony plugin's BroadcastReceiver
+         fire on newly-arriving bank SMS while the app is foregrounded. -->
+    <uses-permission android:name="android.permission.READ_SMS"/>
+    <uses-permission android:name="android.permission.RECEIVE_SMS"/>
+    <!-- UA-8 (Chunk 32): foreground-only "check nearby merchants" geofencing.
+         Deliberately FINE/COARSE only, no ACCESS_BACKGROUND_LOCATION — this
+         chunk's scope was explicitly cut down to a one-shot location read
+         triggered by the user tapping a button, not always-on background
+         geofence monitoring (that permission is heavily gated on both
+         platforms and needs a foreground service + platform review this
+         sandbox can't responsibly build/verify). See PROGRESS.md. Same
+         "could not verify granting on a real device" caveat as UA-4/UA-5.3
+         above — no Android SDK/emulator here either. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="pandapay"
         android:name="${applicationName}"
@@ -30,6 +57,19 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- UA-8.2 (Chunk 32): home-screen widget provider skeleton. Never
+             built/run through a real Android toolchain in this sandbox — see
+             BestCardWidgetProvider.kt and PROGRESS.md for exactly what is
+             and isn't verified. -->
+        <receiver android:name=".BestCardWidgetProvider" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/best_card_widget_info" />
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

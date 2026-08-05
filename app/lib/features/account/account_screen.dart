@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../auth/login_screen.dart';
+import '../geofence/nearby_merchants_screen.dart';
+import '../home_widget/widget_settings_screen.dart';
 
 /// UA-3's "More" tab account section: signed-out shows the login flow,
 /// signed-in shows the profile row api/'s GET /profile actually returns
@@ -37,6 +39,24 @@ class AccountScreen extends ConsumerWidget {
               const SizedBox(height: 8),
               Text('Profile id: ${profileData['id']}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
             ],
+            const SizedBox(height: 24),
+            // UA-8 (Chunk 32): foreground-triggered geofencing + home-screen
+            // widget entry points — both scoped-down per PROGRESS.md.
+            OutlinedButton.icon(
+              icon: const Icon(Icons.near_me),
+              label: const Text('Nearby merchants'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NearbyMerchantsScreen()),
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.widgets_outlined),
+              label: const Text('Home-screen widget'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const WidgetSettingsScreen()),
+              ),
+            ),
             const SizedBox(height: 24),
             OutlinedButton(
               onPressed: () async {

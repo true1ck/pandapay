@@ -42,6 +42,36 @@ dependencies:
   http: ^1.2.2
   shared_preferences: ^2.3.3
 
+  # UA-4 (Chunk 30): camera/QR card scanning. mobile_scanner drives the
+  # QR/barcode path wired up in this chunk; google_mlkit_text_recognition is
+  # wired for the still-photo OCR path (isolated behind CardTextRecognizer)
+  # but, like mobile_scanner's camera preview, could not be exercised on
+  # real hardware in this sandbox — see PROGRESS.md Chunk 30.
+  mobile_scanner: ^6.0.2
+  google_mlkit_text_recognition: ^0.15.0
+
+  # UA-5.3 (Chunk 31): SMS-based transaction auto-import. `telephony` wraps
+  # the RECEIVE_SMS BroadcastReceiver + READ_SMS query so an incoming bank
+  # SMS reaches Dart as a plain (sender, body) pair without hand-written
+  # platform-channel/Kotlin code; `permission_handler` drives the runtime
+  # permission-request UI (Android 6+ requires this to be asked at runtime,
+  # not just declared in the manifest). Both are structurally wired
+  # (SmsListenerService, PermissionGate) but NOT exercised against a real
+  # device/real SMS in this sandbox — see PROGRESS.md Chunk 31.
+  telephony: ^0.2.0
+  permission_handler: ^11.3.1
+
+  # UA-8 (Chunk 32): geofencing + home-screen widget, both scoped down — see
+  # PROGRESS.md for the explicit scope reduction. `geolocator` drives the
+  # foreground-triggered one-shot "check nearby merchants" location read
+  # (app/lib/features/geofence/); `home_widget` writes the "best card right
+  # now" data to native shared storage and triggers a widget refresh
+  # (app/lib/features/home_widget/) — neither the actual OS location prompt
+  # nor the actual native widget rendering could be exercised in this
+  # sandbox (no device/simulator/native build toolchain run end-to-end).
+  geolocator: ^13.0.2
+  home_widget: ^0.7.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -159,6 +159,45 @@ class UserCardsRepository {
     }
   }
 
+  /// UA-5.3 (Chunk 31): SMS auto-import. Sends the raw SMS sender+body to
+  /// POST /transactions/from-sms, which does the server-side regex parse
+  /// (parser_patterns) and, on a match, the exact same cap/milestone/
+  /// points/fee-waiver update as [logTransaction] above. `userCardId` still
+  /// has to be supplied by the caller — the parser extracts amount/
+  /// merchant/last4/date from the SMS text, not which of the user's owned
+  /// cards it belongs to (last4 alone isn't a safe/unique match key across
+  /// issuers), so the on-device listener is expected to resolve that (e.g.
+  /// by asking the user, or matching last4 against owned cards as a hint)
+  /// before calling this. A 200 with `parsed: false` is not an error — it's
+  /// the server telling us the SMS didn't match any active pattern and was
+  /// logged to parser_failures for admin triage instead of silently
+  /// dropped; the caller decides whether to surface that as "log manually?"
+  Future<SmsImportResult> logTransactionFromSms({
+    required String userCardId,
+    required String sender,
+    required String body,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/transactions/from-sms'),
+      headers: _headers,
+      body: jsonEncode({
+        'userCardId': userCardId,
+        'sender': sender,
+        'body': body,
+      }),
+    );
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw UserCardsException(
+        'POST /transactions/from-sms failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return SmsImportResult(
+      parsed: json['parsed'] == true,
+      reason: json['reason'] as String?,
+    );
+  }
+
   /// UA-3+ (Chunk 18): the Activity tab's data source.
   Future<List<TransactionEntry>> fetchTransactions() async {
     final response = await _client.get(Uri.parse('$apiBaseUrl/transactions'), headers: _headers);
@@ -209,4 +248,13 @@ class UserCardsException implements Exception {
   UserCardsException(this.message);
   @override
   String toString() => message;
+}
+
+/// UA-5.3 (Chunk 31): the outcome of a POST /transactions/from-sms call.
+/// [parsed] false with a [reason] is a normal, expected outcome (the server
+/// logged a parser_failures row instead of a transaction) — not exceptional.
+class SmsImportResult {
+  final bool parsed;
+  final String? reason;
+  const SmsImportResult({required this.parsed, this.reason});
 }

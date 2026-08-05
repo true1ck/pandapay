@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  UA-8.2 (Chunk 32): AppWidgetProviderInfo skeleton — structurally present,
+  never verified to actually appear in a real device's widget picker in
+  this sandbox. See PROGRESS.md.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="90dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/best_card_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

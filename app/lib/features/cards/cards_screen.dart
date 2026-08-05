@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/providers.dart';
 import '../../data/user_cards_repository.dart';
 import '../auth/login_screen.dart';
+import '../scan/scan_card_screen.dart';
 
 /// UA-3+ (Chunk 16): the Cards tab — a signed-in user's actual wallet.
 /// Signed-out shows the same login flow as More/AccountScreen (owning
@@ -147,28 +149,47 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
       error: (err, _) => Text('Failed to load catalogue: $err'),
       data: (cards) {
         if (cards.isEmpty) return const SizedBox.shrink();
-        return Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                initialValue: _selectedCardId,
-                decoration: const InputDecoration(labelText: 'Add a card'),
-                items: [
-                  for (final c in cards) DropdownMenuItem(value: c.id, child: Text(c.name)),
-                ],
-                onChanged: (value) => setState(() => _selectedCardId = value),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedCardId,
+                    decoration: const InputDecoration(labelText: 'Add a card'),
+                    items: [
+                      for (final c in cards) DropdownMenuItem(value: c.id, child: Text(c.name)),
+                    ],
+                    onChanged: (value) => setState(() => _selectedCardId = value),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _adding || _selectedCardId == null ? null : _addCard,
+                  child: Text(_adding ? '...' : 'Add'),
+                ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                  ),
+              ],
             ),
-            const SizedBox(width: 8),
-            FilledButton(
-              onPressed: _adding || _selectedCardId == null ? null : _addCard,
-              child: Text(_adding ? '...' : 'Add'),
+            // UA-4 (Chunk 30): scan-to-identify as a shortcut into the same
+            // dropdown above — never replaces it. Picking a match here just
+            // sets _selectedCardId, same as picking it from the dropdown by
+            // hand; "Add" still has to be pressed to actually add it.
+            TextButton.icon(
+              onPressed: () async {
+                final picked = await Navigator.of(context).push<CardProduct>(
+                  MaterialPageRoute(builder: (_) => ScanCardScreen(catalogue: cards)),
+                );
+                if (picked != null) setState(() => _selectedCardId = picked.id);
+              },
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('Scan a QR/barcode instead'),
             ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
-              ),
           ],
         );
       },

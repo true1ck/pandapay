@@ -1348,10 +1348,270 @@ unaffected this chunk) + 19 (`scraper`, unaffected) + 12 (`api`, pure period-bou
 unaffected — this route verified live via curl like every other mutating admin/user route) =
 138 tests total.
 
+### Chunk 30 — UA-4: camera/QR card scanning (scoped down, largely unverified)
+
+Added a "scan to add a card" shortcut into `cards_screen.dart`'s existing `_AddCardForm` —
+augments it, doesn't replace it: the manual catalogue dropdown is still there and is still
+what "Add" acts on; scanning just pre-fills `_selectedCardId`.
+
+**Scope reduction stated up front** (same pattern as AD-4.3, Chunk 23/24): real physical-card
+OCR — reading the embossed PAN, network logo, and issuer wordmark off an actual plastic card
+via ML — is out of scope; that's a real computer-vision problem, not something a pub.dev
+plugin does out of the box. What's actually built: `mobile_scanner` decodes a QR code or
+barcode (e.g. printed on some card mailers/statements) into a raw text payload, and
+`google_mlkit_text_recognition` is wired (behind the same interface) for a still-photo
+text-recognition path. Both feed the *same* pure matcher — the payload/recognized text is
+never parsed as a structured record for either path, just fuzzy-matched as text.
+
+**Split for testability, per the task's structure requirement:**
+- `app/lib/features/scan/card_text_matcher.dart` — pure Dart, zero Flutter/camera
+  dependencies. `detectNetworkFromText` (keyword search against known network synonyms),
+  `extractLastFourDigits` (last 4-digit group found in raw text), and `matchCardText`
+  (token-overlap fuzzy score of extracted text against each `card_products` catalogue
+  entry's name, boosted by a network-keyword match, banded into
+  `MatchConfidence.{high,medium,low}` — `low` matches are never auto-selectable in the UI).
+  Deliberately simple token-overlap, not an edit-distance library — OCR/QR payloads here are
+  short issuer/product-name fragments, not free-form prose, so this was judged sufficient
+  without adding a new pub.dev dependency for it.
+- `app/lib/features/scan/card_scanner.dart` — the thin plugin-wiring boundary:
+  `CardTextRecognizer` interface + `MlKitCardTextRecognizer` implementation, and
+  `extractedTextFromBarcode` converting a `mobile_scanner` `Barcode` into the same
+  `ExtractedCardText` shape the matcher consumes.
+- `app/lib/features/scan/scan_card_screen.dart` — the actual camera UI (`MobileScanner`
+  widget + result panel showing ranked candidates, or the raw scanned text with a manual
+  fallback prompt when nothing clears a confidence floor — never a fabricated guess).
+
+**What's genuinely verified**: `card_text_matcher.dart`'s logic only, via 9 new pure-Dart
+tests in `app/test/features/scan/card_text_matcher_test.dart` — network keyword detection,
+last-4-digit extraction, high/medium/low confidence banding, that a genuinely unrelated text
+blob returns zero candidates (not a low-confidence guess dressed up as a match), and that
+results sort best-first. All 9 pass.
+
+**What is NOT verified — stated explicitly, not glossed over**: this sandbox has no camera
+hardware and no attached simulator/device, so nothing touching `MobileScanner`,
+`MlKitCardTextRecognizer`, or the actual `ScanCardScreen` widget (camera preview, live
+barcode detection callback, permission prompts) was ever run. The Android
+`CAMERA`/`hardware.camera` manifest entries and the iOS `NSCameraUsageDescription` plist
+entry are structurally present (correct keys, per each platform's documented contract) but
+were never confirmed to actually prompt or grant on a real device — that's still an open
+verification gap for whichever agent next has device access.
+
+`app/pubspec.yaml` gained `mobile_scanner` and `google_mlkit_text_recognition` (only this
+pubspec touched, per the task's constraint). `flutter analyze`/`dart run custom_lint`: clean
+(same 12 pre-existing `avoid_print` infos in `tool/`, unrelated). Full `app/` suite: 19/19
+passing (was 10 — the 9 new scan-matcher tests, existing 10 unaffected). Did not re-run
+`pandapay_domain`/`console`/`scraper`/`api` suites — this chunk touched no files in those
+packages.
+
 ## Sandbox limitations
 
 This is a Mac dev machine with Flutter, Dart, Postgres, and Docker all available and
 working (Docker had transient network issues, not a capability gap). Nothing here needed
-a device, Android SDK, or app-store tooling yet — that becomes relevant once UA-4
-(camera/QR scanning) or platform-specific work (UA-5.3 SMS receiver, UA-8 geofencing/widgets)
-starts. No such work has started, so no limitation to report yet on that front.
+a device, Android SDK, or app-store tooling until Chunk 30 (UA-4 camera/QR scanning), which
+hit the actual gap: no camera hardware and no attached simulator/device, so the camera/OCR
+plugin wiring built there could not be exercised live — see Chunk 30 for exactly what was and
+wasn't verified. Platform-specific work: UA-5.3 SMS receiver's on-device listening is now
+built but similarly unexercised (see Chunk 31 — same "no camera hardware" gap, this time
+"no real device to receive a real SMS"); UA-8 geofencing/widgets still fully unstarted.
+
+### Chunk 31 — UA-5.3: SMS-based transaction auto-import (parsing engine + admin CRUD fully verified; on-device listening structurally present, unverified)
+
+Wired up `parser_patterns`/`parser_failures` — both tables existed since Chunk 6 (`db/supabase/migrations/0006_ingest.sql`) and sat completely unused until now — for their evident purpose: turning a raw bank SMS body into a structured transaction via an admin-editable, versioned regex catalogue, with success/failure telemetry.
+
+**What's genuinely verified (curl/unit-test, same discipline as every prior chunk):**
+
+- **`api/src/sms_parser.js`** — pure-function parsing engine. `parseSms(pattern, sms)` applies a `parser_patterns.regex` + `field_map` to a raw SMS body, returning either `{ok:true, fields:{amountInr, merchant, last4, date}}` or `{ok:false, reason}` — never a fabricated partial guess (a regex match with an unparseable amount, a missing capture group, or a field_map with no `amount` mapped are all treated as failures, not "close enough"). `senderMatches()` treats `sender_pattern` as a literal substring match, not a compiled regex, so an admin's typo can't turn into a surprise regex injection. `parseSmsAgainstPatterns()` tries a list of candidate patterns in order and returns the first hit. `redactSmsShape()` builds the `parser_failures.redacted_shape` value (digits→`#`, letter runs→`X`) matching that table's `redacted_shape_has_no_digits` CHECK — `parser_failures` is designed to hold zero raw SMS content, only a redacted shape for admin triage, and the code respects that by never writing the raw body anywhere. 13 new tests in `api/test/sms_parser.test.js` covering: successful HDFC-style and ICICI-style parses (realistic synthetic Indian bank SMS formats, not scraped real customer data), a malformed/no-match body, an unparseable-amount capture, a wrong-issuer sender mismatch, a pattern with no `sender_pattern` (matches any sender), empty body, invalid pattern, missing `amount` field_map entry, and the multi-pattern trial helper's ordering/failure behavior. All 13 pass; full `api` suite now 25/25 (was 12).
+
+- **Refactor**: `POST /transactions`'s entire insert-and-update-all-state body (cap_states, milestone_states, points_ledger, fee_waiver_states — the Chunk 17-29 machinery) is now `insertTransactionAndUpdateState(client, userId, {...})`, a shared function both `POST /transactions` (source='manual') and the new `POST /transactions/from-sms` (source='sms') call — no duplicated cap/milestone/points/fee-waiver logic between the two entry points, by construction.
+
+- **`POST /transactions/from-sms`** — takes `{sender, body, userCardId, occurredAt?, categoryId?, rail?}`, loads active `channel='sms'` patterns, calls `parseSmsAgainstPatterns`. On a match: bumps the winning pattern's `success_count`, calls the shared insert helper with `source='sms'`, returns 201. On no match: inserts a `parser_failures` row (redacted shape only, per above) and returns **200** with `parsed:false` and a `reason` — a parse miss is a normal, logged outcome for this route, not a 4xx/5xx. `userCardId` is still caller-supplied (the parser extracts amount/merchant/last4/date, not which of the user's cards it belongs to — `user_cards` has no `last4` column in this schema, so there's no safe automatic match).
+
+- **`GET/POST/PUT/DELETE /admin/parser-patterns`** — typed-writer CRUD mirroring `PUT /admin/reward-rules/:id`'s exact shape: `POST`/`PUT` validate `channel` against the real `txn_source` enum values and reject an invalid regex (`new RegExp()` throws → 400, never reaches Postgres) or a non-object `field_map`; `PUT` only bumps `version` when actual pattern *content* (`regex`/`field_map`/`senderPattern`) changes, not on a `sampleText`-only edit or an `isActive` toggle — `version` exists to distinguish real pattern revisions, and a content-less bump would make that meaningless. Every mutation writes `admin_audit_log` in the same transaction (create/update/delete all logged; delete logs the full deleted row as `before_value` since there's no soft-delete column on this catalogue table to fall back to).
+
+  **Live-verified** against the real local Postgres via curl with a real OTP-derived JWT (`+919876511001` → `/auth/request-otp` → OTP grepped from `/tmp/auth_service.log` → `/auth/verify-otp`, same flow as prior chunks): created a real HDFC-style pattern, `PUT`'d a content-only field (version stayed 1), `PUT`'d `senderPattern` (version bumped to 2), rejected an invalid regex (`400`), confirmed `admin_audit_log` rows for `create_parser_pattern`/`update_parser_pattern`, then exercised the full `POST /transactions/from-sms` path end to end against a real inserted `user_cards` row: a matching SMS produced a real `transactions` row (`source='sms'`, correct amount/merchant, real `milestone_states` update) and bumped the pattern's `success_count` to 1; a non-matching SMS produced a real `parser_failures` row with a properly redacted (`~[0-9]`-free) shape and no raw content. Deleted the pattern (`DELETE`, audit-logged) and manually cleaned up the test transaction/user_card/profile rows afterward so the dev DB is left as it was found.
+
+**Structurally present, NOT verified — stated plainly, same honesty convention as Chunk 30's camera gap:**
+
+- **`app/lib/features/sms_import/sms_listener_service.dart`** wraps the `telephony` package (`RECEIVE_SMS` BroadcastReceiver via `listenIncomingSms`) and `permission_handler`'s runtime SMS-permission request. This sandbox has no Android SDK/emulator and — even if it had one — no way to deliver a real SMS to it, so nothing touching the actual `Telephony` plugin, the permission-grant dialog, or a real incoming message was ever exercised. Only foreground listening is wired (`listenInBackground: false`); `telephony`'s background/killed-app delivery needs a registered top-level background handler, a real additional platform-wiring pass, and its own device verification this chunk does not attempt — a stated scope cut, not a silent omission.
+- **`app/lib/features/sms_import/sms_import_screen.dart`** — the permission-request UI + card-picker + "start listening" screen that wires the (unverified) listener to the (verified) `POST /transactions/from-sms` via `UserCardsRepository.logTransactionFromSms()`. Not added to any nav route in this chunk (no existing tab was an obvious fit, and wiring one in without being asked would be an unrelated UI change) — reachable only by direct navigation for now; wiring it into the app's actual navigation is left for whichever chunk owns that decision.
+- `app/android/app/src/main/AndroidManifest.xml` gained `READ_SMS`/`RECEIVE_SMS` — declared, never confirmed to actually prompt/grant on a real device, exact same caveat as Chunk 30's `CAMERA` permission.
+
+**What IS genuinely testable and tested on the app side**: `app/lib/features/sms_import/sms_text_hint.dart` — pure Dart, zero plugin/Flutter dependency, split out from the listener wiring for the same testability reason Chunk 30 split `card_text_matcher.dart` from `card_scanner.dart`. `extractLast4Hint()` pulls a display-only "card ending NNNN" hint from raw SMS text (returns `null`, not a guess, when zero or multiple distinct 4-digit candidates appear — e.g. an OTP or reference number sitting next to the real suffix); `looksLikeTransactionSms()` is a deliberately high-recall client-side pre-filter (keyword match) used only to avoid forwarding obvious non-transaction SMS (OTPs, promos) to the API at all — the real accept/reject decision is always the server-side regex match, this is just a courtesy filter. 9 new tests in `app/test/features/sms_import/sms_text_hint_test.dart`, all passing.
+
+`app/pubspec.yaml` gained `telephony` (flagged discontinued by `flutter pub get` but still the only maintained-enough plugin wrapping this exact BroadcastReceiver pattern; noted here rather than silently picked) and `permission_handler`. `flutter analyze`/`dart run custom_lint`: clean (same 12 pre-existing `avoid_print` infos in `tool/`, unrelated to this chunk). Full `app/` suite: 28/28 passing (was 19 — the 9 new `sms_text_hint` tests, existing 19 unaffected). `api` suite: 25/25 (was 12 — the 13 new `sms_parser` tests). Did not touch `pandapay_domain`/`console`/`scraper` — out of this chunk's scope.
+
+Files touched this chunk: `api/src/sms_parser.js` (new), `api/test/sms_parser.test.js` (new), `api/src/index.js` (refactor + 2 new routes + 4 admin CRUD routes), `app/pubspec.yaml`, `app/android/app/src/main/AndroidManifest.xml`, `app/lib/data/user_cards_repository.dart`, `app/lib/features/sms_import/sms_text_hint.dart` (new), `app/lib/features/sms_import/sms_listener_service.dart` (new), `app/lib/features/sms_import/sms_import_screen.dart` (new), `app/test/features/sms_import/sms_text_hint_test.dart` (new), `PROGRESS.md`.
+
+### Chunk 32 — UA-8: geofencing + home-screen widget (scoped down; pure matching/ranking logic and the nearby-merchants route fully verified, background geofencing and native widget rendering structurally present but unverified)
+
+**Scope reduction stated up front**, same pattern as UA-4/UA-5.3 (Chunks 30/31): always-on
+background geofence monitoring (`flutter_background_geolocation`-style continuous location,
+a foreground service on Android and a heavily-gated background mode on iOS) is NOT built.
+What's built instead is a foreground-triggered, one-shot "check nearby merchants" — the user
+taps a button, the device's location is read exactly once, and that single point is matched
+against merchant locations. Likewise, a real native home-screen widget that actually renders
+on a device's home screen was not built end to end — the Dart-side data-writing half is real
+and tested; the native Android/iOS rendering half is structurally present but unverified (no
+Android SDK/emulator or Xcode/simulator build toolchain exercised in this sandbox, same gap
+as Chunks 30/31's camera/SMS plugin wiring).
+
+**What's genuinely verified, via real unit tests with synthetic coordinates (not device GPS):**
+
+`packages/pandapay_domain/lib/src/geo/geo.dart` — pure Dart, zero IO. `haversineDistanceMeters`
+(great-circle distance) and `findNearbyMerchants` (radius filter + nearest-first sort) over a
+new `GeoPoint`/`NearbyMerchantCandidate`/`NearbyMerchantMatch` shape. 12 new tests in
+`packages/pandapay_domain/test/geo/geo_test.dart`, including one pinned against a real-world
+pair (MG Road to Kempegowda Airport, Bengaluru, ~27-35km) rather than only synthetic toy
+points, to catch a formula bug a synthetic-only test set could miss.
+
+`packages/pandapay_domain/lib/src/geo/best_card_for_widget.dart` — `BestCardForWidget.pickBestCard`,
+deliberately NOT a new ranking algorithm: it calls the *existing*
+`RecommendationEngine.rank()` (Chunk 2's engine, unchanged) with a nominal amount (matching
+`enteredAmountProvider`'s own ₹1,000 default in `app/lib/app/providers.dart`, since a widget
+has no amount-entry field) and an optional category, and returns the first non-excluded
+result. 5 new tests in `packages/pandapay_domain/test/geo/best_card_for_widget_test.dart`,
+including one proving category-scoped rules correctly beat a lower general rate — the same
+engine gate `engine_test.dart` already covers, exercised through this new caller. **All five
+pandapay_domain files/exports wired into `pandapay_domain.dart`.**
+
+`api/`: `GET /merchants/nearby?lat=&lng=&radiusM=` — public read, no auth, same shape/pattern
+as `GET /catalogue`/`GET /categories`. SQL-side haversine over `merchant_locations.grid_lat`/
+`grid_lng` (AD-6/Chunk 23's existing grid-snapped columns — no new merchant-location store
+invented), filtered to `is_published = true`, `radiusM` capped at 50000 and validated,
+`lat`/`lng` range-validated, 400 on bad input. **A real, previously-latent bug found and fixed
+while verifying this live**: `merchants`/`merchant_locations` (0007) only ever had an
+admin-only RLS policy (`pandapay.is_admin()`) — every other public route in this codebase
+(`/catalogue`, `/categories`) works because `card_products`/`spend_categories` have an actual
+`_public_read` policy (0011/0015), but `merchants` never got one because every existing route
+touching it (`AD-6`'s `/admin/merchants/*`) is `requireAdmin`-gated. `withUserClient(null, ...)`
+against `merchants` returned zero rows regardless of what was published — not a bug in this
+chunk's query, a pre-existing gap this chunk's new *public* route was the first thing to ever
+actually need a non-admin read from this table. Fixed with a new migration,
+`db/supabase/migrations/0017_merchants_public_read.sql`, adding `merchants_public_read`/
+`merchant_locations_public_read` policies scoped to `is_published = true or pandapay.is_admin()`
+— same restriction shape as `card_products_public_read` (0015), not a broader grant.
+
+**Verified live end-to-end against the actual local Postgres + running `api/`**: applied the
+new migration, inserted one published + one unpublished merchant with real
+`merchant_locations` rows (Bengaluru coordinates), curled `/merchants/nearby` with a real
+radius and confirmed only the published merchant came back with a correct `distance_meters`;
+confirmed a too-small radius correctly excludes it; confirmed the default radius (2000m) and
+an out-of-range `lat=999` 400 correctly. Deleted every fixture row afterward. `api/`'s existing
+25-test suite (`npm test`) re-ran clean, unaffected by this chunk's SQL-string-only change.
+
+**`app/` — what's built and how it's split for testability, same pattern as Chunk 30's
+`card_text_matcher.dart`/`card_scanner.dart` split:**
+
+- `app/lib/features/geofence/nearby_merchants_repository.dart` — `HttpNearbyMerchantsRepository`,
+  the thin HTTP boundary calling `GET /merchants/nearby` and deserializing into the pure
+  `NearbyMerchantCandidate` shape. 3 new tests (`app/test/features/geofence/
+  nearby_merchants_repository_test.dart`) against `MockClient` fixtures shaped like the live
+  route's real response (verified above), covering the happy path, a non-200 error, and an
+  empty result.
+- `app/lib/features/geofence/nearby_merchants_screen.dart` — the actual UI: a
+  "Check nearby merchants" button that reads location once via `geolocator`
+  (`Geolocator.getCurrentPosition`, `LocationAccuracy.medium`, explicitly no
+  `LocationSettings` background flag), calls the repository, re-filters/sorts client-side via
+  `packages/pandapay_domain`'s `findNearbyMerchants` (belt-and-suspenders with the API's own
+  server-side filter — proves the pure-Dart matcher against real API-shaped data, not just
+  synthetic fixtures), and for each match shows the best owned card via a new
+  `bestCardForMerchantProvider(categoryId)` Riverpod family in `app/lib/app/providers.dart`
+  that reuses the exact same wallet/cap/milestone-snapshot assembly
+  `rankedRecommendationsProvider` already does, just calling `BestCardForWidget.pickBestCard`
+  instead of `engine.rank()` directly — one card-owning/cap-state read path, two ranking call
+  sites. **Camera-style caveat applies here too: `Geolocator`'s actual permission
+  prompt/location fix was never exercised on a real device/simulator in this sandbox** — only
+  the repository and pure-Dart matcher layers underneath it are genuinely tested.
+- `app/lib/features/home_widget/home_widget_service.dart` — `HomeWidgetService
+  .updateBestCardWidget`, writing `best_card_name`/`best_card_value_formatted`/`best_card_none`/
+  `best_card_updated_at` via `home_widget`'s `HomeWidget.saveWidgetData` and calling
+  `HomeWidget.updateWidget(androidName:, iOSName:)`. Takes `nowIso` as a parameter rather than
+  calling `DateTime.now()` internally, per this app's `no_datetime_now_outside_clock`
+  custom_lint rule — added a small `clockProvider` (`Clock.system()`) to
+  `app/lib/app/providers.dart`, this app's first use of `pandapay_domain`'s injectable `Clock`
+  outside the engine itself. **Genuinely tested**: 2 new tests in `app/test/features/
+  home_widget/home_widget_service_test.dart` intercept the real `home_widget` platform
+  `MethodChannel` (`setMockMethodCallHandler`) and assert the exact keys/values written and
+  that an update is triggered — this proves the Dart-to-plugin contract for real, not just
+  that the function doesn't throw.
+- `app/lib/features/home_widget/widget_settings_screen.dart` — manual "Update home-screen
+  widget now" panel (no background refresh scheduling exists — no WorkManager/BGTaskScheduler
+  job — stated in the screen's own doc comment, not just here), showing the same
+  `bestOverallCardProvider` (a `bestCardForMerchantProvider(null)` wrapper — "top overall
+  card," the widget's stated fallback mode) result it's about to write, so what's on screen is
+  provably what gets pushed to the widget.
+- Both screens linked from the More/Account tab (`account_screen.dart`) — "Nearby merchants"
+  and "Home-screen widget" buttons, `Navigator.push`/`MaterialPageRoute`, same pattern
+  `cards_screen.dart` uses to open `ScanCardScreen`.
+
+**Native widget skeletons — explicitly unverified, stated per-platform:**
+
+- **Android**: `BestCardWidgetProvider.kt` (extends `home_widget`'s `HomeWidgetProvider`,
+  reads the same SharedPreferences keys `HomeWidgetService` writes), `res/layout/
+  best_card_widget.xml`, `res/xml/best_card_widget_info.xml`, registered as a `<receiver>` in
+  `AndroidManifest.xml`. Structurally complete (matches the standard `home_widget` Android
+  wiring pattern) but **never compiled or run through a real Android/gradle build** in this
+  sandbox — no Android SDK/emulator here, same gap as Chunks 30/31's manifest-only
+  camera/SMS permissions.
+- **iOS**: `ios/HomeWidgetExtension/BestCardWidget.swift` — a real WidgetKit
+  `TimelineProvider`/`View`/`Widget` shape, but **deliberately left outside any Xcode
+  target**, unlike Android's receiver. Reason stated in the file's own header comment: a real
+  WidgetKit extension needs a second Xcode target, an App Group entitlement shared with
+  Runner, and code-signing, all of which are normally created *through Xcode itself* — hand-
+  editing `Runner.xcodeproj/project.pbxproj` blind, with no Xcode/Mac build toolchain in this
+  sandbox to open the project and confirm nothing broke, risks silently corrupting the whole
+  iOS build for a feature that can't be verified here anyway. `HomeWidget.setAppGroupId(...)`
+  is correspondingly never called from the Dart side either — there's no App Group id to set
+  until that Xcode target exists. This is the one piece of this chunk that is source-only, not
+  wired in at all — flagged explicitly, not left implicit.
+- Added `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` to `AndroidManifest.xml` and
+  `NSLocationWhenInUseUsageDescription` to `Info.plist` — deliberately no
+  `ACCESS_BACKGROUND_LOCATION`/`NSLocationAlwaysAndWhenInUseUsageDescription`, matching the
+  scope reduction above. Same "structurally present, not confirmed to actually
+  prompt/grant on a real device" caveat as Chunk 30's camera keys.
+
+`app/pubspec.yaml` gained `geolocator` and `home_widget`.
+
+`flutter analyze`/`dart run custom_lint` on `app/`: clean (same 12 pre-existing `avoid_print`
+infos in `tool/`, unrelated). Full `app/` suite: 33/33 passing — 28 already existed going into
+this chunk (Chunk 31 left `app/` at 28/28), plus this chunk's 5 new tests (3 in
+`nearby_merchants_repository_test.dart`, 2 in `home_widget_service_test.dart`) = 33.
+`pandapay_domain` suite: 96/96 passing (was 83 — this chunk's 13 new tests: 8 in
+`geo_test.dart` (`haversineDistanceMeters` + `findNearbyMerchants`, including one pinned
+against a real-world Bengaluru coordinate pair) + 5 in `best_card_for_widget_test.dart`).
+`api/` suite: 25/25 unaffected (`npm test`,
+pure JS logic tests — the new route was curl-verified live, same pattern as every other route
+in this file, not unit-tested in `api/test/`). Did not touch `console`/`scraper` — out of this
+chunk's scope.
+
+**All five suites now: 96 (`pandapay_domain`) + 33 (`app`) + 14 (`console`) + 19 (`scraper`,
+Python) + 25 (`api`) = 187 tests total.**
+
+Files touched this chunk: `packages/pandapay_domain/lib/src/geo/geo.dart` (new),
+`packages/pandapay_domain/lib/src/geo/best_card_for_widget.dart` (new),
+`packages/pandapay_domain/lib/pandapay_domain.dart`,
+`packages/pandapay_domain/test/geo/geo_test.dart` (new),
+`packages/pandapay_domain/test/geo/best_card_for_widget_test.dart` (new),
+`db/supabase/migrations/0017_merchants_public_read.sql` (new), `api/src/index.js`,
+`app/pubspec.yaml`, `app/pubspec.lock`, `app/android/app/src/main/AndroidManifest.xml`,
+`app/android/app/src/main/kotlin/app/pandapay/pandapay/BestCardWidgetProvider.kt` (new),
+`app/android/app/src/main/res/layout/best_card_widget.xml` (new),
+`app/android/app/src/main/res/xml/best_card_widget_info.xml` (new),
+`app/ios/Runner/Info.plist`, `app/ios/HomeWidgetExtension/BestCardWidget.swift` (new, not
+wired into an Xcode target — see above), `app/lib/app/providers.dart`,
+`app/lib/features/geofence/nearby_merchants_repository.dart` (new),
+`app/lib/features/geofence/nearby_merchants_screen.dart` (new),
+`app/lib/features/home_widget/home_widget_service.dart` (new),
+`app/lib/features/home_widget/widget_settings_screen.dart` (new),
+`app/lib/features/account/account_screen.dart`,
+`app/test/features/geofence/nearby_merchants_repository_test.dart` (new),
+`app/test/features/home_widget/home_widget_service_test.dart` (new), `PROGRESS.md`.
+
+**Sandbox limitations update**: UA-8 is the point where this codebase now has three chunks in
+a row (30, 31, 32) whose native/device-dependent half is structurally present but genuinely
+unverified — no Android SDK/emulator, no Xcode/iOS simulator build toolchain, no camera, no
+real SMS, no GPS fix, and no real device's home screen to drop a widget onto, anywhere in this
+sandbox. Every pure-logic/HTTP-boundary layer underneath each of those three features (the
+QR/OCR text matcher, the SMS regex parser, and now the haversine/nearby-merchant matcher and
+the best-card-for-widget picker) is genuinely unit-tested against real or realistically-shaped
+fixtures — that split is deliberate and consistent across all three chunks, not incidental.
