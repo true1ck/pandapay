@@ -224,6 +224,59 @@ void main() {
     expect(archiveCalled, isTrue);
   });
 
+  testWidgets('Chunk 28: Cards tab shows lifetime points earned and fee-waiver progress',
+      (tester) async {
+    await tester.pumpWidget(
+      _appWithFakeCatalogue(
+        [_rupayCard()],
+        extraOverrides: [
+          accessTokenProvider.overrideWith((ref) => 'fake-access-token'),
+          userCardsRepositoryProvider.overrideWithValue(
+            UserCardsRepository(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-access-token',
+              client: MockClient((request) async {
+                return http.Response(
+                  jsonEncode({
+                    'userCards': [
+                      {
+                        'id': 'user-card-1',
+                        'card_product_id': 'test-rupay',
+                        'nickname': null,
+                        'card_name': 'Test RuPay Card',
+                        'is_default': false,
+                        'total_points_earned': 10000,
+                        'fee_waiver_states': [
+                          {
+                            'fee_waiver_rule_id': 'fw-1',
+                            'qualified_spend': 200000,
+                            'threshold_spend_inr': 100000,
+                            'waives_fee_inr': 500,
+                            'waived_at': '2026-08-05T19:44:27.168Z',
+                          },
+                        ],
+                      },
+                    ],
+                  }),
+                  200,
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.credit_card));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.textContaining('10000 pts earned'), findsOneWidget);
+    expect(find.textContaining('Fee waived'), findsOneWidget);
+  });
+
   testWidgets('Chunk 15: More tab shows the login screen when signed out', (tester) async {
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
     await tester.pump();

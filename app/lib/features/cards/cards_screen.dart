@@ -79,10 +79,18 @@ class _UserCardTileState extends ConsumerState<_UserCardTile> {
   Widget build(BuildContext context) {
     final card = widget.card;
     final amount = ref.watch(enteredAmountProvider);
+    final subtitleParts = <String>[
+      if (card.nickname?.isNotEmpty == true) card.cardName,
+      if (card.totalPointsEarned > 0) '${card.totalPointsEarned.toStringAsFixed(0)} pts earned',
+      for (final fw in card.feeWaiverStates)
+        fw.waivedAt != null
+            ? 'Fee waived (${fw.qualifiedSpend.format()} spent)'
+            : '${fw.qualifiedSpend.format()} of ${fw.thresholdSpend.format()} toward fee waiver',
+    ];
     return Card(
       child: ListTile(
         title: Text(card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName),
-        subtitle: card.nickname?.isNotEmpty == true ? Text(card.cardName) : null,
+        subtitle: subtitleParts.isEmpty ? null : Text(subtitleParts.join(' · ')),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

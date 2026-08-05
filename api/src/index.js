@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { withUserClient } = require('./db');
 const { optionalAuth, requireAuth } = require('./auth');
-const { periodBounds, effectiveRatePerRupee } = require('./cycles');
+const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 
 const app = express();
 app.use(cors());
@@ -655,6 +655,25 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         );
         card.cap_states = capStates.rows;
         card.milestone_states = milestoneStates.rows;
+
+        // Chunk 28: lifetime points-earned total (not period-scoped, unlike
+        // caps/milestones — a points balance doesn't reset each cycle) and
+        // the current-period fee-waiver progress, same "no row = no
+        // progress yet" default as above.
+        const pointsTotal = await client.query(
+          `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger WHERE user_card_id = $1`,
+          [card.id]
+        );
+        card.total_points_earned = pointsTotal.rows[0].total_points;
+
+        const feeWaiverStates = await client.query(
+          `SELECT fw.fee_waiver_rule_id, fw.qualified_spend, fw.waived_at, r.threshold_spend_inr, r.waives_fee_inr
+             FROM fee_waiver_states fw
+             JOIN fee_waiver_rules r ON r.id = fw.fee_waiver_rule_id
+            WHERE fw.user_card_id = $1 AND fw.period_start <= CURRENT_DATE AND fw.period_end >= CURRENT_DATE`,
+          [card.id]
+        );
+        card.fee_waiver_states = feeWaiverStates.rows;
       }
 
       return cards.rows;
@@ -728,11 +747,13 @@ app.post('/user-cards/:id/archive', requireAuth, async (req, res) => {
  * POST /transactions — UA-3+ (Chunk 17): manual transaction entry
  * (source='manual', reward_state='estimated' — R3, nothing here is ever
  * 'confirmed' without a real statement/SMS reconciliation path, which
- * doesn't exist yet). Updates cap_states.consumed and
- * milestone_states.qualified_spend in the SAME transaction as the insert,
- * so a transaction that's recorded but doesn't update state is impossible
- * — same "whole thing rolls back together" pattern as the AD-1 typed
- * writer's audit-log guarantee.
+ * doesn't exist yet). Updates cap_states.consumed, milestone_states.
+ * qualified_spend, points_ledger (Chunk 28: one entry per txn in the
+ * reward's native unit), and fee_waiver_states.qualified_spend (Chunk 28:
+ * auto-marks waived_at once the threshold is crossed) all in the SAME
+ * transaction as the insert, so a transaction that's recorded but doesn't
+ * update state is impossible — same "whole thing rolls back together"
+ * pattern as the AD-1 typed writer's audit-log guarantee.
  */
 app.post('/transactions', requireAuth, async (req, res) => {
   const { userCardId, amountInr, occurredAt, categoryId, rail, merchantName } = req.body || {};
@@ -839,7 +860,70 @@ app.post('/transactions', requireAuth, async (req, res) => {
         milestoneStateUpdates.push(upserted.rows[0]);
       }
 
-      return { status: 201, transaction: txn.rows[0], capStates: capStateUpdates, milestoneStates: milestoneStateUpdates };
+      // Points ledger: one entry per transaction, in the reward's own
+      // native unit (points/miles/cashback-rupees), separate from the cap
+      // machinery's INR-value accounting above. flat_points rules earn 0
+      // per this helper (a fixed bonus isn't a per-transaction rate) so no
+      // ledger noise is written for them.
+      let pointsLedgerEntry = null;
+      if (matchingRule.rows[0]) {
+        const pointsPerRupee = effectivePointsPerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate));
+        if (pointsPerRupee > 0) {
+          const deltaPoints = amount * pointsPerRupee;
+          const inserted = await client.query(
+            `INSERT INTO points_ledger (profile_id, user_card_id, transaction_id, delta_points, reason, state, occurred_at)
+             VALUES ($1, $2, $3, $4, $5, 'estimated', $6)
+             RETURNING id, delta_points, reason, occurred_at`,
+            [req.userId, userCardId, txn.rows[0].id, deltaPoints, `${matchingRule.rows[0].unit} earned on transaction`, occurred]
+          );
+          pointsLedgerEntry = inserted.rows[0];
+        }
+      }
+
+      // Fee-waiver progress: same "which rules apply to this card" +
+      // "accumulate qualified spend in the right period" shape as the cap
+      // loop above, but against fee_waiver_rules/fee_waiver_states instead.
+      // A category on fee_waiver_rules.excluded_categories doesn't count
+      // toward the threshold at all (not even partially).
+      const feeWaiverRules = await client.query(
+        `SELECT id, threshold_spend_inr, period, excluded_categories FROM fee_waiver_rules
+          WHERE card_product_id = $1`,
+        [userCard.card_product_id]
+      );
+      const feeWaiverStateUpdates = [];
+      for (const rule of feeWaiverRules.rows) {
+        if (categoryId && rule.excluded_categories && rule.excluded_categories.includes(categoryId)) {
+          continue;
+        }
+        const { start, end } = periodBounds(rule.period, occurred, { statementDay: userCard.statement_day });
+        const upserted = await client.query(
+          `INSERT INTO fee_waiver_states (profile_id, user_card_id, fee_waiver_rule_id, period_start, period_end, qualified_spend)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (user_card_id, fee_waiver_rule_id, period_start)
+           DO UPDATE SET qualified_spend = fee_waiver_states.qualified_spend + EXCLUDED.qualified_spend, updated_at = now()
+           RETURNING id, fee_waiver_rule_id, period_start, period_end, qualified_spend, waived_at`,
+          [req.userId, userCardId, rule.id, start, end, amount]
+        );
+        let state = upserted.rows[0];
+        if (!state.waived_at && Number(state.qualified_spend) >= Number(rule.threshold_spend_inr)) {
+          const marked = await client.query(
+            `UPDATE fee_waiver_states SET waived_at = now() WHERE id = $1
+             RETURNING id, fee_waiver_rule_id, period_start, period_end, qualified_spend, waived_at`,
+            [state.id]
+          );
+          state = marked.rows[0];
+        }
+        feeWaiverStateUpdates.push(state);
+      }
+
+      return {
+        status: 201,
+        transaction: txn.rows[0],
+        capStates: capStateUpdates,
+        milestoneStates: milestoneStateUpdates,
+        pointsLedgerEntry,
+        feeWaiverStates: feeWaiverStateUpdates,
+      };
     });
 
     if (result.status !== 201) return res.status(result.status).json({ error: result.error });

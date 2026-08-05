@@ -1304,6 +1304,50 @@ passing (was 13). `api/`'s existing 12-test suite (pure period-bounds logic, no 
 unaffected — this route is verified live via curl, same pattern as every other admin route in
 this codebase, not via a Node test file.
 
+### Chunk 29 — points ledger + fee-waiver progress actually get written to
+
+`points_ledger` and `fee_waiver_states` (schema from an early migration) had never had anything
+write to them — only caps and milestones were live (Chunk 17). Both now update in the same
+`POST /transactions` write as everything else, so a transaction that's recorded but leaves
+these stale is impossible (same whole-transaction-rolls-back guarantee as caps/milestones).
+
+`api/cycles.js`: new `effectivePointsPerRupee(unit, rate)` — deliberately separate from the
+existing `effectiveRatePerRupee`, which returns the reward's **INR value** (used for
+reward_value-measure caps); this one returns points/miles/cashback-rupees actually earned, in
+the reward's own native unit, which is what a points ledger should show a user (the same
+numbers the issuer's own app would show), not a value conversion.
+
+`api/index.js`'s `POST /transactions`: after the existing cap/milestone updates, (1) inserts
+one `points_ledger` row per transaction when the matched reward rule has a non-zero
+per-rupee rate (`flat_points` rules correctly earn nothing here — a fixed bonus isn't a
+per-transaction rate, matching the engine's own behavior); (2) upserts `fee_waiver_states.
+qualified_spend` for every `fee_waiver_rule` on the card (skipping a transaction's category if
+it's in that rule's `excluded_categories`), and auto-sets `waived_at` the moment
+qualified_spend crosses `threshold_spend_inr`.
+
+`GET /user-cards` now also returns each card's lifetime `total_points_earned` (not
+period-scoped — a points balance doesn't reset every cycle, unlike caps/milestones) and its
+current-period `fee_waiver_states` (joined to the rule for threshold/waived-fee display).
+
+`app/`: `UserCard` (in `user_cards_repository.dart`) grew `totalPointsEarned` and a new
+`FeeWaiverProgress` list; the Cards tab's tile subtitle now shows `"N pts earned"` and either
+`"Fee waived (₹X spent)"` or `"₹X of ₹Y toward fee waiver"`, only when there's something to
+show (an unused card shows neither).
+
+**Verified live end-to-end**, not just unit-tested: created a real temporary `profiles`/
+`user_cards` row for the existing admin identity, POSTed a real ₹2,00,000 transaction against
+HDFC Millennia (5% cashback, ₹1,00,000 annual fee-waiver threshold) via curl with a real admin
+JWT, and confirmed the actual response: `delta_points: 10000.0000` (exactly 5% of ₹2,00,000,
+correct), `fee_waiver_states[0].waived_at` set (₹2,00,000 ≥ ₹1,00,000 threshold, correct).
+Deleted all the temporary rows afterward so seed data wasn't left mutated.
+
+`flutter analyze` clean on `app/` (pre-existing `avoid_print` infos in `tool/` scripts,
+unrelated to this chunk); one new app widget test (points/fee-waiver subtitle rendering).
+**All five suites now: 83 (`pandapay_domain`, unaffected) + 10 (`app`, was 9) + 14 (`console`,
+unaffected this chunk) + 19 (`scraper`, unaffected) + 12 (`api`, pure period-bounds logic,
+unaffected — this route verified live via curl like every other mutating admin/user route) =
+138 tests total.
+
 ## Sandbox limitations
 
 This is a Mac dev machine with Flutter, Dart, Postgres, and Docker all available and

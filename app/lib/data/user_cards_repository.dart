@@ -18,6 +18,8 @@ class UserCard {
   final bool isDefault;
   final Map<String, Money> capConsumed; // capRule.id -> consumed (in the cap's own measure unit)
   final Map<String, Money> milestoneQualifiedSpend; // milestoneRule.id -> qualified spend so far
+  final double totalPointsEarned; // lifetime, in the reward's own native unit — not an INR Money
+  final List<FeeWaiverProgress> feeWaiverStates;
 
   const UserCard({
     required this.id,
@@ -27,12 +29,16 @@ class UserCard {
     required this.isDefault,
     this.capConsumed = const {},
     this.milestoneQualifiedSpend = const {},
+    this.totalPointsEarned = 0,
+    this.feeWaiverStates = const [],
   });
 
   factory UserCard.fromJson(Map<String, dynamic> json) {
     final capStates = (json['cap_states'] as List? ?? const [])
         .cast<Map<String, dynamic>>();
     final milestoneStates = (json['milestone_states'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final feeWaiverStates = (json['fee_waiver_states'] as List? ?? const [])
         .cast<Map<String, dynamic>>();
     return UserCard(
       id: json['id'] as String,
@@ -48,6 +54,37 @@ class UserCard {
         for (final s in milestoneStates)
           s['milestone_rule_id'] as String: Money.fromRupees(_num(s['qualified_spend'])),
       },
+      totalPointsEarned: _num(json['total_points_earned']),
+      feeWaiverStates: feeWaiverStates.map(FeeWaiverProgress.fromJson).toList(),
+    );
+  }
+}
+
+/// Chunk 28: this card's fee-waiver progress for the CURRENT period only
+/// (mirrors cap/milestone states above) — `waivedAt` non-null means the
+/// spend threshold was already crossed this period.
+class FeeWaiverProgress {
+  final String feeWaiverRuleId;
+  final Money qualifiedSpend;
+  final Money thresholdSpend;
+  final Money waivesFee;
+  final DateTime? waivedAt;
+
+  const FeeWaiverProgress({
+    required this.feeWaiverRuleId,
+    required this.qualifiedSpend,
+    required this.thresholdSpend,
+    required this.waivesFee,
+    this.waivedAt,
+  });
+
+  factory FeeWaiverProgress.fromJson(Map<String, dynamic> json) {
+    return FeeWaiverProgress(
+      feeWaiverRuleId: json['fee_waiver_rule_id'] as String,
+      qualifiedSpend: Money.fromRupees(_num(json['qualified_spend'])),
+      thresholdSpend: Money.fromRupees(_num(json['threshold_spend_inr'])),
+      waivesFee: Money.fromRupees(_num(json['waives_fee_inr'])),
+      waivedAt: json['waived_at'] == null ? null : DateTime.parse(json['waived_at'] as String),
     );
   }
 }

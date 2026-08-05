@@ -159,4 +159,29 @@ function effectiveRatePerRupee(unit, rate, pointValueInr) {
   }
 }
 
-module.exports = { periodBounds, effectiveRatePerRupee };
+/**
+ * Points actually earned per rupee, in the reward's own native unit
+ * (points/miles/cashback-rupees) — distinct from effectiveRatePerRupee's
+ * INR *value*. Used for points_ledger.delta_points, which records what the
+ * card issuer would show as earned, not what it's worth.
+ */
+function effectivePointsPerRupee(unit, rate) {
+  switch (unit) {
+    case 'cashback_percent':
+    case 'discount_percent':
+      return rate / 100;
+    case 'points_per_100':
+    case 'miles_per_100':
+      return rate / 100;
+    case 'points_per_150':
+      return rate / 150;
+    case 'points_per_200':
+      return rate / 200;
+    case 'flat_points':
+      return 0; // fixed bonus, not a per-rupee rate
+    default:
+      return 0;
+  }
+}
+
+module.exports = { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee };
