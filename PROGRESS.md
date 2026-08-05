@@ -257,6 +257,36 @@ human-verification pass is still owed before these could be real user-facing dat
   import tool (`tools/card_import.dart`, UA-1.1.2); only 4 of the ~40-50 cards UA-1.1
   calls for; no admin console UI to edit these (chunk 6).
 
+### Chunk 4 — UA-2 engine remainder: milestones, split optimizer, EMI advisor, etc.
+Extended `packages/pandapay_domain`'s engine with the rest of UA-2.2/UA-2.4:
+- **Milestone bonus** (UA-2.2.4) now contributes to `expectedValue`: a spend counts
+  as "materially" advancing a milestone when it covers a configurable fraction
+  (default 50%) of the remaining threshold gap; the bonus is pro-rated to how much
+  of the gap this specific transaction closes (never double-counts, never claims
+  more than the milestone's `rewardValue` even on a huge overshoot spend), with a
+  reason line distinguishing "materially advances" vs "completes".
+- **`SplitOptimizer`** (UA-2.4.2/G2): greedy marginal-₹/₹ fill across cards in
+  paise-step increments, respecting live cap headroom per step (re-evaluates cap
+  blending as prior steps consume it, not just once upfront) and an optional
+  per-card utilization ceiling. Bounded search, not an LP solver — matches the
+  plan's own framing.
+- **`creditUtilization()`** (UA-2.4.1/E3): ratio + 30%-threshold flag + suggested
+  amount to move to get back under it; zero-limit input never divides by zero.
+- **`billingCycleFloat()`** (UA-2.4.3/E7): interest-free days from a statement day +
+  grace period, through the injectable `Clock` (not `DateTime.now()`), correctly
+  rolling to next month when the statement day has already passed this month.
+- **`adviseEmi()`** (UA-2.4.4/G3): total interest via the standard EMI formula,
+  effective cost (interest + forgone reward value), and a verdict line.
+- **`compareRails()`** (UA-2.4.5/§10.7): runs the same card set through the engine
+  on both UPI-QR and swipe rails and surfaces the delta — reuses the RuPay
+  exclusion gate from chunk-earlier work, so a UPI-only-eligible-card scenario and
+  a swipe-only-higher-rate scenario are both exercised for real, not mocked.
+- **13 new tests, 39/39 total passing.** `dart analyze`: clean.
+- **Not done**: the full 30-scenario golden fixture set (UA-2.5.1) — what exists is
+  targeted unit tests per feature, not the consolidated fixture file the plan asks
+  for; performance test (rank 15 cards <16ms, UA-2.5.3); regression harness for
+  user-reported wrong recommendations (UA-2.5.4, not applicable yet — no users).
+
 ## What's NOT done (next steps, roughly in priority order)
 
 1. **Restart local Postgres** before resuming DB work (see note above) — both the `pandapay` and

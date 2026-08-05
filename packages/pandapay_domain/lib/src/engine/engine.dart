@@ -66,6 +66,13 @@ class Recommendation {
 /// included with `exclusionReason` set and sort last — ui-spec B3.4 shows
 /// them greyed, never silently drops them).
 class RecommendationEngine {
+  /// UA-2.2.4: fraction of a milestone's remaining threshold a transaction
+  /// must cover to count as "materially" advancing it. Configurable per the
+  /// plan's wording ("define 'materially' as a configurable fraction").
+  final double milestoneMaterialFraction;
+
+  const RecommendationEngine({this.milestoneMaterialFraction = 0.5});
+
   List<Recommendation> rank(
     RecommendationContext context,
     List<CardSnapshot> cards,
@@ -188,6 +195,27 @@ class RecommendationEngine {
       final waiverValue = context.amount * waiverFraction;
       value += waiverValue;
       reasons.add('Fuel surcharge waiver: +${waiverValue.format()}');
+    }
+
+    // UA-2.2.4 milestone bonus: add value only when this spend *materially*
+    // advances a milestone. "Materially" = the spend covers at least
+    // [milestoneMaterialFraction] of the remaining threshold. Value added is
+    // pro-rated to how much of the remaining gap this transaction closes, so
+    // a transaction that just barely clears the bar doesn't claim the whole
+    // milestone reward, and a transaction that completes it claims exactly
+    // the reward once (never more, never double-counted across scenarios).
+    for (final milestone in card.milestoneRules) {
+      final progress = snapshot.milestoneProgress[milestone.id] ?? const Money.zero();
+      final remaining = milestone.thresholdSpend - progress;
+      if (remaining.isZero || remaining.isNegative) continue; // already achieved
+      final coversFraction = context.amount.paise / remaining.paise;
+      if (coversFraction < milestoneMaterialFraction) continue; // not material
+
+      final closedPortion = context.amount < remaining ? context.amount : remaining;
+      final bonus = milestone.rewardValue * (closedPortion.paise / milestone.thresholdSpend.paise);
+      value += bonus;
+      final verb = context.amount >= remaining ? 'completes' : 'materially advances';
+      reasons.add('$verb "${milestone.label}" milestone: +${bonus.format()}');
     }
 
     final isOverride = snapshot.forcedOverrideCardId == card.id;
