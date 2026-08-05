@@ -13,3 +13,7 @@ node_modules/
 .flutter-plugins-dependencies
 build/
 
+
+# Node service secrets — never commit real or dev JWT secrets
+auth/.env
+api/.env

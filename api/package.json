@@ -1,0 +1,17 @@
+{
+  "name": "pandapay-api",
+  "version": "1.0.0",
+  "description": "PandaPay product API — verifies JWTs issued by auth/, sets RLS session context, exposes the product database to both Flutter apps.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "pg": "^8.16.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3"
+  }
+}

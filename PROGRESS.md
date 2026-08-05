@@ -182,6 +182,33 @@ the parts still owed that further divergence — a follow-up pass should trim `a
 what PandaPay actually needs, then drop `partner_tier_id`/`active_role`/the unused enum casts
 entirely rather than carrying them as dead columns.
 
+### `api/` — new: minimal product API, RLS proven end-to-end (not just wired)
+Chunk 1 of the task breakdown. New Node/Express service (`api/`, port 4000) sitting
+between the Flutter apps and the `pandapay` product database:
+- `src/auth.js`: verifies the JWT `auth/` issues (same `JWT_ACCESS_SECRET`). **Important
+  finding**: `auth/`'s `tokenService.js` signs with `jwt.sign(payload, ACCESS_SECRET,
+  { expiresIn })` and never sets a real `iss` claim, despite the payload containing a
+  literal `aud: 'authenticated'` field (a leftover Supabase-shaped claim, not a verified
+  JWT audience). Passing `issuer`/`audience` to `jwt.verify()` here silently rejects every
+  real token — fixed by only checking the signature, and documented inline so it isn't
+  "fixed" back into a 401 loop later.
+- `src/db.js`: `withUserClient(userId, fn)` — acquires a pool client, `SET LOCAL
+  app.user_id` inside a transaction, runs the query, commits, releases. `SET LOCAL` is
+  transaction-scoped so a pooled connection can never leak one request's identity into
+  the next.
+- Three routes: `GET/POST /profile` (owner-scoped, requires auth), `GET /catalogue`
+  (public read, no auth). This is the `set_config('app.user_id', ...)` middleware flagged
+  as missing in the previous progress note — it's now built and **proven**, not just wired:
+  created two real users through the actual `auth/` OTP flow, had each POST their own
+  `/profile`, confirmed (a) each user's `GET /profile` returns only their own row, and
+  (b) as postgres superuser (bypassing RLS) both rows genuinely exist in the table — so
+  the isolation is enforced by Postgres RLS, not by API-layer discipline that happens to
+  not have a bug yet.
+- **Not yet done**: no refresh-token handling, no rate limiting, no endpoints beyond
+  profile/catalogue (user_cards, transactions, etc. are chunk 3+ work), no automated
+  tests (verified manually via curl this session — should get a real test suite before
+  much more is built on top of it).
+
 ## What's NOT done (next steps, roughly in priority order)
 
 1. **Restart local Postgres** before resuming DB work (see note above) — both the `pandapay` and
