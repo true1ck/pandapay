@@ -78,6 +78,62 @@ class AdminApi {
       throw AdminApiException('PUT /admin/reward-rules/$ruleId failed: ${response.statusCode} ${response.body}');
     }
   }
+
+  /// AD-2.1: card requests grouped by issuer+product with counts.
+  Future<List<Map<String, dynamic>>> fetchCardRequestGroups() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/card-requests'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/card-requests failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['requestGroups'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> startScrapingSource({
+    required String issuerName,
+    String? productName,
+    required String baseUrl,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/card-requests/start-scraping'),
+      headers: _headers,
+      body: jsonEncode({'issuerName': issuerName, 'productName': ?productName, 'baseUrl': baseUrl}),
+    );
+    if (response.statusCode != 201) {
+      throw AdminApiException('POST start-scraping failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// AD-2.2: data error reports, shown vs claimed against the live value.
+  Future<List<Map<String, dynamic>>> fetchErrorReports() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/error-reports'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/error-reports failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['errorReports'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> approveErrorReport(String reportId) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/error-reports/$reportId/approve'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('approve failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  Future<void> rejectErrorReport(String reportId, {String? reason}) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/error-reports/$reportId/reject'),
+      headers: _headers,
+      body: jsonEncode({'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('reject failed: ${response.statusCode} ${response.body}');
+    }
+  }
 }
 
 class AdminApiException implements Exception {

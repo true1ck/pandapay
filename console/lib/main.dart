@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/providers.dart';
 import 'features/auth/login_screen.dart';
 import 'features/catalogue/catalogue_screen.dart';
+import 'features/queues/card_requests_screen.dart';
+import 'features/queues/error_reports_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: PandaPayConsoleApp()));
@@ -57,23 +59,39 @@ class _AuthGate extends ConsumerWidget {
   }
 }
 
-class _ConsoleHome extends StatelessWidget {
+/// AD-2's nav additions on top of AD-1's catalogue: Card Requests and Error
+/// Reports as sibling destinations, not separate apps — same left-nav shell.
+class _ConsoleHome extends StatefulWidget {
   const _ConsoleHome();
+
+  @override
+  State<_ConsoleHome> createState() => _ConsoleHomeState();
+}
+
+class _ConsoleHomeState extends State<_ConsoleHome> {
+  int _selected = 0;
+
+  static const _destinations = [
+    (label: 'Catalogue', screen: CatalogueScreen()),
+    (label: 'Card Requests', screen: CardRequestsScreen()),
+    (label: 'Error Reports', screen: ErrorReportsScreen()),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Row(
         children: [
-          const SizedBox(
-            width: 220,
-            child: Padding(
-              padding: EdgeInsets.only(top: 16, left: 16),
-              child: Text('Catalogue', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
+          NavigationRail(
+            selectedIndex: _selected,
+            onDestinationSelected: (i) => setState(() => _selected = i),
+            labelType: NavigationRailLabelType.all,
+            destinations: [
+              for (final d in _destinations) NavigationRailDestination(icon: const Icon(Icons.circle), label: Text(d.label)),
+            ],
           ),
           const VerticalDivider(width: 1),
-          const Expanded(child: CatalogueScreen()),
+          Expanded(child: _destinations[_selected].screen),
         ],
       ),
     );

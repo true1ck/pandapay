@@ -202,5 +202,227 @@ app.get('/categories', async (req, res) => {
   }
 });
 
+/**
+ * GET /admin/card-requests — AD-2.1: New Card Request queue (A8/C8), grouped
+ * by issuer+product with counts so priority follows actual demand. `state`
+ * is the shared `review_state` enum (pending/resolved/dismissed) — there is
+ * no separate "queue workflow" enum, per the schema this reuses.
+ */
+app.get('/admin/card-requests', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT issuer_name, product_name, network_guess,
+                sum(request_count) AS total_requests,
+                count(*) AS distinct_reporters,
+                bool_or(state = 'pending') AS has_pending,
+                min(created_at) AS first_requested_at,
+                max(created_at) AS last_requested_at
+           FROM card_requests
+          GROUP BY issuer_name, product_name, network_guess
+          ORDER BY sum(request_count) DESC, max(created_at) DESC`
+      )
+    );
+    res.json({ requestGroups: result.rows });
+  } catch (err) {
+    console.error('GET /admin/card-requests error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /admin/card-requests/start-scraping — AD-2.1's "one-click start
+ * scraping this issuer" action: creates a `sources` row pre-filled from the
+ * request group, disabled by default (AD-3.1.2's ToS gate — `is_enabled`
+ * cannot be true until `tos_reviewed` is true, enforced by the DB CHECK
+ * constraint itself, not by this route). Marks every matching pending
+ * request as resolved.
+ */
+app.post('/admin/card-requests/start-scraping', requireAdmin, async (req, res) => {
+  const { issuerName, productName, baseUrl } = req.body || {};
+  if (!issuerName || typeof issuerName !== 'string') {
+    return res.status(400).json({ error: 'issuerName is required' });
+  }
+  if (!baseUrl || typeof baseUrl !== 'string') {
+    return res.status(400).json({ error: 'baseUrl is required' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const source = await client.query(
+        `INSERT INTO sources (kind, name, base_url, tos_reviewed, is_enabled)
+         VALUES ('bank_official', $1, $2, false, false)
+         RETURNING id, name, base_url, tos_reviewed, is_enabled`,
+        [`${issuerName}${productName ? ' — ' + productName : ''}`, baseUrl]
+      );
+
+      const resolved = await client.query(
+        `UPDATE card_requests SET state = 'resolved'
+          WHERE issuer_name = $1 AND state = 'pending'
+            AND ($2::text IS NULL OR product_name = $2)
+          RETURNING id`,
+        [issuerName, productName || null]
+      );
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'start_scraping_source', 'sources', $2, NULL, $3, $4)`,
+        [
+          req.userId,
+          source.rows[0].id,
+          JSON.stringify(source.rows[0]),
+          `${resolved.rows.length} card_requests resolved`,
+        ]
+      );
+
+      return { source: source.rows[0], resolvedRequestCount: resolved.rows.length };
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    console.error('POST /admin/card-requests/start-scraping error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /admin/error-reports — AD-2.2: shown-vs-claimed side by side against
+ * the *current live value*, not the value at report time — a stale report
+ * against an already-corrected field should visibly show shown==claimed now.
+ */
+app.get('/admin/error-reports', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT er.id, er.card_product_id, cp.name AS card_name, er.field_path,
+                er.shown_value, er.claimed_value, er.source_url, er.attachment_path,
+                er.state, er.created_at
+           FROM data_error_reports er
+           JOIN card_products cp ON cp.id = er.card_product_id
+          ORDER BY er.state = 'pending' DESC, er.created_at DESC`
+      )
+    );
+    res.json({ errorReports: result.rows });
+  } catch (err) {
+    console.error('GET /admin/error-reports error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /admin/error-reports/:id/approve — AD-2's DoD: approving a C7
+ * correction produces a card_catalogue_changes row, a data_version bump
+ * (via the existing bump_card_data_version trigger firing on the
+ * reward_rules UPDATE), and an audit entry, all in one transaction.
+ * Scope: only field_path values shaped 'reward_rules.<rule_id>.rate' are
+ * approvable through this route today — that is the one card-rule mutation
+ * this API already has a typed writer for (see PUT /admin/reward-rules/:id).
+ * Any other field_path is rejected rather than silently no-op'd; widening
+ * this is real AD-5 propagation work (a generic field_path -> table/column
+ * resolver), not something to fake here.
+ */
+app.post('/admin/error-reports/:id/approve', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const reportResult = await client.query(
+        `SELECT * FROM data_error_reports WHERE id = $1 AND state = 'pending'`,
+        [req.params.id]
+      );
+      if (reportResult.rows.length === 0) return { status: 404 };
+      const report = reportResult.rows[0];
+
+      const fieldMatch = /^reward_rules\.([0-9a-f-]{36})\.rate$/.exec(report.field_path);
+      if (!fieldMatch) {
+        return {
+          status: 422,
+          error: `field_path '${report.field_path}' has no typed writer yet — only reward_rules.<id>.rate is supported`,
+        };
+      }
+      const ruleId = fieldMatch[1];
+      const newRate = Number(report.claimed_value);
+      if (!Number.isFinite(newRate) || newRate < 0) {
+        return { status: 422, error: 'claimed_value is not a valid non-negative rate' };
+      }
+
+      const before = await client.query(
+        'SELECT id, card_product_id, rate FROM reward_rules WHERE id = $1 AND card_product_id = $2',
+        [ruleId, report.card_product_id]
+      );
+      if (before.rows.length === 0) {
+        return { status: 422, error: 'reward_rule not found for this card' };
+      }
+
+      const updated = await client.query(
+        'UPDATE reward_rules SET rate = $1 WHERE id = $2 RETURNING id, rate',
+        [newRate, ruleId]
+      );
+
+      const card = await client.query(
+        'SELECT data_version FROM card_products WHERE id = $1',
+        [report.card_product_id]
+      );
+
+      const change = await client.query(
+        `INSERT INTO card_catalogue_changes
+           (card_product_id, data_version_after, field_path, old_value, new_value, change_summary, approved_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id`,
+        [
+          report.card_product_id,
+          card.rows[0].data_version,
+          report.field_path,
+          JSON.stringify(before.rows[0].rate),
+          JSON.stringify(updated.rows[0].rate),
+          `Corrected via user report: rate ${before.rows[0].rate} -> ${updated.rows[0].rate}`,
+          req.userId,
+        ]
+      );
+
+      await client.query(`UPDATE data_error_reports SET state = 'resolved' WHERE id = $1`, [report.id]);
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'approve_error_report', 'data_error_reports', $2, $3, $4, $5)`,
+        [
+          req.userId,
+          report.id,
+          JSON.stringify({ rate: before.rows[0].rate }),
+          JSON.stringify({ rate: updated.rows[0].rate }),
+          'Approved via AD-2.2 error queue',
+        ]
+      );
+
+      return { status: 200, changeId: change.rows[0].id, newDataVersion: card.rows[0].data_version };
+    });
+
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error || 'not_found' });
+    res.json({ changeId: result.changeId });
+  } catch (err) {
+    console.error('POST /admin/error-reports/:id/approve error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+app.post('/admin/error-reports/:id/reject', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const updated = await client.query(
+        `UPDATE data_error_reports SET state = 'dismissed' WHERE id = $1 AND state = 'pending' RETURNING id`,
+        [req.params.id]
+      );
+      if (updated.rows.length === 0) return null;
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, reason)
+         VALUES ($1, 'reject_error_report', 'data_error_reports', $2, $3)`,
+        [req.userId, req.params.id, req.body?.reason || null]
+      );
+      return updated.rows[0];
+    });
+    if (!result) return res.status(404).json({ error: 'not found or already resolved' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /admin/error-reports/:id/reject error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));

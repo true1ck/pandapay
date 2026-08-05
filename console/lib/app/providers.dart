@@ -33,3 +33,15 @@ final adminCardsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
   if (api == null) return const [];
   return api.fetchAdminCards();
 });
+
+final cardRequestGroupsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchCardRequestGroups();
+});
+
+final errorReportsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchErrorReports();
+});

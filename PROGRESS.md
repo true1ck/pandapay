@@ -455,13 +455,62 @@ than editing it in place, so the history of what changed and why stays legible):
   sessions by design — not a regression, matches the "removed .env files" cleanup step from
   Chunk 6).
 
+### Chunk 8 — AD-2: Request & Error queues (console + api), plus a second RLS-gap finding
+
+`api/`: four new admin routes, all typed and audited like the AD-1 writer, not a generic
+passthrough:
+- `GET /admin/card-requests` — groups `card_requests` by issuer+product, `SUM(request_count)`
+  drives ordering (AD-2.1's "priority follows actual demand", not intuition).
+- `POST /admin/card-requests/start-scraping` — creates a `sources` row (`kind='bank_official'`,
+  `tos_reviewed=false`, `is_enabled=false` — the DB CHECK constraint physically prevents
+  enabling before ToS review, this route doesn't try to work around it) and resolves every
+  matching pending request.
+- `GET /admin/error-reports` — shown-vs-claimed, joined to the card's current name.
+- `POST /admin/error-reports/:id/approve` — **scoped deliberately**: only
+  `field_path` values shaped `reward_rules.<uuid>.rate` are approvable (the one typed writer
+  this API has); anything else returns 422 rather than being silently no-op'd or blindly
+  written. On the happy path: updates the `reward_rules` row, inserts a `card_catalogue_changes`
+  row, marks the report resolved, writes `admin_audit_log` — all in one transaction.
+- `POST /admin/error-reports/:id/reject` — marks dismissed, audited.
+
+**A second RLS-gap bug, same class as Chunk 7's, found immediately by hitting the new
+endpoints with a real admin token**: `card_requests`/`data_error_reports` (0011) only ever got
+an *owner* policy (`profile_id = pandapay.uid()`) — no admin policy existed at all. A real
+admin querying either table got zero rows back, full stop, regardless of `requireAdmin`
+passing. Fixed in `db/supabase/migrations/0016_queue_tables_admin_rls.sql` (`..._admin_all`
+policies, `using (pandapay.is_admin())`), applied and re-verified live.
+
+**Verified end to end against the live DB with real tokens, not mocked**, including the
+AD-2 DoD explicitly: approving a seeded SBI Cashback Card correction (5% → 4.5%) produced —
+confirmed via direct psql — a `data_version` bump (3→4), a `card_catalogue_changes` row
+(`old_value`/`new_value`/`change_summary`), an `admin_audit_log` row, and the report flipping
+to `resolved`. Also verified: reject flips a report to `dismissed`; start-scraping creates the
+disabled `sources` row and resolves the matching `card_requests`; a genuine non-admin gets 403
+on both new `GET` endpoints. `db/seed/0002_demo_queue_data.sql` (new, idempotent) seeds
+realistic request/error rows since there's no user-facing submission UI yet.
+
+`console/`: `features/queues/card_requests_screen.dart` (grouped list + start-scraping form),
+`features/queues/error_reports_screen.dart` (shown-vs-claimed + approve/reject buttons),
+wired into `main.dart`'s shell via a `NavigationRail` (Catalogue / Card Requests / Error
+Reports) replacing the single-screen layout from Chunk 6. 2 new widget tests (`MockClient`
+fakes) — 5/5 console tests passing. `flutter analyze`: clean.
+
+**Not done**: no user-facing submission flow for card requests / error reports in `app/` (A8/C8
+still admin-side only, as flagged above); the approve route's field_path scope is intentionally
+narrow (only `reward_rules.<id>.rate` — extending it to caps/milestones/fees is real AD-5
+propagation-resolver work, not a queue-UI task); AD-2.3's "emits a `policy_alert_evidence` row
+with signal `user_report`" (the fourth signal into the AD-5 unified queue) is not wired — AD-5
+itself doesn't exist yet, so there's nowhere for that evidence row to feed into.
+
 ## What's NOT done (next steps, roughly in priority order)
 
-All 6 originally-planned chunks, plus Chunk 7's RLS fix, are complete and verified. Next:
+Chunks 1-8 (see sections above) are complete and verified. Next:
 
-1. **AD-2 through AD-9** (admin console's actual core purpose per `adminimplementation_plan.md`):
-   request/error queues, the scraper, and especially the unified policy-change alert queue — none
-   of this exists. What's built (Chunk 6) is only AD-0.3/AD-1's foundation.
+1. **AD-3 through AD-9** (admin console's remaining core purpose per `adminimplementation_plan.md`):
+   the scraper engine, diff review + AI extraction, and especially the unified policy-change
+   alert queue (AD-5, "the core requirement driving this entire application" per the plan's own
+   words) — none of this exists yet. AD-2's queues (Chunk 8) only handle two of the four signal
+   sources AD-5 is meant to unify.
 2. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
    import tool (UA-1.1.2).
 3. **The cap-measure gap** (Chunk 5): `CapRule` blending doesn't distinguish `spend_amount` vs
@@ -472,6 +521,13 @@ All 6 originally-planned chunks, plus Chunk 7's RLS fix, are complete and verifi
    signed-in user's actual cards; no drift/local cache in the app (always a live fetch, no offline
    path); no token persistence in either Flutter app (refresh loses the session).
 6. The custom_lint rules mentioned in the app section (DateTime.now() ban, bare Money Text ban).
+7. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
+   `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus
+   `support_tickets` pre-emptively fixed in the same migration once the pattern was clear —
+   0011's `tickets_owner`/`card_requests_owner`/`error_reports_owner` policies were all written
+   at the same time with the same missing-admin-policy oversight). `card_requests_owner` was
+   the last one of that trio; worth a final grep across 0011 for any other `_owner`-only policy
+   on a table an admin will eventually need to read.
 
 ## Sandbox limitations
 
