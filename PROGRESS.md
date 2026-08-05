@@ -561,9 +561,46 @@ the public, unauthenticated `/catalogue` and `/categories` endpoints, so there i
 persist there. Token persistence for `app/` is real work but blocked on UA-3's login screen
 existing first, not something to fake here.
 
+### Chunk 11 — implemented the custom_lint plugin (was dev-dep-wired since Chunk 1, never built)
+
+`packages/pandapay_lints` (new): a real `custom_lint` plugin package, not just documentation.
+Two rules:
+- `no_bare_money_text` — flags `Text(...)` whose argument contains a `.format()` call on an
+  expression of static type `Money`, catching both direct calls and string interpolations.
+- `no_datetime_now_outside_clock` — flags `DateTime.now()` outside any `/clock/` path.
+
+**Building this surfaced two real bugs in the rules themselves, found by deliberately testing
+against both real code and a temporary probe file — not assumed correct from reading the API
+docs:**
+1. `no_datetime_now_outside_clock` initially matched on `MethodInvocation` (i.e. `X.method()`
+   shape) — and never fired, on anything, ever. Root cause: `DateTime.now()` is a **named
+   constructor** (`factory DateTime.now()`), not a static method, so it parses as
+   `InstanceCreationExpression`, not `MethodInvocation`, even without an explicit `new`. Found
+   by adding a temporary probe file with a bare `DateTime.now()` call, watching the rule fail
+   to flag it, and instrumenting the rule with debug prints until the visitor callback itself
+   was confirmed never invoked for that node — then fixing the AST node type it registers
+   against. Removed the probe file after confirming the fix.
+2. `no_bare_money_text`'s ignore-comment didn't suppress on the first attempt — trailing
+   explanatory text after the rule name on the same `// ignore: rule_name — why` line broke
+   `custom_lint`'s comment parser. Fixed by moving the explanation to its own comment line above
+   a bare `// ignore: no_bare_money_text`.
+
+**Running the finished plugin against the real app/ codebase (not a synthetic test) found one
+genuine, previously-unnoticed violation**: `home_screen.dart`'s ranked-recommendation list
+rendered `Text(recommendation.expectedValue.format())` directly — a bare Money render that
+silently dropped the required confidence indicator, exactly the bug class UA-0.1.3 exists to
+prevent, sitting undetected since Chunk 5. Fixed by swapping it for `MoneyText(...,
+confidence: recommendation.confidence)`. `MoneyText`'s own internal `Text(amount.format())`
+(the widget's canonical implementation) is exempted with a documented ignore comment.
+
+Wired into `app/analysis_options.yaml` (`analyzer: plugins: [custom_lint]`); `console/` doesn't
+use `Money` or call `DateTime.now()` anywhere yet, so it wasn't wired there — would just be a
+no-op until it has code the rules apply to. `dart run custom_lint`: clean on the real
+codebase. `flutter analyze`/`flutter test`: unaffected, still green.
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-10 (see sections above) are complete and verified. Next:
+Chunks 1-11 (see sections above) are complete and verified. Next:
 
 1. **AD-3 through AD-9** (admin console's remaining core purpose per `adminimplementation_plan.md`):
    the scraper engine, diff review + AI extraction, and especially the unified policy-change
@@ -578,8 +615,7 @@ Chunks 1-10 (see sections above) are complete and verified. Next:
    user_cards/transaction wiring (the engine still ranks the whole catalogue, not a signed-in
    user's actual cards), any local drift/cache, and app-side token persistence (Chunk 10 only
    covered `console/`, which already had a login flow to persist a session for).
-5. The custom_lint rules mentioned in the app section (DateTime.now() ban, bare Money Text ban).
-6. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
+5. **Audit remaining RLS tables for the same owner-policy-only gap** found twice now (Chunk 7:
    `card_products` and children; Chunk 8: `card_requests`/`data_error_reports`, plus
    `support_tickets` pre-emptively fixed in the same migration once the pattern was clear) — a
    final grep across 0011 for any other `_owner`-only policy on a table an admin will eventually

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/providers.dart';
+import '../../main.dart' show MoneyText;
 
 /// B1 Home, cut down to what's real today: category chips + ranked list
 /// with reason lines, backed by the actual engine and a live API fetch.
@@ -113,10 +114,7 @@ class _RecommendationCard extends StatelessWidget {
                 if (recommendation.isOverride)
                   const Chip(label: Text('Override'), visualDensity: VisualDensity.compact),
                 if (!excluded)
-                  Text(
-                    recommendation.expectedValue.format(),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  MoneyText(recommendation.expectedValue, confidence: recommendation.confidence),
               ],
             ),
             if (excluded)

@@ -13,10 +13,19 @@ linter:
   rules:
     avoid_print: true # UA-0.1.3: no print — use core/logging instead.
 
-# UA-0.1.3 also bans `DateTime.now()` outside `core/clock` and any bare
-# `Text` widget rendering a `Money` value directly. Those two rules need a
-# custom_lint plugin (custom_lint/riverpod_lint are wired as dev deps) —
-# the plugin itself is not implemented yet; enforce by review until it is.
+# UA-0.1.3's other two rules — no DateTime.now() outside core/clock, no bare
+# Text of a Money — are implemented as a real custom_lint plugin,
+# packages/pandapay_lints (Chunk 11), not just documented here. Run
+# `dart run custom_lint` (or `flutter analyze` does not include custom_lint
+# results — it's a separate check) to see them.
+analyzer:
+  plugins:
+    - custom_lint
+
+custom_lint:
+  rules:
+    - no_datetime_now_outside_clock
+    - no_bare_money_text
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

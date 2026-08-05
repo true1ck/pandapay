@@ -1,0 +1,11 @@
+name: pandapay_lints
+description: UA-0.1.3's two custom_lint rules — no DateTime.now() outside core/clock, no bare Text of a Money.
+publish_to: 'none'
+version: 0.0.1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  analyzer: ^7.0.0
+  custom_lint_builder: ^0.7.0

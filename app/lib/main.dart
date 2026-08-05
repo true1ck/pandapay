@@ -96,6 +96,8 @@ class MoneyText extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // This *is* the required Money-rendering widget — exempt by design.
+        // ignore: no_bare_money_text
         Text(amount.format()),
         const SizedBox(width: 6),
         Icon(
