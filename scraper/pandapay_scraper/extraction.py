@@ -1,17 +1,20 @@
-"""AD-4.3, honestly scoped: real AI-assisted structured extraction needs an
-LLM call, which needs an API key and a cost/scope decision nobody has made
-for this project yet (no ANTHROPIC_API_KEY or equivalent is configured in
-this environment). Rather than fake that decision or skip AD-4.3 entirely,
-this is a deterministic, regex-based first pass — clearly labeled as such
-everywhere it shows up (`model_name = 'heuristic-regex-v1'`, never anything
-implying AI) — that extracts percentage-rate and rupee-amount changes from a
+"""AD-4.3, originally scoped without an LLM key (see the Chunk 14 PROGRESS.md
+entry): this is a deterministic, regex-based first pass — labeled
+`model_name = 'heuristic-regex-v1'` everywhere it shows up, never anything
+implying AI — that extracts percentage-rate and rupee-amount changes from a
 diff. It is intentionally dumb: no LLM, no learned model, no claim of
-understanding the text. It exists so extraction_proposals/AD-4.4's
-"pre-filled, editable form" has *something* real to pre-fill from today,
-with the same non-negotiable rule the plan sets for real AI extraction:
-the operator verifies and corrects through the existing typed writer
-(PUT /admin/reward-rules/:id, Chunk 6) — this module never writes card data
-itself, only a proposal for a human to look at.
+understanding the text.
+
+AD-4.3 follow-up (see `llm_extraction.py` and PROGRESS.md's AD-4.3 real-LLM
+chunk): this module remains the fallback path. `llm_extraction.dispatch()` is
+now the entry point run.py calls — it uses this heuristic when no
+ANTHROPIC_API_KEY is configured (or EXTRACTION_MODE=heuristic is forced), and
+falls back to it if a configured LLM call fails. It exists so
+extraction_proposals/AD-4.4's "pre-filled, editable form" always has
+*something* real to pre-fill from, with the same non-negotiable rule the plan
+sets for real AI extraction: the operator verifies and corrects through the
+existing typed writer (PUT /admin/reward-rules/:id, Chunk 6) — this module
+never writes card data itself, only a proposal for a human to look at.
 """
 
 from __future__ import annotations
@@ -24,12 +27,15 @@ from .diff import DiffResult
 _PERCENT = re.compile(r"^(\d+(?:\.\d+)?)%$")
 _RUPEE = re.compile(r"^(?:Rs\.?|₹)\s?([\d,]+(?:\.\d+)?)$", re.IGNORECASE)
 
+HEURISTIC_MODEL_NAME = "heuristic-regex-v1"
+
 
 @dataclass
 class ExtractionProposal:
     proposed_fields: dict
     model_confidence: float
     evidence_excerpt: str
+    model_name: str = HEURISTIC_MODEL_NAME
 
 
 def _extract_numbers(words: list[str], pattern: re.Pattern) -> list[float]:

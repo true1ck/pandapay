@@ -236,7 +236,14 @@ def insert_extraction_proposal(
     proposed_fields: dict,
     model_confidence: float,
     evidence_excerpt: str,
+    model_name: str = "heuristic-regex-v1",
 ) -> str:
+    """`model_name` used to be hardcoded to 'heuristic-regex-v1' in the SQL
+    below (back when that was the only extraction path that existed). AD-4.3's
+    real-LLM follow-up (llm_extraction.py) can also produce proposals, labeled
+    'llm-<model>' — the default here preserves the old hardcoded value so any
+    caller that doesn't pass model_name explicitly keeps identical behavior.
+    """
     import json
 
     with conn.cursor() as cur:
@@ -244,9 +251,9 @@ def insert_extraction_proposal(
             """INSERT INTO extraction_proposals
                  (snapshot_id, card_product_id, model_name, proposed_fields,
                   model_confidence, evidence_excerpt)
-               VALUES (%s, %s, 'heuristic-regex-v1', %s, %s, %s)
+               VALUES (%s, %s, %s, %s, %s, %s)
                RETURNING id""",
-            (snapshot_id, card_product_id, json.dumps(proposed_fields), model_confidence, evidence_excerpt),
+            (snapshot_id, card_product_id, model_name, json.dumps(proposed_fields), model_confidence, evidence_excerpt),
         )
         proposal_id = cur.fetchone()["id"]
     conn.commit()

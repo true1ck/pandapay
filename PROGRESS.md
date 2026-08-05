@@ -1615,3 +1615,113 @@ sandbox. Every pure-logic/HTTP-boundary layer underneath each of those three fea
 QR/OCR text matcher, the SMS regex parser, and now the haversine/nearby-merchant matcher and
 the best-card-for-widget picker) is genuinely unit-tested against real or realistically-shaped
 fixtures — that split is deliberate and consistent across all three chunks, not incidental.
+
+## Chunk 33 — AD-3 candidate scrape sources (research/shortlisting only)
+
+This chunk does **not** clear any scraping for production use. It builds a shortlist of
+candidate `sources` rows for the 12 issuers already represented in the seed catalogue
+(HDFC, ICICI, SBI, Axis, Kotak, Yes Bank, IDFC FIRST, IndusInd, AU Small Finance Bank,
+Standard Chartered, RBL, American Express), so the product owner has a concrete list to
+review one source at a time.
+
+For each issuer, found the bank's own official credit-card listing/features page (not an
+aggregator — this app is itself the aggregator) and fetched `robots.txt` for that domain
+(no card-detail page content was fetched or downloaded from any of them — robots.txt only).
+Results: 9 of 12 have a `robots.txt` that does not disallow the candidate path (ICICI, SBI
+Card, Axis, Kotak, IDFC FIRST, IndusInd, Standard Chartered, RBL, American Express); AU Small
+Finance Bank's `robots.txt` is a blanket `Disallow: /` for all crawlers (strong signal against
+scraping, flagged separately); HDFC's `robots.txt` returned an HTTP 403 Cloudflare
+"Access denied" for the automated fetch itself, so its status is unclear; Yes Bank's
+`robots.txt` fetch didn't return a response in this sandbox, also unclear. Full detail per
+issuer (URL, exact page, robots directive) is in `scraper/CANDIDATE_SOURCES.md` (new file).
+
+Inserted one row per candidate into the `sources` table (`kind = 'bank_official'`, correct
+`issuer_id` FK, `base_url` set, `robots_allows`/`robots_checked_at` recorded from the checks
+above). Every row has **`tos_reviewed = false` and `is_enabled = false`** — confirmed against
+the table after insert. This is deliberate and matches the codebase's existing rule, stated
+explicitly by the product owner this session: `tos_reviewed` means a human actually read the
+site's terms of service and confirmed scraping is permitted, not that robots.txt didn't object.
+Robots.txt only governs crawler/indexing behavior and says nothing about a site's actual terms
+on scraping/reuse of financial-product data — so a permissive robots.txt above is recorded as a
+useful signal only, never treated as clearance. The `enabled_requires_tos_review` CHECK
+constraint on `sources` (`is_enabled = false OR tos_reviewed = true`) continues to be the real
+gate, and nothing in this chunk touches it or any extraction code.
+
+Next real step (not done here, and not this agent's to do): the product owner reads each
+site's actual terms of use, one issuer at a time, and only then flips `tos_reviewed = true` on
+that specific row before it can ever be enabled.
+
+Files touched: `scraper/CANDIDATE_SOURCES.md` (new), `PROGRESS.md`. DB: 12 new rows in
+`sources` (local Postgres only, not part of git — inspect via psql or the console's card-request
+flow).
+
+### Chunk 34 — AD-4.3, real LLM-backed extraction (key-gated, honest fallback — still no key this session)
+
+**Same constraint as Chunk 14, re-confirmed this session**: `api/.env` has no `ANTHROPIC_API_KEY`
+and `scraper/.env` does not exist at all (`scraper/example.env` is a template, not a real
+config). Chunk 14 built a deterministic regex heuristic as an honestly-labeled stand-in
+(`model_name = 'heuristic-regex-v1'`). This chunk builds the **real** LLM integration on top of
+it — not another placeholder — wired to activate automatically the moment a real key shows up,
+but genuinely never exercised against a live Anthropic API in this session because there is
+still no key to exercise it with.
+
+`scraper/pandapay_scraper/llm_extraction.py` (new): `dispatch(diff)` is the new single entry
+point (replaces `run.py`'s direct call to `extraction.propose_from_diff`). It reads
+`EXTRACTION_MODE` (`heuristic` | `llm` | `auto`, default `auto` — same `os.environ.get` pattern
+`db.py` already uses for `SCRAPER_DATABASE_URL`, no dotenv magic anywhere in this codebase) and
+`ANTHROPIC_API_KEY` straight from the environment. `auto` with no key (today's actual state) or
+`EXTRACTION_MODE=heuristic` (forced, for cost control even with a key present — same "no hidden
+automatic cost/behavior change" stance as AD-8/AD-9) both route to the existing heuristic
+extractor unchanged. `auto`/`llm` with a key present calls `claude-sonnet-5` with a prompt asking
+for the exact same two-field shape the heuristic targets (`rate_percent`, `cap_value_inr`), then
+defensively parses the response (`_parse_llm_response`) — rejects non-JSON, wrong shape,
+unrecognized field names, non-numeric old/new, out-of-range confidence — raising `ValueError`
+rather than ever letting a malformed LLM reply produce a proposal that could corrupt
+`page_snapshots`/`policy_change_alerts` downstream. **Any exception anywhere in the LLM path
+(network, API error, malformed response) is caught in `dispatch()` and falls back to the
+heuristic extractor** — a bad LLM call degrades to Chunk 14's existing behavior, it never crashes
+the crawl loop. Every path logs which extractor actually ran (`logging`, matching this
+codebase's "never fabricate a capability" convention — e.g. Chunk 14's heuristic-vs-AI console
+labeling). `ExtractionProposal` (extraction.py) gained a `model_name` field (default
+`'heuristic-regex-v1'`, the prior hardcoded constant) so a proposal always says which path
+produced it; the LLM path labels its proposals `'llm-claude-sonnet-5'`.
+
+`db.py`'s `insert_extraction_proposal` — `model_name` was previously hardcoded into the SQL
+insert; now it's a parameter (default unchanged, `'heuristic-regex-v1'`, so any caller that
+doesn't pass it explicitly is byte-for-byte identical to before). `run.py` now calls
+`llm_extraction.dispatch(diff)` instead of `extraction.propose_from_diff(diff)` directly and
+passes `proposal.model_name` through to the insert — this is the only behavioral change to
+`run.py`, and for anyone with no `ANTHROPIC_API_KEY` set (the actual state of this environment)
+it is a no-op: `dispatch()` in `auto` mode with no key calls `propose_from_diff` directly, same
+function, same arguments, same result as before this chunk.
+
+`requirements.txt`/`requirements-lock.txt`: added `anthropic>=0.40` (installed `anthropic==0.120.2`
++ transitive deps — `pydantic`, `jiter`, `distro`, etc. — regenerated the lock file via `pip
+freeze`; every previously-pinned version is unchanged, confirmed by diff before/after).
+`scraper/example.env` documents `ANTHROPIC_API_KEY` and `EXTRACTION_MODE` as new optional config,
+both commented out by default.
+
+**What's verified vs what fundamentally can't be, this session**: 21 new unit tests
+(`tests/test_llm_extraction.py`), all pure logic, zero real network calls —
+`EXTRACTION_MODE`/key-presence dispatch logic for all three modes (including the unrecognized-
+value-falls-back-to-auto case), fallback-to-heuristic when no key is present (the default,
+unmodified path), fallback-to-heuristic when the LLM call raises (mocked — no real key exists to
+make a real call fail with), and the response parser fed synthetic hand-written JSON strings
+covering both well-formed responses (single-field, two-field, wrapped in a markdown fence the
+model wasn't supposed to add) and every malformed shape the parser is supposed to reject. **What
+cannot be verified without a real key, and was not claimed to be**: whether an actual
+`client.messages.create(model="claude-sonnet-5", ...)` call against the live Anthropic API
+behaves as documented — that code path (`_propose_via_llm`'s real `anthropic.Anthropic(...)`
+call) is real, complete, and has never executed in this session. The moment a real key lands in
+`scraper/.env` (gitignored, per `example.env`'s existing instructions) or the shell environment,
+`dispatch()` picks it up automatically with no code change.
+
+All 40 scraper Python tests pass (was 19 at Chunk 14; Chunk 33 added no Python tests; this
+chunk adds 21). Ran `cd scraper && python -m pytest -q` after activating `.venv` — full suite
+green, 0.07s (confirms nothing is silently hitting the network).
+
+Files touched: `scraper/pandapay_scraper/llm_extraction.py` (new), `scraper/pandapay_scraper/
+extraction.py`, `scraper/pandapay_scraper/db.py`, `scraper/pandapay_scraper/run.py`,
+`scraper/tests/test_llm_extraction.py` (new), `scraper/requirements.txt`,
+`scraper/requirements-lock.txt`, `scraper/example.env`, `PROGRESS.md`. No commit made — left
+staged/unstaged per instructions.

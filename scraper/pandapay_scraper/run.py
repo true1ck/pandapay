@@ -18,8 +18,8 @@ import httpx
 from . import db
 from .alerts import record_diff_as_alert_signal
 from .diff import compute_diff
-from .extraction import propose_from_diff
 from .extractor import extract
+from .llm_extraction import dispatch as dispatch_extraction
 from .fetcher import fetch_static
 from .rate_limit import PerHostRateLimiter
 from .robots import RobotsChecker
@@ -87,10 +87,14 @@ def run_source(conn, client: httpx.Client, robots: RobotsChecker, limiter: PerHo
                 if alert_id:
                     print(f"  -> policy_change_alerts row touched: {alert_id}")
 
-                    # AD-4.3 (heuristic stand-in, see extraction.py) — only
-                    # attempted when there's actually an alert/card to
-                    # attach the proposal to.
-                    proposal = propose_from_diff(diff)
+                    # AD-4.3 — dispatches to a real LLM call when
+                    # ANTHROPIC_API_KEY is configured (see llm_extraction.py
+                    # for the EXTRACTION_MODE=heuristic|llm|auto logic),
+                    # falling back to the heuristic regex extractor
+                    # (extraction.py) when no key is present or the LLM call
+                    # fails — only attempted when there's actually an
+                    # alert/card to attach the proposal to.
+                    proposal = dispatch_extraction(diff)
                     if proposal is not None:
                         proposal_id = db.insert_extraction_proposal(
                             conn,
@@ -99,8 +103,9 @@ def run_source(conn, client: httpx.Client, robots: RobotsChecker, limiter: PerHo
                             proposed_fields=proposal.proposed_fields,
                             model_confidence=proposal.model_confidence,
                             evidence_excerpt=proposal.evidence_excerpt,
+                            model_name=proposal.model_name,
                         )
-                        print(f"  -> extraction_proposals row (heuristic, not AI): {proposal_id}")
+                        print(f"  -> extraction_proposals row ({proposal.model_name}): {proposal_id}")
                 elif diff.has_meaningful_change:
                     print("  -> content changed but page isn't linked to a card_product_id, no alert raised")
             changed += 1
