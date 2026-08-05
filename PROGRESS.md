@@ -760,27 +760,66 @@ render → approve → callback fires, without a real network call in the automa
 **All four suites green: 50 (`pandapay_domain`) + 3 (`app`) + 8 (`console`) + 19 (`scraper`,
 Python) = 80 tests total.**
 
+### Chunk 15 — app/'s UA-3 login flow (the app finally has real auth, not just a public catalogue)
+
+`app/`: `data/auth_api.dart` (`AuthApi`/`AuthTokens`, `ProfileApi`) and `data/token_store.dart`
+— near-identical siblings of `console/`'s Chunk 6/10 equivalents (same underlying `auth/`
+service, same OTP endpoints), kept as separate copies rather than factored into a shared
+package since the two apps' account models genuinely diverge (the console never creates a
+`profiles` row; the app does). `app/providers.dart` gained `authApiProvider`,
+`tokenStoreProvider`, `accessTokenProvider`, `sessionInitProvider` (same
+resolve-stored-refresh-token-on-startup pattern as Chunk 10), `profileApiProvider`,
+`profileProvider`. `features/auth/login_screen.dart` — phone+OTP, and on success calls
+`ProfileApi.ensureProfile()` (api/'s `POST /profile` is an upsert — `ON CONFLICT DO UPDATE` —
+so this is safely idempotent on every login, not a duplicate-row risk). `features/account/
+account_screen.dart` — signed-out shows the login screen, signed-in shows the real fetched
+profile + a sign-out button.
+
+Wired into the previously-placeholder **More** tab in `main.dart` (tab index 3) — the app's
+first real auth surface; Cards/Activity tabs remain placeholders, not touched here.
+
+**Verified against the real running `auth/` + `api/` services with a genuine OTP round-trip,
+not mocked**: requested and verified a real OTP for a test phone number, called
+`POST /profile` (confirmed a real row upserted — `locale: 'en-IN'`, `currency: 'INR'` defaults,
+matching exactly what `ProfileApi.ensureProfile()`'s request shape expects), then `GET /profile`
+returned the identical row — proving the exact contract the app's code depends on actually
+matches what `api/` really returns, not just what was assumed when writing the Dart models.
+This is also the first time `api/`'s `/profile` routes (built and RLS-proven back in Chunk 1)
+have ever actually been called by application code rather than curl.
+`flutter analyze` and `dart run custom_lint`: both clean. 2 new widget tests (signed-out shows
+login; signed-in shows the real profile id + sign-out button, via a `MockClient` fake matching
+the console's established pattern) — 5/5 app tests passing (was 3).
+
+**Not done**: no user_cards CRUD (owning/tracking actual cards) yet — that's the next logical
+UA-3+ step now that a real signed-in identity exists; no onboarding flow beyond the bare
+`ensureProfile()` upsert; Cards/Activity tabs still placeholders; no biometric/device-level
+re-auth (UA-3's fuller scope); the engine still ranks the whole catalogue rather than a signed-in
+user's actual cards (that needs user_cards to exist first).
+
+**All four suites now: 50 (`pandapay_domain`) + 5 (`app`) + 8 (`console`) + 19 (`scraper`,
+Python) = 82 tests total.**
+
 ## What's NOT done (next steps, roughly in priority order)
 
-Chunks 1-14 (see sections above) are complete and verified. Next:
+Chunks 1-15 (see sections above) are complete and verified. Next:
 
-1. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
+1. **user_cards wiring** — now that `app/` has real auth (Chunk 15), the natural next step is
+   letting a signed-in user actually own/track cards, so the engine can rank against a real
+   wallet instead of the whole catalogue. This is probably the highest-leverage next slice: real
+   identity already exists, this is the thing it was missing in order to matter.
+2. **AD-3's real pilot set**: 2-3 real bank sources + 2-3 news sources, with genuine ToS review
    per source (a product/legal decision, not something to fabricate) — today there's one
    `sources` row (Chunk 8, still correctly disabled) and the whole pipeline (scrape → diff →
    alert → heuristic proposal → console review → decide) has only ever been proven against safe
    test fetches (`example.com`, a local test server under my own control), never real targets.
-2. **A real AD-4.3 (LLM-backed extraction)**, if/when there's a key and a cost decision — would
+3. **A real AD-4.3 (LLM-backed extraction)**, if/when there's a key and a cost decision — would
    let alerts carry field-level `field_path`s instead of the current page-level ones, and would
    let `extraction_proposals` actually understand prose instead of pattern-matching numbers next
    to `%`/`Rs.` tokens.
-3. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
+4. **UA-1.1 real data**: only 4 of the ~40-50 cards exist, none human-verified (UA-1.1.4); no YAML
    import tool (UA-1.1.2).
-4. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
+5. **UA-2.5.1**: the full 30-scenario golden fixture set (what exists is targeted unit tests per
    feature, not the consolidated fixture file the plan describes).
-5. **`app/` has no auth/login flow (UA-3) at all** — Home only hits public endpoints. This blocks
-   user_cards/transaction wiring (the engine still ranks the whole catalogue, not a signed-in
-   user's actual cards), any local drift/cache, and app-side token persistence (Chunk 10 only
-   covered `console/`, which already had a login flow to persist a session for).
 6. **AD-6 through AD-9**: crowdsourced data visibility, acceptance map/effective-rate monitor,
    data quality dashboard, anonymization audit automation — none started.
 7. **A scheduler for the scraper** (AD-3.2.5's "weekly default crawl") — `scraper/run.py` is

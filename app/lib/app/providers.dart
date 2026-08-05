@@ -1,11 +1,58 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../data/auth_api.dart';
 import '../data/catalogue_repository.dart';
+import '../data/token_store.dart';
 
-/// api/'s default local dev port. Overridden per-flavor once flavors exist
-/// (UA-0.1.2) — there is only one build target today.
+/// api/'s and auth/'s default local dev ports. Overridden per-flavor once
+/// flavors exist (UA-0.1.2) — there is only one build target today.
 const _apiBaseUrl = 'http://localhost:4000';
+const _authBaseUrl = 'http://localhost:3210';
+
+final authApiProvider = Provider<AuthApi>((ref) => AuthApi(authBaseUrl: _authBaseUrl));
+
+final tokenStoreProvider = FutureProvider<TokenStore>((ref) => TokenStore.load());
+
+/// The signed-in access token, or null when signed out. Seeded on startup
+/// by sessionInitProvider from a stored refresh token; login_screen.dart
+/// persists both tokens on a fresh OTP sign-in.
+final accessTokenProvider = StateProvider<String?>((ref) => null);
+
+final profileApiProvider = Provider<ProfileApi?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return ProfileApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// Same pattern as console/lib/app/providers.dart's sessionInitProvider:
+/// resolve a stored refresh token through auth/'s real POST /auth/refresh
+/// on startup; on any failure (expired/reused/invalid), clear storage and
+/// stay signed out rather than retry-looping.
+final sessionInitProvider = FutureProvider<void>((ref) async {
+  final store = await ref.watch(tokenStoreProvider.future);
+  final refreshToken = store.refreshToken;
+  if (refreshToken == null) return;
+
+  final authApi = ref.read(authApiProvider);
+  try {
+    final tokens = await authApi.refresh(refreshToken);
+    await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+    ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
+  } catch (_) {
+    await store.clear();
+  }
+});
+
+/// UA-3: the signed-in user's own profiles row (owner-scoped via RLS —
+/// api/'s GET /profile, proved end to end back in Chunk 1 but never called
+/// from the app itself until this chunk). Null when signed out or when a
+/// signed-in user hasn't completed onboarding yet (no profile row exists).
+final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  final api = ref.watch(profileApiProvider);
+  if (api == null) return null;
+  return api.fetchProfile();
+});
 
 final catalogueRepositoryProvider = Provider<CatalogueRepository>((ref) {
   return HttpCatalogueRepository(baseUrl: _apiBaseUrl);
