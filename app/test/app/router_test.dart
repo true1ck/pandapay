@@ -6,12 +6,18 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Task 3: go_router replaces int-index tab switching + raw MaterialPageRoute.
 /// This is a pure navigation-shell swap — zero behaviour change for the four
 /// existing tabs — so the tests only assert "the right screen shows for the
 /// right route and the right nav item highlights", not anything about screen
 /// content (that's each screen's own test file's job).
+///
+/// Tasks 4-6 added a real onboarding redirect guard in front of the shell —
+/// see router_onboarding_test.dart for that behaviour. These tests are about
+/// the SHELL, not onboarding, so they simulate a device that already
+/// finished onboarding (the guard's own tests cover a fresh install).
 class _EmptyCatalogueRepository implements CatalogueRepository {
   @override
   Future<List<CardProduct>> fetchCatalogue() async => const [];
@@ -23,6 +29,9 @@ class _EmptyCategoryRepository implements CategoryRepository {
 }
 
 Future<void> _pumpApp(WidgetTester tester) async {
+  SharedPreferences.setMockInitialValues({
+    'pandapay_app.onboarding_complete_v1': true,
+  });
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -38,8 +47,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
       ),
     ),
   );
-  await tester.pump();
-  await tester.pump();
+  await tester.pumpAndSettle();
 }
 
 void main() {

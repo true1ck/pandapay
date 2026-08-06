@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/auth_api.dart';
 import '../data/catalogue_repository.dart';
@@ -99,6 +100,45 @@ final sessionKeepAliveProvider = Provider<void>((ref) {
 
   ref.onDispose(() => timer?.cancel());
 });
+
+/// Tasks 4-6: whether the first-run onboarding flow (Welcome -> Account
+/// Choice -> optional sign-up/sign-in -> Tutorial) has ever been completed
+/// on this device. Persisted directly via SharedPreferences (not through
+/// TokenStore — this has nothing to do with auth; it must stay `true` even
+/// after a sign-out, per ui-spec.md A3's "no nagging later" principle:
+/// finishing onboarding once and later signing out must never show the
+/// welcome flow again).
+const _onboardingCompleteKey = 'pandapay_app.onboarding_complete_v1';
+
+final onboardingCompleteProvider =
+    StateNotifierProvider<OnboardingController, AsyncValue<bool>>(
+        (ref) => OnboardingController());
+
+class OnboardingController extends StateNotifier<AsyncValue<bool>> {
+  OnboardingController() : super(const AsyncValue.loading()) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = AsyncValue.data(prefs.getBool(_onboardingCompleteKey) ?? false);
+  }
+
+  Future<void> complete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onboardingCompleteKey, true);
+    state = const AsyncValue.data(true);
+  }
+
+  /// Settings' "Replay tutorial" (Task 21) hook — lets a user re-see the
+  /// coach marks without losing anything else, never a way to re-trigger
+  /// account choice or sign-up.
+  Future<void> reset() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onboardingCompleteKey, false);
+    state = const AsyncValue.data(false);
+  }
+}
 
 /// UA-3: the signed-in user's own profiles row (owner-scoped via RLS —
 /// api/'s GET /profile, proved end to end back in Chunk 1 but never called

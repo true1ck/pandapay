@@ -13,12 +13,23 @@ import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/auth/login_screen.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Chunk 15 added a startup session-resume step (sessionInitProvider) that
 /// resolves a stored refresh token via a real SharedPreferences instance —
 /// overridden to a no-op here so the catalogue/nav tests above stay pure
 /// UI tests, same reasoning as console/test/widget_test.dart.
 final _noSessionInit = sessionInitProvider.overrideWith((ref) async {});
+
+/// Tasks 4-6 put a real onboarding redirect guard in front of the shell —
+/// see test/app/router_onboarding_test.dart for that behaviour on its own.
+/// This file's tests are about the four TABS, not onboarding, so every test
+/// here simulates a device that has already finished it.
+void _simulateOnboardingComplete() {
+  SharedPreferences.setMockInitialValues({
+    'pandapay_app.onboarding_complete_v1': true,
+  });
+}
 
 const _onlineCategoryId = 'cat-online-uuid';
 
@@ -49,6 +60,7 @@ CardProduct _rupayCard() => CardProduct(
     );
 
 Widget _appWithFakeCatalogue(List<CardProduct> cards, {List<Override> extraOverrides = const []}) {
+  _simulateOnboardingComplete();
   return ProviderScope(
     overrides: [
       catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(cards)),
@@ -75,8 +87,7 @@ void main() {
   testWidgets('Home renders a ranked recommendation from a fake catalogue (no real network call)',
       (tester) async {
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
-    await tester.pump(); // let both FutureProviders resolve
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('PandaPay — Home'), findsOneWidget);
     expect(find.text('Test RuPay Card'), findsOneWidget);
@@ -84,6 +95,7 @@ void main() {
   });
 
   testWidgets('Chunk 19: typing a real amount into Home updates the ranking amount', (tester) async {
+    _simulateOnboardingComplete();
     final container = ProviderContainer(overrides: [
       catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_rupayCard()])),
       categoryRepositoryProvider.overrideWithValue(_FakeCategoryRepository()),
@@ -92,8 +104,7 @@ void main() {
     addTearDown(container.dispose);
 
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const PandaPayApp()));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(container.read(enteredAmountProvider), const Money.fromPaise(100000));
 
@@ -107,8 +118,7 @@ void main() {
       (tester) async {
     final noRuleCard = CardProduct(id: 'bare', name: 'Bare Card', network: CardNetwork.rupay);
     await tester.pumpWidget(_appWithFakeCatalogue([noRuleCard]));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Bare Card'), findsOneWidget);
     expect(find.text('No applicable reward rule.'), findsOneWidget);
@@ -117,12 +127,10 @@ void main() {
   testWidgets('Chunk 18: bottom nav switches away from Home to Activity, which shows login when signed out',
       (tester) async {
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(_navTab('Activity'));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('PandaPay — Activity'), findsOneWidget);
     expect(find.byType(LoginScreen), findsOneWidget);
@@ -162,12 +170,10 @@ void main() {
         ],
       ),
     );
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(_navTab('Activity'));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
     await tester.pump();
 
     expect(find.text('Test RuPay Card · Online'), findsOneWidget);
@@ -176,12 +182,10 @@ void main() {
 
   testWidgets('Chunk 16: Cards tab shows the login screen when signed out', (tester) async {
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(_navTab('Cards'));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.byType(LoginScreen), findsOneWidget);
   });
@@ -222,12 +226,10 @@ void main() {
         ],
       ),
     );
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(_navTab('Cards'));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Test RuPay Card'), findsWidgets);
 
@@ -278,12 +280,10 @@ void main() {
         ],
       ),
     );
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(_navTab('Cards'));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.textContaining('10000 pts earned'), findsOneWidget);
     expect(find.textContaining('Fee waived'), findsOneWidget);
@@ -291,12 +291,10 @@ void main() {
 
   testWidgets('Chunk 15: Account tab shows the login screen when signed out', (tester) async {
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(_navTab('Account'));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.text('Send code'), findsOneWidget);
@@ -326,12 +324,10 @@ void main() {
         ],
       ),
     );
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.tap(_navTab('Account'));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
     await tester.pump();
 
     expect(find.text('Signed in'), findsOneWidget);

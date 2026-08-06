@@ -6,8 +6,12 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../data/api_exception.dart';
 import '../features/account/account_screen.dart';
 import '../features/activity/activity_screen.dart';
+import '../features/auth/login_screen.dart';
 import '../features/cards/cards_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/onboarding/account_choice_screen.dart';
+import '../features/onboarding/splash_screen.dart';
+import '../features/onboarding/welcome_screen.dart';
 import '../features/scan/scan_card_screen.dart';
 import 'providers.dart';
 
@@ -15,27 +19,103 @@ import 'providers.dart';
 /// hit instead of a silent 404 — every `context.go(...)` call in the app
 /// should reference these rather than a literal string.
 abstract final class AppRoute {
+  static const splash = '/splash';
+  static const welcome = '/welcome';
+  static const accountChoice = '/account-choice';
+  static const logIn = '/login';
+  static const signUp = '/signup';
   static const home = '/home';
   static const cards = '/cards';
   static const activity = '/activity';
   static const account = '/account';
+
+  /// Screens shown before onboarding is complete — the redirect guard below
+  /// treats this set as its whole "am I in the pre-onboarding flow" check.
+  static const preOnboarding = {splash, welcome, accountChoice, logIn, signUp};
 }
 
-/// Task 3: replaces the previous int-index `switch (_tab)` shell and raw
-/// `MaterialPageRoute` navigation with go_router (declared in pubspec.yaml
-/// since the project's start but never actually used until now).
-///
-/// Deliberately scoped as a pure navigation-shell swap — same four
-/// destinations, same FAB, same screens, zero behaviour change. It does NOT
-/// yet add an auth/onboarding redirect guard: the target screens for that
-/// (splash, welcome, tutorial — Tasks 4-6) don't exist yet, and redirecting
-/// into a route that isn't registered would 404 the whole app. Each of the
-/// four tab screens already handles signed-out state itself (embeds
-/// LoginScreen), which keeps this migration safe to ship on its own.
+/// Bridges Riverpod state into go_router's redirect re-evaluation.
+/// GoRouter only re-runs `redirect` when its `refreshListenable` fires (or
+/// on navigation) — without this, completing onboarding or finishing
+/// sessionInitProvider would sit inert until the next manual navigation.
+class _RouterRefreshNotifier extends ChangeNotifier {
+  _RouterRefreshNotifier(Ref ref) {
+    ref.listen(sessionInitProvider, (_, _) => notifyListeners());
+    ref.listen(accessTokenProvider, (_, _) => notifyListeners());
+    ref.listen(onboardingCompleteProvider, (_, _) => notifyListeners());
+  }
+}
+
+/// Task 3 shipped the navigation-shell swap alone, deferring the
+/// auth/onboarding redirect guard until its target screens (Welcome,
+/// Account Choice — Tasks 4-6) existed. They do now, so this wires the real
+/// guard:
+///   1. While session resume or the onboarding flag is still loading, sit on
+///      /splash — never flash Welcome or Home first and then jump.
+///   2. Once resolved, onboarding NOT complete -> only [AppRoute.preOnboarding]
+///      screens are reachable; anything else bounces to /welcome.
+///   3. Onboarding complete -> preOnboarding screens are UNREACHABLE, even by
+///      direct navigation (ui-spec.md A3: "no nagging later" — completing
+///      onboarding once must never resurface it, not even via a stale deep
+///      link). This is deliberately NOT gated on sign-in status: browsing
+///      without an account remains fully supported after onboarding, same
+///      as Home's existing guest-browse behaviour.
 final goRouterProvider = Provider<GoRouter>((ref) {
+  final refresh = _RouterRefreshNotifier(ref);
+  ref.onDispose(refresh.dispose);
+
   return GoRouter(
-    initialLocation: AppRoute.home,
+    initialLocation: AppRoute.splash,
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      final sessionInit = ref.read(sessionInitProvider);
+      final onboarding = ref.read(onboardingCompleteProvider);
+      final path = state.uri.path;
+
+      if (sessionInit.isLoading || onboarding.isLoading) {
+        return path == AppRoute.splash ? null : AppRoute.splash;
+      }
+
+      final complete = onboarding.valueOrNull ?? false;
+
+      // Loading just finished. Splash must always hand off to a real
+      // destination here — it's never itself a valid resting page once
+      // resolved, even though it's a member of preOnboarding below (that
+      // membership exists so /splash redirects to /splash, i.e. a no-op,
+      // while still loading; it must NOT also mean "stay on splash forever"
+      // once loading is done).
+      if (path == AppRoute.splash) {
+        return complete ? AppRoute.home : AppRoute.welcome;
+      }
+
+      if (!complete) {
+        return AppRoute.preOnboarding.contains(path) ? null : AppRoute.welcome;
+      }
+      return AppRoute.preOnboarding.contains(path) ? AppRoute.home : null;
+    },
     routes: [
+      GoRoute(
+        path: AppRoute.splash,
+        pageBuilder: (context, state) => const NoTransitionPage(child: SplashScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.welcome,
+        pageBuilder: (context, state) => const NoTransitionPage(child: WelcomeScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.accountChoice,
+        pageBuilder: (context, state) => const NoTransitionPage(child: AccountChoiceScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.logIn,
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: Scaffold(body: LoginScreen(mode: AuthMode.logIn))),
+      ),
+      GoRoute(
+        path: AppRoute.signUp,
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: Scaffold(body: LoginScreen(mode: AuthMode.signUp))),
+      ),
       ShellRoute(
         builder: (context, state, child) => _AppShell(
           location: state.uri.path,
