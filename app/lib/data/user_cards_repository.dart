@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import 'api_exception.dart';
+
 double _num(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.parse(v as String));
 
 /// Chunk 17: the CURRENTLY-ACTIVE period's cap/milestone consumption for
@@ -105,7 +107,7 @@ class UserCardsRepository {
   Future<List<UserCard>> fetchUserCards() async {
     final response = await _client.get(Uri.parse('$apiBaseUrl/user-cards'), headers: _headers);
     if (response.statusCode != 200) {
-      throw UserCardsException('GET /user-cards failed: ${response.statusCode} ${response.body}');
+      throw ApiException('GET /user-cards failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['userCards'] as List)
@@ -121,7 +123,7 @@ class UserCardsRepository {
       body: jsonEncode({'cardProductId': cardProductId, 'nickname': ?nickname}),
     );
     if (response.statusCode != 201) {
-      throw UserCardsException('POST /user-cards failed: ${response.statusCode} ${response.body}');
+      throw ApiException('POST /user-cards failed: ${response.statusCode} ${response.body}');
     }
   }
 
@@ -131,7 +133,7 @@ class UserCardsRepository {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw UserCardsException('archive failed: ${response.statusCode} ${response.body}');
+      throw ApiException('archive failed: ${response.statusCode} ${response.body}');
     }
   }
 
@@ -155,7 +157,7 @@ class UserCardsRepository {
       }),
     );
     if (response.statusCode != 201) {
-      throw UserCardsException('POST /transactions failed: ${response.statusCode} ${response.body}');
+      throw ApiException('POST /transactions failed: ${response.statusCode} ${response.body}');
     }
   }
 
@@ -187,7 +189,7 @@ class UserCardsRepository {
       }),
     );
     if (response.statusCode != 201 && response.statusCode != 200) {
-      throw UserCardsException(
+      throw ApiException(
         'POST /transactions/from-sms failed: ${response.statusCode} ${response.body}',
       );
     }
@@ -202,7 +204,7 @@ class UserCardsRepository {
   Future<List<TransactionEntry>> fetchTransactions() async {
     final response = await _client.get(Uri.parse('$apiBaseUrl/transactions'), headers: _headers);
     if (response.statusCode != 200) {
-      throw UserCardsException('GET /transactions failed: ${response.statusCode} ${response.body}');
+      throw ApiException('GET /transactions failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['transactions'] as List)
@@ -241,13 +243,6 @@ class TransactionEntry {
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
     );
   }
-}
-
-class UserCardsException implements Exception {
-  final String message;
-  UserCardsException(this.message);
-  @override
-  String toString() => message;
 }
 
 /// UA-5.3 (Chunk 31): the outcome of a POST /transactions/from-sms call.

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/features/geofence/nearby_merchants_repository.dart';
 
 void main() {
@@ -48,7 +49,7 @@ void main() {
 
       expect(
         () => repo.fetchNearby(lat: 0, lng: 0),
-        throwsA(isA<NearbyMerchantsException>()),
+        throwsA(isA<ApiException>()),
       );
     });
 

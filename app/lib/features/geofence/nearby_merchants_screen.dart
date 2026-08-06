@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/providers.dart';
+import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 
 /// UA-8.1/8.3: "Nearby merchants" — the foreground-triggered, one-shot
@@ -57,7 +58,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
       });
     } catch (err) {
       setState(() {
-        _errorMessage = err.toString();
+        _errorMessage = userFacingErrorMessage(err);
         _state = _LoadState.error;
       });
     }

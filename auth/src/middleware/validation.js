@@ -215,13 +215,17 @@ function validateRequestEmailOtpBody(req, res, next) {
   if (!sizeCheck.valid) return res.status(400).json({ error: sizeCheck.error });
 
   if (!email) return res.status(400).json({ error: 'email is required' });
-  if (!phone_number) return res.status(400).json({ error: 'phone_number is required' });
 
   const emailCheck = validateEmail(email);
   if (!emailCheck.valid) return res.status(400).json({ error: emailCheck.error });
 
-  const phoneCheck = validatePhone(phone_number);
-  if (!phoneCheck.valid) return res.status(400).json({ error: phoneCheck.error });
+  // phone_number is optional here (email-only sign-in is supported — see
+  // the request-email-otp route's own `if (phone_number)` branch): only
+  // validate its shape when the caller actually sent one to link.
+  if (phone_number) {
+    const phoneCheck = validatePhone(phone_number);
+    if (!phoneCheck.valid) return res.status(400).json({ error: phoneCheck.error });
+  }
 
   next();
 }
@@ -236,14 +240,16 @@ function validateVerifyEmailOtpBody(req, res, next) {
   if (!sizeCheck.valid) return res.status(400).json({ error: sizeCheck.error });
 
   if (!email) return res.status(400).json({ error: 'email is required' });
-  if (!phone_number) return res.status(400).json({ error: 'phone_number is required' });
   if (!code) return res.status(400).json({ error: 'code is required' });
 
   const emailCheck = validateEmail(email);
   if (!emailCheck.valid) return res.status(400).json({ error: emailCheck.error });
 
-  const phoneCheck = validatePhone(phone_number);
-  if (!phoneCheck.valid) return res.status(400).json({ error: phoneCheck.error });
+  // phone_number is optional — see validateRequestEmailOtpBody above.
+  if (phone_number) {
+    const phoneCheck = validatePhone(phone_number);
+    if (!phoneCheck.valid) return res.status(400).json({ error: phoneCheck.error });
+  }
 
   const codeCheck = validateOtpCode(code);
   if (!codeCheck.valid) return res.status(400).json({ error: codeCheck.error });

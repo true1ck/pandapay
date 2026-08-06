@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../../data/api_exception.dart';
+
 /// UA-8.3: HTTP client for api/'s `GET /merchants/nearby` — public read, no
 /// auth required (same pattern as CatalogueRepository/CategoryRepository).
 /// This is the thin IO boundary; the actual radius-matching math lives in
@@ -39,7 +41,7 @@ class HttpNearbyMerchantsRepository implements NearbyMerchantsRepository {
     });
     final response = await _client.get(uri);
     if (response.statusCode != 200) {
-      throw NearbyMerchantsException('GET /merchants/nearby failed: ${response.statusCode}');
+      throw ApiException('GET /merchants/nearby failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final merchants = (body['merchants'] as List).cast<Map<String, dynamic>>();
@@ -55,11 +57,4 @@ class HttpNearbyMerchantsRepository implements NearbyMerchantsRepository {
       );
     }).toList();
   }
-}
-
-class NearbyMerchantsException implements Exception {
-  final String message;
-  NearbyMerchantsException(this.message);
-  @override
-  String toString() => message;
 }

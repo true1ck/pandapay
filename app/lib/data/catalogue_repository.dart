@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import 'api_exception.dart';
+
 /// UA-1.2 (partial): fetches the published card catalogue from api/'s
 /// GET /catalogue, which serves `v_card_catalogue_export` — the device sync
 /// contract. Real production UA-1.2 also bundles a seed snapshot in the APK
@@ -24,19 +26,12 @@ class HttpCatalogueRepository implements CatalogueRepository {
   Future<List<CardProduct>> fetchCatalogue() async {
     final response = await _client.get(Uri.parse('$baseUrl/catalogue'));
     if (response.statusCode != 200) {
-      throw CatalogueFetchException('GET /catalogue failed: ${response.statusCode}');
+      throw ApiException('GET /catalogue failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final cards = (body['cards'] as List).cast<Map<String, dynamic>>();
     return cards.map((json) => CardProductJson.fromJson(json)).toList();
   }
-}
-
-class CatalogueFetchException implements Exception {
-  final String message;
-  CatalogueFetchException(this.message);
-  @override
-  String toString() => message;
 }
 
 /// spend_categories row shape from GET /categories — see providers.dart for
@@ -70,7 +65,7 @@ class HttpCategoryRepository implements CategoryRepository {
   Future<List<SpendCategory>> fetchCategories() async {
     final response = await _client.get(Uri.parse('$baseUrl/categories'));
     if (response.statusCode != 200) {
-      throw CatalogueFetchException('GET /categories failed: ${response.statusCode}');
+      throw ApiException('GET /categories failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final categories = (body['categories'] as List).cast<Map<String, dynamic>>();

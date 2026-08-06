@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -45,6 +47,52 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
   } catch (_) {
     await store.clear();
   }
+});
+
+/// Keeps a signed-in session alive for as long as the app stays open, not
+/// just at startup. sessionInitProvider above only ever calls /auth/refresh
+/// once, when the app launches; auth/'s access tokens expire after
+/// JWT_ACCESS_TTL (15 minutes by default), so without this, anyone who kept
+/// the app open past that window would silently start getting 401s on
+/// every API call while accessTokenProvider still held the now-dead token
+/// — "signed in" on screen, broken underneath. This re-reads the CURRENT
+/// refresh token from storage (not a captured value) every 10 minutes,
+/// comfortably inside the 15-minute TTL, and signs the user out cleanly
+/// (matching sessionInitProvider's own failure behavior) if the refresh
+/// token itself turns out to be dead rather than retry-looping against it.
+/// Read once from `_AppShell` in main.dart so it runs for the app's whole
+/// lifetime regardless of which tab is showing.
+const _kSessionRefreshInterval = Duration(minutes: 10);
+
+final sessionKeepAliveProvider = Provider<void>((ref) {
+  Timer? timer;
+
+  Future<void> tick() async {
+    final currentToken = ref.read(accessTokenProvider);
+    if (currentToken == null) return; // signed out since the timer was scheduled
+
+    final store = await ref.read(tokenStoreProvider.future);
+    final refreshToken = store.refreshToken;
+    if (refreshToken == null) return;
+
+    try {
+      final tokens = await ref.read(authApiProvider).refresh(refreshToken);
+      await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+      ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
+    } catch (_) {
+      await store.clear();
+      ref.read(accessTokenProvider.notifier).state = null;
+    }
+  }
+
+  ref.listen<String?>(accessTokenProvider, (previous, next) {
+    timer?.cancel();
+    if (next != null) {
+      timer = Timer.periodic(_kSessionRefreshInterval, (_) => tick());
+    }
+  }, fireImmediately: true);
+
+  ref.onDispose(() => timer?.cancel());
 });
 
 /// UA-3: the signed-in user's own profiles row (owner-scoped via RLS —

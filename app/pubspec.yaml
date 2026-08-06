@@ -42,13 +42,18 @@ dependencies:
   http: ^1.2.2
   shared_preferences: ^2.3.3
 
+  # Design system: Google Fonts for the Plus Jakarta Sans/Inter pairing
+  # (see lib/app/design/app_theme.dart) and flutter_animate for the
+  # 150-300ms micro-interactions used across the redesigned screens.
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.2
+
   # UA-4 (Chunk 30): camera/QR card scanning. mobile_scanner drives the
   # QR/barcode path wired up in this chunk; google_mlkit_text_recognition is
   # wired for the still-photo OCR path (isolated behind CardTextRecognizer)
   # but, like mobile_scanner's camera preview, could not be exercised on
   # real hardware in this sandbox — see PROGRESS.md Chunk 30.
-  mobile_scanner: ^6.0.2
-  google_mlkit_text_recognition: ^0.15.0
+  mobile_scanner: ^7.0.0
 
   # UA-5.3 (Chunk 31): SMS-based transaction auto-import. `telephony` wraps
   # the RECEIVE_SMS BroadcastReceiver + READ_SMS query so an incoming bank
@@ -71,6 +76,9 @@ dependencies:
   # sandbox (no device/simulator/native build toolchain run end-to-end).
   geolocator: ^13.0.2
   home_widget: ^0.7.0
+  rive: ^0.14.11
+  flex_color_scheme: ^8.4.0
+  responsive_framework: ^1.5.1
 
 dev_dependencies:
   flutter_test:
@@ -83,11 +91,7 @@ dev_dependencies:
   riverpod_lint: ^2.6.3
   pandapay_lints:
     path: ../packages/pandapay_lints
-
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter packages.
+  alchemist: ^0.14.0
 flutter:
 
   # The following line ensures that the Material Icons font is

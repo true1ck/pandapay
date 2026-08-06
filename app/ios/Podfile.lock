@@ -1,0 +1,28 @@
+PODS:
+  - Flutter (1.0.0)
+  - home_widget (0.0.1):
+    - Flutter
+  - telephony (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - home_widget (from `.symlinks/plugins/home_widget/ios`)
+  - telephony (from `.symlinks/plugins/telephony/ios`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  home_widget:
+    :path: ".symlinks/plugins/home_widget/ios"
+  telephony:
+    :path: ".symlinks/plugins/telephony/ios"
+
+SPEC CHECKSUMS:
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  home_widget: f169fc41fd807b4d46ab6615dc44d62adbf9f64f
+  telephony: 092fd9f86ca076809b22f4efe52e5d4e57a4e674
+
+PODFILE CHECKSUM: a1d7a1a0ab7d4bc96d06199b218534f421b68e8d
+
+COCOAPODS: 1.16.2

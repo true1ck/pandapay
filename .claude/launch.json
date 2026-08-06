@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "console",
+      "runtimeExecutable": "/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/console/run_web.sh",
+      "runtimeArgs": [],
+      "port": 5173
+    }
+  ]
+}

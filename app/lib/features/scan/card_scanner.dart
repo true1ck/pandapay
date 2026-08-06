@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:mobile_scanner/mobile_scanner.dart' as mobile_scanner;
 
 import 'card_text_matcher.dart';
@@ -19,25 +18,6 @@ abstract class CardTextRecognizer {
   Future<ExtractedCardText> recognizeText(String imagePath);
 
   Future<void> dispose();
-}
-
-/// Real ML Kit-backed implementation. UNVERIFIED — no device/simulator with
-/// a camera was available while building this; wiring follows the package's
-/// documented API but has never actually run against a live frame here.
-class MlKitCardTextRecognizer implements CardTextRecognizer {
-  final TextRecognizer _recognizer;
-
-  MlKitCardTextRecognizer() : _recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-
-  @override
-  Future<ExtractedCardText> recognizeText(String imagePath) async {
-    final input = InputImage.fromFilePath(imagePath);
-    final result = await _recognizer.processImage(input);
-    return ExtractedCardText(result.text);
-  }
-
-  @override
-  Future<void> dispose() => _recognizer.close();
 }
 
 /// Decodes a QR/barcode payload (e.g. printed on some card mailers or

@@ -10,6 +10,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/auth_api.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/features/auth/login_screen.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/main.dart';
 
@@ -58,6 +59,17 @@ Widget _appWithFakeCatalogue(List<CardProduct> cards, {List<Override> extraOverr
     child: const PandaPayApp(),
   );
 }
+
+
+/// Finds a bottom-navigation destination by its visible label, scoped to the
+/// BottomAppBar so it can never collide with same-named text in screen body
+/// content. Deliberately not `find.byIcon` — the icon set is a styling detail
+/// that changed wholesale in the design-system pass, and a nav test should not
+/// break because a rounded icon variant was adopted.
+Finder _navTab(String label) => find.descendant(
+      of: find.byType(BottomAppBar),
+      matching: find.text(label),
+    );
 
 void main() {
   testWidgets('Home renders a ranked recommendation from a fake catalogue (no real network call)',
@@ -108,12 +120,12 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.receipt_long));
+    await tester.tap(_navTab('Activity'));
     await tester.pump();
     await tester.pump();
 
     expect(find.text('PandaPay — Activity'), findsOneWidget);
-    expect(find.text('Sign in'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
   });
 
   testWidgets('Chunk 18: Activity tab shows real logged transactions when signed in', (tester) async {
@@ -153,7 +165,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.receipt_long));
+    await tester.tap(_navTab('Activity'));
     await tester.pump();
     await tester.pump();
     await tester.pump();
@@ -167,11 +179,11 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.credit_card));
+    await tester.tap(_navTab('Cards'));
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Sign in'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
   });
 
   testWidgets('Chunk 16: Cards tab shows a real owned card and lets it be archived', (tester) async {
@@ -213,7 +225,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.credit_card));
+    await tester.tap(_navTab('Cards'));
     await tester.pump();
     await tester.pump();
 
@@ -269,7 +281,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.credit_card));
+    await tester.tap(_navTab('Cards'));
     await tester.pump();
     await tester.pump();
 
@@ -277,20 +289,20 @@ void main() {
     expect(find.textContaining('Fee waived'), findsOneWidget);
   });
 
-  testWidgets('Chunk 15: More tab shows the login screen when signed out', (tester) async {
+  testWidgets('Chunk 15: Account tab shows the login screen when signed out', (tester) async {
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.tap(_navTab('Account'));
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Sign in'), findsOneWidget);
-    expect(find.text('Send OTP'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.text('Send code'), findsOneWidget);
   });
 
-  testWidgets('Chunk 15: More tab shows the real profile and a sign-out button when signed in',
+  testWidgets('Chunk 15: Account tab shows the real profile and a sign-out button when signed in',
       (tester) async {
     await tester.pumpWidget(
       _appWithFakeCatalogue(
@@ -317,12 +329,12 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.tap(_navTab('Account'));
     await tester.pump();
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Signed in.'), findsOneWidget);
+    expect(find.text('Signed in'), findsOneWidget);
     expect(find.textContaining('profile-123'), findsOneWidget);
     expect(find.text('Sign out'), findsOneWidget);
   });

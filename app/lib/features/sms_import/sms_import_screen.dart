@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../data/api_exception.dart';
 import 'sms_listener_service.dart';
 
 /// UA-5.3 (Chunk 31): permission-request UI + the screen that wires the
@@ -74,7 +75,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
         }
       } catch (e) {
         if (mounted) {
-          setState(() => _recentLog.insert(0, 'SMS import failed: $e'));
+          setState(() => _recentLog.insert(0, 'SMS import failed. ${userFacingErrorMessage(e)}'));
         }
       }
     });

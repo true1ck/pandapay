@@ -1,9 +1,20 @@
 // src/services/otpService.js
 const bcrypt = require('bcrypt');
 const db = require('../db');
+const config = require('../config');
 const { markActiveOtp } = require('../middleware/rateLimitMiddleware');
 // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
 const { encryptPhoneNumber } = require('../utils/fieldEncryption');
+
+// === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY ===
+// These fixed identifiers + code "1234" exist solely so local development
+// and QA don't need a working SMS/email provider to sign in. This must
+// never be reachable when config.isProduction is true — it was previously
+// active unconditionally in every environment, which would have let anyone
+// who knew these identifiers log in without ever receiving a real OTP.
+const TEST_OTP_ENABLED = !config.isProduction;
+const TEST_IDENTIFIERS = ['1234567890', '+911234567890', 'test@example.com', 'newuser4@example.com'];
+const TEST_OTP_CODE = '1234';
 
 // === ADDED FOR 2-MIN OTP VALIDITY & NO-RESEND ===
 // OTP validity changed from 10 minutes to 2 minutes (120 seconds)
@@ -53,15 +64,14 @@ function generateOtpCode() {
  * @returns {Promise<{code: string}>} - The generated OTP code
  */
 async function createOtp(identifier, type = 'phone') {
-  // === DEBUGGING: TEST OTP BYPASS ===
-  const testIdentifiers = ["1234567890", "+911234567890", "test@example.com"];
-  const testOtpCode = "1234";
+  // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY, see constants above ===
   const normalizedIdentifier = identifier.trim().toLowerCase();
-  
-  const code = testIdentifiers.includes(normalizedIdentifier) ? testOtpCode : generateOtpCode();
-  
-  if (testIdentifiers.includes(normalizedIdentifier)) {
-    console.log(`[OTP Service] 🔧 DEBUG MODE: Test OTP generated for ${type}:`, normalizedIdentifier, '- Code:', testOtpCode);
+  const isTestIdentifier = TEST_OTP_ENABLED && TEST_IDENTIFIERS.includes(normalizedIdentifier);
+
+  const code = isTestIdentifier ? TEST_OTP_CODE : generateOtpCode();
+
+  if (isTestIdentifier) {
+    console.log(`[OTP Service] 🔧 DEV MODE: Test OTP generated for ${type}:`, normalizedIdentifier, '- Code:', TEST_OTP_CODE);
   }
   
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
@@ -120,14 +130,12 @@ async function createOtp(identifier, type = 'phone') {
  * @returns {Promise<{ok: boolean, reason?: string}>} - Whether the OTP is valid
  */
 async function verifyOtp(identifier, code, type = 'phone') {
-  const testIdentifiers = ["1234567890", "+911234567890", "test@example.com", "newuser4@example.com"];
-  const testOtpCode = "1234";
-  
   const codeStr = String(code).trim();
   const normalizedIdentifier = identifier.trim().toLowerCase();
-  
-  if (testIdentifiers.includes(normalizedIdentifier) && codeStr === testOtpCode) {
-    console.log(`[OTP Service] 🔧 DEBUG MODE: Test OTP bypass activated for ${type}:`, normalizedIdentifier);
+
+  // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY, see constants above ===
+  if (TEST_OTP_ENABLED && TEST_IDENTIFIERS.includes(normalizedIdentifier) && codeStr === TEST_OTP_CODE) {
+    console.log(`[OTP Service] 🔧 DEV MODE: Test OTP bypass activated for ${type}:`, normalizedIdentifier);
     return { ok: true };
   }
   

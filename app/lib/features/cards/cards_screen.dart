@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../auth/login_screen.dart';
 import '../scan/scan_card_screen.dart';
@@ -27,19 +30,36 @@ class CardsScreen extends ConsumerWidget {
     final userCards = ref.watch(userCardsProvider);
     return userCards.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Failed to load your cards: $err')),
+      error: (err, _) => ErrorState(
+        message: userFacingErrorMessage(err),
+        onRetry: () => ref.invalidate(userCardsProvider),
+      ),
       data: (cards) => Column(
         children: [
           Expanded(
             child: cards.isEmpty
-                ? const Center(child: Text('No cards yet — add one below.'))
+                ? const EmptyState(
+                    icon: Icons.wallet_outlined,
+                    title: 'Your wallet is empty',
+                    message: 'Add a card below to start tracking spend and rewards.',
+                  )
                 : ListView.builder(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
                     itemCount: cards.length,
-                    itemBuilder: (context, index) => _UserCardTile(cards[index]),
+                    itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpace.md),
+                      child: _UserCardTile(cards[index]),
+                    ),
                   ),
           ),
-          const Padding(padding: EdgeInsets.all(12), child: _AddCardForm()),
+          Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(top: BorderSide(color: AppColors.ink100)),
+            ),
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: const _AddCardForm(),
+          ),
         ],
       ),
     );
@@ -68,9 +88,13 @@ class _UserCardTileState extends ConsumerState<_UserCardTile> {
             categoryId: categoryId,
           );
       ref.invalidate(userCardsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Logged ${amount.format()} spend.')));
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to log spend: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to log spend. ${userFacingErrorMessage(e)}')));
       }
     } finally {
       if (mounted) setState(() => _logging = false);
@@ -81,35 +105,98 @@ class _UserCardTileState extends ConsumerState<_UserCardTile> {
   Widget build(BuildContext context) {
     final card = widget.card;
     final amount = ref.watch(enteredAmountProvider);
-    final subtitleParts = <String>[
-      if (card.nickname?.isNotEmpty == true) card.cardName,
+    final textTheme = Theme.of(context).textTheme;
+    final badges = <String>[
       if (card.totalPointsEarned > 0) '${card.totalPointsEarned.toStringAsFixed(0)} pts earned',
       for (final fw in card.feeWaiverStates)
         fw.waivedAt != null
             ? 'Fee waived (${fw.qualifiedSpend.format()} spent)'
             : '${fw.qualifiedSpend.format()} of ${fw.thresholdSpend.format()} toward fee waiver',
     ];
-    return Card(
-      child: ListTile(
-        title: Text(card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName),
-        subtitle: subtitleParts.isEmpty ? null : Text(subtitleParts.join(' · ')),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(_logging ? Icons.hourglass_top : Icons.add_card),
-              tooltip: 'Log a ${amount.format()} spend on this card (enter amount on Home)',
-              onPressed: _logging ? null : _logTransaction,
-            ),
-            IconButton(
-              icon: const Icon(Icons.archive_outlined),
-              tooltip: 'Archive (never deleted)',
-              onPressed: () async {
-                await ref.read(userCardsRepositoryProvider)!.archiveCard(card.id);
-                ref.invalidate(userCardsProvider);
-              },
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.ink100),
+      ),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: AppColors.teal50, borderRadius: BorderRadius.circular(AppRadius.sm)),
+                child: const Icon(Icons.credit_card_rounded, color: AppColors.teal600, size: 20),
+              ),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Text(
+                  card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName,
+                  style: textTheme.titleMedium,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              _CardActionButton(
+                icon: _logging ? null : Icons.add_card_rounded,
+                loading: _logging,
+                tooltip: 'Log a ${amount.format()} spend on this card',
+                onPressed: _logging ? null : _logTransaction,
+              ),
+              const SizedBox(width: AppSpace.xs),
+              _CardActionButton(
+                icon: Icons.archive_outlined,
+                tooltip: 'Archive (never deleted)',
+                onPressed: () async {
+                  await ref.read(userCardsRepositoryProvider)!.archiveCard(card.id);
+                  ref.invalidate(userCardsProvider);
+                },
+              ),
+            ],
+          ),
+          if (badges.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            Wrap(
+              spacing: AppSpace.xs,
+              runSpacing: AppSpace.xs,
+              children: [
+                for (final b in badges)
+                  StatusPill(label: b, foreground: AppColors.navy800, background: AppColors.surfaceMuted),
+              ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CardActionButton extends StatelessWidget {
+  final IconData? icon;
+  final bool loading;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  const _CardActionButton({this.icon, this.loading = false, required this.tooltip, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.sm)),
+          child: loading
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : Icon(icon, size: 18, color: AppColors.navy800),
         ),
       ),
     );
@@ -162,36 +249,43 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
     final catalogue = ref.watch(catalogueProvider);
     return catalogue.when(
       loading: () => const SizedBox.shrink(),
-      error: (err, _) => Text('Failed to load catalogue: $err'),
+      error: (err, _) => Text(userFacingErrorMessage(err), style: Theme.of(context).textTheme.bodySmall),
       data: (cards) {
         if (cards.isEmpty) return const SizedBox.shrink();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     initialValue: _selectedCardId,
                     decoration: const InputDecoration(labelText: 'Add a card'),
                     items: [
-                      for (final c in cards) DropdownMenuItem(value: c.id, child: Text(c.name)),
+                      for (final c in cards) DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis)),
                     ],
                     onChanged: (value) => setState(() => _selectedCardId = value),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.sm),
                 FilledButton(
+                  style: FilledButton.styleFrom(minimumSize: const Size(72, 52)),
                   onPressed: _adding || _selectedCardId == null ? null : _addCard,
-                  child: Text(_adding ? '...' : 'Add'),
+                  child: _adding
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Add'),
                 ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
-                  ),
               ],
             ),
+            if (_error != null) ...[
+              const SizedBox(height: AppSpace.xs),
+              Text(_error!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.error)),
+            ],
             // UA-4 (Chunk 30): scan-to-identify as a shortcut into the same
             // dropdown above — never replaces it. Picking a match here just
             // sets _selectedCardId, same as picking it from the dropdown by
@@ -203,7 +297,7 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
                 );
                 if (picked != null) setState(() => _selectedCardId = picked.id);
               },
-              icon: const Icon(Icons.qr_code_scanner),
+              icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
               label: const Text('Scan a QR/barcode instead'),
             ),
           ],
@@ -222,7 +316,7 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
       ref.invalidate(userCardsProvider);
       setState(() => _selectedCardId = null);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = userFacingErrorMessage(e));
     } finally {
       if (mounted) setState(() => _adding = false);
     }

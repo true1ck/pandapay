@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import 'api_exception.dart';
+
 /// UA-3: the user app's own OTP login flow against auth/ — mirrors
 /// console/lib/data/admin_api.dart's AuthApi/AuthTokens (same auth/
 /// service, same OTP endpoints), kept as a separate class rather than a
@@ -25,7 +27,7 @@ class AuthApi {
       body: jsonEncode({'phone_number': phoneNumber}),
     );
     if (response.statusCode != 200) {
-      throw AuthApiException('OTP request failed: ${response.statusCode} ${response.body}');
+      throw ApiException('OTP request failed: ${response.statusCode} ${response.body}');
     }
   }
 
@@ -36,7 +38,7 @@ class AuthApi {
       body: jsonEncode({'phone_number': phoneNumber, 'code': code, 'device_id': deviceId}),
     );
     if (response.statusCode != 200) {
-      throw AuthApiException('OTP verify failed: ${response.statusCode} ${response.body}');
+      throw ApiException('OTP verify failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return AuthTokens(
@@ -52,12 +54,65 @@ class AuthApi {
       body: jsonEncode({'refresh_token': refreshToken}),
     );
     if (response.statusCode != 200) {
-      throw AuthApiException('Refresh failed: ${response.statusCode} ${response.body}');
+      throw ApiException('Refresh failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return AuthTokens(
       accessToken: body['access_token'] as String,
       refreshToken: body['refresh_token'] as String? ?? refreshToken,
+    );
+  }
+
+  /// Email-based sign-in against auth/'s /auth/request-email-otp and
+  /// /auth/verify-email-otp — the same OTP machinery as phone (2-minute TTL,
+  /// bcrypt-hashed, rate-limited), just a different identifier. phone_number
+  /// is deliberately omitted from the request body: the backend treats it as
+  /// an optional "link this email to an existing phone account" field, and
+  /// this app only ever offers Phone or Email as alternatives, never both at
+  /// once.
+  Future<void> requestEmailOtp(String email) async {
+    final response = await _client.post(
+      Uri.parse('$authBaseUrl/auth/request-email-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('OTP request failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// [phoneNumber] is optional and only sent at SIGN-UP, where we collect both
+  /// identifiers so the account has a phone on file for SMS-based transaction
+  /// detection (UA-5.3) even though the OTP itself goes to the email. auth/'s
+  /// verify-email-otp links the two onto one users row and rejects the case
+  /// where they already belong to different accounts. The key is omitted
+  /// entirely when absent — sending an explicit null would fail that route's
+  /// validatePhone() check rather than being treated as "not provided".
+  Future<AuthTokens> verifyEmailOtp(
+    String email,
+    String code,
+    String deviceId, {
+    String? phoneNumber,
+  }) async {
+    final trimmedPhone = phoneNumber?.trim();
+    final response = await _client.post(
+      Uri.parse('$authBaseUrl/auth/verify-email-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email,
+        'code': code,
+        'device_id': deviceId,
+        if (trimmedPhone != null && trimmedPhone.isNotEmpty)
+          'phone_number': trimmedPhone,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('OTP verify failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return AuthTokens(
+      accessToken: body['access_token'] as String,
+      refreshToken: body['refresh_token'] as String?,
     );
   }
 }
@@ -80,7 +135,7 @@ class ProfileApi {
   Future<Map<String, dynamic>?> fetchProfile() async {
     final response = await _client.get(Uri.parse('$apiBaseUrl/profile'), headers: _headers);
     if (response.statusCode != 200) {
-      throw AuthApiException('GET /profile failed: ${response.statusCode} ${response.body}');
+      throw ApiException('GET /profile failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['profile'] as Map<String, dynamic>?;
@@ -96,16 +151,9 @@ class ProfileApi {
       body: jsonEncode({'displayName': displayName}),
     );
     if (response.statusCode != 201) {
-      throw AuthApiException('POST /profile failed: ${response.statusCode} ${response.body}');
+      throw ApiException('POST /profile failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['profile'] as Map<String, dynamic>;
   }
-}
-
-class AuthApiException implements Exception {
-  final String message;
-  AuthApiException(this.message);
-  @override
-  String toString() => message;
 }
