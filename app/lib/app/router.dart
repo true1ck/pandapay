@@ -11,9 +11,11 @@ import '../features/cards/cards_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/onboarding/account_choice_screen.dart';
 import '../features/onboarding/splash_screen.dart';
+import '../features/onboarding/tutorial_overlay.dart';
 import '../features/onboarding/welcome_screen.dart';
 import '../features/scan/scan_card_screen.dart';
 import 'providers.dart';
+import 'tutorial_keys.dart';
 
 /// Route paths as constants so a typo becomes a compile-time-adjacent grep
 /// hit instead of a silent 404 — every `context.go(...)` call in the app
@@ -205,10 +207,20 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // Runs sessionKeepAliveProvider for the app's whole lifetime — the shell
     // is the one widget guaranteed to stay mounted across every tab.
     ref.watch(sessionKeepAliveProvider);
+    final tutorialKeys = ref.watch(tutorialKeysProvider);
+    // Task 5: the coach-mark tour only makes sense over Home (that's where
+    // every one of its four targets lives) — a user who backs out to
+    // another tab mid-tour simply doesn't see it there rather than the
+    // overlay trying to follow them to a screen with nothing to point at.
+    final showTutorial =
+        widget.location == AppRoute.home && !(ref.watch(tutorialSeenProvider).valueOrNull ?? true);
     return Scaffold(
       appBar: AppBar(title: Text('PandaPay — $_currentLabel')),
-      body: widget.child,
+      body: showTutorial
+          ? Stack(children: [widget.child, const TutorialOverlay()])
+          : widget.child,
       floatingActionButton: FloatingActionButton.large(
+        key: tutorialKeys.scanFab,
         onPressed: _scanning ? null : _scanFromFab,
         tooltip: 'Scan a card',
         child: _scanning

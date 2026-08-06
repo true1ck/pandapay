@@ -6,6 +6,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
@@ -35,16 +36,19 @@ class HomeScreen extends ConsumerWidget {
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final ranked = ref.watch(rankedRecommendationsProvider);
     final signedIn = ref.watch(accessTokenProvider) != null;
+    final tutorialKeys = ref.watch(tutorialKeysProvider);
 
     return Column(
       children: [
         if (!signedIn) const _SignInBanner(),
         Padding(
+          key: tutorialKeys.amountField,
           padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
           child: _AmountField(),
         ),
         const SizedBox(height: AppSpace.lg),
         SizedBox(
+          key: tutorialKeys.categoryChips,
           height: 40,
           child: ListView(
             scrollDirection: Axis.horizontal,
@@ -185,12 +189,13 @@ class _AmountFieldState extends ConsumerState<_AmountField> {
   }
 }
 
-class _RankedList extends StatelessWidget {
+class _RankedList extends ConsumerWidget {
   final AsyncValue<List<Recommendation>> ranked;
   const _RankedList({required this.ranked});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tutorialKeys = ref.watch(tutorialKeysProvider);
     return ranked.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
@@ -206,6 +211,7 @@ class _RankedList extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.xxl),
           itemCount: recommendations.length,
           itemBuilder: (context, index) => Padding(
+            key: index == 0 ? tutorialKeys.firstRecommendationCard : null,
             padding: const EdgeInsets.only(bottom: AppSpace.md),
             child: _RecommendationCard(recommendations[index], rank: index),
           ),

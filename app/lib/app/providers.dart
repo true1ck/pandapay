@@ -140,6 +140,39 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
   }
 }
 
+/// Task 5 (ui-spec.md A11): whether the first-run coach-mark tutorial has
+/// been seen. Deliberately a SEPARATE flag from onboardingCompleteProvider
+/// above, not a reuse of it — Settings' future "Replay tutorial" (Task 21)
+/// must reset only the coach marks, never send a returning user back
+/// through Welcome/Account Choice.
+const _tutorialSeenKey = 'pandapay_app.tutorial_seen_v1';
+
+final tutorialSeenProvider = StateNotifierProvider<TutorialController, AsyncValue<bool>>(
+    (ref) => TutorialController());
+
+class TutorialController extends StateNotifier<AsyncValue<bool>> {
+  TutorialController() : super(const AsyncValue.loading()) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = AsyncValue.data(prefs.getBool(_tutorialSeenKey) ?? false);
+  }
+
+  Future<void> complete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_tutorialSeenKey, true);
+    state = const AsyncValue.data(true);
+  }
+
+  Future<void> reset() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_tutorialSeenKey, false);
+    state = const AsyncValue.data(false);
+  }
+}
+
 /// UA-3: the signed-in user's own profiles row (owner-scoped via RLS —
 /// api/'s GET /profile, proved end to end back in Chunk 1 but never called
 /// from the app itself until this chunk). Null when signed out or when a
