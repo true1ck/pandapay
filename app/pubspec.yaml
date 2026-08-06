@@ -85,6 +85,10 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^6.0.0
+  # Drives sessionKeepAliveProvider's Timer.periodic without real wall-clock
+  # delays — a real-time-delay test (test/app/session_keepalive_test.dart)
+  # passed in isolation but flaked under full-suite load from timing drift.
+  fake_async: ^1.3.1
   riverpod_generator: ^2.6.3
   build_runner: ^2.4.13
   custom_lint: ^0.7.0

@@ -45,8 +45,13 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    // A scroll view rather than a bare Center+Column: on a short viewport
+    // (landscape phone, split-screen, or a keyboard eating half the
+    // available height) a fixed-size icon plus title plus message plus
+    // action can legitimately exceed the space this renders into. Scrolling
+    // degrades gracefully; a bare Column throws a RenderFlex overflow.
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpace.xxl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -83,8 +88,9 @@ class ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    // See EmptyState's build() for why this scrolls rather than overflows.
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpace.xxl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
