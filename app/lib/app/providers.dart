@@ -62,7 +62,11 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
 /// token itself turns out to be dead rather than retry-looping against it.
 /// Read once from `_AppShell` in main.dart so it runs for the app's whole
 /// lifetime regardless of which tab is showing.
-const _kSessionRefreshInterval = Duration(minutes: 10);
+/// How often to proactively rotate the access token. Must stay comfortably
+/// below auth/'s JWT_ACCESS_TTL (15m by default) — overridable so tests can
+/// drive the timer without waiting in real time.
+final sessionRefreshIntervalProvider =
+    Provider<Duration>((ref) => const Duration(minutes: 10));
 
 final sessionKeepAliveProvider = Provider<void>((ref) {
   Timer? timer;
@@ -88,7 +92,8 @@ final sessionKeepAliveProvider = Provider<void>((ref) {
   ref.listen<String?>(accessTokenProvider, (previous, next) {
     timer?.cancel();
     if (next != null) {
-      timer = Timer.periodic(_kSessionRefreshInterval, (_) => tick());
+      timer = Timer.periodic(
+          ref.read(sessionRefreshIntervalProvider), (_) => tick());
     }
   }, fireImmediately: true);
 
