@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/auth_api.dart';
 import '../data/card_overrides_repository.dart';
 import '../data/catalogue_repository.dart';
+import '../data/override_resolver.dart';
 import '../data/token_store.dart';
 import '../data/user_cards_repository.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
@@ -280,17 +281,18 @@ final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>
   final catalogue = ref.watch(catalogueProvider);
   final categories = ref.watch(categoriesProvider);
   final userCards = ref.watch(userCardsProvider);
+  final overrides = ref.watch(cardOverridesProvider);
   final selectedSlug = ref.watch(selectedCategoryProvider);
   final engine = ref.watch(recommendationEngineProvider);
 
-  if (catalogue.isLoading || categories.isLoading || userCards.isLoading) {
+  if (catalogue.isLoading || categories.isLoading || userCards.isLoading || overrides.isLoading) {
     return const AsyncValue.loading();
   }
-  final combinedError = catalogue.error ?? categories.error ?? userCards.error;
+  final combinedError = catalogue.error ?? categories.error ?? userCards.error ?? overrides.error;
   if (combinedError != null) {
     return AsyncValue.error(
       combinedError,
-      catalogue.stackTrace ?? categories.stackTrace ?? userCards.stackTrace!,
+      catalogue.stackTrace ?? categories.stackTrace ?? userCards.stackTrace ?? overrides.stackTrace!,
     );
   }
 
@@ -303,6 +305,15 @@ final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>
       ? allCards
       : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
 
+  // B8: resolve once per rank() call — Home only carries category context
+  // (no merchant/vpa yet, that's B3's scan-result context), so vpa/
+  // merchantName are omitted here on purpose.
+  final overrideProductId = resolveActiveOverrideCardProductId(
+    overrides: overrides.requireValue,
+    wallet: wallet,
+    categoryId: categoryId,
+  );
+
   final context = RecommendationContext(
     amount: ref.watch(enteredAmountProvider),
     categoryId: categoryId,
@@ -314,15 +325,17 @@ final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>
   // look up, so it's evaluated as freshly-uncapped, same as before Chunk 17.
   final snapshots = cards.map((c) {
     final owned = wallet.firstWhereOrNull((w) => w.cardProductId == c.id);
-    if (owned == null) return CardSnapshot(product: c);
-    final capRemaining = {
-      for (final cap in c.capRules)
-        if (owned.capConsumed.containsKey(cap.id)) cap.id: cap.capValue - owned.capConsumed[cap.id]!,
-    };
+    final capRemaining = owned == null
+        ? const <String, Money>{}
+        : {
+            for (final cap in c.capRules)
+              if (owned.capConsumed.containsKey(cap.id)) cap.id: cap.capValue - owned.capConsumed[cap.id]!,
+          };
     return CardSnapshot(
       product: c,
       capRemaining: capRemaining,
-      milestoneProgress: owned.milestoneQualifiedSpend,
+      milestoneProgress: owned?.milestoneQualifiedSpend ?? const {},
+      forcedOverrideCardId: overrideProductId,
     );
   }).toList();
   return AsyncValue.data(engine.rank(context, snapshots));
@@ -354,6 +367,10 @@ final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {
 /// — one "pick the best card" implementation, called from two different
 /// UI entry points (a nearby-merchant tile here, a home-screen widget
 /// there), not two competing ranking paths.
+// Note: deliberately NOT wired to card_overrides (unlike
+// rankedRecommendationsProvider above) — B8's spec scopes override
+// wiring to Home's ranking; extending it to the geofence tile's
+// per-merchant ranking is a natural follow-up, not done here.
 final bestCardForMerchantProvider =
     Provider.family<AsyncValue<Recommendation?>, String?>((ref, categoryId) {
   final catalogue = ref.watch(catalogueProvider);
