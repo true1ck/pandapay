@@ -12,3 +12,4 @@ export 'src/engine/engine.dart';
 export 'src/engine/calculators.dart';
 export 'src/geo/geo.dart';
 export 'src/geo/best_card_for_widget.dart';
+export 'src/upi/upi_qr.dart';
