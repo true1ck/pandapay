@@ -17,9 +17,10 @@ import '../overrides/manual_overrides_screen.dart';
 /// Deliberately usable signed-out (rankedRecommendationsProvider falls
 /// back to the whole catalogue) — see the sign-in banner below for how a
 /// signed-out visitor finds their way to an account.
-/// Missing vs the full ui-spec B1: hero-card treatment, alerts strip,
-/// backup-card row, geofence-driven context line, offline bundling — all
-/// noted as not-yet-done rather than faked.
+/// Missing vs the full ui-spec B1: alerts strip, geofence-driven context
+/// line, offline bundling — all noted as not-yet-done rather than faked.
+/// Hero-card treatment and the backup-card row (see _BackupCardRow) are
+/// done.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -208,26 +209,84 @@ class _RankedList extends ConsumerWidget {
             message: 'Add a card to see personalized reward recommendations here.',
           );
         }
+        // ui-spec B1.4: the first non-excluded runner-up after the hero
+        // (index 0), if one exists — see _BackupCardRow's doc comment for
+        // why this is "next-best ranked card" rather than real
+        // crowdsourced acceptance data.
+        final backup = recommendations.skip(1).firstWhereOrNull((r) => !r.isExcluded);
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.xxl),
-          itemCount: recommendations.length,
-          itemBuilder: (context, index) => Padding(
-            key: index == 0 ? tutorialKeys.firstRecommendationCard : null,
-            padding: const EdgeInsets.only(bottom: AppSpace.md),
-            // Keyed by card identity, not just position: _RecommendationCard
-            // is a StatefulWidget holding its own "Why this card?" expand
-            // state, and ranked can reorder (category chip, amount edit).
-            // Without a stable key, ListView.builder reuses the Element at
-            // an index and the wrong card inherits the previous occupant's
-            // expanded/collapsed state.
-            child: _RecommendationCard(
-              recommendations[index],
-              rank: index,
-              key: ValueKey(recommendations[index].card.id),
-            ),
-          ),
+          itemCount: recommendations.length + (backup != null ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (backup != null && index == 1) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.md),
+                child: _BackupCardRow(backup),
+              );
+            }
+            final recIndex = (backup != null && index > 1) ? index - 1 : index;
+            return Padding(
+              key: recIndex == 0 ? tutorialKeys.firstRecommendationCard : null,
+              padding: const EdgeInsets.only(bottom: AppSpace.md),
+              // Keyed by card identity, not just position: _RecommendationCard
+              // is a StatefulWidget holding its own "Why this card?" expand
+              // state, and ranked can reorder (category chip, amount edit).
+              // Without a stable key, ListView.builder reuses the Element at
+              // an index and the wrong card inherits the previous occupant's
+              // expanded/collapsed state.
+              child: _RecommendationCard(
+                recommendations[recIndex],
+                rank: recIndex,
+                key: ValueKey(recommendations[recIndex].card.id),
+              ),
+            );
+          },
         );
       },
+    );
+  }
+}
+
+/// ui-spec B1.4 backup card row, rendered once directly below the hero
+/// card. Scope reduction, stated explicitly here: this shows the next-best
+/// non-excluded card from the same already-ranked `rankedRecommendationsProvider`
+/// list (the runner-up), not real crowdsourced acceptance data — the only
+/// acceptance-data surface in this codebase today is the admin-gated
+/// `GET /admin/acceptance-summary`, and building a public equivalent is a
+/// whole crowdsourcing-pipeline surface out of scope for this delta.
+class _BackupCardRow extends StatelessWidget {
+  final Recommendation backup;
+  const _BackupCardRow(this.backup);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.swap_horiz_rounded, size: 16, color: AppColors.ink500),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: Theme.of(context).textTheme.bodySmall,
+                children: [
+                  const TextSpan(text: 'If not accepted: '),
+                  TextSpan(
+                    text: backup.card.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          MoneyText(backup.expectedValue, confidence: backup.confidence, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
     );
   }
 }
@@ -408,5 +467,14 @@ class _RecommendationCardState extends State<_RecommendationCard> {
         ],
       ),
     );
+  }
+}
+
+extension _FirstWhereOrNull<T> on Iterable<T> {
+  T? firstWhereOrNull(bool Function(T) test) {
+    for (final e in this) {
+      if (test(e)) return e;
+    }
+    return null;
   }
 }

@@ -112,4 +112,70 @@ void main() {
     expect(find.textContaining('B reason two'), findsNothing);
     expect(find.text('Why this card?'), findsWidgets);
   });
+
+  testWidgets('shows a backup-card row for the runner-up when one exists', (tester) async {
+    final recs = [
+      Recommendation(card: _card('c1'), expectedValue: Money.fromRupees(120), confidence: Confidence.estimated, reasonLines: const ['Base rate 5.0%']),
+      Recommendation(card: _card('c2'), expectedValue: Money.fromRupees(80), confidence: Confidence.estimated, reasonLines: const ['Base rate 2.0%']),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [rankedRecommendationsProvider.overrideWithValue(AsyncValue.data(recs))],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('If not accepted:'), findsOneWidget);
+    expect(find.textContaining('Card c2'), findsWidgets);
+  });
+
+  testWidgets('backup row skips an excluded runner-up and shows the next eligible card', (tester) async {
+    // Regression coverage: the backup row must pick the first ELIGIBLE
+    // (non-excluded) lower-ranked card, not literally rank index 1 — if
+    // rank 1 is excluded (e.g. cap reached), rank 2 should show instead.
+    final recs = [
+      Recommendation(card: _card('c1'), expectedValue: Money.fromRupees(120), confidence: Confidence.estimated, reasonLines: const ['Base rate 5.0%']),
+      Recommendation(
+        card: _card('c2'),
+        expectedValue: Money.fromRupees(80),
+        confidence: Confidence.estimated,
+        reasonLines: const ['Base rate 2.0%'],
+        exclusionReason: 'Monthly cap reached',
+      ),
+      Recommendation(card: _card('c3'), expectedValue: Money.fromRupees(60), confidence: Confidence.estimated, reasonLines: const ['Base rate 1.5%']),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [rankedRecommendationsProvider.overrideWithValue(AsyncValue.data(recs))],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('If not accepted:'), findsOneWidget);
+    expect(find.textContaining('Card c3'), findsWidgets);
+  });
+
+  testWidgets('no backup row when every lower-ranked card is excluded', (tester) async {
+    final recs = [
+      Recommendation(card: _card('c1'), expectedValue: Money.fromRupees(120), confidence: Confidence.estimated, reasonLines: const ['Base rate 5.0%']),
+      Recommendation(
+        card: _card('c2'),
+        expectedValue: Money.fromRupees(80),
+        confidence: Confidence.estimated,
+        reasonLines: const ['Base rate 2.0%'],
+        exclusionReason: 'Monthly cap reached',
+      ),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [rankedRecommendationsProvider.overrideWithValue(AsyncValue.data(recs))],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('If not accepted:'), findsNothing);
+  });
 }
