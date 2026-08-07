@@ -1,6 +1,9 @@
 testfile.tmp
 db/audit-logs/
 
+# Isolated per-plan git worktrees (superpowers:using-git-worktrees)
+.worktrees/
+
 # Original source repo the user supplied for auth — adapted copy lives in auth/,
 # this stays local as reference material and is not part of the app going forward.
 PandaPal_Auth_Service/
