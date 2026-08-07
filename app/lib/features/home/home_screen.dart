@@ -278,6 +278,29 @@ class _RankedList extends ConsumerWidget {
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.xxl),
           itemCount: recommendations.length + (backup != null ? 1 : 0),
+          // findChildIndexCallback: without this, SliverChildBuilderDelegate
+          // (used by ListView.builder under the hood) only matches keyed
+          // children at their previous index — when the list reorders, it
+          // silently drops/resets Element state instead of moving it. This
+          // callback tells Flutter how to search for a child by its key,
+          // allowing it to move _RecommendationCard state across indices.
+          findChildIndexCallback: (key) {
+            if (key is! ValueKey<String>) return null;
+
+            final cardId = key.value;
+
+            // Find the recommendation with this card ID
+            final recIndex = recommendations.indexWhere((r) => r.card.id == cardId);
+            if (recIndex == -1) return null;
+
+            // Calculate the ListView index from the recommendation index.
+            // If backup is present, it occupies ListView index 1 and all
+            // recommendations after index 0 are shifted by 1.
+            if (backup != null && recIndex > 0) {
+              return recIndex + 1;
+            }
+            return recIndex;
+          },
           itemBuilder: (context, index) {
             if (backup != null && index == 1) {
               return Padding(
@@ -294,7 +317,8 @@ class _RankedList extends ConsumerWidget {
               // state, and ranked can reorder (category chip, amount edit).
               // Without a stable key, ListView.builder reuses the Element at
               // an index and the wrong card inherits the previous occupant's
-              // expanded/collapsed state.
+              // expanded/collapsed state. With findChildIndexCallback above,
+              // Flutter can now find and move elements correctly on reorder.
               child: _RecommendationCard(
                 recommendations[recIndex],
                 rank: recIndex,
