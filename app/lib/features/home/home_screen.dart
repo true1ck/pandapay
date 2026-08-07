@@ -309,20 +309,37 @@ class _RankedList extends ConsumerWidget {
               );
             }
             final recIndex = (backup != null && index > 1) ? index - 1 : index;
+            // Keyed by card identity, not just position: _RecommendationCard
+            // is a StatefulWidget holding its own "Why this card?" expand
+            // state, and ranked can reorder (category chip, amount edit).
+            // The key MUST live on the widget returned directly by
+            // itemBuilder (this Padding) — SliverChildBuilderDelegate (and
+            // therefore findChildIndexCallback above) only ever looks at the
+            // top-level child's key when deciding whether to move an
+            // existing Element instead of discarding it. A key nested one
+            // level down (e.g. on _RecommendationCard alone) is invisible to
+            // that mechanism, so the callback would silently no-op.
             return Padding(
-              key: recIndex == 0 ? tutorialKeys.firstRecommendationCard : null,
+              key: ValueKey(recommendations[recIndex].card.id),
               padding: const EdgeInsets.only(bottom: AppSpace.md),
-              // Keyed by card identity, not just position: _RecommendationCard
-              // is a StatefulWidget holding its own "Why this card?" expand
-              // state, and ranked can reorder (category chip, amount edit).
-              // Without a stable key, ListView.builder reuses the Element at
-              // an index and the wrong card inherits the previous occupant's
-              // expanded/collapsed state. With findChildIndexCallback above,
-              // Flutter can now find and move elements correctly on reorder.
+              // NOTE: the tutorial anchor GlobalKey is passed in as a plain
+              // constructor field (cardAnchorKey), not attached as this
+              // widget's own Key. A GlobalKey directly on a StatefulWidget
+              // (or on a KeyedSubtree wrapping one) makes Flutter transplant
+              // that Element — and its State, including _expanded — to
+              // wherever the GlobalKey is used next frame. Since
+              // "recIndex == 0" is a rank-based condition that moves between
+              // cards on reorder, that would silently re-introduce the very
+              // per-card state leak this file's findChildIndexCallback/
+              // ValueKey fix exists to prevent, just via a different
+              // mechanism. Applying the GlobalKey to an inner, non-identity
+              // widget (see _RecommendationCardState.build) keeps it usable
+              // for the tutorial overlay's positioning without touching
+              // which State object a card keeps on reorder.
               child: _RecommendationCard(
                 recommendations[recIndex],
                 rank: recIndex,
-                key: ValueKey(recommendations[recIndex].card.id),
+                cardAnchorKey: recIndex == 0 ? tutorialKeys.firstRecommendationCard : null,
               ),
             );
           },
@@ -379,7 +396,13 @@ class _BackupCardRow extends StatelessWidget {
 class _RecommendationCard extends StatefulWidget {
   final Recommendation recommendation;
   final int rank;
-  const _RecommendationCard(this.recommendation, {required this.rank, super.key});
+  // Anchor GlobalKey for the onboarding tutorial overlay to measure this
+  // card's position when it's the rank-0 (hero) card. Deliberately NOT this
+  // widget's own `key` — see the call site in _RankedList for why: this
+  // widget's identity (and thus its State's _expanded flag) must be keyed
+  // only by card id, never by a rank-based GlobalKey.
+  final Key? cardAnchorKey;
+  const _RecommendationCard(this.recommendation, {required this.rank, this.cardAnchorKey, super.key});
 
   @override
   State<_RecommendationCard> createState() => _RecommendationCardState();
@@ -396,6 +419,7 @@ class _RecommendationCardState extends State<_RecommendationCard> {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
+      key: widget.cardAnchorKey,
       decoration: BoxDecoration(
         // ui-spec B1.2: the hero card gets its own art/color treatment,
         // not just a thin border like every other ranked-list row —

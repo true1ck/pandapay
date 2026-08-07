@@ -112,6 +112,10 @@ void main() {
     // index — its own second reason line must stay hidden until tapped.
     expect(find.textContaining('B reason two'), findsNothing);
     expect(find.text('Why this card?'), findsWidgets);
+
+    // Card A moved from rank 0 to rank 1 — its Element (and thus its own
+    // _expanded flag) must move WITH it, not be reset by the reorder.
+    expect(find.textContaining('A reason two'), findsOneWidget);
   });
 
   testWidgets('shows a backup-card row for the runner-up when one exists', (tester) async {
@@ -180,6 +184,7 @@ void main() {
     expect(find.textContaining('If not accepted:'), findsNothing);
   });
 
+
   testWidgets('hero card\'s "Compare all cards" button opens the B4 comparison screen', (tester) async {
     final recs = [
       Recommendation(card: _card('c1'), expectedValue: Money.fromRupees(120), confidence: Confidence.estimated, reasonLines: const ['Base rate 5.0%']),
@@ -202,4 +207,5 @@ void main() {
     expect(find.byType(ComparisonViewScreen), findsOneWidget);
     expect(find.text('Compare cards'), findsOneWidget);
   });
+
 }
