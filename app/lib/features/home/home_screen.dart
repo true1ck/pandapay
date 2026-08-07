@@ -10,6 +10,7 @@ import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
+import '../overrides/manual_overrides_screen.dart';
 
 /// B1 Home, cut down to what's real today: category chips + ranked list
 /// with reason lines, backed by the actual engine and a live API fetch.
@@ -221,22 +222,37 @@ class _RankedList extends ConsumerWidget {
   }
 }
 
-class _RecommendationCard extends StatelessWidget {
+class _RecommendationCard extends StatefulWidget {
   final Recommendation recommendation;
   final int rank;
   const _RecommendationCard(this.recommendation, {required this.rank});
 
   @override
+  State<_RecommendationCard> createState() => _RecommendationCardState();
+}
+
+class _RecommendationCardState extends State<_RecommendationCard> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final recommendation = widget.recommendation;
     final excluded = recommendation.isExcluded;
-    final isBest = rank == 0 && !excluded;
+    final isHero = widget.rank == 0 && !excluded;
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
       decoration: BoxDecoration(
-        color: excluded ? AppColors.surfaceMuted : AppColors.surface,
+        // ui-spec B1.2: the hero card gets its own art/color treatment,
+        // not just a thin border like every other ranked-list row —
+        // filled navy so it reads as "the answer" at a glance, matching
+        // B1's "answer 'which card?' in under 500ms" purpose statement.
+        color: isHero ? AppColors.navy900 : (excluded ? AppColors.surfaceMuted : AppColors.surface),
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: isBest ? Border.all(color: AppColors.teal500, width: 1.5) : Border.all(color: AppColors.ink100),
+        border: isHero ? null : Border.all(color: AppColors.ink100),
+        boxShadow: isHero
+            ? [BoxShadow(color: AppColors.navy900.withValues(alpha: 0.24), blurRadius: 16, offset: const Offset(0, 6))]
+            : null,
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -247,11 +263,11 @@ class _RecommendationCard extends StatelessWidget {
               Expanded(
                 child: Row(
                   children: [
-                    if (isBest) ...[
+                    if (isHero) ...[
                       const StatusPill(
                         label: 'BEST',
-                        foreground: Colors.white,
-                        background: AppColors.teal600,
+                        foreground: AppColors.navy900,
+                        background: Colors.white,
                         icon: Icons.star_rounded,
                       ),
                       const SizedBox(width: AppSpace.sm),
@@ -260,7 +276,7 @@ class _RecommendationCard extends StatelessWidget {
                       child: Text(
                         recommendation.card.name,
                         style: textTheme.titleMedium?.copyWith(
-                          color: excluded ? AppColors.ink500 : AppColors.ink900,
+                          color: isHero ? Colors.white : (excluded ? AppColors.ink500 : AppColors.ink900),
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -269,9 +285,23 @@ class _RecommendationCard extends StatelessWidget {
                 ),
               ),
               if (recommendation.isOverride)
-                const Padding(
-                  padding: EdgeInsets.only(left: AppSpace.xs),
-                  child: StatusPill(label: 'Override', foreground: AppColors.navy800, background: AppColors.surfaceMuted),
+                Padding(
+                  padding: const EdgeInsets.only(left: AppSpace.xs),
+                  child: GestureDetector(
+                    // B8 chip requirement: tapping the "override active" pill
+                    // takes the user straight to where they can see/undo it —
+                    // an override silently steering advice with no visible
+                    // way back is exactly the trust bug B8 exists to prevent.
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ManualOverridesScreen()),
+                    ),
+                    child: StatusPill(
+                      label: 'Override active',
+                      foreground: isHero ? Colors.white : AppColors.navy800,
+                      background: isHero ? Colors.white.withValues(alpha: 0.16) : AppColors.surfaceMuted,
+                      icon: Icons.push_pin_rounded,
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -291,14 +321,61 @@ class _RecommendationCard extends StatelessWidget {
             MoneyText(
               recommendation.expectedValue,
               confidence: recommendation.confidence,
-              style: textTheme.headlineSmall,
+              style: isHero ? textTheme.headlineMedium?.copyWith(color: Colors.white) : textTheme.headlineSmall,
             ),
             const SizedBox(height: AppSpace.xs),
-            for (final line in recommendation.reasonLines)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text('•  $line', style: textTheme.bodySmall),
+            // ui-spec B1.3 "Why this card?" — collapsed to the first reason
+            // line by default (short, scannable), full arithmetic behind an
+            // explicit tap so the ranked list doesn't turn into a wall of
+            // text for every card.
+            if (recommendation.reasonLines.isNotEmpty) ...[
+              Text(
+                '•  ${recommendation.reasonLines.first}',
+                style: textTheme.bodySmall?.copyWith(color: isHero ? Colors.white70 : null),
               ),
+              if (recommendation.reasonLines.length > 1) ...[
+                InkWell(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _expanded ? 'Hide the full breakdown' : 'Why this card?',
+                          style: textTheme.labelMedium?.copyWith(
+                            color: isHero ? AppColors.teal400 : AppColors.teal600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Icon(
+                          _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                          size: 18,
+                          color: isHero ? AppColors.teal400 : AppColors.teal600,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_expanded)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final line in recommendation.reasonLines.skip(1))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              '•  $line',
+                              style: textTheme.bodySmall?.copyWith(color: isHero ? Colors.white70 : null),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ],
           ],
         ],
       ),
