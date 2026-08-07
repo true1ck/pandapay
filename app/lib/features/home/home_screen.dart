@@ -214,7 +214,17 @@ class _RankedList extends ConsumerWidget {
           itemBuilder: (context, index) => Padding(
             key: index == 0 ? tutorialKeys.firstRecommendationCard : null,
             padding: const EdgeInsets.only(bottom: AppSpace.md),
-            child: _RecommendationCard(recommendations[index], rank: index),
+            // Keyed by card identity, not just position: _RecommendationCard
+            // is a StatefulWidget holding its own "Why this card?" expand
+            // state, and ranked can reorder (category chip, amount edit).
+            // Without a stable key, ListView.builder reuses the Element at
+            // an index and the wrong card inherits the previous occupant's
+            // expanded/collapsed state.
+            child: _RecommendationCard(
+              recommendations[index],
+              rank: index,
+              key: ValueKey(recommendations[index].card.id),
+            ),
           ),
         );
       },
@@ -225,7 +235,7 @@ class _RankedList extends ConsumerWidget {
 class _RecommendationCard extends StatefulWidget {
   final Recommendation recommendation;
   final int rank;
-  const _RecommendationCard(this.recommendation, {required this.rank});
+  const _RecommendationCard(this.recommendation, {required this.rank, super.key});
 
   @override
   State<_RecommendationCard> createState() => _RecommendationCardState();
@@ -287,19 +297,28 @@ class _RecommendationCardState extends State<_RecommendationCard> {
               if (recommendation.isOverride)
                 Padding(
                   padding: const EdgeInsets.only(left: AppSpace.xs),
-                  child: GestureDetector(
-                    // B8 chip requirement: tapping the "override active" pill
-                    // takes the user straight to where they can see/undo it —
-                    // an override silently steering advice with no visible
-                    // way back is exactly the trust bug B8 exists to prevent.
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ManualOverridesScreen()),
-                    ),
-                    child: StatusPill(
-                      label: 'Override active',
-                      foreground: isHero ? Colors.white : AppColors.navy800,
-                      background: isHero ? Colors.white.withValues(alpha: 0.16) : AppColors.surfaceMuted,
-                      icon: Icons.push_pin_rounded,
+                  child: ConstrainedBox(
+                    // The pill itself stays small (StatusPill's own padding),
+                    // but the tappable region is padded out to the 48x48dp
+                    // minimum touch target so it's usable, not just visible.
+                    constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                    child: GestureDetector(
+                      // B8 chip requirement: tapping the "override active" pill
+                      // takes the user straight to where they can see/undo it —
+                      // an override silently steering advice with no visible
+                      // way back is exactly the trust bug B8 exists to prevent.
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ManualOverridesScreen()),
+                      ),
+                      child: Center(
+                        child: StatusPill(
+                          label: 'Override active',
+                          foreground: isHero ? Colors.white : AppColors.navy800,
+                          background: isHero ? Colors.white.withValues(alpha: 0.16) : AppColors.surfaceMuted,
+                          icon: Icons.push_pin_rounded,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -334,26 +353,35 @@ class _RecommendationCardState extends State<_RecommendationCard> {
                 style: textTheme.bodySmall?.copyWith(color: isHero ? Colors.white70 : null),
               ),
               if (recommendation.reasonLines.length > 1) ...[
-                InkWell(
-                  onTap: () => setState(() => _expanded = !_expanded),
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _expanded ? 'Hide the full breakdown' : 'Why this card?',
-                          style: textTheme.labelMedium?.copyWith(
-                            color: isHero ? AppColors.teal400 : AppColors.teal600,
-                            fontWeight: FontWeight.w600,
-                          ),
+                // Visual row stays compact; the InkWell's own min-size
+                // constraint pads the tappable region out to 48x48dp
+                // without inflating the pill/text's on-screen footprint.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: InkWell(
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _expanded ? 'Hide the full breakdown' : 'Why this card?',
+                              style: textTheme.labelMedium?.copyWith(
+                                color: isHero ? AppColors.teal400 : AppColors.teal600,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Icon(
+                              _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                              size: 18,
+                              color: isHero ? AppColors.teal400 : AppColors.teal600,
+                            ),
+                          ],
                         ),
-                        Icon(
-                          _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                          size: 18,
-                          color: isHero ? AppColors.teal400 : AppColors.teal600,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
