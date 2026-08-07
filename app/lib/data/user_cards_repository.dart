@@ -71,6 +71,7 @@ class FeeWaiverProgress {
   final Money thresholdSpend;
   final Money waivesFee;
   final DateTime? waivedAt;
+  final DateTime periodEnd;
 
   const FeeWaiverProgress({
     required this.feeWaiverRuleId,
@@ -78,6 +79,7 @@ class FeeWaiverProgress {
     required this.thresholdSpend,
     required this.waivesFee,
     this.waivedAt,
+    required this.periodEnd,
   });
 
   factory FeeWaiverProgress.fromJson(Map<String, dynamic> json) {
@@ -87,6 +89,7 @@ class FeeWaiverProgress {
       thresholdSpend: Money.fromRupees(_num(json['threshold_spend_inr'])),
       waivesFee: Money.fromRupees(_num(json['waives_fee_inr'])),
       waivedAt: json['waived_at'] == null ? null : DateTime.parse(json['waived_at'] as String),
+      periodEnd: DateTime.parse(json['period_end'] as String),
     );
   }
 }

@@ -267,6 +267,7 @@ void main() {
                             'threshold_spend_inr': 100000,
                             'waives_fee_inr': 500,
                             'waived_at': '2026-08-05T19:44:27.168Z',
+                            'period_end': '2026-08-31T00:00:00.000Z',
                           },
                         ],
                       },

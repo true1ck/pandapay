@@ -11,16 +11,19 @@ import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
+import 'home_alerts.dart';
 
 /// B1 Home, cut down to what's real today: category chips + ranked list
 /// with reason lines, backed by the actual engine and a live API fetch.
 /// Deliberately usable signed-out (rankedRecommendationsProvider falls
 /// back to the whole catalogue) — see the sign-in banner below for how a
 /// signed-out visitor finds their way to an account.
-/// Missing vs the full ui-spec B1: alerts strip, geofence-driven context
-/// line, offline bundling — all noted as not-yet-done rather than faked.
-/// Hero-card treatment and the backup-card row (see _BackupCardRow) are
-/// done.
+/// Missing vs the full ui-spec B1: geofence-driven context line, offline
+/// bundling — noted as not-yet-done rather than faked. Hero-card treatment,
+/// the backup-card row (see _BackupCardRow), and the alerts strip (see
+/// _AlertsStrip — cap-nearly-hit and fee-waiver-deadline only; see its doc
+/// comment for why the other three ui-spec B1.6 alert kinds aren't here)
+/// are done.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -74,8 +77,63 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: AppSpace.sm),
+        const _AlertsStrip(),
         Expanded(child: _RankedList(ranked: ranked)),
       ],
+    );
+  }
+}
+
+/// ui-spec B1.6 alerts strip: actionable alerts shown above the ranked
+/// list, capped to 2 at once and priority-ordered by [computeHomeAlerts].
+/// A fixed strip above the list (not a list item), so the "stable Key for
+/// per-item stateful widgets in a ListView.builder" lesson from the
+/// ranked-list rows above doesn't apply here — this widget is stateless,
+/// rebuilt whole from provider state each time, with no per-alert identity
+/// to preserve across rebuilds. No new Riverpod provider needed: this is a
+/// leaf presentational concern computed directly from already-watched
+/// providers, matching how _BackupCardRow above needed none either.
+class _AlertsStrip extends ConsumerWidget {
+  const _AlertsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userCards = ref.watch(userCardsProvider);
+    final catalogue = ref.watch(catalogueProvider);
+    if (!userCards.hasValue || !catalogue.hasValue) return const SizedBox.shrink();
+
+    final now = ref.watch(clockProvider).now();
+    final alerts = computeHomeAlerts(wallet: userCards.requireValue, catalogue: catalogue.requireValue, now: now)
+        .take(2) // ui-spec B1.6: max 2 at once
+        .toList();
+    if (alerts.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.sm),
+      child: Column(
+        children: [
+          for (final alert in alerts)
+            Container(
+              margin: const EdgeInsets.only(bottom: AppSpace.xs),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7ED),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: const Color(0xFFFED7AA)),
+              ),
+              child: Row(
+                children: [
+                  // Icon + text label together, not color alone, carry the
+                  // "this needs attention" signal — an amber-only box would
+                  // fail for colorblind users.
+                  const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFB45309)),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(child: Text(alert.message, style: Theme.of(context).textTheme.bodySmall)),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -924,7 +924,8 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         card.total_points_earned = pointsTotal.rows[0].total_points;
 
         const feeWaiverStates = await client.query(
-          `SELECT fw.fee_waiver_rule_id, fw.qualified_spend, fw.waived_at, r.threshold_spend_inr, r.waives_fee_inr
+          `SELECT fw.fee_waiver_rule_id, fw.qualified_spend, fw.waived_at, fw.period_end,
+                  r.threshold_spend_inr, r.waives_fee_inr
              FROM fee_waiver_states fw
              JOIN fee_waiver_rules r ON r.id = fw.fee_waiver_rule_id
             WHERE fw.user_card_id = $1 AND fw.period_start <= CURRENT_DATE AND fw.period_end >= CURRENT_DATE`,
