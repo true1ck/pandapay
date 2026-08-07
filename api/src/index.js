@@ -1001,6 +1001,166 @@ app.post('/user-cards/:id/archive', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /card-overrides — B8: every override rule the signed-in user owns,
+ * enabled or disabled (the Manual Overrides screen shows both, with a
+ * disabled-state pill — B8's empty state explains how to create one from
+ * B3, not filtered out here). Same owner-scoped pattern as GET /user-cards.
+ */
+app.get('/card-overrides', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT co.id, co.user_card_id, co.scope, co.vpa, co.merchant_name,
+                co.category_id, sc.name AS category_name, co.reason_note,
+                co.is_enabled, co.created_at,
+                cp.name AS card_name, uc.nickname AS card_nickname
+           FROM card_overrides co
+           JOIN user_cards uc ON uc.id = co.user_card_id
+           JOIN card_products cp ON cp.id = uc.card_product_id
+           LEFT JOIN spend_categories sc ON sc.id = co.category_id
+          WHERE co.profile_id = $1
+          ORDER BY co.created_at DESC`,
+        [req.userId]
+      )
+    );
+    res.json({ overrides: result.rows });
+  } catch (err) {
+    console.error('GET /card-overrides error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /card-overrides — B3's "Always use this card here" and B8's manual
+ * "create a rule" both land here. `scope` determines which of vpa/
+ * merchantName/categoryId is required — mirrors the table's
+ * override_scope_populated CHECK constraint exactly so a bad request fails
+ * with a clear 400 instead of a raw constraint-violation 500.
+ */
+app.post('/card-overrides', requireAuth, async (req, res) => {
+  const { userCardId, scope, vpa, merchantName, categoryId, reasonNote } = req.body || {};
+  if (!userCardId || typeof userCardId !== 'string') {
+    return res.status(400).json({ error: 'userCardId is required' });
+  }
+  if (!['vpa', 'merchant_name', 'category'].includes(scope)) {
+    return res.status(400).json({ error: "scope must be 'vpa', 'merchant_name', or 'category'" });
+  }
+  if (scope === 'vpa' && !vpa) {
+    return res.status(400).json({ error: 'vpa is required when scope is vpa' });
+  }
+  if (scope === 'merchant_name' && !merchantName) {
+    return res.status(400).json({ error: 'merchantName is required when scope is merchant_name' });
+  }
+  if (scope === 'category' && !categoryId) {
+    return res.status(400).json({ error: 'categoryId is required when scope is category' });
+  }
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const owns = await client.query(
+        `SELECT id FROM user_cards WHERE id = $1 AND profile_id = $2 AND is_archived = false`,
+        [userCardId, req.userId]
+      );
+      if (owns.rows.length === 0) return null;
+
+      const inserted = await client.query(
+        `INSERT INTO card_overrides (profile_id, user_card_id, scope, vpa, merchant_name, category_id, reason_note)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, user_card_id, scope, vpa, merchant_name, category_id, reason_note, is_enabled, created_at`,
+        [req.userId, userCardId, scope, vpa || null, merchantName || null, categoryId || null, reasonNote || null]
+      );
+      return inserted.rows[0];
+    });
+
+    if (!result) return res.status(404).json({ error: 'user_card not found or not owned by you' });
+    res.status(201).json({ override: result });
+  } catch (err) {
+    console.error('POST /card-overrides error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * PATCH /card-overrides/:id — B8's edit + enable/disable toggle. Only
+ * is_enabled, reason_note, and user_card_id (re-pointing the rule at a
+ * different card) are editable — scope/vpa/merchant_name/category_id are
+ * NOT patchable here; changing what a rule targets is a delete-and-recreate
+ * in the UI (Task 4), keeping this route's write surface small and the
+ * override_scope_populated CHECK trivially satisfied (we never touch the
+ * scope-defining columns).
+ */
+app.patch('/card-overrides/:id', requireAuth, async (req, res) => {
+  const { isEnabled, reasonNote, userCardId } = req.body || {};
+  const sets = [];
+  const params = [];
+  if (isEnabled !== undefined) {
+    params.push(!!isEnabled);
+    sets.push(`is_enabled = $${params.length}`);
+  }
+  if (reasonNote !== undefined) {
+    params.push(reasonNote || null);
+    sets.push(`reason_note = $${params.length}`);
+  }
+  if (userCardId !== undefined) {
+    params.push(userCardId);
+    sets.push(`user_card_id = $${params.length}`);
+  }
+  if (sets.length === 0) {
+    return res.status(400).json({ error: 'nothing to update' });
+  }
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      if (userCardId !== undefined) {
+        const owns = await client.query(
+          `SELECT id FROM user_cards WHERE id = $1 AND profile_id = $2 AND is_archived = false`,
+          [userCardId, req.userId]
+        );
+        if (owns.rows.length === 0) return 'card_not_found';
+      }
+      params.push(req.params.id, req.userId);
+      const updated = await client.query(
+        `UPDATE card_overrides SET ${sets.join(', ')}
+          WHERE id = $${params.length - 1} AND profile_id = $${params.length}
+          RETURNING id, user_card_id, scope, vpa, merchant_name, category_id, reason_note, is_enabled, created_at`,
+        params
+      );
+      return updated.rows[0] || null;
+    });
+
+    if (result === 'card_not_found') return res.status(404).json({ error: 'user_card not found or not owned by you' });
+    if (!result) return res.status(404).json({ error: 'override not found' });
+    res.json({ override: result });
+  } catch (err) {
+    console.error('PATCH /card-overrides/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * DELETE /card-overrides/:id — unlike transactions/user_cards (R4: archive,
+ * never delete — they carry financial history), an override rule is pure
+ * user *intent*, not a financial record, so a true delete is appropriate
+ * here. Confirmation lives client-side (Task 4's delete-confirmation
+ * dialog per this plan's Global Constraints).
+ */
+app.delete('/card-overrides/:id', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `DELETE FROM card_overrides WHERE id = $1 AND profile_id = $2 RETURNING id`,
+        [req.params.id, req.userId]
+      )
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'override not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /card-overrides/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * POST /transactions — UA-3+ (Chunk 17): manual transaction entry
  * (source='manual', reward_state='estimated' — R3, nothing here is ever
  * 'confirmed' without a real statement/SMS reconciliation path, which
