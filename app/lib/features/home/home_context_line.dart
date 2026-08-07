@@ -17,6 +17,25 @@ enum _ContextState { locating, found, noPermission, noMatch, offlineOrError }
 /// geofencing" scope note, which applies here identically — this widget
 /// does not add a new location-permission flow, it triggers the same kind
 /// of one-shot read from `initState` instead of a button tap.
+///
+/// IMPORTANT — permission-nag fix (post-review): Home's route is a plain
+/// `ShellRoute`/`GoRoute` (see `app/lib/app/router.dart`), not a
+/// `StatefulShellRoute.indexedStack`, so `HomeScreen` — and this widget —
+/// is disposed and rebuilt on every navigation back to the Home tab.
+/// That means `initState` fires again on every Home → other tab → Home
+/// round trip. If the automatic mount ever called
+/// `Geolocator.requestPermission()` while permission is Android's
+/// "denied" (not yet "don't ask again"), the OS permission dialog would
+/// resurface on ordinary tab navigation — a real system nag, not just an
+/// in-app one, and a direct violation of ui-spec B1 States' "no location
+/// permission -> chips primary, no nag". So `_locate` takes an `auto`
+/// flag: an automatic mount only ever calls `Geolocator.checkPermission()`
+/// (read-only, never shows a dialog) and falls back to the noPermission
+/// state without prompting if it isn't already granted. Only an explicit
+/// user tap (`auto: false`) is allowed to call `requestPermission()` —
+/// matching `nearby_merchants_screen.dart`'s own pattern exactly, where
+/// the whole location flow (including the request) only ever runs from
+/// a button's `onPressed`.
 class HomeContextLine extends ConsumerStatefulWidget {
   const HomeContextLine({super.key});
 
@@ -31,10 +50,10 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
   @override
   void initState() {
     super.initState();
-    _locate();
+    _locate(auto: true);
   }
 
-  Future<void> _locate() async {
+  Future<void> _locate({required bool auto}) async {
     if (mounted) setState(() => _state = _ContextState.locating);
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -44,6 +63,13 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
       }
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
+        if (auto) {
+          // Never prompt on an automatic mount — checkPermission() alone
+          // never surfaces a system dialog, but requestPermission() does,
+          // and an automatic mount must stay silent per ui-spec B1 States.
+          if (mounted) setState(() => _state = _ContextState.noPermission);
+          return;
+        }
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
@@ -113,7 +139,7 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
         constraints: const BoxConstraints(minHeight: 48),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          onTap: _state == _ContextState.locating ? null : _locate,
+          onTap: _state == _ContextState.locating ? null : () => _locate(auto: false),
           child: Align(
             alignment: Alignment.centerLeft,
             child: Row(
