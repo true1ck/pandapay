@@ -12,18 +12,19 @@ import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
 import 'home_alerts.dart';
+import 'home_context_line.dart';
 
 /// B1 Home, cut down to what's real today: category chips + ranked list
 /// with reason lines, backed by the actual engine and a live API fetch.
 /// Deliberately usable signed-out (rankedRecommendationsProvider falls
 /// back to the whole catalogue) — see the sign-in banner below for how a
 /// signed-out visitor finds their way to an account.
-/// Missing vs the full ui-spec B1: geofence-driven context line, offline
-/// bundling — noted as not-yet-done rather than faked. Hero-card treatment,
-/// the backup-card row (see _BackupCardRow), and the alerts strip (see
-/// _AlertsStrip — cap-nearly-hit and fee-waiver-deadline only; see its doc
-/// comment for why the other three ui-spec B1.6 alert kinds aren't here)
-/// are done.
+/// Missing vs the full ui-spec B1: offline bundling — noted as not-yet-done
+/// rather than faked. Hero-card treatment, the backup-card row (see
+/// _BackupCardRow), the alerts strip (see _AlertsStrip — cap-nearly-hit and
+/// fee-waiver-deadline only; see its doc comment for why the other three
+/// ui-spec B1.6 alert kinds aren't here), and the geofence-driven context
+/// line (see HomeContextLine in home_context_line.dart) are done.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -45,6 +46,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Column(
       children: [
+        const HomeContextLine(),
         if (!signedIn) const _SignInBanner(),
         Padding(
           key: tutorialKeys.amountField,
