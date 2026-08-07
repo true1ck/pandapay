@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/features/comparison/comparison_view_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -177,5 +178,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('If not accepted:'), findsNothing);
+  });
+
+  testWidgets('hero card\'s "Compare all cards" button opens the B4 comparison screen', (tester) async {
+    final recs = [
+      Recommendation(card: _card('c1'), expectedValue: Money.fromRupees(120), confidence: Confidence.estimated, reasonLines: const ['Base rate 5.0%']),
+      Recommendation(card: _card('c2'), expectedValue: Money.fromRupees(80), confidence: Confidence.estimated, reasonLines: const ['Base rate 2.0%']),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [rankedRecommendationsProvider.overrideWithValue(AsyncValue.data(recs))],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Only the hero (rank 0) card gets the entry point, not every row.
+    expect(find.text('Compare all cards'), findsOneWidget);
+
+    await tester.tap(find.text('Compare all cards'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ComparisonViewScreen), findsOneWidget);
+    expect(find.text('Compare cards'), findsOneWidget);
   });
 }

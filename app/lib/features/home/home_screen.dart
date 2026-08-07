@@ -10,6 +10,7 @@ import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
+import '../comparison/comparison_view_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
 import 'home_alerts.dart';
 import 'home_context_line.dart';
@@ -524,6 +525,19 @@ class _RecommendationCardState extends State<_RecommendationCard> {
               ],
             ],
           ],
+          // ui-spec B4 entry point: only the hero card gets this — B4's
+          // full sortable comparison table is one tap away from "the
+          // answer" B1 already gave, for whoever wants to see the whole
+          // ranked field rather than just the top pick.
+          if (isHero)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ComparisonViewScreen())),
+                style: TextButton.styleFrom(foregroundColor: AppColors.teal400),
+                child: const Text('Compare all cards'),
+              ),
+            ),
         ],
       ),
     );
