@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/auth_api.dart';
+import '../data/card_overrides_repository.dart';
 import '../data/catalogue_repository.dart';
 import '../data/token_store.dart';
 import '../data/user_cards_repository.dart';
@@ -205,6 +206,20 @@ final transactionsProvider = FutureProvider<List<TransactionEntry>>((ref) async 
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   return repo.fetchTransactions();
+});
+
+final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return CardOverridesRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// B8 — every override rule the signed-in user owns (enabled or disabled).
+/// Empty (not an error) when signed out, same reasoning as userCardsProvider.
+final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
+  final repo = ref.watch(cardOverridesRepositoryProvider);
+  if (repo == null) return const [];
+  return repo.fetchOverrides();
 });
 
 final catalogueRepositoryProvider = Provider<CatalogueRepository>((ref) {
