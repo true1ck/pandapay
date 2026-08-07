@@ -6,27 +6,30 @@ import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 
-/// ui-spec.md A3 ⭐. "Use without an account" carries a recommended badge
-/// and completes onboarding immediately — local/guest mode is explicitly a
-/// first-class citizen per the spec ("no dark patterns, no nagging later"),
-/// matching this app's existing signed-out browse support on Home. "Create
-/// account" only completes onboarding once sign-up actually succeeds
-/// (accessTokenProvider becomes non-null); backing out of sign-up leaves the
-/// user right back here rather than silently treating an abandoned flow as
-/// a completed choice.
+/// ui-spec.md A3 ⭐. "Use without an account" carries a recommended badge —
+/// local/guest mode is explicitly a first-class citizen per the spec ("no
+/// dark patterns, no nagging later"), matching this app's existing
+/// signed-out browse support on Home. "Create account" only continues once
+/// sign-up actually succeeds (accessTokenProvider becomes non-null); backing
+/// out of sign-up leaves the user right back here rather than silently
+/// treating an abandoned flow as a completed choice.
+///
+/// Task A7-A10 (implementation-plan's Group A completion): neither path
+/// completes onboarding here anymore — both continue to A7 (Add Your First
+/// Card) instead, per the spec's real screen order A3 -> A7 -> A9 -> A10 ->
+/// A11 -> Home. A10 Tracking Setup is now the only place onboarding
+/// actually completes.
 class AccountChoiceScreen extends ConsumerWidget {
   const AccountChoiceScreen({super.key});
 
-  Future<void> _useWithoutAccount(WidgetRef ref, BuildContext context) async {
-    await ref.read(onboardingCompleteProvider.notifier).complete();
-    if (context.mounted) context.go(AppRoute.home);
+  void _useWithoutAccount(WidgetRef ref, BuildContext context) {
+    context.go(AppRoute.addFirstCard);
   }
 
   Future<void> _createAccount(WidgetRef ref, BuildContext context) async {
     await context.push(AppRoute.signUp);
-    if (ref.read(accessTokenProvider) != null) {
-      await ref.read(onboardingCompleteProvider.notifier).complete();
-      if (context.mounted) context.go(AppRoute.home);
+    if (ref.read(accessTokenProvider) != null && context.mounted) {
+      context.go(AppRoute.addFirstCard);
     }
     // Otherwise the user backed out of sign-up without completing it —
     // stay right here, no navigation.
