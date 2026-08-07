@@ -122,16 +122,35 @@ class CardOverridesRepository {
     return CardOverride.fromJson((jsonDecode(response.body) as Map<String, dynamic>)['override'] as Map<String, dynamic>);
   }
 
-  Future<void> setEnabled(String id, bool enabled) async {
+  /// B8 edit: PATCHes only the fields the caller actually passes (mirrors
+  /// the backend route's `if (x !== undefined)` per-field logic exactly —
+  /// see api/src/index.js's `PATCH /card-overrides/:id`). Only
+  /// [isEnabled]/[reasonNote]/[userCardId] are ever sent: scope/vpa/
+  /// merchantName/categoryId are NOT patchable by design (per Task 1's
+  /// brief) — changing what a rule targets is a delete-and-recreate in the
+  /// UI, not an edit, so this method has no parameters for them.
+  ///
+  /// To clear an existing note, pass `reasonNote: ''` explicitly (the
+  /// backend turns an empty string into SQL NULL) — passing `null` (the
+  /// default) omits the field from the PATCH body entirely, leaving it
+  /// untouched.
+  Future<void> updateOverride(String id, {bool? isEnabled, String? reasonNote, String? userCardId}) async {
+    final requestBody = <String, dynamic>{
+      if (isEnabled != null) 'isEnabled': isEnabled,
+      if (reasonNote != null) 'reasonNote': reasonNote,
+      if (userCardId != null) 'userCardId': userCardId,
+    };
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/card-overrides/$id'),
       headers: _headers,
-      body: jsonEncode({'isEnabled': enabled}),
+      body: jsonEncode(requestBody),
     );
     if (response.statusCode != 200) {
       throw ApiException('PATCH /card-overrides/$id failed: ${response.statusCode} ${response.body}');
     }
   }
+
+  Future<void> setEnabled(String id, bool enabled) => updateOverride(id, isEnabled: enabled);
 
   Future<void> delete(String id) async {
     final response = await _client.delete(Uri.parse('$apiBaseUrl/card-overrides/$id'), headers: _headers);

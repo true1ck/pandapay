@@ -113,6 +113,10 @@ class _OverrideTile extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
+                  onPressed: () => _openEditSheet(context, ref),
+                  child: const Text('Edit'),
+                ),
+                TextButton(
                   onPressed: () => _toggle(context, ref),
                   child: Text(rule.isEnabled ? 'Disable' : 'Enable'),
                 ),
@@ -129,9 +133,29 @@ class _OverrideTile extends ConsumerWidget {
     );
   }
 
+  /// B8 edit: card reassignment + note only — scope/vpa/merchantName/
+  /// categoryId are deliberately not editable here (see
+  /// CardOverridesRepository.updateOverride's doc comment); changing what a
+  /// rule targets stays delete-and-recreate via the Delete + FAB flow.
+  Future<void> _openEditSheet(BuildContext context, WidgetRef ref) async {
+    final userCards = await ref.read(userCardsProvider.future);
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _EditOverrideSheet(rule: rule, userCards: userCards),
+    );
+  }
+
   Future<void> _toggle(BuildContext context, WidgetRef ref) async {
     final repo = ref.read(cardOverridesRepositoryProvider);
-    if (repo == null) return;
+    if (repo == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('You need to be signed in to do that.')));
+      }
+      return;
+    }
     try {
       await repo.setEnabled(rule.id, !rule.isEnabled);
       ref.invalidate(cardOverridesProvider);
@@ -165,7 +189,13 @@ class _OverrideTile extends ConsumerWidget {
     );
     if (confirmed != true) return;
     final repo = ref.read(cardOverridesRepositoryProvider);
-    if (repo == null) return;
+    if (repo == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('You need to be signed in to do that.')));
+      }
+      return;
+    }
     try {
       await repo.delete(rule.id);
       ref.invalidate(cardOverridesProvider);
@@ -304,6 +334,108 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
               child: _saving
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Text('Save override'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// B8 edit sheet: reassign the card and/or change the note on an *existing*
+/// rule via `CardOverridesRepository.updateOverride` (a real PATCH, not a
+/// delete-and-recreate). Deliberately has no scope/vpa/merchantName/
+/// categoryId fields — see that method's doc comment for why those stay
+/// out of this flow.
+class _EditOverrideSheet extends ConsumerStatefulWidget {
+  final CardOverride rule;
+  final List<UserCard> userCards;
+  const _EditOverrideSheet({required this.rule, required this.userCards});
+
+  @override
+  ConsumerState<_EditOverrideSheet> createState() => _EditOverrideSheetState();
+}
+
+class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
+  late String? _selectedUserCardId = widget.rule.userCardId;
+  late final _noteController = TextEditingController(text: widget.rule.reasonNote ?? '');
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  bool get _canSave => _selectedUserCardId != null;
+
+  Future<void> _save() async {
+    final repo = ref.read(cardOverridesRepositoryProvider);
+    if (repo == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('You need to be signed in to do that.')));
+      }
+      return;
+    }
+    if (!_canSave) return;
+    setState(() => _saving = true);
+    try {
+      await repo.updateOverride(
+        widget.rule.id,
+        userCardId: _selectedUserCardId,
+        // Always sent (even empty) so clearing the note field actually
+        // clears it server-side — see updateOverride's doc comment.
+        reasonNote: _noteController.text.trim(),
+      );
+      ref.invalidate(cardOverridesProvider);
+      ref.invalidate(rankedRecommendationsProvider);
+      if (mounted) Navigator.of(context).pop();
+    } catch (err) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: AppSpace.lg, right: AppSpace.lg, top: AppSpace.lg,
+        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Edit override', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpace.md),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedUserCardId,
+              decoration: const InputDecoration(labelText: 'Card'),
+              items: widget.userCards
+                  .map((c) => DropdownMenuItem(
+                        value: c.id,
+                        child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedUserCardId = v),
+            ),
+            const SizedBox(height: AppSpace.md),
+            TextField(
+              controller: _noteController,
+              decoration: const InputDecoration(labelText: 'Note (optional)'),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            FilledButton(
+              onPressed: _canSave && !_saving ? _save : null,
+              child: _saving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Save changes'),
             ),
           ],
         ),
