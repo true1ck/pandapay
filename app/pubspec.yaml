@@ -80,6 +80,23 @@ dependencies:
   flex_color_scheme: ^8.4.0
   responsive_framework: ^1.5.1
 
+  # G4 (Chunk 38): one-tap `tel:` dial from Emergency Card Info. Not already
+  # a dependency (checked before adding, contrary to the plan's "likely
+  # already a dependency" guess) — added because G4's one-tap dial is a core,
+  # explicit spec requirement, not an optional nicety, unlike F2/F4/F6's
+  # PDF-parsing/share-sheet packages (Chunk 37 scoped those OUT specifically
+  # because this sandbox has no Flutter SDK to `pub get`/compile a new native
+  # plugin against). url_launcher is a much lower-risk addition than those —
+  # a thin, extremely widely-used platform-channel wrapper with a small,
+  # stable API — and this codebase already has precedent (Chunks 30-32) for
+  # adding native plugins without live device verification. Still unverified
+  # by a real `pub get`/build in this environment — flagged, not hidden.
+  url_launcher: ^6.3.1
+  path_provider: ^2.1.6
+  package_info_plus: ^10.2.1
+  intl: ^0.20.3
+  image_picker: ^1.2.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
