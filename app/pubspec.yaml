@@ -124,7 +124,26 @@ dependencies:
   path: ^1.9.0
   connectivity_plus: ^7.3.1
 
-dev_dependencies:
+  # F2 (ui-spec Statement PDF Import, GAP_ANALYSIS.md §3): real on-device
+  # PDF text extraction, including password-protected statements — the
+  # exact package this screen's own doc-comment already named as the
+  # intended choice before this was wired for real. Free community
+  # license (Syncfusion's Flutter widgets are free under their Community
+  # License for qualifying individuals/small businesses — confirm
+  # eligibility before a commercial release; flagged, not a legal
+  # determination made here). Verified resolving cleanly against this
+  # exact dependency graph with `dart pub get` before landing it.
+  syncfusion_flutter_pdf: ^34.2.2
+  # F2: real file picking for statement PDF import — named in the original
+  # plan's package table alongside share_plus (F6), which isn't added here;
+  # F6's own screen already made a documented judgment call to use
+  # Clipboard instead. Pinned to the 12.0.0 beta line, not the latest
+  # stable 11.x — every file_picker <12.0.0-beta.1 hard-pins win32 ^5.9.0,
+  # which conflicts with package_info_plus's win32 ^6.0.1 (win32 only
+  # matters for this app's unused Windows desktop target, but pub's
+  # resolver still enforces it). Verified resolving cleanly against this
+  # exact dependency graph before landing it.
+  file_picker: ">=12.0.0-beta.1"
   flutter_test:
     sdk: flutter
 

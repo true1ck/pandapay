@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -6,34 +9,27 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/pdf_statement_parser.dart';
 import '../../main.dart' show MoneyText;
 
 enum _Step { pickFile, password, parsing, preview, done, error }
 
 /// ui-spec.md F2 Statement PDF Import.
 ///
-/// Scope decision, per this task's own instructions: real on-device
-/// password-protected-PDF parsing is genuinely non-trivial (needs a PDF
-/// library capable of decrypting + extracting a bank statement's
-/// transaction table entirely client-side) and no such package is a
-/// pubspec dependency today. Rather than add an unverifiable new native
-/// plugin in an environment with no Flutter SDK to `pub get`/compile
-/// against (this sandbox — see this chunk's PROGRESS.md entry), this
-/// screen builds the REAL UI flow (file step → password prompt → parse
-/// progress → preview → confirm → `statement_imports` row) wired to a
-/// STUB parser that fabricates a small, clearly-fake preview instead of
-/// reading a real file. What real PDF parsing would still need: a
-/// password-capable PDF text/table extraction package (e.g. something in
-/// the `syncfusion_flutter_pdf`/`pdfx` family — needs an explicit package
-/// choice + security review before adding, per this task's own
-/// instructions), issuer-specific column-layout parsing per bank (mirrors
-/// `parser_patterns` server-side, but PDF layouts are far less uniform
-/// than SMS/email text), and wiring the result into D5's duplicate-check
-/// logic once that exists (C/D plan).
+/// Real on-device parsing: `file_picker` for the file, `syncfusion_flutter_pdf`
+/// (`PdfStatementReader`, data/pdf_statement_parser.dart) for password-aware
+/// decryption + text extraction, and a heuristic (not issuer-specific)
+/// regex line-parser for the transaction table — see that file's own
+/// doc-comment for exactly what the heuristic does and doesn't handle.
+/// Real per-issuer column-layout parsing (mirroring `parser_patterns`
+/// server-side for SMS) remains out of scope — PDF table layouts vary far
+/// more than SMS/email text ever does, and this pass ships a genuinely
+/// working generic extractor rather than a perfect one.
 ///
-/// Security: the "password" typed below is used only to simulate the
-/// parse step in-memory — it is never sent to the backend, never logged,
-/// never included in any error report (matches F2's own security note).
+/// Security: the PDF bytes and the typed password never leave this device
+/// — `file_picker` reads bytes into memory, `PdfStatementReader` decrypts
+/// in-process, and only the resulting transaction COUNT/closing balance
+/// (never the raw text or file) is sent to `confirmStatementImport`.
 class StatementPdfImportScreen extends ConsumerStatefulWidget {
   const StatementPdfImportScreen({super.key});
 
@@ -43,14 +39,12 @@ class StatementPdfImportScreen extends ConsumerStatefulWidget {
 
 class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScreen> {
   _Step _step = _Step.pickFile;
-  String? _fakeFileName;
+  String? _fileName;
+  Uint8List? _fileBytes;
   final _passwordController = TextEditingController();
   String? _errorMessage;
   String? _selectedCardId;
-
-  // Stub-parsed preview data — never derived from a real file.
-  final _detectedTxnCount = 12;
-  final _detectedClosingBalance = Money.fromRupees(24310);
+  ParsedStatement? _parsed;
 
   @override
   void dispose() {
@@ -59,44 +53,89 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
     super.dispose();
   }
 
-  void _pickFile() {
-    // Stub: a real implementation would use a file-picker package here
-    // (see this file's doc-comment for why none is wired up this pass).
+  Future<void> _pickFile() async {
+    // file_picker 12.0.0-beta's pickFiles is a static FilePicker method,
+    // not FilePicker.platform.pickFiles — that instance-based API was
+    // removed in this beta line (see pubspec.yaml's own note on why this
+    // beta is pinned instead of the 11.x stable). withData/.bytes is also
+    // deprecated in this beta in favor of PlatformFile.readAsBytes().
+    final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
+    if (result == null || result.files.isEmpty) return;
+    final picked = result.files.single;
+    Uint8List bytes;
+    try {
+      bytes = await picked.readAsBytes();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _step = _Step.error;
+        _errorMessage = "Couldn't read that file. Try picking it again.";
+      });
+      return;
+    }
+    if (!mounted) return;
     setState(() {
-      _fakeFileName = 'statement.pdf';
+      _fileName = picked.name;
+      _fileBytes = bytes;
       _step = _Step.password;
     });
   }
 
   Future<void> _submitPassword() async {
+    final bytes = _fileBytes;
+    if (bytes == null) return;
     setState(() => _step = _Step.parsing);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    // Stub parser: never actually inspects the "password" for correctness
-    // (there's no real file). An empty password is treated as the one
-    // deliberately-modeled failure case so the error state is reachable.
-    if (_passwordController.text.trim().isEmpty) {
+    try {
+      final password = _passwordController.text.trim().isEmpty ? null : _passwordController.text.trim();
+      final text = await Future(() => PdfStatementReader().extractText(bytes, password: password));
+      final parsed = parseStatementText(text);
+      if (!mounted) return;
+      if (parsed.transactions.isEmpty) {
+        setState(() {
+          _step = _Step.error;
+          _errorMessage = "Couldn't find any transactions in this statement — it may use a layout this app "
+              "doesn't recognize yet.";
+        });
+        return;
+      }
       setState(() {
-        _step = _Step.error;
-        _errorMessage = 'That password didn\'t work for this statement.';
+        _parsed = parsed;
+        _step = _Step.preview;
       });
-      return;
+    } on StatementParseException catch (e) {
+      if (mounted) {
+        setState(() {
+          _step = _Step.error;
+          _errorMessage = e.message;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _step = _Step.error;
+          _errorMessage = userFacingErrorMessage(e);
+        });
+      }
     }
-    setState(() => _step = _Step.preview);
   }
 
   Future<void> _confirmImport() async {
     final repo = ref.read(importRepositoryProvider);
-    if (repo == null || _selectedCardId == null) return;
+    final parsed = _parsed;
+    if (repo == null || _selectedCardId == null || parsed == null) return;
     try {
-      final now = DateTime.now();
+      final dates = parsed.transactions.map((t) => t.date).toList()..sort();
       await repo.confirmStatementImport(
         userCardId: _selectedCardId!,
-        statementFrom: DateTime(now.year, now.month - 1, 1),
-        statementTo: DateTime(now.year, now.month, 0),
-        closingBalance: _detectedClosingBalance,
-        txnCount: _detectedTxnCount,
-        reconciledCount: _detectedTxnCount, // stub: treats every detected line as reconciled
+        statementFrom: dates.first,
+        statementTo: dates.last,
+        closingBalance: parsed.closingBalance,
+        txnCount: parsed.transactions.length,
+        // Every heuristically-detected line is treated as reconciled — this
+        // screen has no separate "confirm each row" step yet (ui-spec's
+        // "list each detected transaction for review" is satisfied by the
+        // preview list below, not a per-row accept/reject control).
+        reconciledCount: parsed.transactions.length,
       );
       ref.invalidate(statementImportsProvider);
       if (mounted) setState(() => _step = _Step.done);
@@ -136,18 +175,19 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('$_fakeFileName', style: textTheme.titleSmall),
+            Text('$_fileName', style: textTheme.titleSmall),
             const SizedBox(height: AppSpace.sm),
             Text(
-              'This PDF is password-protected. Enter the password (usually your PAN or DOB per your bank\'s '
-              'convention) — it stays on this device and is never sent anywhere.',
+              'If this PDF is password-protected, enter the password (usually your PAN or DOB per your bank\'s '
+              'convention) — it stays on this device and is never sent anywhere. Leave blank if it isn\'t '
+              'protected.',
               style: textTheme.bodyMedium,
             ),
             const SizedBox(height: AppSpace.lg),
             TextField(
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Statement password', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Statement password (optional)', border: OutlineInputBorder()),
             ),
             const SizedBox(height: AppSpace.lg),
             ElevatedButton(onPressed: _submitPassword, child: const Text('Unlock & parse')),
@@ -167,20 +207,53 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
         );
 
       case _Step.preview:
+        final parsed = _parsed!;
         final userCards = ref.watch(userCardsProvider);
         return ListView(
           children: [
             Text('Detected transactions', style: textTheme.titleMedium),
             const SizedBox(height: AppSpace.sm),
-            Row(children: [Text('$_detectedTxnCount transactions found · closing balance ', style: textTheme.bodyMedium), MoneyText(_detectedClosingBalance, confidence: Confidence.estimated)]),
+            Row(
+              children: [
+                Text('${parsed.transactions.length} transactions found', style: textTheme.bodyMedium),
+                if (parsed.closingBalance != null) ...[
+                  Text(' · closing balance ', style: textTheme.bodyMedium),
+                  MoneyText(parsed.closingBalance!, confidence: Confidence.estimated),
+                ],
+              ],
+            ),
             const SizedBox(height: AppSpace.md),
             Container(
               padding: const EdgeInsets.all(AppSpace.md),
               decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
-              child: Text(
-                'This preview is a stub — no real PDF was parsed (see this screen\'s doc-comment). A real build '
-                'would list each detected transaction here for review before import.',
-                style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final txn in parsed.transactions.take(20))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${txn.date.day.toString().padLeft(2, '0')}/${txn.date.month.toString().padLeft(2, '0')} · ${txn.description}',
+                              style: textTheme.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          MoneyText(txn.amount, confidence: Confidence.estimated, style: textTheme.bodySmall),
+                        ],
+                      ),
+                    ),
+                  if (parsed.transactions.length > 20)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpace.xs),
+                      child: Text(
+                        '+ ${parsed.transactions.length - 20} more',
+                        style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: AppSpace.lg),

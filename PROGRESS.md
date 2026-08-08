@@ -2594,3 +2594,46 @@ unverified by a real compile, per above.
 **Not done**: no real device/emulator verification (same root cause — no Android toolchain access
 in this sandbox). If a real build environment becomes available, `./gradlew compileDebugKotlin`
 (or a full `flutter build apk`) is the next concrete step, not a re-investigation.
+
+### Chunk 44 — F2 Statement PDF Import: real parsing, not a stub
+
+Replaced the fabricated-preview stub with real on-device parsing. Two new dependencies, both
+verified resolving cleanly against this exact dependency graph before landing (today's running
+theme — see Chunk 41's drift saga): `syncfusion_flutter_pdf` (password-aware decrypt + text
+extraction) and `file_picker`, pinned to the `12.0.0-beta` line rather than the 11.x stable —
+every `file_picker <12.0.0-beta.1` hard-pins `win32 ^5.9.0`, which conflicts with
+`package_info_plus`'s `win32 ^6.0.1` (an unused Windows-desktop transitive dependency for a
+mobile-only app, but `pub`'s resolver still enforces it). The beta's `pickFiles` API also moved
+from `FilePicker.platform.pickFiles` to a static `FilePicker.pickFiles`, and `withData`/`.bytes`
+are deprecated there in favor of `PlatformFile.readAsBytes()` — used the current API, not the
+deprecated one.
+
+`app/lib/data/pdf_statement_parser.dart`: `PdfStatementReader` bridges syncfusion's byte-level API
+to plain text (collapses its various internal "wrong password"/"corrupted"/"not a PDF" exception
+types into one `StatementParseException` with a plain-language message — the screen has one
+actionable next step regardless of which). `parseStatementText()` is a pure, heuristic regex line
+extractor — deliberately NOT issuer-specific column parsing (PDF layouts vary far more than
+SMS/email text ever does, same "flagged, not hidden" scope call the screen's own prior doc-comment
+already made) — matches `DD/MM/YYYY`-or-`DD-MM-YYYY` + description + amount + optional Dr/Cr
+suffix, plus a separate "Closing Balance" line detector. A line that doesn't match is silently
+skipped (a statement mixing headers/footers/summaries with transaction rows is the normal case,
+not a failure); only "found zero transactions at all" surfaces as an error to the user.
+
+**Genuinely verified, not just unit-tested against fixture strings**: the parser tests include real
+`syncfusion_flutter_pdf`-generated PDFs (built in-memory via `PdfDocument`/`saveSync()`, no fixture
+file needed) — one unencrypted, one password-protected — round-tripped through the actual
+`PdfStatementReader.extractText()` to prove the syncfusion integration itself works, not just the
+regex. The widget test goes further: fakes `FilePickerPlatform.instance` to return a real generated
+PDF's bytes, then drives the full screen flow (pick → password → parse → preview shows the REAL
+detected transaction/closing-balance → card selection → confirm → real `ImportRepository` call
+recorded) end to end.
+
+**Verification**: `flutter analyze` 0 errors. `flutter test`: 279/279 (was 264, +15 across
+`test/data/pdf_statement_parser_test.dart` and `test/features/import/statement_pdf_import_screen_test.dart`).
+
+**Not done**: no per-issuer column-layout parsing (explicit scope cut, see above). No Dr/Cr
+distinction (every detected line is currently treated as a debit-equivalent amount for count/total
+purposes — `confirmStatementImport` doesn't take a sign per line yet). No wiring into D5's
+duplicate-check logic (D5 operates on already-imported transactions server-side; this chunk stops
+at handing the server a transaction count + closing balance, matching the existing
+`confirmStatementImport` contract it was already calling).
