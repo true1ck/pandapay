@@ -1790,3 +1790,103 @@ TODO/FIXME/stub markers exist anywhere except the one already-documented intenti
 `NotImplementedError` in `scraper/pandapay_scraper/fetcher.py` (Chunk 12's Playwright
 fallback). No commit made yet — left
 staged/unstaged per instructions.
+
+### Chunk 39 — Group H (Settings & Account, 10 screens) + finish Group A per
+docs/superpowers/plans/2026-08-07-group-h-settings-and-group-a-completion.md
+
+Group H had zero prior plan (the only spec group in that state) and Group A had 5 screens
+(A4's real consent gap, A6, A7-A10) left unbuilt. Wrote the plan, then built both groups —
+dispatched 9 parallel subagents (8 independent H-screens + one worktree-isolated agent for the
+strictly-sequential A7→A8→A9→A10 chain), hit a session-wide rate limit partway through, resumed
+every agent from its exact stopping point rather than restarting, then did the H1 hub integration
+and A4/A6 myself since those two touch shared files (`account_screen.dart`, `login_screen.dart`)
+that can't be safely parallelized.
+
+**Backend** (`api/src/index.js`): 13 new routes, every one exercised live against the running
+`auth`/`api`/Postgres stack with real OTP-issued tokens, not just unit-tested — `GET/POST
+/consents`, `GET /consents/history`, `PATCH /user-cards/:id`, `GET/PUT /notification-preferences`
++ `GET/POST/DELETE .../muted-merchants`, `POST/DELETE /account/delete-request`, `POST
+/support-tickets`, `GET /changelog`. New migration `0019_notification_preferences.sql`
+(`notification_preferences` + `notification_muted_merchants`, RLS force-enabled and verified —
+`app_user` with no `app.user_id` set sees zero rows) — the one genuine schema gap the plan's own
+audit found; everything else H needed (`user_consents`, `support_tickets`, `changelog_entries`,
+`pandapay.execute_account_deletion()`) already existed with zero routes, same "backend ran ahead
+of UI" pattern every prior group's audit found too. `db/seed/0003_demo_changelog.sql` (idempotent)
+seeds one real changelog row so H10 isn't always-empty.
+
+**`packages/pandapay_domain`**: `Money.format()` gained a `MoneyNumberFormat` parameter
+(`lakhCrore` default, `international`) — H6's number-format toggle — with zero changes required
+at any of the ~40 existing call sites. 6 new tests, 117/117 passing.
+
+**Group H, all 10 screens, `app/lib/features/settings/`** (new directory): H1 Settings Hub
+(rebuilds `AccountScreen`'s body into a real hub — keeps the 5 existing Tools tiles unchanged,
+adds 7 new Settings rows + Feedback + a What's-New row with a live unread badge; sign-out moved
+off this screen into H2, per the plan). H2 Account (biometric-lock toggle, upgrade-from-local-mode,
+typed-`DELETE`-to-confirm account deletion with the 30-day grace period the backend actually
+grants — never claims the account is gone immediately). H3 Notification Settings (8 category
+toggles at their real conservative defaults, quiet hours, a 0-20 daily cap, muted-merchant list).
+H4 Privacy & Permissions (live `permission_handler` status rows, data-handling copy grounded in
+product-plan.md §6, reuses E12's existing `contributions_opt_in` toggle rather than duplicating
+it, consent history). H5 Data & Storage (real cache-size computation, record counts reusing
+already-fetched providers, a "reset all data" that is provably token-store-safe — 11 new pure-logic
+unit tests). H6 Appearance (the app had no dark `ThemeData` before this — added `AppTheme.dark()`
+— plus the number-format toggle wired into `MoneyText`, found during the wiring that `MoneyText`
+actually lives in `main.dart`, not `design/widgets.dart` as the plan assumed). H7 Help & FAQ
+(static, offline, zero providers — answers grounded in `RecommendationEngine.rank()`'s real
+factors, not generic filler). H8 Legal (Terms/Privacy have no real drafted copy anywhere in this
+repo — shipped as clearly-badged `[Draft — pending legal review]` placeholder rather than
+presenting invented legal text as final; the not-financial-advice disclaimer and OSM/ODbL
+attribution are the real required copy, not drafts). H9 Feedback & Support (diagnostics — real
+`appVersion`/platform via `package_info_plus` — shown before the user can submit, per the literal
+spec wording). H10 What's New (`maybeShowWhatsNewSheet(BuildContext, WidgetRef)` — not wired to
+Home's launch path yet, ready for whoever does).
+
+**Group A, the remaining 5 screens**: A4's sign-up now collects three separate, purpose-specific
+DPDP §8.2 consents (terms/crowdsource/marketing) instead of the one bundled footer sentence it
+shipped with — each writes its own row via `POST /consents`. A6 doesn't exist as specced — this
+app is OTP-only, there has never been a password — shipped the real functional equivalent instead: a
+"Trouble receiving it?" link from the OTP step straight into H9, pre-filled. A7 Add Your First
+Card (search + issuer-grouped + network-filtered picker, not reusing C3's known-thin dropdown).
+A8 Request Unsupported Card (face-only-photo warning, posts to the already-existing
+`POST /card-requests`). A9 Card Details Setup (per-card, all fields skippable, PATCHes only what
+actually changed; points-balance field is visibly present but documented as a no-op — no route
+exists yet to seed an initial `points_ledger` balance). A10 Tracking Setup (reuses the real
+F2/F3/F4 screens rather than forking onboarding-only copies; this is now the ONLY place
+`onboardingCompleteProvider.complete()` is called — moved out of `account_choice_screen.dart`,
+which now continues into A7 instead of completing onboarding directly).
+
+**Two real bugs found and fixed, not just claimed handled**: (1) the notification-preferences
+`PUT` route's first-insert path passed explicit `null`s into `NOT NULL`-defaulted columns —
+rewritten as ensure-row-then-`COALESCE`-update; caught by live curl testing, not review. (2) "
+ListTile background color... may be invisible" — a missing-`Material`-ancestor assertion — hit
+independently in two unrelated places (H7's FAQ `ExpansionTile`s, found and fixed by that
+subagent; A4's new consent checkboxes, found and fixed by me via a real widget test that actually
+exercises tap/scroll, not just `flutter analyze`).
+
+**Verification**: `flutter analyze` / `dart run custom_lint` clean on every file this chunk
+touches (custom_lint itself was unreliably slow/hanging project-wide for every agent this
+session — root-caused eventually to resource contention from many concurrent `dart run
+custom_lint` invocations, not a real code defect; confirmed via manual grep for the two custom
+rules' patterns as a substitute where the tool itself wouldn't finish). `flutter test`: 152/157
+passing (`app/`) — the 5 failures are pre-existing, in unrelated in-progress Group E work
+(`credit_utilization_screen_test.dart`, `insights_hub_screen_test.dart`) that was already
+uncommitted in the tree before this session started, confirmed via `git stash`-style before/after
+comparison, not assumed. `dart test` in `packages/pandapay_domain`: 117/117.
+
+**Committed**: `ca4de5d`, 37 files. **Not committed, on purpose**: `api/src/index.js`. Its
+uncommitted state carries substantial pre-existing backend work for Groups C/D/E/F/admin that
+this chunk didn't author or verify, and the two are interleaved into the same file in a way that
+isn't cleanly hunk-separable — forcing a manual split risked corrupting someone else's in-progress
+code. This chunk's 13 routes are real, live-verified, and sitting in the working tree; they're
+committed only in spirit until whoever owns the rest of that file's uncommitted state reconciles
+it. (Verified the split was done safely by diffing a from-HEAD reapply of just this chunk's hunk
+against a full backup of the working file before restoring the backup — the only delta was
+exactly the pre-existing Group D/G content, nothing of this chunk's was lost or duplicated.)
+
+**Not done**: H10's auto-show-on-launch wiring into Home (the function exists, not called
+anywhere yet); A9's points-balance field is a documented no-op (needs a real
+`POST /user-cards/:id/points-adjustment` route); local→cloud data migration when upgrading from
+local mode (H2's entry point exists, there's no offline cache yet for it to migrate *from*);
+`app/lib/features/settings/appearance_screen.dart`'s text-scale toggle only applies within that
+screen's own subtree — the app-root-level `MaterialApp` wiring for the 200%-ceiling accessibility
+requirement is a real follow-up, not silently claimed done.
