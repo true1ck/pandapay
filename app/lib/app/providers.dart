@@ -3,9 +3,11 @@ import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/app_status_repository.dart';
 import '../data/auth_api.dart';
 import '../data/card_feedback_repository.dart';
 import '../data/card_overrides_repository.dart';
@@ -709,6 +711,36 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
 /// B5 — public read, no auth, same pattern as catalogueRepositoryProvider.
 final merchantSearchRepositoryProvider = Provider<MerchantSearchRepository>((ref) {
   return HttpMerchantSearchRepository(baseUrl: _apiBaseUrl);
+});
+
+/// S5/S6 (ui-spec System Surfaces, GAP_ANALYSIS.md §3) — forced upgrade /
+/// maintenance mode. Public, no auth, same pattern as
+/// catalogueRepositoryProvider above.
+final appStatusRepositoryProvider = Provider<AppStatusRepository>((ref) {
+  return HttpAppStatusRepository(baseUrl: _apiBaseUrl);
+});
+
+/// Deliberately fails open: if the status check itself can't be reached
+/// (offline, server hiccup), the app must still be usable rather than
+/// blocking on an inability to confirm it *shouldn't* block — a status
+/// check that can accidentally lock every user out on its own outage would
+/// be worse than the forced-upgrade/maintenance gate it exists to enforce.
+/// router.dart's redirect only acts when this has a real (non-null,
+/// non-error) value.
+final appStatusProvider = FutureProvider<AppStatus?>((ref) async {
+  try {
+    return await ref.watch(appStatusRepositoryProvider).fetchStatus();
+  } catch (_) {
+    return null;
+  }
+});
+
+/// The installed app's own version — resolved once via package_info_plus,
+/// compared against appStatusProvider's minSupportedVersion by
+/// router.dart's redirect guard (via isVersionOlderThan).
+final appVersionProvider = FutureProvider<String>((ref) async {
+  final info = await PackageInfo.fromPlatform();
+  return info.version;
 });
 
 /// UA-0.3 offline cache (GAP_ANALYSIS.md §2, plan

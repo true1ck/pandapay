@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../data/api_exception.dart';
+import '../data/app_status_repository.dart' show isVersionOlderThan;
 import '../features/account/account_screen.dart';
 import '../features/activity/activity_screen.dart';
 import '../features/activity/duplicate_review_screen.dart';
@@ -43,6 +44,8 @@ import '../features/onboarding/welcome_screen.dart';
 import '../features/scan/scan_card_screen.dart';
 import '../features/scan/scan_result_screen.dart';
 import '../features/scan/upi_qr_scanner_screen.dart';
+import '../features/system/forced_upgrade_screen.dart';
+import '../features/system/maintenance_screen.dart';
 import '../features/tools/emergency_card_info_screen.dart';
 import '../features/tools/tools_hub_screen.dart';
 import 'providers.dart';
@@ -125,6 +128,15 @@ abstract final class AppRoute {
   /// tools_hub_screen.dart for how both paths land on the same screen.
   static const emergencyCardInfo = '/emergency-card-info';
 
+  /// S5/S6 (ui-spec System Surfaces, GAP_ANALYSIS.md §3) — forced upgrade /
+  /// maintenance mode. Both are unbypassable full-screen blocks, checked
+  /// ahead of the onboarding guard below (a maintenance window or a
+  /// too-old install blocks the app regardless of onboarding state) and
+  /// deliberately NOT members of [preOnboarding] — that set means "only
+  /// reachable before onboarding completes," which doesn't apply here.
+  static const maintenance = '/maintenance';
+  static const forceUpgrade = '/force-upgrade';
+
   /// A7/A9/A10 (implementation-plan's Group A completion): the rest of the
   /// onboarding chain after Account Choice, per ui-spec's real screen order
   /// A3 -> A7 -> A9 -> A10 -> A11 -> Home. A8 (Request Unsupported Card) is
@@ -159,6 +171,11 @@ class _RouterRefreshNotifier extends ChangeNotifier {
     ref.listen(sessionInitProvider, (_, _) => notifyListeners());
     ref.listen(accessTokenProvider, (_, _) => notifyListeners());
     ref.listen(onboardingCompleteProvider, (_, _) => notifyListeners());
+    // S5/S6 — re-evaluate redirect once the status/version checks resolve,
+    // and again any time appStatusProvider is invalidated (e.g.
+    // MaintenanceScreen's "Try again" button).
+    ref.listen(appStatusProvider, (_, _) => notifyListeners());
+    ref.listen(appVersionProvider, (_, _) => notifyListeners());
   }
 }
 
@@ -184,9 +201,31 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: AppRoute.splash,
     refreshListenable: refresh,
     redirect: (context, state) {
+      final path = state.uri.path;
+
+      // S5/S6 — checked first, ahead of the onboarding guard below: a
+      // maintenance window or a too-old install blocks the app regardless
+      // of onboarding state. Only acts once appStatusProvider has actually
+      // resolved to a non-null value — it fails open on its own fetch
+      // error (returns null, see providers.dart), so a status-check outage
+      // never itself blocks anyone; and the forced-upgrade branch only
+      // acts once appVersionProvider has resolved too, so "haven't loaded
+      // the version yet" is never mistaken for "too old."
+      final status = ref.read(appStatusProvider).valueOrNull;
+      if (status != null) {
+        if (status.maintenanceMode) {
+          return path == AppRoute.maintenance ? null : AppRoute.maintenance;
+        }
+        if (path == AppRoute.maintenance) return AppRoute.home; // recovered mid-session
+        final version = ref.read(appVersionProvider).valueOrNull;
+        if (version != null && isVersionOlderThan(version, status.minSupportedVersion)) {
+          return path == AppRoute.forceUpgrade ? null : AppRoute.forceUpgrade;
+        }
+        if (path == AppRoute.forceUpgrade) return AppRoute.home;
+      }
+
       final sessionInit = ref.read(sessionInitProvider);
       final onboarding = ref.read(onboardingCompleteProvider);
-      final path = state.uri.path;
 
       if (sessionInit.isLoading || onboarding.isLoading) {
         return path == AppRoute.splash ? null : AppRoute.splash;
@@ -417,6 +456,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoute.emergencyCardInfo,
         builder: (context, state) => const EmergencyCardInfoScreen(),
+      ),
+      // S5/S6: unbypassable full-screen blocks — see the redirect guard
+      // above and both AppRoute constants' doc-comments.
+      GoRoute(
+        path: AppRoute.maintenance,
+        pageBuilder: (context, state) => const NoTransitionPage(child: MaintenanceScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.forceUpgrade,
+        pageBuilder: (context, state) => const NoTransitionPage(child: ForcedUpgradeScreen()),
       ),
       ShellRoute(
         builder: (context, state, child) => _AppShell(

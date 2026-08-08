@@ -474,6 +474,35 @@ app.get('/categories', async (req, res) => {
 });
 
 /**
+ * GET /app-status — S5/S6 (ui-spec System Surfaces, GAP_ANALYSIS.md §3):
+ * forced upgrade / maintenance mode. Public, no auth — called before a
+ * session exists, same reasoning as GET /categories above. Single-row
+ * table (0020_app_status.sql); a missing row (shouldn't happen given the
+ * migration's seed insert, but defensively) is treated the same as "no
+ * restriction" rather than a 500, so a DB hiccup here never itself blocks
+ * the whole app — the client's own fetch failure handling already fails
+ * open the same way.
+ */
+app.get('/app-status', async (req, res) => {
+  try {
+    const result = await withUserClient(null, (client) =>
+      client.query(
+        'SELECT min_supported_version, maintenance_mode, maintenance_message FROM app_status WHERE id = true'
+      )
+    );
+    const row = result.rows[0];
+    res.json({
+      minSupportedVersion: row?.min_supported_version ?? '1.0.0',
+      maintenanceMode: row?.maintenance_mode ?? false,
+      maintenanceMessage: row?.maintenance_message ?? null,
+    });
+  } catch (err) {
+    console.error('GET /app-status error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * GET /merchants/nearby — UA-8.3: foreground-triggered "check nearby
  * merchants" (see PROGRESS.md's UA-8 chunk for the explicit scope
  * reduction — no always-on background geofence monitoring, just this

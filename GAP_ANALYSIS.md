@@ -74,7 +74,7 @@ The ranking engine (`packages/pandapay_domain/lib/src/engine/`) is real, tested,
 | S2 Quick Settings Tile | ❌ Not found | No `TileService`/QuickSettings code anywhere. |
 | S3 Location notifications | 🟡 Wrong mechanism | `geofence/nearby_merchants_screen.dart` is a foreground one-shot `geolocator` read, not true OS background geofencing (`geofence_service` or equivalent). |
 | S4 Universal loading/empty/error states | ✅ Done | Shared `LoadingSkeleton`/`EmptyState`/`ErrorState` used throughout, including all new Group B screens. |
-| S5/S6 Forced upgrade / Maintenance mode | ❌ Not found | No `min_supported_version` or kill-switch code anywhere. |
+| S5/S6 Forced upgrade / Maintenance mode | ✅ Built 2026-08-08 | `app_status` table (`db/supabase/migrations/0020_app_status.sql`) + public `GET /app-status`; `router.dart`'s redirect guard blocks to `MaintenanceScreen`/`ForcedUpgradeScreen` ahead of the onboarding check, fails open on a status-check fetch error so an outage in the check itself never blocks everyone. No console UI to edit the row yet (direct DB access only) — flagged, not hidden. |
 
 ---
 
@@ -115,7 +115,7 @@ Real Python code exists (`fetcher.py`, `extractor.py`, `llm_extraction.py`, `rob
 
 1. ~~Offline-first local DB (UA-0.3)~~ — **Built 2026-08-08** (see §2): catalogue/wallet/overrides caching + B6 offline outbox. Remaining sub-scope, not urgent: relational local mirror, incremental `data_version` sync, offline queueing for non-B6 writes.
 2. **Fill in F2/F4/F5 stubs** — real PDF parsing (`syncfusion_flutter_pdf` or equivalent), on-device SMS verification, a real sync/backup engine.
-3. **S2 (Quick Settings Tile) and S5/S6 (forced upgrade / maintenance mode)** — entirely unbuilt; confirm in/out of scope before prioritizing.
+3. ~~S5/S6 (forced upgrade / maintenance mode)~~ — **Built 2026-08-08** (see §4 System surfaces table). **S2 (Quick Settings Tile)** still entirely unbuilt — needs native Kotlin `TileService`, no Flutter-side plugin covers it; confirm in/out of scope before prioritizing.
 4. **S1/S3 real-device work** — iOS widget extension needs a real Xcode session; geofencing needs a true background mechanism to replace the current foreground one-shot read.
 5. ~~Wire `console/lib/app/router.dart` or delete it~~ — **Deleted 2026-08-08**: it had zero real callers (only referenced in a comment); the widget-level `_AuthGate` + `NavigationRail`/`setState` nav in `main.dart` was already working and covered by 15 passing tests, and a go_router migration would have meant rewriting that whole test file for marginal benefit (deep-linking on an internal single-user-role admin tool). `go_router` dependency also removed from `console/pubspec.yaml` since nothing else used it.
 6. **Scraper legal review + LLM key** — pure owner action, no code needed.

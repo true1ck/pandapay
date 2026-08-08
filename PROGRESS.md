@@ -2512,3 +2512,57 @@ outbox only covers B6 quick-add writes, not other offline write paths (override 
 archive, etc. still fail outright when offline, same as before this chunk); no relational local
 mirror of the Supabase schema (a much larger, separate undertaking — see the plan's Architecture
 note for the explicit scope call).
+
+### Chunk 42 — GAP_ANALYSIS punch list: B7 buttons wired, dead console router deleted, S5/S6 built
+
+Three independent items from `GAP_ANALYSIS.md`'s priority punch list, done sequentially (not in
+parallel, per explicit direction this session):
+
+**B7 Split/EMI buttons** (`app/lib/features/calculator/big_purchase_calculator_screen.dart`) —
+these shipped disabled with a "coming soon" snackbar back when Group G didn't exist in this
+codebase yet. Now that `SplitPlannerScreen` (G2) and `EmiAdvisorScreen` (G3) are real, both buttons
+just push them for real. Neither screen accepts an initial-amount parameter (both carry their own
+amount input already), so B7's local `_amount` isn't threaded through — matches how these screens
+are already reached from Tools Hub with no pre-fill either. Two existing tests rewritten to assert
+real navigation instead of a snackbar.
+
+**Admin console dead router** (`console/lib/app/router.dart`) — deleted rather than wired. It had
+zero real callers; `main.dart`'s own comment already said "not wired into this build," only
+referenced from a doc-comment. The actual navigation (`_AuthGate` + `NavigationRail`/`setState`)
+already does real async admin-status gating (`GET /admin/me`) and is covered by 15 passing tests.
+Migrating to go_router for deep-linking would have meant rewriting that whole test file for
+marginal benefit — an internal, single-role admin tool with 10 flat destinations has no real
+deep-linking need. Removed the now-unused `go_router` dependency from `console/pubspec.yaml` too,
+since nothing else in that package used it.
+
+**S5/S6 Forced upgrade / Maintenance mode** — new `app_status` table
+(`db/supabase/migrations/0020_app_status.sql`, single-row, RLS public-read same pattern as
+`card_products_public_read`) + public `GET /app-status` (`api/src/index.js`). Client:
+`AppStatusRepository`/`appStatusProvider`/`appVersionProvider` in `providers.dart`;
+`router.dart`'s redirect guard checks status ahead of the onboarding guard (a maintenance window or
+too-old install blocks regardless of onboarding state) and blocks to new `MaintenanceScreen`/
+`ForcedUpgradeScreen`. Deliberately fails open twice over: the client catches any fetch error and
+treats it as "no restriction" (a status-check outage must never itself lock everyone out), and the
+forced-upgrade branch only acts once `appVersionProvider` has actually resolved (never mistakes
+"haven't loaded the version yet" for "too old"). Version comparison (`isVersionOlderThan`) is the
+same "dot-separated integers, not full semver" simplification `whats_new_screen.dart`'s
+`_isNewerVersion` already uses elsewhere in this codebase — deliberately not deduplicated across a
+`features/` -> `data/` layering boundary the rest of the app avoids crossing.
+
+`ForcedUpgradeScreen`'s "Update now" button opens a Play Store search query, not a real listing URL
+— PandaPay has no confirmed real Play Store listing yet, and fabricating one would be worse than an
+honest placeholder. No console UI to edit `app_status` yet; updated via direct DB access until an
+admin screen exists (flagged, not hidden, matches this repo's existing pattern for admin-only rows
+with no console coverage).
+
+**Verification**: `flutter analyze` 0 errors (both `app/` and `console/`). `flutter test`: `app/`
+264/264 (was 253, +11 across `test/app/router_app_status_test.dart`,
+`test/data/app_status_repository_test.dart`, and the two rewritten calculator tests); `console/`
+15/15 (unchanged — confirms the router deletion broke nothing). `node --test` in `api/`: 25/25
+(unaffected by the new endpoint, which has no dedicated test yet — flagged, not hidden; the
+existing suite only covers `cycles.js`/`sms_parser.js`, not `index.js`'s routes directly).
+
+**Not done**: S2 (Quick Settings Tile) still needs a native Kotlin `TileService` with no Flutter
+plugin covering it — out of scope for this chunk, remains open on the punch list. No console
+screen to edit `app_status` (owner can add one later; direct DB access works today). No dedicated
+API test for `GET /app-status`.
