@@ -536,6 +536,46 @@ app.get('/merchants/nearby', async (req, res) => {
 });
 
 /**
+ * GET /merchants/search — B5: typed search over published merchants, by
+ * display name only (not VPA — VPA search is a B3 scope reduction noted in
+ * this plan's Task 12). Public read, same is_published-only filter as
+ * GET /merchants/nearby, same q ILIKE pattern as GET /admin/merchants but
+ * without the admin gate. Each row is shaped like a /merchants/nearby
+ * candidate (minus distance_meters, since search has no origin point) so
+ * the app can feed results into the same NearbyMerchantCandidate/
+ * bestCardForMerchantProvider machinery nearby_merchants_screen.dart
+ * already uses, rather than a third parallel "merchant result" shape.
+ */
+app.get('/merchants/search', async (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  if (q.length === 0) {
+    return res.status(400).json({ error: 'q is required' });
+  }
+
+  try {
+    const result = await withUserClient(null, (client) =>
+      client.query(
+        `SELECT m.id AS merchant_id, m.display_name, m.category_id, m.confidence,
+                l.grid_lat, l.grid_lng
+           FROM merchants m
+           LEFT JOIN LATERAL (
+             SELECT grid_lat, grid_lng FROM merchant_locations
+              WHERE merchant_id = m.id ORDER BY confirmation_count DESC LIMIT 1
+           ) l ON true
+          WHERE m.is_published = true AND m.display_name ILIKE $1
+          ORDER BY m.confirmation_count DESC
+          LIMIT 50`,
+        [`%${q}%`]
+      )
+    );
+    res.json({ merchants: result.rows });
+  } catch (err) {
+    console.error('GET /merchants/search error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * GET /admin/card-requests — AD-2.1: New Card Request queue (A8/C8), grouped
  * by issuer+product with counts so priority follows actual demand. `state`
  * is the shared `review_state` enum (pending/resolved/dismissed) — there is
