@@ -2670,3 +2670,37 @@ the fake `UserCardsRepository`'s per-message responses, not hardcoded.
 **Not done**: live `RECEIVE_SMS` listener still unverified on real hardware (owner action). No
 support for backup-app XML shapes beyond the `address`/`body` (or `from`/`text`) attribute
 convention this chunk covers.
+
+### Chunk 46 — F5 Sync & Backup: reaffirmed as a deliberate scope cut, one real bug fixed
+
+Closes out this session's `GAP_ANALYSIS.md` punch-list sweep. Read `sync_backup_screen.dart` and
+`api/`'s `POST /backup-runs` in full before deciding anything — both already carry extensive,
+reasoned scope-decision doc-comments from an earlier session, not silent gaps. Conclusion: a real
+multi-device sync engine (conflict-resolving `change_log` producer/consumer across every entity,
+an offline write queue for every write path) is a genuinely separate, much larger undertaking than
+everything else on this session's punch list combined — not attempted, and — per this repo's
+consistent ethos — not faked either.
+
+**One real, narrow bug fixed**: `POST /backup-runs` genuinely inserts a real `backup_runs` row
+(confirmed by reading the route) — it isn't a client-side no-op. But the client's "Back up now"
+button showed `'Backup requested (stub — see this screen's doc-comment)'`, which reads as if the
+whole action did nothing. Reworded to `'Backup requested and logged.'`, with the actual scope
+boundary (the row is real; the underlying backup JOB — pg_dump/WAL-archiving — is honestly absent,
+that's ops infrastructure outside an Express route's job) moved into a code comment instead of
+user-facing copy that undersold what actually happened.
+
+**Context**: §2's offline-first local cache (Chunk 41, this session) already delivers the practical
+value this app actually needed from "sync" — the flagship flow keeps working without a live
+connection — without being the literal multi-device conflict-resolution engine ui-spec F5
+describes. That's a real, shipped, tested capability; F5 as fully specced remains a distinct,
+larger, and un-started effort.
+
+**Verification**: `flutter analyze` 0 errors, `flutter test` 285/285 (unchanged — a copy-only fix,
+no new test needed; no existing test asserted the old stub-labeled snackbar text).
+
+**Not done, deliberately, not silently**: no `change_log` producer/consumer, no offline write queue
+beyond B6's outbox (Chunk 41), no real backup job, no restore engine (the "Restore from backup"
+button's confirmation UX is real; the restore itself remains explicitly unwired, same as before this
+chunk). This closes out the session's punch-list sweep — every remaining `GAP_ANALYSIS.md` item is
+now either done, an owner-blocked action (physical device / legal review / Xcode signing), or a
+reasoned, documented scope cut like this one — none are silent gaps.

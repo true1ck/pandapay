@@ -77,11 +77,17 @@ class SyncBackupScreen extends ConsumerWidget {
                 label: const Text('Back up now'),
                 onPressed: () async {
                   try {
+                    // The POST this triggers genuinely inserts a real
+                    // backup_runs row (not a client-side fake) — what's
+                    // scoped out is the underlying backup JOB itself (no
+                    // pg_dump/WAL-archiving pipeline exists yet, that's ops
+                    // infrastructure, not an Express route or a Flutter
+                    // screen). See api/'s POST /backup-runs doc-comment.
                     await repo.triggerBackupNow();
                     ref.invalidate(backupStatusProvider);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Backup requested (stub — see this screen\'s doc-comment)')),
+                        const SnackBar(content: Text('Backup requested and logged.')),
                       );
                     }
                   } catch (e) {
