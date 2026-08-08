@@ -1,0 +1,172 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
+
+import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
+import '../../app/providers.dart';
+import '../../data/api_exception.dart';
+import '../../data/user_cards_repository.dart' show UserCard;
+import '../../main.dart' show MoneyText;
+
+/// ui-spec B7. "Split suggestion" (-> G2 Split Planner) and "EMI
+/// comparison" (-> G3 EMI Advisor) are visibly present but disabled with a
+/// "Coming soon" snackbar — Group G (Tools & Modes) is not built in this
+/// codebase yet, and faking a navigation to a screen that doesn't exist
+/// would be worse than an honest disabled state. Remove the `onPressed:
+/// null` + snackbar-on-tap-of-a-wrapping-InkWell once G2/G3 land.
+///
+/// Amount/category here are this screen's own local state, deliberately
+/// independent of Home's `selectedCategoryProvider`/`enteredAmountProvider`
+/// — a one-off "what if I spent this much on X" computation, same reasoning
+/// ScanResultScreen (B3, Task 12) gives for its own local context in that
+/// screen's header comment.
+class BigPurchaseCalculatorScreen extends ConsumerStatefulWidget {
+  const BigPurchaseCalculatorScreen({super.key});
+
+  @override
+  ConsumerState<BigPurchaseCalculatorScreen> createState() => _BigPurchaseCalculatorScreenState();
+}
+
+class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalculatorScreen> {
+  late final TextEditingController _amountController;
+  Money _amount = Money.fromRupees(50000);
+  String? _categoryId;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController = TextEditingController(text: _amount.rupees.toStringAsFixed(0));
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  void _showComingSoon(String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$feature is coming soon.')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final catalogue = ref.watch(catalogueProvider);
+    final userCards = ref.watch(userCardsProvider);
+    final categories = ref.watch(categoriesProvider);
+    final engine = ref.watch(recommendationEngineProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Big-purchase calculator')),
+      body: Padding(
+        padding: const EdgeInsets.all(AppSpace.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Amount', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: AppSpace.sm),
+            TextField(
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(prefixText: '₹ '),
+              controller: _amountController,
+              onChanged: (v) {
+                final parsed = double.tryParse(v);
+                if (parsed != null && parsed >= 0) setState(() => _amount = Money.fromRupees(parsed));
+              },
+            ),
+            const SizedBox(height: AppSpace.md),
+            categories.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (err, _) => Text(userFacingErrorMessage(err)),
+              data: (list) => Wrap(
+                spacing: AppSpace.xs,
+                children: [
+                  for (final c in list)
+                    ChoiceChip(
+                      label: Text(c.name),
+                      selected: _categoryId == c.id,
+                      onSelected: (_) => setState(() => _categoryId = c.id),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _showComingSoon('Split suggestion'),
+                    child: const Text('Split suggestion'),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _showComingSoon('EMI comparison'),
+                    child: const Text('EMI comparison'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.lg),
+            Expanded(child: _buildResults(catalogue, userCards, engine)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResults(
+    AsyncValue<List<CardProduct>> catalogue,
+    AsyncValue<List<UserCard>> userCards,
+    RecommendationEngine engine,
+  ) {
+    if (catalogue.isLoading || userCards.isLoading) return const Center(child: CircularProgressIndicator());
+    final combinedError = catalogue.error ?? userCards.error;
+    if (combinedError != null) return ErrorState(message: userFacingErrorMessage(combinedError));
+
+    final allCards = catalogue.requireValue;
+    final wallet = userCards.requireValue;
+    if (wallet.isEmpty) {
+      return const EmptyState(
+        icon: Icons.credit_card_off_rounded,
+        title: 'No cards yet',
+        message: 'Add a card to compare a big purchase across your wallet.',
+      );
+    }
+    final owned = allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
+
+    final context = RecommendationContext(amount: _amount, categoryId: _categoryId, rail: TxnRail.swipe);
+    final snapshots = owned.map((c) {
+      final uc = wallet.where((w) => w.cardProductId == c.id).first;
+      final capRemaining = {
+        for (final cap in c.capRules)
+          if (uc.capConsumed.containsKey(cap.id)) cap.id: cap.capValue - uc.capConsumed[cap.id]!,
+      };
+      return CardSnapshot(product: c, capRemaining: capRemaining, milestoneProgress: uc.milestoneQualifiedSpend);
+    }).toList();
+
+    final ranked = engine.rank(context, snapshots);
+    return ListView.builder(
+      itemCount: ranked.length,
+      itemBuilder: (context, index) {
+        final rec = ranked[index];
+        // ui-spec B7.5: flag a milestone-completing purchase — the engine
+        // already phrases this exactly in reasonLines ("completes ...
+        // milestone"), so this reuses that text rather than reinventing
+        // milestone-completion detection here.
+        final completesMilestone = rec.reasonLines.any((l) => l.contains('completes') && l.contains('milestone'));
+        return Card(
+          key: ValueKey(rec.card.id),
+          margin: const EdgeInsets.only(bottom: AppSpace.sm),
+          child: ListTile(
+            title: Text(rec.card.name),
+            subtitle: rec.isExcluded ? Text(rec.exclusionReason!) : Text(rec.reasonLines.join(' · ')),
+            trailing: rec.isExcluded ? null : MoneyText(rec.expectedValue, confidence: rec.confidence),
+            tileColor: completesMilestone ? const Color(0xFFECFDF5) : null,
+          ),
+        );
+      },
+    );
+  }
+}

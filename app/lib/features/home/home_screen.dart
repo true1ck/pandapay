@@ -10,6 +10,7 @@ import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
+import '../calculator/big_purchase_calculator_screen.dart';
 import '../comparison/comparison_view_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
 import '../quickadd/quick_add_screen.dart';
@@ -71,6 +72,12 @@ class HomeScreen extends ConsumerWidget {
                 icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
                 onPressed: () =>
                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QuickAddScreen())),
+              ),
+              IconButton(
+                tooltip: 'Big-purchase calculator',
+                icon: const Icon(Icons.calculate_outlined, size: 20),
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const BigPurchaseCalculatorScreen())),
               ),
             ],
           ),
