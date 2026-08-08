@@ -10,13 +10,17 @@ import '../../data/card_overrides_repository.dart' show CardOverride;
 import '../../data/override_resolver.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
+import '../tools/emi_advisor_screen.dart';
+import '../tools/split_planner_screen.dart';
 
-/// ui-spec B7. "Split suggestion" (-> G2 Split Planner) and "EMI
-/// comparison" (-> G3 EMI Advisor) are visibly present but disabled with a
-/// "Coming soon" snackbar — Group G (Tools & Modes) is not built in this
-/// codebase yet, and faking a navigation to a screen that doesn't exist
-/// would be worse than an honest disabled state. Remove the `onPressed:
-/// null` + snackbar-on-tap-of-a-wrapping-InkWell once G2/G3 land.
+/// ui-spec B7. "Split suggestion" pushes G2 Split Planner and "EMI
+/// comparison" pushes G3 EMI Advisor — both screens carry their own amount
+/// input (splitPlannerAmountProvider / EmiAdvisorScreen's own principal
+/// field), so this screen's local `_amount` isn't threaded through; a user
+/// arriving from B7 re-enters the figure there, same as arriving at G2/G3
+/// any other way (from Tools Hub). Originally shipped disabled with a
+/// "Coming soon" snackbar before G2/G3 existed in this codebase — wired for
+/// real once they landed.
 ///
 /// Amount/category here are this screen's own local state, deliberately
 /// independent of Home's `selectedCategoryProvider`/`enteredAmountProvider`
@@ -45,10 +49,6 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
   void dispose() {
     _amountController.dispose();
     super.dispose();
-  }
-
-  void _showComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$feature is coming soon.')));
   }
 
   @override
@@ -98,14 +98,18 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => _showComingSoon('Split suggestion'),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SplitPlannerScreen()),
+                    ),
                     child: const Text('Split suggestion'),
                   ),
                 ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => _showComingSoon('EMI comparison'),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const EmiAdvisorScreen()),
+                    ),
                     child: const Text('EMI comparison'),
                   ),
                 ),

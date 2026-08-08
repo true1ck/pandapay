@@ -6,10 +6,12 @@ import 'package:pandapay/data/card_overrides_repository.dart';
 import 'package:pandapay/data/catalogue_repository.dart' show SpendCategory;
 import 'package:pandapay/data/user_cards_repository.dart' show UserCard;
 import 'package:pandapay/features/calculator/big_purchase_calculator_screen.dart';
+import 'package:pandapay/features/tools/emi_advisor_screen.dart';
+import 'package:pandapay/features/tools/split_planner_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 void main() {
-  testWidgets('Split suggestion and EMI comparison show a Coming soon snackbar, never navigate', (tester) async {
+  testWidgets('Split suggestion pushes SplitPlannerScreen (G2)', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -23,13 +25,12 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Split suggestion'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('Split suggestion is coming soon.'), findsOneWidget);
-    expect(find.byType(BigPurchaseCalculatorScreen), findsOneWidget);
+    expect(find.byType(SplitPlannerScreen), findsOneWidget);
   });
 
-  testWidgets('EMI comparison shows a Coming soon snackbar, never navigates', (tester) async {
+  testWidgets('EMI comparison pushes EmiAdvisorScreen (G3)', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -43,10 +44,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('EMI comparison'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('EMI comparison is coming soon.'), findsOneWidget);
-    expect(find.byType(BigPurchaseCalculatorScreen), findsOneWidget);
+    expect(find.byType(EmiAdvisorScreen), findsOneWidget);
   });
 
   testWidgets('shows the empty state when the wallet has no cards', (tester) async {
