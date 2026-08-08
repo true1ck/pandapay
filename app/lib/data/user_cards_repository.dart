@@ -528,6 +528,36 @@ class UserCardsRepository {
     }
   }
 
+  /// Task D-5 (ui-spec D5 Duplicate Review). Pending pairs only.
+  Future<List<DuplicateCandidate>> fetchDuplicateCandidates() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/duplicate-candidates'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw ApiException('GET /duplicate-candidates failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['duplicateCandidates'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(DuplicateCandidate.fromJson)
+        .toList();
+  }
+
+  /// [resolution] one of 'merged' / 'kept_both' / 'deleted_one'.
+  /// [keepTransactionId] required unless [resolution] is 'kept_both'.
+  Future<void> resolveDuplicateCandidate(
+    String id, {
+    required String resolution,
+    String? keepTransactionId,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/duplicate-candidates/$id/resolve'),
+      headers: _headers,
+      body: jsonEncode({'resolution': resolution, if (keepTransactionId != null) 'keepTransactionId': keepTransactionId}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('POST /duplicate-candidates/:id/resolve failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
   static String _dateOnly(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -700,4 +730,68 @@ class SmsImportResult {
   final bool parsed;
   final String? reason;
   const SmsImportResult({required this.parsed, this.reason});
+}
+
+/// Task D-5 (ui-spec D5 Duplicate Review) — one side of a suspected-
+/// duplicate pair. Deliberately a smaller shape than [TransactionEntry]
+/// (no category, no note) — GET /duplicate-candidates only ever selects
+/// the fields D5's side-by-side comparison actually shows.
+class DuplicateTransactionSummary {
+  final String id;
+  final Money amount;
+  final DateTime occurredAt;
+  final String? merchantName;
+  final String source;
+  final String status;
+  final String? cardDisplayName;
+
+  const DuplicateTransactionSummary({
+    required this.id,
+    required this.amount,
+    required this.occurredAt,
+    this.merchantName,
+    required this.source,
+    required this.status,
+    this.cardDisplayName,
+  });
+
+  factory DuplicateTransactionSummary.fromJson(Map<String, dynamic> json) {
+    final nickname = json['card_nickname'] as String?;
+    final cardName = json['card_name'] as String?;
+    return DuplicateTransactionSummary(
+      id: json['id'] as String,
+      amount: Money.fromRupees(_num(json['amount_inr'])),
+      occurredAt: DateTime.parse(json['occurred_at'] as String),
+      merchantName: json['merchant_name'] as String?,
+      source: json['source'] as String,
+      status: json['status'] as String,
+      cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
+    );
+  }
+}
+
+class DuplicateCandidate {
+  final String id;
+  final DuplicateTransactionSummary txnA;
+  final DuplicateTransactionSummary txnB;
+  final double matchScore;
+  final String matchReason;
+
+  const DuplicateCandidate({
+    required this.id,
+    required this.txnA,
+    required this.txnB,
+    required this.matchScore,
+    required this.matchReason,
+  });
+
+  factory DuplicateCandidate.fromJson(Map<String, dynamic> json) {
+    return DuplicateCandidate(
+      id: json['id'] as String,
+      txnA: DuplicateTransactionSummary.fromJson(json['txn_a'] as Map<String, dynamic>),
+      txnB: DuplicateTransactionSummary.fromJson(json['txn_b'] as Map<String, dynamic>),
+      matchScore: _num(json['match_score']),
+      matchReason: json['match_reason'] as String,
+    );
+  }
 }

@@ -149,9 +149,82 @@ class FuelSurchargeRule {
   });
 }
 
+/// `fee_waiver_rules` — the catalogue's DEFINITION of a waiver (threshold,
+/// period, fee amount). Distinct from [FeeWaiverProgress] in
+/// user_cards_repository.dart, which is a specific user's PROGRESS against
+/// one of these — C2's Fees tab and C4/C6 zip the two together by
+/// [feeWaiverRuleId].
+class FeeWaiverRule {
+  final String id;
+  final Money thresholdSpend;
+  final CapPeriod period;
+  final Money waivesFee;
+  final List<String> excludedCategoryIds;
+  final String? notes;
+
+  const FeeWaiverRule({
+    required this.id,
+    required this.thresholdSpend,
+    required this.period,
+    required this.waivesFee,
+    this.excludedCategoryIds = const [],
+    this.notes,
+  });
+}
+
+/// Mirrors `benefit_kind` (database.sql) — C5's cross-card grouping key.
+enum BenefitKind {
+  loungeDomestic,
+  loungeInternational,
+  golf,
+  concierge,
+  insuranceTravel,
+  insurancePurchase,
+  extendedWarranty,
+  diningProgram,
+  movie,
+  fuelSurcharge,
+  roadsideAssistance,
+  other,
+}
+
+/// `card_benefits` — static catalogue data, no per-user state (unlike
+/// caps/milestones/fee-waivers, which all have a *_states counterpart).
+/// Feeds C2's Benefits tab and C5's cross-card cheat sheet.
+class CardBenefit {
+  final String id;
+  final BenefitKind kind;
+  final String label;
+  final String? description;
+  final int? quotaCount;
+  final CapPeriod? quotaPeriod;
+  final String? networkProgram; // e.g. 'Priority Pass', 'DreamFolks'
+  final Money? valueEstimate;
+
+  const CardBenefit({
+    required this.id,
+    required this.kind,
+    required this.label,
+    this.description,
+    this.quotaCount,
+    this.quotaPeriod,
+    this.networkProgram,
+    this.valueEstimate,
+  });
+}
+
 /// A minimal `card_products` projection — everything the engine needs to
 /// rank, nothing it needs to fetch. Assembled by a repository layer;
 /// per UA-2.1.2 the engine never queries.
+///
+/// Task C-0: [feeWaiverRules], [benefits], [annualFeeInr], [joiningFeeInr],
+/// [verifiedAt], [issuerName], [artAssetUrl] and [artPrimaryColor] were
+/// already present in every `GET /catalogue` response
+/// (`v_card_catalogue_export`) but silently dropped by the old
+/// [CardProductJson.fromJson] — the engine never needed them, but C2's
+/// Fees/Benefits tabs and C5's cheat sheet do. None of this is used by
+/// `domain/engine/` ranking logic; it's catalogue display data riding on
+/// the same fetch.
 class CardProduct {
   final String id;
   final String name;
@@ -163,6 +236,14 @@ class CardProduct {
   final List<MilestoneRule> milestoneRules;
   final ForexRule? forexRule;
   final FuelSurchargeRule? fuelRule;
+  final List<FeeWaiverRule> feeWaiverRules;
+  final List<CardBenefit> benefits;
+  final Money? annualFeeInr;
+  final Money? joiningFeeInr;
+  final DateTime? verifiedAt;
+  final String? issuerName;
+  final String? artAssetUrl;
+  final String? artPrimaryColor;
 
   const CardProduct({
     required this.id,
@@ -175,5 +256,13 @@ class CardProduct {
     this.milestoneRules = const [],
     this.forexRule,
     this.fuelRule,
+    this.feeWaiverRules = const [],
+    this.benefits = const [],
+    this.annualFeeInr,
+    this.joiningFeeInr,
+    this.verifiedAt,
+    this.issuerName,
+    this.artAssetUrl,
+    this.artPrimaryColor,
   });
 }

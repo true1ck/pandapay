@@ -134,7 +134,11 @@ void main() {
     // Material's 5-item ceiling meant Insights displaced it, not joined it.
     await tester.tap(_navTab('Insights'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('All Activity'));
+    // Insights Hub has grown to 15 tiles across Groups E/F/G — 'All
+    // Activity' isn't mounted at all until scrolled into the grid's
+    // viewport (a plain ensureVisible needs the element to already exist),
+    // so this scrolls the sliver grid until it appears.
+    await tester.scrollUntilVisible(find.text('All Activity'), 200, scrollable: find.byType(Scrollable));
     await tester.pumpAndSettle();
     await tester.tap(find.text('All Activity'));
     await tester.pumpAndSettle();
@@ -165,6 +169,9 @@ void main() {
                         'category_name': 'Online',
                         'card_name': 'Test RuPay Card',
                         'card_nickname': null,
+                        'user_card_id': 'uc-1',
+                        'source': 'manual',
+                        'status': 'active',
                       },
                     ],
                     'userCards': <Map<String, dynamic>>[],
@@ -181,13 +188,21 @@ void main() {
 
     await tester.tap(_navTab('Insights'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('All Activity'));
+    // Insights Hub has grown to 15 tiles across Groups E/F/G — 'All
+    // Activity' isn't mounted at all until scrolled into the grid's
+    // viewport (a plain ensureVisible needs the element to already exist),
+    // so this scrolls the sliver grid until it appears.
+    await tester.scrollUntilVisible(find.text('All Activity'), 200, scrollable: find.byType(Scrollable));
     await tester.pumpAndSettle();
     await tester.tap(find.text('All Activity'));
     await tester.pumpAndSettle();
 
     expect(find.text('Test RuPay Card · Online'), findsOneWidget);
-    expect(find.text('₹1,000.00'), findsOneWidget);
+    // The D1 summary card's total-spend header shows the same figure as
+    // the sole transaction tile below it when there's only one entry, so
+    // both legitimately render '₹1,000.00' — this only checks it appears
+    // (not exactly once).
+    expect(find.text('₹1,000.00'), findsWidgets);
   });
 
   testWidgets('Chunk 16: Cards tab shows the login screen when signed out', (tester) async {

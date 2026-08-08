@@ -6,6 +6,10 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../data/api_exception.dart';
 import '../features/account/account_screen.dart';
 import '../features/activity/activity_screen.dart';
+import '../features/activity/duplicate_review_screen.dart';
+import '../features/activity/edit_transaction_screen.dart';
+import '../features/activity/needs_review_screen.dart';
+import '../features/activity/transaction_detail_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/cards/benefits_cheat_sheet_screen.dart';
 import '../features/cards/card_detail_screen.dart';
@@ -24,6 +28,7 @@ import '../features/insights/fee_waivers_screen.dart';
 import '../features/insights/insights_hub_screen.dart';
 import '../features/insights/lounge_access_screen.dart';
 import '../features/insights/milestones_screen.dart';
+import '../features/insights/missed_opportunities_screen.dart';
 import '../features/insights/monthly_savings_screen.dart';
 import '../features/insights/my_contributions_screen.dart';
 import '../features/insights/portfolio_audit_screen.dart';
@@ -276,6 +281,26 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           body: const ActivityScreen(),
         ),
       ),
+      // D2/D3 — deep-linkable per ui-spec §1 ("transaction detail" named
+      // explicitly). Static siblings (needsReview, duplicateReview) are
+      // registered separately below, same "static beats param at the same
+      // depth" reasoning as cardDetail's own doc-comment.
+      GoRoute(
+        path: AppRoute.transactionDetail,
+        builder: (context, state) => TransactionDetailScreen(transactionId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/activity/:id/edit',
+        builder: (context, state) => EditTransactionScreen(transactionId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: AppRoute.needsReview,
+        builder: (context, state) => const NeedsReviewScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.duplicateReview,
+        builder: (context, state) => const DuplicateReviewScreen(),
+      ),
       GoRoute(
         path: AppRoute.creditUtilization,
         builder: (context, state) => Scaffold(
@@ -331,6 +356,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           appBar: AppBar(title: const Text('My Contributions')),
           body: const MyContributionsScreen(),
         ),
+      ),
+      // D6 — already builds its own Scaffold+AppBar, same shape as
+      // importHub/toolsHub below.
+      GoRoute(
+        path: AppRoute.missedOpportunities,
+        builder: (context, state) => const MissedOpportunitiesScreen(),
       ),
       // C5 Benefits Cheat Sheet already builds its own Scaffold+AppBar, same
       // shape as importHub/toolsHub below.

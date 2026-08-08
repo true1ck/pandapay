@@ -11,6 +11,7 @@ import '../data/catalogue_repository.dart';
 import '../data/consents_api.dart';
 import '../data/emergency_contacts_repository.dart';
 import '../data/import_repository.dart';
+import '../data/needs_review_repository.dart';
 import '../data/token_store.dart';
 import '../data/user_cards_repository.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
@@ -230,6 +231,25 @@ class DueDateRemindersController extends StateNotifier<Set<String>> {
   }
 }
 
+/// Task D-4: on-device only, never uploaded — see NeedsReviewRepository's
+/// own doc-comment for why. `needsReviewItemsProvider` invalidates itself
+/// whenever an item is added/removed (each mutation site calls
+/// `ref.invalidate`), same pull-based refresh pattern as every other
+/// FutureProvider in this file rather than a StateNotifier — the store is
+/// a dumb list, not something with derived state worth a controller class.
+final needsReviewRepositoryProvider = Provider<NeedsReviewRepository>((ref) => NeedsReviewRepository());
+
+final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((ref) {
+  return ref.watch(needsReviewRepositoryProvider).fetchAll();
+});
+
+/// D1's badge (ui-spec §1: "Activity... with badge for D4 count") and
+/// Insights Hub's tile both read this rather than the full list, so
+/// neither has to unwrap an AsyncValue just to show a number.
+final needsReviewCountProvider = Provider<int>((ref) {
+  return ref.watch(needsReviewItemsProvider).valueOrNull?.length ?? 0;
+});
+
 /// UA-3: the signed-in user's own profiles row (owner-scoped via RLS —
 /// api/'s GET /profile, proved end to end back in Chunk 1 but never called
 /// from the app itself until this chunk). Null when signed out or when a
@@ -273,6 +293,14 @@ final transactionsProvider = FutureProvider<List<TransactionEntry>>((ref) async 
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   return repo.fetchTransactions();
+});
+
+/// Task D-5: pending duplicate-candidate pairs; empty (not an error) when
+/// signed out, same pattern as every other repository-backed provider here.
+final duplicateCandidatesProvider = FutureProvider<List<DuplicateCandidate>>((ref) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  if (repo == null) return const [];
+  return repo.fetchDuplicateCandidates();
 });
 
 /// Task C-1 (C1 My Cards' active/archived filter). Deliberately a SEPARATE

@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/needs_review_repository.dart';
+import 'sms_backup_import_screen.dart';
+import 'sms_consent_screen.dart';
 import 'sms_listener_service.dart';
 
 /// UA-5.3 (Chunk 31): permission-request UI + the screen that wires the
@@ -31,7 +34,15 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
   String? _selectedCardId;
   final List<String> _recentLog = [];
 
+  /// F4: an explicit consent/declaration step now runs before the OS
+  /// permission dialog (previously this went straight to
+  /// `requestPermissions()`) — see sms_consent_screen.dart's doc-comment.
   Future<void> _requestPermission() async {
+    final consented = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const SmsConsentScreen()),
+    );
+    if (consented != true || !mounted) return;
+
     setState(() => _requesting = true);
     try {
       final granted = await _service.requestPermissions();
@@ -68,10 +79,24 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
           setState(() {
             _recentLog.insert(
               0,
-              result.parsed ? 'Logged a transaction from SMS ($sender)' : 'Could not parse SMS from $sender (${result.reason})',
+              result.parsed ? 'Logged a transaction from SMS ($sender)' : 'Could not parse SMS from $sender — added to Needs Review',
             );
           });
-          if (result.parsed) ref.invalidate(userCardsProvider);
+          if (result.parsed) {
+            ref.invalidate(userCardsProvider);
+          } else {
+            // Task D-4: never silently drop an unparsed message — the raw
+            // text is right here, on-device, and would otherwise vanish
+            // once this screen's ephemeral _recentLog scrolls away.
+            await ref.read(needsReviewRepositoryProvider).add(NeedsReviewItem(
+                  id: '${sender}_${DateTime.now().microsecondsSinceEpoch}',
+                  sender: sender,
+                  body: body,
+                  reason: result.reason,
+                  receivedAt: DateTime.now(),
+                ));
+            ref.invalidate(needsReviewItemsProvider);
+          }
         }
       } catch (e) {
         if (mounted) {
@@ -98,6 +123,20 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
               'entering every transaction by hand. Requires SMS permission.',
             ),
             const SizedBox(height: 16),
+            // F4: one-time backup-file import — always available, independent
+            // of the live auto-read permission/listener above (per the plan's
+            // explicit "always available" requirement).
+            OutlinedButton.icon(
+              icon: const Icon(Icons.upload_file_outlined),
+              label: const Text('Import from an SMS backup file (one-time)'),
+              onPressed: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const SmsBackupImportScreen())),
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            const Text('Live auto-read (Android)', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
             if (!_permissionGranted)
               ElevatedButton(
                 onPressed: _requesting ? null : _requestPermission,
