@@ -172,7 +172,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         TextField(
           controller: _merchantController,
           decoration: const InputDecoration(labelText: 'Merchant name'),
-          onChanged: (_) => setState(() {}), // "Pay with" reads merchant text live
+          // No onChanged/setState needed: _payWith reads _merchantController.text
+          // directly at tap time, not from a build-time-captured value, so
+          // typing here doesn't need to trigger a rebuild of anything else.
         ),
         const SizedBox(height: AppSpace.sm),
         // ui-spec B3.2 edge case: no `mc` on the QR -> no category could be
