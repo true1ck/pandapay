@@ -80,6 +80,15 @@ dependencies:
   flex_color_scheme: ^8.4.0
   responsive_framework: ^1.5.1
 
+  # B2 (Group B): gallery import — scanning a UPI QR from a screenshot
+  # rather than the live camera (ui-spec B2.2). mobile_scanner's
+  # analyzeImage(path) decodes a QR from an arbitrary image file; something
+  # has to hand it a file path from the user's photo gallery, which is this
+  # package's whole job. Same "added without a live device/pub-get
+  # verification in this sandbox" caveat as mobile_scanner/geolocator above
+  # (see PROGRESS.md Chunks 30/32) — flagged, not hidden.
+  image_picker: ^1.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
