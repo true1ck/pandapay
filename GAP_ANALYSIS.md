@@ -50,7 +50,7 @@ The ranking engine (`packages/pandapay_domain/lib/src/engine/`) is real, tested,
 | F1 Import Hub | ✅ Done | |
 | F2 Statement PDF Import | ✅ Built 2026-08-08 | Real on-device parsing: `file_picker` for the file, `syncfusion_flutter_pdf` for password-aware decryption + text extraction, a heuristic (not issuer-specific) regex line-parser (`app/lib/data/pdf_statement_parser.dart`) for the transaction table. Verified with real generated-PDF round-trip tests (encrypt, decrypt, extract, parse) — not just UI plumbing. Still not per-issuer column-layout parsing (PDF layouts vary far more than SMS/email text) — a generic extractor, flagged as such in code. |
 | F3 Email Forwarding | ✅ Done (UI) | Backend email-ingestion worker still unconfirmed. |
-| F4 SMS Import | 🟡 Stub for on-device parts | Parsing logic is real and unit-tested; `RECEIVE_SMS` listener/permission flow still never run on real hardware (`TODO_OWNER.md`). |
+| F4 SMS Import | 🟡 Backup-file path built 2026-08-08; live listener still owner-blocked | The one-time backup-file import (`sms_backup_import_screen.dart`) now does real file picking + real XML parsing (`data/sms_backup_xml_parser.dart`, the "SMS Backup & Restore" app's export format) instead of fake sample messages — verified with a widget test asserting real parsed/failed counts. The separate live `RECEIVE_SMS` auto-read listener/permission flow is unrelated code and still never run on real hardware (`TODO_OWNER.md`) — that part needs a physical device, not more code. |
 | F5 Sync & Backup | 🟡 Stub | No client-side sync engine (see §2); backup/restore is status-only, backup action itself still a stub. |
 | F6 Data Export | ✅ Done | |
 | F7 IMAP Connection | ✅ Done | |
@@ -114,7 +114,7 @@ Real Python code exists (`fetcher.py`, `extractor.py`, `llm_extraction.py`, `rob
 ## Priority punch list
 
 1. ~~Offline-first local DB (UA-0.3)~~ — **Built 2026-08-08** (see §2): catalogue/wallet/overrides caching + B6 offline outbox. Remaining sub-scope, not urgent: relational local mirror, incremental `data_version` sync, offline queueing for non-B6 writes.
-2. ~~F2 real PDF parsing~~ — **Built 2026-08-08** (see §3 table). F4 (on-device SMS verification) and F5 (real sync/backup engine) remain.
+2. ~~F2 real PDF parsing~~ and ~~F4 backup-file real parsing~~ — **Built 2026-08-08** (see §3 table). F4's live `RECEIVE_SMS` listener is owner-blocked (needs a physical device, not code). F5 (real sync/backup engine) remains.
 3. ~~S5/S6 (forced upgrade / maintenance mode)~~ and ~~S2 (Quick Settings Tile)~~ — **Both built 2026-08-08** (see §4 System surfaces table). S2 remains unverified against a real Android toolchain (sandbox network limitation, not skipped).
 4. **S1/S3 real-device work** — iOS widget extension needs a real Xcode session; geofencing needs a true background mechanism to replace the current foreground one-shot read.
 5. ~~Wire `console/lib/app/router.dart` or delete it~~ — **Deleted 2026-08-08**: it had zero real callers (only referenced in a comment); the widget-level `_AuthGate` + `NavigationRail`/`setState` nav in `main.dart` was already working and covered by 15 passing tests, and a go_router migration would have meant rewriting that whole test file for marginal benefit (deep-linking on an internal single-user-role admin tool). `go_router` dependency also removed from `console/pubspec.yaml` since nothing else used it.

@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +7,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/needs_review_repository.dart';
+import '../../data/sms_backup_xml_parser.dart';
 
 /// ui-spec.md F4 SMS Import — the one-time backup-file import path the
 /// plan flags as missing ("always available, independent of the auto-read
@@ -18,14 +20,11 @@ import '../../data/needs_review_repository.dart';
 /// parser... batch it rather than building a second parser" instruction —
 /// then records the summary via POST /sms-import-batches.
 ///
-/// Judgment call: Android SMS-backup-file parsing (typically an XML export
-/// from a backup app) needs real file access. `file_picker` is not a
-/// pubspec dependency and this pass has no Flutter SDK to verify a newly
-/// added native plugin compiles (see PROGRESS.md) — so file selection is
-/// STUBBED with a small fixed set of sample "backup" messages rather than
-/// reading a real file, same scope-down reasoning as the PDF import
-/// screen. The per-message parse/log calls that follow are real, not
-/// stubbed — this demonstrates the actual batch-write path end to end.
+/// Real file selection (`file_picker`) + real XML parsing
+/// (`data/sms_backup_xml_parser.dart`, the "SMS Backup & Restore" app's
+/// de facto standard export format) — not a stub. The per-message
+/// parse/log calls were already real before this pass; this closes the
+/// remaining gap (fake sample messages instead of a real file).
 class SmsBackupImportScreen extends ConsumerStatefulWidget {
   const SmsBackupImportScreen({super.key});
 
@@ -33,31 +32,50 @@ class SmsBackupImportScreen extends ConsumerStatefulWidget {
   ConsumerState<SmsBackupImportScreen> createState() => _SmsBackupImportScreenState();
 }
 
-// Stand-in for messages that would come from a real parsed backup-file XML.
-const _sampleBackupMessages = [
-  ('VM-HDFCBK', 'Rs.499.00 spent on HDFC Bank Card x1234 at AMAZON on 01-01-24'),
-  ('AX-AxisBk', 'INR 1,250.00 spent on Axis Bank Card XX5678 at SWIGGY on 03-01-24'),
-  ('unknown-sender', 'This is not a bank message and will fail to parse.'),
-];
-
 class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
   String? _selectedCardId;
-  bool _picked = false;
+  String? _fileName;
+  List<BackupSmsMessage>? _messages;
   bool _importing = false;
   int? _messageCount;
   int? _parsedCount;
   int? _failedCount;
+  String? _pickError;
+
+  Future<void> _pickFile() async {
+    setState(() => _pickError = null);
+    final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['xml']);
+    if (result == null || result.files.isEmpty) return;
+    final picked = result.files.single;
+    try {
+      final bytes = await picked.readAsBytes();
+      final messages = parseSmsBackupXml(String.fromCharCodes(bytes));
+      if (messages.isEmpty) {
+        setState(() => _pickError = "Couldn't find any messages in that file.");
+        return;
+      }
+      setState(() {
+        _fileName = picked.name;
+        _messages = messages;
+      });
+    } on SmsBackupParseException catch (e) {
+      setState(() => _pickError = e.message);
+    } catch (e) {
+      setState(() => _pickError = "Couldn't read that file. Try picking it again.");
+    }
+  }
 
   Future<void> _runImport() async {
     final userCardsRepo = ref.read(userCardsRepositoryProvider);
     final importRepo = ref.read(importRepositoryProvider);
-    if (userCardsRepo == null || importRepo == null || _selectedCardId == null) return;
+    final messages = _messages;
+    if (userCardsRepo == null || importRepo == null || _selectedCardId == null || messages == null) return;
 
     setState(() => _importing = true);
     var parsed = 0;
     var failed = 0;
     try {
-      for (final (sender, body) in _sampleBackupMessages) {
+      for (final (:sender, :body) in messages) {
         try {
           final result = await userCardsRepo.logTransactionFromSms(
             userCardId: _selectedCardId!,
@@ -85,7 +103,7 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
       }
       if (failed > 0) ref.invalidate(needsReviewItemsProvider);
       await importRepo.recordSmsImportBatch(
-        messageCount: _sampleBackupMessages.length,
+        messageCount: messages.length,
         parsedCount: parsed,
         failedCount: failed,
       );
@@ -93,7 +111,7 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
       ref.invalidate(smsImportBatchesProvider);
       if (mounted) {
         setState(() {
-          _messageCount = _sampleBackupMessages.length;
+          _messageCount = messages.length;
           _parsedCount = parsed;
           _failedCount = failed;
         });
@@ -133,19 +151,22 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
                     style: textTheme.bodyMedium,
                   ),
                   const SizedBox(height: AppSpace.lg),
-                  if (!_picked)
+                  if (_pickError != null) ...[
+                    Text(_pickError!, style: textTheme.bodySmall?.copyWith(color: AppColors.ink500)),
+                    const SizedBox(height: AppSpace.sm),
+                  ],
+                  if (_messages == null)
                     ElevatedButton.icon(
                       icon: const Icon(Icons.upload_file_outlined),
                       label: const Text('Select backup file'),
-                      onPressed: () => setState(() => _picked = true),
+                      onPressed: _pickFile,
                     )
                   else ...[
                     Container(
                       padding: const EdgeInsets.all(AppSpace.md),
                       decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
                       child: Text(
-                        'sms_backup.xml selected — ${_sampleBackupMessages.length} messages found '
-                        '(stub file contents — see this screen\'s doc-comment).',
+                        '$_fileName selected — ${_messages!.length} messages found.',
                         style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
                       ),
                     ),

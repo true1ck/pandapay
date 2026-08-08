@@ -144,6 +144,10 @@ dependencies:
   # resolver still enforces it). Verified resolving cleanly against this
   # exact dependency graph before landing it.
   file_picker: ">=12.0.0-beta.1"
+  # F4: parsing an "SMS Backup & Restore"-format XML export — already
+  # resolved transitively via syncfusion_flutter_pdf, declared directly
+  # here since app/lib/data/sms_backup_xml_parser.dart imports it directly.
+  xml: ^7.0.1
   flutter_test:
     sdk: flutter
 

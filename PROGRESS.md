@@ -2637,3 +2637,36 @@ purposes — `confirmStatementImport` doesn't take a sign per line yet). No wiri
 duplicate-check logic (D5 operates on already-imported transactions server-side; this chunk stops
 at handing the server a transaction count + closing balance, matching the existing
 `confirmStatementImport` contract it was already calling).
+
+### Chunk 45 — F4 SMS backup-file import: real file picking + real XML parsing
+
+Replaced the fake-sample-messages stub with a real path. New `app/lib/data/sms_backup_xml_parser.dart`:
+`parseSmsBackupXml()` parses the "SMS Backup & Restore" app's de facto standard export format (an
+`smses` root with `sms` elements carrying `address`/`body` attributes), falling back to `from`/`text`
+for the handful of other apps that export a similar shape differently — deliberately NOT a universal
+parser for every backup-app format, same "flagged, not hidden" scope call F2's PDF parser already
+made for issuer-specific layouts. An `sms` element missing both sender and body is silently skipped
+(a file with a few malformed entries alongside many good ones is the normal case); genuinely invalid
+XML throws a plain-language `SmsBackupParseException`, not a raw `XmlException`.
+
+`sms_backup_import_screen.dart` now uses `file_picker` (already added this session for F2 — no new
+dependency) for real file selection instead of a `setState(() => _picked = true)` fake-toggle. The
+per-message parse/log calls (`UserCardsRepository.logTransactionFromSms`, the SAME parser the live
+listener uses, batched) and the needs-review-queue fallback for unparseable messages were already
+real before this chunk — only the file-input side was fake.
+
+This is scoped narrowly to what was actually stubbed: the separate live `RECEIVE_SMS` auto-read
+listener/permission flow (`sms_listener_service.dart`) is unrelated code, untouched by this chunk,
+and remains owner-blocked per `TODO_OWNER.md` — it needs a physical Android device to grant runtime
+permissions and receive a real SMS, not more code to write.
+
+**Verification**: `flutter analyze` 0 errors. `flutter test`: 285/285 (was 279, +6 across
+`test/data/sms_backup_xml_parser_test.dart` and a new
+`test/features/sms_import/sms_backup_import_screen_test.dart` that fakes `FilePickerPlatform` to
+return a real (in-memory-built, not a fixture file) backup XML and drives the full pick → parse →
+card-select → import → summary flow, asserting the parsed/failed counts are genuinely derived from
+the fake `UserCardsRepository`'s per-message responses, not hardcoded.
+
+**Not done**: live `RECEIVE_SMS` listener still unverified on real hardware (owner action). No
+support for backup-app XML shapes beyond the `address`/`body` (or `from`/`text`) attribute
+convention this chunk covers.
