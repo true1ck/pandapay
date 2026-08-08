@@ -194,15 +194,16 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null || _selectedUserCardId == null) return;
     setState(() => _saving = true);
+    final merchantName = _merchantController.text.trim().isEmpty ? null : _merchantController.text.trim();
+    final note = _noteController.text.trim().isEmpty ? null : _noteController.text.trim();
     try {
-      final merchantName = _merchantController.text.trim().isEmpty ? null : _merchantController.text.trim();
       await repo.logTransaction(
         userCardId: _selectedUserCardId!,
         amount: Money.fromRupees(amount),
         categoryId: _selectedCategoryId,
         merchantName: merchantName,
         occurredAt: occurredAt,
-        note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+        note: note,
       );
       await _rememberLastUsedCard(_selectedUserCardId!);
       // Remembers whatever merchant name was actually used this save, even
@@ -248,6 +249,38 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         );
       }
     } catch (err) {
+      // UA-0.3 offline queue (GAP_ANALYSIS.md §2): only route into the
+      // outbox when the device actually reads as offline right now — a
+      // real server error (validation, 500) while genuinely online must
+      // still surface as an error, not silently queue a save that will
+      // just fail identically on retry.
+      final isOnline = ref.read(isOnlineProvider).valueOrNull ?? true;
+      if (!isOnline) {
+        await ref.read(outboxRepositoryProvider.future).then(
+              (outbox) => outbox.enqueue(
+                userCardId: _selectedUserCardId!,
+                amount: Money.fromRupees(amount),
+                categoryId: _selectedCategoryId,
+                merchantName: merchantName,
+                occurredAt: occurredAt,
+                note: note,
+              ),
+            );
+        ref.invalidate(pendingOutboxCountProvider);
+        if (mounted) {
+          // Same "capture before pop" reasoning as the success path above —
+          // ScaffoldMessenger.of(context) after pop() would attach to a
+          // deactivated context and silently fail to show anything.
+          final messenger = ScaffoldMessenger.of(context);
+          Navigator.of(context).pop();
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text("Saved offline — this'll sync automatically once you're back online."),
+            ),
+          );
+        }
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
       }

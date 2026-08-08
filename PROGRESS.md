@@ -2438,3 +2438,77 @@ local mode (H2's entry point exists, there's no offline cache yet for it to migr
 `app/lib/features/settings/appearance_screen.dart`'s text-scale toggle only applies within that
 screen's own subtree — the app-root-level `MaterialApp` wiring for the 200%-ceiling accessibility
 requirement is a real follow-up, not silently claimed done.
+
+### Chunk 41 — Offline-first local cache (UA-0.3) per
+`docs/superpowers/plans/2026-08-08-offline-first-local-cache.md`
+
+Closed the single biggest surviving gap from `GAP_ANALYSIS.md` §2: the flagship scan-and-recommend
+flow (Group B, merged in Chunk 40's sibling work) was fully live-network-dependent, meaning it
+failed exactly where it matters most — a spotty connection at the point of sale. `catalogueProvider`,
+`categoriesProvider`, `userCardsProvider`, and `cardOverridesProvider` (`app/lib/app/providers.dart`)
+now cache the raw JSON body of every successful fetch and fall back to the last-cached body on any
+fetch failure, decoding it through the exact same `fromJson` parsers already used for live data —
+one parser, two sources, no separate cache-deserialization code path to drift out of sync. B6 quick-add
+gets a real offline write path: a failed save while offline queues to a
+`transaction_outbox_entries` table (`TransactionOutboxRepository`) instead of just erroring, and
+auto-flushes the moment `isOnlineProvider` (backed by `connectivity_plus`) reports connectivity
+back. Home shows a new `_OfflineBanner` when offline, including a pending-outbox count when
+non-zero. Wallet/overrides cache entries clear on sign-out (public catalogue/categories data
+doesn't) — the same "don't leak a previous signed-in user's data across a sign-out" bug class
+already found once this session in quick-add's SharedPreferences last-used-card key.
+
+**Not a relational mirror of the Supabase schema** — deliberately, per the plan's Architecture
+note: a raw-JSON-blob cache keyed by endpoint (`catalogue`, `categories`, `user_cards`,
+`card_overrides`), not a drift-modeled replica of `card_products`/`user_cards`/etc. Reconstructing
+`CardProduct`/`UserCard`/`CardOverride` needed `toJson()` added to those types (and their nested
+rule types — `RewardRule`, `CapRule`, `MilestoneRule`, `ForexRule`, `FuelSurchargeRule`,
+`FeeWaiverRule`, `CardBenefit` in `packages/pandapay_domain`) for the round-trip; each is unit-
+tested to round-trip every field, not just the happy-path ones.
+
+**A real architecture pivot mid-implementation, not silently absorbed**: the plan as originally
+written specified `drift`/`drift_flutter`. Dropped after hitting a genuine, unresolvable-in-place
+blocker — every `drift_dev` version compatible with `pandapay_lints`' `analyzer ^7.0.0` constraint
+crashes the analyzer (`DotShorthandInvocationImpl` in `bundle_writer.dart`) when its `build_runner`
+codegen step analyzes this codebase's existing `'key': ?value` null-shorthand syntax (used
+elsewhere already, e.g. `user_cards_repository.dart`'s `logTransaction`), and every `drift_dev`
+version that avoids the crash needs an `analyzer`/`build` version `pandapay_lints` or
+`riverpod_generator` can't satisfy simultaneously. Confirmed via direct reproduction (a minimal
+drift_dev build against this exact dependency graph), not assumed from a changelog. Switched to
+plain `package:sqlite3` with hand-written SQL — same on-disk SQLite storage the plan's letter asked
+for, zero code generation, so the whole conflict class doesn't apply.
+
+**Two more real bugs found and fixed, not just claimed handled**: (1) an unmocked `path_provider`
+platform channel call never resolves inside `testWidgets()` — not the `MissingPluginException` it
+throws promptly in a bare `test()`, a genuine indefinite hang, confirmed by direct reproduction
+with a 20-cycle pump loop that never observed a result. This alone broke ~80 pre-existing, unrelated
+widget tests (anything transitively watching `catalogueProvider`/`userCardsProvider`/
+`cardOverridesProvider`, i.e. most of the suite) before being root-caused and fixed by detecting
+`flutter test`'s standard `FLUTTER_TEST` environment variable and opening an in-memory DB directly,
+skip `path_provider` entirely, rather than reaching for a device path that was never going to
+resolve. A `Future.timeout()` was tried first and reverted — it leaves a real dangling `Timer` when
+a test's own `pumpAndSettle` finishes before the timeout fires, tripping `flutter_test`'s
+`!timersPending` teardown invariant, itself only caught by running the full suite after the fix,
+not just the tests that seemed related. (2) `quick_add_screen.dart`'s new offline-save branch
+initially called `ScaffoldMessenger.of(context)` *after* `Navigator.pop()` — the exact bug pattern
+the screen's own pre-existing success-path comment already warns against, caught by a widget test
+that actually asserts on the SnackBar text appearing, not just that the save didn't throw.
+
+**Verification**: `flutter analyze` 0 errors. `flutter test`: 253/253 (was 234 at Chunk 40, +19 new
+across `app/test/data/local/`, `app/test/data/*_to_json_test.dart`, `app/test/app/
+is_online_provider_test.dart`, `app/test/app/providers_offline_catalogue_test.dart`, `app/test/app/
+providers_offline_wallet_test.dart`, `app/test/features/quickadd/quick_add_offline_test.dart`,
+`app/test/features/home/offline_banner_test.dart`). `dart test` in `packages/pandapay_domain`:
+131/131 (+1, the `CardProduct` toJson round-trip test). `node --test` in `api/`: unaffected, 25/25
+(no backend changes this chunk).
+
+**Also this chunk**: ratified the custom Node/JWT auth stack over the originally-planned Supabase
+Auth in `Userappimplementation_plan.md` §UA-7.2 (a deliberate decision, not a drift-and-forget) —
+`GAP_ANALYSIS.md` updated to match on both counts.
+
+**Not done**: Tasks 1-7 of the plan are complete; Task 8 (this entry) closes it out. Still open per
+the plan's own scope: no incremental `data_version` sync (every online catalogue fetch is a full
+re-pull — fine at current catalogue size, flagged as a future optimization, not a defect); the
+outbox only covers B6 quick-add writes, not other offline write paths (override create, card
+archive, etc. still fail outright when offline, same as before this chunk); no relational local
+mirror of the Supabase schema (a much larger, separate undertaking — see the plan's Architecture
+note for the explicit scope call).

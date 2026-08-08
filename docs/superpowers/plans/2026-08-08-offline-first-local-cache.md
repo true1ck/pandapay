@@ -1,6 +1,6 @@
 # Offline-First Local Cache (UA-0.3, GAP_ANALYSIS §2) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Give the four offline-critical providers behind Home's ranked recommendation (catalogue, categories, wallet, overrides) a last-known-good local cache, so the flagship scan-and-recommend flow still renders with real data when the device has no connectivity — plus an offline-tolerant write path for B6 quick-add.
 
@@ -34,7 +34,7 @@
 - Produces: `AppDatabase` class with tables `cachedResponses` (getter, generated) and `transactionOutboxEntries` (getter, generated). Constructor `AppDatabase([QueryExecutor? executor])` — tests pass `NativeDatabase.memory()`, production uses the no-arg default (`driftDatabase(name: 'pandapay')` from `drift_flutter`).
 - Produces: row data classes `CachedResponse` (fields: `key` String, `rawJson` String, `fetchedAt` DateTime) and `TransactionOutboxEntry` (fields: `id` int, `userCardId` String, `amountPaise` int, `categoryId` String?, `merchantName` String?, `occurredAt` DateTime?, `note` String?, `createdAt` DateTime, `lastError` String?).
 
-- [ ] **Step 1: Add dependencies to pubspec.yaml**
+- [x] **Step 1: Add dependencies to pubspec.yaml**
 
 In `app/pubspec.yaml`, add to `dependencies:` (alongside the existing `path_provider: ^2.1.6` line):
 
@@ -50,12 +50,12 @@ Add to `dev_dependencies:` (alongside the existing `build_runner: ^2.5.4` line):
   drift_dev: ^2.27.0
 ```
 
-- [ ] **Step 2: Run pub get**
+- [x] **Step 2: Run pub get**
 
 Run: `cd app && flutter pub get`
 Expected: resolves cleanly, no version conflicts.
 
-- [ ] **Step 3: Write the failing test for the database schema**
+- [x] **Step 3: Write the failing test for the database schema**
 
 ```dart
 // app/test/data/local/app_database_test.dart
@@ -107,12 +107,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it fails (file doesn't exist yet)**
+- [x] **Step 4: Run test to verify it fails (file doesn't exist yet)**
 
 Run: `cd app && flutter test test/data/local/app_database_test.dart`
 Expected: FAIL — `app_database.dart` not found / compile error.
 
-- [ ] **Step 5: Write the database**
+- [x] **Step 5: Write the database**
 
 ```dart
 // app/lib/data/local/app_database.dart
@@ -167,17 +167,17 @@ class AppDatabase extends _$AppDatabase {
 }
 ```
 
-- [ ] **Step 6: Generate drift code**
+- [x] **Step 6: Generate drift code**
 
 Run: `cd app && dart run build_runner build --delete-conflicting-outputs`
 Expected: generates `app_database.g.dart` with no errors.
 
-- [ ] **Step 7: Run test to verify it passes**
+- [x] **Step 7: Run test to verify it passes**
 
 Run: `cd app && flutter test test/data/local/app_database_test.dart`
 Expected: PASS (3 tests).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add app/pubspec.yaml app/pubspec.lock app/lib/data/local/ app/test/data/local/
@@ -196,7 +196,7 @@ git commit -m "feat(app): add drift-backed local cache database (UA-0.3 step 1)"
 - Consumes: `AppDatabase` from Task 1.
 - Produces: `class ResponseCache { ResponseCache(AppDatabase db); Future<void> put(String key, String rawJson); Future<String?> get(String key); Future<void> clear(String key); }` — used by every provider in Task 3/4.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```dart
 // app/test/data/local/response_cache_test.dart
@@ -247,12 +247,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd app && flutter test test/data/local/response_cache_test.dart`
 Expected: FAIL — `response_cache.dart` not found.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```dart
 // app/lib/data/local/response_cache.dart
@@ -282,12 +282,12 @@ class ResponseCache {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd app && flutter test test/data/local/response_cache_test.dart`
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/lib/data/local/response_cache.dart app/test/data/local/response_cache_test.dart
@@ -308,7 +308,7 @@ git commit -m "feat(app): add ResponseCache key/value wrapper over the local DB"
 
 **Note on approach:** rather than change the `CatalogueRepository`/`CategoryRepository` abstract interfaces (19 test files implement them as fakes — changing the interface would break all of them for no benefit), this task caches by round-tripping the *parsed* result through `jsonEncode`/existing `fromJson`. This requires adding `toJson()` — done as a prerequisite sub-step below, mirroring `card_rules_json.dart`'s existing `fromJson` key names exactly so the cached blob decodes through the unmodified `CardProductJson.fromJson`/`SpendCategory.fromJson`.
 
-- [ ] **Step 1: Add toJson round-trip support to pandapay_domain (prerequisite)**
+- [x] **Step 1: Add toJson round-trip support to pandapay_domain (prerequisite)**
 
 In `packages/pandapay_domain/lib/src/card_rules/card_rules_json.dart`, add a `_snakeFromCamel` inverse of the existing `_camelFromSnake`, and a `toJson()` method on every existing `*Json` extension, mirroring the exact keys each `fromJson` reads. Append after the existing `_camelFromSnake` function:
 
@@ -452,7 +452,7 @@ extension CardProductJson on CardProduct {
 
 (`network.name` is used directly, not `_snakeFromCamel`, because `_parseNetwork` calls `CardNetwork.values.byName(value)` directly with no snake/camel bridging — check `card_rules_json.dart:31` to confirm before writing this line; mirror whatever that line actually does.)
 
-- [ ] **Step 2: Write a round-trip test for the new toJson methods**
+- [x] **Step 2: Write a round-trip test for the new toJson methods**
 
 ```dart
 // packages/pandapay_domain/test/card_rules_json_roundtrip_test.dart
@@ -504,12 +504,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 3: Run test to verify it fails, then implement, then verify it passes**
+- [x] **Step 3: Run test to verify it fails, then implement, then verify it passes**
 
 Run: `cd packages/pandapay_domain && dart test test/card_rules_json_roundtrip_test.dart`
 Expected: FAIL first (no `toJson` method), then implement Step 1's code, then PASS.
 
-- [ ] **Step 4: Add SpendCategory.toJson (small, in app/lib/data/catalogue_repository.dart)**
+- [x] **Step 4: Add SpendCategory.toJson (small, in app/lib/data/catalogue_repository.dart)**
 
 In `app/lib/data/catalogue_repository.dart`, add a `toJson()` method to the `SpendCategory` class itself (it's a plain class, not an extension, so this is a regular method):
 
@@ -530,7 +530,7 @@ class SpendCategory {
 }
 ```
 
-- [ ] **Step 5: Write the failing provider-level cache test**
+- [x] **Step 5: Write the failing provider-level cache test**
 
 ```dart
 // app/test/app/providers_offline_catalogue_test.dart
@@ -601,12 +601,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 6: Run test to verify it fails**
+- [x] **Step 6: Run test to verify it fails**
 
 Run: `cd app && flutter test test/app/providers_offline_catalogue_test.dart`
 Expected: FAIL — `appDatabaseProvider` doesn't exist yet.
 
-- [ ] **Step 7: Wire the providers**
+- [x] **Step 7: Wire the providers**
 
 In `app/lib/app/providers.dart`, add near the top (after the existing imports, alongside other `import '../data/...'` lines):
 
@@ -669,17 +669,17 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
 
 Add `import 'dart:convert';` at the top of `providers.dart` if not already present (check first — it likely already imports `dart:async`; `dart:convert` needs to be added alongside it).
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `cd app && flutter test test/app/providers_offline_catalogue_test.dart`
 Expected: PASS (2 tests).
 
-- [ ] **Step 9: Run the full app test suite to check nothing else broke**
+- [x] **Step 9: Run the full app test suite to check nothing else broke**
 
 Run: `cd app && flutter test`
 Expected: PASS (was 234, now 234 + new tests). If anything that overrides `catalogueRepositoryProvider`/`categoryRepositoryProvider` in existing tests fails because it now also needs `appDatabaseProvider` overridden, add `appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory()))` to that test's override list — check failures individually, don't guess.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add packages/pandapay_domain/lib/src/card_rules/card_rules_json.dart packages/pandapay_domain/test/card_rules_json_roundtrip_test.dart app/lib/data/catalogue_repository.dart app/lib/app/providers.dart app/test/app/providers_offline_catalogue_test.dart
@@ -698,7 +698,7 @@ git commit -m "feat(app): cache catalogue/categories with last-known-good fallba
 - Consumes: `responseCacheProvider` (Task 3), existing `UserCardsRepository.fetchUserCards()` / `CardOverridesRepository.fetchOverrides()` (unchanged), `UserCard.toJson()`/`CardOverride.toJson()` (new, added this task).
 - Produces: `userCardsProvider`/`cardOverridesProvider` keep existing signatures. New `_clearUserScopedCacheOnSignOut` listener wired into a `Provider<void>` read from `_AppShell` (same pattern as the existing `sessionKeepAliveProvider`).
 
-- [ ] **Step 1: Add UserCard.toJson and CardOverride.toJson**
+- [x] **Step 1: Add UserCard.toJson and CardOverride.toJson**
 
 In `app/lib/data/user_cards_repository.dart`, add to the `UserCard` class (mirror `UserCard.fromJson`'s keys exactly — read that factory first to confirm every key name before writing this, since it has more fields than shown in the plan's earlier research pass: `statement_day`, `opened_on`, `credit_limit_inr`, `due_day`, `anniversary_on`, `is_archived`, plus the nested `cap_states`/`milestone_states`/`fee_waiver_states` arrays):
 
@@ -767,7 +767,7 @@ Map<String, dynamic> toJson() => {
 
 Re-check `OverrideScope.name` actually matches what `fromJson` expects (it may parse via a snake-case string like `CapMeasure` elsewhere does — confirm before assuming `.name` is correct).
 
-- [ ] **Step 2: Write round-trip tests for both toJson additions**
+- [x] **Step 2: Write round-trip tests for both toJson additions**
 
 ```dart
 // app/test/data/user_cards_repository_toJson_test.dart
@@ -808,12 +808,12 @@ void main() {
 
 (Add an equivalent `card_overrides_repository_toJson_test.dart` for `CardOverride` — construct one with every field set, round-trip, assert each field.)
 
-- [ ] **Step 3: Run tests, verify fail then implement then pass**
+- [x] **Step 3: Run tests, verify fail then implement then pass**
 
 Run: `cd app && flutter test test/data/user_cards_repository_toJson_test.dart test/data/card_overrides_repository_toJson_test.dart`
 Expected: FAIL first, PASS after implementing Step 1.
 
-- [ ] **Step 4: Write the failing provider cache test**
+- [x] **Step 4: Write the failing provider cache test**
 
 Same shape as Task 3 Step 5 but for `userCardsProvider` — a `_FlakyUserCardsRepository`-style fake wrapping the real `UserCardsRepository`'s network call is awkward since `UserCardsRepository` is concrete, not an interface. Instead, test the cache behavior directly against `ResponseCache` + the parse logic, and separately verify via a widget-level test that `userCardsProvider`'s override still works end to end (existing tests already override `userCardsProvider` directly in most screens, so this task's own correctness is best proven by a focused unit test of the caching logic in isolation):
 
@@ -862,12 +862,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 5: Run test to verify it fails**
+- [x] **Step 5: Run test to verify it fails**
 
 Run: `cd app && flutter test test/app/providers_offline_wallet_test.dart`
 Expected: FAIL — `toJson` methods don't exist yet if Step 1 wasn't done first (it should already be done by this point; if this genuinely fails only because the test file itself doesn't exist, that's the expected starting state).
 
-- [ ] **Step 6: Wire userCardsProvider and cardOverridesProvider**
+- [x] **Step 6: Wire userCardsProvider and cardOverridesProvider**
 
 In `app/lib/app/providers.dart`, replace the existing bodies:
 
@@ -910,7 +910,7 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
 });
 ```
 
-- [ ] **Step 7: Add the sign-out cache-clear listener**
+- [x] **Step 7: Add the sign-out cache-clear listener**
 
 Add near `sessionKeepAliveProvider` (same file, same established `ref.listen` pattern):
 
@@ -931,7 +931,7 @@ final cacheLifecycleProvider = Provider<void>((ref) {
 });
 ```
 
-- [ ] **Step 8: Read cacheLifecycleProvider from _AppShell**
+- [x] **Step 8: Read cacheLifecycleProvider from _AppShell**
 
 In `app/lib/app/router.dart`, find `_AppShellState.build()` where it does `ref.watch(sessionKeepAliveProvider);` and add immediately after:
 
@@ -939,17 +939,17 @@ In `app/lib/app/router.dart`, find `_AppShellState.build()` where it does `ref.w
 ref.watch(cacheLifecycleProvider);
 ```
 
-- [ ] **Step 9: Run tests to verify they pass**
+- [x] **Step 9: Run tests to verify they pass**
 
 Run: `cd app && flutter test test/app/providers_offline_wallet_test.dart test/data/user_cards_repository_toJson_test.dart test/data/card_overrides_repository_toJson_test.dart`
 Expected: PASS.
 
-- [ ] **Step 10: Run the full suite**
+- [x] **Step 10: Run the full suite**
 
 Run: `cd app && flutter test`
 Expected: PASS (all previous + new tests).
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add app/lib/data/user_cards_repository.dart app/lib/data/card_overrides_repository.dart app/lib/app/providers.dart app/lib/app/router.dart app/test/app/providers_offline_wallet_test.dart app/test/data/user_cards_repository_toJson_test.dart app/test/data/card_overrides_repository_toJson_test.dart
@@ -967,7 +967,7 @@ git commit -m "feat(app): cache wallet/overrides with fallback, clear on sign-ou
 **Interfaces:**
 - Produces: `isOnlineProvider` — `StreamProvider<bool>`, true when the device has any network interface up (not necessarily internet-reachable — `connectivity_plus` only reports interface state, which is the right scope for this app: it drives "should I attempt a network call / show an offline banner," not a full reachability probe).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```dart
 // app/test/app/is_online_provider_test.dart
@@ -986,12 +986,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd app && flutter test test/app/is_online_provider_test.dart`
 Expected: FAIL — `connectivityResultToIsOnline` not defined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `app/lib/app/providers.dart`, add:
 
@@ -1014,12 +1014,12 @@ final isOnlineProvider = StreamProvider<bool>((ref) {
 });
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd app && flutter test test/app/is_online_provider_test.dart`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/pubspec.yaml app/pubspec.lock app/lib/app/providers.dart app/test/app/is_online_provider_test.dart
@@ -1039,7 +1039,7 @@ git commit -m "feat(app): add isOnlineProvider via connectivity_plus"
 - Consumes: `AppDatabase` (Task 1), `UserCardsRepository.logTransaction(...)` (existing, unchanged signature).
 - Produces: `class TransactionOutboxRepository { Future<void> enqueue({required String userCardId, required Money amount, String? categoryId, String? merchantName, DateTime? occurredAt, String? note}); Future<List<TransactionOutboxEntry>> pending(); Future<int> flush(UserCardsRepository repo); }`. `flush` returns the count of entries successfully sent and removed. `outboxRepositoryProvider` (`Provider<TransactionOutboxRepository>`), `pendingOutboxCountProvider` (`FutureProvider<int>`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```dart
 // app/test/data/local/transaction_outbox_repository_test.dart
@@ -1115,12 +1115,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd app && flutter test test/data/local/transaction_outbox_repository_test.dart`
 Expected: FAIL — file doesn't exist.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```dart
 // app/lib/data/local/transaction_outbox_repository.dart
@@ -1190,12 +1190,12 @@ class TransactionOutboxRepository {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd app && flutter test test/data/local/transaction_outbox_repository_test.dart`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Wire providers and auto-flush on reconnect**
+- [x] **Step 5: Wire providers and auto-flush on reconnect**
 
 In `app/lib/app/providers.dart`, add:
 
@@ -1239,12 +1239,12 @@ In `app/lib/app/router.dart`'s `_AppShellState.build()`, add alongside the other
 ref.watch(outboxFlushProvider);
 ```
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `cd app && flutter test`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add app/lib/data/local/transaction_outbox_repository.dart app/lib/app/providers.dart app/lib/app/router.dart app/test/data/local/transaction_outbox_repository_test.dart
@@ -1264,7 +1264,7 @@ git commit -m "feat(app): add B6 offline transaction outbox with auto-flush on r
 **Interfaces:**
 - Consumes: `isOnlineProvider`, `outboxRepositoryProvider`, `pendingOutboxCountProvider` (Task 5/6).
 
-- [ ] **Step 1: Write the failing quick-add offline test**
+- [x] **Step 1: Write the failing quick-add offline test**
 
 Read `quick_add_screen.dart`'s current save handler first (the `try { await repo.logTransaction(...) } catch (e) { ... }` block) to write a test that matches its exact current error-handling shape, then add a case: when the thrown error looks like a connectivity failure (no specific type exists today — treat any exception the same way network code elsewhere in the app does, i.e. don't try to distinguish "offline" from "500" here, just always offer the outbox path when a save fails and current connectivity, per `isOnlineProvider`, reads false).
 
@@ -1286,7 +1286,7 @@ Read `quick_add_screen.dart`'s current save handler first (the `try { await repo
 
 (Write this out fully once Step 2's actual copy/wording is decided — the plan intentionally leaves the exact assertion text as a placeholder ONLY for the SnackBar copy, everything else above is concrete and must be written in full before running.)
 
-- [ ] **Step 2: Modify quick_add_screen.dart's save handler**
+- [x] **Step 2: Modify quick_add_screen.dart's save handler**
 
 Find the existing `catch (e)` block in the save handler. Change it so that when the save throws AND `ref.read(isOnlineProvider).valueOrNull == false`, it enqueues to the outbox instead of just showing an error:
 
@@ -1321,12 +1321,12 @@ Find the existing `catch (e)` block in the save handler. Change it so that when 
 
 Adapt this to fit whatever the existing catch block's exact variable names/control flow already are — read the real current code first, this is describing the behavior to add, not a literal diff.
 
-- [ ] **Step 3: Finish writing the test from Step 1 with the real SnackBar copy, run it, verify pass**
+- [x] **Step 3: Finish writing the test from Step 1 with the real SnackBar copy, run it, verify pass**
 
 Run: `cd app && flutter test test/features/quickadd/quick_add_offline_test.dart`
 Expected: PASS.
 
-- [ ] **Step 4: Add the offline banner to Home**
+- [x] **Step 4: Add the offline banner to Home**
 
 In `app/lib/features/home/home_screen.dart`, find where `_AlertsStrip` or similar top-of-screen widgets are composed and add a small banner shown when `ref.watch(isOnlineProvider).valueOrNull == false`:
 
@@ -1356,7 +1356,7 @@ class _OfflineBanner extends ConsumerWidget {
 
 Wire it into `HomeScreen`'s build method above the existing content (check the actual widget tree structure first — likely inside the `Column` that already holds `_AlertsStrip`).
 
-- [ ] **Step 5: Write and run the banner test**
+- [x] **Step 5: Write and run the banner test**
 
 ```dart
 // app/test/features/home/offline_banner_test.dart
@@ -1370,12 +1370,12 @@ Wire it into `HomeScreen`'s build method above the existing content (check the a
 Run: `cd app && flutter test test/features/home/offline_banner_test.dart`
 Expected: PASS.
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `cd app && flutter test && flutter analyze`
 Expected: all tests pass, 0 analyzer errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add app/lib/features/quickadd/quick_add_screen.dart app/lib/features/home/home_screen.dart app/test/features/quickadd/quick_add_offline_test.dart app/test/features/home/offline_banner_test.dart
@@ -1390,15 +1390,15 @@ git commit -m "feat(app): queue B6 quick-add offline, show an offline banner on 
 - Modify: `GAP_ANALYSIS.md`
 - Modify: `PROGRESS.md`
 
-- [ ] **Step 1: Update GAP_ANALYSIS.md §2**
+- [x] **Step 1: Update GAP_ANALYSIS.md §2**
 
 Change the "No offline-first local database" section from ❌ to reflect the new state: catalogue/categories/wallet/overrides have a last-known-good cache and B6 quick-add queues offline. Explicitly note what's still NOT covered (no relational mirror, no incremental data_version sync, no offline queue for other write paths like override create/card archive) so the entry stays honest rather than overclaiming full UA-0.3 compliance.
 
-- [ ] **Step 2: Log a PROGRESS.md chunk entry**
+- [x] **Step 2: Log a PROGRESS.md chunk entry**
 
 Follow the file's existing chunk-entry format (read the last few entries for the exact style) — summarize what shipped, what's still open, and link back to this plan file.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add GAP_ANALYSIS.md PROGRESS.md

@@ -114,9 +114,52 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: AppSpace.sm),
+        const _OfflineBanner(),
         const _AlertsStrip(),
         Expanded(child: _RankedList(ranked: ranked)),
       ],
+    );
+  }
+}
+
+/// UA-0.3 offline cache (GAP_ANALYSIS.md §2): visible only when the device
+/// currently reads as offline — catalogueProvider/userCardsProvider/
+/// cardOverridesProvider fall back to last-cached data silently underneath
+/// this, so without this banner a user has no way to tell the ranked list
+/// they're looking at might be stale. Pending-outbox count only shown when
+/// non-zero, matching _AlertsStrip's "don't show an empty state as if it
+/// were content" pattern elsewhere on this screen.
+class _OfflineBanner extends ConsumerWidget {
+  const _OfflineBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isOnline = ref.watch(isOnlineProvider).valueOrNull ?? true;
+    if (isOnline) return const SizedBox.shrink();
+
+    final pendingCount = ref.watch(pendingOutboxCountProvider).valueOrNull ?? 0;
+    final message = pendingCount > 0
+        ? "You're offline — showing your last synced cards. "
+            '$pendingCount transaction${pendingCount == 1 ? '' : 's'} will sync when you\'re back.'
+        : "You're offline — showing your last synced cards.";
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.sm),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.ink100),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.cloud_off_rounded, size: 16, color: AppColors.ink500),
+            const SizedBox(width: AppSpace.sm),
+            Expanded(child: Text(message, style: Theme.of(context).textTheme.bodySmall)),
+          ],
+        ),
+      ),
     );
   }
 }

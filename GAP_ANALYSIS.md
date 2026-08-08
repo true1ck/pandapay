@@ -25,16 +25,21 @@ The ranking engine (`packages/pandapay_domain/lib/src/engine/`) is real, tested,
 
 ---
 
-## 2. No offline-first local database — still the biggest architecture-level gap
+## 2. Offline-first local cache — 🟡 built (2026-08-08), not a full relational mirror
 
 `Userappimplementation_plan.md` (UA-0.3) mandates drift/SQLite as the local source of truth with network sync as an opportunistic outbox: _"Any code path where a screen awaits a network call before rendering a recommendation is a defect."_
 
-Reality, unchanged from before the Group B merge:
-- `app/pubspec.yaml` has no `drift`, `sqlite3`, `sqlcipher`, `isar`, or `hive` dependency.
-- `app/lib/data/` is 18 thin REST repositories with no local DB layer.
-- Every new B-group provider (`cardOverridesProvider`, `rankedRecommendationsProvider`, etc.) is a live-network `FutureProvider`.
+**Implemented** (`docs/superpowers/plans/2026-08-08-offline-first-local-cache.md`, PROGRESS.md Chunk 41):
+- `catalogueProvider`, `categoriesProvider`, `userCardsProvider`, `cardOverridesProvider` (`app/lib/app/providers.dart`) all cache the raw JSON body of every successful fetch and fall back to the last-cached body on any fetch failure — the exact same `fromJson` parsers decode both the live and cached path. The flagship scan-and-recommend flow now renders with real (if possibly stale) data offline instead of failing outright.
+- B6 quick-add gets a real offline write path: a failed save while offline queues to `TransactionOutboxRepository` instead of erroring, auto-flushed when `isOnlineProvider` (`connectivity_plus`) reports connectivity back.
+- Home shows an offline banner (with pending-outbox count) when disconnected.
+- Wallet/overrides cache clears on sign-out; catalogue/categories (public) survive it.
+- Backed by plain `package:sqlite3` (`app/lib/data/local/app_database.dart`), **not `drift`** — the plan originally specified drift and switched mid-implementation after a real, confirmed blocker: every `drift_dev` version compatible with `pandapay_lints`' `analyzer ^7.0.0` crashes the analyzer on syntax this codebase already uses elsewhere, and every version that avoids the crash needs an analyzer/build version the rest of the toolchain can't satisfy. See the plan doc's amendment note for the full story.
 
-This is now the **more urgent** item than before: the flagship scan-and-recommend loop itself is what breaks offline, not a still-missing feature. A user with no signal cannot get a recommendation at the point of sale — the exact scenario the flagship feature exists for.
+**Still gap'd, deliberately out of this pass's scope:**
+- No relational local mirror of `card_products`/`user_cards`/etc. — a raw-JSON-blob cache per endpoint, not a queryable local replica of the schema. A much larger, separate undertaking.
+- No incremental `data_version` sync — every online catalogue fetch is a full re-pull (fine at current catalogue size).
+- The offline write queue only covers B6 quick-add — other write paths (override create, card archive, edit transaction, etc.) still fail outright when offline, same as before this pass.
 
 ---
 
@@ -108,7 +113,7 @@ Real Python code exists (`fetcher.py`, `extractor.py`, `llm_extraction.py`, `rob
 
 ## Priority punch list
 
-1. **Offline-first local DB (UA-0.3)** — the single biggest surviving architecture gap, and now the most urgent: the flagship scan-and-recommend loop is fully live-network-dependent, meaning it fails exactly where it matters most (spotty connectivity at checkout).
+1. ~~Offline-first local DB (UA-0.3)~~ — **Built 2026-08-08** (see §2): catalogue/wallet/overrides caching + B6 offline outbox. Remaining sub-scope, not urgent: relational local mirror, incremental `data_version` sync, offline queueing for non-B6 writes.
 2. **Fill in F2/F4/F5 stubs** — real PDF parsing (`syncfusion_flutter_pdf` or equivalent), on-device SMS verification, a real sync/backup engine.
 3. **S2 (Quick Settings Tile) and S5/S6 (forced upgrade / maintenance mode)** — entirely unbuilt; confirm in/out of scope before prioritizing.
 4. **S1/S3 real-device work** — iOS widget extension needs a real Xcode session; geofencing needs a true background mechanism to replace the current foreground one-shot read.
