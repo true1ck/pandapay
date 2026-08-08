@@ -140,15 +140,19 @@ class UserCardsRepository {
     }
   }
 
-  /// UA-3+ (Chunk 17): manual transaction entry — the only source txn_source
-  /// supports today (no SMS/email/statement import). Updates cap_states/
-  /// milestone_states server-side in the same write, so a follow-up
-  /// GET /user-cards (userCardsProvider.invalidate) immediately reflects
-  /// real consumed headroom.
+  /// UA-3+ (Chunk 17), extended for B6: manual quick-add now carries
+  /// merchantName/occurredAt/note through to POST /transactions, all three
+  /// already accepted server-side (occurredAt/categoryId/rail/merchantName
+  /// were already wired; note is this task's addition — see Task 15 of
+  /// the Group B plan). No client-side "undo" beyond a dismiss-only
+  /// snackbar (Task 16) — there is no DELETE /transactions/:id route.
   Future<void> logTransaction({
     required String userCardId,
     required Money amount,
     String? categoryId,
+    String? merchantName,
+    DateTime? occurredAt,
+    String? note,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/transactions'),
@@ -157,6 +161,9 @@ class UserCardsRepository {
         'userCardId': userCardId,
         'amountInr': amount.rupees,
         'categoryId': ?categoryId,
+        'merchantName': ?merchantName,
+        'occurredAt': occurredAt?.toIso8601String(),
+        'note': ?note,
       }),
     );
     if (response.statusCode != 201) {

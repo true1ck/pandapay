@@ -1224,7 +1224,7 @@ app.delete('/card-overrides/:id', requireAuth, async (req, res) => {
  * this function does not open its own.
  */
 async function insertTransactionAndUpdateState(client, userId, {
-  userCardId, amount, occurred, categoryId, rail, merchantName, source,
+  userCardId, amount, occurred, categoryId, rail, merchantName, note, source,
 }) {
   const cardResult = await client.query(
     `SELECT uc.id, uc.card_product_id, uc.statement_day, uc.opened_on, uc.created_at,
@@ -1253,10 +1253,10 @@ async function insertTransactionAndUpdateState(client, userId, {
 
   const txn = await client.query(
     `INSERT INTO transactions
-       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, reward_state)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'estimated')
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, note, reward_state)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'estimated')
      RETURNING id, amount_inr, occurred_at`,
-    [userId, userCardId, amount, occurred, merchantName || null, categoryId || null, rail || 'unknown', source || 'manual']
+    [userId, userCardId, amount, occurred, merchantName || null, categoryId || null, rail || 'unknown', source || 'manual', note || null]
   );
 
   const capRules = await client.query(
@@ -1382,7 +1382,7 @@ async function insertTransactionAndUpdateState(client, userId, {
 }
 
 app.post('/transactions', requireAuth, async (req, res) => {
-  const { userCardId, amountInr, occurredAt, categoryId, rail, merchantName } = req.body || {};
+  const { userCardId, amountInr, occurredAt, categoryId, rail, merchantName, note } = req.body || {};
   const amount = Number(amountInr);
   if (!userCardId || typeof userCardId !== 'string') {
     return res.status(400).json({ error: 'userCardId is required' });
@@ -1398,7 +1398,7 @@ app.post('/transactions', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       insertTransactionAndUpdateState(client, req.userId, {
-        userCardId, amount, occurred, categoryId, rail, merchantName, source: 'manual',
+        userCardId, amount, occurred, categoryId, rail, merchantName, note, source: 'manual',
       })
     );
 
