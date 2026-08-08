@@ -524,6 +524,12 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // Runs sessionKeepAliveProvider for the app's whole lifetime — the shell
     // is the one widget guaranteed to stay mounted across every tab.
     ref.watch(sessionKeepAliveProvider);
+    // UA-0.3 offline cache lifecycle — clears the per-user cache on
+    // sign-out, and flushes the B6 offline outbox the moment connectivity
+    // returns. Same "read once from the shell" reasoning as
+    // sessionKeepAliveProvider above.
+    ref.watch(cacheLifecycleProvider);
+    ref.watch(outboxFlushProvider);
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     // Task 5: the coach-mark tour only makes sense over Home (that's where
     // every one of its four targets lives) — a user who backs out to

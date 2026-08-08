@@ -105,6 +105,25 @@ dependencies:
   package_info_plus: ^10.2.1
   intl: ^0.20.3
 
+  # UA-0.3 offline-first local cache (GAP_ANALYSIS.md §2, plan
+  # docs/superpowers/plans/2026-08-08-offline-first-local-cache.md): raw
+  # sqlite3 (not drift) backs a raw-JSON-blob cache (not a relational
+  # schema mirror — see the plan's Architecture note for why) so
+  # catalogue/wallet/overrides survive a lost connection, plus a B6
+  # quick-add offline write queue. Plain SQL, no code generation —
+  # drift_dev's build_runner step was tried first and dropped: every
+  # drift_dev version compatible with pandapay_lints' analyzer ^7.0.0 hits
+  # a genuine analyzer crash (DotShorthandInvocationImpl in
+  # bundle_writer.dart) on this codebase's existing `'key': ?value` null-
+  # shorthand syntax, and every drift_dev version that avoids the crash
+  # needs an analyzer/build version pandapay_lints or riverpod_generator
+  # can't satisfy. sqlite3 needs no codegen, so the conflict doesn't apply.
+  # connectivity_plus drives the online/offline signal.
+  sqlite3: ^2.9.4
+  sqlite3_flutter_libs: ^0.5.42
+  path: ^1.9.0
+  connectivity_plus: ^7.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

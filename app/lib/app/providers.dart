@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +14,9 @@ import '../data/catalogue_repository.dart';
 import '../data/consents_api.dart';
 import '../data/emergency_contacts_repository.dart';
 import '../data/import_repository.dart';
+import '../data/local/app_database.dart';
+import '../data/local/response_cache.dart';
+import '../data/local/transaction_outbox_repository.dart';
 import '../data/merchant_search_repository.dart';
 import '../data/needs_review_repository.dart';
 import '../data/override_resolver.dart';
@@ -287,7 +292,18 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
 final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchUserCards();
+  try {
+    final cards = await repo.fetchUserCards();
+    final cache = await _cacheOrNull(ref);
+    await cache?.put(_userCardsCacheKey, jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}));
+    return cards;
+  } catch (_) {
+    final cache = await _cacheOrNull(ref);
+    final cached = await cache?.get(_userCardsCacheKey);
+    if (cached == null) rethrow;
+    final body = jsonDecode(cached) as Map<String, dynamic>;
+    return (body['userCards'] as List).cast<Map<String, dynamic>>().map(UserCard.fromJson).toList();
+  }
 });
 
 /// UA-3+ (Chunk 18): the Activity tab's data — empty (not an error) when
@@ -309,7 +325,75 @@ final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((ref)
 final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
   final repo = ref.watch(cardOverridesRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchOverrides();
+  try {
+    final overrides = await repo.fetchOverrides();
+    final cache = await _cacheOrNull(ref);
+    await cache?.put(_cardOverridesCacheKey, jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}));
+    return overrides;
+  } catch (_) {
+    final cache = await _cacheOrNull(ref);
+    final cached = await cache?.get(_cardOverridesCacheKey);
+    if (cached == null) rethrow;
+    final body = jsonDecode(cached) as Map<String, dynamic>;
+    return (body['overrides'] as List).cast<Map<String, dynamic>>().map(CardOverride.fromJson).toList();
+  }
+});
+
+/// Privacy: user_cards/card_overrides cache entries are per-signed-in-user
+/// and must not leak across a sign-out -> sign-in-as-different-user
+/// sequence, same bug class already found once this session in quick-add's
+/// SharedPreferences last-used-card key. catalogue/categories are public
+/// and deliberately NOT cleared here.
+final cacheLifecycleProvider = Provider<void>((ref) {
+  ref.listen<String?>(accessTokenProvider, (previous, next) async {
+    if (previous != null && next == null) {
+      final cache = await _cacheOrNull(ref);
+      await cache?.clear(_userCardsCacheKey);
+      await cache?.clear(_cardOverridesCacheKey);
+    }
+  });
+});
+
+/// connectivity_plus reports interface state, not internet reachability —
+/// intentionally scoped that way here: this drives "should the offline
+/// banner show / should the outbox try to flush," not a guarantee the
+/// server is actually reachable (a flush attempt can still fail and stay
+/// queued even when this reads true).
+bool connectivityResultToIsOnline(List<ConnectivityResult> results) {
+  return results.any((r) => r != ConnectivityResult.none);
+}
+
+final isOnlineProvider = StreamProvider<bool>((ref) {
+  return Connectivity().onConnectivityChanged.map(connectivityResultToIsOnline);
+});
+
+final outboxRepositoryProvider = FutureProvider<TransactionOutboxRepository>((ref) async {
+  return TransactionOutboxRepository(await ref.watch(appDatabaseProvider.future));
+});
+
+final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
+  final items = await (await ref.watch(outboxRepositoryProvider.future)).pending();
+  return items.length;
+});
+
+/// Flushes the outbox the moment connectivity comes back — read once from
+/// _AppShell alongside cacheLifecycleProvider/sessionKeepAliveProvider so
+/// it runs for the app's whole lifetime, not just while Home is visible.
+final outboxFlushProvider = Provider<void>((ref) {
+  ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) async {
+    final wasOffline = previous?.valueOrNull == false;
+    final isNowOnline = next.valueOrNull == true;
+    if (!wasOffline || !isNowOnline) return;
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null) return;
+    final outboxRepo = await ref.read(outboxRepositoryProvider.future);
+    final sent = await outboxRepo.flush(repo);
+    if (sent > 0) {
+      ref.invalidate(pendingOutboxCountProvider);
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(transactionsProvider);
+    }
+  });
 });
 
 /// Task D-5: pending duplicate-candidate pairs; empty (not an error) when
@@ -627,12 +711,75 @@ final merchantSearchRepositoryProvider = Provider<MerchantSearchRepository>((ref
   return HttpMerchantSearchRepository(baseUrl: _apiBaseUrl);
 });
 
-final catalogueProvider = FutureProvider<List<CardProduct>>((ref) {
-  return ref.watch(catalogueRepositoryProvider).fetchCatalogue();
+/// UA-0.3 offline cache (GAP_ANALYSIS.md §2, plan
+/// docs/superpowers/plans/2026-08-08-offline-first-local-cache.md). Not a
+/// relational mirror of the Supabase schema — a raw-JSON-blob cache backed
+/// by plain sqlite3 (see app_database.dart's doc-comment for why not
+/// drift), closed via ref.onDispose so tests get a fresh in-memory DB per
+/// container. AppDatabase.open() is inherently async (path_provider
+/// resolves the documents directory via a platform channel) — same
+/// FutureProvider shape as tokenStoreProvider above, for the same reason.
+final appDatabaseProvider = FutureProvider<AppDatabase>((ref) async {
+  final db = await AppDatabase.open();
+  ref.onDispose(db.close);
+  return db;
 });
 
-final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) {
-  return ref.watch(categoryRepositoryProvider).fetchCategories();
+final responseCacheProvider = FutureProvider<ResponseCache>((ref) async {
+  return ResponseCache(await ref.watch(appDatabaseProvider.future));
+});
+
+/// The cache is always best-effort — every offline-cache-aware provider
+/// below calls this instead of watching responseCacheProvider directly, so
+/// a local-DB init failure (an unavailable platform channel in a plain
+/// unit test, or a genuine device I/O error) degrades to "no cache" rather
+/// than taking down the whole provider and everything that depends on it.
+Future<ResponseCache?> _cacheOrNull(Ref ref) async {
+  try {
+    return await ref.watch(responseCacheProvider.future);
+  } catch (_) {
+    return null;
+  }
+}
+
+const _catalogueCacheKey = 'catalogue';
+const _categoriesCacheKey = 'categories';
+const _userCardsCacheKey = 'user_cards';
+const _cardOverridesCacheKey = 'card_overrides';
+
+/// UA-0.3 offline step: live fetch first, caching the raw response on
+/// success; on ANY fetch failure, falls back to the last cached response
+/// rather than leaving Home with nothing to rank against. Only fires the
+/// fallback on a genuine failure — a successful-but-empty catalogue is
+/// never treated as "fetch failed."
+final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
+  try {
+    final cards = await ref.watch(catalogueRepositoryProvider).fetchCatalogue();
+    final cache = await _cacheOrNull(ref);
+    await cache?.put(_catalogueCacheKey, jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}));
+    return cards;
+  } catch (_) {
+    final cache = await _cacheOrNull(ref);
+    final cached = await cache?.get(_catalogueCacheKey);
+    if (cached == null) rethrow;
+    final body = jsonDecode(cached) as Map<String, dynamic>;
+    return (body['cards'] as List).cast<Map<String, dynamic>>().map(CardProductJson.fromJson).toList();
+  }
+});
+
+final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
+  try {
+    final categories = await ref.watch(categoryRepositoryProvider).fetchCategories();
+    final cache = await _cacheOrNull(ref);
+    await cache?.put(_categoriesCacheKey, jsonEncode({'categories': categories.map((c) => c.toJson()).toList()}));
+    return categories;
+  } catch (_) {
+    final cache = await _cacheOrNull(ref);
+    final cached = await cache?.get(_categoriesCacheKey);
+    if (cached == null) rethrow;
+    final body = jsonDecode(cached) as Map<String, dynamic>;
+    return (body['categories'] as List).cast<Map<String, dynamic>>().map(SpendCategory.fromJson).toList();
+  }
 });
 
 /// B1 category chips (ui-spec) — the primary card selector when there's no

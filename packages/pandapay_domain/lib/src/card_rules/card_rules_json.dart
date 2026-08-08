@@ -49,6 +49,26 @@ String _camelFromSnake(String snake) {
   return parts.first + parts.skip(1).map((p) => p.isEmpty ? '' : p[0].toUpperCase() + p.substring(1)).join();
 }
 
+/// Inverse of [_camelFromSnake] — used only by the offline-cache toJson
+/// methods below (docs/superpowers/plans/2026-08-08-offline-first-local-cache.md)
+/// to serialize an enum's .name back to the snake_case shape fromJson
+/// expects, so a cached blob decodes through the SAME unmodified fromJson
+/// parsers used for a live fetch.
+String _snakeFromCamel(String camel) {
+  final buffer = StringBuffer();
+  for (final rune in camel.runes) {
+    final ch = String.fromCharCode(rune);
+    if (ch == ch.toUpperCase() && ch != ch.toLowerCase()) {
+      buffer
+        ..write('_')
+        ..write(ch.toLowerCase());
+    } else {
+      buffer.write(ch);
+    }
+  }
+  return buffer.toString();
+}
+
 extension RewardRuleJson on RewardRule {
   static RewardRule fromJson(Map<String, dynamic> json) {
     return RewardRule(
@@ -63,6 +83,18 @@ extension RewardRuleJson on RewardRule {
       priority: (json['priority'] as num?)?.toInt() ?? 100,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'category_id': categoryId,
+        'merchant_pattern': merchantPattern,
+        'rail': rail == null ? null : _snakeFromCamel(rail!.name),
+        'unit': _snakeFromCamel(unit.name),
+        'rate': rate,
+        'min_txn_inr': minTxn?.rupees,
+        'max_txn_inr': maxTxn?.rupees,
+        'priority': priority,
+      };
 }
 
 extension CapRuleJson on CapRule {
@@ -85,6 +117,18 @@ extension CapRuleJson on CapRule {
       period: _parseCapPeriod(json['period'] as String),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'reward_rule_id': rewardRuleId,
+        'category_id': categoryId,
+        'label': label,
+        'cap_value': capValue.rupees,
+        'measure': _snakeFromCamel(measure.name),
+        'post_cap_unit': postCapUnit == null ? null : _snakeFromCamel(postCapUnit!.name),
+        'post_cap_rate': postCapRate,
+        'period': _snakeFromCamel(period.name),
+      };
 }
 
 extension MilestoneRuleJson on MilestoneRule {
@@ -97,6 +141,14 @@ extension MilestoneRuleJson on MilestoneRule {
       isRepeatable: json['is_repeatable'] as bool? ?? false,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'threshold_spend_inr': thresholdSpend.rupees,
+        'reward_value_inr': rewardValue.rupees,
+        'is_repeatable': isRepeatable,
+      };
 }
 
 extension ForexRuleJson on ForexRule {
@@ -106,6 +158,11 @@ extension ForexRuleJson on ForexRule {
       gstOnMarkup: json['gst_on_markup'] as bool? ?? true,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'markup_percent': markupPercent,
+        'gst_on_markup': gstOnMarkup,
+      };
 }
 
 extension FuelSurchargeRuleJson on FuelSurchargeRule {
@@ -117,6 +174,13 @@ extension FuelSurchargeRuleJson on FuelSurchargeRule {
       maxTxn: _moneyOrNull(json['max_txn_inr']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'surcharge_percent': surchargePercent,
+        'waiver_percent': waiverPercent,
+        'min_txn_inr': minTxn?.rupees,
+        'max_txn_inr': maxTxn?.rupees,
+      };
 }
 
 /// Mirrors `benefit_kind` (database.sql) — Postgres enum values are already
@@ -135,6 +199,15 @@ extension FeeWaiverRuleJson on FeeWaiverRule {
       notes: json['notes'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'threshold_spend_inr': thresholdSpend.rupees,
+        'period': _snakeFromCamel(period.name),
+        'waives_fee_inr': waivesFee.rupees,
+        'excluded_categories': excludedCategoryIds,
+        'notes': notes,
+      };
 }
 
 extension CardBenefitJson on CardBenefit {
@@ -150,6 +223,17 @@ extension CardBenefitJson on CardBenefit {
       valueEstimate: _moneyOrNull(json['value_estimate_inr']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': _snakeFromCamel(kind.name),
+        'label': label,
+        'description': description,
+        'quota_count': quotaCount,
+        'quota_period': quotaPeriod == null ? null : _snakeFromCamel(quotaPeriod!.name),
+        'network_program': networkProgram,
+        'value_estimate_inr': valueEstimate?.rupees,
+      };
 }
 
 extension CardProductJson on CardProduct {
@@ -185,4 +269,25 @@ extension CardProductJson on CardProduct {
       artPrimaryColor: json['art_primary_color'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'network': network.name,
+        'is_upi_linkable': isUpiLinkable,
+        'point_value_inr': pointValueInr,
+        'reward_rules': rewardRules.map((r) => r.toJson()).toList(),
+        'cap_rules': capRules.map((r) => r.toJson()).toList(),
+        'milestone_rules': milestoneRules.map((r) => r.toJson()).toList(),
+        'forex': forexRule?.toJson(),
+        'fuel': fuelRule?.toJson(),
+        'fee_waiver_rules': feeWaiverRules.map((r) => r.toJson()).toList(),
+        'benefits': benefits.map((b) => b.toJson()).toList(),
+        'annual_fee_inr': annualFeeInr?.rupees,
+        'joining_fee_inr': joiningFeeInr?.rupees,
+        'verified_at': verifiedAt?.toIso8601String(),
+        'issuer_name': issuerName,
+        'art_asset': artAssetUrl,
+        'art_primary_color': artPrimaryColor,
+      };
 }

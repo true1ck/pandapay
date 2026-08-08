@@ -102,6 +102,37 @@ class UserCard {
       isArchived: json['is_archived'] as bool? ?? false,
     );
   }
+
+  /// Offline-cache round-trip only (docs/superpowers/plans/2026-08-08-offline-first-local-cache.md)
+  /// — mirrors [fromJson]'s keys exactly so a cached blob decodes through
+  /// the unmodified fromJson parser above.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'card_product_id': cardProductId,
+        'nickname': nickname,
+        'card_name': cardName,
+        'is_default': isDefault,
+        'cap_states': [
+          for (final entry in capConsumed.entries) {'cap_rule_id': entry.key, 'consumed': entry.value.rupees},
+        ],
+        'milestone_states': [
+          for (final entry in milestoneQualifiedSpend.entries)
+            {
+              'milestone_rule_id': entry.key,
+              'qualified_spend': entry.value.rupees,
+              if (milestonePeriodEnd[entry.key] != null)
+                'period_end': milestonePeriodEnd[entry.key]!.toIso8601String(),
+            },
+        ],
+        'fee_waiver_states': feeWaiverStates.map((fw) => fw.toJson()).toList(),
+        'total_points_earned': totalPointsEarned,
+        'statement_day': statementDay,
+        'opened_on': openedOn?.toIso8601String(),
+        'credit_limit_inr': creditLimit?.rupees,
+        'due_day': dueDay,
+        'anniversary_on': anniversaryOn?.toIso8601String(),
+        'is_archived': isArchived,
+      };
 }
 
 /// Chunk 28: this card's fee-waiver progress for the CURRENT period only
@@ -134,6 +165,15 @@ class FeeWaiverProgress {
       periodEnd: DateTime.parse(json['period_end'] as String),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'fee_waiver_rule_id': feeWaiverRuleId,
+        'qualified_spend': qualifiedSpend.rupees,
+        'threshold_spend_inr': thresholdSpend.rupees,
+        'waives_fee_inr': waivesFee.rupees,
+        'waived_at': waivedAt?.toIso8601String(),
+        'period_end': periodEnd.toIso8601String(),
+      };
 }
 
 /// Task C-6 (ui-spec C6 Points & Expiry) — one row in `points_ledger`.

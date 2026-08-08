@@ -71,6 +71,22 @@ class CardOverride {
         cardName: json['card_name'] as String,
         cardNickname: json['card_nickname'] as String?,
       );
+
+  /// Offline-cache round-trip only (docs/superpowers/plans/2026-08-08-offline-first-local-cache.md).
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'user_card_id': userCardId,
+        'scope': _scopeToJson(scope),
+        'vpa': vpa,
+        'merchant_name': merchantName,
+        'category_id': categoryId,
+        'category_name': categoryName,
+        'reason_note': reasonNote,
+        'is_enabled': isEnabled,
+        'created_at': createdAt.toIso8601String(),
+        'card_name': cardName,
+        'card_nickname': cardNickname,
+      };
 }
 
 class CardOverridesRepository {

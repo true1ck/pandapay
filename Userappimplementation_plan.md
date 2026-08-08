@@ -90,7 +90,7 @@ The device SQLite is the source of truth for user data. The network is never in 
 | Secure storage | `flutter_secure_storage` | Session tokens, biometric gate |
 | Encryption at rest | `sqlcipher_flutter_libs` | product-plan §17 |
 | Crash | `sentry_flutter` (self-hosted GlitchTip DSN) | |
-| Backend | `supabase_flutter` | |
+| Backend | ~~`supabase_flutter`~~ **Actual: custom Node/Express (`api/`) + Node/JWT/OTP auth service (`auth/`)** | Deviation, ratified 2026-08-08 — see UA-7.2 note below and [GAP_ANALYSIS.md](./GAP_ANALYSIS.md) §6. Postgres/Supabase is still used as the managed DB host, just not through `supabase_flutter`'s client SDK or Supabase Auth. |
 | Charts | `fl_chart` | E9/E11 only |
 | Files | `file_picker`, `share_plus` | F2, F6 |
 | Notifications | `flutter_local_notifications` | Local scheduling; FCM for pushes |
@@ -375,10 +375,13 @@ The device SQLite is the source of truth for user data. The network is never in 
 - **UA-7.1.3** **Local → account upgrade with zero data loss**: local rows are assigned the new `profile_id` and replayed through the sync outbox in dependency order. Test with a 2,000-transaction local DB.
 
 ### UA-7.2 Auth lifecycle (A4, A5, A6, H2)
-- **UA-7.2.1** Email+password and passwordless magic link (preferred); no phone OTP (costs money per SMS).
-- **UA-7.2.2** Password rules shown *before* submission, strength meter, show/hide. Network failure **preserves entered data**.
+
+> **Deviation, ratified 2026-08-08 (see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md) §6):** the app shipped OTP-only auth against a custom Node/JWT service (`auth/`), not Supabase Auth's email+password/magic-link as originally specced below. This was a deliberate call, not an oversight — it's built, tested, and working end-to-end, and rewriting the auth layer now would touch every authenticated screen for no functional gain. UA-7.2.1 and UA-7.2.4 (password rules, reset-with-deep-link) are superseded by A6's actual behavior: OTP-only means there is no password to reset, so a "Trouble receiving it?" link from the OTP step routes straight into H9 (Feedback & Support) instead (see `PROGRESS.md` Chunk 39). The rest of this section (error messaging, biometric unlock, account deletion) still applies to the OTP flow as written.
+
+- **UA-7.2.1** ~~Email+password and passwordless magic link (preferred)~~ **Actual: OTP-only via the custom auth service; no password ever exists.**
+- **UA-7.2.2** ~~Password rules shown before submission~~ **N/A — no password.**
 - **UA-7.2.3** Login errors: generic wrong-credentials message that **does not reveal whether the email exists**; unverified; rate-limited; offline.
-- **UA-7.2.4** Reset flow with deep link and clear token-expiry re-request path.
+- **UA-7.2.4** ~~Reset flow with deep link and clear token-expiry re-request path~~ **Actual: A6 is a "Trouble receiving it?" link from the OTP step into H9 (Feedback & Support), pre-filled — there is no password to reset.**
 - **UA-7.2.5** Biometric unlock offer after first successful login; session expiry handling; silent refresh in A1.
 - **UA-7.2.6** H2 **account deletion** — states exactly what is deleted and by when *including backups*, typed confirmation, grace period → `deletion_requested_at`/`deletion_due_at`. DPDP requirement (§8.2).
 

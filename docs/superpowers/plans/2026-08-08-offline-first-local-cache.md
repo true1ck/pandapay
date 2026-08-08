@@ -1,0 +1,1406 @@
+# Offline-First Local Cache (UA-0.3, GAP_ANALYSIS §2) Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Give the four offline-critical providers behind Home's ranked recommendation (catalogue, categories, wallet, overrides) a last-known-good local cache, so the flagship scan-and-recommend flow still renders with real data when the device has no connectivity — plus an offline-tolerant write path for B6 quick-add.
+
+**Architecture:** No relational mirror of the Supabase schema (that's a much bigger, separate undertaking with marginal near-term benefit). Instead: a single key/value `cached_responses` SQLite table stores the *raw JSON response body* per endpoint (`catalogue`, `categories`, `user_cards`, `card_overrides`). On every successful live fetch, the four providers cache the raw body before parsing; on any fetch failure, they fall back to the last-cached raw body and parse it through the exact same `fromJson` code already used for live data — one parser, two sources. A second table, `transaction_outbox_entries`, queues B6 quick-add saves made while offline and flushes them when connectivity returns. `connectivity_plus` drives an `isOnlineProvider` that a new Home banner reads.
+
+> **Amended during implementation:** this plan originally specified `drift`/`drift_flutter` for the local DB. That was dropped after hitting a real, unresolvable-in-place blocker: every `drift_dev` version compatible with `pandapay_lints`' `analyzer ^7.0.0` constraint crashes (`DotShorthandInvocationImpl` in `analyzer`'s `bundle_writer.dart`) when its `build_runner` codegen step analyzes this codebase's existing `'key': ?value` null-shorthand syntax, and every `drift_dev` version that avoids the crash needs an `analyzer`/`build` version `pandapay_lints`/`riverpod_generator` can't satisfy. Switched to plain `package:sqlite3` with hand-written SQL — same on-disk SQLite storage, zero code generation, so the whole conflict class doesn't apply. See `app/lib/data/local/app_database.dart`'s doc-comment for the full story, and the "Task 1" section below (kept as originally written, with drift API calls, for historical/planning context — the actually-implemented code uses `AppDatabase`/`Database.execute`/`.select()` raw-SQL calls instead of the `CachedResponsesCompanion`/`insertOnConflictUpdate` drift API shown in the steps below).
+
+**Tech Stack:** `sqlite3` ^2.9.4 + `sqlite3_flutter_libs` ^0.5.42 (native binary bundling for real devices) + `path` ^1.9.0 (implemented; originally planned as `drift`/`drift_flutter`, see amendment above), `connectivity_plus` ^7.3.1. Riverpod 2.6.1 (codegen-free `Provider`/`FutureProvider` style, matching this file's existing convention — do NOT introduce `riverpod_generator` annotations here, the rest of `providers.dart` doesn't use them). `AppDatabase.open()` detects `flutter test` via the standard `FLUTTER_TEST` env var and opens an in-memory DB directly rather than resolving a real file path through `path_provider` — an unmocked `path_provider` platform channel call never resolves inside `testWidgets()` (confirmed empirically), which would otherwise hang every widget test that transitively watches `catalogueProvider`/`userCardsProvider`/`cardOverridesProvider`, i.e. most of the suite.
+
+## Global Constraints
+
+- No relational mirror of `card_products`/`user_cards`/etc. — raw-JSON blob cache only. Incremental `data_version` sync is an explicit non-goal of this plan (full catalogue re-fetch every time is fine; catalogue is small).
+- Every new/changed file must keep `flutter analyze` at 0 errors and `flutter test` fully green (currently 234 passing) before any task is considered done.
+- Cache fallback must never mask a *real* server error to the point of showing stale data as if it were fresh — the fallback only fires on a genuine fetch failure (network exception, non-2xx, JSON decode error), never on a successful-but-empty response.
+- The `user_cards`/`card_overrides` cache entries are per-signed-in-user and must be cleared on sign-out — the `card_overrides_screen` bug class already found once this session ("stale prefs key leaking across a sign-out → different-user sign-in") must not repeat here.
+- `catalogue`/`categories` cache entries are NOT user-scoped (public data) and survive sign-out.
+- Outbox entries are `POST /transactions` payloads only (B6 quick-add) — do not attempt to queue other write paths (override create, card archive, etc.) in this plan; that's future work.
+- Keep files small and focused per the codebase's existing pattern: one repository/helper class per file under `app/lib/data/`.
+
+---
+
+## Task 1: Add dependencies and the drift database
+
+**Files:**
+- Modify: `app/pubspec.yaml`
+- Create: `app/lib/data/local/app_database.dart`
+- Create (generated by build_runner, not hand-written): `app/lib/data/local/app_database.g.dart`
+- Test: `app/test/data/local/app_database_test.dart`
+
+**Interfaces:**
+- Produces: `AppDatabase` class with tables `cachedResponses` (getter, generated) and `transactionOutboxEntries` (getter, generated). Constructor `AppDatabase([QueryExecutor? executor])` — tests pass `NativeDatabase.memory()`, production uses the no-arg default (`driftDatabase(name: 'pandapay')` from `drift_flutter`).
+- Produces: row data classes `CachedResponse` (fields: `key` String, `rawJson` String, `fetchedAt` DateTime) and `TransactionOutboxEntry` (fields: `id` int, `userCardId` String, `amountPaise` int, `categoryId` String?, `merchantName` String?, `occurredAt` DateTime?, `note` String?, `createdAt` DateTime, `lastError` String?).
+
+- [ ] **Step 1: Add dependencies to pubspec.yaml**
+
+In `app/pubspec.yaml`, add to `dependencies:` (alongside the existing `path_provider: ^2.1.6` line):
+
+```yaml
+  drift: ^2.27.0
+  drift_flutter: ^0.2.7
+  connectivity_plus: ^7.3.1
+```
+
+Add to `dev_dependencies:` (alongside the existing `build_runner: ^2.5.4` line):
+
+```yaml
+  drift_dev: ^2.27.0
+```
+
+- [ ] **Step 2: Run pub get**
+
+Run: `cd app && flutter pub get`
+Expected: resolves cleanly, no version conflicts.
+
+- [ ] **Step 3: Write the failing test for the database schema**
+
+```dart
+// app/test/data/local/app_database_test.dart
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/local/app_database.dart';
+
+void main() {
+  late AppDatabase db;
+
+  setUp(() => db = AppDatabase(NativeDatabase.memory()));
+  tearDown(() => db.close());
+
+  test('cachedResponses round-trips a row via insertOnConflictUpdate', () async {
+    final now = DateTime.now();
+    await db.into(db.cachedResponses).insertOnConflictUpdate(
+          CachedResponsesCompanion.insert(key: 'catalogue', rawJson: '{"cards":[]}', fetchedAt: now),
+        );
+    final row = await (db.select(db.cachedResponses)..where((t) => t.key.equals('catalogue'))).getSingle();
+    expect(row.rawJson, '{"cards":[]}');
+  });
+
+  test('cachedResponses insertOnConflictUpdate overwrites the same key', () async {
+    await db.into(db.cachedResponses).insertOnConflictUpdate(
+          CachedResponsesCompanion.insert(key: 'catalogue', rawJson: 'first', fetchedAt: DateTime.now()),
+        );
+    await db.into(db.cachedResponses).insertOnConflictUpdate(
+          CachedResponsesCompanion.insert(key: 'catalogue', rawJson: 'second', fetchedAt: DateTime.now()),
+        );
+    final rows = await db.select(db.cachedResponses).get();
+    expect(rows, hasLength(1));
+    expect(rows.single.rawJson, 'second');
+  });
+
+  test('transactionOutboxEntries auto-increments id and stores a queued quick-add', () async {
+    final id = await db.into(db.transactionOutboxEntries).insert(
+          TransactionOutboxEntriesCompanion.insert(
+            userCardId: 'uc-1',
+            amountPaise: 150000,
+            createdAt: DateTime.now(),
+          ),
+        );
+    expect(id, greaterThan(0));
+    final row = await (db.select(db.transactionOutboxEntries)..where((t) => t.id.equals(id))).getSingle();
+    expect(row.userCardId, 'uc-1');
+    expect(row.amountPaise, 150000);
+    expect(row.categoryId, isNull);
+  });
+}
+```
+
+- [ ] **Step 4: Run test to verify it fails (file doesn't exist yet)**
+
+Run: `cd app && flutter test test/data/local/app_database_test.dart`
+Expected: FAIL — `app_database.dart` not found / compile error.
+
+- [ ] **Step 5: Write the database**
+
+```dart
+// app/lib/data/local/app_database.dart
+import 'package:drift/drift.dart';
+import 'package:drift_flutter/drift_flutter.dart';
+
+part 'app_database.g.dart';
+
+/// UA-0.3 offline cache (GAP_ANALYSIS.md §2) — one row per cached endpoint,
+/// storing the raw response body text so a cold-cache read reuses the exact
+/// same fromJson parser a live fetch already used. Deliberately NOT a
+/// relational mirror of card_products/user_cards/etc. — see this plan's
+/// Global Constraints for why a raw-blob cache was chosen over a full
+/// drift-modeled schema.
+class CachedResponses extends Table {
+  TextColumn get key => text()();
+  TextColumn get rawJson => text()();
+  DateTimeColumn get fetchedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
+
+/// B6 quick-add offline queue — one row per POST /transactions payload that
+/// failed to send while offline. `amountPaise` mirrors Money.paise (the
+/// only integer-safe representation) rather than a rupee double, avoiding
+/// float round-trip drift on a real payment amount.
+class TransactionOutboxEntries extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get userCardId => text()();
+  IntColumn get amountPaise => integer()();
+  TextColumn get categoryId => text().nullable()();
+  TextColumn get merchantName => text().nullable()();
+  DateTimeColumn get occurredAt => dateTime().nullable()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  // Set when a flush attempt fails for a reason other than "still offline"
+  // (e.g. a 4xx from the server) — surfaced to the user rather than
+  // retried forever silently. Null means "never attempted" or "queued
+  // again after a prior failure was cleared by the user."
+  TextColumn get lastError => text().nullable()();
+}
+
+@DriftDatabase(tables: [CachedResponses, TransactionOutboxEntries])
+class AppDatabase extends _$AppDatabase {
+  AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
+
+  @override
+  int get schemaVersion => 1;
+
+  static QueryExecutor _openConnection() => driftDatabase(name: 'pandapay');
+}
+```
+
+- [ ] **Step 6: Generate drift code**
+
+Run: `cd app && dart run build_runner build --delete-conflicting-outputs`
+Expected: generates `app_database.g.dart` with no errors.
+
+- [ ] **Step 7: Run test to verify it passes**
+
+Run: `cd app && flutter test test/data/local/app_database_test.dart`
+Expected: PASS (3 tests).
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add app/pubspec.yaml app/pubspec.lock app/lib/data/local/ app/test/data/local/
+git commit -m "feat(app): add drift-backed local cache database (UA-0.3 step 1)"
+```
+
+---
+
+## Task 2: ResponseCache wrapper
+
+**Files:**
+- Create: `app/lib/data/local/response_cache.dart`
+- Test: `app/test/data/local/response_cache_test.dart`
+
+**Interfaces:**
+- Consumes: `AppDatabase` from Task 1.
+- Produces: `class ResponseCache { ResponseCache(AppDatabase db); Future<void> put(String key, String rawJson); Future<String?> get(String key); Future<void> clear(String key); }` — used by every provider in Task 3/4.
+
+- [ ] **Step 1: Write the failing test**
+
+```dart
+// app/test/data/local/response_cache_test.dart
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/response_cache.dart';
+
+void main() {
+  late AppDatabase db;
+  late ResponseCache cache;
+
+  setUp(() {
+    db = AppDatabase(NativeDatabase.memory());
+    cache = ResponseCache(db);
+  });
+  tearDown(() => db.close());
+
+  test('get returns null when nothing cached for that key', () async {
+    expect(await cache.get('catalogue'), isNull);
+  });
+
+  test('put then get round-trips the raw json', () async {
+    await cache.put('catalogue', '{"cards":[]}');
+    expect(await cache.get('catalogue'), '{"cards":[]}');
+  });
+
+  test('put overwrites a previous value for the same key', () async {
+    await cache.put('catalogue', 'first');
+    await cache.put('catalogue', 'second');
+    expect(await cache.get('catalogue'), 'second');
+  });
+
+  test('different keys do not collide', () async {
+    await cache.put('catalogue', 'cat-value');
+    await cache.put('categories', 'cats-value');
+    expect(await cache.get('catalogue'), 'cat-value');
+    expect(await cache.get('categories'), 'cats-value');
+  });
+
+  test('clear removes only the given key', () async {
+    await cache.put('user_cards', 'wallet');
+    await cache.put('catalogue', 'cat');
+    await cache.clear('user_cards');
+    expect(await cache.get('user_cards'), isNull);
+    expect(await cache.get('catalogue'), 'cat');
+  });
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd app && flutter test test/data/local/response_cache_test.dart`
+Expected: FAIL — `response_cache.dart` not found.
+
+- [ ] **Step 3: Write the implementation**
+
+```dart
+// app/lib/data/local/response_cache.dart
+import 'app_database.dart';
+
+/// Thin key/value wrapper over [AppDatabase]'s cachedResponses table — see
+/// that table's doc-comment for why this stores raw JSON text rather than
+/// parsed domain objects.
+class ResponseCache {
+  final AppDatabase _db;
+  ResponseCache(this._db);
+
+  Future<void> put(String key, String rawJson) {
+    return _db.into(_db.cachedResponses).insertOnConflictUpdate(
+          CachedResponsesCompanion.insert(key: key, rawJson: rawJson, fetchedAt: DateTime.now()),
+        );
+  }
+
+  Future<String?> get(String key) async {
+    final row = await (_db.select(_db.cachedResponses)..where((t) => t.key.equals(key))).getSingleOrNull();
+    return row?.rawJson;
+  }
+
+  Future<void> clear(String key) {
+    return (_db.delete(_db.cachedResponses)..where((t) => t.key.equals(key))).go();
+  }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `cd app && flutter test test/data/local/response_cache_test.dart`
+Expected: PASS (5 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/lib/data/local/response_cache.dart app/test/data/local/response_cache_test.dart
+git commit -m "feat(app): add ResponseCache key/value wrapper over the local DB"
+```
+
+---
+
+## Task 3: Cache the catalogue and categories providers
+
+**Files:**
+- Modify: `app/lib/app/providers.dart`
+- Test: `app/test/app/providers_offline_catalogue_test.dart`
+
+**Interfaces:**
+- Consumes: `ResponseCache` (Task 2), existing `CatalogueRepository.fetchCatalogue()` / `CategoryRepository.fetchCategories()` (unchanged interfaces — no changes to `catalogue_repository.dart` in this task), `CardProductJson.fromJson`/`SpendCategory.fromJson` (unchanged, from `pandapay_domain`).
+- Produces: `appDatabaseProvider` (`Provider<AppDatabase>`), `responseCacheProvider` (`Provider<ResponseCache>`) — both reused by every later task in this plan. `catalogueProvider`/`categoriesProvider` keep their existing signatures (`FutureProvider<List<CardProduct>>` / `FutureProvider<List<SpendCategory>>`) — no caller elsewhere in the app needs to change.
+
+**Note on approach:** rather than change the `CatalogueRepository`/`CategoryRepository` abstract interfaces (19 test files implement them as fakes — changing the interface would break all of them for no benefit), this task caches by round-tripping the *parsed* result through `jsonEncode`/existing `fromJson`. This requires adding `toJson()` — done as a prerequisite sub-step below, mirroring `card_rules_json.dart`'s existing `fromJson` key names exactly so the cached blob decodes through the unmodified `CardProductJson.fromJson`/`SpendCategory.fromJson`.
+
+- [ ] **Step 1: Add toJson round-trip support to pandapay_domain (prerequisite)**
+
+In `packages/pandapay_domain/lib/src/card_rules/card_rules_json.dart`, add a `_snakeFromCamel` inverse of the existing `_camelFromSnake`, and a `toJson()` method on every existing `*Json` extension, mirroring the exact keys each `fromJson` reads. Append after the existing `_camelFromSnake` function:
+
+```dart
+String _snakeFromCamel(String camel) {
+  final buffer = StringBuffer();
+  for (final rune in camel.runes) {
+    final ch = String.fromCharCode(rune);
+    if (ch == ch.toUpperCase() && ch != ch.toLowerCase()) {
+      buffer
+        ..write('_')
+        ..write(ch.toLowerCase());
+    } else {
+      buffer.write(ch);
+    }
+  }
+  return buffer.toString();
+}
+```
+
+Then add a `toJson()` static-free instance method to each extension (extension methods can be non-static instance methods on the extended type — these read `this`, not a `json` param):
+
+```dart
+extension RewardRuleJson on RewardRule {
+  static RewardRule fromJson(Map<String, dynamic> json) { /* unchanged */ }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'category_id': categoryId,
+        'merchant_pattern': merchantPattern,
+        'rail': rail == null ? null : _snakeFromCamel(rail!.name),
+        'unit': _snakeFromCamel(unit.name),
+        'rate': rate,
+        'min_txn_inr': minTxn?.rupees,
+        'max_txn_inr': maxTxn?.rupees,
+        'priority': priority,
+      };
+}
+
+extension CapRuleJson on CapRule {
+  static CapRule fromJson(Map<String, dynamic> json) { /* unchanged */ }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'reward_rule_id': rewardRuleId,
+        'category_id': categoryId,
+        'label': label,
+        'cap_value': capValue.rupees,
+        'measure': _snakeFromCamel(measure.name),
+        'post_cap_unit': postCapUnit == null ? null : _snakeFromCamel(postCapUnit!.name),
+        'post_cap_rate': postCapRate,
+        'period': _snakeFromCamel(period.name),
+      };
+}
+
+extension MilestoneRuleJson on MilestoneRule {
+  static MilestoneRule fromJson(Map<String, dynamic> json) { /* unchanged */ }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'threshold_spend_inr': thresholdSpend.rupees,
+        'reward_value_inr': rewardValue.rupees,
+        'is_repeatable': isRepeatable,
+      };
+}
+
+extension ForexRuleJson on ForexRule {
+  static ForexRule fromJson(Map<String, dynamic> json) { /* unchanged */ }
+
+  Map<String, dynamic> toJson() => {
+        'markup_percent': markupPercent,
+        'gst_on_markup': gstOnMarkup,
+      };
+}
+
+extension FuelSurchargeRuleJson on FuelSurchargeRule {
+  static FuelSurchargeRule fromJson(Map<String, dynamic> json) { /* unchanged */ }
+
+  Map<String, dynamic> toJson() => {
+        'surcharge_percent': surchargePercent,
+        'waiver_percent': waiverPercent,
+        'min_txn_inr': minTxn?.rupees,
+        'max_txn_inr': maxTxn?.rupees,
+      };
+}
+
+extension FeeWaiverRuleJson on FeeWaiverRule {
+  static FeeWaiverRule fromJson(Map<String, dynamic> json) { /* unchanged */ }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'threshold_spend_inr': thresholdSpend.rupees,
+        'period': _snakeFromCamel(period.name),
+        'waives_fee_inr': waivesFee.rupees,
+        'excluded_categories': excludedCategoryIds,
+        'notes': notes,
+      };
+}
+
+extension CardBenefitJson on CardBenefit {
+  static CardBenefit fromJson(Map<String, dynamic> json) { /* unchanged */ }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': _snakeFromCamel(kind.name),
+        'label': label,
+        'description': description,
+        'quota_count': quotaCount,
+        'quota_period': quotaPeriod == null ? null : _snakeFromCamel(quotaPeriod!.name),
+        'network_program': networkProgram,
+        'value_estimate_inr': valueEstimate?.rupees,
+      };
+}
+
+extension CardProductJson on CardProduct {
+  static CardProduct fromJson(Map<String, dynamic> json) { /* unchanged */ }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'network': network.name,
+        'is_upi_linkable': isUpiLinkable,
+        'point_value_inr': pointValueInr,
+        'reward_rules': rewardRules.map((r) => r.toJson()).toList(),
+        'cap_rules': capRules.map((r) => r.toJson()).toList(),
+        'milestone_rules': milestoneRules.map((r) => r.toJson()).toList(),
+        'forex': forexRule?.toJson(),
+        'fuel': fuelRule?.toJson(),
+        'fee_waiver_rules': feeWaiverRules.map((r) => r.toJson()).toList(),
+        'benefits': benefits.map((b) => b.toJson()).toList(),
+        'annual_fee_inr': annualFeeInr?.rupees,
+        'joining_fee_inr': joiningFeeInr?.rupees,
+        'verified_at': verifiedAt?.toIso8601String(),
+        'issuer_name': issuerName,
+        'art_asset': artAssetUrl,
+        'art_primary_color': artPrimaryColor,
+      };
+}
+```
+
+(`network.name` is used directly, not `_snakeFromCamel`, because `_parseNetwork` calls `CardNetwork.values.byName(value)` directly with no snake/camel bridging — check `card_rules_json.dart:31` to confirm before writing this line; mirror whatever that line actually does.)
+
+- [ ] **Step 2: Write a round-trip test for the new toJson methods**
+
+```dart
+// packages/pandapay_domain/test/card_rules_json_roundtrip_test.dart
+import 'dart:convert';
+import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test('CardProduct toJson -> jsonEncode -> jsonDecode -> fromJson round-trips every field', () {
+    final original = CardProduct(
+      id: 'p1',
+      name: 'Axis Ace',
+      network: CardNetwork.rupay,
+      isUpiLinkable: true,
+      pointValueInr: 0.25,
+      rewardRules: [
+        RewardRule(id: 'r1', categoryId: 'c1', unit: RewardUnit.cashbackPercent, rate: 5, priority: 10),
+      ],
+      capRules: [
+        CapRule(
+          id: 'cap1',
+          label: 'Monthly cap',
+          capValue: Money.fromRupees(500),
+          measure: CapMeasure.spendAmount,
+          postCapRate: 1,
+          period: CapPeriod.monthly,
+        ),
+      ],
+      milestoneRules: const [],
+      feeWaiverRules: const [],
+      benefits: const [],
+      annualFeeInr: Money.fromRupees(499),
+    );
+
+    final roundTripped = CardProductJson.fromJson(
+      jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>,
+    );
+
+    expect(roundTripped.id, original.id);
+    expect(roundTripped.name, original.name);
+    expect(roundTripped.network, original.network);
+    expect(roundTripped.isUpiLinkable, original.isUpiLinkable);
+    expect(roundTripped.rewardRules.single.unit, RewardUnit.cashbackPercent);
+    expect(roundTripped.rewardRules.single.rate, 5);
+    expect(roundTripped.capRules.single.capValue.paise, Money.fromRupees(500).paise);
+    expect(roundTripped.capRules.single.measure, CapMeasure.spendAmount);
+    expect(roundTripped.annualFeeInr!.paise, Money.fromRupees(499).paise);
+  });
+}
+```
+
+- [ ] **Step 3: Run test to verify it fails, then implement, then verify it passes**
+
+Run: `cd packages/pandapay_domain && dart test test/card_rules_json_roundtrip_test.dart`
+Expected: FAIL first (no `toJson` method), then implement Step 1's code, then PASS.
+
+- [ ] **Step 4: Add SpendCategory.toJson (small, in app/lib/data/catalogue_repository.dart)**
+
+In `app/lib/data/catalogue_repository.dart`, add a `toJson()` method to the `SpendCategory` class itself (it's a plain class, not an extension, so this is a regular method):
+
+```dart
+class SpendCategory {
+  final String id;
+  final String slug;
+  final String name;
+  const SpendCategory({required this.id, required this.slug, required this.name});
+
+  factory SpendCategory.fromJson(Map<String, dynamic> json) => SpendCategory(
+        id: json['id'] as String,
+        slug: json['slug'] as String,
+        name: json['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {'id': id, 'slug': slug, 'name': name};
+}
+```
+
+- [ ] **Step 5: Write the failing provider-level cache test**
+
+```dart
+// app/test/app/providers_offline_catalogue_test.dart
+import 'package:drift/native.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
+
+class _FlakyCatalogueRepository implements CatalogueRepository {
+  bool shouldFail;
+  final List<CardProduct> cards;
+  _FlakyCatalogueRepository(this.cards, {this.shouldFail = false});
+
+  @override
+  Future<List<CardProduct>> fetchCatalogue() async {
+    if (shouldFail) throw Exception('no connectivity');
+    return cards;
+  }
+}
+
+class _EmptyCategoryRepository implements CategoryRepository {
+  @override
+  Future<List<SpendCategory>> fetchCategories() async => const [];
+}
+
+void main() {
+  test('catalogueProvider caches a successful fetch, then falls back to it on failure', () async {
+    final db = AppDatabase(NativeDatabase.memory());
+    final card = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+    final repo = _FlakyCatalogueRepository([card]);
+
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      catalogueRepositoryProvider.overrideWithValue(repo),
+      categoryRepositoryProvider.overrideWithValue(_EmptyCategoryRepository()),
+    ]);
+    addTearDown(container.dispose);
+    addTearDown(db.close);
+
+    // First read: live fetch succeeds and gets cached.
+    final first = await container.read(catalogueProvider.future);
+    expect(first.single.id, 'p1');
+
+    // Simulate the network going away and invalidate to force a re-fetch.
+    repo.shouldFail = true;
+    container.invalidate(catalogueProvider);
+    final second = await container.read(catalogueProvider.future);
+    expect(second.single.id, 'p1'); // served from cache, not an error
+  });
+
+  test('catalogueProvider rethrows when the fetch fails and nothing is cached yet', () async {
+    final db = AppDatabase(NativeDatabase.memory());
+    final repo = _FlakyCatalogueRepository(const [], shouldFail: true);
+
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      catalogueRepositoryProvider.overrideWithValue(repo),
+      categoryRepositoryProvider.overrideWithValue(_EmptyCategoryRepository()),
+    ]);
+    addTearDown(container.dispose);
+    addTearDown(db.close);
+
+    await expectLater(container.read(catalogueProvider.future), throwsA(anything));
+  });
+}
+```
+
+- [ ] **Step 6: Run test to verify it fails**
+
+Run: `cd app && flutter test test/app/providers_offline_catalogue_test.dart`
+Expected: FAIL — `appDatabaseProvider` doesn't exist yet.
+
+- [ ] **Step 7: Wire the providers**
+
+In `app/lib/app/providers.dart`, add near the top (after the existing imports, alongside other `import '../data/...'` lines):
+
+```dart
+import '../data/local/app_database.dart';
+import '../data/local/response_cache.dart';
+```
+
+Add near `catalogueRepositoryProvider` (this file already groups related providers together — put these two right before it):
+
+```dart
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  final db = AppDatabase();
+  ref.onDispose(db.close);
+  return db;
+});
+
+final responseCacheProvider = Provider<ResponseCache>((ref) => ResponseCache(ref.watch(appDatabaseProvider)));
+```
+
+Replace the existing `catalogueProvider`/`categoriesProvider` definitions:
+
+```dart
+const _catalogueCacheKey = 'catalogue';
+const _categoriesCacheKey = 'categories';
+
+/// UA-0.3 offline step (GAP_ANALYSIS.md §2): live fetch first, caching the
+/// raw response on success; on ANY fetch failure, falls back to the last
+/// cached response rather than leaving Home with nothing to rank against.
+/// Only fires the fallback on a genuine failure — a successful-but-empty
+/// catalogue is never treated as "fetch failed."
+final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
+  final cache = ref.watch(responseCacheProvider);
+  try {
+    final cards = await ref.watch(catalogueRepositoryProvider).fetchCatalogue();
+    await cache.put(_catalogueCacheKey, jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}));
+    return cards;
+  } catch (_) {
+    final cached = await cache.get(_catalogueCacheKey);
+    if (cached == null) rethrow;
+    final body = jsonDecode(cached) as Map<String, dynamic>;
+    return (body['cards'] as List).cast<Map<String, dynamic>>().map(CardProductJson.fromJson).toList();
+  }
+});
+
+final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
+  final cache = ref.watch(responseCacheProvider);
+  try {
+    final categories = await ref.watch(categoryRepositoryProvider).fetchCategories();
+    await cache.put(_categoriesCacheKey, jsonEncode({'categories': categories.map((c) => c.toJson()).toList()}));
+    return categories;
+  } catch (_) {
+    final cached = await cache.get(_categoriesCacheKey);
+    if (cached == null) rethrow;
+    final body = jsonDecode(cached) as Map<String, dynamic>;
+    return (body['categories'] as List).cast<Map<String, dynamic>>().map(SpendCategory.fromJson).toList();
+  }
+});
+```
+
+Add `import 'dart:convert';` at the top of `providers.dart` if not already present (check first — it likely already imports `dart:async`; `dart:convert` needs to be added alongside it).
+
+- [ ] **Step 8: Run test to verify it passes**
+
+Run: `cd app && flutter test test/app/providers_offline_catalogue_test.dart`
+Expected: PASS (2 tests).
+
+- [ ] **Step 9: Run the full app test suite to check nothing else broke**
+
+Run: `cd app && flutter test`
+Expected: PASS (was 234, now 234 + new tests). If anything that overrides `catalogueRepositoryProvider`/`categoryRepositoryProvider` in existing tests fails because it now also needs `appDatabaseProvider` overridden, add `appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory()))` to that test's override list — check failures individually, don't guess.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add packages/pandapay_domain/lib/src/card_rules/card_rules_json.dart packages/pandapay_domain/test/card_rules_json_roundtrip_test.dart app/lib/data/catalogue_repository.dart app/lib/app/providers.dart app/test/app/providers_offline_catalogue_test.dart
+git commit -m "feat(app): cache catalogue/categories with last-known-good fallback"
+```
+
+---
+
+## Task 4: Cache the wallet and overrides providers (user-scoped, cleared on sign-out)
+
+**Files:**
+- Modify: `app/lib/app/providers.dart`
+- Test: `app/test/app/providers_offline_wallet_test.dart`
+
+**Interfaces:**
+- Consumes: `responseCacheProvider` (Task 3), existing `UserCardsRepository.fetchUserCards()` / `CardOverridesRepository.fetchOverrides()` (unchanged), `UserCard.toJson()`/`CardOverride.toJson()` (new, added this task).
+- Produces: `userCardsProvider`/`cardOverridesProvider` keep existing signatures. New `_clearUserScopedCacheOnSignOut` listener wired into a `Provider<void>` read from `_AppShell` (same pattern as the existing `sessionKeepAliveProvider`).
+
+- [ ] **Step 1: Add UserCard.toJson and CardOverride.toJson**
+
+In `app/lib/data/user_cards_repository.dart`, add to the `UserCard` class (mirror `UserCard.fromJson`'s keys exactly — read that factory first to confirm every key name before writing this, since it has more fields than shown in the plan's earlier research pass: `statement_day`, `opened_on`, `credit_limit_inr`, `due_day`, `anniversary_on`, `is_archived`, plus the nested `cap_states`/`milestone_states`/`fee_waiver_states` arrays):
+
+```dart
+Map<String, dynamic> toJson() => {
+      'id': id,
+      'card_product_id': cardProductId,
+      'nickname': nickname,
+      'card_name': cardName,
+      'is_default': isDefault,
+      'cap_states': [
+        for (final entry in capConsumed.entries) {'cap_rule_id': entry.key, 'consumed': entry.value.rupees},
+      ],
+      'milestone_states': [
+        for (final entry in milestoneQualifiedSpend.entries)
+          {
+            'milestone_rule_id': entry.key,
+            'qualified_spend': entry.value.rupees,
+            if (milestonePeriodEnd[entry.key] != null) 'period_end': milestonePeriodEnd[entry.key]!.toIso8601String(),
+          },
+      ],
+      'fee_waiver_states': feeWaiverStates.map((fw) => fw.toJson()).toList(),
+      'total_points_earned': totalPointsEarned,
+      'statement_day': statementDay,
+      'opened_on': openedOn?.toIso8601String(),
+      'credit_limit_inr': creditLimit?.rupees,
+      'due_day': dueDay,
+      'anniversary_on': anniversaryOn?.toIso8601String(),
+      'is_archived': isArchived,
+    };
+```
+
+Before writing this, re-read `UserCard.fromJson` and `FeeWaiverProgress.fromJson` in full (they may have grown fields since this plan was written) and adjust key names to match exactly — a mismatch here means silent data loss on cache round-trip, not a crash, so get every key right.
+
+Add to `FeeWaiverProgress`:
+
+```dart
+Map<String, dynamic> toJson() => {
+      'fee_waiver_rule_id': feeWaiverRuleId,
+      'qualified_spend': qualifiedSpend.rupees,
+      'threshold_spend_inr': thresholdSpend.rupees,
+      'waives_fee_inr': waivesFee.rupees,
+      'waived_at': waivedAt?.toIso8601String(),
+      'period_end': periodEnd.toIso8601String(),
+    };
+```
+
+In `app/lib/data/card_overrides_repository.dart`, add to `CardOverride` (re-read `CardOverride.fromJson` first for exact keys):
+
+```dart
+Map<String, dynamic> toJson() => {
+      'id': id,
+      'user_card_id': userCardId,
+      'scope': scope.name,
+      'vpa': vpa,
+      'merchant_name': merchantName,
+      'category_id': categoryId,
+      'category_name': categoryName,
+      'reason_note': reasonNote,
+      'is_enabled': isEnabled,
+      'created_at': createdAt.toIso8601String(),
+      'card_name': cardName,
+      'card_nickname': cardNickname,
+    };
+```
+
+Re-check `OverrideScope.name` actually matches what `fromJson` expects (it may parse via a snake-case string like `CapMeasure` elsewhere does — confirm before assuming `.name` is correct).
+
+- [ ] **Step 2: Write round-trip tests for both toJson additions**
+
+```dart
+// app/test/data/user_cards_repository_toJson_test.dart
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
+
+void main() {
+  test('UserCard toJson -> fromJson round-trips cap/milestone/fee-waiver state', () {
+    final original = UserCard(
+      id: 'uc1',
+      cardProductId: 'p1',
+      cardName: 'Test Card',
+      isDefault: true,
+      capConsumed: {'cap1': Money.fromRupees(2000)},
+      milestoneQualifiedSpend: {'m1': Money.fromRupees(5000)},
+      feeWaiverStates: [
+        FeeWaiverProgress(
+          feeWaiverRuleId: 'fw1',
+          qualifiedSpend: Money.fromRupees(1000),
+          thresholdSpend: Money.fromRupees(250000),
+          waivesFee: Money.fromRupees(499),
+          periodEnd: DateTime(2026, 12, 31),
+        ),
+      ],
+    );
+
+    final roundTripped = UserCard.fromJson(original.toJson());
+
+    expect(roundTripped.id, 'uc1');
+    expect(roundTripped.capConsumed['cap1']!.paise, Money.fromRupees(2000).paise);
+    expect(roundTripped.milestoneQualifiedSpend['m1']!.paise, Money.fromRupees(5000).paise);
+    expect(roundTripped.feeWaiverStates.single.feeWaiverRuleId, 'fw1');
+    expect(roundTripped.isDefault, true);
+  });
+}
+```
+
+(Add an equivalent `card_overrides_repository_toJson_test.dart` for `CardOverride` — construct one with every field set, round-trip, assert each field.)
+
+- [ ] **Step 3: Run tests, verify fail then implement then pass**
+
+Run: `cd app && flutter test test/data/user_cards_repository_toJson_test.dart test/data/card_overrides_repository_toJson_test.dart`
+Expected: FAIL first, PASS after implementing Step 1.
+
+- [ ] **Step 4: Write the failing provider cache test**
+
+Same shape as Task 3 Step 5 but for `userCardsProvider` — a `_FlakyUserCardsRepository`-style fake wrapping the real `UserCardsRepository`'s network call is awkward since `UserCardsRepository` is concrete, not an interface. Instead, test the cache behavior directly against `ResponseCache` + the parse logic, and separately verify via a widget-level test that `userCardsProvider`'s override still works end to end (existing tests already override `userCardsProvider` directly in most screens, so this task's own correctness is best proven by a focused unit test of the caching logic in isolation):
+
+```dart
+// app/test/app/providers_offline_wallet_test.dart
+import 'dart:convert';
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/response_cache.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
+
+void main() {
+  test('cached user_cards raw JSON decodes back through UserCard.fromJson', () async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final cache = ResponseCache(db);
+
+    final card = UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test', isDefault: true);
+    await cache.put('user_cards', jsonEncode({'userCards': [card.toJson()]}));
+
+    final cached = await cache.get('user_cards');
+    final body = jsonDecode(cached!) as Map<String, dynamic>;
+    final decoded = (body['userCards'] as List).cast<Map<String, dynamic>>().map(UserCard.fromJson).toList();
+
+    expect(decoded.single.id, 'uc1');
+  });
+
+  test('clearing the user_cards and card_overrides keys removes only those', () async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final cache = ResponseCache(db);
+
+    await cache.put('user_cards', 'wallet-data');
+    await cache.put('card_overrides', 'overrides-data');
+    await cache.put('catalogue', 'catalogue-data');
+
+    await cache.clear('user_cards');
+    await cache.clear('card_overrides');
+
+    expect(await cache.get('user_cards'), isNull);
+    expect(await cache.get('card_overrides'), isNull);
+    expect(await cache.get('catalogue'), 'catalogue-data'); // public data survives
+  });
+}
+```
+
+- [ ] **Step 5: Run test to verify it fails**
+
+Run: `cd app && flutter test test/app/providers_offline_wallet_test.dart`
+Expected: FAIL — `toJson` methods don't exist yet if Step 1 wasn't done first (it should already be done by this point; if this genuinely fails only because the test file itself doesn't exist, that's the expected starting state).
+
+- [ ] **Step 6: Wire userCardsProvider and cardOverridesProvider**
+
+In `app/lib/app/providers.dart`, replace the existing bodies:
+
+```dart
+const _userCardsCacheKey = 'user_cards';
+const _cardOverridesCacheKey = 'card_overrides';
+
+final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  if (repo == null) return const [];
+  final cache = ref.watch(responseCacheProvider);
+  try {
+    final cards = await repo.fetchUserCards();
+    await cache.put(_userCardsCacheKey, jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}));
+    return cards;
+  } catch (_) {
+    final cached = await cache.get(_userCardsCacheKey);
+    if (cached == null) rethrow;
+    final body = jsonDecode(cached) as Map<String, dynamic>;
+    return (body['userCards'] as List).cast<Map<String, dynamic>>().map(UserCard.fromJson).toList();
+  }
+});
+```
+
+```dart
+final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
+  final repo = ref.watch(cardOverridesRepositoryProvider);
+  if (repo == null) return const [];
+  final cache = ref.watch(responseCacheProvider);
+  try {
+    final overrides = await repo.fetchOverrides();
+    await cache.put(_cardOverridesCacheKey, jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}));
+    return overrides;
+  } catch (_) {
+    final cached = await cache.get(_cardOverridesCacheKey);
+    if (cached == null) rethrow;
+    final body = jsonDecode(cached) as Map<String, dynamic>;
+    return (body['overrides'] as List).cast<Map<String, dynamic>>().map(CardOverride.fromJson).toList();
+  }
+});
+```
+
+- [ ] **Step 7: Add the sign-out cache-clear listener**
+
+Add near `sessionKeepAliveProvider` (same file, same established `ref.listen` pattern):
+
+```dart
+/// Privacy: user_cards/card_overrides cache entries are per-signed-in-user
+/// and must not leak across a sign-out -> sign-in-as-different-user
+/// sequence, same bug class already found once this session in quick-add's
+/// SharedPreferences last-used-card key. catalogue/categories are public
+/// and deliberately NOT cleared here.
+final cacheLifecycleProvider = Provider<void>((ref) {
+  ref.listen<String?>(accessTokenProvider, (previous, next) {
+    if (previous != null && next == null) {
+      final cache = ref.read(responseCacheProvider);
+      cache.clear(_userCardsCacheKey);
+      cache.clear(_cardOverridesCacheKey);
+    }
+  });
+});
+```
+
+- [ ] **Step 8: Read cacheLifecycleProvider from _AppShell**
+
+In `app/lib/app/router.dart`, find `_AppShellState.build()` where it does `ref.watch(sessionKeepAliveProvider);` and add immediately after:
+
+```dart
+ref.watch(cacheLifecycleProvider);
+```
+
+- [ ] **Step 9: Run tests to verify they pass**
+
+Run: `cd app && flutter test test/app/providers_offline_wallet_test.dart test/data/user_cards_repository_toJson_test.dart test/data/card_overrides_repository_toJson_test.dart`
+Expected: PASS.
+
+- [ ] **Step 10: Run the full suite**
+
+Run: `cd app && flutter test`
+Expected: PASS (all previous + new tests).
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add app/lib/data/user_cards_repository.dart app/lib/data/card_overrides_repository.dart app/lib/app/providers.dart app/lib/app/router.dart app/test/app/providers_offline_wallet_test.dart app/test/data/user_cards_repository_toJson_test.dart app/test/data/card_overrides_repository_toJson_test.dart
+git commit -m "feat(app): cache wallet/overrides with fallback, clear on sign-out"
+```
+
+---
+
+## Task 5: isOnlineProvider (connectivity_plus)
+
+**Files:**
+- Modify: `app/lib/app/providers.dart`
+- Test: `app/test/app/is_online_provider_test.dart`
+
+**Interfaces:**
+- Produces: `isOnlineProvider` — `StreamProvider<bool>`, true when the device has any network interface up (not necessarily internet-reachable — `connectivity_plus` only reports interface state, which is the right scope for this app: it drives "should I attempt a network call / show an offline banner," not a full reachability probe).
+
+- [ ] **Step 1: Write the failing test**
+
+```dart
+// app/test/app/is_online_provider_test.dart
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/app/providers.dart';
+
+void main() {
+  test('isOnlineProvider maps ConnectivityResult.none to false, anything else to true', () {
+    expect(connectivityResultToIsOnline([ConnectivityResult.none]), false);
+    expect(connectivityResultToIsOnline([ConnectivityResult.wifi]), true);
+    expect(connectivityResultToIsOnline([ConnectivityResult.mobile]), true);
+    expect(connectivityResultToIsOnline([]), false);
+  });
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd app && flutter test test/app/is_online_provider_test.dart`
+Expected: FAIL — `connectivityResultToIsOnline` not defined.
+
+- [ ] **Step 3: Implement**
+
+In `app/lib/app/providers.dart`, add:
+
+```dart
+import 'package:connectivity_plus/connectivity_plus.dart';
+```
+
+```dart
+/// connectivity_plus reports interface state, not internet reachability —
+/// intentionally scoped that way here: this drives "should the offline
+/// banner show / should the outbox try to flush," not a guarantee the
+/// server is actually reachable (a flush attempt can still fail and stay
+/// queued even when this reads true).
+bool connectivityResultToIsOnline(List<ConnectivityResult> results) {
+  return results.any((r) => r != ConnectivityResult.none);
+}
+
+final isOnlineProvider = StreamProvider<bool>((ref) {
+  return Connectivity().onConnectivityChanged.map(connectivityResultToIsOnline);
+});
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `cd app && flutter test test/app/is_online_provider_test.dart`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/pubspec.yaml app/pubspec.lock app/lib/app/providers.dart app/test/app/is_online_provider_test.dart
+git commit -m "feat(app): add isOnlineProvider via connectivity_plus"
+```
+
+---
+
+## Task 6: Transaction outbox (B6 offline quick-add queue)
+
+**Files:**
+- Create: `app/lib/data/local/transaction_outbox_repository.dart`
+- Modify: `app/lib/app/providers.dart`
+- Test: `app/test/data/local/transaction_outbox_repository_test.dart`
+
+**Interfaces:**
+- Consumes: `AppDatabase` (Task 1), `UserCardsRepository.logTransaction(...)` (existing, unchanged signature).
+- Produces: `class TransactionOutboxRepository { Future<void> enqueue({required String userCardId, required Money amount, String? categoryId, String? merchantName, DateTime? occurredAt, String? note}); Future<List<TransactionOutboxEntry>> pending(); Future<int> flush(UserCardsRepository repo); }`. `flush` returns the count of entries successfully sent and removed. `outboxRepositoryProvider` (`Provider<TransactionOutboxRepository>`), `pendingOutboxCountProvider` (`FutureProvider<int>`).
+
+- [ ] **Step 1: Write the failing test**
+
+```dart
+// app/test/data/local/transaction_outbox_repository_test.dart
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/api_exception.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/transaction_outbox_repository.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
+
+class _FakeUserCardsRepository extends UserCardsRepository {
+  final List<Map<String, dynamic>> sent = [];
+  bool shouldFail;
+  _FakeUserCardsRepository({this.shouldFail = false}) : super(apiBaseUrl: 'http://test', accessToken: 'tok');
+
+  @override
+  Future<void> logTransaction({
+    required String userCardId,
+    required Money amount,
+    String? categoryId,
+    String? merchantName,
+    DateTime? occurredAt,
+    String? note,
+  }) async {
+    if (shouldFail) throw ApiException('offline');
+    sent.add({'userCardId': userCardId, 'amount': amount});
+  }
+}
+
+void main() {
+  late AppDatabase db;
+  late TransactionOutboxRepository outbox;
+
+  setUp(() {
+    db = AppDatabase(NativeDatabase.memory());
+    outbox = TransactionOutboxRepository(db);
+  });
+  tearDown(() => db.close());
+
+  test('enqueue then pending returns the queued entry', () async {
+    await outbox.enqueue(userCardId: 'uc1', amount: Money.fromRupees(150), note: 'coffee');
+    final items = await outbox.pending();
+    expect(items, hasLength(1));
+    expect(items.single.userCardId, 'uc1');
+    expect(items.single.amountPaise, Money.fromRupees(150).paise);
+    expect(items.single.note, 'coffee');
+  });
+
+  test('flush sends every pending entry and removes it on success', () async {
+    await outbox.enqueue(userCardId: 'uc1', amount: Money.fromRupees(100));
+    await outbox.enqueue(userCardId: 'uc2', amount: Money.fromRupees(200));
+    final repo = _FakeUserCardsRepository();
+
+    final sentCount = await outbox.flush(repo);
+
+    expect(sentCount, 2);
+    expect(repo.sent, hasLength(2));
+    expect(await outbox.pending(), isEmpty);
+  });
+
+  test('flush leaves a failing entry queued with lastError set, and still sends the rest', () async {
+    await outbox.enqueue(userCardId: 'uc1', amount: Money.fromRupees(100));
+    final repo = _FakeUserCardsRepository(shouldFail: true);
+
+    final sentCount = await outbox.flush(repo);
+
+    expect(sentCount, 0);
+    final remaining = await outbox.pending();
+    expect(remaining, hasLength(1));
+    expect(remaining.single.lastError, isNotNull);
+  });
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd app && flutter test test/data/local/transaction_outbox_repository_test.dart`
+Expected: FAIL — file doesn't exist.
+
+- [ ] **Step 3: Implement**
+
+```dart
+// app/lib/data/local/transaction_outbox_repository.dart
+import 'package:drift/drift.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
+
+import '../user_cards_repository.dart';
+import 'app_database.dart';
+
+/// B6 offline queue (GAP_ANALYSIS.md §2/§7) — a quick-add save that fails
+/// while offline lands here instead of just erroring out, and is sent for
+/// real the next time [flush] runs (wired to isOnlineProvider transitioning
+/// to true — see providers.dart's outboxFlushProvider).
+class TransactionOutboxRepository {
+  final AppDatabase _db;
+  TransactionOutboxRepository(this._db);
+
+  Future<void> enqueue({
+    required String userCardId,
+    required Money amount,
+    String? categoryId,
+    String? merchantName,
+    DateTime? occurredAt,
+    String? note,
+  }) {
+    return _db.into(_db.transactionOutboxEntries).insert(
+          TransactionOutboxEntriesCompanion.insert(
+            userCardId: userCardId,
+            amountPaise: amount.paise,
+            categoryId: Value(categoryId),
+            merchantName: Value(merchantName),
+            occurredAt: Value(occurredAt),
+            note: Value(note),
+            createdAt: DateTime.now(),
+          ),
+        );
+  }
+
+  Future<List<TransactionOutboxEntry>> pending() {
+    return (_db.select(_db.transactionOutboxEntries)..orderBy([(t) => OrderingTerm.asc(t.createdAt)])).get();
+  }
+
+  /// Attempts every queued entry once. A success removes the row; a
+  /// failure records [lastError] and leaves it queued for the next flush —
+  /// never silently drops a queued transaction.
+  Future<int> flush(UserCardsRepository repo) async {
+    var sent = 0;
+    for (final entry in await pending()) {
+      try {
+        await repo.logTransaction(
+          userCardId: entry.userCardId,
+          amount: Money.fromPaise(entry.amountPaise),
+          categoryId: entry.categoryId,
+          merchantName: entry.merchantName,
+          occurredAt: entry.occurredAt,
+          note: entry.note,
+        );
+        await (_db.delete(_db.transactionOutboxEntries)..where((t) => t.id.equals(entry.id))).go();
+        sent++;
+      } catch (e) {
+        await (_db.update(_db.transactionOutboxEntries)..where((t) => t.id.equals(entry.id)))
+            .write(TransactionOutboxEntriesCompanion(lastError: Value(e.toString())));
+      }
+    }
+    return sent;
+  }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `cd app && flutter test test/data/local/transaction_outbox_repository_test.dart`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Wire providers and auto-flush on reconnect**
+
+In `app/lib/app/providers.dart`, add:
+
+```dart
+import '../data/local/transaction_outbox_repository.dart';
+```
+
+```dart
+final outboxRepositoryProvider = Provider<TransactionOutboxRepository>((ref) {
+  return TransactionOutboxRepository(ref.watch(appDatabaseProvider));
+});
+
+final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
+  final items = await ref.watch(outboxRepositoryProvider).pending();
+  return items.length;
+});
+
+/// Flushes the outbox the moment connectivity comes back — read once from
+/// _AppShell alongside cacheLifecycleProvider/sessionKeepAliveProvider so
+/// it runs for the app's whole lifetime, not just while Home is visible.
+final outboxFlushProvider = Provider<void>((ref) {
+  ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) async {
+    final wasOffline = previous?.valueOrNull == false;
+    final isNowOnline = next.valueOrNull == true;
+    if (!wasOffline || !isNowOnline) return;
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null) return;
+    final sent = await ref.read(outboxRepositoryProvider).flush(repo);
+    if (sent > 0) {
+      ref.invalidate(pendingOutboxCountProvider);
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(transactionsProvider);
+    }
+  });
+});
+```
+
+In `app/lib/app/router.dart`'s `_AppShellState.build()`, add alongside the other `ref.watch(...)` lifecycle lines:
+
+```dart
+ref.watch(outboxFlushProvider);
+```
+
+- [ ] **Step 6: Run the full suite**
+
+Run: `cd app && flutter test`
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add app/lib/data/local/transaction_outbox_repository.dart app/lib/app/providers.dart app/lib/app/router.dart app/test/data/local/transaction_outbox_repository_test.dart
+git commit -m "feat(app): add B6 offline transaction outbox with auto-flush on reconnect"
+```
+
+---
+
+## Task 7: Wire quick-add to the outbox, add the offline banner
+
+**Files:**
+- Modify: `app/lib/features/quickadd/quick_add_screen.dart`
+- Modify: `app/lib/features/home/home_screen.dart`
+- Test: `app/test/features/quickadd/quick_add_offline_test.dart`
+- Test: `app/test/features/home/offline_banner_test.dart`
+
+**Interfaces:**
+- Consumes: `isOnlineProvider`, `outboxRepositoryProvider`, `pendingOutboxCountProvider` (Task 5/6).
+
+- [ ] **Step 1: Write the failing quick-add offline test**
+
+Read `quick_add_screen.dart`'s current save handler first (the `try { await repo.logTransaction(...) } catch (e) { ... }` block) to write a test that matches its exact current error-handling shape, then add a case: when the thrown error looks like a connectivity failure (no specific type exists today — treat any exception the same way network code elsewhere in the app does, i.e. don't try to distinguish "offline" from "500" here, just always offer the outbox path when a save fails and current connectivity, per `isOnlineProvider`, reads false).
+
+```dart
+// app/test/features/quickadd/quick_add_offline_test.dart
+// Structure this test the same way test/features/quickadd/quick_add_screen_test.dart
+// already sets up its ProviderScope (same overrides: userCardsProvider,
+// userCardsRepositoryProvider, categoriesProvider) — copy that scaffolding,
+// then add:
+//   1. Override isOnlineProvider to emit `false`.
+//   2. Override userCardsRepositoryProvider's logTransaction to throw.
+//   3. Fill the amount + card fields, tap Save.
+//   4. Expect the SnackBar text to mention it was saved for later / queued
+//      (exact copy TBD when writing this — match whatever wording gets
+//      added in Step 2 below) instead of a bare error.
+//   5. Read outboxRepositoryProvider.pending() from the container and
+//      assert it now has one entry.
+```
+
+(Write this out fully once Step 2's actual copy/wording is decided — the plan intentionally leaves the exact assertion text as a placeholder ONLY for the SnackBar copy, everything else above is concrete and must be written in full before running.)
+
+- [ ] **Step 2: Modify quick_add_screen.dart's save handler**
+
+Find the existing `catch (e)` block in the save handler. Change it so that when the save throws AND `ref.read(isOnlineProvider).valueOrNull == false`, it enqueues to the outbox instead of just showing an error:
+
+```dart
+} catch (e) {
+  if (!mounted) return;
+  final isOnline = ref.read(isOnlineProvider).valueOrNull ?? true;
+  if (!isOnline) {
+    await ref.read(outboxRepositoryProvider).enqueue(
+          userCardId: _selectedUserCardId!,
+          amount: Money.fromRupees(amount),
+          categoryId: _selectedCategoryId,
+          merchantName: merchantName,
+          occurredAt: occurredAt,
+          note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+        );
+    ref.invalidate(pendingOutboxCountProvider);
+    if (mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Saved offline — this'll sync automatically once you're back online.")),
+      );
+    }
+    return;
+  }
+  setState(() => _saving = false);
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Could not save. ${userFacingErrorMessage(e)}')),
+  );
+}
+```
+
+Adapt this to fit whatever the existing catch block's exact variable names/control flow already are — read the real current code first, this is describing the behavior to add, not a literal diff.
+
+- [ ] **Step 3: Finish writing the test from Step 1 with the real SnackBar copy, run it, verify pass**
+
+Run: `cd app && flutter test test/features/quickadd/quick_add_offline_test.dart`
+Expected: PASS.
+
+- [ ] **Step 4: Add the offline banner to Home**
+
+In `app/lib/features/home/home_screen.dart`, find where `_AlertsStrip` or similar top-of-screen widgets are composed and add a small banner shown when `ref.watch(isOnlineProvider).valueOrNull == false`:
+
+```dart
+class _OfflineBanner extends ConsumerWidget {
+  const _OfflineBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isOnline = ref.watch(isOnlineProvider).valueOrNull ?? true;
+    if (isOnline) return const SizedBox.shrink();
+    final pendingCount = ref.watch(pendingOutboxCountProvider).valueOrNull ?? 0;
+    return Container(
+      width: double.infinity,
+      color: AppColors.surfaceMuted,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
+      child: Text(
+        pendingCount > 0
+            ? "You're offline — showing your last synced cards. $pendingCount transaction${pendingCount == 1 ? '' : 's'} will sync when you're back."
+            : "You're offline — showing your last synced cards.",
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    );
+  }
+}
+```
+
+Wire it into `HomeScreen`'s build method above the existing content (check the actual widget tree structure first — likely inside the `Column` that already holds `_AlertsStrip`).
+
+- [ ] **Step 5: Write and run the banner test**
+
+```dart
+// app/test/features/home/offline_banner_test.dart
+// Same ProviderScope scaffolding as home_screen_test.dart, plus:
+//   isOnlineProvider overridden to a Stream emitting false.
+// Pump, then expect(find.textContaining("You're offline"), findsOneWidget).
+// A second test overrides isOnlineProvider to true and expects the banner
+// text to NOT be found.
+```
+
+Run: `cd app && flutter test test/features/home/offline_banner_test.dart`
+Expected: PASS.
+
+- [ ] **Step 6: Run the full suite**
+
+Run: `cd app && flutter test && flutter analyze`
+Expected: all tests pass, 0 analyzer errors.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add app/lib/features/quickadd/quick_add_screen.dart app/lib/features/home/home_screen.dart app/test/features/quickadd/quick_add_offline_test.dart app/test/features/home/offline_banner_test.dart
+git commit -m "feat(app): queue B6 quick-add offline, show an offline banner on Home"
+```
+
+---
+
+## Task 8: Update GAP_ANALYSIS.md and PROGRESS.md
+
+**Files:**
+- Modify: `GAP_ANALYSIS.md`
+- Modify: `PROGRESS.md`
+
+- [ ] **Step 1: Update GAP_ANALYSIS.md §2**
+
+Change the "No offline-first local database" section from ❌ to reflect the new state: catalogue/categories/wallet/overrides have a last-known-good cache and B6 quick-add queues offline. Explicitly note what's still NOT covered (no relational mirror, no incremental data_version sync, no offline queue for other write paths like override create/card archive) so the entry stays honest rather than overclaiming full UA-0.3 compliance.
+
+- [ ] **Step 2: Log a PROGRESS.md chunk entry**
+
+Follow the file's existing chunk-entry format (read the last few entries for the exact style) — summarize what shipped, what's still open, and link back to this plan file.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add GAP_ANALYSIS.md PROGRESS.md
+git commit -m "docs: log offline-first local cache completion in GAP_ANALYSIS/PROGRESS"
+```

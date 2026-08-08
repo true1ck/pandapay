@@ -48,6 +48,8 @@ class SpendCategory {
         slug: json['slug'] as String,
         name: json['name'] as String,
       );
+
+  Map<String, dynamic> toJson() => {'id': id, 'slug': slug, 'name': name};
 }
 
 abstract class CategoryRepository {
