@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +11,9 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 
 const _lastUsedCardKey = 'pandapay_app.quick_add_last_used_card_v1';
+const _recentMerchantsKey = 'pandapay_app.quick_add_recent_merchants_v1';
+const _maxRecentMerchants = 8;
+const _merchantSearchDebounce = Duration(milliseconds: 300);
 
 /// ui-spec B6 — "under 3 taps." No true undo: there is no
 /// DELETE /transactions/:id route in this codebase (verified against
@@ -19,16 +24,15 @@ const _lastUsedCardKey = 'pandapay_app.quick_add_last_used_card_v1';
 /// actually happen server-side. A real undo is future work once a delete
 /// route exists.
 ///
-/// Scope note (matches the Task 16 brief as written, not the fuller B6
-/// ui-spec prose): merchant is a plain optional text field, not an
-/// autocomplete-with-history — the brief's own "Consumes" list only calls
-/// for shared_preferences persistence of the *last-used card*, not a
-/// merchant-name history store, so no such store was invented here.
-/// Category is an independent optional dropdown rather than auto-filled
-/// from merchant, for the same reason: nothing in this codebase maps a
-/// free-text merchant name to a category client-side today (the closest
-/// server-side equivalent is SMS-parser merchant matching in
-/// transactions/from-sms, which isn't reachable from a manual-entry form).
+/// Merchant field: typeahead against merchantSearchRepositoryProvider (the
+/// same GET /merchants/search Task 13/14 already wired up), plus a locally
+/// persisted "recent merchants" list — mirrors Task 14's
+/// pandapay_app.merchant_recent_searches_v1 pattern exactly, just under its
+/// own key so quick-add's recents don't collide with merchant-search's.
+/// Picking a *search-matched* suggestion (one with a real categoryId from
+/// the backend) auto-fills the category dropdown, which the user can still
+/// override afterward; typing a merchant name freehand (no suggestion
+/// picked) leaves category as a manual choice, same as before.
 class QuickAddScreen extends ConsumerStatefulWidget {
   const QuickAddScreen({super.key});
 
@@ -40,16 +44,25 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   final _amountController = TextEditingController();
   final _merchantController = TextEditingController();
   final _noteController = TextEditingController();
+  final _merchantFocusNode = FocusNode();
   String? _selectedUserCardId;
   String? _selectedCategoryId;
   DateTime? _date;
   bool _saving = false;
   String? _amountError;
 
+  List<String> _recentMerchants = const [];
+  List<NearbyMerchantCandidate> _merchantResults = const [];
+  bool _merchantSearching = false;
+  bool _showMerchantSuggestions = false;
+  Timer? _merchantDebounce;
+
   @override
   void initState() {
     super.initState();
     _loadLastUsedCard();
+    _loadRecentMerchants();
+    _merchantFocusNode.addListener(_onMerchantFocusChanged);
   }
 
   @override
@@ -57,6 +70,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     _amountController.dispose();
     _merchantController.dispose();
     _noteController.dispose();
+    _merchantFocusNode.removeListener(_onMerchantFocusChanged);
+    _merchantFocusNode.dispose();
+    _merchantDebounce?.cancel();
     super.dispose();
   }
 
@@ -69,6 +85,71 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   Future<void> _rememberLastUsedCard(String userCardId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastUsedCardKey, userCardId);
+  }
+
+  Future<void> _loadRecentMerchants() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) setState(() => _recentMerchants = prefs.getStringList(_recentMerchantsKey) ?? const []);
+  }
+
+  Future<void> _rememberMerchant(String name) async {
+    if (name.trim().isEmpty) return;
+    final trimmed = name.trim();
+    final prefs = await SharedPreferences.getInstance();
+    final updated = [trimmed, ..._recentMerchants.where((m) => m != trimmed)].take(_maxRecentMerchants).toList();
+    await prefs.setStringList(_recentMerchantsKey, updated);
+    if (mounted) setState(() => _recentMerchants = updated);
+  }
+
+  void _onMerchantFocusChanged() {
+    if (_merchantFocusNode.hasFocus) {
+      setState(() => _showMerchantSuggestions = true);
+    } else {
+      // Small delay so a tap on a suggestion tile (which also blurs the
+      // field) still registers before the list disappears.
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (mounted && !_merchantFocusNode.hasFocus) setState(() => _showMerchantSuggestions = false);
+      });
+    }
+  }
+
+  void _onMerchantTextChanged(String value) {
+    _merchantDebounce?.cancel();
+    if (value.trim().isEmpty) {
+      setState(() {
+        _merchantResults = const [];
+        _merchantSearching = false;
+      });
+      return;
+    }
+    _merchantDebounce = Timer(_merchantSearchDebounce, () => _searchMerchants(value.trim()));
+  }
+
+  Future<void> _searchMerchants(String query) async {
+    setState(() => _merchantSearching = true);
+    try {
+      final repo = ref.read(merchantSearchRepositoryProvider);
+      final results = await repo.search(query);
+      if (mounted) setState(() => _merchantResults = results);
+    } catch (_) {
+      // Typeahead is a convenience, not a required step — a failed search
+      // just means no suggestions this keystroke; the merchant field still
+      // works as free text either way.
+      if (mounted) setState(() => _merchantResults = const []);
+    } finally {
+      if (mounted) setState(() => _merchantSearching = false);
+    }
+  }
+
+  void _pickMerchant({required String name, String? categoryId}) {
+    _merchantController.text = name;
+    setState(() {
+      if (categoryId != null) _selectedCategoryId = categoryId;
+      _showMerchantSuggestions = false;
+      _merchantResults = const [];
+    });
+    _merchantFocusNode.unfocus();
+    _rememberMerchant(name);
   }
 
   bool get _canSave {
@@ -104,15 +185,21 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     if (repo == null || _selectedUserCardId == null) return;
     setState(() => _saving = true);
     try {
+      final merchantName = _merchantController.text.trim().isEmpty ? null : _merchantController.text.trim();
       await repo.logTransaction(
         userCardId: _selectedUserCardId!,
         amount: Money.fromRupees(amount),
         categoryId: _selectedCategoryId,
-        merchantName: _merchantController.text.trim().isEmpty ? null : _merchantController.text.trim(),
+        merchantName: merchantName,
         occurredAt: occurredAt,
         note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
       );
       await _rememberLastUsedCard(_selectedUserCardId!);
+      // Remembers whatever merchant name was actually used this save, even
+      // if typed freehand rather than picked from a suggestion — "remembers"
+      // per ui-spec B6 means next time's quick-add, not just this session's
+      // typeahead picks.
+      if (merchantName != null) await _rememberMerchant(merchantName);
       // These providers already do the cap/milestone/points/fee-waiver
       // recompute server-side inside logTransaction above — invalidating
       // them here just pulls that already-updated state back down so Home
@@ -171,7 +258,27 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               onChanged: (_) => setState(() => _amountError = null),
             ),
             const SizedBox(height: AppSpace.md),
-            TextField(controller: _merchantController, decoration: const InputDecoration(labelText: 'Merchant (optional)')),
+            TextField(
+              controller: _merchantController,
+              focusNode: _merchantFocusNode,
+              decoration: InputDecoration(
+                labelText: 'Merchant (optional)',
+                suffixIcon: _merchantSearching
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    : null,
+              ),
+              onChanged: _onMerchantTextChanged,
+            ),
+            if (_showMerchantSuggestions)
+              _MerchantSuggestions(
+                query: _merchantController.text,
+                recent: _recentMerchants,
+                results: _merchantResults,
+                onPick: _pickMerchant,
+              ),
             const SizedBox(height: AppSpace.md),
             userCards.when(
               loading: () => const LinearProgressIndicator(),
@@ -180,10 +287,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 initialValue: _selectedUserCardId,
                 decoration: const InputDecoration(labelText: 'Card'),
                 items: cards
-                    .map((c) => DropdownMenuItem(
-                          value: c.id,
-                          child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
-                        ))
+                    .map(
+                      (c) => DropdownMenuItem(
+                        value: c.id,
+                        child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                      ),
+                    )
                     .toList(),
                 onChanged: (v) => setState(() => _selectedUserCardId = v),
               ),
@@ -220,7 +329,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               },
             ),
             const SizedBox(height: AppSpace.md),
-            TextField(controller: _noteController, decoration: const InputDecoration(labelText: 'Note (optional)')),
+            TextField(
+              controller: _noteController,
+              decoration: const InputDecoration(labelText: 'Note (optional)'),
+            ),
             const SizedBox(height: AppSpace.lg),
             FilledButton(
               onPressed: _canSave && !_saving ? _save : null,
@@ -230,6 +342,56 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The merchant field's suggestion drop-down: recent picks when the field
+/// is empty, live search results (from merchantSearchRepositoryProvider)
+/// once the user starts typing. A search-result tap carries a real
+/// categoryId through to [onPick] for the category auto-fill; a recent-pick
+/// tap doesn't (recents only remember names — see
+/// _QuickAddScreenState._rememberMerchant), so it leaves category untouched,
+/// same as free-text entry.
+class _MerchantSuggestions extends StatelessWidget {
+  final String query;
+  final List<String> recent;
+  final List<NearbyMerchantCandidate> results;
+  final void Function({required String name, String? categoryId}) onPick;
+
+  const _MerchantSuggestions({required this.query, required this.recent, required this.results, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final showRecent = query.trim().isEmpty;
+    final items = showRecent ? recent : null;
+    if (showRecent && recent.isEmpty) return const SizedBox.shrink();
+    if (!showRecent && results.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      margin: const EdgeInsets.only(top: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showRecent)
+            for (final name in items!)
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.history_rounded, size: 18),
+                title: Text(name),
+                onTap: () => onPick(name: name),
+              )
+          else
+            for (final candidate in results)
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.storefront_rounded, size: 18),
+                title: Text(candidate.displayName ?? 'Unnamed merchant'),
+                onTap: () => onPick(name: candidate.displayName ?? '', categoryId: candidate.categoryId),
+              ),
+        ],
       ),
     );
   }
