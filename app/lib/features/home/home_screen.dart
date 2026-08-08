@@ -12,6 +12,7 @@ import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
 import '../comparison/comparison_view_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
+import '../quickadd/quick_add_screen.dart';
 import '../search/merchant_search_screen.dart';
 import 'home_alerts.dart';
 import 'home_context_line.dart';
@@ -64,6 +65,12 @@ class HomeScreen extends ConsumerWidget {
                 icon: const Icon(Icons.search_rounded, size: 20),
                 onPressed: () =>
                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MerchantSearchScreen())),
+              ),
+              IconButton(
+                tooltip: 'Quick add a transaction',
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+                onPressed: () =>
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QuickAddScreen())),
               ),
             ],
           ),
