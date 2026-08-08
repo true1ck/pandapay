@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/router.dart';
 import '../../data/api_exception.dart';
+import '../settings/feedback_support_screen.dart';
+
+/// A4: DPDP §8.2 — purpose-specific, unbundled consent, never a single
+/// bundled "I agree to everything" checkbox. Bumped by hand whenever the
+/// Terms/Privacy copy actually changes; every consent row this screen
+/// writes is tagged with whichever version was current at sign-up time.
+const currentPolicyVersion = '2026-08-07';
 
 /// Whether this screen is creating a new account or signing an existing one in.
 ///
@@ -48,6 +57,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _loading = false;
   String? _error;
 
+  /// A4's three purpose-specific checkboxes — sign-up only. [_acceptedTerms]
+  /// is required (gates submit); the other two default OFF and are optional.
+  bool _acceptedTerms = false;
+  bool _optInCrowdsource = false;
+  bool _optInMarketing = false;
+
   bool get _isSignUp => widget.mode == AuthMode.signUp;
 
   /// Sign-up always verifies by email; log-in follows the toggle.
@@ -88,6 +103,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // already be E.164.
       final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
       if (digits.length < 10) return 'That phone number looks too short.';
+      if (!_acceptedTerms) return 'You need to accept the Terms & Privacy Policy to continue.';
     }
     return null;
   }
@@ -146,6 +162,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
 
       await ref.read(profileApiProvider)!.ensureProfile();
+
+      // A4: record the three purpose-specific consents now that a profile
+      // row exists to attach them to. Each POST /consents call inserts its
+      // own audit-log row (see ConsentsApi's doc-comment) — never skipped
+      // for "required", since even a required grant needs its own
+      // timestamped record per DPDP §8.2.
+      if (_isSignUp) {
+        final consentsApi = ref.read(consentsApiProvider)!;
+        await consentsApi.submit(
+          purpose: 'terms',
+          granted: _acceptedTerms,
+          policyVersion: currentPolicyVersion,
+          sourceScreen: 'A4',
+        );
+        await consentsApi.submit(
+          purpose: 'crowdsource',
+          granted: _optInCrowdsource,
+          policyVersion: currentPolicyVersion,
+          sourceScreen: 'A4',
+        );
+        await consentsApi.submit(
+          purpose: 'marketing',
+          granted: _optInMarketing,
+          policyVersion: currentPolicyVersion,
+          sourceScreen: 'A4',
+        );
+        // Mirrors E12/H4's actual toggle — profiles.contributions_opt_in is
+        // the live flag other screens read, not the consent log itself.
+        if (_optInCrowdsource) {
+          await ref.read(userCardsRepositoryProvider)!.setContributionsOptIn(true);
+        }
+      }
       ref.invalidate(profileProvider);
 
       // This screen is also reached by being pushed (Home's "Sign in" banner),
@@ -219,6 +267,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         phoneController: _phoneController,
                         loading: _loading,
                         onSubmit: _requestOtp,
+                        acceptedTerms: _acceptedTerms,
+                        optInCrowdsource: _optInCrowdsource,
+                        optInMarketing: _optInMarketing,
+                        onAcceptedTermsChanged: (v) => setState(() => _acceptedTerms = v),
+                        onOptInCrowdsourceChanged: (v) => setState(() => _optInCrowdsource = v),
+                        onOptInMarketingChanged: (v) => setState(() => _optInMarketing = v),
                       ),
                     ],
                     if (_otpRequested)
@@ -233,14 +287,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: AppSpace.lg),
                       _ErrorBanner(message: _error!),
                     ],
-                    const SizedBox(height: AppSpace.xxxl),
+                    const SizedBox(height: AppSpace.xl),
+                    // G4's "zero login" requirement in practice: AccountScreen
+                    // (this widget's usual host) shows LoginScreen instead of
+                    // its Tools list whenever signed out, so without this link
+                    // Emergency Card Info would be unreachable from the tab
+                    // it's otherwise discoverable from pre-sign-in. Lost-card
+                    // help has to work for someone who's never made an
+                    // account at all, not just someone temporarily signed out.
                     Center(
-                      child: Text(
-                        'By continuing you agree to PandaPay\'s Terms & Privacy Policy.',
-                        style: textTheme.bodySmall,
-                        textAlign: TextAlign.center,
+                      child: TextButton.icon(
+                        onPressed: () => context.push(AppRoute.emergencyCardInfo),
+                        icon: const Icon(Icons.emergency_outlined, size: 16),
+                        label: const Text('Lost or stolen card? Get emergency help — no sign-in needed'),
                       ),
                     ),
+                    // A4: the bundled "by continuing you agree..." footer is
+                    // gone for sign-up — the three checkboxes in
+                    // _IdentifierStep are the real, unbundled consent now.
+                    // Log-in has no new consent to collect (the account
+                    // already has one on file from its own sign-up), so it
+                    // keeps a short reference line instead.
+                    if (!_isSignUp) ...[
+                      const SizedBox(height: AppSpace.md),
+                      Center(
+                        child: Text(
+                          'By continuing you agree to PandaPay\'s Terms & Privacy Policy.',
+                          style: textTheme.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -352,6 +429,15 @@ class _IdentifierStep extends StatelessWidget {
   final bool loading;
   final VoidCallback onSubmit;
 
+  /// A4 — sign-up only. See _LoginScreenState's own fields for what each
+  /// means; this widget just renders/reports them, LoginScreen owns state.
+  final bool acceptedTerms;
+  final bool optInCrowdsource;
+  final bool optInMarketing;
+  final ValueChanged<bool> onAcceptedTermsChanged;
+  final ValueChanged<bool> onOptInCrowdsourceChanged;
+  final ValueChanged<bool> onOptInMarketingChanged;
+
   const _IdentifierStep({
     required this.isSignUp,
     required this.usesEmail,
@@ -359,6 +445,12 @@ class _IdentifierStep extends StatelessWidget {
     required this.phoneController,
     required this.loading,
     required this.onSubmit,
+    required this.acceptedTerms,
+    required this.optInCrowdsource,
+    required this.optInMarketing,
+    required this.onAcceptedTermsChanged,
+    required this.onOptInCrowdsourceChanged,
+    required this.onOptInMarketingChanged,
   });
 
   @override
@@ -423,6 +515,26 @@ class _IdentifierStep extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: AppSpace.lg),
+          // A4: three separate, purpose-specific checkboxes — DPDP §8.2
+          // forbids bundling these into one "I agree" tick. Only the first
+          // is required; the other two are optional and default off.
+          _ConsentCheckbox(
+            value: acceptedTerms,
+            onChanged: onAcceptedTermsChanged,
+            label: "I accept PandaPay's Terms & Privacy Policy",
+            required: true,
+          ),
+          _ConsentCheckbox(
+            value: optInCrowdsource,
+            onChanged: onOptInCrowdsourceChanged,
+            label: 'Contribute anonymized merchant data to improve the app',
+          ),
+          _ConsentCheckbox(
+            value: optInMarketing,
+            onChanged: onOptInMarketingChanged,
+            label: 'Send me product update emails',
+          ),
         ],
         const SizedBox(height: AppSpace.xl),
         FilledButton(
@@ -437,6 +549,43 @@ class _IdentifierStep extends StatelessWidget {
               : const Text('Send code'),
         ),
       ],
+    );
+  }
+}
+
+class _ConsentCheckbox extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final String label;
+  final bool required;
+
+  const _ConsentCheckbox({
+    required this.value,
+    required this.onChanged,
+    required this.label,
+    this.required = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Explicit Material ancestor: CheckboxListTile paints its background/ink
+    // on the nearest Material, and this widget sits inside a plain Column
+    // with no Material of its own between it and any coloured ancestor —
+    // caught by Flutter's own debug assertion under widget testing, same
+    // class of bug as the ListTile fix elsewhere in this codebase's H7 work.
+    return Material(
+      color: Colors.transparent,
+      child: CheckboxListTile(
+        value: value,
+        onChanged: (v) => onChanged(v ?? false),
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: Text(
+          required ? '$label (required)' : '$label (optional)',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
     );
   }
 }
@@ -489,6 +638,25 @@ class _OtpStep extends StatelessWidget {
                 onPressed: loading ? null : onResend,
                 child: const Text('Resend code')),
           ],
+        ),
+        // A6: this app is OTP-only (no password ever exists — see
+        // login_screen.dart's own top-of-file doc comment), so there is no
+        // password-reset screen to build. This is the real, functional
+        // equivalent the spec's "clear re-request path" asks for: a dead
+        // end (code never arrives) gets a route to a human, not a fake
+        // password flow bolted onto a system that doesn't have one.
+        Center(
+          child: TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const FeedbackSupportScreen(
+                  prefilledKind: 'general',
+                  prefilledMessage: "I'm not receiving my OTP code.",
+                ),
+              ),
+            ),
+            child: const Text('Trouble receiving it?'),
+          ),
         ),
         const SizedBox(height: AppSpace.lg),
         FilledButton(

@@ -1,3 +1,9 @@
+/// H6 (Appearance): the spec's only two documented number-grouping options
+/// (§Localization: "Indian number formatting (lakh/crore)") — [lakhCrore]
+/// is the existing default (groups of 2 after the first 3 from the right),
+/// [international] is the plain groups-of-3 alternative.
+enum MoneyNumberFormat { lakhCrore, international }
+
 /// Indian Rupee amount stored as an integer number of paise.
 ///
 /// Never use `double` for currency — paise avoids float rounding entirely.
@@ -35,9 +41,14 @@ class Money {
   @override
   int get hashCode => paise.hashCode;
 
-  /// Indian numbering: groups of 2 after the first group of 3 from the right.
-  /// e.g. 1234567.89 -> "12,34,567.89"
-  String format({bool compact = false, bool showSymbol = true}) {
+  /// Indian numbering by default: groups of 2 after the first group of 3
+  /// from the right, e.g. 1234567.89 -> "12,34,567.89". Pass
+  /// `format: MoneyNumberFormat.international` for plain groups-of-3
+  /// (H6/Appearance's number-format toggle) — e.g. "1,234,567.89".
+  /// [compact] (Cr/L/K suffixes) is Indian-numbering-specific and ignores
+  /// [format] — there's no equivalent short form defined for international
+  /// grouping in this app.
+  String format({bool compact = false, bool showSymbol = true, MoneyNumberFormat format = MoneyNumberFormat.lakhCrore}) {
     final negative = paise < 0;
     final absPaise = paise.abs();
     final rupeePart = absPaise ~/ 100;
@@ -61,7 +72,9 @@ class Money {
       return '$sign$symbol$compactStr';
     }
 
-    final grouped = _groupIndian(rupeePart.toString());
+    final grouped = format == MoneyNumberFormat.international
+        ? _groupInternational(rupeePart.toString())
+        : _groupIndian(rupeePart.toString());
     final paiseStr = paisePart.toString().padLeft(2, '0');
     return '$sign$symbol$grouped.$paiseStr';
   }
@@ -69,6 +82,19 @@ class Money {
   static String _trimZeros(double v) {
     final s = v.toStringAsFixed(2);
     return s.replaceFirst(RegExp(r'\.?0+$'), '');
+  }
+
+  /// Plain groups-of-3 from the right, e.g. "1234567" -> "1,234,567".
+  static String _groupInternational(String digits) {
+    if (digits.length <= 3) return digits;
+    final groups = <String>[];
+    var rest = digits;
+    while (rest.length > 3) {
+      groups.insert(0, rest.substring(rest.length - 3));
+      rest = rest.substring(0, rest.length - 3);
+    }
+    groups.insert(0, rest);
+    return groups.join(',');
   }
 
   static String _groupIndian(String digits) {

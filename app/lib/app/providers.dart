@@ -8,6 +8,7 @@ import '../data/auth_api.dart';
 import '../data/card_feedback_repository.dart';
 import '../data/card_requests_api.dart';
 import '../data/catalogue_repository.dart';
+import '../data/consents_api.dart';
 import '../data/emergency_contacts_repository.dart';
 import '../data/import_repository.dart';
 import '../data/token_store.dart';
@@ -41,6 +42,14 @@ final cardRequestsApiProvider = Provider<CardRequestsApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
   return CardRequestsApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// A4/H4 consent writes (DPDP §8.2). Same null-when-signed-out shape as
+/// every other repository provider in this file.
+final consentsApiProvider = Provider<ConsentsApi?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return ConsentsApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
 });
 
 /// Same pattern as console/lib/app/providers.dart's sessionInitProvider:
