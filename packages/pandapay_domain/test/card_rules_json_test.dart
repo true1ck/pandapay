@@ -61,6 +61,66 @@ void main() {
     expect(card.pointValueInr, 1.0);
   });
 
+  test('Task C-0: catalogue-display fields (fee/freshness/issuer/art) parse from the live fixture', () {
+    final json = cardsJson.firstWhere((c) => c['slug'] == 'axis-ace');
+    final card = CardProductJson.fromJson(json);
+
+    expect(card.annualFeeInr, Money.fromRupees(499));
+    expect(card.joiningFeeInr, Money.fromRupees(499));
+    expect(card.verifiedAt, isNotNull);
+    expect(card.issuerName, 'Axis Bank');
+    // art_asset/art_primary_color are null in this fixture (not seeded) —
+    // asserting the parse doesn't throw on absent art is the point here.
+    expect(card.artAssetUrl, isNull);
+    expect(card.artPrimaryColor, isNull);
+  });
+
+  test('Task C-0: fee_waiver_rules and benefits parse from a hand-built response shape', () {
+    // The seed fixture's fee_waiver_rules/benefits arrays are empty (not
+    // seeded yet) — this exercises the actual field-mapping against the
+    // real v_card_catalogue_export shape (database.sql) rather than relying
+    // on seed data catching up first.
+    final json = {
+      ...cardsJson.first,
+      'fee_waiver_rules': [
+        {
+          'id': 'fw-1',
+          'threshold_spend_inr': '250000.00',
+          'period': 'annual',
+          'waives_fee_inr': '499.00',
+          'excluded_categories': ['cat-fuel'],
+          'notes': 'Fuel and rent excluded',
+        },
+      ],
+      'benefits': [
+        {
+          'id': 'b-1',
+          'kind': 'lounge_domestic',
+          'label': '8 domestic lounge visits/year',
+          'description': 'Priority Pass required',
+          'quota_count': 8,
+          'quota_period': 'annual',
+          'network_program': 'Priority Pass',
+          'value_estimate_inr': '3200.00',
+        },
+      ],
+    };
+    final card = CardProductJson.fromJson(json);
+
+    expect(card.feeWaiverRules, hasLength(1));
+    expect(card.feeWaiverRules.first.thresholdSpend, Money.fromRupees(250000));
+    expect(card.feeWaiverRules.first.period, CapPeriod.annual);
+    expect(card.feeWaiverRules.first.waivesFee, Money.fromRupees(499));
+    expect(card.feeWaiverRules.first.excludedCategoryIds, ['cat-fuel']);
+
+    expect(card.benefits, hasLength(1));
+    expect(card.benefits.first.kind, BenefitKind.loungeDomestic);
+    expect(card.benefits.first.quotaCount, 8);
+    expect(card.benefits.first.quotaPeriod, CapPeriod.annual);
+    expect(card.benefits.first.networkProgram, 'Priority Pass');
+    expect(card.benefits.first.valueEstimate, Money.fromRupees(3200));
+  });
+
   test('parsed cards are directly usable by RecommendationEngine.rank()', () {
     final cards = cardsJson.map((j) => CardProductJson.fromJson(j)).toList();
     final engine = RecommendationEngine();

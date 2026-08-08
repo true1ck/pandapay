@@ -62,8 +62,9 @@ void main() {
     expect(find.text('Know which card to use — before you pay.'), findsNothing);
   });
 
-  testWidgets('choosing "use without an account" completes onboarding and reaches Home',
-      (tester) async {
+  testWidgets(
+      'choosing "use without an account" continues to Add Your First Card, NOT Home '
+      '(Task A7-A10: onboarding now only completes at the end of A10)', (tester) async {
     await _pumpApp(tester, onboardingComplete: false);
 
     await tester.tap(find.text('Get started'));
@@ -73,12 +74,15 @@ void main() {
     await tester.tap(find.text('Use without an account'));
     await tester.pumpAndSettle();
 
-    expect(find.text('PandaPay — Home'), findsOneWidget);
+    // Lands on A7 (Add Your First Card), not Home — the empty test
+    // catalogue renders its app-bar default title.
+    expect(find.text('Add your cards'), findsOneWidget);
+    expect(find.text('PandaPay — Home'), findsNothing);
 
-    // The persisted flag must actually be set, not just the in-memory
-    // redirect state — otherwise a cold relaunch would show Welcome again.
+    // Onboarding must NOT be marked complete yet — A10 is now the only
+    // place that happens.
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool('pandapay_app.onboarding_complete_v1'), isTrue);
+    expect(prefs.getBool('pandapay_app.onboarding_complete_v1'), isNot(isTrue));
   });
 
   testWidgets('once onboarding is complete, Welcome is unreachable even by direct navigation',

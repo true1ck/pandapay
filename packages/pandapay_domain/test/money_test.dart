@@ -64,6 +64,30 @@ void main() {
     });
   });
 
+  group('H6 Appearance: international number-format toggle', () {
+    test('groups digits in plain groups-of-3', () {
+      expect(
+        Money.fromRupees(1234567.89).format(format: MoneyNumberFormat.international),
+        '₹1,234,567.89',
+      );
+      expect(Money.fromRupees(1000).format(format: MoneyNumberFormat.international), '₹1,000.00');
+      expect(Money.fromRupees(100).format(format: MoneyNumberFormat.international), '₹100.00');
+      expect(Money.fromRupees(12345678).format(format: MoneyNumberFormat.international), '₹12,345,678.00');
+    });
+
+    test('negative amounts and showSymbol:false still work under international grouping', () {
+      expect(Money.fromRupees(-500).format(format: MoneyNumberFormat.international), '-₹500.00');
+      expect(
+        Money.fromRupees(1234567).format(format: MoneyNumberFormat.international, showSymbol: false),
+        '1,234,567.00',
+      );
+    });
+
+    test('default parameter keeps every existing call site unchanged (lakh/crore)', () {
+      expect(Money.fromRupees(1234567.89).format(), '₹12,34,567.89');
+    });
+  });
+
   group('Money round-trip property test (UA-0.2.4 DoD)', () {
     test('formatting a paise value and re-parsing its digits round-trips '
         'across 0 to 10^9 and negative values', () {

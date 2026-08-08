@@ -119,6 +119,39 @@ extension FuelSurchargeRuleJson on FuelSurchargeRule {
   }
 }
 
+/// Mirrors `benefit_kind` (database.sql) — Postgres enum values are already
+/// snake_case, same `_camelFromSnake` bridge every other enum here uses.
+BenefitKind _parseBenefitKind(String value) =>
+    BenefitKind.values.firstWhere((k) => k.name == _camelFromSnake(value), orElse: () => BenefitKind.other);
+
+extension FeeWaiverRuleJson on FeeWaiverRule {
+  static FeeWaiverRule fromJson(Map<String, dynamic> json) {
+    return FeeWaiverRule(
+      id: json['id'] as String,
+      thresholdSpend: _moneyFromRupees(json['threshold_spend_inr']),
+      period: _parseCapPeriod(json['period'] as String),
+      waivesFee: _moneyFromRupees(json['waives_fee_inr']),
+      excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const []).cast<String>(),
+      notes: json['notes'] as String?,
+    );
+  }
+}
+
+extension CardBenefitJson on CardBenefit {
+  static CardBenefit fromJson(Map<String, dynamic> json) {
+    return CardBenefit(
+      id: json['id'] as String,
+      kind: _parseBenefitKind(json['kind'] as String),
+      label: json['label'] as String,
+      description: json['description'] as String?,
+      quotaCount: (json['quota_count'] as num?)?.toInt(),
+      quotaPeriod: json['quota_period'] != null ? _parseCapPeriod(json['quota_period'] as String) : null,
+      networkProgram: json['network_program'] as String?,
+      valueEstimate: _moneyOrNull(json['value_estimate_inr']),
+    );
+  }
+}
+
 extension CardProductJson on CardProduct {
   static CardProduct fromJson(Map<String, dynamic> json) {
     return CardProduct(
@@ -138,6 +171,18 @@ extension CardProductJson on CardProduct {
           .toList(),
       forexRule: json['forex'] != null ? ForexRuleJson.fromJson(json['forex'] as Map<String, dynamic>) : null,
       fuelRule: json['fuel'] != null ? FuelSurchargeRuleJson.fromJson(json['fuel'] as Map<String, dynamic>) : null,
+      feeWaiverRules: ((json['fee_waiver_rules'] as List?) ?? const [])
+          .map((e) => FeeWaiverRuleJson.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      benefits: ((json['benefits'] as List?) ?? const [])
+          .map((e) => CardBenefitJson.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      annualFeeInr: _moneyOrNull(json['annual_fee_inr']),
+      joiningFeeInr: _moneyOrNull(json['joining_fee_inr']),
+      verifiedAt: json['verified_at'] == null ? null : DateTime.parse(json['verified_at'] as String),
+      issuerName: json['issuer_name'] as String?,
+      artAssetUrl: json['art_asset'] as String?,
+      artPrimaryColor: json['art_primary_color'] as String?,
     );
   }
 }

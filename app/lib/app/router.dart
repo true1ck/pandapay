@@ -6,16 +6,45 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../data/api_exception.dart';
 import '../features/account/account_screen.dart';
 import '../features/activity/activity_screen.dart';
+import '../features/activity/duplicate_review_screen.dart';
+import '../features/activity/edit_transaction_screen.dart';
+import '../features/activity/needs_review_screen.dart';
+import '../features/activity/transaction_detail_screen.dart';
 import '../features/auth/login_screen.dart';
-import '../features/cards/cards_screen.dart';
+import '../features/cards/benefits_cheat_sheet_screen.dart';
+import '../features/cards/card_detail_screen.dart';
+import '../features/cards/edit_card_screen.dart';
+import '../features/cards/my_cards_screen.dart';
+import '../features/cards/points_expiry_screen.dart';
+import '../features/cards/report_wrong_data_screen.dart';
+import '../features/cards/request_new_card_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/import/import_hub_screen.dart';
+import '../features/insights/billing_float_screen.dart';
+import '../features/insights/caps_screen.dart';
+import '../features/insights/credit_utilization_screen.dart';
+import '../features/insights/due_date_calendar_screen.dart';
+import '../features/insights/fee_waivers_screen.dart';
+import '../features/insights/insights_hub_screen.dart';
+import '../features/insights/lounge_access_screen.dart';
+import '../features/insights/milestones_screen.dart';
+import '../features/insights/missed_opportunities_screen.dart';
+import '../features/insights/monthly_savings_screen.dart';
+import '../features/insights/my_contributions_screen.dart';
+import '../features/insights/portfolio_audit_screen.dart';
+import '../features/insights/spending_overview_screen.dart';
 import '../features/onboarding/account_choice_screen.dart';
+import '../features/onboarding/add_first_card_screen.dart';
+import '../features/onboarding/card_details_setup_screen.dart';
 import '../features/onboarding/splash_screen.dart';
+import '../features/onboarding/tracking_setup_screen.dart';
 import '../features/onboarding/tutorial_overlay.dart';
 import '../features/onboarding/welcome_screen.dart';
 import '../features/scan/scan_card_screen.dart';
 import '../features/scan/scan_result_screen.dart';
 import '../features/scan/upi_qr_scanner_screen.dart';
+import '../features/tools/emergency_card_info_screen.dart';
+import '../features/tools/tools_hub_screen.dart';
 import 'providers.dart';
 import 'tutorial_keys.dart';
 
@@ -30,12 +59,95 @@ abstract final class AppRoute {
   static const signUp = '/signup';
   static const home = '/home';
   static const cards = '/cards';
-  static const activity = '/activity';
+  static const insights = '/insights';
   static const account = '/account';
+
+  /// Group C (Cards) net-new screens (implementation-plan-group-c-d.md).
+  /// Same "plain pushed route, screen builds its own Scaffold+AppBar"
+  /// pattern as importHub/toolsHub above — deep-linkable per ui-spec §1
+  /// ("card detail" is explicitly named there), reached from C1 My Cards.
+  static const benefitsCheatSheet = '/cards/benefits';
+  static const cardDetail = '/cards/:id';
+  static const editCard = '/cards/:id/edit';
+  static const pointsExpiry = '/cards/points-expiry';
+  static const reportWrongData = '/cards/report-wrong-data';
+  static const requestNewCard = '/cards/request-new-card';
+
+  /// Group D (Transactions) net-new screens. transactionDetail is
+  /// deep-linkable per ui-spec §1 ("transaction detail" explicitly named).
+  static const transactionDetail = '/activity/:id';
+  static const needsReview = '/activity/needs-review';
+  static const duplicateReview = '/activity/duplicates';
+  static const missedOpportunities = '/insights/missed-opportunities';
+
+  /// Task 7: no longer a bottom-nav destination — Material's 5-item ceiling
+  /// meant Insights displaced it, not joined it, once a 4th non-Home/Cards/
+  /// Account destination was needed. Still a real route, reached only via
+  /// Insights Hub's "All Activity" tile now.
+  static const activity = '/activity';
+  static const caps = '/insights/caps';
+  static const milestones = '/insights/milestones';
+  static const billingFloat = '/insights/billing-float';
+
+  /// Group E (Trackers & Insights) net-new screens (E3, E5, E6, E8, E9,
+  /// E10, E11, E12) — implementation-plan-group-e-f-g.md. Same pushed-route
+  /// pattern as caps/milestones/billingFloat above (AppBar + back), all
+  /// reached from Insights Hub (E1)'s tile grid.
+  static const creditUtilization = '/insights/credit-utilization';
+  static const feeWaivers = '/insights/fee-waivers';
+  static const loungeAccess = '/insights/lounge-access';
+  static const dueDateCalendar = '/insights/due-dates';
+  static const monthlySavings = '/insights/savings-report';
+  static const portfolioAudit = '/insights/portfolio-audit';
+  static const spendingOverview = '/insights/spending-overview';
+  static const myContributions = '/insights/my-contributions';
+
+  /// Group F (Data Import & Sync) — implementation-plan-group-e-f-g.md §3.
+  /// F1 Import Hub is the one entry point reached from Account's Tools
+  /// section (F3's per-plan navigation finding); F2-F7 are all reached from
+  /// F1's tiles via plain Navigator.push, not separate registered routes —
+  /// same "go look at one thing and come back" reasoning the caps/
+  /// milestones/billingFloat routes above already follow, and F1's own
+  /// children are one level deeper still (a hub-of-a-hub), so a second tier
+  /// of go_router routes would add ceremony with no real navigation need.
+  static const importHub = '/account/import';
+
+  /// Group G (Tools & Modes) — implementation-plan-group-e-f-g.md §4. Same
+  /// hub-of-a-hub pattern as importHub above: G1-G3 are reached from
+  /// [toolsHub] via plain Navigator.push, not separate registered routes.
+  static const toolsHub = '/account/tools';
+
+  /// G4 Emergency Card Info is deliberately its OWN top-level route,
+  /// registered outside the ShellRoute and outside toolsHub's push chain —
+  /// per the plan's "zero network and zero login" mandate, it must be
+  /// reachable without going through Account's sign-in gate. See
+  /// LoginScreen's own entry point and this route's doc-comment in
+  /// tools_hub_screen.dart for how both paths land on the same screen.
+  static const emergencyCardInfo = '/emergency-card-info';
+
+  /// A7/A9/A10 (implementation-plan's Group A completion): the rest of the
+  /// onboarding chain after Account Choice, per ui-spec's real screen order
+  /// A3 -> A7 -> A9 -> A10 -> A11 -> Home. A8 (Request Unsupported Card) is
+  /// deliberately NOT a registered route here — same "go look at one thing
+  /// and come back" reasoning as importHub/toolsHub's own children above:
+  /// it's reached by a plain `Navigator.push` from A7 (and, unchanged, from
+  /// C8 elsewhere), not a forward step in this linear flow.
+  static const addFirstCard = '/onboarding/add-card';
+  static const cardDetailsSetup = '/onboarding/card-details';
+  static const trackingSetup = '/onboarding/tracking-setup';
 
   /// Screens shown before onboarding is complete — the redirect guard below
   /// treats this set as its whole "am I in the pre-onboarding flow" check.
-  static const preOnboarding = {splash, welcome, accountChoice, logIn, signUp};
+  static const preOnboarding = {
+    splash,
+    welcome,
+    accountChoice,
+    logIn,
+    signUp,
+    addFirstCard,
+    cardDetailsSetup,
+    trackingSetup,
+  };
 }
 
 /// Bridges Riverpod state into go_router's redirect re-evaluation.
@@ -120,6 +232,192 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const NoTransitionPage(child: Scaffold(body: LoginScreen(mode: AuthMode.signUp))),
       ),
+      // A7/A9/A10: the rest of the onboarding chain, reached via
+      // context.go(...) as forward linear steps (not pushed-and-returned
+      // like A8) — see AppRoute's own doc-comment above for the push-vs-
+      // route reasoning this follows.
+      GoRoute(
+        path: AppRoute.addFirstCard,
+        pageBuilder: (context, state) => const NoTransitionPage(child: AddFirstCardScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.cardDetailsSetup,
+        pageBuilder: (context, state) => NoTransitionPage(
+          child: CardDetailsSetupScreen(userCardIds: state.extra! as List<String>),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.trackingSetup,
+        pageBuilder: (context, state) => const NoTransitionPage(child: TrackingSetupScreen()),
+      ),
+      // Task 7-11: Insights Hub's drill-down screens. Plain pushed routes
+      // (AppBar + back button), not part of the ShellRoute below — these are
+      // "go look at one thing and come back", not top-level destinations a
+      // user switches between, so a bottom-nav-persistent shell would be the
+      // wrong pattern for them.
+      GoRoute(
+        path: AppRoute.caps,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Caps & Limits')),
+          body: const CapsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.milestones,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Milestones')),
+          body: const MilestonesScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.billingFloat,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Billing Cycle Float')),
+          body: const BillingFloatScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.activity,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Activity')),
+          body: const ActivityScreen(),
+        ),
+      ),
+      // D2/D3 — deep-linkable per ui-spec §1 ("transaction detail" named
+      // explicitly). Static siblings (needsReview, duplicateReview) are
+      // registered separately below, same "static beats param at the same
+      // depth" reasoning as cardDetail's own doc-comment.
+      GoRoute(
+        path: AppRoute.transactionDetail,
+        builder: (context, state) => TransactionDetailScreen(transactionId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/activity/:id/edit',
+        builder: (context, state) => EditTransactionScreen(transactionId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: AppRoute.needsReview,
+        builder: (context, state) => const NeedsReviewScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.duplicateReview,
+        builder: (context, state) => const DuplicateReviewScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.creditUtilization,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Credit Utilization')),
+          body: const CreditUtilizationScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.feeWaivers,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Annual Fee Waivers')),
+          body: const FeeWaiversScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.loungeAccess,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Lounge Access')),
+          body: const LoungeAccessScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.dueDateCalendar,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Due Date Calendar')),
+          body: const DueDateCalendarScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.monthlySavings,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Monthly Savings Report')),
+          body: const MonthlySavingsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.portfolioAudit,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Portfolio Audit')),
+          body: const PortfolioAuditScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.spendingOverview,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Spending Overview')),
+          body: const SpendingOverviewScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.myContributions,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('My Contributions')),
+          body: const MyContributionsScreen(),
+        ),
+      ),
+      // D6 — already builds its own Scaffold+AppBar, same shape as
+      // importHub/toolsHub below.
+      GoRoute(
+        path: AppRoute.missedOpportunities,
+        builder: (context, state) => const MissedOpportunitiesScreen(),
+      ),
+      // C5 Benefits Cheat Sheet already builds its own Scaffold+AppBar, same
+      // shape as importHub/toolsHub below.
+      GoRoute(
+        path: AppRoute.benefitsCheatSheet,
+        builder: (context, state) => const BenefitsCheatSheetScreen(),
+      ),
+      // C2 Card Detail — deep-linkable (ui-spec §1 names "card detail"
+      // explicitly). go_router matches the static benefitsCheatSheet route
+      // above in preference to this param route for the literal path
+      // '/cards/benefits', so declaration order here doesn't create an
+      // ambiguity between the two.
+      GoRoute(
+        path: AppRoute.cardDetail,
+        builder: (context, state) => CardDetailScreen(userCardId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: AppRoute.editCard,
+        builder: (context, state) => EditCardScreen(userCardId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: AppRoute.pointsExpiry,
+        builder: (context, state) => const PointsExpiryScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.reportWrongData,
+        builder: (context, state) => ReportWrongDataScreen(
+          cardProductId: state.uri.queryParameters['cardProductId']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.requestNewCard,
+        builder: (context, state) => const RequestNewCardScreen(),
+      ),
+      // F1 Import Hub already builds its own Scaffold+AppBar (its F2-F7
+      // children are reached via plain pushed routes from inside it, not
+      // more go_router entries — see AppRoute.importHub's doc-comment).
+      GoRoute(
+        path: AppRoute.importHub,
+        builder: (context, state) => const ImportHubScreen(),
+      ),
+      // Group G — same "already builds its own Scaffold+AppBar" shape as
+      // importHub above.
+      GoRoute(
+        path: AppRoute.toolsHub,
+        builder: (context, state) => const ToolsHubScreen(),
+      ),
+      // G4: reachable with or without a session — see AppRoute.
+      // emergencyCardInfo's own doc-comment for why this is a top-level
+      // route rather than nested under toolsHub's push chain.
+      GoRoute(
+        path: AppRoute.emergencyCardInfo,
+        builder: (context, state) => const EmergencyCardInfoScreen(),
+      ),
       ShellRoute(
         builder: (context, state, child) => _AppShell(
           location: state.uri.path,
@@ -139,11 +437,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoute.cards,
-            pageBuilder: (context, state) => const NoTransitionPage(child: CardsScreen()),
+            pageBuilder: (context, state) => const NoTransitionPage(child: MyCardsScreen()),
           ),
           GoRoute(
-            path: AppRoute.activity,
-            pageBuilder: (context, state) => const NoTransitionPage(child: ActivityScreen()),
+            path: AppRoute.insights,
+            pageBuilder: (context, state) => const NoTransitionPage(child: InsightsHubScreen()),
           ),
           GoRoute(
             path: AppRoute.account,
@@ -170,7 +468,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
   static const _destinations = [
     (AppRoute.home, 'Home', Icons.home_rounded),
     (AppRoute.cards, 'Cards', Icons.credit_card_rounded),
-    (AppRoute.activity, 'Activity', Icons.receipt_long_rounded),
+    (AppRoute.insights, 'Insights', Icons.insights_rounded),
     (AppRoute.account, 'Account', Icons.person_rounded),
   ];
 

@@ -68,13 +68,13 @@ void main() {
     expect(find.text('PandaPay — Cards'), findsOneWidget);
   });
 
-  testWidgets('tapping Activity then Account navigates correctly (order-independent)', (tester) async {
+  testWidgets('tapping Insights then Account navigates correctly (order-independent)', (tester) async {
     await _pumpApp(tester);
 
-    await tester.tap(find.descendant(of: find.byType(BottomAppBar), matching: find.text('Activity')));
+    await tester.tap(find.descendant(of: find.byType(BottomAppBar), matching: find.text('Insights')));
     await tester.pump();
     await tester.pump();
-    expect(find.text('PandaPay — Activity'), findsOneWidget);
+    expect(find.text('PandaPay — Insights'), findsOneWidget);
 
     await tester.tap(find.descendant(of: find.byType(BottomAppBar), matching: find.text('Account')));
     await tester.pump();

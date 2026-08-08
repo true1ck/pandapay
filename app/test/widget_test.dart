@@ -124,15 +124,26 @@ void main() {
     expect(find.text('No applicable reward rule.'), findsOneWidget);
   });
 
-  testWidgets('Chunk 18: bottom nav switches away from Home to Activity, which shows login when signed out',
+  testWidgets(
+      'Chunk 18/Task 7: Insights Hub -> All Activity shows login when signed out',
       (tester) async {
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
     await tester.pumpAndSettle();
 
-    await tester.tap(_navTab('Activity'));
+    // Activity moved out of the bottom nav under Insights Hub (Task 7) —
+    // Material's 5-item ceiling meant Insights displaced it, not joined it.
+    await tester.tap(_navTab('Insights'));
+    await tester.pumpAndSettle();
+    // Insights Hub has grown to 15 tiles across Groups E/F/G — 'All
+    // Activity' isn't mounted at all until scrolled into the grid's
+    // viewport (a plain ensureVisible needs the element to already exist),
+    // so this scrolls the sliver grid until it appears.
+    await tester.scrollUntilVisible(find.text('All Activity'), 200, scrollable: find.byType(Scrollable));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All Activity'));
     await tester.pumpAndSettle();
 
-    expect(find.text('PandaPay — Activity'), findsOneWidget);
+    expect(find.text('Activity'), findsWidgets);
     expect(find.byType(LoginScreen), findsOneWidget);
   });
 
@@ -158,6 +169,9 @@ void main() {
                         'category_name': 'Online',
                         'card_name': 'Test RuPay Card',
                         'card_nickname': null,
+                        'user_card_id': 'uc-1',
+                        'source': 'manual',
+                        'status': 'active',
                       },
                     ],
                     'userCards': <Map<String, dynamic>>[],
@@ -172,12 +186,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(_navTab('Activity'));
+    await tester.tap(_navTab('Insights'));
     await tester.pumpAndSettle();
-    await tester.pump();
+    // Insights Hub has grown to 15 tiles across Groups E/F/G — 'All
+    // Activity' isn't mounted at all until scrolled into the grid's
+    // viewport (a plain ensureVisible needs the element to already exist),
+    // so this scrolls the sliver grid until it appears.
+    await tester.scrollUntilVisible(find.text('All Activity'), 200, scrollable: find.byType(Scrollable));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All Activity'));
+    await tester.pumpAndSettle();
 
     expect(find.text('Test RuPay Card · Online'), findsOneWidget);
-    expect(find.text('₹1,000.00'), findsOneWidget);
+    // The D1 summary card's total-spend header shows the same figure as
+    // the sole transaction tile below it when there's only one entry, so
+    // both legitimately render '₹1,000.00' — this only checks it appears
+    // (not exactly once).
+    expect(find.text('₹1,000.00'), findsWidgets);
   });
 
   testWidgets('Chunk 16: Cards tab shows the login screen when signed out', (tester) async {
@@ -301,7 +326,8 @@ void main() {
     expect(find.text('Send code'), findsOneWidget);
   });
 
-  testWidgets('Chunk 15: Account tab shows the real profile and a sign-out button when signed in',
+  testWidgets(
+      'Chunk 15 + H1: Account tab shows the real profile and the Settings hub rows when signed in',
       (tester) async {
     await tester.pumpWidget(
       _appWithFakeCatalogue(
@@ -333,6 +359,16 @@ void main() {
 
     expect(find.text('Signed in'), findsOneWidget);
     expect(find.textContaining('profile-123'), findsOneWidget);
-    expect(find.text('Sign out'), findsOneWidget);
+    // H1: sign-out moved off this top-level screen into the pushed Account
+    // settings screen (H2) — this tab now shows the Settings hub row list
+    // instead of a bare sign-out button. The hub's ListView is long enough
+    // that later rows aren't built until scrolled into view (sliver lazy
+    // building applies even to the ListView(children:) constructor), so
+    // scrollUntilVisible is required here rather than a bare find.text.
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(find.text('Notifications'), 300, scrollable: scrollable);
+    expect(find.text('Notifications'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text("What's New"), 300, scrollable: scrollable);
+    expect(find.text("What's New"), findsOneWidget);
   });
 }
