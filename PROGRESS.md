@@ -2562,7 +2562,35 @@ with no console coverage).
 (unaffected by the new endpoint, which has no dedicated test yet — flagged, not hidden; the
 existing suite only covers `cycles.js`/`sms_parser.js`, not `index.js`'s routes directly).
 
-**Not done**: S2 (Quick Settings Tile) still needs a native Kotlin `TileService` with no Flutter
-plugin covering it — out of scope for this chunk, remains open on the punch list. No console
-screen to edit `app_status` (owner can add one later; direct DB access works today). No dedicated
-API test for `GET /app-status`.
+**Not done**: no console screen to edit `app_status` (owner can add one later; direct DB access
+works today). No dedicated API test for `GET /app-status`.
+
+### Chunk 43 — S2 Quick Settings Tile
+
+`BestCardTileService.kt` (`app/android/app/src/main/kotlin/app/pandapay/pandapay/`) — reads the
+exact same `HomeWidgetPreferences` SharedPreferences file `BestCardWidgetProvider.kt` (S1) already
+reads (`best_card_name`/`best_card_value_formatted`/`best_card_none`, written from Dart via
+`HomeWidgetService`), so no new Dart-side plumbing was needed. Tapping the tile launches the app
+(a Quick Settings tile can't render rich UI or accept sub-element taps, so "open the app for full
+detail" is standard for this surface). Registered in `AndroidManifest.xml` as a `<service>` with
+`BIND_QUICK_SETTINGS_TILE`. `minSdk` bumped from Flutter's default to 24 in
+`android/app/build.gradle.kts` — `TileService` doesn't exist before API 24, and the original plan
+(UA-0.1.1) already called for min SDK 24 regardless.
+
+**Actually attempted real verification, not just skipped it**: unlike S1/S3's prior "never compiled
+against a real Android toolchain" caveat, this chunk found a real Android SDK already installed at
+`~/Library/Android/sdk` and tried `./gradlew compileDebugKotlin` twice (once without, once with
+`ANDROID_HOME`/`local.properties` set correctly). Both attempts failed identically: a Gradle
+distribution download from `services.gradle.org` corrupts partway through with a TLS
+`AEADBadTagException` ("bad_record_mac", tag mismatch) — a sandbox network-egress limitation on
+large binary transfers, not a code defect (the failure signature is identical both times, at a
+similar point in the download, unrelated to anything this chunk wrote). Flagged precisely rather
+than silently falling back to "unverified" without having actually tried.
+
+**Verification**: `flutter analyze`/`flutter test` unaffected (264/264, 0 errors) — this chunk is
+pure native Kotlin + manifest + Gradle config, no Dart changes. The Kotlin file itself is
+unverified by a real compile, per above.
+
+**Not done**: no real device/emulator verification (same root cause — no Android toolchain access
+in this sandbox). If a real build environment becomes available, `./gradlew compileDebugKotlin`
+(or a full `flutter build apk`) is the next concrete step, not a re-investigation.

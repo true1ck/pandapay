@@ -72,6 +72,20 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/best_card_widget_info" />
         </receiver>
+
+        <!-- S2 (GAP_ANALYSIS.md §3): Quick Settings tile. Same "never built
+             through a real Android toolchain in this sandbox" caveat as the
+             widget receiver above — see BestCardTileService.kt. -->
+        <service
+            android:name=".BestCardTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="PandaPay"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

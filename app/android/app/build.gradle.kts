@@ -19,7 +19,12 @@ android {
         applicationId = "app.pandapay.pandapay"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Pinned to 24 (Android 7.0), not flutter.minSdkVersion's default —
+        // S2's QuickSettingsTileService (BestCardTileService.kt) needs API
+        // 24+ to exist at all, and UA-0.1.1's original plan already called
+        // for min SDK 24 regardless. ~99%+ of active Android devices are
+        // already past this floor.
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
