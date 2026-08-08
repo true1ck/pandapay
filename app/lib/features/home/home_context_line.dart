@@ -127,7 +127,11 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
     };
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, 0),
+      // B5 (Task 14): this widget's own leading padding is now owned by
+      // home_screen.dart's wrapping Row/Padding, which places a search
+      // IconButton alongside it — this must stay EdgeInsets.zero to avoid
+      // doubled spacing at that call site.
+      padding: EdgeInsets.zero,
       child: ConstrainedBox(
         // Tappable to correct/re-trigger location per ui-spec B1.1 — retries
         // the same one-shot read this widget already triggers from

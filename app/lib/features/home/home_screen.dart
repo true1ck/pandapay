@@ -12,6 +12,7 @@ import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
 import '../comparison/comparison_view_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
+import '../search/merchant_search_screen.dart';
 import 'home_alerts.dart';
 import 'home_context_line.dart';
 
@@ -47,7 +48,26 @@ class HomeScreen extends ConsumerWidget {
 
     return Column(
       children: [
-        const HomeContextLine(),
+        // B5 entry point: a search icon in front of the geofence-driven
+        // context line (Task 8) — HomeScreen has no AppBar of its own (that
+        // lives in _AppShell in main.dart), so this Row is where "search
+        // merchants" lives instead. HomeContextLine's own internal leading
+        // padding is now owned by this wrapping Padding (see
+        // home_context_line.dart) to avoid doubled spacing.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 0),
+          child: Row(
+            children: [
+              const Expanded(child: HomeContextLine()),
+              IconButton(
+                tooltip: 'Search merchants',
+                icon: const Icon(Icons.search_rounded, size: 20),
+                onPressed: () =>
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MerchantSearchScreen())),
+              ),
+            ],
+          ),
+        ),
         if (!signedIn) const _SignInBanner(),
         Padding(
           key: tutorialKeys.amountField,

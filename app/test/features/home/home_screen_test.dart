@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/features/comparison/comparison_view_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
+import 'package:pandapay/features/search/merchant_search_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 CardProduct _card(String id) => CardProduct(id: id, name: 'Card $id', network: CardNetwork.visa);
@@ -35,6 +36,21 @@ void main() {
 
     expect(find.textContaining('Cap headroom'), findsOneWidget);
     expect(find.text('Hide the full breakdown'), findsOneWidget);
+  });
+
+  testWidgets('B5: the search icon next to the context line opens Merchant Search', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [rankedRecommendationsProvider.overrideWithValue(const AsyncValue.data([]))],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Search merchants'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MerchantSearchScreen), findsOneWidget);
   });
 
   testWidgets('an override pill navigates to Manual Overrides on tap', (tester) async {

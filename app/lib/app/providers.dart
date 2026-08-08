@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/auth_api.dart';
 import '../data/card_overrides_repository.dart';
 import '../data/catalogue_repository.dart';
+import '../data/merchant_search_repository.dart';
 import '../data/override_resolver.dart';
 import '../data/token_store.dart';
 import '../data/user_cards_repository.dart';
@@ -229,6 +230,11 @@ final catalogueRepositoryProvider = Provider<CatalogueRepository>((ref) {
 
 final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
   return HttpCategoryRepository(baseUrl: _apiBaseUrl);
+});
+
+/// B5 — public read, no auth, same pattern as catalogueRepositoryProvider.
+final merchantSearchRepositoryProvider = Provider<MerchantSearchRepository>((ref) {
+  return HttpMerchantSearchRepository(baseUrl: _apiBaseUrl);
 });
 
 final catalogueProvider = FutureProvider<List<CardProduct>>((ref) {
