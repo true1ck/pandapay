@@ -14,6 +14,8 @@ import '../features/onboarding/splash_screen.dart';
 import '../features/onboarding/tutorial_overlay.dart';
 import '../features/onboarding/welcome_screen.dart';
 import '../features/scan/scan_card_screen.dart';
+import '../features/scan/scan_result_screen.dart';
+import '../features/scan/upi_qr_scanner_screen.dart';
 import 'providers.dart';
 import 'tutorial_keys.dart';
 
@@ -202,6 +204,23 @@ class _AppShellState extends ConsumerState<_AppShell> {
     }
   }
 
+  /// B2/B3: "scan a merchant's UPI QR to pay" — a second, separate scan
+  /// entry point from the existing FAB's "scan to add a card" flow. Reachable
+  /// from a new IconButton next to the FAB rather than repurposing the FAB
+  /// itself, since the FAB's tooltip/semantics ("Scan a card") is already
+  /// load-bearing for the add-card flow tested in
+  /// app/test/app/router_test.dart.
+  Future<void> _scanToPay() async {
+    final parsed = await Navigator.of(context).push<ParsedUpiQr>(
+      MaterialPageRoute(builder: (_) => const UpiQrScannerScreen()),
+    );
+    if (parsed != null && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ScanResultScreen(parsed: parsed)),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Runs sessionKeepAliveProvider for the app's whole lifetime — the shell
@@ -219,17 +238,30 @@ class _AppShellState extends ConsumerState<_AppShell> {
       body: showTutorial
           ? Stack(children: [widget.child, const TutorialOverlay()])
           : widget.child,
-      floatingActionButton: FloatingActionButton.large(
-        key: tutorialKeys.scanFab,
-        onPressed: _scanning ? null : _scanFromFab,
-        tooltip: 'Scan a card',
-        child: _scanning
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              )
-            : const Icon(Icons.qr_code_scanner_rounded),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'scanToPayFab',
+            onPressed: _scanToPay,
+            tooltip: 'Scan a UPI QR to pay',
+            child: const Icon(Icons.qr_code_2_rounded),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton.large(
+            heroTag: 'scanFab',
+            key: tutorialKeys.scanFab,
+            onPressed: _scanning ? null : _scanFromFab,
+            tooltip: 'Scan a card',
+            child: _scanning
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.qr_code_scanner_rounded),
+          ),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(

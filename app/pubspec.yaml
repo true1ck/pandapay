@@ -89,6 +89,16 @@ dependencies:
   # (see PROGRESS.md Chunks 30/32) — flagged, not hidden.
   image_picker: ^1.1.2
 
+  # B3 (Task 12): launches the `upi://pay?...` intent built by
+  # buildUpiPayUri (packages/pandapay_domain) so "Pay with [card]" actually
+  # hands off to whatever UPI app is installed. NOTE: an earlier task's
+  # plan doc wrongly assumed this was already a dependency (added for a
+  # G4 `tel:` dial task that isn't part of this plan) — verified absent
+  # from this file before this task, added here instead. Same
+  # "not exercised against a real device/live UPI app in this sandbox"
+  # caveat as mobile_scanner/geolocator/image_picker above.
+  url_launcher: ^6.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
