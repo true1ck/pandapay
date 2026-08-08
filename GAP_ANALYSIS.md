@@ -78,9 +78,9 @@ The ranking engine (`packages/pandapay_domain/lib/src/engine/`) is real, tested,
 
 ---
 
-## 5. Admin Console (`console/`) — unchanged, router still dead code
+## 5. Admin Console (`console/`) — dead router deleted 2026-08-08 (see punch list #5)
 
-- `console/lib/app/router.dart` still routes every path to `_StubScreen(...)`; real navigation happens via direct widget wiring in `console/lib/main.dart` (`MaterialApp(home: const _AuthGate())`), bypassing go_router and its route-guard security model entirely.
+- Navigation is a widget-level `_AuthGate` + `NavigationRail`/`setState` switch in `console/lib/main.dart`, real auth-gated (waits on `sessionInitProvider`, checks `isAdminProvider` against a real `GET /admin/me`), covered by 15 passing tests. No deep-linking, by design — an internal single-role admin tool with 10 flat destinations doesn't need it, and the go_router scaffold that would have provided it had zero real callers.
 - 10 real screens exist (alerts, catalogue, card requests, error reports, merchants, conflicts, acceptance rates, data-quality dashboard, anonymization audit, parser patterns) — not vaporware, just not re-verified task-by-task against a plan doc in this pass (this audit focused on Group B; console deserves its own follow-up pass).
 - `catalogue_screen.dart` still missing the tabbed rule-family editor and a confirmed "verification pass" workflow (unconfirmed whether this changed).
 
@@ -117,7 +117,7 @@ Real Python code exists (`fetcher.py`, `extractor.py`, `llm_extraction.py`, `rob
 2. **Fill in F2/F4/F5 stubs** — real PDF parsing (`syncfusion_flutter_pdf` or equivalent), on-device SMS verification, a real sync/backup engine.
 3. **S2 (Quick Settings Tile) and S5/S6 (forced upgrade / maintenance mode)** — entirely unbuilt; confirm in/out of scope before prioritizing.
 4. **S1/S3 real-device work** — iOS widget extension needs a real Xcode session; geofencing needs a true background mechanism to replace the current foreground one-shot read.
-5. **Wire `console/lib/app/router.dart`** or delete it — still dead code bypassing the intended route-guard model.
+5. ~~Wire `console/lib/app/router.dart` or delete it~~ — **Deleted 2026-08-08**: it had zero real callers (only referenced in a comment); the widget-level `_AuthGate` + `NavigationRail`/`setState` nav in `main.dart` was already working and covered by 15 passing tests, and a go_router migration would have meant rewriting that whole test file for marginal benefit (deep-linking on an internal single-user-role admin tool). `go_router` dependency also removed from `console/pubspec.yaml` since nothing else used it.
 6. **Scraper legal review + LLM key** — pure owner action, no code needed.
 7. ~~Reconcile backend architecture~~ — **Decided 2026-08-08**: keep Node/JWT + Express, docs updated. F3's email-ingestion worker is still unbuilt and remains open.
 8. **B7's disabled Split/EMI buttons** — wire them up, or confirm the scope cut is accepted.

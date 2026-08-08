@@ -18,14 +18,15 @@ void main() {
   runApp(const ProviderScope(child: PandaPayConsoleApp()));
 }
 
-/// AD-0.3: real auth against auth/'s OTP flow + api/'s requireAdmin check
-/// (not the ConsoleSession.signedOut stub from earlier in the session).
-/// Gating is done here as a widget-level switch rather than through
-/// go_router's `redirect` (app/router.dart, from before real auth existed)
-/// — simpler to keep correct with genuinely async admin-status resolution.
-/// app/router.dart's ShellRoute/nav stubs are not wired into this build;
-/// left in place as reference for AD-0.2.4's intended nav shape, not dead
-/// weight pretending to be load-bearing.
+/// AD-0.3: real auth against auth/'s OTP flow + api/'s requireAdmin check.
+/// Gating is a widget-level switch, not a go_router `redirect` — simpler
+/// to keep correct with genuinely async admin-status resolution, and this
+/// console has no deep-linking requirement (internal tool, single
+/// destination list, GAP_ANALYSIS.md §5 confirmed the earlier go_router
+/// scaffold in app/router.dart had zero real callers and deleted it rather
+/// than force a rewrite of this file's already-working, already-tested
+/// nav — see that file's git history if the ShellRoute-based shape is
+/// ever wanted again).
 class PandaPayConsoleApp extends StatelessWidget {
   const PandaPayConsoleApp({super.key});
 
