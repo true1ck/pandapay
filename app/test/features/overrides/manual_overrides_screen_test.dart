@@ -239,4 +239,50 @@ void main() {
     expect(find.textContaining('new note'), findsOneWidget);
     expect(find.text('Edit override'), findsNothing); // sheet closed
   });
+
+  testWidgets(
+      'editing an override whose card was archived (absent from userCardsProvider) does not crash and shows no card selected',
+      (tester) async {
+    // GET /card-overrides doesn't exclude overrides pointing at archived
+    // cards, unlike GET /user-cards — so this override's userCardId ('uc1')
+    // legitimately doesn't appear in the current userCardsProvider list.
+    // Before the fix, DropdownButtonFormField's `initialValue: uc1` with no
+    // matching item in `items` throws a debug assertion.
+    final override = CardOverride(
+      id: 'o6',
+      userCardId: 'uc1',
+      scope: OverrideScope.category,
+      categoryId: 'cat1',
+      categoryName: 'Fuel',
+      isEnabled: true,
+      createdAt: DateTime(2026, 1, 1),
+      cardName: 'Archived Card',
+    );
+    final fakeRepo = _FakeCardOverridesRepository([override]);
+    const userCards = [
+      // Note: no 'uc1' here — that card has been archived.
+      UserCard(id: 'uc2', cardProductId: 'cp2', cardName: 'ICICI Amazon Pay', isDefault: false),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          cardOverridesRepositoryProvider.overrideWithValue(fakeRepo),
+          userCardsProvider.overrideWith((ref) async => userCards),
+        ],
+        child: const MaterialApp(home: ManualOverridesScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    // No assertion/exception thrown — the sheet opened successfully.
+    expect(tester.takeException(), isNull);
+    expect(find.text('Edit override'), findsOneWidget);
+
+    // No card selected (fell back to null) -> Save changes stays disabled.
+    final saveButton = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save changes'));
+    expect(saveButton.onPressed, isNull);
+  });
 }

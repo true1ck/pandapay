@@ -357,7 +357,15 @@ class _EditOverrideSheet extends ConsumerStatefulWidget {
 }
 
 class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
-  late String? _selectedUserCardId = widget.rule.userCardId;
+  // GET /card-overrides doesn't exclude overrides pointing at archived
+  // cards (unlike GET /user-cards, which userCards here comes from), so a
+  // rule can reference a card no longer in this list — e.g. create an
+  // override, then archive that card. Feeding a value absent from `items`
+  // into DropdownButtonFormField is a debug assertion crash, so fall back
+  // to no-selection when the rule's card isn't actually present.
+  late String? _selectedUserCardId = widget.userCards.any((c) => c.id == widget.rule.userCardId)
+      ? widget.rule.userCardId
+      : null;
   late final _noteController = TextEditingController(text: widget.rule.reasonNote ?? '');
   bool _saving = false;
 

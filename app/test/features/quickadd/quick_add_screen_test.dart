@@ -32,6 +32,22 @@ class _ThrowingMerchantSearchRepository implements MerchantSearchRepository {
   }
 }
 
+/// In-memory stand-in for UserCardsRepository.logTransaction so the
+/// save+pop+Undo flow can be exercised without a real HTTP client.
+class _FakeUserCardsRepository extends UserCardsRepository {
+  _FakeUserCardsRepository() : super(apiBaseUrl: 'http://localhost', accessToken: 't');
+
+  @override
+  Future<void> logTransaction({
+    required String userCardId,
+    required Money amount,
+    String? categoryId,
+    String? merchantName,
+    DateTime? occurredAt,
+    String? note,
+  }) async {}
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -328,5 +344,97 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(find.text('Quick add'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a persisted last-used-card id absent from the current wallet does not crash Quick Add on load',
+      (tester) async {
+    // The prefs key isn't cleared on sign-out, so a sign-out ->
+    // sign-in-as-different-user sequence can leave a stale card id here
+    // that the CURRENT wallet doesn't contain. Before the fix,
+    // DropdownButtonFormField's initialValue would be set to that stale id
+    // with no matching item in `items`, throwing a debug assertion.
+    SharedPreferences.setMockInitialValues({
+      'pandapay_app.quick_add_last_used_card_v1': 'stale-card-not-in-wallet',
+    });
+    const card = UserCard(id: 'card-1', cardProductId: 'product-1', cardName: 'Test Card', isDefault: true);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => const [card]),
+          categoriesProvider.overrideWith((ref) async => const []),
+          merchantSearchRepositoryProvider.overrideWithValue(_EmptyMerchantSearchRepository()),
+        ],
+        child: const MaterialApp(home: QuickAddScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    // Falls back to no selection rather than the stale id — Save stays
+    // disabled until the user actually picks a card from the current wallet.
+    final saveButton = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'));
+    expect(saveButton.onPressed, isNull);
+  });
+
+  testWidgets('tapping Undo after a save+pop sequence does not throw (messenger captured before pop)', (
+    tester,
+  ) async {
+    const card = UserCard(id: 'card-1', cardProductId: 'product-1', cardName: 'Test Card', isDefault: true);
+    final fakeRepo = _FakeUserCardsRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => const [card]),
+          userCardsRepositoryProvider.overrideWithValue(fakeRepo),
+          categoriesProvider.overrideWith((ref) async => const []),
+          merchantSearchRepositoryProvider.overrideWithValue(_EmptyMerchantSearchRepository()),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const QuickAddScreen()),
+                  ),
+                  child: const Text('open quick add'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('open quick add'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '250');
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Test Card').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    // Let the pop animation fully finish — by now, if the SnackBarAction's
+    // closure captured `context` instead of `messenger`, that context is
+    // deactivated.
+    await tester.pumpAndSettle();
+
+    expect(find.text('Quick add'), findsNothing); // popped back off screen
+    expect(find.text('Undo'), findsOneWidget);
+
+    await tester.tap(find.text('Undo'));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    await tester.pumpAndSettle();
+    expect(
+      find.text("This app can't undo a saved transaction yet — there's no delete option either; edit it from Activity instead."),
+      findsOneWidget,
+    );
   });
 }

@@ -35,8 +35,15 @@ ParsedUpiQr? parseUpiQrString(String raw) {
   final pa = uri.queryParameters['pa'];
   if (pa == null || pa.isEmpty) return null;
 
+  // double.parse throws FormatException on malformed input, and this app
+  // scans arbitrary (attacker-controlled) QR codes — an unparseable `am`
+  // must not blow up the whole parse when every other field (pa, pn, mc)
+  // is still perfectly usable. Treated the same as "no amount present"
+  // (am: null) rather than rejecting the whole QR, since pa is the only
+  // field this function's doc comment promises is required.
   final amRaw = uri.queryParameters['am'];
-  final am = amRaw == null || amRaw.isEmpty ? null : Money.fromRupees(double.parse(amRaw));
+  final parsedAm = amRaw == null || amRaw.isEmpty ? null : double.tryParse(amRaw);
+  final am = parsedAm == null ? null : Money.fromRupees(parsedAm);
   final mc = uri.queryParameters['mc'];
 
   return ParsedUpiQr(

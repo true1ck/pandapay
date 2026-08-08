@@ -30,6 +30,20 @@ void main() {
       expect(parsed!.am, isNull);
     });
 
+    test('a malformed am param does not throw — parses everything else and leaves am null', () {
+      // This app scans arbitrary (attacker-controlled) QR codes, and the
+      // function's own doc comment promises it returns null for anything
+      // unusable — not that it throws. double.parse would throw
+      // FormatException here; double.tryParse must not, and every other
+      // field (pa/mc) is still perfectly valid and usable.
+      final parsed = parseUpiQrString('upi://pay?pa=x@y&mc=5411&am=abc');
+
+      expect(parsed, isNotNull);
+      expect(parsed!.pa, 'x@y');
+      expect(parsed.mc, '5411');
+      expect(parsed.am, isNull);
+    });
+
     test('a non-UPI string returns null', () {
       expect(parseUpiQrString('https://example.com'), isNull);
       expect(parseUpiQrString('not a url at all'), isNull);

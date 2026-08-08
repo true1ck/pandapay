@@ -79,7 +79,17 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   Future<void> _loadLastUsedCard() async {
     final prefs = await SharedPreferences.getInstance();
     final lastUsed = prefs.getString(_lastUsedCardKey);
-    if (lastUsed != null && mounted) setState(() => _selectedUserCardId = lastUsed);
+    if (lastUsed == null) return;
+    // This prefs key isn't cleared on sign-out (only TokenStore's tokens
+    // are), so a sign-out -> sign-in-as-different-user -> open Quick Add
+    // sequence can restore a card id that isn't in the CURRENT user's
+    // wallet. Feeding a value absent from the dropdown's `items` crashes
+    // a debug assertion, so verify membership against the live wallet
+    // before restoring it.
+    final cards = await ref.read(userCardsProvider.future);
+    if (mounted && cards.any((c) => c.id == lastUsed)) {
+      setState(() => _selectedUserCardId = lastUsed);
+    }
   }
 
   Future<void> _rememberLastUsedCard(String userCardId) async {
@@ -207,8 +217,15 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
       if (mounted) {
+        // Captured BEFORE pop() — by the time a user actually taps "Undo"
+        // (the snackbar lives ~4s, the pop animation completes in ~300ms),
+        // this screen's own `context` is deactivated and
+        // ScaffoldMessenger.of(context) inside the closure below would
+        // throw. `messenger` stays valid because it's the ScaffoldMessenger
+        // instance itself, not a context lookup.
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: const Text('Transaction logged'),
             action: SnackBarAction(
@@ -218,7 +235,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               // plainly that the save already happened and can't be
               // reversed from here, instead of pretending an undo occurred.
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text(
                       "This app can't undo a saved transaction yet — there's no delete option either; edit it from Activity instead.",

@@ -436,7 +436,7 @@ class _RecommendationCard extends StatefulWidget {
   // widget's identity (and thus its State's _expanded flag) must be keyed
   // only by card id, never by a rank-based GlobalKey.
   final Key? cardAnchorKey;
-  const _RecommendationCard(this.recommendation, {required this.rank, this.cardAnchorKey, super.key});
+  const _RecommendationCard(this.recommendation, {required this.rank, this.cardAnchorKey});
 
   @override
   State<_RecommendationCard> createState() => _RecommendationCardState();

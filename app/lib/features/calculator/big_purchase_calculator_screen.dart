@@ -6,6 +6,8 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/card_overrides_repository.dart' show CardOverride;
+import '../../data/override_resolver.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 
@@ -55,6 +57,7 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
     final userCards = ref.watch(userCardsProvider);
     final categories = ref.watch(categoriesProvider);
     final engine = ref.watch(recommendationEngineProvider);
+    final overrides = ref.watch(cardOverridesProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Big-purchase calculator')),
@@ -109,7 +112,7 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
               ],
             ),
             const SizedBox(height: AppSpace.lg),
-            Expanded(child: _buildResults(catalogue, userCards, engine)),
+            Expanded(child: _buildResults(catalogue, userCards, engine, overrides)),
           ],
         ),
       ),
@@ -120,9 +123,12 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
     AsyncValue<List<CardProduct>> catalogue,
     AsyncValue<List<UserCard>> userCards,
     RecommendationEngine engine,
+    AsyncValue<List<CardOverride>> overrides,
   ) {
-    if (catalogue.isLoading || userCards.isLoading) return const Center(child: CircularProgressIndicator());
-    final combinedError = catalogue.error ?? userCards.error;
+    if (catalogue.isLoading || userCards.isLoading || overrides.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final combinedError = catalogue.error ?? userCards.error ?? overrides.error;
     if (combinedError != null) return ErrorState(message: userFacingErrorMessage(combinedError));
 
     final allCards = catalogue.requireValue;
@@ -137,13 +143,28 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
     final owned = allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
 
     final context = RecommendationContext(amount: _amount, categoryId: _categoryId, rail: TxnRail.swipe);
+    // Same B8 wiring as rankedRecommendationsProvider (app/providers.dart):
+    // this screen only carries category context (no merchant/vpa), so an
+    // active category override must be honored here too — otherwise Home
+    // and the calculator can silently recommend different cards for the
+    // same category, contradicting each other with no explanation.
+    final overrideProductId = resolveActiveOverrideCardProductId(
+      overrides: overrides.requireValue,
+      wallet: wallet,
+      categoryId: _categoryId,
+    );
     final snapshots = owned.map((c) {
       final uc = wallet.where((w) => w.cardProductId == c.id).first;
       final capRemaining = {
         for (final cap in c.capRules)
           if (uc.capConsumed.containsKey(cap.id)) cap.id: cap.capValue - uc.capConsumed[cap.id]!,
       };
-      return CardSnapshot(product: c, capRemaining: capRemaining, milestoneProgress: uc.milestoneQualifiedSpend);
+      return CardSnapshot(
+        product: c,
+        capRemaining: capRemaining,
+        milestoneProgress: uc.milestoneQualifiedSpend,
+        forcedOverrideCardId: overrideProductId,
+      );
     }).toList();
 
     final ranked = engine.rank(context, snapshots);
@@ -160,7 +181,21 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
           key: ValueKey(rec.card.id),
           margin: const EdgeInsets.only(bottom: AppSpace.sm),
           child: ListTile(
-            title: Text(rec.card.name),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(child: Text(rec.card.name, overflow: TextOverflow.ellipsis)),
+                if (rec.isOverride) ...[
+                  const SizedBox(width: AppSpace.xs),
+                  const StatusPill(
+                    label: 'Override active',
+                    foreground: AppColors.navy800,
+                    background: AppColors.surfaceMuted,
+                    icon: Icons.push_pin_rounded,
+                  ),
+                ],
+              ],
+            ),
             subtitle: rec.isExcluded ? Text(rec.exclusionReason!) : Text(rec.reasonLines.join(' · ')),
             trailing: rec.isExcluded ? null : MoneyText(rec.expectedValue, confidence: rec.confidence),
             tileColor: completesMilestone ? const Color(0xFFECFDF5) : null,
