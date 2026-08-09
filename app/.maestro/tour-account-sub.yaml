@@ -1,0 +1,13 @@
+appId: app.pandapay.pandapay
+---
+- scroll
+- takeScreenshot: a1-account-scrolled
+- tapOn: "Import & sync"
+- takeScreenshot: a2-import-hub
+- back
+- tapOn: "Nearby merchants"
+- takeScreenshot: a3-nearby-merchants
+- back
+- tapOn: "Account"
+- takeScreenshot: a4-account-settings
+- back

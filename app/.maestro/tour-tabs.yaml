@@ -1,0 +1,14 @@
+appId: app.pandapay.pandapay
+---
+- tapOn:
+    text: "Cards\nCards"
+- takeScreenshot: t1-cards-tab
+- tapOn:
+    text: "Insights\nInsights"
+- takeScreenshot: t2-insights-tab
+- tapOn:
+    text: "Account\nAccount"
+- takeScreenshot: t3-account-tab
+- tapOn:
+    text: "Home\nHome"
+- takeScreenshot: t4-back-home

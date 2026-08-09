@@ -1,0 +1,7 @@
+appId: app.pandapay.pandapay
+---
+- tapOn:
+    text: "Cards\nCards"
+- tapOn: "HDFC Millennia"
+- takeScreenshot: c1-card-detail
+- tapOn: "Back"

@@ -1,0 +1,11 @@
+appId: app.pandapay.pandapay
+---
+- tapOn: "Email"
+- tapOn: "you@example.com"
+- inputText: "test@example.com"
+- tapOn: "Send code"
+- extendedWaitUntil:
+    visible: "Verify"
+    timeout: 8000
+    optional: true
+- takeScreenshot: 01-otp-screen

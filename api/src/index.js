@@ -1,10 +1,14 @@
 require('dotenv').config();
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
-const { withUserClient } = require('./db');
+const { withUserClient, pool } = require('./db');
 const { optionalAuth, requireAuth } = require('./auth');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
-const { parseSmsAgainstPatterns, redactSmsShape } = require('./sms_parser');
+const { parseSmsAgainstPatterns, redactSmsShape, senderMatches } = require('./sms_parser');
+const { testImapLogin } = require('./imap_test');
+const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
+const { registerRuleFamilyRoutes } = require('./admin_rule_families');
 
 const app = express();
 app.use(cors());
@@ -183,6 +187,136 @@ app.put('/admin/reward-rules/:id', requireAdmin, async (req, res) => {
     console.error('PUT /admin/reward-rules/:id error', err);
     res.status(500).json({ error: 'internal_error' });
   }
+});
+
+// AD-1.1.2 tabbed rule-family editor — the other 8 rule tables
+// v_admin_card_catalogue_export already reads (0022's migration comment).
+// Only reward_rules (above) had a typed writer before this; every other
+// family was read-only in the console until now. See
+// admin_rule_families.js's header comment for the shared route shape.
+const REWARD_UNITS = [
+  'cashback_percent', 'points_per_100', 'points_per_150', 'points_per_200',
+  'miles_per_100', 'flat_points', 'discount_percent',
+];
+const CAP_PERIODS = ['statement_cycle', 'calendar_month', 'quarter', 'half_year', 'annual', 'lifetime'];
+const CAP_MEASURES = ['reward_value', 'spend_amount', 'txn_count'];
+const BENEFIT_KINDS = [
+  'lounge_domestic', 'lounge_international', 'golf', 'concierge', 'insurance_travel',
+  'insurance_purchase', 'extended_warranty', 'dining_program', 'movie', 'fuel_surcharge',
+  'roadside_assistance', 'other',
+];
+const MILESTONE_ANCHORS = ['card_anniversary', 'calendar_year', 'fiscal_year', 'statement_cycle'];
+
+const adminRouteDeps = { withUserClient, requireAdmin };
+
+registerRuleFamilyRoutes(app, adminRouteDeps, {
+  urlSegment: 'cap-rules',
+  tableName: 'cap_rules',
+  auditEntity: 'cap_rule',
+  fields: [
+    { name: 'categoryId', column: 'category_id', type: 'string' },
+    { name: 'benefitKind', column: 'benefit_kind', type: 'enum', values: BENEFIT_KINDS },
+    { name: 'label', column: 'label', type: 'string', required: true },
+    { name: 'measure', column: 'measure', type: 'enum', values: CAP_MEASURES, required: true },
+    { name: 'period', column: 'period', type: 'enum', values: CAP_PERIODS, required: true },
+    { name: 'capValue', column: 'cap_value', type: 'number', min: 0, required: true },
+    { name: 'postCapUnit', column: 'post_cap_unit', type: 'enum', values: REWARD_UNITS },
+    { name: 'postCapRate', column: 'post_cap_rate', type: 'number', min: 0 },
+    { name: 'resetsOnDay', column: 'resets_on_day', type: 'integer', min: 1, max: 31 },
+  ],
+});
+
+registerRuleFamilyRoutes(app, adminRouteDeps, {
+  urlSegment: 'milestone-rules',
+  tableName: 'milestone_rules',
+  auditEntity: 'milestone_rule',
+  fields: [
+    { name: 'label', column: 'label', type: 'string', required: true },
+    { name: 'period', column: 'period', type: 'enum', values: CAP_PERIODS },
+    { name: 'thresholdSpendInr', column: 'threshold_spend_inr', type: 'number', min: 0, required: true },
+    { name: 'rewardDescription', column: 'reward_description', type: 'string', required: true },
+    { name: 'rewardValueInr', column: 'reward_value_inr', type: 'number', min: 0, required: true },
+    { name: 'isRepeatable', column: 'is_repeatable', type: 'boolean' },
+    { name: 'maxRepeats', column: 'max_repeats', type: 'integer', min: 0 },
+    { name: 'anchor', column: 'anchor', type: 'enum', values: MILESTONE_ANCHORS },
+  ],
+});
+
+registerRuleFamilyRoutes(app, adminRouteDeps, {
+  urlSegment: 'fee-waiver-rules',
+  tableName: 'fee_waiver_rules',
+  auditEntity: 'fee_waiver_rule',
+  fields: [
+    { name: 'thresholdSpendInr', column: 'threshold_spend_inr', type: 'number', min: 0, required: true },
+    { name: 'period', column: 'period', type: 'enum', values: CAP_PERIODS },
+    { name: 'waivesFeeInr', column: 'waives_fee_inr', type: 'number', min: 0, required: true },
+    { name: 'notes', column: 'notes', type: 'string' },
+  ],
+});
+
+registerRuleFamilyRoutes(app, adminRouteDeps, {
+  urlSegment: 'card-benefits',
+  tableName: 'card_benefits',
+  auditEntity: 'card_benefit',
+  fields: [
+    { name: 'kind', column: 'kind', type: 'enum', values: BENEFIT_KINDS, required: true },
+    { name: 'label', column: 'label', type: 'string', required: true },
+    { name: 'description', column: 'description', type: 'string' },
+    { name: 'quotaCount', column: 'quota_count', type: 'integer', min: 0 },
+    { name: 'quotaPeriod', column: 'quota_period', type: 'enum', values: CAP_PERIODS },
+    { name: 'networkProgram', column: 'network_program', type: 'string' },
+    { name: 'valueEstimateInr', column: 'value_estimate_inr', type: 'number', min: 0 },
+  ],
+});
+
+registerRuleFamilyRoutes(app, adminRouteDeps, {
+  urlSegment: 'redemption-options',
+  tableName: 'redemption_options',
+  auditEntity: 'redemption_option',
+  fields: [
+    { name: 'programName', column: 'program_name', type: 'string', required: true },
+    { name: 'method', column: 'method', type: 'string', required: true },
+    { name: 'valuePerPointInr', column: 'value_per_point_inr', type: 'number', min: 0, required: true },
+    { name: 'minPoints', column: 'min_points', type: 'integer', min: 0 },
+    { name: 'notes', column: 'notes', type: 'string' },
+  ],
+});
+
+registerRuleFamilyRoutes(app, adminRouteDeps, {
+  urlSegment: 'forex-rules',
+  tableName: 'forex_rules',
+  auditEntity: 'forex_rule',
+  singlePerCard: true,
+  fields: [
+    { name: 'markupPercent', column: 'markup_percent', type: 'number', min: 0, required: true },
+    { name: 'gstOnMarkup', column: 'gst_on_markup', type: 'boolean' },
+    { name: 'waiverNotes', column: 'waiver_notes', type: 'string' },
+  ],
+});
+
+registerRuleFamilyRoutes(app, adminRouteDeps, {
+  urlSegment: 'fuel-surcharge-rules',
+  tableName: 'fuel_surcharge_rules',
+  auditEntity: 'fuel_surcharge_rule',
+  singlePerCard: true,
+  fields: [
+    { name: 'surchargePercent', column: 'surcharge_percent', type: 'number', min: 0 },
+    { name: 'waiverPercent', column: 'waiver_percent', type: 'number', min: 0 },
+    { name: 'minTxnInr', column: 'min_txn_inr', type: 'number', min: 0 },
+    { name: 'maxTxnInr', column: 'max_txn_inr', type: 'number', min: 0 },
+    { name: 'monthlyWaiverCap', column: 'monthly_waiver_cap', type: 'number', min: 0 },
+  ],
+});
+
+registerRuleFamilyRoutes(app, adminRouteDeps, {
+  urlSegment: 'billing-cycle-rules',
+  tableName: 'billing_cycle_rules',
+  auditEntity: 'billing_cycle_rule',
+  singlePerCard: true,
+  fields: [
+    { name: 'gracePeriodDays', column: 'grace_period_days', type: 'integer', min: 0 },
+    { name: 'cycleNotes', column: 'cycle_notes', type: 'string' },
+  ],
 });
 
 /**
@@ -3404,6 +3538,206 @@ app.get('/admin/effective-rate-summary/:cardProductId/:categoryId/samples', requ
  * has never had. Both are flagged here rather than faked with a single
  * fabricated data point pretending to be a trend.
  */
+/**
+ * ============================================================================
+ * AD-3 Scraper source registry + AD-4 change-detection/diff-review
+ * ============================================================================
+ * Both were previously read-only-at-the-schema-level: `sources` existed
+ * (0008_admin_console.sql, with its own `enabled_requires_tos_review` CHECK
+ * constraint) and scrape_runs/page_snapshots/extraction_proposals were
+ * written by scraper/pandapay_scraper's Python jobs and consumed
+ * indirectly via GET /admin/alerts/:id's evidence+proposals join — but
+ * there was no console-side screen to manage a source's ToS-review/
+ * enabled flags, add a new candidate source, browse recent scrape runs,
+ * or look at a page's raw snapshot history outside the context of an
+ * already-created alert. These routes back that missing surface.
+ */
+
+/** GET /admin/sources — AD-3.1 source registry list. */
+app.get('/admin/sources', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT s.id, s.kind, s.issuer_id, i.name AS issuer_name, s.name, s.base_url,
+                s.robots_allows, s.robots_checked_at, s.tos_reviewed, s.tos_note,
+                s.crawl_frequency, s.is_enabled, s.created_at,
+                (SELECT count(*) FROM source_pages sp WHERE sp.source_id = s.id) AS page_count
+           FROM sources s
+           LEFT JOIN issuers i ON i.id = s.issuer_id
+          ORDER BY s.tos_reviewed ASC, s.name`
+      )
+    );
+    res.json({ sources: result.rows });
+  } catch (err) {
+    console.error('GET /admin/sources error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /admin/sources — register a new candidate source. Always created
+ * with tos_reviewed=false/is_enabled=false regardless of what's posted —
+ * the DB CHECK constraint would reject is_enabled=true with
+ * tos_reviewed=false anyway, but this route doesn't even give a caller
+ * the chance to try; ToS review is a deliberate separate step (PATCH
+ * below), same posture as scraper/CANDIDATE_SOURCES.md's existing 12
+ * research-only rows.
+ */
+app.post('/admin/sources', requireAdmin, async (req, res) => {
+  const { kind, issuerId, name, baseUrl, tosNote, reason } = req.body || {};
+  const VALID_KINDS = ['bank_official', 'news_review', 'regulator', 'other'];
+  if (!VALID_KINDS.includes(kind)) {
+    return res.status(400).json({ error: `kind must be one of ${VALID_KINDS.join('/')}` });
+  }
+  if (typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'name is required' });
+  }
+  if (typeof baseUrl !== 'string' || !/^https?:\/\//.test(baseUrl)) {
+    return res.status(400).json({ error: 'baseUrl must be a valid http(s) URL' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO sources (kind, issuer_id, name, base_url, tos_note, tos_reviewed, is_enabled)
+         VALUES ($1, $2, $3, $4, $5, false, false)
+         RETURNING *`,
+        [kind, issuerId || null, name.trim(), baseUrl, tosNote || null]
+      );
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+         VALUES ($1, 'create_source', 'sources', $2, $3, $4)`,
+        [req.userId, inserted.rows[0].id, JSON.stringify(inserted.rows[0]), reason || null]
+      );
+      return inserted.rows[0];
+    });
+    res.status(201).json({ source: result });
+  } catch (err) {
+    console.error('POST /admin/sources error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * PATCH /admin/sources/:id — AD-3.2 the ToS-review + enable/disable
+ * typed writer. tosReviewed/tosNote/isEnabled/crawlFrequencyDays are the
+ * only writable fields — never base_url/kind/name here (those would
+ * change what's actually being scraped, a "new source" action, not an
+ * "update review status" one). The DB's own CHECK constraint
+ * (enabled_requires_tos_review) is the actual last line of defense if
+ * this validation is ever bypassed; this 400 is just a friendlier error
+ * than a raw constraint-violation from Postgres.
+ */
+app.patch('/admin/sources/:id', requireAdmin, async (req, res) => {
+  const { tosReviewed, tosNote, isEnabled, crawlFrequencyDays, reason } = req.body || {};
+  if (tosReviewed !== undefined && typeof tosReviewed !== 'boolean') {
+    return res.status(400).json({ error: 'tosReviewed must be a boolean' });
+  }
+  if (isEnabled !== undefined && typeof isEnabled !== 'boolean') {
+    return res.status(400).json({ error: 'isEnabled must be a boolean' });
+  }
+  if (crawlFrequencyDays !== undefined && (!Number.isInteger(crawlFrequencyDays) || crawlFrequencyDays < 1)) {
+    return res.status(400).json({ error: 'crawlFrequencyDays must be a positive integer' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const before = await client.query(`SELECT * FROM sources WHERE id = $1`, [req.params.id]);
+      if (before.rows.length === 0) return null;
+
+      const effectiveTosReviewed = tosReviewed !== undefined ? tosReviewed : before.rows[0].tos_reviewed;
+      const effectiveIsEnabled = isEnabled !== undefined ? isEnabled : before.rows[0].is_enabled;
+      if (effectiveIsEnabled && !effectiveTosReviewed) {
+        return { error: 'cannot enable a source before its ToS has been reviewed' };
+      }
+
+      const updated = await client.query(
+        `UPDATE sources SET
+           tos_reviewed = COALESCE($1, tos_reviewed),
+           tos_note = COALESCE($2, tos_note),
+           is_enabled = COALESCE($3, is_enabled),
+           crawl_frequency = COALESCE($4::int * interval '1 day', crawl_frequency)
+         WHERE id = $5
+         RETURNING *`,
+        [tosReviewed ?? null, tosNote ?? null, isEnabled ?? null, crawlFrequencyDays ?? null, req.params.id]
+      );
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'update_source', 'sources', $2, $3, $4, $5)`,
+        [req.userId, req.params.id, JSON.stringify(before.rows[0]), JSON.stringify(updated.rows[0]), reason || null]
+      );
+      return { source: updated.rows[0] };
+    });
+    if (!result) return res.status(404).json({ error: 'source not found' });
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('PATCH /admin/sources/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** GET /admin/scrape-runs — AD-4.1 recent run history across every source. */
+app.get('/admin/scrape-runs', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT r.id, r.source_id, s.name AS source_name, r.triggered_by, r.status,
+                r.pages_fetched, r.pages_changed, r.started_at, r.finished_at, r.duration_ms, r.error_text
+           FROM scrape_runs r
+           JOIN sources s ON s.id = r.source_id
+          ORDER BY r.started_at DESC NULLS LAST LIMIT 100`
+      )
+    );
+    res.json({ scrapeRuns: result.rows });
+  } catch (err) {
+    console.error('GET /admin/scrape-runs error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /admin/source-pages/:id/snapshots — AD-4.2's side-by-side diff view
+ * backend: the last 5 snapshots for one page, newest first, each with its
+ * full extracted_text so the console can render old-vs-new side by side.
+ * Not a computed line-diff (no diff library added for a console-only
+ * read path) — the operator's own eyes do the comparison, same trust
+ * model as reading the "evidence excerpt" everywhere else in this admin
+ * flow (verbatim source text, never a summarized/interpreted version).
+ */
+app.get('/admin/source-pages/:id/snapshots', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT id, content_hash, extracted_text, http_status, captured_at
+           FROM page_snapshots WHERE source_page_id = $1
+          ORDER BY captured_at DESC LIMIT 5`,
+        [req.params.id]
+      )
+    );
+    res.json({ snapshots: result.rows });
+  } catch (err) {
+    console.error('GET /admin/source-pages/:id/snapshots error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** GET /admin/sources/:id/pages — the pages under one source, for picking which page's snapshot history to view. */
+app.get('/admin/sources/:id/pages', requireAdmin, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT id, url, page_role, card_product_id, last_crawled_at, last_changed_at, consecutive_failures, is_enabled
+           FROM source_pages WHERE source_id = $1 ORDER BY page_role, url`,
+        [req.params.id]
+      )
+    );
+    res.json({ sourcePages: result.rows });
+  } catch (err) {
+    console.error('GET /admin/sources/:id/pages error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 app.get('/admin/data-quality-dashboard', requireAdmin, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
@@ -3484,13 +3818,14 @@ app.post('/admin/anonymization-audit-runs/run', requireAdmin, async (req, res) =
  * ============================================================================
  * Group F — Data Import & Sync (implementation-plan-group-e-f-g.md, Task F-0)
  * ============================================================================
- * Task F-0's scope decision, carried out here: every F-screen needs new
- * routes, but F3 (live inbound-email ingestion), F5 (a real bidirectional
+ * Task F-0's original scope decision (superseded for F3, still true for
+ * F5/F7): every F-screen needs new routes, but F5 (a real bidirectional
  * sync engine) and F7 (a background IMAP poller) each need a job
- * runner/queue/webhook-receiver this single Express file can't host. Per
- * the plan's own recommendation, this pass builds the CRUD/status surface
- * for every F screen and explicitly does NOT build:
- *   - an SMTP/webhook receiver that ingests real inbound email (F3)
+ * runner/queue this single Express file can't host on its own. F3's
+ * receiver (POST /inbound-emails/webhook, below) has since been built —
+ * a plain webhook endpoint is exactly the kind of thing this file CAN
+ * host, unlike a scheduled poller or a stateful sync engine. Still
+ * explicitly NOT built:
  *   - a background IMAP poller that actually reads a mailbox (F7)
  *   - a client-side offline-write-queue/conflict-resolution sync engine (F5)
  * Each is called out again on its own route below, not just here.
@@ -3504,14 +3839,16 @@ app.post('/admin/anonymization-audit-runs/run', requireAdmin, async (req, res) =
  * `rotated_from`'s existence in the schema — rotation is a distinct, later
  * action, not implicit on every POST).
  *
- * NOT built here: anything that actually delivers mail to this address.
- * `first_email_at`/`email_count` stay at their defaults forever without a
- * real inbound-email receiver (SMTP server or a provider webhook like
- * SendGrid/Mailgun inbound parse) wired up to write `inbound_emails` and
- * update this row — that's real infrastructure outside a single Express
- * route, flagged explicitly in the plan's Task F-0 and in this chunk's
- * PROGRESS.md entry. The F3 screen's "Waiting for first email…" status is
- * real UI over real (if permanently 'waiting') data, not a fake front end.
+ * The receiver that actually delivers mail to this address now exists:
+ * POST /inbound-emails/webhook below writes to `inbound_emails` and
+ * updates this row's `first_email_at`/`email_count` for real. What's
+ * still outside this repo's scope is the DNS + provider-dashboard wiring
+ * (SendGrid/Mailgun inbound parse, or a Cloudflare Email Worker) that
+ * routes mail sent to `<local_part>@in.pandapay.app` to that webhook —
+ * real infra setup for a given deployment, not something an Express route
+ * can do for itself. Until that's configured in a given environment,
+ * `first_email_at`/`email_count` stay at their defaults, which is still
+ * an honestly-reported "waiting" status, not a fake one.
  */
 app.post('/forwarding-addresses', requireAuth, async (req, res) => {
   try {
@@ -3558,6 +3895,170 @@ app.get('/forwarding-addresses/me', requireAuth, async (req, res) => {
     res.json({ forwardingAddress: result.rows[0] || null });
   } catch (err) {
     console.error('GET /forwarding-addresses/me error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /inbound-emails/webhook — the real inbound-email receiver the
+ * schema (0006_ingest.sql) and POST /forwarding-addresses' doc-comment
+ * both flagged as missing. This is the HTTP-facing side of that pipeline:
+ * point any provider's inbound-parse webhook (SendGrid Inbound Parse,
+ * Mailgun Routes, Postmark Inbound) or a Cloudflare Email Worker that
+ * forwards a parsed message as JSON at this URL, and it will actually
+ * populate `inbound_emails` and `forwarding_addresses.email_count` for
+ * real, closing the loop F3's UI has been honestly reporting as "waiting
+ * forever" until now. The DNS/MX + provider-dashboard wiring to route
+ * mail sent to *.in.pandapay.app here is real infrastructure setup
+ * outside this repo — same class of action as the Play Store listing or
+ * scraper legal review, not something an Express route can do for itself.
+ *
+ * No user/admin JWT exists on this path — the caller is a trusted mail
+ * provider, not a person with an account. Auth is a shared secret
+ * (INBOUND_EMAIL_WEBHOOK_SECRET) checked via the x-webhook-secret header,
+ * constant-time compared. Anyone without the secret gets a flat 401
+ * with no information about whether any given address exists.
+ *
+ * Expects a normalized payload: { to, from, subject, text }. Adapting a
+ * specific provider's native payload shape (SendGrid's multipart form,
+ * Mailgun's different field names, a Worker's raw MIME) to this shape is
+ * a thin mapping step at the provider/Worker config level, deliberately
+ * not coupled into this route.
+ */
+app.post('/inbound-emails/webhook', async (req, res) => {
+  const configuredSecret = process.env.INBOUND_EMAIL_WEBHOOK_SECRET;
+  if (!configuredSecret) {
+    console.error('POST /inbound-emails/webhook: INBOUND_EMAIL_WEBHOOK_SECRET is not set');
+    return res.status(500).json({ error: 'internal_error' });
+  }
+  const providedSecret = req.get('x-webhook-secret') || '';
+  const secretsMatch =
+    providedSecret.length === configuredSecret.length &&
+    crypto.timingSafeEqual(Buffer.from(providedSecret), Buffer.from(configuredSecret));
+  if (!secretsMatch) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  const { to, from, subject, text } = req.body || {};
+  const localPart = extractLocalPart(to);
+  if (!localPart) {
+    return res.status(400).json({ error: 'to header did not contain a parseable address' });
+  }
+  const body = typeof text === 'string' ? text : '';
+
+  try {
+    const patternsResult = await pool.query(
+      `SELECT id, sender_pattern, regex, field_map
+         FROM parser_patterns WHERE channel = 'email' AND is_active = true ORDER BY version DESC`
+    );
+    const parsed = parseSmsAgainstPatterns(patternsResult.rows, { sender: from, body });
+    const isKnownBankSender = patternsResult.rows.some((p) => senderMatches(p.sender_pattern, from));
+    const policyKeywordHit = scanPolicyKeywords(`${subject || ''}\n${body}`);
+
+    const rpcResult = await pool.query(
+      `SELECT * FROM pandapay.ingest_inbound_email($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        localPart,
+        from || null,
+        subject || null,
+        body || null,
+        isKnownBankSender,
+        parsed.ok,
+        parsed.ok ? parsed.patternId : null,
+        policyKeywordHit,
+        parsed.ok ? null : redactSmsShape(body),
+      ]
+    );
+
+    const row = rpcResult.rows[0];
+    if (!row || !row.inbound_email_id) {
+      // Unknown/inactive local_part — deliberately not distinguishable from
+      // "accepted" in the response, so this endpoint never becomes an
+      // address-enumeration oracle for an attacker probing local_parts.
+      return res.status(202).json({ accepted: true });
+    }
+    res.status(202).json({ accepted: true, parsed: parsed.ok });
+  } catch (err) {
+    console.error('POST /inbound-emails/webhook error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** GET /inbound-emails/me — F3's "recent emails" list; never returns body_text (raw content stays server-side). */
+app.get('/inbound-emails/me', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT id, sender, subject, received_at, is_known_bank_sender, parsed_ok, produced_txn_id
+           FROM inbound_emails WHERE profile_id = $1 ORDER BY received_at DESC LIMIT 50`,
+        [req.userId]
+      )
+    );
+    res.json({ inboundEmails: result.rows });
+  } catch (err) {
+    console.error('GET /inbound-emails/me error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /inbound-emails/:id/create-transaction — closes the loop for an
+ * email that parsed successfully: re-runs the same channel='email' match
+ * against the stored body (rather than trusting a client-supplied amount,
+ * same non-fabrication stance as /transactions/from-sms) and, given a
+ * caller-supplied userCardId (this route doesn't guess which of the
+ * user's cards an email belongs to, same contract as every other
+ * transaction-creation route), inserts the transaction and links it back
+ * via raw_source_ref / produced_txn_id.
+ */
+app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res) => {
+  const { userCardId, categoryId, rail } = req.body || {};
+  if (!userCardId || typeof userCardId !== 'string') {
+    return res.status(400).json({ error: 'userCardId is required' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const emailRow = await client.query(
+        `SELECT id, sender, subject, body_text, produced_txn_id, parsed_ok
+           FROM inbound_emails WHERE id = $1 AND profile_id = $2`,
+        [req.params.id, req.userId]
+      );
+      const email = emailRow.rows[0];
+      if (!email) return { status: 404, error: 'not_found' };
+      if (email.produced_txn_id) return { status: 409, error: 'already_converted_to_a_transaction' };
+
+      const patterns = await client.query(
+        `SELECT id, sender_pattern, regex, field_map
+           FROM parser_patterns WHERE channel = 'email' AND is_active = true ORDER BY version DESC`
+      );
+      const parsed = parseSmsAgainstPatterns(patterns.rows, { sender: email.sender, body: email.body_text || '' });
+      if (!parsed.ok) {
+        return { status: 422, error: 'could_not_parse_this_email', reason: parsed.reason };
+      }
+
+      const inserted = await insertTransactionAndUpdateState(client, req.userId, {
+        userCardId,
+        amount: parsed.fields.amountInr,
+        occurred: new Date(),
+        categoryId: categoryId || null,
+        rail: rail || 'unknown',
+        merchantName: parsed.fields.merchant || null,
+        source: 'email',
+      });
+      if (inserted.status !== 201) return inserted;
+
+      await client.query(
+        `UPDATE inbound_emails SET produced_txn_id = $1 WHERE id = $2`,
+        [inserted.transaction.id, email.id]
+      );
+      await client.query(`UPDATE transactions SET raw_source_ref = $1 WHERE id = $2`, [email.id, inserted.transaction.id]);
+
+      return { status: 201, ...inserted };
+    });
+    if (result.status !== 201) return res.status(result.status).json({ error: result.error, reason: result.reason });
+    res.status(201).json(result);
+  } catch (err) {
+    console.error('POST /inbound-emails/:id/create-transaction error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3871,21 +4372,30 @@ app.get('/imap-connections/me', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /imap-connections/:id/test — a STUB test-connection, per the plan's
- * explicit allowance: "test connection can be a stub that validates format
- * only, not a live IMAP handshake." A real implementation would open a TLS
- * socket to imap_host:imap_port and attempt a LOGIN with the decrypted app
- * password — genuinely live network I/O from an API route, not attempted
- * here. This only checks the stored fields are well-formed (host looks
- * like a hostname, port in range, email has an @) and, if so, marks
- * `verified_at`. Never decrypts/logs the password.
+ * POST /imap-connections/:id/test — a real IMAP handshake (see
+ * ./imap_test.js). Decrypts the stored app password server-side via
+ * pgp_sym_decrypt, opens a TLS socket to imap_host:imap_port, and attempts
+ * a LOGIN. The decrypted password lives only in this request's memory —
+ * never logged, never echoed back to the client, and the query that
+ * decrypts it is scoped to this user's own row (RLS + explicit
+ * profile_id match). On success marks `verified_at`; on failure leaves it
+ * untouched and returns the (non-sensitive) reason string from the IMAP
+ * server or socket layer.
+ *
+ * Falls back to a format-only check when IMAP_ENCRYPTION_KEY isn't set,
+ * so local/dev environments without the key configured don't hard-fail —
+ * but production must have it set for this to mean anything.
  */
 app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
   try {
+    const encryptionKey = process.env.IMAP_ENCRYPTION_KEY;
     const result = await withUserClient(req.userId, async (client) => {
       const existing = await client.query(
-        `SELECT id, email, imap_host, imap_port FROM imap_connections WHERE id = $1 AND profile_id = $2`,
-        [req.params.id, req.userId]
+        encryptionKey
+          ? `SELECT id, email, imap_host, imap_port, pgp_sym_decrypt(app_password_encrypted, $3) AS app_password
+               FROM imap_connections WHERE id = $1 AND profile_id = $2`
+          : `SELECT id, email, imap_host, imap_port FROM imap_connections WHERE id = $1 AND profile_id = $2`,
+        encryptionKey ? [req.params.id, req.userId, encryptionKey] : [req.params.id, req.userId]
       );
       const conn = existing.rows[0];
       if (!conn) return null;
@@ -3895,9 +4405,26 @@ app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
       const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(conn.email);
       const formatOk = hostLooksValid && portLooksValid && emailLooksValid;
 
+      const safeConn = { id: conn.id, email: conn.email, imap_host: conn.imap_host, imap_port: conn.imap_port };
+
       if (!formatOk) {
-        return { ok: false, connection: conn, reason: 'One or more fields look malformed — this is a format check only, not a live IMAP login.' };
+        return { ok: false, connection: safeConn, reason: 'One or more fields look malformed.' };
       }
+      if (!encryptionKey || !conn.app_password) {
+        return { ok: false, connection: safeConn, reason: 'IMAP_ENCRYPTION_KEY not configured on this server — cannot decrypt the stored password to test it.' };
+      }
+
+      const loginResult = await testImapLogin({
+        host: conn.imap_host,
+        port: conn.imap_port,
+        email: conn.email,
+        password: conn.app_password,
+      });
+
+      if (!loginResult.ok) {
+        return { ok: false, connection: safeConn, reason: loginResult.reason };
+      }
+
       const updated = await client.query(
         `UPDATE imap_connections SET verified_at = now() WHERE id = $1
          RETURNING id, email, imap_host, imap_port, sender_filter, is_active, verified_at, last_poll_at, last_poll_status`,

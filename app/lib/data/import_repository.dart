@@ -49,6 +49,41 @@ class ImportRepository {
     return ForwardingAddress.fromJson(body['forwardingAddress'] as Map<String, dynamic>);
   }
 
+  /// GET /inbound-emails/me — real data as of the email-ingestion webhook
+  /// (POST /inbound-emails/webhook, api/src/index.js): once a provider
+  /// forwards a real email there, it shows up here. Empty until that's
+  /// wired up in a given deployment (DNS/webhook config is an infra step,
+  /// not something this app does at runtime) — an honest empty state, not
+  /// a fake one.
+  Future<List<InboundEmail>> fetchInboundEmails() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/inbound-emails/me'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw ApiException('GET /inbound-emails/me failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['inboundEmails'] as List).cast<Map<String, dynamic>>().map(InboundEmail.fromJson).toList();
+  }
+
+  Future<void> createTransactionFromInboundEmail({
+    required String inboundEmailId,
+    required String userCardId,
+    String? categoryId,
+    String? rail,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/inbound-emails/$inboundEmailId/create-transaction'),
+      headers: _headers,
+      body: jsonEncode({
+        'userCardId': userCardId,
+        if (categoryId != null) 'categoryId': categoryId,
+        if (rail != null) 'rail': rail,
+      }),
+    );
+    if (response.statusCode != 201) {
+      throw ApiException('POST /inbound-emails/:id/create-transaction failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
   // ---- F2 Statement PDF Import ----------------------------------------------
 
   Future<List<StatementImport>> fetchStatementImports() async {
@@ -240,6 +275,36 @@ class ForwardingAddress {
         verifiedAt: json['verified_at'] == null ? null : DateTime.parse(json['verified_at'] as String),
         firstEmailAt: json['first_email_at'] == null ? null : DateTime.parse(json['first_email_at'] as String),
         emailCount: (json['email_count'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class InboundEmail {
+  final String id;
+  final String? sender;
+  final String? subject;
+  final DateTime receivedAt;
+  final bool isKnownBankSender;
+  final bool? parsedOk;
+  final String? producedTxnId;
+
+  const InboundEmail({
+    required this.id,
+    this.sender,
+    this.subject,
+    required this.receivedAt,
+    required this.isKnownBankSender,
+    this.parsedOk,
+    this.producedTxnId,
+  });
+
+  factory InboundEmail.fromJson(Map<String, dynamic> json) => InboundEmail(
+        id: json['id'] as String,
+        sender: json['sender'] as String?,
+        subject: json['subject'] as String?,
+        receivedAt: DateTime.parse(json['received_at'] as String),
+        isKnownBankSender: json['is_known_bank_sender'] as bool? ?? false,
+        parsedOk: json['parsed_ok'] as bool?,
+        producedTxnId: json['produced_txn_id'] as String?,
       );
 }
 

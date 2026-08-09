@@ -81,6 +81,20 @@ final alertsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   return api.fetchAlerts();
 });
 
+/// AD-3: scraper source registry.
+final sourcesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchSources();
+});
+
+/// AD-4: recent scrape run history across every source.
+final scrapeRunsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchScrapeRuns();
+});
+
 /// AD-6.1: merchant table filter state — plain fields, not a class, so
 /// merchantsProvider (below) can .watch() each one independently and only
 /// the filters that actually changed trigger a refetch.

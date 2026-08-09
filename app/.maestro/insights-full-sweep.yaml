@@ -1,0 +1,20 @@
+appId: app.pandapay.pandapay
+---
+- tapOn: "Caps & Limits\n1 tracked"
+- takeScreenshot: s1-caps
+- back
+- tapOn: "Milestones"
+- takeScreenshot: s2-milestones
+- back
+- tapOn: "Fee Waivers"
+- takeScreenshot: s3-fee-waivers
+- back
+- tapOn: "Billing Float"
+- takeScreenshot: s4-billing-float
+- back
+- tapOn: "Credit Utilization"
+- takeScreenshot: s5-credit-util
+- back
+- tapOn: "Lounge Access"
+- takeScreenshot: s6-lounge
+- back

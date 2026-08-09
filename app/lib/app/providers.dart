@@ -24,6 +24,7 @@ import '../data/needs_review_repository.dart';
 import '../data/override_resolver.dart';
 import '../data/token_store.dart';
 import '../data/user_cards_repository.dart';
+import '../features/geofence/geofence_monitor_service.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
 
@@ -672,6 +673,15 @@ final forwardingAddressProvider = FutureProvider<ForwardingAddress?>((ref) async
   return repo.fetchForwardingAddress();
 });
 
+/// F3: this profile's recently received forwarded emails, newest first.
+/// Real data once a mail provider is wired to POST /inbound-emails/webhook
+/// for a given deployment — empty (not fake) until then.
+final inboundEmailsProvider = FutureProvider<List<InboundEmail>>((ref) async {
+  final repo = ref.watch(importRepositoryProvider);
+  if (repo == null) return const [];
+  return repo.fetchInboundEmails();
+});
+
 /// F2/F1: recent statement imports, newest first.
 final statementImportsProvider = FutureProvider<List<StatementImport>>((ref) async {
   final repo = ref.watch(importRepositoryProvider);
@@ -954,6 +964,22 @@ final clockProvider = Provider<Clock>((ref) => const Clock.system());
 final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((ref) {
   return HttpNearbyMerchantsRepository(baseUrl: _apiBaseUrl);
 });
+
+/// Background geofence monitor — one instance for the app's lifetime, kept
+/// alive by `ref.keepAlive()` since starting/stopping it is a deliberate
+/// user action (a settings toggle), not something that should reset on
+/// every rebuild of whatever screen happens to read it.
+final geofenceMonitorServiceProvider = Provider<GeofenceMonitorService>((ref) {
+  final service = GeofenceMonitorService(repo: ref.watch(nearbyMerchantsRepositoryProvider));
+  ref.onDispose(() => service.stop());
+  return service;
+});
+
+/// Whether background geofence monitoring is currently on — a plain
+/// StateProvider the toggle UI reads/writes; the actual start()/stop()
+/// call happens in the widget (needs a BuildContext for permission-denied
+/// messaging), this just tracks the resulting on/off state for display.
+final geofenceMonitoringEnabledProvider = StateProvider<bool>((ref) => false);
 
 final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {
   return BestCardForWidget(engine: ref.watch(recommendationEngineProvider));

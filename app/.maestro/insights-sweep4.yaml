@@ -1,0 +1,25 @@
+appId: app.pandapay.pandapay
+---
+- tapOn: "Portfolio Audit"
+- takeScreenshot: u1-portfolio-audit
+- tapOn: "Back"
+- scroll
+- tapOn: "Spending Overview"
+- takeScreenshot: u2-spending-overview
+- tapOn: "Back"
+- scroll
+- tapOn: "My Contributions"
+- takeScreenshot: u3-my-contributions
+- tapOn: "Back"
+- scroll
+- tapOn: "All Activity"
+- takeScreenshot: u4-all-activity
+- tapOn: "Back"
+- scroll
+- tapOn: "Missed Opportunities"
+- takeScreenshot: u5-missed-opportunities
+- tapOn: "Back"
+- scroll
+- tapOn: "Needs Review"
+- takeScreenshot: u6-needs-review
+- tapOn: "Back"

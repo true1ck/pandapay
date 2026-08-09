@@ -1,31 +1,68 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// UA-3: same pattern as console/lib/data/token_store.dart (SharedPreferences,
-/// works on Web via localStorage too) — kept as a separate copy rather than a
-/// shared package since the two apps' pubspecs don't share a common
-/// non-domain package yet and this is a handful of lines, not worth the
-/// coupling.
+/// UA-3. Access/refresh tokens are the credential that lets this device act
+/// as the signed-in user indefinitely (the refresh token in particular has
+/// no short expiry) — OWASP M9 requires these live in the iOS Keychain /
+/// Android Keystore, not SharedPreferences' plaintext plist/XML, which is
+/// readable on a jailbroken/rooted device and can end up in an unencrypted
+/// backup. `flutter_secure_storage` wraps exactly that OS-level storage.
+///
+/// [load] transparently migrates anyone already signed in under the old
+/// SharedPreferences-backed version of this class (pre-dates this fix) —
+/// read the old plaintext values once, move them into secure storage, then
+/// delete the plaintext copies, so nobody already logged in gets silently
+/// signed out by this change.
 class TokenStore {
   static const _accessKey = 'pandapay_app.access_token';
   static const _refreshKey = 'pandapay_app.refresh_token';
 
-  final SharedPreferences _prefs;
-  const TokenStore(this._prefs);
+  final FlutterSecureStorage _secureStorage;
+  String? _cachedAccessToken;
+  String? _cachedRefreshToken;
 
-  static Future<TokenStore> load() async => TokenStore(await SharedPreferences.getInstance());
+  TokenStore(this._secureStorage, {String? accessToken, String? refreshToken})
+      : _cachedAccessToken = accessToken,
+        _cachedRefreshToken = refreshToken;
 
-  String? get accessToken => _prefs.getString(_accessKey);
-  String? get refreshToken => _prefs.getString(_refreshKey);
+  static Future<TokenStore> load() async {
+    const secureStorage = FlutterSecureStorage();
+    var accessToken = await secureStorage.read(key: _accessKey);
+    var refreshToken = await secureStorage.read(key: _refreshKey);
+
+    if (accessToken == null && refreshToken == null) {
+      final prefs = await SharedPreferences.getInstance();
+      final legacyAccess = prefs.getString(_accessKey);
+      final legacyRefresh = prefs.getString(_refreshKey);
+      if (legacyAccess != null || legacyRefresh != null) {
+        if (legacyAccess != null) await secureStorage.write(key: _accessKey, value: legacyAccess);
+        if (legacyRefresh != null) await secureStorage.write(key: _refreshKey, value: legacyRefresh);
+        await prefs.remove(_accessKey);
+        await prefs.remove(_refreshKey);
+        accessToken = legacyAccess;
+        refreshToken = legacyRefresh;
+      }
+    }
+
+    return TokenStore(secureStorage, accessToken: accessToken, refreshToken: refreshToken);
+  }
+
+  String? get accessToken => _cachedAccessToken;
+  String? get refreshToken => _cachedRefreshToken;
 
   Future<void> save({required String accessToken, String? refreshToken}) async {
-    await _prefs.setString(_accessKey, accessToken);
+    _cachedAccessToken = accessToken;
+    await _secureStorage.write(key: _accessKey, value: accessToken);
     if (refreshToken != null) {
-      await _prefs.setString(_refreshKey, refreshToken);
+      _cachedRefreshToken = refreshToken;
+      await _secureStorage.write(key: _refreshKey, value: refreshToken);
     }
   }
 
   Future<void> clear() async {
-    await _prefs.remove(_accessKey);
-    await _prefs.remove(_refreshKey);
+    _cachedAccessToken = null;
+    _cachedRefreshToken = null;
+    await _secureStorage.delete(key: _accessKey);
+    await _secureStorage.delete(key: _refreshKey);
   }
 }

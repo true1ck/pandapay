@@ -41,6 +41,9 @@ dependencies:
   go_router: ^14.6.2
   http: ^1.2.2
   shared_preferences: ^2.3.3
+  # Access/refresh tokens must live in the OS keychain/keystore, not
+  # SharedPreferences' plaintext plist/XML (OWASP M9) — see token_store.dart.
+  flutter_secure_storage: ^11.0.0
 
   # Design system: Google Fonts for the Plus Jakarta Sans/Inter pairing
   # (see lib/app/design/app_theme.dart) and flutter_animate for the
@@ -66,15 +69,26 @@ dependencies:
   telephony: ^0.2.0
   permission_handler: ^11.3.1
 
-  # UA-8 (Chunk 32): geofencing + home-screen widget, both scoped down — see
-  # PROGRESS.md for the explicit scope reduction. `geolocator` drives the
-  # foreground-triggered one-shot "check nearby merchants" location read
-  # (app/lib/features/geofence/); `home_widget` writes the "best card right
-  # now" data to native shared storage and triggers a widget refresh
-  # (app/lib/features/home_widget/) — neither the actual OS location prompt
-  # nor the actual native widget rendering could be exercised in this
-  # sandbox (no device/simulator/native build toolchain run end-to-end).
+  # UA-8 (Chunk 32, extended): geofencing + home-screen widget. `geolocator`
+  # drives both the original foreground-triggered one-shot "check nearby
+  # merchants" location read (app/lib/features/geofence/nearby_merchants_screen.dart)
+  # AND, as of the background-geofencing pass, an optional background
+  # position stream (geofence_monitor_service.dart) using geolocator's own
+  # Android foreground-service / iOS background-mode support — no separate
+  # geofencing package added, since geolocator already covers this and the
+  # rest of the app's location code is already built on it.
+  # `flutter_local_notifications` is what actually surfaces a background
+  # geofence match to the user (a stream running with nothing rendering it
+  # isn't a real geofence feature) — the one genuinely new dependency this
+  # pass adds. `home_widget` writes the "best card right now" data to
+  # native shared storage and triggers a widget refresh
+  # (app/lib/features/home_widget/). None of the actual OS location/
+  # notification prompts nor native widget rendering could be exercised in
+  # this sandbox (no device/simulator/native build toolchain run end-to-end)
+  # — flagged, not hidden, same posture as every other native-permission
+  # feature in this file.
   geolocator: ^13.0.2
+  flutter_local_notifications: ^18.0.1
   home_widget: ^0.7.0
   rive: ^0.14.11
   flex_color_scheme: ^8.4.0
@@ -150,6 +164,11 @@ dependencies:
   xml: ^7.0.1
   flutter_test:
     sdk: flutter
+
+  # test/flutter_test_config.dart installs an in-memory fake against this
+  # interface so TokenStore's flutter_secure_storage calls work under the
+  # headless flutter_tester harness — see that file's doc-comment.
+  flutter_secure_storage_platform_interface: ^2.0.3
 
   flutter_lints: ^6.0.0
   # Drives sessionKeepAliveProvider's Timer.periodic without real wall-clock

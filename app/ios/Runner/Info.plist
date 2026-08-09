@@ -9,14 +9,21 @@
 	     device/simulator in this sandbox. See PROGRESS.md. -->
 	<key>NSCameraUsageDescription</key>
 	<string>Pandapay uses the camera to scan a QR/barcode on a card mailer or statement to help identify which card you're adding.</string>
-	<!-- UA-8 (Chunk 32): foreground-only "check nearby merchants" geofencing.
-	     Deliberately only the WhenInUse key — no NSLocationAlwaysAndWhenInUseUsageDescription/
-	     always-on background location, matching this chunk's explicit scope
-	     reduction to a one-shot foreground location read. Same "could not
-	     verify prompting on a real simulator/device" caveat as UA-4's camera
-	     key above. See PROGRESS.md. -->
+	<!-- UA-8 (Chunk 32, extended): "check nearby merchants" geofencing.
+	     WhenInUse covers the default one-shot check; the Always key below
+	     backs the opt-in background-alerts toggle (GeofenceMonitorService)
+	     added in a later pass — iOS only offers a combined "Always and
+	     When In Use" prompt, no separate "Always"-only string, hence the
+	     "AndWhenInUse" key name even though this app also uses the
+	     when-in-use-only path for the default flow. UIBackgroundModes'
+	     `location` entry (bottom of this file) is what lets the position
+	     stream keep delivering while backgrounded once "Always" is
+	     granted. Same "could not verify prompting on a real
+	     simulator/device" caveat as UA-4's camera key above. -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Pandapay checks your current location, once, when you tap "check nearby merchants" to suggest which card to use there.</string>
+	<string>Pandapay checks your current location to suggest which card to use nearby.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Pandapay can check your location in the background to alert you when you're near a merchant you've used before, so you can use the right card. This only runs if you turn on "Background alerts".</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -62,6 +69,14 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Lets the position stream keep delivering while backgrounded, once
+	     the user has granted "Always" via the toggle above — background
+	     modes are declarative permission for what the app MAY do, still
+	     gated by the actual location-permission grant at runtime. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

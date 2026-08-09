@@ -12,7 +12,14 @@ const { encryptPhoneNumber } = require('../utils/fieldEncryption');
 // never be reachable when config.isProduction is true — it was previously
 // active unconditionally in every environment, which would have let anyone
 // who knew these identifiers log in without ever receiving a real OTP.
-const TEST_OTP_ENABLED = !config.isProduction;
+//
+// Gating on `!config.isProduction` alone is one missing/misconfigured
+// NODE_ENV away from silently reopening exactly that hole in a real
+// deployment — NODE_ENV defaults to non-production if it's ever unset. A
+// second, explicit opt-in that itself defaults OFF means a deploy has to
+// get TWO things wrong (not set NODE_ENV=production AND explicitly set
+// ALLOW_TEST_OTP=true) before this bypass can be live, instead of one.
+const TEST_OTP_ENABLED = !config.isProduction && process.env.ALLOW_TEST_OTP === 'true';
 const TEST_IDENTIFIERS = ['1234567890', '+911234567890', 'test@example.com', 'newuser4@example.com'];
 const TEST_OTP_CODE = '1234';
 

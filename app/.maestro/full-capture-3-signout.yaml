@@ -1,0 +1,4 @@
+appId: app.pandapay.pandapay
+---
+- takeScreenshot: cap02-account-settings
+- tapOn: "Sign out"

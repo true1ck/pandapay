@@ -1,0 +1,15 @@
+appId: app.pandapay.pandapay
+---
+- takeScreenshot: cap03-welcome
+- tapOn: "Get started"
+- takeScreenshot: cap04-account-choice
+- tapOn: "Use without an account\nRECOMMENDED\nEverything stays on this phone. Nothing is uploaded."
+- takeScreenshot: cap05-add-first-card
+- tapOn: "HDFC Millennia"
+- takeScreenshot: cap06-card-selected
+- tapOn: "Continue"
+- takeScreenshot: cap07-card-details-setup
+- tapOn: "Finish"
+- takeScreenshot: cap08-tracking-setup
+- tapOn: "Set up later"
+- takeScreenshot: cap09-home-fresh-guest

@@ -193,6 +193,18 @@ class _RouterRefreshNotifier extends ChangeNotifier {
 ///      link). This is deliberately NOT gated on sign-in status: browsing
 ///      without an account remains fully supported after onboarding, same
 ///      as Home's existing guest-browse behaviour.
+/// The ShellRoute's own Navigator — every hub-of-a-hub screen (Import Hub,
+/// Tools Hub, Travel Mode, Sync & Backup, IMAP connection, etc.) is a plain
+/// Navigator.push/context.push on top of THIS Navigator, not a registered
+/// route of its own. Switching bottom-nav tabs only tells go_router to swap
+/// which of the 4 tab GoRoutes is active — it does NOT know about, and so
+/// never pops, anything pushed imperatively on top. Without popping back to
+/// this Navigator's base page first, tapping a different tab left whatever
+/// was pushed (e.g. Tools & Travel) stuck on screen with a stale AppBar
+/// title/tab highlight that didn't match — a confirmed, reproduced bug.
+/// `_navButton` below uses this key to unwind that stack before navigating.
+final _shellNavigatorKey = GlobalKey<NavigatorState>();
+
 final goRouterProvider = Provider<GoRouter>((ref) {
   final refresh = _RouterRefreshNotifier(ref);
   ref.onDispose(refresh.dispose);
@@ -231,7 +243,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         return path == AppRoute.splash ? null : AppRoute.splash;
       }
 
-      final complete = onboarding.valueOrNull ?? false;
+      // A signed-in session proves onboarding already happened (on this
+      // device or another one) — without this, logging into an existing
+      // account on a fresh install still bounces through the whole
+      // Welcome -> Account Choice -> Add Card funnel, since
+      // onboardingCompleteProvider is a per-device SharedPreferences flag
+      // with no idea the login above it just succeeded.
+      final signedIn = ref.read(accessTokenProvider) != null;
+      final complete = (onboarding.valueOrNull ?? false) || signedIn;
 
       // Loading just finished. Splash must always hand off to a real
       // destination here — it's never itself a valid resting page once
@@ -323,17 +342,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       // D2/D3 — deep-linkable per ui-spec §1 ("transaction detail" named
-      // explicitly). Static siblings (needsReview, duplicateReview) are
-      // registered separately below, same "static beats param at the same
-      // depth" reasoning as cardDetail's own doc-comment.
-      GoRoute(
-        path: AppRoute.transactionDetail,
-        builder: (context, state) => TransactionDetailScreen(transactionId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/activity/:id/edit',
-        builder: (context, state) => EditTransactionScreen(transactionId: state.pathParameters['id']!),
-      ),
+      // explicitly). go_router matches in declaration order, not by
+      // specificity, so both static siblings below must come BEFORE this
+      // '/activity/:id' route — otherwise it swallows them with :id
+      // literally bound to "needs-review" / "duplicates" (this was a real,
+      // reproduced bug: opening Needs Review 500'd with a Postgres
+      // "invalid input syntax for type uuid" error). Same fix applied to
+      // cardDetail's '/cards/:id' vs. its own static siblings above.
       GoRoute(
         path: AppRoute.needsReview,
         builder: (context, state) => const NeedsReviewScreen(),
@@ -341,6 +356,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoute.duplicateReview,
         builder: (context, state) => const DuplicateReviewScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.transactionDetail,
+        builder: (context, state) => TransactionDetailScreen(transactionId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/activity/:id/edit',
+        builder: (context, state) => EditTransactionScreen(transactionId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: AppRoute.creditUtilization,
@@ -411,18 +434,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const BenefitsCheatSheetScreen(),
       ),
       // C2 Card Detail — deep-linkable (ui-spec §1 names "card detail"
-      // explicitly). go_router matches the static benefitsCheatSheet route
-      // above in preference to this param route for the literal path
-      // '/cards/benefits', so declaration order here doesn't create an
-      // ambiguity between the two.
-      GoRoute(
-        path: AppRoute.cardDetail,
-        builder: (context, state) => CardDetailScreen(userCardId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: AppRoute.editCard,
-        builder: (context, state) => EditCardScreen(userCardId: state.pathParameters['id']!),
-      ),
+      // explicitly). go_router matches routes in declaration order, not by
+      // specificity, so every static '/cards/...' sibling (pointsExpiry,
+      // reportWrongData, requestNewCard, same as benefitsCheatSheet above)
+      // must be declared BEFORE this '/cards/:id' route — otherwise it
+      // swallows them with :id literally bound to e.g. "points-expiry".
+      // (That's exactly what happened here before this fix; see the same
+      // bug on the /activity/:id vs. needsReview/duplicateReview routes
+      // below, which gets the identical fix.)
       GoRoute(
         path: AppRoute.pointsExpiry,
         builder: (context, state) => const PointsExpiryScreen(),
@@ -436,6 +455,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoute.requestNewCard,
         builder: (context, state) => const RequestNewCardScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.cardDetail,
+        builder: (context, state) => CardDetailScreen(userCardId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: AppRoute.editCard,
+        builder: (context, state) => EditCardScreen(userCardId: state.pathParameters['id']!),
       ),
       // F1 Import Hub already builds its own Scaffold+AppBar (its F2-F7
       // children are reached via plain pushed routes from inside it, not
@@ -468,6 +495,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => const NoTransitionPage(child: ForcedUpgradeScreen()),
       ),
       ShellRoute(
+        navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) => _AppShell(
           location: state.uri.path,
           child: child,
@@ -587,34 +615,47 @@ class _AppShellState extends ConsumerState<_AppShell> {
     final showTutorial =
         widget.location == AppRoute.home && !(ref.watch(tutorialSeenProvider).valueOrNull ?? true);
     return Scaffold(
-      appBar: AppBar(title: Text('PandaPay — $_currentLabel')),
-      body: showTutorial
-          ? Stack(children: [widget.child, const TutorialOverlay()])
-          : widget.child,
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'scanToPayFab',
+      appBar: AppBar(
+        title: Text('PandaPay — $_currentLabel'),
+        // "Scan a UPI QR to pay" used to be a second FAB stacked directly
+        // on top of "Scan a card" below — two near-identical QR icons
+        // glued together read as a mistake, not two features, and doubled
+        // how much of the screen the docked FAB ate into. It's a much
+        // better fit as a plain app-bar action (every other one-off,
+        // non-primary action in this shell already lives here), leaving
+        // the FAB to do the one thing it's sized for.
+        actions: [
+          IconButton(
             onPressed: _scanToPay,
             tooltip: 'Scan a UPI QR to pay',
-            child: const Icon(Icons.qr_code_2_rounded),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton.large(
-            heroTag: 'scanFab',
-            key: tutorialKeys.scanFab,
-            onPressed: _scanning ? null : _scanFromFab,
-            tooltip: 'Scan a card',
-            child: _scanning
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.qr_code_scanner_rounded),
+            icon: const Icon(Icons.qr_code_2_rounded),
           ),
         ],
+      ),
+      // The docked FAB is centered on the bottom bar's top edge, so
+      // roughly half its height floats above the bar and over whatever
+      // this shell's body currently is — every tab root and every screen
+      // pushed on top of it (Import Hub, Sync & Backup, IMAP connection,
+      // etc. all live inside this same body). Reserve that space so the
+      // FAB never sits on top of tappable content.
+      body: Stack(
+        children: [
+          Padding(padding: const EdgeInsets.only(bottom: 72), child: widget.child),
+          if (showTutorial) const TutorialOverlay(),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.large(
+        heroTag: 'scanFab',
+        key: tutorialKeys.scanFab,
+        onPressed: _scanning ? null : _scanFromFab,
+        tooltip: 'Scan a card',
+        child: _scanning
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+            : const Icon(Icons.qr_code_scanner_rounded),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
@@ -644,7 +685,18 @@ class _AppShellState extends ConsumerState<_AppShell> {
     final color = selected ? Theme.of(context).colorScheme.primary : const Color(0xFF6B7684);
     return Expanded(
       child: InkWell(
-        onTap: () => context.go(path),
+        onTap: () {
+          // Unwind anything pushed on top of the shell's own Navigator
+          // (Import Hub, Travel Mode, a pushed card/transaction detail,
+          // etc.) BEFORE switching tabs — see _shellNavigatorKey's own
+          // doc-comment for why this is needed. popUntil(isFirst) is safe
+          // here specifically because this key only ever points at the
+          // ShellRoute's Navigator, whose sole declarative entry is
+          // whichever of the 4 tabs is current; it can't over-pop into
+          // Welcome/Splash or any other outer route.
+          _shellNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+          context.go(path);
+        },
         child: Semantics(
           label: label,
           selected: selected,

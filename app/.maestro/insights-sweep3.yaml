@@ -1,0 +1,10 @@
+appId: app.pandapay.pandapay
+---
+- tapOn: "Due Dates"
+- takeScreenshot: t1-due-dates
+- tapOn: "Back"
+- tapOn: "Savings Report"
+- takeScreenshot: t2-savings
+- tapOn: "Back"
+- scroll
+- takeScreenshot: t3-hub-scrolled

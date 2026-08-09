@@ -20,10 +20,10 @@ import '../../data/api_exception.dart';
 ///
 /// NOT built this pass: an actual background IMAP poller that reads the
 /// mailbox (needs a scheduled job, same class of gap as F3's inbound-email
-/// ingestion — see Task F-0). "Test connection" below is a STUB per this
-/// task's own explicit allowance: it validates field FORMAT only (host
-/// looks like a hostname, port in range, email has an @), never opens a
-/// real IMAP/TLS handshake.
+/// ingestion — see Task F-0). "Test connection" performs a real IMAP
+/// handshake server-side (POST /imap-connections/:id/test decrypts the
+/// stored app password and opens a live TLS+LOGIN against imap_host:port —
+/// see api/src/imap_test.js) — not just a format check.
 class ImapConnectionScreen extends ConsumerStatefulWidget {
   const ImapConnectionScreen({super.key});
 
@@ -64,8 +64,13 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
       _passwordController.clear(); // never keep the typed password around after it's sent
       ref.invalidate(imapConnectionProvider);
       if (mounted) {
-        await repo.testImapConnection(conn.id);
+        final testResult = await repo.testImapConnection(conn.id);
         ref.invalidate(imapConnectionProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(testResult.ok ? 'Connected — login succeeded.' : (testResult.reason ?? 'Login failed.')),
+          ));
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -130,7 +135,7 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            conn.verifiedAt != null ? 'Format verified' : 'Not yet verified',
+                            conn.verifiedAt != null ? 'Login verified' : 'Not yet verified',
                             style: textTheme.bodySmall,
                           ),
                         ],
@@ -204,8 +209,8 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
           ),
           const SizedBox(height: AppSpace.sm),
           Text(
-            '"Test connection" checks the fields look well-formed only — it does not perform a live IMAP login '
-            '(no background poller is wired up this pass; see this screen\'s doc-comment).',
+            '"Test connection" performs a real IMAP login against your mail server to confirm the credentials work. '
+            'No background poller is wired up yet to read the mailbox automatically (see this screen\'s doc-comment).',
             style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
           ),
         ],

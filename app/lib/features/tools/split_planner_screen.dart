@@ -40,60 +40,75 @@ class _SplitPlannerScreenState extends ConsumerState<SplitPlannerScreen> {
     final plan = ref.watch(splitPlanProvider);
     final amount = ref.watch(splitPlannerAmountProvider);
 
-    return owned.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => ErrorState(
-        message: userFacingErrorMessage(err),
-        onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
-      ),
-      data: (pairs) {
-        if (pairs.isEmpty) {
-          return const EmptyState(
-            icon: Icons.call_split_rounded,
-            title: 'No cards yet',
-            message: 'Add at least one card to plan a split.',
+    return Scaffold(
+      appBar: AppBar(title: const Text('Multi-Card Split Planner')),
+      body: owned.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, _) => ErrorState(
+          message: userFacingErrorMessage(err),
+          onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
+        ),
+        data: (pairs) {
+          if (pairs.isEmpty) {
+            return const EmptyState(
+              icon: Icons.call_split_rounded,
+              title: 'No cards yet',
+              message: 'Add at least one card to plan a split.',
+            );
+          }
+          return ListView(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            children: [
+              Text(
+                'Total amount to spend',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: AppSpace.sm),
+              TextField(
+                controller: _amountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                ],
+                decoration: const InputDecoration(
+                  prefixText: '₹ ',
+                  hintText: 'e.g. 50000',
+                ),
+                onChanged: (value) {
+                  final parsed = double.tryParse(value);
+                  ref
+                      .read(splitPlannerAmountProvider.notifier)
+                      .state = parsed == null
+                      ? const Money.zero()
+                      : Money.fromRupees(parsed);
+                },
+              ),
+              const SizedBox(height: AppSpace.xxl),
+              if (amount.isZero)
+                const EmptyState(
+                  icon: Icons.request_quote_outlined,
+                  title: 'Enter an amount to see a split',
+                  message:
+                      'PandaPay will divide it across your cards to maximize rewards, respecting '
+                      'each card\'s caps and (where you\'ve entered a credit limit) staying under 30% '
+                      'utilization.',
+                )
+              else if (plan.isEmpty)
+                const EmptyState(
+                  icon: Icons.block_rounded,
+                  title: 'No eligible allocation',
+                  message:
+                      'Every owned card is either excluded for this amount or already at its cap/'
+                      'utilization ceiling — try a smaller amount.',
+                )
+              else
+                _SplitResult(plan: plan, total: amount),
+            ],
           );
-        }
-        return ListView(
-          padding: const EdgeInsets.all(AppSpace.lg),
-          children: [
-            Text(
-              'Total amount to spend',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: AppSpace.sm),
-            TextField(
-              controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              decoration: const InputDecoration(prefixText: '₹ ', hintText: 'e.g. 50000'),
-              onChanged: (value) {
-                final parsed = double.tryParse(value);
-                ref.read(splitPlannerAmountProvider.notifier).state =
-                    parsed == null ? const Money.zero() : Money.fromRupees(parsed);
-              },
-            ),
-            const SizedBox(height: AppSpace.xxl),
-            if (amount.isZero)
-              const EmptyState(
-                icon: Icons.request_quote_outlined,
-                title: 'Enter an amount to see a split',
-                message: 'PandaPay will divide it across your cards to maximize rewards, respecting '
-                    'each card\'s caps and (where you\'ve entered a credit limit) staying under 30% '
-                    'utilization.',
-              )
-            else if (plan.isEmpty)
-              const EmptyState(
-                icon: Icons.block_rounded,
-                title: 'No eligible allocation',
-                message: 'Every owned card is either excluded for this amount or already at its cap/'
-                    'utilization ceiling — try a smaller amount.',
-              )
-            else
-              _SplitResult(plan: plan, total: amount),
-          ],
-        );
-      },
+        },
+      ),
     );
   }
 }
@@ -106,7 +121,10 @@ class _SplitResult extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final totalExpectedValue = plan.fold<Money>(const Money.zero(), (a, b) => a + b.expectedValue);
+    final totalExpectedValue = plan.fold<Money>(
+      const Money.zero(),
+      (a, b) => a + b.expectedValue,
+    );
     final placed = plan.fold<Money>(const Money.zero(), (a, b) => a + b.amount);
 
     return Column(
@@ -124,11 +142,20 @@ class _SplitResult extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Total expected reward value',
-                        style: textTheme.bodySmall?.copyWith(color: Colors.white70)),
+                    Text(
+                      'Total expected reward value',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    MoneyText(totalExpectedValue, confidence: Confidence.estimated,
-                        style: textTheme.headlineSmall?.copyWith(color: Colors.white)),
+                    MoneyText(
+                      totalExpectedValue,
+                      confidence: Confidence.estimated,
+                      style: textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -166,7 +193,9 @@ class _AllocationBar extends StatelessWidget {
     // is double?, so this needs an explicit .toDouble() rather than
     // relying on the clamp() result being assignable directly (it isn't,
     // under sound null safety).
-    final rawFraction = total.isZero ? 0.0 : allocation.amount.paise / total.paise;
+    final rawFraction = total.isZero
+        ? 0.0
+        : allocation.amount.paise / total.paise;
     final fraction = rawFraction.clamp(0.0, 1.0).toDouble();
     return Container(
       decoration: BoxDecoration(
@@ -180,8 +209,14 @@ class _AllocationBar extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(allocation.card.name, style: textTheme.titleSmall)),
-              MoneyText(allocation.amount, confidence: Confidence.estimated, style: textTheme.bodyMedium),
+              Expanded(
+                child: Text(allocation.card.name, style: textTheme.titleSmall),
+              ),
+              MoneyText(
+                allocation.amount,
+                confidence: Confidence.estimated,
+                style: textTheme.bodyMedium,
+              ),
             ],
           ),
           const SizedBox(height: AppSpace.sm),
@@ -197,9 +232,15 @@ class _AllocationBar extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Row(
             children: [
-              Text('${(fraction * 100).toStringAsFixed(0)}% of total · expected reward ',
-                  style: textTheme.bodySmall),
-              MoneyText(allocation.expectedValue, confidence: Confidence.estimated, style: textTheme.bodySmall),
+              Text(
+                '${(fraction * 100).toStringAsFixed(0)}% of total · expected reward ',
+                style: textTheme.bodySmall,
+              ),
+              MoneyText(
+                allocation.expectedValue,
+                confidence: Confidence.estimated,
+                style: textTheme.bodySmall,
+              ),
             ],
           ),
         ],

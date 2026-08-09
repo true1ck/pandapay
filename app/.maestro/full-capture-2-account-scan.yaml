@@ -1,0 +1,6 @@
+appId: app.pandapay.pandapay
+---
+- tapOn: "Skip tour"
+- tapOn:
+    text: "Account\nAccount"
+- scroll

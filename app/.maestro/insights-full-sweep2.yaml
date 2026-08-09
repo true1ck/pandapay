@@ -1,0 +1,18 @@
+appId: app.pandapay.pandapay
+---
+- tapOn: "Back"
+- tapOn: "Milestones"
+- takeScreenshot: s2-milestones
+- tapOn: "Back"
+- tapOn: "Fee Waivers"
+- takeScreenshot: s3-fee-waivers
+- tapOn: "Back"
+- tapOn: "Billing Float"
+- takeScreenshot: s4-billing-float
+- tapOn: "Back"
+- tapOn: "Credit Utilization"
+- takeScreenshot: s5-credit-util
+- tapOn: "Back"
+- tapOn: "Lounge Access"
+- takeScreenshot: s6-lounge
+- tapOn: "Back"

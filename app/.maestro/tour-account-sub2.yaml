@@ -1,0 +1,16 @@
+appId: app.pandapay.pandapay
+---
+- tapOn:
+    text: "Account\nAccount"
+- tapOn: "Import & sync"
+- takeScreenshot: b1-import-hub
+- back
+- tapOn: "Nearby merchants"
+- takeScreenshot: b2-nearby-merchants
+- back
+- tapOn: "SMS transaction import"
+- takeScreenshot: b3-sms-import
+- back
+- tapOn: "Home-screen widget"
+- takeScreenshot: b4-home-widget
+- back

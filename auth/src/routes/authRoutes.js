@@ -846,8 +846,16 @@ router.post(
       const encryptedPhone = encryptPhoneNumber(phone_number);
       
       const verificationResult = await executeOtpVerifyWithTiming(async () => {
+        // CRITICAL FIX: verifyOtp() resolves to an object — {ok: true} or
+        // {ok: false, reason: ...} — never null/undefined. `!isValid` on a
+        // non-null object is always false in JS regardless of `.ok`, so
+        // this previously accepted ANY code for ANY email that had ever
+        // requested an OTP: a wrong/expired/never-issued code still hit the
+        // `return { success: true, ... }` line below and went on to mint
+        // real access+refresh tokens. Must check `.ok`, same as the phone
+        // path (verify-otp route, above) already correctly does.
         const isValid = await verifyOtp(normalizedEmail, code, 'email');
-        if (!isValid) {
+        if (!isValid.ok) {
           await incrementFailedVerify(normalizedEmail);
           return { error: 'Invalid or expired code', status: 400 };
         }

@@ -1,0 +1,5 @@
+appId: app.pandapay.pandapay
+---
+- tapOn:
+    text: "Insights\nInsights"
+- takeScreenshot: i0-hub

@@ -15,17 +15,25 @@
          fire on newly-arriving bank SMS while the app is foregrounded. -->
     <uses-permission android:name="android.permission.READ_SMS"/>
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
-    <!-- UA-8 (Chunk 32): foreground-only "check nearby merchants" geofencing.
-         Deliberately FINE/COARSE only, no ACCESS_BACKGROUND_LOCATION — this
-         chunk's scope was explicitly cut down to a one-shot location read
-         triggered by the user tapping a button, not always-on background
-         geofence monitoring (that permission is heavily gated on both
-         platforms and needs a foreground service + platform review this
-         sandbox can't responsibly build/verify). See PROGRESS.md. Same
-         "could not verify granting on a real device" caveat as UA-4/UA-5.3
-         above — no Android SDK/emulator here either. -->
+    <!-- UA-8 (Chunk 32): "check nearby merchants" geofencing. Originally
+         foreground-only (FINE/COARSE); extended in a later pass to add
+         optional background monitoring — an opt-in toggle in
+         nearby_merchants_screen.dart, off by default, backed by
+         GeofenceMonitorService's geolocator position stream. ACCESS_BACKGROUND_LOCATION
+         and the foreground-service permissions below are ONLY exercised
+         when the user explicitly turns that toggle on; the default
+         one-shot flow still only needs FINE/COARSE. Same "could not
+         verify granting on a real device" caveat as UA-4/UA-5.3 above —
+         no Android SDK/emulator here either. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <!-- Android 13+ runtime notification permission — flutter_local_notifications
+         needs this to actually post the background-geofence-match alert
+         (and the required persistent foreground-service notification). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="pandapay"
         android:name="${applicationName}"

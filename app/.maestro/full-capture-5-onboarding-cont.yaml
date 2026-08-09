@@ -1,0 +1,8 @@
+appId: app.pandapay.pandapay
+---
+- tapOn: "Add 1 card"
+- takeScreenshot: cap07-card-details-setup
+- tapOn: "Finish"
+- takeScreenshot: cap08-tracking-setup
+- tapOn: "Set up later"
+- takeScreenshot: cap09-home-fresh-guest

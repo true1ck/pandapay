@@ -1,0 +1,14 @@
+appId: app.pandapay.pandapay
+---
+- tapOn:
+    text: "Account\nAccount"
+- tapOn: "Travel & tools"
+- tapOn: "Travel Mode\nRe-rank cards by forex markup, lounge access abroad, travel insurance"
+- takeScreenshot: p1-travel-mode
+- tapOn: "Back"
+- tapOn: "Multi-Card Split Planner\nDivide a big purchase across your cards for maximum rewards"
+- takeScreenshot: p2-split-planner
+- tapOn: "Back"
+- tapOn: "EMI Advisor\nSee the real cost of converting a purchase to EMI"
+- takeScreenshot: p3-emi-advisor
+- tapOn: "Back"

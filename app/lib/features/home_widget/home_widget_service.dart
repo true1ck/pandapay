@@ -25,6 +25,28 @@ class HomeWidgetService {
   static const String updatedAtKey = 'best_card_updated_at';
   static const String noCardKey = 'best_card_none';
 
+  /// The App Group `HomeWidgetExtension.swift`/Runner.entitlements/
+  /// HomeWidgetExtension.entitlements all share — must match all three
+  /// exactly. iOS-only concept (`setAppGroupId` is a no-op on Android,
+  /// where `home_widget` uses SharedPreferences instead), but calling it
+  /// unconditionally on every platform is simpler and harmless than
+  /// branching on Platform.isIOS here.
+  static const String iosAppGroupId = 'group.app.pandapay.pandapay.homewidget';
+
+  bool _configured = false;
+
+  /// Idempotent, called automatically by [updateBestCardWidget] — without
+  /// this, `home_widget`'s iOS side has no UserDefaults suite to write
+  /// into and every saveWidgetData call silently fails to reach the
+  /// widget extension. Folded into the update call rather than requiring
+  /// a separate startup call site, so there's no "someone forgot to wire
+  /// this up" failure mode.
+  Future<void> configure() async {
+    if (_configured) return;
+    await HomeWidget.setAppGroupId(iosAppGroupId);
+    _configured = true;
+  }
+
   /// Writes [recommendation] (or a "no usable card" marker when null) to
   /// the widget's shared storage and asks the OS to trigger a redraw.
   /// [nowIso] is passed in rather than read via `DateTime.now()` directly,
@@ -34,6 +56,7 @@ class HomeWidgetService {
     required Recommendation? recommendation,
     required String nowIso,
   }) async {
+    await configure();
     if (recommendation == null) {
       await HomeWidget.saveWidgetData<bool>(noCardKey, true);
       await HomeWidget.saveWidgetData<String>(cardNameKey, '');

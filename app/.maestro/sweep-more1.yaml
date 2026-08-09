@@ -1,0 +1,11 @@
+appId: app.pandapay.pandapay
+---
+- tapOn: "Back"
+- tapOn: "Benefits cheat sheet"
+- takeScreenshot: m1-benefits-cheat-sheet
+- tapOn: "Back"
+- tapOn: "HDFC Millennia\n5% online spends — capped at ₹1,000 cashback/cycle"
+- tapOn:
+    id: "flag"
+    optional: true
+- takeScreenshot: m2-report-wrong-data-attempt

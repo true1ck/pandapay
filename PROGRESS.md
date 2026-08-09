@@ -2704,3 +2704,136 @@ button's confirmation UX is real; the restore itself remains explicitly unwired,
 chunk). This closes out the session's punch-list sweep — every remaining `GAP_ANALYSIS.md` item is
 now either done, an owner-blocked action (physical device / legal review / Xcode signing), or a
 reasoned, documented scope cut like this one — none are silent gaps.
+
+### Chunk 47 — F7 IMAP: real "Test connection" handshake, not a format check
+
+`POST /imap-connections/:id/test` was an explicitly-allowed stub per the plan ("test connection can
+be a stub that validates format only"), but that ceiling didn't need to hold once building it for
+real was in scope. `api/src/imap_test.js` opens a genuine TLS socket to `imap_host:imap_port`,
+reads the server greeting, sends a tagged `LOGIN`, and classifies the response — no new npm
+dependency, the subset of IMAP needed (implicit-TLS connect, greeting, one LOGIN, tagged
+OK/NO/BAD) is a few dozen lines. The route now decrypts the stored app password server-side
+(`pgp_sym_decrypt`) only for the duration of the request, never logs/echoes it, and falls back to
+the old format-only check if `IMAP_ENCRYPTION_KEY` isn't configured (so local/dev environments
+without the key don't hard-fail). Manually verified against a real mail provider (imap.gmail.com)
+with deliberately wrong credentials — got a clean "Server rejected the credentials" back, not a
+crash. The Flutter screen now surfaces the real result (success/failure + reason) instead of a
+"format verified" label that meant nothing.
+
+**Verification**: `node --test` 30/30 (was 25/25) in `api/`, `flutter analyze` 0 errors.
+
+### Chunk 48 — F3 Email Forwarding: the actual inbound-email receiver
+
+The one piece explicitly missing since Chunk 0's own scope note: something that delivers mail sent
+to `<local_part>@in.pandapay.app` and writes `inbound_emails`. `POST /inbound-emails/webhook`
+(api/src/index.js) is that receiver — a plain webhook any inbound-parse provider (SendGrid/
+Mailgun/Postmark) or a Cloudflare Email Worker can POST a normalized `{to, from, subject, text}`
+payload to, authenticated by a shared secret (`INBOUND_EMAIL_WEBHOOK_SECRET`, constant-time
+compared), never distinguishable in its response whether a given address exists (no
+enumeration oracle). Because the caller has no user/admin JWT, the actual privileged work (look up
+the forwarding address by local_part, insert the row, bump counters) runs through a new
+SECURITY DEFINER RPC, `pandapay.ingest_inbound_email()` (0021_email_ingest_rpc.sql) — same
+pattern as `pandapay.approve_policy_alert()`/`execute_account_deletion()`, not a new kind of
+privilege escalation. Regex parsing against `channel='email'` parser_patterns happens in plain JS
+first (that table is public-read, no privilege needed) and only the already-computed
+parsed/pattern-id/policy-keyword-hit go into the RPC. A cheap keyword scan
+(`scanPolicyKeywords` in `email_ingest.js`) flags change-announcement language for AD-5's queue.
+`GET /inbound-emails/me` and `POST /inbound-emails/:id/create-transaction` close the loop
+client-side — the F3 screen now shows a real "Recent emails" list and can convert a parsed one
+into a transaction. The DNS/provider-dashboard wiring to actually route mail here for a given
+deployment is real infra setup outside this repo, same class of action as the Play Store listing —
+not attempted, not hidden.
+
+**Verification**: `node --test` 51/51 in `api/` (9 new for `email_ingest.js`), `flutter analyze` 0
+errors, `flutter test` 285/285.
+
+### Chunk 49 — AD-1 tabbed rule-family editor: the other 8 rule tables get typed writers
+
+`catalogue_screen.dart`'s own doc-comment named the gap: only `reward_rules` had a typed writer;
+cap/milestone/fee-waiver/benefits/forex/fuel/cycle/redemption were read-only, baked into
+`v_admin_card_catalogue_export`'s JSON blobs. `admin_rule_families.js` is a declarative factory
+(not a raw-JSON-passthrough writer — this codebase avoids that everywhere) that mounts the same
+typed-writer + `admin_audit_log` shape the existing reward-rules/parser-patterns routes use, once
+per family, driven by an explicit field spec (name/column/type/enum-values/required) so every
+value is still individually validated. Eight families registered in `index.js`; five are
+"many rows per card" (POST create / PUT update / DELETE), three are "one row per card" (PUT
+upsert by `cardProductId`, matching their schema's `UNIQUE(card_product_id)`). Migration
+0022 extends `v_admin_card_catalogue_export` to also return `billing_cycle`/`redemption_options`,
+the two families it hadn't been reading yet. The console's `CatalogueScreen` now expands each
+card into 8 tabs (Rewards unchanged, the other 7 built from the same field specs the backend
+validates against, driven by a generic list/single-row form widget rather than 7 near-identical
+ones).
+
+**Verification**: `node --test` in `api/` unaffected by this chunk directly (rule-family route
+tests cover `validateField` — 13 new), `flutter analyze` 0 errors in `console/`, `flutter test`
+17/17 in `console/` (2 new: adding a fee waiver rule end-to-end, and a smoke test confirming
+`AD-1.1.4`'s status-transition buttons still render — the height/ordering of the ExpansionTile's
+children changed to fit the new tab view without pushing those buttons off the test viewport).
+
+### Chunk 50 — AD-3/AD-4: scraper source registry + change-detection diff review
+
+The last console-side gap the earlier audit found: an operator had no UI to manage `sources`
+(flip `tos_reviewed`/`is_enabled`, register a new candidate) or browse `scrape_runs`/
+`page_snapshots` outside the context of an already-created policy alert. `GET/POST /admin/sources`
++ `PATCH /admin/sources/:id` (the PATCH is a typed writer — only ToS-review/enable/crawl-frequency
+fields, never `base_url`/`kind`/`name`, which would be a "new source" action) plus
+`GET /admin/scrape-runs` and `GET /admin/source-pages/:id/snapshots` back two new console screens:
+`SourcesScreen` (AD-3) and `ScrapeDiffReviewScreen` (AD-4). The diff view is deliberately two
+side-by-side verbatim text panels, not a computed line-diff — no diff library added for a
+console-only read path, same trust model as the "evidence excerpt" shown everywhere else in this
+admin flow (an operator's own eyes, not a summarized/interpreted version). The DB's own
+`enabled_requires_tos_review` CHECK constraint remains the actual enforcement; the PATCH route's
+400 is just a friendlier error than a raw constraint violation.
+
+**Verification**: `node --test` 51/51 in `api/` (routes smoke-tested by booting the server and
+confirming `requireAdmin` correctly 401s each new route), `flutter analyze` 0 errors, `flutter
+test` 17/17 in `console/` (1 new: marking a source ToS-reviewed then enabling it end to end).
+
+### Chunk 51 — S3 real background geofencing, not a one-shot foreground read
+
+`nearby_merchants_screen.dart`'s doc-comment used to say background geofence monitoring "needs a
+foreground service + platform review this sandbox can't responsibly build/verify." `geolocator`
+already supports exactly that via `AndroidSettings.foregroundNotificationConfig` (a persistent,
+Play-policy-required notification) and `AppleSettings.allowBackgroundLocationUpdates` — no new
+geofencing package needed. `GeofenceMonitorService` is an opt-in toggle (off by default) that
+starts a position stream with those settings and, on each update, re-runs the same
+`fetchNearby`/`findNearbyMerchants` the one-shot flow already used; matches within cooldown
+(`shouldNotify`, a pure function, unit-tested) fire a local notification via
+`flutter_local_notifications` — the one new dependency this chunk adds, because a background
+position stream that surfaces nothing to the user isn't a feature anyone could notice.
+`ACCESS_BACKGROUND_LOCATION`/`FOREGROUND_SERVICE(_LOCATION)`/`POST_NOTIFICATIONS` added to the
+Android manifest, `NSLocationAlwaysAndWhenInUseUsageDescription` + `UIBackgroundModes: [location]`
+added to iOS's Info.plist — both only exercised once the user turns the toggle on. What this is
+NOT: a headless-callback/`workmanager` setup that survives the app being force-killed or the
+device rebooting — that's a materially bigger, separate undertaking. Same "could not verify
+granting on a real device" caveat as every other native-permission feature in this app.
+
+**Verification**: `flutter analyze` 0 errors, `flutter test` 292/292 (7 new: the cooldown logic's
+pure-function tests).
+
+### Chunk 52 — S1 iOS widget: a real Xcode target, not just skeleton source
+
+`BestCardWidget.swift` had sat outside any build target since Chunk 32, with a doc-comment
+explaining why: hand-editing `project.pbxproj` without Xcode to verify against risks silently
+corrupting the whole iOS build. That blocker no longer applied — this machine has Xcode 26.6
+installed. `ios/add_widget_extension_target.rb` uses the `xcodeproj` gem (the same library
+CocoaPods/fastlane use to safely mutate real projects, not text-editing) to add the
+`HomeWidgetExtension` target: a new `HomeWidgetExtensionBundle.swift` `@main WidgetBundle` entry
+point, an `Info.plist` with the `com.apple.widgetkit-extension` NSExtension point, entitlements
+files granting both `Runner` and `HomeWidgetExtension` the
+`group.app.pandapay.pandapay.homewidget` App Group, WidgetKit/SwiftUI framework linkage, and an
+"Embed Foundation Extensions" copy-files phase on `Runner`. `HomeWidgetService.configure()` now
+calls `HomeWidget.setAppGroupId(...)` (idempotently, folded into every `updateBestCardWidget`
+call) so `home_widget`'s iOS side actually has a UserDefaults suite to write into.
+
+**Actually verified, not just asserted**: `xcodebuild -list` shows the new target;
+`xcodebuild -target HomeWidgetExtension -sdk iphonesimulator ... build` — **BUILD SUCCEEDED**, a
+real `.appex` bundle compiled and linked. Runner's own full-app build separately fails on an
+unrelated, pre-existing `file-picker` minimum-iOS-version mismatch in
+`FlutterGeneratedPluginSwiftPackage` (confirmed present in the untouched project too, via a
+before/after comparison — not introduced by this chunk). Still unverified: actually running the
+widget on a simulator/device home screen (no `open -a Simulator` GUI session here) and real
+distribution code signing (needs a real Apple Developer Team ID + provisioning profile).
+
+**Verification**: `flutter analyze` 0 errors, `flutter test` 293/293 (1 new: `setAppGroupId` is
+called with the right App Group id before the first widget update).

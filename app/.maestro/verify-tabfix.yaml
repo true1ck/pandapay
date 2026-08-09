@@ -1,0 +1,19 @@
+appId: app.pandapay.pandapay
+---
+- tapOn: "I already have an account"
+- tapOn: "Email"
+- tapOn: "you@example.com"
+- inputText: "test@example.com"
+- tapOn: "Send code"
+- extendedWaitUntil:
+    visible: "Verification code"
+    timeout: 8000
+- tapOn:
+    point: "50%,32%"
+- inputText: "1234"
+- tapOn: "Verify & continue"
+- extendedWaitUntil:
+    visible:
+      text: "Home\nHome"
+    timeout: 8000
+- takeScreenshot: q1-post-login

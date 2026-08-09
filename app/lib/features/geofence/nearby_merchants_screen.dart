@@ -7,15 +7,14 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 
-/// UA-8.1/8.3: "Nearby merchants" — the foreground-triggered, one-shot
-/// version of geofencing this chunk actually built. Explicitly NOT
-/// always-on background geofence monitoring (see PROGRESS.md for the
-/// stated scope reduction) — this screen only reads the device's current
-/// location when the user taps the button, sends it to
-/// `GET /merchants/nearby`, and for each match reuses the *exact same*
-/// `rankedRecommendationsProvider`/engine machinery Home already uses
-/// (scoped to the merchant's own category when it has one) to say which
-/// owned card to use there.
+/// UA-8.1/8.3: "Nearby merchants" — the original foreground-triggered,
+/// one-shot check (button tap -> one location read -> `GET
+/// /merchants/nearby` -> rank via the same `rankedRecommendationsProvider`/
+/// engine machinery Home uses), plus a toggle for real background
+/// monitoring (GeofenceMonitorService) added in a later pass — see that
+/// service's doc-comment for exactly what "background" does and doesn't
+/// mean here (app-process-alive background, not survives-a-reboot
+/// tracking).
 class NearbyMerchantsScreen extends ConsumerStatefulWidget {
   const NearbyMerchantsScreen({super.key});
 
@@ -29,6 +28,34 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   _LoadState _state = _LoadState.idle;
   String? _errorMessage;
   List<NearbyMerchantMatch> _matches = const [];
+  bool _backgroundToggleBusy = false;
+  String? _backgroundError;
+
+  Future<void> _toggleBackgroundMonitoring(bool enable) async {
+    setState(() {
+      _backgroundToggleBusy = true;
+      _backgroundError = null;
+    });
+    final service = ref.read(geofenceMonitorServiceProvider);
+    try {
+      if (enable) {
+        final granted = await service.requestPermissions();
+        if (!granted) {
+          setState(() => _backgroundError =
+              'Background location and notification permissions are needed for this — enable them in Settings.');
+          return;
+        }
+        await service.start();
+      } else {
+        await service.stop();
+      }
+      ref.read(geofenceMonitoringEnabledProvider.notifier).state = enable;
+    } catch (e) {
+      setState(() => _backgroundError = userFacingErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _backgroundToggleBusy = false);
+    }
+  }
 
   Future<void> _checkNearby() async {
     setState(() {
@@ -89,6 +116,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final backgroundEnabled = ref.watch(geofenceMonitoringEnabledProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Nearby merchants')),
       body: Padding(
@@ -97,12 +125,28 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Checks your current location once and looks for merchants '
-              "you or other PandaPay users have transacted at nearby, then "
-              'suggests which of your cards to use. This is a one-shot '
-              "check, not always-on background tracking.",
+              'Checks your current location and looks for merchants you or '
+              'other PandaPay users have transacted at nearby, then suggests '
+              'which of your cards to use.',
               style: TextStyle(fontSize: 13, color: Colors.black54),
             ),
+            const SizedBox(height: 12),
+            Card(
+              child: SwitchListTile(
+                title: const Text('Background alerts'),
+                subtitle: Text(backgroundEnabled
+                    ? 'On — you\'ll get a notification when you\'re near a known merchant, '
+                        'even with the app closed. A persistent notification shows while this is active.'
+                    : 'Off — checks only run when you tap the button below.'),
+                value: backgroundEnabled,
+                onChanged: _backgroundToggleBusy ? null : _toggleBackgroundMonitoring,
+              ),
+            ),
+            if (_backgroundError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 4),
+                child: Text(_backgroundError!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+              ),
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: _state == _LoadState.locating || _state == _LoadState.fetching

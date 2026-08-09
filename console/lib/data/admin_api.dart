@@ -125,6 +125,78 @@ class AdminApi {
     return body['card'] as Map<String, dynamic>;
   }
 
+  /// AD-1.1.2 tabbed rule-family editor, client side. Mirrors the backend's
+  /// declarative factory (admin_rule_families.js) one-for-one: same shape
+  /// for all 8 non-reward-rules families (cap-rules, milestone-rules,
+  /// fee-waiver-rules, card-benefits, redemption-options as "list"
+  /// families; forex-rules, fuel-surcharge-rules, billing-cycle-rules as
+  /// "single row per card" families), so the tab widgets don't need 8
+  /// near-identical client methods either — `urlSegment` selects the
+  /// family, `fields` is exactly the JSON body the typed server-side
+  /// validator checks.
+  Future<Map<String, dynamic>> createRuleFamilyRow(
+    String urlSegment, {
+    required String cardProductId,
+    required Map<String, dynamic> fields,
+    String? reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/$urlSegment'),
+      headers: _headers,
+      body: jsonEncode({'cardProductId': cardProductId, ...fields, 'reason': ?reason}),
+    );
+    if (response.statusCode != 201) {
+      throw AdminApiException('POST /admin/$urlSegment failed: ${response.statusCode} ${response.body}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateRuleFamilyRow(
+    String urlSegment,
+    String id, {
+    required Map<String, dynamic> fields,
+    String? reason,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$apiBaseUrl/admin/$urlSegment/$id'),
+      headers: _headers,
+      body: jsonEncode({...fields, 'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('PUT /admin/$urlSegment/$id failed: ${response.statusCode} ${response.body}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<void> deleteRuleFamilyRow(String urlSegment, String id, {String? reason}) async {
+    final response = await _client.delete(
+      Uri.parse('$apiBaseUrl/admin/$urlSegment/$id'),
+      headers: _headers,
+      body: jsonEncode({'reason': ?reason}),
+    );
+    if (response.statusCode != 204) {
+      throw AdminApiException('DELETE /admin/$urlSegment/$id failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// singlePerCard families: forex-rules / fuel-surcharge-rules / billing-cycle-rules.
+  Future<Map<String, dynamic>> upsertSinglePerCardRuleFamily(
+    String urlSegment, {
+    required String cardProductId,
+    required Map<String, dynamic> fields,
+    String? reason,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$apiBaseUrl/admin/$urlSegment/by-card/$cardProductId'),
+      headers: _headers,
+      body: jsonEncode({...fields, 'reason': ?reason}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('PUT /admin/$urlSegment/by-card/$cardProductId failed: ${response.statusCode} ${response.body}');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   /// AD-2.1: card requests grouped by issuer+product with counts.
   Future<List<Map<String, dynamic>>> fetchCardRequestGroups() async {
     final response = await _client.get(Uri.parse('$apiBaseUrl/admin/card-requests'), headers: _headers);
@@ -528,6 +600,100 @@ class AdminApi {
     if (response.statusCode != 200) {
       throw AdminApiException('DELETE /admin/parser-patterns/$id failed: ${response.statusCode} ${response.body}');
     }
+  }
+
+  // ---- AD-3 scraper source registry -----------------------------------------
+
+  Future<List<Map<String, dynamic>>> fetchSources() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sources'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/sources failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['sources'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> createSource({
+    required String kind,
+    required String name,
+    required String baseUrl,
+    String? issuerId,
+    String? tosNote,
+    String? reason,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/admin/sources'),
+      headers: _headers,
+      body: jsonEncode({
+        'kind': kind,
+        'name': name,
+        'baseUrl': baseUrl,
+        'issuerId': ?issuerId,
+        'tosNote': ?tosNote,
+        'reason': ?reason,
+      }),
+    );
+    if (response.statusCode != 201) {
+      throw AdminApiException('POST /admin/sources failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// AD-3.2 typed writer: only tos_reviewed/tos_note/is_enabled/crawl
+  /// frequency are ever sent — never base_url/kind/name (a "new source"
+  /// action, not a review-status update).
+  Future<void> updateSource(
+    String id, {
+    bool? tosReviewed,
+    String? tosNote,
+    bool? isEnabled,
+    int? crawlFrequencyDays,
+    String? reason,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$apiBaseUrl/admin/sources/$id'),
+      headers: _headers,
+      body: jsonEncode({
+        'tosReviewed': ?tosReviewed,
+        'tosNote': ?tosNote,
+        'isEnabled': ?isEnabled,
+        'crawlFrequencyDays': ?crawlFrequencyDays,
+        'reason': ?reason,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('PATCH /admin/sources/$id failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSourcePages(String sourceId) async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/sources/$sourceId/pages'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/sources/$sourceId/pages failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['sourcePages'] as List).cast<Map<String, dynamic>>();
+  }
+
+  // ---- AD-4 change detection / diff review -----------------------------------
+
+  Future<List<Map<String, dynamic>>> fetchScrapeRuns() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/scrape-runs'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/scrape-runs failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['scrapeRuns'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSourcePageSnapshots(String sourcePageId) async {
+    final response =
+        await _client.get(Uri.parse('$apiBaseUrl/admin/source-pages/$sourcePageId/snapshots'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+          'GET /admin/source-pages/$sourcePageId/snapshots failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['snapshots'] as List).cast<Map<String, dynamic>>();
   }
 }
 

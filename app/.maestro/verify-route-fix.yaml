@@ -1,0 +1,8 @@
+appId: app.pandapay.pandapay
+---
+- tapOn:
+    text: "Insights\nInsights"
+- scroll
+- tapOn: "Needs Review"
+- takeScreenshot: r1-needs-review
+- tapOn: "Back"

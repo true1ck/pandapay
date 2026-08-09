@@ -41,100 +41,129 @@ class _EmiAdvisorScreenState extends ConsumerState<EmiAdvisorScreen> {
   Widget build(BuildContext context) {
     final owned = ref.watch(ownedCardsWithProductProvider);
 
-    return owned.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => ErrorState(
-        message: userFacingErrorMessage(err),
-        onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
-      ),
-      data: (pairs) {
-        if (pairs.isEmpty) {
-          return const EmptyState(
-            icon: Icons.calculate_outlined,
-            title: 'No cards yet',
-            message: 'Add a card to get EMI advice for it.',
+    return Scaffold(
+      appBar: AppBar(title: const Text('EMI Advisor')),
+      body: owned.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, _) => ErrorState(
+          message: userFacingErrorMessage(err),
+          onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
+        ),
+        data: (pairs) {
+          if (pairs.isEmpty) {
+            return const EmptyState(
+              icon: Icons.calculate_outlined,
+              title: 'No cards yet',
+              message: 'Add a card to get EMI advice for it.',
+            );
+          }
+          _selectedCardProductId ??= pairs.first.$2.id;
+
+          final principal = double.tryParse(_amountController.text) ?? 0;
+          final rate = double.tryParse(_rateController.text) ?? 0;
+          final params = (
+            cardProductId: _selectedCardProductId!,
+            principalRupees: principal,
+            tenureMonths: _tenureMonths,
+            annualInterestRatePercent: rate,
           );
-        }
-        _selectedCardProductId ??= pairs.first.$2.id;
+          final advice = ref.watch(emiAdviceProvider(params));
 
-        final principal = double.tryParse(_amountController.text) ?? 0;
-        final rate = double.tryParse(_rateController.text) ?? 0;
-        final params = (
-          cardProductId: _selectedCardProductId!,
-          principalRupees: principal,
-          tenureMonths: _tenureMonths,
-          annualInterestRatePercent: rate,
-        );
-        final advice = ref.watch(emiAdviceProvider(params));
-
-        return ListView(
-          padding: const EdgeInsets.all(AppSpace.lg),
-          children: [
-            Text('Which card would you pay on?', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: AppSpace.sm),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedCardProductId,
-              items: [
-                for (final (userCard, product) in pairs)
-                  DropdownMenuItem(
-                    value: product.id,
-                    child: Text(userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name),
-                  ),
-              ],
-              onChanged: (v) => setState(() => _selectedCardProductId = v),
-            ),
-            const SizedBox(height: AppSpace.lg),
-            Text('Purchase amount', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: AppSpace.sm),
-            TextField(
-              controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              decoration: const InputDecoration(prefixText: '₹ ', hintText: 'e.g. 60000'),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: AppSpace.lg),
-            Text('Tenure', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: AppSpace.sm),
-            Wrap(
-              spacing: AppSpace.sm,
-              children: [
-                for (final months in const [3, 6, 9, 12, 18, 24])
-                  ChoiceChip(
-                    label: Text('$months mo'),
-                    selected: _tenureMonths == months,
-                    onSelected: (_) => setState(() => _tenureMonths = months),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.lg),
-            Text('Annual interest rate (%)', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: AppSpace.sm),
-            TextField(
-              controller: _rateController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              decoration: const InputDecoration(suffixText: '% per year'),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: AppSpace.xxl),
-            if (principal <= 0)
-              const EmptyState(
-                icon: Icons.receipt_long_outlined,
-                title: 'Enter a purchase amount',
-                message: 'PandaPay will compare paying via EMI against paying in full on this card.',
-              )
-            else if (advice == null)
-              const EmptyState(
-                icon: Icons.error_outline_rounded,
-                title: 'Can\'t compute this yet',
-                message: 'Check the amount and tenure are both greater than zero.',
-              )
-            else
-              _AdviceResult(advice: advice),
-          ],
-        );
-      },
+          return ListView(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            children: [
+              Text(
+                'Which card would you pay on?',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: AppSpace.sm),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedCardProductId,
+                items: [
+                  for (final (userCard, product) in pairs)
+                    DropdownMenuItem(
+                      value: product.id,
+                      child: Text(
+                        userCard.nickname?.isNotEmpty == true
+                            ? userCard.nickname!
+                            : product.name,
+                      ),
+                    ),
+                ],
+                onChanged: (v) => setState(() => _selectedCardProductId = v),
+              ),
+              const SizedBox(height: AppSpace.lg),
+              Text(
+                'Purchase amount',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: AppSpace.sm),
+              TextField(
+                controller: _amountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                ],
+                decoration: const InputDecoration(
+                  prefixText: '₹ ',
+                  hintText: 'e.g. 60000',
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: AppSpace.lg),
+              Text('Tenure', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: AppSpace.sm),
+              Wrap(
+                spacing: AppSpace.sm,
+                children: [
+                  for (final months in const [3, 6, 9, 12, 18, 24])
+                    ChoiceChip(
+                      label: Text('$months mo'),
+                      selected: _tenureMonths == months,
+                      onSelected: (_) => setState(() => _tenureMonths = months),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.lg),
+              Text(
+                'Annual interest rate (%)',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: AppSpace.sm),
+              TextField(
+                controller: _rateController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                ],
+                decoration: const InputDecoration(suffixText: '% per year'),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: AppSpace.xxl),
+              if (principal <= 0)
+                const EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Enter a purchase amount',
+                  message:
+                      'PandaPay will compare paying via EMI against paying in full on this card.',
+                )
+              else if (advice == null)
+                const EmptyState(
+                  icon: Icons.error_outline_rounded,
+                  title: 'Can\'t compute this yet',
+                  message:
+                      'Check the amount and tenure are both greater than zero.',
+                )
+              else
+                _AdviceResult(advice: advice),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -152,7 +181,9 @@ class _AdviceResult extends StatelessWidget {
       children: [
         Container(
           decoration: BoxDecoration(
-            color: costly ? AppColors.errorBg : AppColors.success.withValues(alpha: 0.12),
+            color: costly
+                ? AppColors.errorBg
+                : AppColors.success.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           padding: const EdgeInsets.all(AppSpace.lg),
@@ -160,14 +191,18 @@ class _AdviceResult extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                costly ? Icons.trending_down_rounded : Icons.check_circle_outline_rounded,
+                costly
+                    ? Icons.trending_down_rounded
+                    : Icons.check_circle_outline_rounded,
                 color: costly ? AppColors.error : AppColors.success,
               ),
               const SizedBox(width: AppSpace.sm),
               Expanded(
                 child: Text(
                   advice.verdictLine,
-                  style: textTheme.titleSmall?.copyWith(color: costly ? AppColors.error : AppColors.success),
+                  style: textTheme.titleSmall?.copyWith(
+                    color: costly ? AppColors.error : AppColors.success,
+                  ),
                 ),
               ),
             ],
@@ -175,8 +210,15 @@ class _AdviceResult extends StatelessWidget {
         ),
         const SizedBox(height: AppSpace.lg),
         _AdviceRow(label: 'Total interest', amount: advice.totalInterest),
-        _AdviceRow(label: 'Rewards you\'d forfeit by not paying in full', amount: advice.forfeitedRewards),
-        _AdviceRow(label: 'Effective cost of choosing EMI', amount: advice.effectiveCost, emphasized: true),
+        _AdviceRow(
+          label: 'Rewards you\'d forfeit by not paying in full',
+          amount: advice.forfeitedRewards,
+        ),
+        _AdviceRow(
+          label: 'Effective cost of choosing EMI',
+          amount: advice.effectiveCost,
+          emphasized: true,
+        ),
       ],
     );
   }
@@ -186,7 +228,11 @@ class _AdviceRow extends StatelessWidget {
   final String label;
   final Money amount;
   final bool emphasized;
-  const _AdviceRow({required this.label, required this.amount, this.emphasized = false});
+  const _AdviceRow({
+    required this.label,
+    required this.amount,
+    this.emphasized = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +248,12 @@ class _AdviceRow extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpace.md),
         child: Row(
           children: [
-            Expanded(child: Text(label, style: emphasized ? textTheme.titleSmall : textTheme.bodyMedium)),
+            Expanded(
+              child: Text(
+                label,
+                style: emphasized ? textTheme.titleSmall : textTheme.bodyMedium,
+              ),
+            ),
             MoneyText(
               amount,
               confidence: Confidence.estimated,

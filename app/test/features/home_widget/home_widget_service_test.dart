@@ -75,4 +75,14 @@ void main() {
     expect(saved[HomeWidgetService.noCardKey], true);
     expect(saved[HomeWidgetService.cardNameKey], '');
   });
+
+  test('configures the iOS App Group id exactly once before the first update', () async {
+    final service = HomeWidgetService();
+    await service.updateBestCardWidget(recommendation: null, nowIso: '2026-08-06T00:00:00.000Z');
+    await service.updateBestCardWidget(recommendation: null, nowIso: '2026-08-06T00:01:00.000Z');
+
+    final setAppGroupCalls = calls.where((c) => c.method == 'setAppGroupId').toList();
+    expect(setAppGroupCalls, hasLength(1));
+    expect(setAppGroupCalls.single.arguments['groupId'], HomeWidgetService.iosAppGroupId);
+  });
 }

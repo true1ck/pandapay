@@ -1,0 +1,8 @@
+appId: app.pandapay.pandapay
+---
+- launchApp:
+    clearState: true
+- swipe:
+    direction: DOWN
+    duration: 100
+- takeScreenshot: cap01-launch-state

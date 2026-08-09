@@ -1,37 +1,32 @@
-// UA-8.2 (Chunk 32): iOS WidgetKit skeleton source — deliberately NOT wired
-// into an Xcode target. Unlike Android's `<receiver>` (a plain manifest
-// entry this session could safely hand-edit and reason about), a real
-// WidgetKit extension needs a *second Xcode target* — a new
-// `.pbxproj` entry, an App Group entitlement shared with the main
-// Runner target, a widget bundle Info.plist, and code-signing — all
-// created and wired through Xcode itself, not safely hand-edited into a
-// binary-ish `.pbxproj` file blind, without Xcode/a Mac build toolchain
-// to actually open the project and verify nothing broke. That's the real
-// reason this file sits outside any build target: hand-editing a pbxproj
-// without being able to open/build the project risks silently corrupting
-// the whole iOS build for a feature nobody can verify anyway in this
-// sandbox. See PROGRESS.md for the explicit callout.
+// UA-8.2: iOS WidgetKit extension. Now a real Xcode target
+// (HomeWidgetExtension, added via the xcodeproj gem — see
+// ios/add_widget_extension_target.rb, run once to generate the
+// project.pbxproj changes; safe to re-run, it no-ops if the target already
+// exists) — Runner embeds it (Embed Foundation Extensions build phase),
+// both targets share the `group.app.pandapay.pandapay.homewidget` App
+// Group via their respective .entitlements files, and
+// HomeWidgetService.setAppGroupId is called from the Dart side (see
+// home_widget_service.dart) so `home_widget`'s saveWidgetData actually
+// lands in the UserDefaults suite this file reads from.
 //
-// What IS true and intentional: this shows the actual shape a real
-// extension's TimelineProvider/View would take, reading the same
-// `best_card_name` / `best_card_value_formatted` / `best_card_none` keys
-// (via the same App Group `UserDefaults(suiteName:)` `home_widget`'s Dart
-// side already writes to through `HomeWidget.saveWidgetData`) that
-// BestCardWidgetProvider.kt reads on Android — same data contract, two
-// platforms, written once from home_widget_service.dart.
+// Reads the same `best_card_name` / `best_card_value_formatted` /
+// `best_card_none` keys BestCardWidgetProvider.kt reads on Android — same
+// data contract, two platforms, written once from home_widget_service.dart.
 //
-// To actually finish this: open Runner.xcworkspace in Xcode, File > New >
-// Target > Widget Extension, name it "HomeWidgetExtension", add this file
-// (and drop the boilerplate Xcode generates), enable the same App Group
-// capability on both the Runner and HomeWidgetExtension targets, and call
-// `HomeWidget.setAppGroupId(...)` from the Dart side (not yet called
-// anywhere in home_widget_service.dart — another explicit gap, since there
-// is no App Group id to set until the Xcode target exists).
+// Still unverified: whether this actually renders on a real device/
+// simulator home screen (no way to install/run a widget on this
+// environment's build target), and code signing for a real distribution
+// build (needs a real Apple Developer Team ID, App Group capability
+// enabled on developer.apple.com, and a provisioning profile covering
+// both bundle ids — none of which can be set up from source alone).
+// `xcodebuild -list` confirming the target exists and a
+// `-showBuildSettings`/build-for-simulator pass are as far as this
+// environment can verify.
 
 import WidgetKit
 import SwiftUI
 
-private let appGroupId = "group.app.pandapay.pandapay.homewidget" // not yet created in Xcode
+private let appGroupId = "group.app.pandapay.pandapay.homewidget"
 
 struct BestCardEntry: TimelineEntry {
     let date: Date

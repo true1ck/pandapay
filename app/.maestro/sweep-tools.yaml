@@ -1,0 +1,7 @@
+appId: app.pandapay.pandapay
+---
+- tapOn: "Back"
+- tapOn:
+    text: "Account\nAccount"
+- tapOn: "Travel & tools"
+- takeScreenshot: n1-tools-hub

@@ -163,6 +163,87 @@ void main() {
     expect(find.text('Test Card — in_review'), findsOneWidget);
   });
 
+  testWidgets('AD-1.1.2: admin adds a fee waiver rule via the tabbed rule-family editor',
+      (tester) async {
+    http.Request? capturedCreateRequest;
+    String? capturedCreateBody;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                if (request.url.path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (request.url.path == '/admin/fee-waiver-rules' && request.method == 'POST') {
+                  capturedCreateRequest = request;
+                  capturedCreateBody = request.body;
+                  return http.Response(
+                    jsonEncode({
+                      'fee_waiver_rule': {
+                        'id': 'fee-1',
+                        'card_product_id': 'card-1',
+                        'threshold_spend_inr': 200000,
+                        'waives_fee_inr': 500,
+                      },
+                    }),
+                    201,
+                  );
+                }
+                return http.Response(
+                  jsonEncode({
+                    'cards': [
+                      {
+                        'id': 'card-1',
+                        'name': 'Test Card',
+                        'status': 'draft',
+                        'network': 'rupay',
+                        'data_version': 1,
+                        'is_upi_linkable': true,
+                        'verified_at': null,
+                        'reward_rules': <Map<String, dynamic>>[],
+                        'fee_waiver_rules': <Map<String, dynamic>>[],
+                      },
+                    ],
+                  }),
+                  200,
+                );
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Test Card — draft'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Fees'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, 'Threshold spend (INR)'), '200000');
+    await tester.enterText(find.widgetWithText(TextField, 'Waives fee (INR)'), '500');
+
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+
+    expect(capturedCreateRequest, isNotNull);
+    final decodedBody = jsonDecode(capturedCreateBody!) as Map<String, dynamic>;
+    expect(decodedBody['cardProductId'], 'card-1');
+    expect(decodedBody['thresholdSpendInr'], 200000.0);
+    expect(decodedBody['waivesFeeInr'], 500.0);
+  });
+
   testWidgets('AD-2.1: admin sees card requests grouped by issuer+product with counts',
       (tester) async {
     await tester.pumpWidget(
@@ -847,5 +928,84 @@ void main() {
     await tester.tap(find.text('Add pattern'));
     await tester.pumpAndSettle();
     expect(createCalled, isTrue);
+  });
+
+  testWidgets('AD-3.2: admin marks a source ToS-reviewed then enables it',
+      (tester) async {
+    var tosReviewed = false;
+    var isEnabled = false;
+    http.Request? lastPatchRequest;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _noSessionInit,
+          accessTokenProvider.overrideWith((ref) => 'fake-admin-token'),
+          adminApiProvider.overrideWithValue(
+            AdminApi(
+              apiBaseUrl: 'http://test',
+              accessToken: 'fake-admin-token',
+              client: MockClient((request) async {
+                if (request.url.path == '/admin/me') {
+                  return http.Response(jsonEncode({'isAdmin': true}), 200);
+                }
+                if (request.url.path == '/admin/sources/src-1' && request.method == 'PATCH') {
+                  lastPatchRequest = request;
+                  final body = jsonDecode(request.body) as Map<String, dynamic>;
+                  if (body['tosReviewed'] == true) tosReviewed = true;
+                  if (body.containsKey('isEnabled')) isEnabled = body['isEnabled'] as bool;
+                  return http.Response(jsonEncode({'source': {}}), 200);
+                }
+                if (request.url.path == '/admin/sources') {
+                  return http.Response(
+                    jsonEncode({
+                      'sources': [
+                        {
+                          'id': 'src-1',
+                          'kind': 'bank_official',
+                          'issuer_id': null,
+                          'issuer_name': null,
+                          'name': 'HDFC Rewards Page',
+                          'base_url': 'https://example.com/hdfc',
+                          'robots_allows': true,
+                          'tos_reviewed': tosReviewed,
+                          'tos_note': null,
+                          'crawl_frequency': '7 days',
+                          'is_enabled': isEnabled,
+                          'page_count': 2,
+                        },
+                      ],
+                    }),
+                    200,
+                  );
+                }
+                return http.Response(jsonEncode({'cards': <Map<String, dynamic>>[]}), 200);
+              }),
+            ),
+          ),
+        ],
+        child: const PandaPayConsoleApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Sources'), 100);
+    await tester.tap(find.text('Sources'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('ToS NOT reviewed'), findsOneWidget);
+    await tester.tap(find.text('HDFC Rewards Page'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Mark ToS reviewed'));
+    await tester.pumpAndSettle();
+
+    expect(lastPatchRequest, isNotNull);
+    expect(find.textContaining('ToS reviewed'), findsWidgets);
+    expect(find.text('Enable'), findsOneWidget);
+
+    await tester.tap(find.text('Enable'));
+    await tester.pumpAndSettle();
+
+    expect(isEnabled, isTrue);
+    expect(find.textContaining(' · enabled'), findsOneWidget);
   });
 }

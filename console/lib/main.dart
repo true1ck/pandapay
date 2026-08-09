@@ -13,6 +13,8 @@ import 'features/dashboard/data_quality_dashboard_screen.dart';
 import 'features/parser_patterns/parser_patterns_screen.dart';
 import 'features/queues/card_requests_screen.dart';
 import 'features/queues/error_reports_screen.dart';
+import 'features/scraper/scrape_diff_review_screen.dart';
+import 'features/scraper/sources_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: PandaPayConsoleApp()));
@@ -98,6 +100,8 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     (label: 'Data Quality', screen: DataQualityDashboardScreen()),
     (label: 'Anonymization Audit', screen: AnonymizationAuditScreen()),
     (label: 'Parser Patterns', screen: ParserPatternsScreen()),
+    (label: 'Sources', screen: SourcesScreen()),
+    (label: 'Scrape Diff Review', screen: ScrapeDiffReviewScreen()),
   ];
 
   @override

@@ -10,18 +10,20 @@ import '../../data/import_repository.dart';
 
 /// ui-spec.md F3 Email Forwarding Setup ⭐ highest-friction flow.
 ///
-/// Scope decision (Task F-0, per implementation-plan-group-e-f-g.md §3):
-/// this screen builds the forwarding-address ISSUANCE + STATUS-POLLING UI
-/// only. It deliberately does NOT build live inbound-email ingestion — no
-/// SMTP server or webhook receiver exists anywhere in this codebase to
-/// actually deliver mail sent to the issued address, so `emailCount` will
-/// stay 0 and status will stay "Waiting for first email…" forever in this
-/// environment. That's a real, honestly-reported status, not a fake one —
-/// see POST /forwarding-addresses' doc-comment (api/src/index.js) for the
-/// full reasoning. Gmail's verification-code paste step and the
-/// provider-specific screenshots both depend on that ingestion path
-/// existing (the plan's own sequencing note), so neither is built here —
-/// only the generic forward-to-this-address instructions are shown.
+/// Forwarding-address issuance + status-polling UI, now backed by a real
+/// receiver: POST /inbound-emails/webhook (api/src/index.js) actually
+/// writes to `inbound_emails` and bumps `forwarding_addresses.email_count`
+/// once a mail provider (SendGrid/Mailgun inbound parse, or a Cloudflare
+/// Email Worker) is configured to POST forwarded mail there for a given
+/// deployment. That DNS + provider-dashboard wiring is real infra setup
+/// outside this repo (same class of action as the Play Store listing or
+/// scraper legal review) — until it's done for a given environment,
+/// `emailCount` legitimately stays 0, which is still an honestly-reported
+/// status, not a fake one.
+///
+/// Gmail's verification-code paste step and provider-specific screenshots
+/// still aren't built (lower priority than the ingestion pipeline itself)
+/// — only the generic forward-to-this-address instructions are shown.
 ///
 /// Skippable at any point per spec: this is a plain pushed route, back
 /// navigation is always available, nothing blocks progress elsewhere in
@@ -104,15 +106,16 @@ class _IssueAddressViewState extends State<_IssueAddressView> {
   }
 }
 
-class _StatusView extends StatelessWidget {
+class _StatusView extends ConsumerWidget {
   final ForwardingAddress address;
   final VoidCallback onRefresh;
   const _StatusView({required this.address, required this.onRefresh});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
     final connected = address.emailCount > 0;
+    final inboundEmails = ref.watch(inboundEmailsProvider);
 
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -164,6 +167,62 @@ class _StatusView extends StatelessWidget {
             ),
           ],
         ),
+        if (connected) ...[
+          const SizedBox(height: AppSpace.xxl),
+          Text('Recent emails', style: textTheme.labelLarge),
+          const SizedBox(height: AppSpace.sm),
+          inboundEmails.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpace.md),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (err, _) => Text(userFacingErrorMessage(err), style: textTheme.bodySmall),
+            data: (emails) {
+              if (emails.isEmpty) {
+                return Text('No emails received yet.', style: textTheme.bodySmall?.copyWith(color: AppColors.ink500));
+              }
+              return Column(
+                children: emails
+                    .map((e) => Container(
+                          margin: const EdgeInsets.only(bottom: AppSpace.sm),
+                          padding: const EdgeInsets.all(AppSpace.md),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                            border: Border.all(color: AppColors.ink100),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                e.parsedOk == true
+                                    ? Icons.check_circle_rounded
+                                    : (e.parsedOk == false ? Icons.error_outline_rounded : Icons.hourglass_top_rounded),
+                                size: 16,
+                                color: e.parsedOk == true ? AppColors.success : AppColors.warning,
+                              ),
+                              const SizedBox(width: AppSpace.sm),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(e.subject ?? e.sender ?? 'Email', style: textTheme.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    Text(
+                                      e.parsedOk == true
+                                          ? (e.producedTxnId != null ? 'Added as a transaction' : 'Parsed — ready to add')
+                                          : (e.parsedOk == false ? 'Could not parse automatically' : 'Received'),
+                                      style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ))
+                    .toList(),
+              );
+            },
+          ),
+        ],
         const SizedBox(height: AppSpace.xxl),
         Text('How to set up forwarding', style: textTheme.labelLarge),
         const SizedBox(height: AppSpace.sm),

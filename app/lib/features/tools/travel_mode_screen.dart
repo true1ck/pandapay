@@ -28,42 +28,58 @@ class TravelModeScreen extends ConsumerWidget {
     final travelMode = ref.watch(travelModeProvider);
     final pairs = ref.watch(ownedCardsWithProductProvider);
 
-    return pairs.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => ErrorState(
-        message: userFacingErrorMessage(err),
-        onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
+    return Scaffold(
+      appBar: AppBar(title: const Text('Travel Mode')),
+      body: pairs.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, _) => ErrorState(
+          message: userFacingErrorMessage(err),
+          onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
+        ),
+        data: (owned) {
+          return ListView(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            children: [
+              _TravelModeToggle(
+                enabled: travelMode,
+                onChanged: (v) =>
+                    ref.read(travelModeProvider.notifier).state = v,
+              ),
+              const SizedBox(height: AppSpace.xxl),
+              Text(
+                'Forex markup by card',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: AppSpace.xs),
+              Text(
+                'What each card actually charges on a foreign-currency swipe, including GST on the '
+                'markup — lower is better. Cards ranked here are the ones you own.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: AppSpace.md),
+              _MarkupComparison(owned: owned),
+              const SizedBox(height: AppSpace.xxl),
+              Text(
+                'Lounge access abroad',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: AppSpace.sm),
+              _LoungeAbroadSection(owned: owned),
+              const SizedBox(height: AppSpace.xxl),
+              Text(
+                'Travel insurance',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: AppSpace.sm),
+              _TravelInsuranceSection(owned: owned),
+              const SizedBox(height: AppSpace.xxl),
+              const _DccExplainer(),
+              const SizedBox(height: AppSpace.xxl),
+              const _DestinationAcceptanceNotes(),
+            ],
+          );
+        },
       ),
-      data: (owned) {
-        return ListView(
-          padding: const EdgeInsets.all(AppSpace.lg),
-          children: [
-            _TravelModeToggle(enabled: travelMode, onChanged: (v) => ref.read(travelModeProvider.notifier).state = v),
-            const SizedBox(height: AppSpace.xxl),
-            Text('Forex markup by card', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: AppSpace.xs),
-            Text(
-              'What each card actually charges on a foreign-currency swipe, including GST on the '
-              'markup — lower is better. Cards ranked here are the ones you own.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: AppSpace.md),
-            _MarkupComparison(owned: owned),
-            const SizedBox(height: AppSpace.xxl),
-            Text('Lounge access abroad', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: AppSpace.sm),
-            _LoungeAbroadSection(owned: owned),
-            const SizedBox(height: AppSpace.xxl),
-            Text('Travel insurance', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: AppSpace.sm),
-            _TravelInsuranceSection(owned: owned),
-            const SizedBox(height: AppSpace.xxl),
-            const _DccExplainer(),
-            const SizedBox(height: AppSpace.xxl),
-            const _DestinationAcceptanceNotes(),
-          ],
-        );
-      },
     );
   }
 }
@@ -84,7 +100,10 @@ class _TravelModeToggle extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Row(
         children: [
-          Icon(Icons.flight_takeoff_rounded, color: enabled ? Colors.white : AppColors.navy800),
+          Icon(
+            Icons.flight_takeoff_rounded,
+            color: enabled ? Colors.white : AppColors.navy800,
+          ),
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
@@ -92,19 +111,27 @@ class _TravelModeToggle extends StatelessWidget {
               children: [
                 Text(
                   'Travel Mode',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(color: enabled ? Colors.white : null),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: enabled ? Colors.white : null,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   enabled
                       ? 'On — Home now ranks cards with forex markup factored in.'
                       : 'Off — turn on when you\'re spending abroad.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: enabled ? Colors.white70 : null),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: enabled ? Colors.white70 : null,
+                  ),
                 ),
               ],
             ),
           ),
-          Switch(value: enabled, onChanged: onChanged, activeTrackColor: AppColors.teal500),
+          Switch(
+            value: enabled,
+            onChanged: onChanged,
+            activeTrackColor: AppColors.teal500,
+          ),
         ],
       ),
     );
@@ -126,7 +153,8 @@ class _MarkupComparison extends StatelessWidget {
     }
     final withForex = <(UserCard, CardProduct, double)>[
       for (final (uc, p) in owned)
-        if (p.forexRule != null) (uc, p, p.forexRule!.effectiveMarkupFraction()),
+        if (p.forexRule != null)
+          (uc, p, p.forexRule!.effectiveMarkupFraction()),
     ]..sort((a, b) => a.$3.compareTo(b.$3));
     final withoutForex = owned.where((p) => p.$2.forexRule == null).toList();
 
@@ -147,15 +175,19 @@ class _MarkupComparison extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
+                      userCard.nickname?.isNotEmpty == true
+                          ? userCard.nickname!
+                          : product.name,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
                   Text(
                     '${(markup * 100).toStringAsFixed(2)}% incl. GST',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: markup <= 0.02 ? AppColors.success : AppColors.error,
-                        ),
+                      color: markup <= 0.02
+                          ? AppColors.success
+                          : AppColors.error,
+                    ),
                   ),
                 ],
               ),
@@ -163,7 +195,10 @@ class _MarkupComparison extends StatelessWidget {
           ),
         if (withoutForex.isNotEmpty) ...[
           const SizedBox(height: AppSpace.sm),
-          Text('No forex data on file', style: Theme.of(context).textTheme.labelLarge),
+          Text(
+            'No forex data on file',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
           const SizedBox(height: AppSpace.xs),
           for (final (userCard, product) in withoutForex)
             Padding(
@@ -211,7 +246,10 @@ class _LoungeAbroadSection extends ConsumerWidget {
         padding: EdgeInsets.all(AppSpace.md),
         child: LinearProgressIndicator(),
       ),
-      error: (err, _) => Text(userFacingErrorMessage(err), style: Theme.of(context).textTheme.bodySmall),
+      error: (err, _) => Text(
+        userFacingErrorMessage(err),
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
       data: (visitList) => Column(
         children: [
           for (final (userCard, product, benefit) in rows)
@@ -222,8 +260,17 @@ class _LoungeAbroadSection extends ConsumerWidget {
                 product: product,
                 benefit: benefit,
                 usedThisWindow: visitList
-                    .where((v) => v.userCardId == userCard.id && v.benefitId == benefit.id)
-                    .where((v) => isInCurrentLoungeWindow(v.usedOn, benefit.quotaPeriod))
+                    .where(
+                      (v) =>
+                          v.userCardId == userCard.id &&
+                          v.benefitId == benefit.id,
+                    )
+                    .where(
+                      (v) => isInCurrentLoungeWindow(
+                        v.usedOn,
+                        benefit.quotaPeriod,
+                      ),
+                    )
                     .length,
               ),
             ),
@@ -255,7 +302,9 @@ class _LoungeAbroadTile extends StatelessWidget {
     final quotaValue = benefit.quotaCount;
     final unlimited = quotaValue == null;
     final quota = quotaValue ?? 0;
-    final remaining = unlimited ? null : (quota - usedThisWindow).clamp(0, quota);
+    final remaining = unlimited
+        ? null
+        : (quota - usedThisWindow).clamp(0, quota);
     final eligible = unlimited || (remaining ?? 0) > 0;
     return Container(
       decoration: BoxDecoration(
@@ -343,14 +392,23 @@ class _TravelInsuranceSection extends StatelessWidget {
                   ),
                   if (benefit.description != null) ...[
                     const SizedBox(height: 2),
-                    Text(benefit.description!, style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      benefit.description!,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                   if (benefit.valueEstimate != null) ...[
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Text('Estimated cover ', style: Theme.of(context).textTheme.bodySmall),
-                        MoneyText(benefit.valueEstimate!, confidence: Confidence.estimated),
+                        Text(
+                          'Estimated cover ',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        MoneyText(
+                          benefit.valueEstimate!,
+                          confidence: Confidence.estimated,
+                        ),
                       ],
                     ),
                   ],
@@ -382,9 +440,18 @@ class _DccExplainer extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, size: 18, color: AppColors.error),
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 18,
+                color: AppColors.error,
+              ),
               const SizedBox(width: AppSpace.sm),
-              Expanded(child: Text('Watch out for DCC', style: Theme.of(context).textTheme.titleSmall)),
+              Expanded(
+                child: Text(
+                  'Watch out for DCC',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpace.sm),
@@ -425,13 +492,18 @@ class _DestinationAcceptanceNotes extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Card acceptance abroad', style: Theme.of(context).textTheme.titleSmall),
+          Text(
+            'Card acceptance abroad',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
           const SizedBox(height: AppSpace.sm),
           Text(
             'PandaPay doesn\'t have per-destination acceptance data (no country/merchant coverage '
             'is modelled anywhere in this app today) — this is general guidance, not a country-by-'
             'country breakdown.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
           ),
           const SizedBox(height: AppSpace.sm),
           Text(
