@@ -66,7 +66,10 @@ class MonthlySavingsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: AppSpace.lg),
-            _StatRow(label: 'Total spend', child: MoneyText(r.totalSpend, confidence: Confidence.estimated)),
+            _StatRow(
+              label: 'Total spend',
+              child: MoneyText(r.totalSpend, confidence: Confidence.estimated, style: BambooFonts.money(15, color: BambooInk.ink900)),
+            ),
             const Divider(height: AppSpace.xl),
             // baseline/value-missed are honestly not-yet-computed this
             // pass — shown as an explicit "not available" note rather than

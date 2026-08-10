@@ -70,7 +70,7 @@ class MoneyText extends ConsumerWidget {
         Icon(
           confidence.isConfirmed ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
           size: 14,
-          color: confidence.isConfirmed ? const Color(0xFF15803D) : const Color(0xFFB45309),
+          color: confidence.isConfirmed ? BambooInk.jade : BambooInk.amber,
         ),
       ],
     );
