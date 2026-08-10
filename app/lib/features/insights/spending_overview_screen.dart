@@ -54,28 +54,27 @@ class SpendingOverviewScreen extends ConsumerWidget {
         final sortedCategories = byCategory.entries.toList()..sort((a, b) => b.value.paise.compareTo(a.value.paise));
         final sortedMerchants = byMerchant.entries.toList()..sort((a, b) => b.value.paise.compareTo(a.value.paise));
 
-        final textTheme = Theme.of(context).textTheme;
         return ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
             Container(
               padding: const EdgeInsets.all(AppSpace.lg),
-              decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.lg)),
+              decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.lg)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('This month', style: textTheme.bodyMedium),
-                  MoneyText(total, confidence: Confidence.estimated, style: textTheme.displaySmall),
+                  Text('This month', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+                  MoneyText(total, confidence: Confidence.estimated, style: BambooFonts.money(28, color: BambooInk.ink900)),
                 ],
               ),
             ),
             const SizedBox(height: AppSpace.xl),
-            Text('By category', style: textTheme.labelLarge),
+            Text('By category', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.sm),
             for (final e in sortedCategories)
               _BreakdownRow(label: e.key, amount: e.value, total: total),
             const SizedBox(height: AppSpace.xl),
-            Text('By merchant', style: textTheme.labelLarge),
+            Text('By merchant', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.sm),
             for (final e in sortedMerchants.take(10))
               _BreakdownRow(label: e.key, amount: e.value, total: total),
@@ -103,7 +102,6 @@ class _BreakdownRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final ratio = total.isZero ? 0.0 : (amount.paise / total.paise).clamp(0.0, 1.0);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.md),
@@ -113,8 +111,8 @@ class _BreakdownRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(child: Text(label, style: textTheme.bodyMedium, overflow: TextOverflow.ellipsis)),
-              MoneyText(amount, confidence: Confidence.estimated, style: textTheme.bodyMedium),
+              Expanded(child: Text(label, style: BambooFonts.ui(13.5, color: BambooInk.ink900), overflow: TextOverflow.ellipsis)),
+              MoneyText(amount, confidence: Confidence.estimated, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
             ],
           ),
           const SizedBox(height: 4),
@@ -123,8 +121,8 @@ class _BreakdownRow extends StatelessWidget {
             child: LinearProgressIndicator(
               value: ratio,
               minHeight: 4,
-              backgroundColor: AppColors.surfaceMuted,
-              color: AppColors.teal500,
+              backgroundColor: BambooInk.paperMuted,
+              color: BambooInk.jade,
             ),
           ),
         ],
