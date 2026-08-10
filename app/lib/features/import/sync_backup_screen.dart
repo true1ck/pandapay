@@ -33,89 +33,116 @@ class SyncBackupScreen extends ConsumerWidget {
     final repo = ref.watch(importRepositoryProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Sync & backup')),
-      body: status.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) =>
-            ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(backupStatusProvider)),
-        data: (backupStatus) {
-          if (backupStatus == null || repo == null) {
-            return const EmptyState(icon: Icons.cloud_off_outlined, title: 'Sign in to see backup status');
-          }
-          return ListView(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppSpace.md),
-                decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
-                child: Text(
-                  'Multi-device sync (pending-change count, live conflict resolution) isn\'t built yet — this app '
-                  'talks directly to the server today, with no offline queue. This screen only shows real backup/'
-                  'restore status and any conflicts already on record.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Sync & backup', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: status.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) =>
+              ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(backupStatusProvider)),
+          data: (backupStatus) {
+            if (backupStatus == null || repo == null) {
+              return const EmptyState(icon: Icons.cloud_off_outlined, title: 'Sign in to see backup status');
+            }
+            return ListView(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppSpace.md),
+                  decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+                  child: Text(
+                    'Multi-device sync (pending-change count, live conflict resolution) isn\'t built yet — this app '
+                    'talks directly to the server today, with no offline queue. This screen only shows real backup/'
+                    'restore status and any conflicts already on record.',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              _StatusCard(
-                icon: Icons.backup_outlined,
-                title: 'Last backup',
-                value: backupStatus.latestBackupRanAt == null
-                    ? 'No backup on record'
-                    : '${_fmt(backupStatus.latestBackupRanAt!)} · ${backupStatus.latestBackupStatus ?? 'unknown'}',
-              ),
-              const SizedBox(height: AppSpace.md),
-              _StatusCard(
-                icon: Icons.restore_outlined,
-                title: 'Last restore drill',
-                value: backupStatus.latestRestoreDrillRanAt == null
-                    ? 'No restore drill on record'
-                    : '${_fmt(backupStatus.latestRestoreDrillRanAt!)} · ${backupStatus.latestRestoreDrillOk == true ? 'OK' : 'failed'}',
-              ),
-              const SizedBox(height: AppSpace.lg),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.cloud_upload_outlined),
-                label: const Text('Back up now'),
-                onPressed: () async {
-                  try {
-                    // The POST this triggers genuinely inserts a real
-                    // backup_runs row (not a client-side fake) — what's
-                    // scoped out is the underlying backup JOB itself (no
-                    // pg_dump/WAL-archiving pipeline exists yet, that's ops
-                    // infrastructure, not an Express route or a Flutter
-                    // screen). See api/'s POST /backup-runs doc-comment.
-                    await repo.triggerBackupNow();
-                    ref.invalidate(backupStatusProvider);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Backup requested and logged.')),
-                      );
+                const SizedBox(height: AppSpace.lg),
+                _StatusCard(
+                  icon: Icons.backup_outlined,
+                  title: 'Last backup',
+                  value: backupStatus.latestBackupRanAt == null
+                      ? 'No backup on record'
+                      : '${_fmt(backupStatus.latestBackupRanAt!)} · ${backupStatus.latestBackupStatus ?? 'unknown'}',
+                ),
+                const SizedBox(height: AppSpace.md),
+                _StatusCard(
+                  icon: Icons.restore_outlined,
+                  title: 'Last restore drill',
+                  value: backupStatus.latestRestoreDrillRanAt == null
+                      ? 'No restore drill on record'
+                      : '${_fmt(backupStatus.latestRestoreDrillRanAt!)} · ${backupStatus.latestRestoreDrillOk == true ? 'OK' : 'failed'}',
+                ),
+                const SizedBox(height: AppSpace.lg),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.slate,
+                    foregroundColor: BambooInk.lime,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+                  ),
+                  icon: const Icon(Icons.cloud_upload_outlined),
+                  label: const Text('Back up now'),
+                  onPressed: () async {
+                    try {
+                      // The POST this triggers genuinely inserts a real
+                      // backup_runs row (not a client-side fake) — what's
+                      // scoped out is the underlying backup JOB itself (no
+                      // pg_dump/WAL-archiving pipeline exists yet, that's ops
+                      // infrastructure, not an Express route or a Flutter
+                      // screen). See api/'s POST /backup-runs doc-comment.
+                      await repo.triggerBackupNow();
+                      ref.invalidate(backupStatusProvider);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Backup requested and logged.')),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+                      }
                     }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
-                    }
-                  }
-                },
-              ),
-              const SizedBox(height: AppSpace.xxl),
-              Text('Conflict log', style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: AppSpace.sm),
-              if (backupStatus.conflicts.isEmpty)
-                Text('No conflicts on record.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.ink500))
-              else
-                for (final c in backupStatus.conflicts) _ConflictTile(conflict: c),
-              const SizedBox(height: AppSpace.xxl),
-              Text('Restore', style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: AppSpace.sm),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error, side: const BorderSide(color: AppColors.errorBg, width: 1.5)),
-                icon: const Icon(Icons.warning_amber_rounded),
-                label: const Text('Restore from backup'),
-                onPressed: () => _confirmRestore(context),
-              ),
-            ],
-          );
-        },
+                  },
+                ),
+                const SizedBox(height: AppSpace.xxl),
+                Text('Conflict log', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+                const SizedBox(height: AppSpace.sm),
+                if (backupStatus.conflicts.isEmpty)
+                  Text('No conflicts on record.', style: BambooFonts.ui(13.5, color: BambooInk.ink500))
+                else
+                  for (final c in backupStatus.conflicts) _ConflictTile(conflict: c),
+                const SizedBox(height: AppSpace.xxl),
+                Text('Restore', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+                const SizedBox(height: AppSpace.sm),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BambooInk.clay,
+                    side: const BorderSide(color: BambooInk.warningBorder, width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(Icons.warning_amber_rounded),
+                  label: const Text('Restore from backup'),
+                  onPressed: () => _confirmRestore(context),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -171,17 +198,21 @@ class _StatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppRadius.md), border: Border.all(color: AppColors.ink100)),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: AppColors.navy800),
+          Icon(icon, size: 20, color: BambooInk.ink900),
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.ink500)),
-                Text(value, style: Theme.of(context).textTheme.titleSmall),
+                Text(title, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                Text(value, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
               ],
             ),
           ),
@@ -201,11 +232,11 @@ class _ConflictTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpace.sm),
       child: Container(
         padding: const EdgeInsets.all(AppSpace.md),
-        decoration: BoxDecoration(color: AppColors.warningBg, borderRadius: BorderRadius.circular(AppRadius.md)),
+        decoration: BoxDecoration(color: BambooInk.warningBg, borderRadius: BorderRadius.circular(AppRadius.md)),
         child: Text(
           '${conflict.entity}.${conflict.field} — resolved via ${conflict.strategy}'
           '${conflict.userAcknowledged ? '' : ' (not yet acknowledged)'}',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: BambooFonts.ui(12.5, color: BambooInk.ink900),
         ),
       ),
     );
