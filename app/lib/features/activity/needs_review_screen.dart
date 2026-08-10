@@ -20,40 +20,56 @@ class NeedsReviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(needsReviewItemsProvider);
     return Scaffold(
+      backgroundColor: BambooInk.paper,
       appBar: AppBar(
-        title: const Text('Needs review'),
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Needs review', style: BambooFonts.heading(18, color: BambooInk.ink900)),
         actions: [
           if ((items.valueOrNull ?? const []).isNotEmpty)
             TextButton(
+              style: TextButton.styleFrom(foregroundColor: BambooInk.ink900),
               onPressed: () async {
                 final ids = <String>[for (final i in items.valueOrNull ?? const <NeedsReviewItem>[]) i.id];
                 await ref.read(needsReviewRepositoryProvider).removeAll(ids);
                 ref.invalidate(needsReviewItemsProvider);
               },
-              child: const Text('Dismiss all', style: TextStyle(color: Colors.white)),
+              child: const Text('Dismiss all'),
             ),
         ],
       ),
-      body: items.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
-        data: (list) {
-          if (list.isEmpty) {
-            return const EmptyState(
-              icon: Icons.mark_email_read_outlined,
-              title: 'Nothing needs review',
-              message: 'Messages we couldn\'t automatically parse show up here — nothing is ever dropped silently.',
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: items.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
+          data: (list) {
+            if (list.isEmpty) {
+              return const EmptyState(
+                icon: Icons.mark_email_read_outlined,
+                title: 'Nothing needs review',
+                message: 'Messages we couldn\'t automatically parse show up here — nothing is ever dropped silently.',
+              );
+            }
+            return ListView.builder(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              itemCount: list.length,
+              itemBuilder: (context, index) => Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.md),
+                child: _NeedsReviewTile(list[index]),
+              ),
             );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            itemCount: list.length,
-            itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpace.md),
-              child: _NeedsReviewTile(list[index]),
-            ),
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -106,33 +122,39 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    final textTheme = Theme.of(context).textTheme;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(item.sender, style: textTheme.titleSmall),
+          Text(item.sender, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.xs),
           Container(
             padding: const EdgeInsets.all(AppSpace.sm),
-            decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.sm)),
-            child: Text(item.body, style: textTheme.bodySmall),
+            decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.sm)),
+            child: Text(item.body, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
           ),
           if (item.reason != null) ...[
             const SizedBox(height: AppSpace.xs),
-            Text('Reason: ${item.reason}', style: textTheme.bodySmall?.copyWith(color: AppColors.ink500)),
+            Text('Reason: ${item.reason}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
           ],
           const SizedBox(height: AppSpace.md),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BambooInk.ink900,
+                    side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                    minimumSize: const Size.fromHeight(44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
+                  ),
                   onPressed: _busy ? null : _dismissNotATransaction,
                   child: const Text('Not a transaction'),
                 ),
@@ -140,9 +162,16 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
               const SizedBox(width: AppSpace.sm),
               Expanded(
                 child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.slate,
+                    foregroundColor: BambooInk.lime,
+                    minimumSize: const Size.fromHeight(44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
+                  ),
                   onPressed: _busy ? null : _fillManually,
                   child: _busy
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
                       : const Text('Fill in fields'),
                 ),
               ),
@@ -178,7 +207,27 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
 
-    return Padding(
+    final inputDecoration = (String label) => InputDecoration(
+          labelText: label,
+          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          filled: true,
+          fillColor: BambooInk.glassFillOnPaper,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+          ),
+        );
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: BambooInk.paper,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
       padding: EdgeInsets.only(
         left: AppSpace.lg,
         right: AppSpace.lg,
@@ -189,18 +238,20 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Fill in the missing fields', style: Theme.of(context).textTheme.titleMedium),
+          Text('Fill in the missing fields', style: BambooFonts.heading(17, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.lg),
           TextField(
             controller: _amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Amount (₹)'),
+            style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+            decoration: inputDecoration('Amount (₹)'),
             autofocus: true,
           ),
           const SizedBox(height: AppSpace.lg),
           DropdownButtonFormField<String>(
             initialValue: _cardId,
-            decoration: const InputDecoration(labelText: 'Card'),
+            style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+            decoration: inputDecoration('Card'),
             items: [
               for (final c in cards)
                 DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
@@ -210,12 +261,20 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
           const SizedBox(height: AppSpace.lg),
           DropdownButtonFormField<String>(
             initialValue: _categoryId,
-            decoration: const InputDecoration(labelText: 'Category (optional)'),
+            style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+            decoration: inputDecoration('Category (optional)'),
             items: [for (final c in categories) DropdownMenuItem(value: c.id, child: Text(c.name))],
             onChanged: (v) => setState(() => _categoryId = v),
           ),
           const SizedBox(height: AppSpace.xl),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: BambooInk.slate,
+              foregroundColor: BambooInk.lime,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+            ),
             onPressed: () {
               final amount = double.tryParse(_amountController.text.trim());
               if (amount == null || amount <= 0 || _cardId == null) return;
