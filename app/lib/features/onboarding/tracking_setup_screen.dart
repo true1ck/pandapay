@@ -38,20 +38,35 @@ class _TrackingSetupScreenState extends ConsumerState<TrackingSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Set up tracking')),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0.9, -0.6),
+          radius: 1.3,
+          colors: [BambooInk.wash, BambooInk.paper],
+          stops: [0.0, 0.6],
+        ),
+      ),
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Set up tracking', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('How should we track your spending?', style: textTheme.headlineSmall),
+              Text('How should we track your spending?', style: BambooFonts.heading(22, color: BambooInk.ink900)),
               const SizedBox(height: AppSpace.sm),
               Text(
                 'Pick a channel below, or skip for now — you can always set this up later from Import & Sync.',
-                style: textTheme.bodyMedium,
+                style: BambooFonts.ui(13.5, color: BambooInk.ink500),
               ),
               const SizedBox(height: AppSpace.xl),
               Expanded(
@@ -85,12 +100,19 @@ class _TrackingSetupScreenState extends ConsumerState<TrackingSetupScreen> {
               ),
               const SizedBox(height: AppSpace.md),
               OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BambooInk.ink900,
+                  minimumSize: const Size.fromHeight(48),
+                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
                 onPressed: _finishing ? null : _finish,
                 child: const Text('Set up later'),
               ),
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -126,19 +148,19 @@ class _ChannelChoiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(AppSpace.lg),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
+            color: BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: badge != null ? AppColors.teal500 : AppColors.ink100,
+              color: badge != null ? BambooInk.slate : BambooInk.hairlineOnPaper,
               width: badge != null ? 1.5 : 1,
             ),
           ),
@@ -149,10 +171,10 @@ class _ChannelChoiceCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  color: BambooInk.slate,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: AppColors.navy800, size: 22),
+                child: Icon(icon, color: BambooInk.lime, size: 22),
               ),
               const SizedBox(width: AppSpace.md),
               Expanded(
@@ -161,29 +183,29 @@ class _ChannelChoiceCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Flexible(child: Text(title, style: textTheme.titleMedium)),
+                        Flexible(child: Text(title, style: BambooFonts.heading(16, color: BambooInk.ink900))),
                         if (badge != null) ...[
                           const SizedBox(width: AppSpace.xs),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: AppColors.teal600,
-                              borderRadius: BorderRadius.circular(AppRadius.pill),
+                              color: BambooInk.lime,
+                              borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
                               badge!,
-                              style: textTheme.labelSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                              style: BambooFonts.ui(10, weight: FontWeight.w700, color: BambooInk.slate).copyWith(letterSpacing: 0.5),
                             ),
                           ),
                         ],
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(description, style: textTheme.bodySmall),
+                    Text(description, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.ink300),
+              const Icon(Icons.chevron_right_rounded, color: BambooInk.ink300),
             ],
           ),
         ),
