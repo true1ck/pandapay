@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/needs_review_repository.dart';
@@ -112,63 +113,104 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
     final userCards = ref.watch(userCardsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('SMS auto-import')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Automatically log spends from your bank\'s SMS alerts instead of '
-              'entering every transaction by hand. Requires SMS permission.',
-            ),
-            const SizedBox(height: 16),
-            // F4: one-time backup-file import — always available, independent
-            // of the live auto-read permission/listener above (per the plan's
-            // explicit "always available" requirement).
-            OutlinedButton.icon(
-              icon: const Icon(Icons.upload_file_outlined),
-              label: const Text('Import from an SMS backup file (one-time)'),
-              onPressed: () => Navigator.of(context)
-                  .push(MaterialPageRoute(builder: (_) => const SmsBackupImportScreen())),
-            ),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 16),
-            const Text('Live auto-read (Android)', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            if (!_permissionGranted)
-              ElevatedButton(
-                onPressed: _requesting ? null : _requestPermission,
-                child: Text(_requesting ? 'Requesting…' : 'Grant SMS permission'),
-              )
-            else
-              const Text('SMS permission granted.', style: TextStyle(color: Colors.green)),
-            const SizedBox(height: 16),
-            userCards.when(
-              loading: () => const CircularProgressIndicator(),
-              error: (err, _) => Text('Failed to load cards: $err'),
-              data: (cards) => DropdownButton<String>(
-                hint: const Text('Log parsed SMS against which card?'),
-                value: _selectedCardId,
-                items: [
-                  for (final c in cards)
-                    DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
-                ],
-                onChanged: (v) => setState(() => _selectedCardId = v),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('SMS auto-import', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Automatically log spends from your bank\'s SMS alerts instead of '
+                'entering every transaction by hand. Requires SMS permission.',
+                style: BambooFonts.ui(13.5, color: BambooInk.ink500),
               ),
-            ),
-            const SizedBox(height: 16),
-            if (_permissionGranted && !_listening)
-              ElevatedButton(onPressed: _startListening, child: const Text('Start listening')),
-            if (_listening) const Text('Listening for incoming SMS…', style: TextStyle(fontStyle: FontStyle.italic)),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView(
-                children: [for (final line in _recentLog) Text(line)],
+              const SizedBox(height: 16),
+              // F4: one-time backup-file import — always available, independent
+              // of the live auto-read permission/listener above (per the plan's
+              // explicit "always available" requirement).
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BambooInk.ink900,
+                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                icon: const Icon(Icons.upload_file_outlined),
+                label: const Text('Import from an SMS backup file (one-time)'),
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const SmsBackupImportScreen())),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              const Divider(color: BambooInk.hairlineOnPaper),
+              const SizedBox(height: 16),
+              Text('Live auto-read (Android)', style: BambooFonts.ui(13, weight: FontWeight.w700, color: BambooInk.ink900)),
+              const SizedBox(height: 8),
+              if (!_permissionGranted)
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.slate,
+                    foregroundColor: BambooInk.lime,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: _requesting ? null : _requestPermission,
+                  child: Text(_requesting ? 'Requesting…' : 'Grant SMS permission'),
+                )
+              else
+                Text('SMS permission granted.', style: BambooFonts.ui(13.5, color: BambooInk.jade)),
+              const SizedBox(height: 16),
+              userCards.when(
+                loading: () => const CircularProgressIndicator(),
+                error: (err, _) => Text('Failed to load cards: $err', style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                data: (cards) => DropdownButton<String>(
+                  hint: Text('Log parsed SMS against which card?', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+                  value: _selectedCardId,
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  items: [
+                    for (final c in cards)
+                      DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
+                  ],
+                  onChanged: (v) => setState(() => _selectedCardId = v),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_permissionGranted && !_listening)
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.slate,
+                    foregroundColor: BambooInk.lime,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: _startListening,
+                  child: const Text('Start listening'),
+                ),
+              if (_listening)
+                Text(
+                  'Listening for incoming SMS…',
+                  style: BambooFonts.ui(13.5, color: BambooInk.ink500).copyWith(fontStyle: FontStyle.italic),
+                ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView(
+                  children: [for (final line in _recentLog) Text(line, style: BambooFonts.ui(13, color: BambooInk.ink900))],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
