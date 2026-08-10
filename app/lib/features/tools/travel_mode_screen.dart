@@ -29,56 +29,73 @@ class TravelModeScreen extends ConsumerWidget {
     final pairs = ref.watch(ownedCardsWithProductProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Travel Mode')),
-      body: pairs.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(
-          message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Travel Mode', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
         ),
-        data: (owned) {
-          return ListView(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            children: [
-              _TravelModeToggle(
-                enabled: travelMode,
-                onChanged: (v) =>
-                    ref.read(travelModeProvider.notifier).state = v,
-              ),
-              const SizedBox(height: AppSpace.xxl),
-              Text(
-                'Forex markup by card',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpace.xs),
-              Text(
-                'What each card actually charges on a foreign-currency swipe, including GST on the '
-                'markup — lower is better. Cards ranked here are the ones you own.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: AppSpace.md),
-              _MarkupComparison(owned: owned),
-              const SizedBox(height: AppSpace.xxl),
-              Text(
-                'Lounge access abroad',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpace.sm),
-              _LoungeAbroadSection(owned: owned),
-              const SizedBox(height: AppSpace.xxl),
-              Text(
-                'Travel insurance',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpace.sm),
-              _TravelInsuranceSection(owned: owned),
-              const SizedBox(height: AppSpace.xxl),
-              const _DccExplainer(),
-              const SizedBox(height: AppSpace.xxl),
-              const _DestinationAcceptanceNotes(),
-            ],
-          );
-        },
+        child: pairs.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
+          ),
+          data: (owned) {
+            return ListView(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              children: [
+                _TravelModeToggle(
+                  enabled: travelMode,
+                  onChanged: (v) =>
+                      ref.read(travelModeProvider.notifier).state = v,
+                ),
+                const SizedBox(height: AppSpace.xxl),
+                Text(
+                  'Forex markup by card',
+                  style: BambooFonts.heading(16, color: BambooInk.ink900),
+                ),
+                const SizedBox(height: AppSpace.xs),
+                Text(
+                  'What each card actually charges on a foreign-currency swipe, including GST on the '
+                  'markup — lower is better. Cards ranked here are the ones you own.',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+                const SizedBox(height: AppSpace.md),
+                _MarkupComparison(owned: owned),
+                const SizedBox(height: AppSpace.xxl),
+                Text(
+                  'Lounge access abroad',
+                  style: BambooFonts.heading(16, color: BambooInk.ink900),
+                ),
+                const SizedBox(height: AppSpace.sm),
+                _LoungeAbroadSection(owned: owned),
+                const SizedBox(height: AppSpace.xxl),
+                Text(
+                  'Travel insurance',
+                  style: BambooFonts.heading(16, color: BambooInk.ink900),
+                ),
+                const SizedBox(height: AppSpace.sm),
+                _TravelInsuranceSection(owned: owned),
+                const SizedBox(height: AppSpace.xxl),
+                const _DccExplainer(),
+                const SizedBox(height: AppSpace.xxl),
+                const _DestinationAcceptanceNotes(),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -93,16 +110,16 @@ class _TravelModeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: enabled ? AppColors.navy900 : AppColors.surface,
+        color: enabled ? BambooInk.slate : BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Row(
         children: [
           Icon(
             Icons.flight_takeoff_rounded,
-            color: enabled ? Colors.white : AppColors.navy800,
+            color: enabled ? BambooInk.lime : BambooInk.ink900,
           ),
           const SizedBox(width: AppSpace.md),
           Expanded(
@@ -111,18 +128,14 @@ class _TravelModeToggle extends StatelessWidget {
               children: [
                 Text(
                   'Travel Mode',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: enabled ? Colors.white : null,
-                  ),
+                  style: BambooFonts.heading(14.5, color: enabled ? BambooInk.onSlate : BambooInk.ink900),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   enabled
                       ? 'On — Home now ranks cards with forex markup factored in.'
                       : 'Off — turn on when you\'re spending abroad.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: enabled ? Colors.white70 : null,
-                  ),
+                  style: BambooFonts.ui(12.5, color: enabled ? BambooInk.onSlateMuted : BambooInk.ink500),
                 ),
               ],
             ),
@@ -130,7 +143,8 @@ class _TravelModeToggle extends StatelessWidget {
           Switch(
             value: enabled,
             onChanged: onChanged,
-            activeTrackColor: AppColors.teal500,
+            activeTrackColor: BambooInk.jade,
+            activeColor: BambooInk.lime,
           ),
         ],
       ),
@@ -166,9 +180,9 @@ class _MarkupComparison extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: Container(
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: BambooInk.glassFillOnPaper,
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.ink100),
+                border: Border.all(color: BambooInk.hairlineOnPaper),
               ),
               padding: const EdgeInsets.all(AppSpace.md),
               child: Row(
@@ -178,15 +192,15 @@ class _MarkupComparison extends StatelessWidget {
                       userCard.nickname?.isNotEmpty == true
                           ? userCard.nickname!
                           : product.name,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                     ),
                   ),
                   Text(
                     '${(markup * 100).toStringAsFixed(2)}% incl. GST',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: markup <= 0.02
-                          ? AppColors.success
-                          : AppColors.error,
+                    style: BambooFonts.ui(
+                      12.5,
+                      weight: FontWeight.w700,
+                      color: markup <= 0.02 ? BambooInk.jade : BambooInk.clay,
                     ),
                   ),
                 ],
@@ -197,7 +211,7 @@ class _MarkupComparison extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Text(
             'No forex data on file',
-            style: Theme.of(context).textTheme.labelLarge,
+            style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
           ),
           const SizedBox(height: AppSpace.xs),
           for (final (userCard, product) in withoutForex)
@@ -206,7 +220,7 @@ class _MarkupComparison extends StatelessWidget {
               child: Text(
                 '${userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name} — markup unknown, '
                 'treat as domestic-only until confirmed',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),
             ),
         ],
@@ -230,14 +244,14 @@ class _LoungeAbroadSection extends ConsumerWidget {
     if (rows.isEmpty) {
       return Container(
         decoration: BoxDecoration(
-          color: AppColors.surfaceMuted,
+          color: BambooInk.paperMuted,
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         padding: const EdgeInsets.all(AppSpace.md),
         child: Text(
           'None of your cards carry an international-lounge benefit — or you haven\'t added a card '
           'yet. This section only shows what your own cards\' catalogue data actually lists.',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
         ),
       );
     }
@@ -248,7 +262,7 @@ class _LoungeAbroadSection extends ConsumerWidget {
       ),
       error: (err, _) => Text(
         userFacingErrorMessage(err),
-        style: Theme.of(context).textTheme.bodySmall,
+        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
       ),
       data: (visitList) => Column(
         children: [
@@ -308,9 +322,9 @@ class _LoungeAbroadTile extends StatelessWidget {
     final eligible = unlimited || (remaining ?? 0) > 0;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.md),
       child: Row(
@@ -318,7 +332,7 @@ class _LoungeAbroadTile extends StatelessWidget {
           Icon(
             eligible ? Icons.check_circle_outline_rounded : Icons.block_rounded,
             size: 18,
-            color: eligible ? AppColors.success : AppColors.error,
+            color: eligible ? BambooInk.jade : BambooInk.clay,
           ),
           const SizedBox(width: AppSpace.sm),
           Expanded(
@@ -327,13 +341,13 @@ class _LoungeAbroadTile extends StatelessWidget {
               children: [
                 Text(
                   '${userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name} — ${benefit.label}',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                 ),
                 Text(
                   unlimited
                       ? 'Unlimited this period'
                       : '${remaining ?? 0} of $quota visits left this period',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
               ],
             ),
@@ -358,7 +372,7 @@ class _TravelInsuranceSection extends StatelessWidget {
     if (rows.isEmpty) {
       return Container(
         decoration: BoxDecoration(
-          color: AppColors.surfaceMuted,
+          color: BambooInk.paperMuted,
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         padding: const EdgeInsets.all(AppSpace.md),
@@ -367,7 +381,7 @@ class _TravelInsuranceSection extends StatelessWidget {
           'card genuinely doesn\'t carry one, or that PandaPay\'s catalogue data for it is '
           'incomplete — check your card\'s own terms before travelling on the assumption you\'re '
           'covered.',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
         ),
       );
     }
@@ -378,9 +392,9 @@ class _TravelInsuranceSection extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: Container(
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: BambooInk.glassFillOnPaper,
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.ink100),
+                border: Border.all(color: BambooInk.hairlineOnPaper),
               ),
               padding: const EdgeInsets.all(AppSpace.md),
               child: Column(
@@ -388,13 +402,13 @@ class _TravelInsuranceSection extends StatelessWidget {
                 children: [
                   Text(
                     '${userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name} — ${benefit.label}',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                   ),
                   if (benefit.description != null) ...[
                     const SizedBox(height: 2),
                     Text(
                       benefit.description!,
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ],
                   if (benefit.valueEstimate != null) ...[
@@ -403,11 +417,12 @@ class _TravelInsuranceSection extends StatelessWidget {
                       children: [
                         Text(
                           'Estimated cover ',
-                          style: Theme.of(context).textTheme.bodySmall,
+                          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                         ),
                         MoneyText(
                           benefit.valueEstimate!,
                           confidence: Confidence.estimated,
+                          style: BambooFonts.money(14, color: BambooInk.ink900),
                         ),
                       ],
                     ),
@@ -430,9 +445,9 @@ class _DccExplainer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: BambooInk.paperMuted,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -443,13 +458,13 @@ class _DccExplainer extends StatelessWidget {
               const Icon(
                 Icons.warning_amber_rounded,
                 size: 18,
-                color: AppColors.error,
+                color: BambooInk.clay,
               ),
               const SizedBox(width: AppSpace.sm),
               Expanded(
                 child: Text(
                   'Watch out for DCC',
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                 ),
               ),
             ],
@@ -458,7 +473,7 @@ class _DccExplainer extends StatelessWidget {
           Text(
             'At a foreign card machine or ATM you\'ll sometimes be asked "Charge in ₹ (INR) or in the '
             'local currency?" — that prompt is Dynamic Currency Conversion (DCC).',
-            style: Theme.of(context).textTheme.bodySmall,
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.sm),
           Text(
@@ -466,7 +481,7 @@ class _DccExplainer extends StatelessWidget {
             'exchange rate on the spot — it\'s almost always worse than your card network\'s real '
             'rate, on top of whatever forex markup your card already charges. Choosing local '
             'currency lets your card issuer do the conversion instead, at the real rate.',
-            style: Theme.of(context).textTheme.bodySmall,
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
         ],
       ),
@@ -484,9 +499,9 @@ class _DestinationAcceptanceNotes extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -494,22 +509,20 @@ class _DestinationAcceptanceNotes extends StatelessWidget {
         children: [
           Text(
             'Card acceptance abroad',
-            style: Theme.of(context).textTheme.titleSmall,
+            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
           ),
           const SizedBox(height: AppSpace.sm),
           Text(
             'PandaPay doesn\'t have per-destination acceptance data (no country/merchant coverage '
             'is modelled anywhere in this app today) — this is general guidance, not a country-by-'
             'country breakdown.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500).copyWith(fontStyle: FontStyle.italic),
           ),
           const SizedBox(height: AppSpace.sm),
           Text(
             'RuPay has limited acceptance outside India. If your only card is RuPay, carry a Visa '
             'or Mastercard as a backup when travelling internationally.',
-            style: Theme.of(context).textTheme.bodySmall,
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
         ],
       ),
