@@ -60,17 +60,48 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
     final overrides = ref.watch(cardOverridesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Big-purchase calculator')),
-      body: Padding(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Big-purchase calculator', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
         padding: const EdgeInsets.all(AppSpace.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Amount', style: Theme.of(context).textTheme.labelLarge),
+            Text('Amount', style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink500)),
             const SizedBox(height: AppSpace.sm),
             TextField(
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(prefixText: '₹ '),
+              style: BambooFonts.money(24, color: BambooInk.ink900),
+              decoration: InputDecoration(
+                prefixText: '₹ ',
+                prefixStyle: BambooFonts.money(24, color: BambooInk.ink500),
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                ),
+              ),
               controller: _amountController,
               onChanged: (v) {
                 final parsed = double.tryParse(v);
@@ -87,7 +118,16 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
                   for (final c in list)
                     ChoiceChip(
                       label: Text(c.name),
+                      labelStyle: BambooFonts.ui(
+                        13,
+                        weight: FontWeight.w600,
+                        color: _categoryId == c.id ? BambooInk.onSlate : BambooInk.ink900,
+                      ),
                       selected: _categoryId == c.id,
+                      selectedColor: BambooInk.slate,
+                      backgroundColor: BambooInk.paperMuted,
+                      side: BorderSide.none,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                       onSelected: (_) => setState(() => _categoryId = c.id),
                     ),
                 ],
@@ -98,6 +138,12 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
               children: [
                 Expanded(
                   child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: BambooInk.ink900,
+                      minimumSize: const Size.fromHeight(48),
+                      side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const SplitPlannerScreen()),
                     ),
@@ -107,6 +153,12 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: BambooInk.ink900,
+                      minimumSize: const Size.fromHeight(48),
+                      side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const EmiAdvisorScreen()),
                     ),
@@ -118,6 +170,7 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
             const SizedBox(height: AppSpace.lg),
             Expanded(child: _buildResults(catalogue, userCards, engine, overrides)),
           ],
+        ),
         ),
       ),
     );
@@ -183,26 +236,42 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
         final completesMilestone = rec.reasonLines.any((l) => l.contains('completes') && l.contains('milestone'));
         return Card(
           key: ValueKey(rec.card.id),
+          color: completesMilestone ? const Color(0xFFE3F3EA) : BambooInk.glassFillOnPaper,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: completesMilestone ? BambooInk.jade.withValues(alpha: 0.4) : BambooInk.hairlineOnPaper),
+          ),
           margin: const EdgeInsets.only(bottom: AppSpace.sm),
           child: ListTile(
             title: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Flexible(child: Text(rec.card.name, overflow: TextOverflow.ellipsis)),
+                Flexible(
+                  child: Text(
+                    rec.card.name,
+                    style: BambooFonts.heading(15, color: BambooInk.ink900),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 if (rec.isOverride) ...[
                   const SizedBox(width: AppSpace.xs),
                   const StatusPill(
                     label: 'Override active',
-                    foreground: AppColors.navy800,
-                    background: AppColors.surfaceMuted,
+                    foreground: BambooInk.ink900,
+                    background: BambooInk.paperMuted,
                     icon: Icons.push_pin_rounded,
                   ),
                 ],
               ],
             ),
-            subtitle: rec.isExcluded ? Text(rec.exclusionReason!) : Text(rec.reasonLines.join(' · ')),
-            trailing: rec.isExcluded ? null : MoneyText(rec.expectedValue, confidence: rec.confidence),
-            tileColor: completesMilestone ? const Color(0xFFECFDF5) : null,
+            subtitle: Text(
+              rec.isExcluded ? rec.exclusionReason! : rec.reasonLines.join(' · '),
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+            trailing: rec.isExcluded
+                ? null
+                : MoneyText(rec.expectedValue, confidence: rec.confidence, style: BambooFonts.money(16, color: BambooInk.ink900)),
           ),
         );
       },
