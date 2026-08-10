@@ -107,8 +107,27 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
     final id = widget.userCardIds[_index];
     final userCards = ref.watch(userCardsProvider);
     return Scaffold(
-      appBar: AppBar(title: Text('Card ${_index + 1} of ${widget.userCardIds.length}')),
-      body: userCards.when(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          'Card ${_index + 1} of ${widget.userCardIds.length}',
+          style: BambooFonts.heading(17, color: BambooInk.ink900),
+        ),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: userCards.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(userCardsProvider)),
         data: (cards) {
@@ -125,7 +144,7 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
           return ListView(
             padding: const EdgeInsets.all(AppSpace.lg),
             children: [
-              Text(card.cardName, style: Theme.of(context).textTheme.bodySmall),
+              Text(card.cardName, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
               const SizedBox(height: AppSpace.lg),
               TextField(
                 controller: _nicknameController,
@@ -179,7 +198,7 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
               ),
               if (_error != null) ...[
                 const SizedBox(height: AppSpace.md),
-                Text(_error!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.error)),
+                Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
               ],
               const SizedBox(height: AppSpace.xl),
               Row(
@@ -187,6 +206,12 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
                   if (_index > 0)
                     Expanded(
                       child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: BambooInk.ink900,
+                          minimumSize: const Size.fromHeight(52),
+                          side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
                         onPressed: _saving ? null : () => setState(() => _index--),
                         child: const Text('Back'),
                       ),
@@ -194,9 +219,16 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
                   if (_index > 0) const SizedBox(width: AppSpace.md),
                   Expanded(
                     child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: BambooInk.slate,
+                        foregroundColor: BambooInk.lime,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                      ),
                       onPressed: _saving ? null : () => _next(card),
                       child: _saving
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
                           : Text(_isLast ? 'Finish' : 'Next'),
                     ),
                   ),
@@ -205,6 +237,7 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
             ],
           );
         },
+        ),
       ),
     );
   }
