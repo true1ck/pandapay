@@ -61,10 +61,27 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Request a card')),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        child: _submitted ? _buildConfirmation(context) : _buildForm(context),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Request a card', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          child: _submitted ? _buildConfirmation(context) : _buildForm(context),
+        ),
       ),
     );
   }
@@ -74,42 +91,72 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.check_circle_outline_rounded, size: 48, color: AppColors.success),
+          const Icon(Icons.check_circle_outline_rounded, size: 48, color: BambooInk.jade),
           const SizedBox(height: AppSpace.lg),
-          Text('Request sent', style: Theme.of(context).textTheme.titleMedium),
+          Text('Request sent', style: BambooFonts.heading(17, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
-          const Text(
+          Text(
             "We add cards based on real demand — you'll see it in a future update if it's added.",
+            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpace.xl),
-          FilledButton(onPressed: () => context.pop(), child: const Text('Done')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: BambooInk.slate,
+              foregroundColor: BambooInk.lime,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+            ),
+            onPressed: () => context.pop(),
+            child: const Text('Done'),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildForm(BuildContext context) {
+    final inputDecoration = (String label) => InputDecoration(
+          labelText: label,
+          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          filled: true,
+          fillColor: BambooInk.glassFillOnPaper,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+          ),
+        );
+
     return ListView(
       children: [
         Text(
           "Add every card you own — the advice is only as good as what it knows about.",
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: BambooFonts.ui(13.5, color: BambooInk.ink500),
         ),
         const SizedBox(height: AppSpace.xl),
         TextField(
           controller: _issuerController,
-          decoration: const InputDecoration(labelText: 'Issuer (e.g. HDFC Bank)'),
+          style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+          decoration: inputDecoration('Issuer (e.g. HDFC Bank)'),
         ),
         const SizedBox(height: AppSpace.lg),
         TextField(
           controller: _productController,
-          decoration: const InputDecoration(labelText: 'Card name'),
+          style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+          decoration: inputDecoration('Card name'),
         ),
         const SizedBox(height: AppSpace.lg),
         DropdownButtonFormField<CardNetwork>(
           initialValue: _networkGuess,
-          decoration: const InputDecoration(labelText: 'Network (if known)'),
+          style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+          decoration: inputDecoration('Network (if known)'),
           items: [
             for (final n in CardNetwork.values) DropdownMenuItem(value: n, child: Text(_networkLabel(n))),
           ],
@@ -119,17 +166,24 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
         Text(
           'A photo of the card FACE ONLY can help us identify it — never photograph the card number. '
           'Photo upload is coming in a later update; for now the description above is enough to submit.',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
         ),
         if (_error != null) ...[
           const SizedBox(height: AppSpace.md),
-          Text(_error!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.error)),
+          Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
         ],
         const SizedBox(height: AppSpace.xl),
         FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: BambooInk.slate,
+            foregroundColor: BambooInk.lime,
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+          ),
           onPressed: _submitting ? null : _submit,
           child: _submitting
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
               : const Text('Submit request'),
         ),
       ],
