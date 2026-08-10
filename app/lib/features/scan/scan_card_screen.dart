@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../../app/design/app_theme.dart';
 import 'card_scanner.dart';
 import 'card_text_matcher.dart';
 
@@ -66,26 +67,34 @@ class _ScanCardScreenState extends State<ScanCardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan a card (QR/barcode)')),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Scan a card (QR/barcode)', style: BambooFonts.heading(16, color: BambooInk.ink900)),
+      ),
       body: Column(
         children: [
           Expanded(
             flex: 3,
             child: _handling
-                ? const Center(child: Icon(Icons.qr_code_scanner, size: 64))
+                ? const Center(child: Icon(Icons.qr_code_scanner, size: 64, color: BambooInk.ink500))
                 : MobileScanner(controller: _controller, onDetect: _onDetect),
           ),
           Expanded(
             flex: 2,
             child: _lastExtracted == null
-                ? const Center(
+                ? Center(
                     child: Padding(
-                      padding: EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(16),
                       child: Text(
                         'Point the camera at a QR code or barcode on a card mailer or '
                         'statement. Full physical-card OCR is not supported yet — use the '
                         'manual picker below the wallet for cards without a scannable code.',
                         textAlign: TextAlign.center,
+                        style: BambooFonts.ui(13.5, color: BambooInk.ink500),
                       ),
                     ),
                   )
@@ -123,29 +132,34 @@ class _ResultPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Scanned text', style: Theme.of(context).textTheme.labelMedium),
-          Text(extracted.rawText, style: const TextStyle(fontFamily: 'monospace')),
+          Text('Scanned text', style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500)),
+          Text(extracted.rawText, style: const TextStyle(fontFamily: 'monospace', color: BambooInk.ink900)),
           const SizedBox(height: 12),
           if (confident.isEmpty)
-            const Text(
+            Text(
               'No confident match in the catalogue — pick the card manually below.',
-              style: TextStyle(color: Colors.orange),
+              style: BambooFonts.ui(13, color: BambooInk.amber),
             )
           else
-            Text('Possible matches', style: Theme.of(context).textTheme.labelMedium),
+            Text('Possible matches', style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500)),
           for (final match in matches.take(5))
             ListTile(
-              title: Text(match.product.name),
-              subtitle: Text('${match.confidence.name} confidence · ${match.reason}'),
+              title: Text(match.product.name, style: BambooFonts.ui(14.5, color: BambooInk.ink900)),
+              subtitle: Text('${match.confidence.name} confidence · ${match.reason}', style: BambooFonts.ui(12, color: BambooInk.ink500)),
               trailing: match.confidence == MatchConfidence.low
                   ? null
                   : FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: BambooInk.slate, foregroundColor: BambooInk.lime),
                       onPressed: () => onConfirm(match.product),
                       child: const Text('Use this'),
                     ),
             ),
           const SizedBox(height: 8),
-          OutlinedButton(onPressed: onRescan, child: const Text('Scan again')),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(foregroundColor: BambooInk.ink900, side: const BorderSide(color: BambooInk.hairlineOnPaper)),
+            onPressed: onRescan,
+            child: const Text('Scan again'),
+          ),
         ],
       ),
     );
