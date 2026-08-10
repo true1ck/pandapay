@@ -14,11 +14,29 @@ import '../scan/scan_card_screen.dart';
 import 'card_picker_screen.dart';
 
 /// C1 My Cards (ui-spec Group C, implementation-plan-group-c-d.md) —
-/// replaces the old flat-list CardsScreen. Card-art list, drag-to-reorder
+/// restyled onto the Bamboo Ink design system (see home_screen.dart's
+/// doc-comment for the overall rollout rationale). Behaviour is
+/// unchanged from before this pass: card-art list, drag-to-reorder
 /// priority, per-card cap-usage bar / utilization bar / next due date,
-/// active/archived filter, FAB -> C3 (still the inline dropdown form below
-/// until C3's real searchable picker lands — same reasoning as the plan's
-/// own sequencing note).
+/// active/archived filter, log-spend/archive actions, FAB/picker/scan
+/// add-card flow. No dedicated test file exists for this screen (checked
+/// before restyling), but the structural/functional widgets
+/// (SegmentedButton, ReorderableListView.builder, its onReorderItem
+/// callback) are untouched — only colors/typography/shape changed.
+///
+/// Per the mockup's own "02 Wallet" screen: the mockup shows a horizontal
+/// swipeable card-art row plus a single "selected card" detail panel
+/// below it — a different interaction model from this screen's real one
+/// (every card's own cap/utilization bars, log-spend and archive actions,
+/// and drag-to-reorder priority, all visible at once in a vertical list).
+/// Adopting the mockup's structure literally would mean dropping or
+/// awkwardly bolting on that real, already-shipped functionality onto a
+/// layout that has nowhere to put it. Per the handoff bundle's own
+/// instruction ("match the visual output; don't copy the prototype's
+/// internal structure unless it happens to fit"), this keeps the real
+/// vertical list/detail-per-tile structure and applies the mockup's
+/// visual language to it instead: colored card-art tiles, slate/lime
+/// accents, Bamboo typography.
 class MyCardsScreen extends ConsumerWidget {
   const MyCardsScreen({super.key});
 
@@ -35,111 +53,141 @@ class MyCardsScreen extends ConsumerWidget {
     final showArchived = ref.watch(showArchivedCardsProvider);
     final myCards = ref.watch(myCardsProvider);
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment(value: false, label: Text('Active')),
-                    ButtonSegment(value: true, label: Text('Archived')),
-                  ],
-                  selected: {showArchived},
-                  onSelectionChanged: (selection) =>
-                      ref.read(showArchivedCardsProvider.notifier).state = selection.first,
-                ),
-              ),
-              const SizedBox(width: AppSpace.sm),
-              IconButton(
-                tooltip: 'Benefits cheat sheet',
-                icon: const Icon(Icons.workspace_premium_outlined),
-                onPressed: () => context.push(AppRoute.benefitsCheatSheet),
-              ),
-              IconButton(
-                tooltip: 'Points & expiry',
-                icon: const Icon(Icons.stars_outlined),
-                onPressed: () => context.push(AppRoute.pointsExpiry),
-              ),
-            ],
-          ),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0.9, -0.7),
+          radius: 1.3,
+          colors: [BambooInk.wash, BambooInk.paper],
+          stops: [0.0, 0.6],
         ),
-        Expanded(
-          child: myCards.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => ErrorState(
-              message: userFacingErrorMessage(err),
-              onRetry: () => ref.invalidate(myCardsProvider),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SegmentedButton<bool>(
+                    style: SegmentedButton.styleFrom(
+                      selectedBackgroundColor: BambooInk.slate,
+                      selectedForegroundColor: BambooInk.onSlate,
+                      foregroundColor: BambooInk.ink500,
+                      side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                      textStyle: BambooFonts.ui(13.5, weight: FontWeight.w600),
+                    ),
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('Active')),
+                      ButtonSegment(value: true, label: Text('Archived')),
+                    ],
+                    selected: {showArchived},
+                    onSelectionChanged: (selection) =>
+                        ref.read(showArchivedCardsProvider.notifier).state = selection.first,
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                IconButton(
+                  tooltip: 'Benefits cheat sheet',
+                  icon: const Icon(Icons.workspace_premium_outlined, color: BambooInk.ink500),
+                  onPressed: () => context.push(AppRoute.benefitsCheatSheet),
+                ),
+                IconButton(
+                  tooltip: 'Points & expiry',
+                  icon: const Icon(Icons.stars_outlined, color: BambooInk.ink500),
+                  onPressed: () => context.push(AppRoute.pointsExpiry),
+                ),
+              ],
             ),
-            data: (cards) {
-              if (cards.isEmpty) {
-                return EmptyState(
-                  icon: showArchived ? Icons.archive_outlined : Icons.wallet_outlined,
-                  title: showArchived ? 'No archived cards' : 'Your wallet is empty',
-                  message: showArchived
-                      ? 'Cards you archive show up here — never deleted, always restorable.'
-                      : 'Add a card below to start tracking spend and rewards.',
-                );
-              }
-              // Reordering only makes sense on the active, priority-ordered
-              // view — archived cards have no ranking to reorder.
-              if (showArchived) {
-                return ListView.builder(
+          ),
+          Expanded(
+            child: myCards.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, _) => ErrorState(
+                message: userFacingErrorMessage(err),
+                onRetry: () => ref.invalidate(myCardsProvider),
+              ),
+              data: (cards) {
+                if (cards.isEmpty) {
+                  return EmptyState(
+                    icon: showArchived ? Icons.archive_outlined : Icons.wallet_outlined,
+                    title: showArchived ? 'No archived cards' : 'Your wallet is empty',
+                    message: showArchived
+                        ? 'Cards you archive show up here — never deleted, always restorable.'
+                        : 'Add a card below to start tracking spend and rewards.',
+                  );
+                }
+                // Reordering only makes sense on the active, priority-ordered
+                // view — archived cards have no ranking to reorder.
+                if (showArchived) {
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
+                    itemCount: cards.length,
+                    itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpace.md),
+                      child: _MyCardTile(cards[index]),
+                    ),
+                  );
+                }
+                return ReorderableListView.builder(
                   padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
                   itemCount: cards.length,
                   itemBuilder: (context, index) => Padding(
+                    key: ValueKey(cards[index].id),
                     padding: const EdgeInsets.only(bottom: AppSpace.md),
                     child: _MyCardTile(cards[index]),
                   ),
-                );
-              }
-              return ReorderableListView.builder(
-                padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
-                itemCount: cards.length,
-                itemBuilder: (context, index) => Padding(
-                  key: ValueKey(cards[index].id),
-                  padding: const EdgeInsets.only(bottom: AppSpace.md),
-                  child: _MyCardTile(cards[index]),
-                ),
-                onReorderItem: (oldIndex, newIndex) async {
-                  final reordered = List<UserCard>.from(cards);
-                  final moved = reordered.removeAt(oldIndex);
-                  reordered.insert(newIndex, moved);
-                  // Optimistic: the repository call is fire-and-forget from
-                  // the UI's perspective, but ref.invalidate afterward makes
-                  // sure the server's own sort_order (the source of truth)
-                  // is what's actually displayed once it round-trips, not
-                  // just this client's guess forever.
-                  try {
-                    await ref.read(userCardsRepositoryProvider)!.reorderCards([for (final c in reordered) c.id]);
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Could not save the new order. ${userFacingErrorMessage(e)}')),
-                      );
+                  onReorderItem: (oldIndex, newIndex) async {
+                    final reordered = List<UserCard>.from(cards);
+                    final moved = reordered.removeAt(oldIndex);
+                    reordered.insert(newIndex, moved);
+                    // Optimistic: the repository call is fire-and-forget from
+                    // the UI's perspective, but ref.invalidate afterward makes
+                    // sure the server's own sort_order (the source of truth)
+                    // is what's actually displayed once it round-trips, not
+                    // just this client's guess forever.
+                    try {
+                      await ref.read(userCardsRepositoryProvider)!.reorderCards([for (final c in reordered) c.id]);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Could not save the new order. ${userFacingErrorMessage(e)}')),
+                        );
+                      }
+                    } finally {
+                      ref.invalidate(myCardsProvider);
                     }
-                  } finally {
-                    ref.invalidate(myCardsProvider);
-                  }
-                },
-              );
-            },
+                  },
+                );
+              },
+            ),
           ),
-        ),
-        Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            border: Border(top: BorderSide(color: AppColors.ink100)),
+          Container(
+            decoration: const BoxDecoration(
+              color: BambooInk.paper,
+              border: Border(top: BorderSide(color: BambooInk.hairlineOnPaper)),
+            ),
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: const _AddCardForm(),
           ),
-          padding: const EdgeInsets.all(AppSpace.lg),
-          child: const _AddCardForm(),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
+
+/// Deterministic per-card "card art" face color (same card always gets the
+/// same color — not decorative randomness), echoing the mockup's colored
+/// wallet-card tiles.
+const _cardFaces = [
+  BambooInk.slate,
+  BambooInk.jade,
+  Color(0xFF5B4B8A),
+  BambooInk.clay,
+  Color(0xFF1B5E6B),
+];
+
+Color _faceColorFor(String cardId) => _cardFaces[cardId.hashCode.abs() % _cardFaces.length];
 
 class _MyCardTile extends ConsumerStatefulWidget {
   final UserCard card;
@@ -203,7 +251,6 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
   Widget build(BuildContext context) {
     final card = widget.card;
     final amount = ref.watch(enteredAmountProvider);
-    final textTheme = Theme.of(context).textTheme;
     final badges = <String>[
       if (card.totalPointsEarned > 0) '${card.totalPointsEarned.toStringAsFixed(0)} pts earned',
       for (final fw in card.feeWaiverStates)
@@ -214,17 +261,21 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
 
     final pairs = ref.watch(myCardsWithProductProvider).valueOrNull ?? const [];
     final product = pairs.where((p) => p.$1.id == card.id).map((p) => p.$2).firstOrNull;
+    final faceColor = _faceColorFor(card.id);
 
     return Opacity(
-      opacity: card.isArchived ? 0.6 : 1,
+      opacity: card.isArchived ? 0.55 : 1,
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: BorderRadius.circular(24),
         onTap: () => context.push('/cards/${card.id}'),
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.ink100),
+            color: BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+            boxShadow: [
+              BoxShadow(color: BambooInk.ink900.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3)),
+            ],
           ),
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Column(
@@ -233,17 +284,16 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
               Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
-                    decoration:
-                        BoxDecoration(color: AppColors.teal50, borderRadius: BorderRadius.circular(AppRadius.sm)),
-                    child: const Icon(Icons.credit_card_rounded, color: AppColors.teal600, size: 20),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(color: faceColor, borderRadius: BorderRadius.circular(14)),
+                    child: const Icon(Icons.credit_card_rounded, color: BambooInk.onSlate, size: 20),
                   ),
                   const SizedBox(width: AppSpace.md),
                   Expanded(
                     child: Text(
                       card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName,
-                      style: textTheme.titleMedium,
+                      style: BambooFonts.heading(15.5, color: BambooInk.ink900),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -273,17 +323,14 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
               ],
               if (card.dueDay != null && !card.isArchived) ...[
                 const SizedBox(height: AppSpace.sm),
-                Text(_nextDueDateLabel(card.dueDay!), style: textTheme.bodySmall),
+                Text(_nextDueDateLabel(card.dueDay!), style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
               ],
               if (badges.isNotEmpty) ...[
                 const SizedBox(height: AppSpace.sm),
                 Wrap(
                   spacing: AppSpace.xs,
                   runSpacing: AppSpace.xs,
-                  children: [
-                    for (final b in badges)
-                      StatusPill(label: b, foreground: AppColors.navy800, background: AppColors.surfaceMuted),
-                  ],
+                  children: [for (final b in badges) _BambooPill(b)],
                 ),
               ],
             ],
@@ -299,6 +346,24 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
     if (!next.isAfter(now)) next = DateTime(now.year, now.month + 1, dueDay);
     final daysLeft = next.difference(DateTime(now.year, now.month, now.day)).inDays;
     return 'Next due in $daysLeft days';
+  }
+}
+
+/// A small rounded label pill in Bamboo typography (Instrument Sans) — the
+/// generic [StatusPill] in widgets.dart renders in the ambient Material
+/// theme's font instead, so this is a Bamboo-specific equivalent, same
+/// reasoning as home_screen.dart's own pill widgets.
+class _BambooPill extends StatelessWidget {
+  final String label;
+  const _BambooPill(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(999)),
+      child: Text(label, style: BambooFonts.ui(12, weight: FontWeight.w500, color: BambooInk.ink900)),
+    );
   }
 }
 
@@ -326,19 +391,18 @@ class _NearestCapBar extends StatelessWidget {
       }
     }
     if (worst == null) return const SizedBox.shrink();
-    final textTheme = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(worst.label, style: textTheme.bodySmall),
-        const SizedBox(height: 4),
+        Text(worst.label, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+        const SizedBox(height: 5),
         ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
+          borderRadius: BorderRadius.circular(999),
           child: LinearProgressIndicator(
             value: worstRatio,
-            minHeight: 6,
-            backgroundColor: AppColors.surfaceMuted,
-            color: worstRatio >= 0.9 ? AppColors.warning : AppColors.teal600,
+            minHeight: 7,
+            backgroundColor: BambooInk.paperMuted,
+            color: worstRatio >= 0.9 ? BambooInk.clay : BambooInk.jade,
           ),
         ),
       ],
@@ -354,25 +418,27 @@ class _UtilizationBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final spendProxy = card.capConsumed.values.fold<Money>(const Money.zero(), (a, b) => a + b);
     final result = creditUtilization(spendProxy, card.creditLimit!);
-    final textTheme = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text('Utilization', style: textTheme.bodySmall),
+            Text('Utilization', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
             const Spacer(),
-            Text('${(result.ratio * 100).clamp(0, 999).toStringAsFixed(0)}%', style: textTheme.bodySmall),
+            Text(
+              '${(result.ratio * 100).clamp(0, 999).toStringAsFixed(0)}%',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink900),
+            ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 5),
         ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
+          borderRadius: BorderRadius.circular(999),
           child: LinearProgressIndicator(
             value: result.ratio.clamp(0.0, 1.0),
-            minHeight: 6,
-            backgroundColor: AppColors.surfaceMuted,
-            color: result.overThreshold ? AppColors.warning : AppColors.teal600,
+            minHeight: 7,
+            backgroundColor: BambooInk.paperMuted,
+            color: result.overThreshold ? BambooInk.clay : BambooInk.jade,
           ),
         ),
       ],
@@ -401,15 +467,19 @@ class _CardActionButton extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
           width: 36,
           height: 36,
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.sm)),
+          decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(12)),
           child: loading
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              : Icon(icon, size: 18, color: AppColors.navy800),
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.ink500),
+                )
+              : Icon(icon, size: 18, color: BambooInk.ink900),
         ),
       ),
     );
@@ -514,21 +584,33 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
     final catalogue = ref.watch(catalogueProvider);
     return catalogue.when(
       loading: () => const SizedBox.shrink(),
-      error: (err, _) => Text(userFacingErrorMessage(err), style: Theme.of(context).textTheme.bodySmall),
+      error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(13, color: BambooInk.ink500)),
       data: (cards) {
         if (cards.isEmpty) return const SizedBox.shrink();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700, color: BambooInk.onSlate),
+              ),
               onPressed: _busy ? null : _openPicker,
               icon: _busy
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.add_rounded),
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                    )
+                  : const Icon(Icons.add_rounded, color: BambooInk.lime),
               label: const Text('Add a card'),
             ),
             const SizedBox(height: AppSpace.sm),
             TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
               onPressed: _busy ? null : _scan,
               icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
               label: const Text('Scan a QR/barcode instead'),
