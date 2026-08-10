@@ -66,27 +66,26 @@ class _BillingFloatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final displayName = userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name;
 
     if (userCard.statementDay == null) {
       return Container(
         decoration: BoxDecoration(
-          color: AppColors.surfaceMuted,
+          color: BambooInk.paperMuted,
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         padding: const EdgeInsets.all(AppSpace.lg),
         child: Row(
           children: [
-            const Icon(Icons.event_busy_rounded, size: 20, color: AppColors.ink500),
+            const Icon(Icons.event_busy_rounded, size: 20, color: BambooInk.ink500),
             const SizedBox(width: AppSpace.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(displayName, style: textTheme.titleSmall),
+                  Text(displayName, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                   const SizedBox(height: 2),
-                  Text('Set a statement day to see this card\'s float.', style: textTheme.bodySmall),
+                  Text('Set a statement day to see this card\'s float.', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                 ],
               ),
             ),
@@ -103,25 +102,25 @@ class _BillingFloatTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(displayName, style: textTheme.titleSmall),
+          Text(displayName, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
           Text(
             'Use $displayName today → up to ${result.totalInterestFreeDays} interest-free days.',
-            style: textTheme.headlineSmall,
+            style: BambooFonts.heading(20, color: BambooInk.ink900),
           ),
           const SizedBox(height: AppSpace.sm),
           Text(
             'Statement cuts in ${result.daysUntilStatement} day${result.daysUntilStatement == 1 ? '' : 's'} '
             '(assumes a $_assumedGracePeriodDays-day grace period to the due date).',
-            style: textTheme.bodySmall,
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
         ],
       ),
