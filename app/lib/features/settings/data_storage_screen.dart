@@ -183,7 +183,7 @@ class _InfoCard extends StatelessWidget {
         color: BambooInk.paperMuted,
         borderRadius: BorderRadius.circular(AppRadius.md),
       ),
-      child: Text(text, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: BambooInk.ink500)),
+      child: Text(text, style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
     );
   }
 }
@@ -205,15 +205,15 @@ class _StorageRow extends StatelessWidget {
         children: [
           const Icon(Icons.sd_storage_outlined, size: 20, color: BambooInk.ink900),
           const SizedBox(width: AppSpace.md),
-          const Expanded(child: Text('Cache size')),
+          Expanded(child: Text('Cache size', style: BambooFonts.ui(13.5, color: BambooInk.ink900))),
           cacheSize.when(
-            data: (bytes) => Text(formatBytes(bytes), style: Theme.of(context).textTheme.titleSmall),
+            data: (bytes) => Text(formatBytes(bytes), style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
             loading: () => const SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            error: (_, _) => const Text('—'),
+            error: (_, _) => Text('—', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
           ),
         ],
       ),
@@ -272,7 +272,7 @@ class _CountLine extends StatelessWidget {
       children: [
         Icon(icon, size: 18, color: BambooInk.ink500),
         const SizedBox(width: AppSpace.sm),
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+        Text(label, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
       ],
     );
   }
@@ -316,9 +316,9 @@ class _ActionTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(color: color)),
+                    Text(title, style: BambooFonts.heading(14.5, color: color)),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                    Text(subtitle, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                   ],
                 ),
               ),
