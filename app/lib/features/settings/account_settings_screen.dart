@@ -21,8 +21,25 @@ class AccountSettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
-      body: const _AccountSettingsBody(),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Account', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: const _AccountSettingsBody(),
+      ),
     );
   }
 }
@@ -46,7 +63,7 @@ class _AccountSettingsBody extends ConsumerWidget {
           const SizedBox(height: AppSpace.xxl),
           const _UpgradeFromLocalModeRow(),
           const SizedBox(height: AppSpace.xxl),
-          Text('Security', style: Theme.of(context).textTheme.labelLarge),
+          Text('SECURITY', style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: 1.1)),
           const SizedBox(height: AppSpace.sm),
           const _BiometricLockTile(),
           const SizedBox(height: AppSpace.xxl),
@@ -72,8 +89,12 @@ class _IdentityCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
-        color: AppColors.navy900,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+        ),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: Row(
         children: [
@@ -81,12 +102,12 @@ class _IdentityCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
+              color: BambooInk.lime.withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.person_rounded,
-              color: Colors.white,
+              color: BambooInk.lime,
               size: 24,
             ),
           ),
@@ -95,18 +116,11 @@ class _IdentityCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Signed in',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: Colors.white),
-                ),
+                Text('Signed in', style: BambooFonts.heading(16, color: BambooInk.onSlate)),
                 const SizedBox(height: 2),
                 Text(
                   identifier,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: Colors.white60),
+                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -134,7 +148,7 @@ class _UpgradeFromLocalModeRow extends ConsumerWidget {
     if (token != null) return const SizedBox.shrink();
 
     return Material(
-      color: AppColors.surface,
+      color: BambooInk.glassFillOnPaper,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -146,7 +160,7 @@ class _UpgradeFromLocalModeRow extends ConsumerWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: AppColors.ink100),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
           ),
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpace.lg,
@@ -157,7 +171,7 @@ class _UpgradeFromLocalModeRow extends ConsumerWidget {
               const Icon(
                 Icons.cloud_upload_outlined,
                 size: 20,
-                color: AppColors.navy800,
+                color: BambooInk.ink900,
               ),
               const SizedBox(width: AppSpace.md),
               Expanded(
@@ -166,14 +180,12 @@ class _UpgradeFromLocalModeRow extends ConsumerWidget {
                   children: [
                     Text(
                       'Upgrade from local mode',
-                      style: Theme.of(context).textTheme.bodyLarge,
+                      style: BambooFonts.ui(14.5, weight: FontWeight.w500, color: BambooInk.ink900),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Sync across devices and back up your cards.',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: AppColors.ink300),
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ],
                 ),
@@ -181,7 +193,7 @@ class _UpgradeFromLocalModeRow extends ConsumerWidget {
               const Icon(
                 Icons.chevron_right_rounded,
                 size: 20,
-                color: AppColors.ink300,
+                color: BambooInk.ink300,
               ),
             ],
           ),
@@ -198,8 +210,8 @@ class _SignOutButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.error,
-        side: const BorderSide(color: AppColors.errorBg, width: 1.5),
+        foregroundColor: BambooInk.clay,
+        side: BorderSide(color: BambooInk.clay.withValues(alpha: 0.3), width: 1.5),
       ),
       icon: const Icon(Icons.logout_rounded, size: 18),
       onPressed: () => _signOut(ref),
@@ -259,12 +271,12 @@ class _BiometricLockTile extends ConsumerWidget {
     final lockState = ref.watch(biometricLockProvider);
     final enabled = lockState.valueOrNull ?? false;
     return Material(
-      color: AppColors.surface,
+      color: BambooInk.glassFillOnPaper,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.ink100),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
         ),
         child: SwitchListTile(
           value: enabled,
@@ -272,9 +284,10 @@ class _BiometricLockTile extends ConsumerWidget {
               ? null
               : (value) =>
                     ref.read(biometricLockProvider.notifier).setEnabled(value),
-          title: const Text('Biometric lock'),
-          subtitle: const Text('Require Face/Touch ID to open the app'),
-          activeTrackColor: AppColors.navy900,
+          title: Text('Biometric lock', style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900)),
+          subtitle: Text('Require Face/Touch ID to open the app', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+          activeTrackColor: BambooInk.slate,
+          activeColor: BambooInk.lime,
         ),
       ),
     );
@@ -385,9 +398,9 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
-        color: AppColors.errorBg,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+        color: BambooInk.clay.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: BambooInk.clay.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,15 +409,13 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
             children: [
               const Icon(
                 Icons.warning_amber_rounded,
-                color: AppColors.error,
+                color: BambooInk.clay,
                 size: 20,
               ),
               const SizedBox(width: AppSpace.sm),
               Text(
                 'Delete account',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(color: AppColors.error),
+                style: BambooFonts.heading(16, color: BambooInk.clay),
               ),
             ],
           ),
@@ -425,9 +436,7 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
             const SizedBox(height: AppSpace.sm),
             Text(
               _error!,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.error),
+              style: BambooFonts.ui(12.5, color: BambooInk.clay),
             ),
           ],
         ],
@@ -479,7 +488,7 @@ class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
           'deleted in 30 days. Crowdsourced merchant data you\'ve contributed '
           'stays anonymous and is never linked back to you. Backups are '
           'purged on their own retention schedule.',
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: BambooFonts.ui(13.5, color: BambooInk.ink500),
         ),
         const SizedBox(height: AppSpace.lg),
         TextField(
@@ -494,7 +503,12 @@ class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: BambooInk.clay,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+            ),
             onPressed: canConfirm ? widget.onConfirm : null,
             child: widget.submitting
                 ? const SizedBox(
@@ -534,15 +548,17 @@ class _ScheduledDeletionState extends StatelessWidget {
         Text(
           'Deletion scheduled for $formatted. Your account is not deleted '
           'yet — sign back in any time before then to cancel.',
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: BambooFonts.ui(13.5, color: BambooInk.ink500),
         ),
         const SizedBox(height: AppSpace.md),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton(
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.error,
-              side: const BorderSide(color: AppColors.error, width: 1.5),
+              foregroundColor: BambooInk.clay,
+              minimumSize: const Size.fromHeight(52),
+              side: const BorderSide(color: BambooInk.clay, width: 1.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
             onPressed: submitting ? null : onCancel,
             child: submitting
