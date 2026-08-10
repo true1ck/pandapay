@@ -23,6 +23,15 @@ import '../../main.dart' show MoneyText;
 ///
 /// Task E-0c: rows sort closest-to-cap first via the shared urgency
 /// scorer, matching E1's ordering approach.
+///
+/// Bamboo Ink's token set defines only a two-tier clay/jade severity
+/// pairing (no separate mid-severity "warning" hue) — this screen's real
+/// three-tier traffic light (>=90% / >=50% / under) is a genuine part of
+/// its function (it's how a user tells "fine" from "watch this" from
+/// "about to hit the cap"), so a distinct amber is kept here rather than
+/// collapsing to two colors and losing that signal.
+const _amber = Color(0xFFD97706);
+
 class CapsScreen extends ConsumerWidget {
   const CapsScreen({super.key});
 
@@ -69,7 +78,7 @@ class CapsScreen extends ConsumerWidget {
                 child: _CapTile(userCard: userCard, product: product, cap: cap, allOwned: owned),
               ),
             if (fuelRows.isNotEmpty) ...[
-              Text('Fuel surcharge waivers', style: Theme.of(context).textTheme.labelLarge),
+              Text('Fuel surcharge waivers', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
               const SizedBox(height: AppSpace.sm),
               for (final (userCard, product, fuel) in fuelRows)
                 Padding(
@@ -93,7 +102,6 @@ class _CapTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final consumed = userCard.capConsumed[cap.id] ?? const Money.zero();
     final remainingPaise = (cap.capValue.paise - consumed.paise).clamp(0, cap.capValue.paise);
     final remaining = Money.fromPaise(remainingPaise);
@@ -102,17 +110,17 @@ class _CapTile extends StatelessWidget {
     final Color barColor;
     final String headline;
     if (ratio >= 0.9) {
-      barColor = AppColors.error;
+      barColor = BambooInk.clay;
       headline = cap.measure == CapMeasure.txnCount
           ? '${remaining.rupees.toInt()} transactions left'
           : '${remaining.format()} left';
     } else if (ratio >= 0.5) {
-      barColor = AppColors.warning;
+      barColor = _amber;
       headline = cap.measure == CapMeasure.txnCount
           ? '${remaining.rupees.toInt()} transactions left'
           : '${remaining.format()} left';
     } else {
-      barColor = AppColors.success;
+      barColor = BambooInk.jade;
       headline = cap.measure == CapMeasure.txnCount
           ? '${remaining.rupees.toInt()} transactions left'
           : '${remaining.format()} left';
@@ -120,9 +128,9 @@ class _CapTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -134,19 +142,19 @@ class _CapTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(cap.label, style: textTheme.titleSmall),
+                    Text(cap.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                     const SizedBox(height: 2),
                     Text(
                       userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-                      style: textTheme.bodySmall,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ],
                 ),
               ),
               if (ratio >= 0.9)
-                const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.error)
+                const Icon(Icons.warning_amber_rounded, size: 16, color: BambooInk.clay)
               else if (ratio >= 0.5)
-                const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.warning),
+                const Icon(Icons.info_outline_rounded, size: 16, color: _amber),
             ],
           ),
           const SizedBox(height: AppSpace.md),
@@ -155,7 +163,7 @@ class _CapTile extends StatelessWidget {
             child: LinearProgressIndicator(
               value: ratio,
               minHeight: 8,
-              backgroundColor: AppColors.surfaceMuted,
+              backgroundColor: BambooInk.paperMuted,
               color: barColor,
             ),
           ),
@@ -163,11 +171,11 @@ class _CapTile extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(headline, style: textTheme.labelLarge?.copyWith(color: barColor)),
+              Text(headline, style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: barColor)),
               if (cap.measure != CapMeasure.txnCount)
-                MoneyText(consumed, confidence: Confidence.estimated, style: textTheme.bodySmall)
+                MoneyText(consumed, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500))
               else
-                Text('${consumed.rupees.toInt()} / ${cap.capValue.rupees.toInt()}', style: textTheme.bodySmall),
+                Text('${consumed.rupees.toInt()} / ${cap.capValue.rupees.toInt()}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
             ],
           ),
           if (ratio >= 0.9) ...[
@@ -215,7 +223,7 @@ class _SwitchToSuggestion extends StatelessWidget {
     final label = bestOwned.$1.nickname?.isNotEmpty == true ? bestOwned.$1.nickname! : best.card.name;
     return Text(
       'Switch to $label after this cap',
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.teal600, fontWeight: FontWeight.w600),
+      style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.jade),
     );
   }
 }
@@ -232,12 +240,11 @@ class _FuelSurchargeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -245,14 +252,14 @@ class _FuelSurchargeTile extends StatelessWidget {
         children: [
           Text(
             userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-            style: textTheme.titleSmall,
+            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
           ),
           const SizedBox(height: 4),
           Text(
             '${fuel.waiverPercent.toStringAsFixed(2)}% surcharge waived'
             '${fuel.minTxn != null ? " on spends above ${fuel.minTxn!.format()}" : ""}'
             '${fuel.maxTxn != null ? " up to ${fuel.maxTxn!.format()}" : ""}',
-            style: textTheme.bodySmall,
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
         ],
       ),
