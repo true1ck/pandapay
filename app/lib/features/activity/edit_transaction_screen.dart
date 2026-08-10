@@ -83,78 +83,136 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
 
+    final inputDecoration = (String label) => InputDecoration(
+          labelText: label,
+          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          filled: true,
+          fillColor: BambooInk.glassFillOnPaper,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+          ),
+        );
+
     return Scaffold(
+      backgroundColor: BambooInk.paper,
       appBar: AppBar(
-        title: const Text('Edit transaction'),
-        actions: [TextButton(onPressed: () => context.pop(), child: const Text('Cancel', style: TextStyle(color: Colors.white)))],
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Edit transaction', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: BambooInk.ink900),
+            onPressed: () => context.pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
       ),
-      body: txn.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
-        data: (entry) {
-          _initFrom(entry);
-          return ListView(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            children: [
-              TextField(
-                controller: _amountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Amount (₹)'),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              TextField(
-                controller: _merchantController,
-                decoration: const InputDecoration(labelText: 'Merchant'),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              DropdownButtonFormField<String>(
-                initialValue: _userCardId,
-                decoration: const InputDecoration(labelText: 'Card'),
-                items: [
-                  for (final c in cards)
-                    DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: txn.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
+          data: (entry) {
+            _initFrom(entry);
+            return ListView(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              children: [
+                TextField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  decoration: inputDecoration('Amount (₹)'),
+                ),
+                const SizedBox(height: AppSpace.lg),
+                TextField(
+                  controller: _merchantController,
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  decoration: inputDecoration('Merchant'),
+                ),
+                const SizedBox(height: AppSpace.lg),
+                DropdownButtonFormField<String>(
+                  initialValue: _userCardId,
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  decoration: inputDecoration('Card'),
+                  items: [
+                    for (final c in cards)
+                      DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
+                  ],
+                  onChanged: (v) => setState(() => _userCardId = v),
+                ),
+                const SizedBox(height: AppSpace.lg),
+                DropdownButtonFormField<String>(
+                  initialValue: _categoryId,
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  decoration: inputDecoration('Category'),
+                  items: [
+                    for (final c in categories) DropdownMenuItem(value: c.id, child: Text(c.name)),
+                  ],
+                  onChanged: (v) => setState(() => _categoryId = v),
+                ),
+                const SizedBox(height: AppSpace.lg),
+                Material(
+                  color: BambooInk.glassFillOnPaper,
+                  borderRadius: BorderRadius.circular(16),
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                    ),
+                    title: Text('Date', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+                    subtitle: Text(
+                      _occurredAt?.toLocal().toString().split(' ').first ?? '—',
+                      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                    ),
+                    trailing: const Icon(Icons.calendar_today_outlined, size: 18, color: BambooInk.ink500),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _occurredAt ?? DateTime.now(),
+                        firstDate: DateTime.now().subtract(const Duration(days: 365 * 3)),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) setState(() => _occurredAt = picked);
+                    },
+                  ),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: AppSpace.md),
+                  Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
                 ],
-                onChanged: (v) => setState(() => _userCardId = v),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              DropdownButtonFormField<String>(
-                initialValue: _categoryId,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: [
-                  for (final c in categories) DropdownMenuItem(value: c.id, child: Text(c.name)),
-                ],
-                onChanged: (v) => setState(() => _categoryId = v),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Date'),
-                subtitle: Text(_occurredAt?.toLocal().toString().split(' ').first ?? '—'),
-                trailing: const Icon(Icons.calendar_today_outlined, size: 18),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _occurredAt ?? DateTime.now(),
-                    firstDate: DateTime.now().subtract(const Duration(days: 365 * 3)),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) setState(() => _occurredAt = picked);
-                },
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: AppSpace.md),
-                Text(_error!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.error)),
+                const SizedBox(height: AppSpace.xl),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.slate,
+                    foregroundColor: BambooInk.lime,
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                  ),
+                  onPressed: _saving ? null : _save,
+                  child: _saving
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
+                      : const Text('Save'),
+                ),
               ],
-              const SizedBox(height: AppSpace.xl),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Save'),
-              ),
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
