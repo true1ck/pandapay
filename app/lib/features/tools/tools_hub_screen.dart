@@ -23,44 +23,61 @@ class ToolsHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Tools & Travel')),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        children: [
-          Text(
-            'Travel-aware ranking, multi-card planning, and the one screen in this app that always '
-            'works with no sign-in and no signal.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.ink500),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Tools & Travel', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
           ),
-          const SizedBox(height: AppSpace.lg),
-          _ToolTile(
-            icon: Icons.flight_takeoff_rounded,
-            title: 'Travel Mode',
-            subtitle: 'Re-rank cards by forex markup, lounge access abroad, travel insurance',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TravelModeScreen())),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ToolTile(
-            icon: Icons.call_split_rounded,
-            title: 'Multi-Card Split Planner',
-            subtitle: 'Divide a big purchase across your cards for maximum rewards',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SplitPlannerScreen())),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ToolTile(
-            icon: Icons.calculate_outlined,
-            title: 'EMI Advisor',
-            subtitle: 'See the real cost of converting a purchase to EMI',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmiAdvisorScreen())),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ToolTile(
-            icon: Icons.emergency_outlined,
-            title: 'Emergency Card Info',
-            subtitle: 'Lost-card hotlines — works offline and without signing in',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmergencyCardInfoScreen())),
-          ),
-        ],
+        ),
+        child: ListView(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          children: [
+            Text(
+              'Travel-aware ranking, multi-card planning, and the one screen in this app that always '
+              'works with no sign-in and no signal.',
+              style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.4),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            _ToolTile(
+              icon: Icons.flight_takeoff_rounded,
+              title: 'Travel Mode',
+              subtitle: 'Re-rank cards by forex markup, lounge access abroad, travel insurance',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TravelModeScreen())),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _ToolTile(
+              icon: Icons.call_split_rounded,
+              title: 'Multi-Card Split Planner',
+              subtitle: 'Divide a big purchase across your cards for maximum rewards',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SplitPlannerScreen())),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _ToolTile(
+              icon: Icons.calculate_outlined,
+              title: 'EMI Advisor',
+              subtitle: 'See the real cost of converting a purchase to EMI',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmiAdvisorScreen())),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _ToolTile(
+              icon: Icons.emergency_outlined,
+              title: 'Emergency Card Info',
+              subtitle: 'Lost-card hotlines — works offline and without signing in',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmergencyCardInfoScreen())),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -77,34 +94,34 @@ class _ToolTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.surface,
+      color: BambooInk.glassFillOnPaper,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.md),
         onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(AppRadius.md), border: Border.all(color: AppColors.ink100)),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(AppRadius.md), border: Border.all(color: BambooInk.hairlineOnPaper)),
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Row(
             children: [
               Container(
                 width: 40,
                 height: 40,
-                decoration: const BoxDecoration(color: AppColors.surfaceMuted, shape: BoxShape.circle),
-                child: Icon(icon, size: 20, color: AppColors.navy800),
+                decoration: const BoxDecoration(color: BambooInk.slate, shape: BoxShape.circle),
+                child: Icon(icon, size: 20, color: BambooInk.lime),
               ),
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: Theme.of(context).textTheme.titleSmall),
+                    Text(title, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                    Text(subtitle, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.ink300),
+              const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink300),
             ],
           ),
         ),
