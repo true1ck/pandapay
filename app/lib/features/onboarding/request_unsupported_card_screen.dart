@@ -94,13 +94,29 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("My card isn't listed")),
-      body: ListView(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text("My card isn't listed", style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
         children: [
           Text(
             "Tell us which card you own and we'll add it to the catalogue. We'll let you know once it's available.",
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.xl),
           TextField(
@@ -124,20 +140,24 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
             onChanged: (v) => setState(() => _networkGuess = v),
           ),
           const SizedBox(height: AppSpace.xxl),
-          Text('Photo (optional)', style: Theme.of(context).textTheme.titleSmall),
+          Text('Photo (optional)', style: BambooFonts.heading(14, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
           Container(
             padding: const EdgeInsets.all(AppSpace.md),
-            decoration: BoxDecoration(color: AppColors.warningBg, borderRadius: BorderRadius.circular(AppRadius.md)),
+            decoration: BoxDecoration(
+              color: BambooInk.clay.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: BambooInk.clay.withValues(alpha: 0.3)),
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 20),
+                const Icon(Icons.warning_amber_rounded, color: BambooInk.clay, size: 20),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: Text(
                     'Photograph the card face only — never the number, CVV, or expiry.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.warning),
+                    style: BambooFonts.ui(12.5, color: BambooInk.clay),
                   ),
                 ),
               ],
@@ -145,26 +165,40 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
           ),
           const SizedBox(height: AppSpace.md),
           OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BambooInk.ink900,
+              minimumSize: const Size.fromHeight(48),
+              side: const BorderSide(color: BambooInk.hairlineOnPaper),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
             onPressed: _pickPhoto,
             icon: const Icon(Icons.camera_alt_outlined),
             label: Text(_photo == null ? 'Take a photo' : 'Retake photo'),
           ),
           if (_photo != null) ...[
             const SizedBox(height: AppSpace.sm),
-            Text('Photo captured: ${_photo!.name}', style: Theme.of(context).textTheme.bodySmall),
+            Text('Photo captured: ${_photo!.name}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
           ],
           if (_error != null) ...[
             const SizedBox(height: AppSpace.lg),
-            Text(_error!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.error)),
+            Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
           ],
           const SizedBox(height: AppSpace.xxl),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: BambooInk.slate,
+              foregroundColor: BambooInk.lime,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+            ),
             onPressed: !_canSubmit || _submitting ? null : _submit,
             child: _submitting
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
                 : const Text('Submit request'),
           ),
         ],
+        ),
       ),
     );
   }
