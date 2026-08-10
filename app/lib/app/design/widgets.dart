@@ -31,6 +31,21 @@ class AppLogoMark extends StatelessWidget {
   }
 }
 
+/// The real panda-mark logo from the Bamboo Ink handoff
+/// (`assets/logo/pandapay_mark.png`, registered in pubspec.yaml) —
+/// distinct from [AppLogoMark] above, which is the older placeholder
+/// icon still used by screens not yet migrated to the new design system
+/// (e.g. the login screen).
+class PandaMark extends StatelessWidget {
+  final double size;
+  const PandaMark({super.key, this.size = 42});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset('assets/logo/pandapay_mark.png', width: size, height: size, fit: BoxFit.contain);
+  }
+}
+
 /// Centered placeholder for "nothing here yet" states — icon, headline,
 /// optional supporting copy and action, so empty states read as
 /// intentional rather than broken.

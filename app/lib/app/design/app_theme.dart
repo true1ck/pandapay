@@ -60,6 +60,116 @@ abstract final class AppRadius {
   static const pill = 999.0;
 }
 
+/// "Bamboo Ink" — the design system from the Claude Design handoff
+/// (`PandaPay Redesign.dc.html`, see `chats/chat1.md` and `chat2.md` in
+/// that bundle for how it was arrived at): slate carries every decision
+/// surface, bamboo lime marks the one thing worth acting on — and ONLY
+/// ever on a slate surface, never as text/a number directly on paper,
+/// per the design chat's own P4 palette finding ("lime can't be a number
+/// on white") — and screens sit on white under a faint bamboo wash.
+/// Money is set in Bricolage Grotesque, everything else in Instrument
+/// Sans.
+///
+/// Landed additively, alongside [AppColors]/[AppTheme] rather than
+/// replacing them: a global `ColorScheme`/`ThemeData` swap would silently
+/// touch every already-built, already-tested screen's buttons/contrast
+/// before each one gets its own reviewed restyle pass (most of those
+/// screens are real, shipped features with widget-test coverage — see
+/// PROGRESS.md). Home is the first screen migrated to these tokens;
+/// further screens adopt [BambooInk]/[BambooFonts] one at a time.
+abstract final class BambooInk {
+  // Decision surfaces — the dark slate cards/sheets that carry a verdict
+  // or an action, per the design chat's "L2"/Slate #2B313A pick.
+  static const slate = Color(0xFF2B313A);
+  static const slateRaised = Color(0xFF333A45); // top of a subtle vertical gradient on slate
+  static const slateLow = Color(0xFF262B33); // bottom of that same gradient
+  static const slateHairline = Color(0xFF424956);
+
+  /// The one accent. Only ever on [slate]/[slateRaised] surfaces (a
+  /// money figure, a badge, a filled button) — never set as text or a
+  /// number directly on [paper], which is exactly the contrast problem
+  /// the design chat ran into and fixed by confining lime to dark
+  /// surfaces.
+  static const lime = Color(0xFFCDF564);
+
+  // Secondary accents (P4 palette: lime for money, ink/slate for
+  // actions — jade/clay are the "Design DNA" swatch's supporting pair,
+  // used sparingly for non-money semantic accents).
+  static const jade = Color(0xFF12805C);
+  static const clay = Color(0xFFE8623C);
+
+  // Paper base — screens sit on white under a faint green wash falling
+  // from the top-right, not a flat tint.
+  static const paper = Color(0xFFFFFFFF);
+  static const wash = Color(0xFFE4F2CF);
+  static const paperMuted = Color(0xFFF7F6F0);
+
+  // Text/icon colors on paper.
+  static const ink900 = Color(0xFF2B313A);
+  static const ink500 = Color(0xFF8B8F94);
+  static const ink300 = Color(0xFF6E7379);
+  static const hairlineOnPaper = Color(0x1F2B313A); // rgba(43,49,58,.12)
+
+  // Text/icon colors on slate.
+  static const onSlate = Color(0xFFFBFAF5);
+  static const onSlateMuted = Color(0xFF8B9099);
+  static const onSlateSubtle = Color(0xFFB9BFC5);
+
+  // Glass panel fill for a card floating on the paper wash (frosted via
+  // BackdropFilter at the call site — this is just the tint underneath).
+  static const glassFillOnPaper = Color(0xD1FFFFFF); // rgba(255,255,255,.82)
+
+  static const warningBg = Color(0xFFFFF3ED);
+  static const warningBorder = Color(0xFFFBD9C9);
+}
+
+/// Bamboo Ink's two-face type system: Bricolage Grotesque for money and
+/// headings, Instrument Sans for everything else. Thin wrappers around
+/// `google_fonts` (already a dependency for the navy/teal system's own
+/// Plus Jakarta Sans/Inter pairing) rather than a second `TextTheme`,
+/// since Home is the only screen using these so far — see [BambooInk]'s
+/// own doc-comment for why this isn't wired into the global `ThemeData`
+/// yet.
+abstract final class BambooFonts {
+  static TextStyle money(
+    double size, {
+    FontWeight weight = FontWeight.w800,
+    Color color = BambooInk.ink900,
+    double? letterSpacing,
+  }) =>
+      GoogleFonts.bricolageGrotesque(
+        fontSize: size,
+        fontWeight: weight,
+        color: color,
+        letterSpacing: letterSpacing ?? -size * 0.045,
+        height: 1.0,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+
+  static TextStyle heading(
+    double size, {
+    FontWeight weight = FontWeight.w700,
+    Color color = BambooInk.ink900,
+    double? letterSpacing,
+    double? height,
+  }) =>
+      GoogleFonts.bricolageGrotesque(
+        fontSize: size,
+        fontWeight: weight,
+        color: color,
+        letterSpacing: letterSpacing ?? -size * 0.035,
+        height: height,
+      );
+
+  static TextStyle ui(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    Color color = BambooInk.ink900,
+    double? height,
+  }) =>
+      GoogleFonts.instrumentSans(fontSize: size, fontWeight: weight, color: color, height: height);
+}
+
 /// Dark-mode neutrals. `AppColors` above is a set of hardcoded light-mode
 /// constants used throughout the app's widgets (cards, borders, icons) —
 /// turning those genuinely theme-aware is a larger refactor than Task H6
