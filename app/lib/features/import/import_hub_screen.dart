@@ -29,13 +29,29 @@ class ImportHubScreen extends ConsumerWidget {
     final smsBatches = ref.watch(smsImportBatchesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Import & Sync')),
-      body: ListView(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Import & Sync', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
         children: [
           Text(
             'Bring your existing spending history into PandaPay, or keep it flowing automatically.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.ink500),
+            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.lg),
           _ChannelCard(
@@ -43,10 +59,10 @@ class ImportHubScreen extends ConsumerWidget {
             title: 'SMS import',
             status: smsBatches.when(
               data: (batches) => batches.isEmpty
-                  ? const _Status('Not set up', AppColors.ink500)
-                  : _Status('Active — ${batches.length} import${batches.length == 1 ? '' : 's'}', AppColors.success),
-              loading: () => const _Status('Checking…', AppColors.ink500),
-              error: (_, __) => const _Status('Error', AppColors.error),
+                  ? const _Status('Not set up', BambooInk.ink500)
+                  : _Status('Active — ${batches.length} import${batches.length == 1 ? '' : 's'}', BambooInk.jade),
+              loading: () => const _Status('Checking…', BambooInk.ink500),
+              error: (_, __) => const _Status('Error', BambooInk.clay),
             ),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
           ),
@@ -54,7 +70,7 @@ class ImportHubScreen extends ConsumerWidget {
           _ChannelCard(
             icon: Icons.picture_as_pdf_outlined,
             title: 'Statement PDF import',
-            status: const _Status('One-off action — tap to import a statement', AppColors.ink500),
+            status: const _Status('One-off action — tap to import a statement', BambooInk.ink500),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StatementPdfImportScreen())),
           ),
           const SizedBox(height: AppSpace.md),
@@ -63,12 +79,12 @@ class ImportHubScreen extends ConsumerWidget {
             title: 'Email forwarding',
             status: forwarding.when(
               data: (addr) {
-                if (addr == null) return const _Status('Not set up', AppColors.ink500);
-                if (addr.emailCount > 0) return _Status('Connected — ${addr.emailCount} received', AppColors.success);
-                return const _Status('Waiting for first email…', AppColors.warning);
+                if (addr == null) return const _Status('Not set up', BambooInk.ink500);
+                if (addr.emailCount > 0) return _Status('Connected — ${addr.emailCount} received', BambooInk.jade);
+                return const _Status('Waiting for first email…', BambooInk.amber);
               },
-              loading: () => const _Status('Checking…', AppColors.ink500),
-              error: (_, __) => const _Status('Error', AppColors.error),
+              loading: () => const _Status('Checking…', BambooInk.ink500),
+              error: (_, __) => const _Status('Error', BambooInk.clay),
             ),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmailForwardingScreen())),
           ),
@@ -78,32 +94,33 @@ class ImportHubScreen extends ConsumerWidget {
             title: 'IMAP connection (fallback)',
             status: imap.when(
               data: (conn) {
-                if (conn == null) return const _Status('Not set up', AppColors.ink500);
-                if (conn.verifiedAt != null) return const _Status('Connected', AppColors.success);
-                return const _Status('Set up — not yet verified', AppColors.warning);
+                if (conn == null) return const _Status('Not set up', BambooInk.ink500);
+                if (conn.verifiedAt != null) return const _Status('Connected', BambooInk.jade);
+                return const _Status('Set up — not yet verified', BambooInk.amber);
               },
-              loading: () => const _Status('Checking…', AppColors.ink500),
-              error: (_, __) => const _Status('Error', AppColors.error),
+              loading: () => const _Status('Checking…', BambooInk.ink500),
+              error: (_, __) => const _Status('Error', BambooInk.clay),
             ),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImapConnectionScreen())),
           ),
           const SizedBox(height: AppSpace.xxl),
-          Text('Data', style: Theme.of(context).textTheme.labelLarge),
+          Text('Data', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
           _ChannelCard(
             icon: Icons.cloud_sync_outlined,
             title: 'Sync & backup',
-            status: const _Status('Backup status & conflict log', AppColors.ink500),
+            status: const _Status('Backup status & conflict log', BambooInk.ink500),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SyncBackupScreen())),
           ),
           const SizedBox(height: AppSpace.md),
           _ChannelCard(
             icon: Icons.download_outlined,
             title: 'Export your data',
-            status: const _Status('Your data is yours', AppColors.ink500),
+            status: const _Status('Your data is yours', BambooInk.ink500),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DataExportScreen())),
           ),
         ],
+        ),
       ),
     );
   }
@@ -125,38 +142,37 @@ class _ChannelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Material(
-      color: AppColors.surface,
+      color: BambooInk.glassFillOnPaper,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.md),
         onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(AppRadius.md), border: Border.all(color: AppColors.ink100)),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(AppRadius.md), border: Border.all(color: BambooInk.hairlineOnPaper)),
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Row(
             children: [
               Container(
                 width: 40,
                 height: 40,
-                decoration: const BoxDecoration(color: AppColors.surfaceMuted, shape: BoxShape.circle),
-                child: Icon(icon, size: 20, color: AppColors.navy800),
+                decoration: const BoxDecoration(color: BambooInk.slate, shape: BoxShape.circle),
+                child: Icon(icon, size: 20, color: BambooInk.lime),
               ),
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: textTheme.titleSmall),
+                    Text(title, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                     const SizedBox(height: 2),
                     // Never colour-alone: status text always carries the
                     // word itself, colour is a reinforcement only.
-                    Text(status.label, style: textTheme.bodySmall?.copyWith(color: status.color)),
+                    Text(status.label, style: BambooFonts.ui(12.5, color: status.color)),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.ink300),
+              const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink300),
             ],
           ),
         ),
