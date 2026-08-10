@@ -41,73 +41,103 @@ class _SplitPlannerScreenState extends ConsumerState<SplitPlannerScreen> {
     final amount = ref.watch(splitPlannerAmountProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Multi-Card Split Planner')),
-      body: owned.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(
-          message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Multi-Card Split Planner', style: BambooFonts.heading(16.5, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
         ),
-        data: (pairs) {
-          if (pairs.isEmpty) {
-            return const EmptyState(
-              icon: Icons.call_split_rounded,
-              title: 'No cards yet',
-              message: 'Add at least one card to plan a split.',
+        child: owned.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
+          ),
+          data: (pairs) {
+            if (pairs.isEmpty) {
+              return const EmptyState(
+                icon: Icons.call_split_rounded,
+                title: 'No cards yet',
+                message: 'Add at least one card to plan a split.',
+              );
+            }
+            return ListView(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              children: [
+                Text(
+                  'Total amount to spend',
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
+                const SizedBox(height: AppSpace.sm),
+                TextField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  decoration: InputDecoration(
+                    prefixText: '₹ ',
+                    hintText: 'e.g. 50000',
+                    hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+                    filled: true,
+                    fillColor: BambooInk.glassFillOnPaper,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    final parsed = double.tryParse(value);
+                    ref
+                        .read(splitPlannerAmountProvider.notifier)
+                        .state = parsed == null
+                        ? const Money.zero()
+                        : Money.fromRupees(parsed);
+                  },
+                ),
+                const SizedBox(height: AppSpace.xxl),
+                if (amount.isZero)
+                  const EmptyState(
+                    icon: Icons.request_quote_outlined,
+                    title: 'Enter an amount to see a split',
+                    message:
+                        'PandaPay will divide it across your cards to maximize rewards, respecting '
+                        'each card\'s caps and (where you\'ve entered a credit limit) staying under 30% '
+                        'utilization.',
+                  )
+                else if (plan.isEmpty)
+                  const EmptyState(
+                    icon: Icons.block_rounded,
+                    title: 'No eligible allocation',
+                    message:
+                        'Every owned card is either excluded for this amount or already at its cap/'
+                        'utilization ceiling — try a smaller amount.',
+                  )
+                else
+                  _SplitResult(plan: plan, total: amount),
+              ],
             );
-          }
-          return ListView(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            children: [
-              Text(
-                'Total amount to spend',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              const SizedBox(height: AppSpace.sm),
-              TextField(
-                controller: _amountController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                ],
-                decoration: const InputDecoration(
-                  prefixText: '₹ ',
-                  hintText: 'e.g. 50000',
-                ),
-                onChanged: (value) {
-                  final parsed = double.tryParse(value);
-                  ref
-                      .read(splitPlannerAmountProvider.notifier)
-                      .state = parsed == null
-                      ? const Money.zero()
-                      : Money.fromRupees(parsed);
-                },
-              ),
-              const SizedBox(height: AppSpace.xxl),
-              if (amount.isZero)
-                const EmptyState(
-                  icon: Icons.request_quote_outlined,
-                  title: 'Enter an amount to see a split',
-                  message:
-                      'PandaPay will divide it across your cards to maximize rewards, respecting '
-                      'each card\'s caps and (where you\'ve entered a credit limit) staying under 30% '
-                      'utilization.',
-                )
-              else if (plan.isEmpty)
-                const EmptyState(
-                  icon: Icons.block_rounded,
-                  title: 'No eligible allocation',
-                  message:
-                      'Every owned card is either excluded for this amount or already at its cap/'
-                      'utilization ceiling — try a smaller amount.',
-                )
-              else
-                _SplitResult(plan: plan, total: amount),
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -120,7 +150,6 @@ class _SplitResult extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final totalExpectedValue = plan.fold<Money>(
       const Money.zero(),
       (a, b) => a + b.expectedValue,
@@ -132,7 +161,11 @@ class _SplitResult extends StatelessWidget {
       children: [
         Container(
           decoration: BoxDecoration(
-            color: AppColors.navy900,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [BambooInk.slateRaised, BambooInk.slate],
+            ),
             borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           padding: const EdgeInsets.all(AppSpace.lg),
@@ -144,17 +177,13 @@ class _SplitResult extends StatelessWidget {
                   children: [
                     Text(
                       'Total expected reward value',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: Colors.white70,
-                      ),
+                      style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
                     ),
                     const SizedBox(height: 4),
                     MoneyText(
                       totalExpectedValue,
                       confidence: Confidence.estimated,
-                      style: textTheme.headlineSmall?.copyWith(
-                        color: Colors.white,
-                      ),
+                      style: BambooFonts.money(24, color: BambooInk.lime),
                     ),
                   ],
                 ),
@@ -167,7 +196,7 @@ class _SplitResult extends StatelessWidget {
           Text(
             '${(total - placed).format()} of this amount has no eligible card left to place — shown '
             'as unallocated below, not silently dropped.',
-            style: textTheme.bodySmall?.copyWith(color: AppColors.error),
+            style: BambooFonts.ui(12.5, color: BambooInk.clay),
           ),
         ],
         const SizedBox(height: AppSpace.lg),
@@ -188,7 +217,6 @@ class _AllocationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     // num.clamp() returns num, not double — LinearProgressIndicator.value
     // is double?, so this needs an explicit .toDouble() rather than
     // relying on the clamp() result being assignable directly (it isn't,
@@ -199,9 +227,9 @@ class _AllocationBar extends StatelessWidget {
     final fraction = rawFraction.clamp(0.0, 1.0).toDouble();
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -210,12 +238,12 @@ class _AllocationBar extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(allocation.card.name, style: textTheme.titleSmall),
+                child: Text(allocation.card.name, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
               ),
               MoneyText(
                 allocation.amount,
                 confidence: Confidence.estimated,
-                style: textTheme.bodyMedium,
+                style: BambooFonts.money(14, color: BambooInk.ink900),
               ),
             ],
           ),
@@ -225,8 +253,8 @@ class _AllocationBar extends StatelessWidget {
             child: LinearProgressIndicator(
               value: fraction,
               minHeight: 10,
-              backgroundColor: AppColors.surfaceMuted,
-              color: AppColors.teal600,
+              backgroundColor: BambooInk.paperMuted,
+              color: BambooInk.jade,
             ),
           ),
           const SizedBox(height: AppSpace.sm),
@@ -234,12 +262,12 @@ class _AllocationBar extends StatelessWidget {
             children: [
               Text(
                 '${(fraction * 100).toStringAsFixed(0)}% of total · expected reward ',
-                style: textTheme.bodySmall,
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
               ),
               MoneyText(
                 allocation.expectedValue,
                 confidence: Confidence.estimated,
-                style: textTheme.bodySmall,
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
               ),
             ],
           ),
