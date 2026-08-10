@@ -152,56 +152,106 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Import statement PDF')),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        child: _buildStep(context),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Import statement PDF', style: BambooFonts.heading(16, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          child: _buildStep(context),
+        ),
       ),
     );
   }
 
   Widget _buildStep(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     switch (_step) {
       case _Step.pickFile:
         return EmptyState(
           icon: Icons.picture_as_pdf_outlined,
           title: 'Select a statement PDF',
           message: 'Processed entirely on your device — the file and its password are never uploaded.',
-          action: ElevatedButton(onPressed: _pickFile, child: const Text('Choose file')),
+          action: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: BambooInk.slate,
+              foregroundColor: BambooInk.lime,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+            ),
+            onPressed: _pickFile,
+            child: const Text('Choose file'),
+          ),
         );
 
       case _Step.password:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('$_fileName', style: textTheme.titleSmall),
+            Text('$_fileName', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.sm),
             Text(
               'If this PDF is password-protected, enter the password (usually your PAN or DOB per your bank\'s '
               'convention) — it stays on this device and is never sent anywhere. Leave blank if it isn\'t '
               'protected.',
-              style: textTheme.bodyMedium,
+              style: BambooFonts.ui(13.5, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.lg),
             TextField(
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Statement password (optional)', border: OutlineInputBorder()),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: InputDecoration(
+                labelText: 'Statement password (optional)',
+                labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                ),
+              ),
             ),
             const SizedBox(height: AppSpace.lg),
-            ElevatedButton(onPressed: _submitPassword, child: const Text('Unlock & parse')),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+              ),
+              onPressed: _submitPassword,
+              child: const Text('Unlock & parse'),
+            ),
           ],
         );
 
       case _Step.parsing:
-        return const Center(
+        return Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: AppSpace.lg),
-              Text('Parsing on-device…'),
+              const CircularProgressIndicator(),
+              const SizedBox(height: AppSpace.lg),
+              Text('Parsing on-device…', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
             ],
           ),
         );
@@ -211,21 +261,21 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
         final userCards = ref.watch(userCardsProvider);
         return ListView(
           children: [
-            Text('Detected transactions', style: textTheme.titleMedium),
+            Text('Detected transactions', style: BambooFonts.heading(16, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.sm),
             Row(
               children: [
-                Text('${parsed.transactions.length} transactions found', style: textTheme.bodyMedium),
+                Text('${parsed.transactions.length} transactions found', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
                 if (parsed.closingBalance != null) ...[
-                  Text(' · closing balance ', style: textTheme.bodyMedium),
-                  MoneyText(parsed.closingBalance!, confidence: Confidence.estimated),
+                  Text(' · closing balance ', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+                  MoneyText(parsed.closingBalance!, confidence: Confidence.estimated, style: BambooFonts.money(14, color: BambooInk.ink900)),
                 ],
               ],
             ),
             const SizedBox(height: AppSpace.md),
             Container(
               padding: const EdgeInsets.all(AppSpace.md),
-              decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+              decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -237,11 +287,11 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
                           Expanded(
                             child: Text(
                               '${txn.date.day.toString().padLeft(2, '0')}/${txn.date.month.toString().padLeft(2, '0')} · ${txn.description}',
-                              style: textTheme.bodySmall,
+                              style: BambooFonts.ui(12.5, color: BambooInk.ink900),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          MoneyText(txn.amount, confidence: Confidence.estimated, style: textTheme.bodySmall),
+                          MoneyText(txn.amount, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink900)),
                         ],
                       ),
                     ),
@@ -250,7 +300,7 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
                       padding: const EdgeInsets.only(top: AppSpace.xs),
                       child: Text(
                         '+ ${parsed.transactions.length - 20} more',
-                        style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+                        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                       ),
                     ),
                 ],
@@ -259,10 +309,25 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
             const SizedBox(height: AppSpace.lg),
             userCards.when(
               loading: () => const CircularProgressIndicator(),
-              error: (err, _) => Text(userFacingErrorMessage(err)),
+              error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
               data: (cards) => DropdownButtonFormField<String>(
                 initialValue: _selectedCardId,
-                decoration: const InputDecoration(labelText: 'Import against which card?', border: OutlineInputBorder()),
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: InputDecoration(
+                  labelText: 'Import against which card?',
+                  labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                  filled: true,
+                  fillColor: BambooInk.glassFillOnPaper,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                  ),
+                ),
                 items: [
                   for (final c in cards)
                     DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
@@ -271,7 +336,14 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
               ),
             ),
             const SizedBox(height: AppSpace.lg),
-            ElevatedButton(
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+              ),
               onPressed: _selectedCardId == null ? null : _confirmImport,
               child: const Text('Confirm import'),
             ),
@@ -283,7 +355,15 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
           icon: Icons.check_circle_outline_rounded,
           title: 'Statement imported',
           message: 'Estimates from this period have been reconciled to confirmed.',
-          action: OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Done')),
+          action: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BambooInk.ink900,
+              side: const BorderSide(color: BambooInk.hairlineOnPaper),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Done'),
+          ),
         );
 
       case _Step.error:
