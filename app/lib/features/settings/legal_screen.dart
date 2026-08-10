@@ -35,7 +35,14 @@ class LegalScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Legal')),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Legal', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
         children: [
@@ -95,14 +102,17 @@ class LegalScreen extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Card(
             elevation: 0,
-            color: AppColors.surfaceMuted,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+            color: BambooInk.paperMuted,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
             child: ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-              leading: const Icon(Icons.code_rounded, color: AppColors.ink700),
-              title: const Text('View open-source licences'),
-              subtitle: const Text('Every package this app depends on, and its licence'),
-              trailing: const Icon(Icons.chevron_right_rounded),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              leading: const Icon(Icons.code_rounded, color: BambooInk.ink900),
+              title: Text('View open-source licences', style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900)),
+              subtitle: Text('Every package this app depends on, and its licence', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              trailing: const Icon(Icons.chevron_right_rounded, color: BambooInk.ink300),
               onTap: () => showLicensePage(context: context, applicationName: 'PandaPay'),
             ),
           ),
@@ -130,7 +140,7 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+        Text(title, style: BambooFonts.heading(16, color: BambooInk.ink900)),
         if (showDraftBadge) ...[
           const SizedBox(width: AppSpace.sm),
           const _DraftBadge(),
@@ -153,16 +163,13 @@ class _DraftBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: 2),
       decoration: BoxDecoration(
-        color: AppColors.warningBg,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+        color: BambooInk.clay.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: BambooInk.clay.withValues(alpha: 0.4)),
       ),
       child: Text(
         'Draft',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.warning,
-              fontWeight: FontWeight.w700,
-            ),
+        style: BambooFonts.ui(11, weight: FontWeight.w700, color: BambooInk.clay),
       ),
     );
   }
@@ -176,7 +183,7 @@ class _BodyText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.ink700, height: 1.5),
+      style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.5),
     );
   }
 }
