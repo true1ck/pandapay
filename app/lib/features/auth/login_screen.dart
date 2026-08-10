@@ -231,9 +231,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Container(
-      color: AppColors.canvas,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+        ),
+      ),
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -247,11 +252,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const AppLogoMark(),
+                    Container(
+                      width: 64,
+                      height: 64,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: BambooInk.paper, borderRadius: BorderRadius.circular(20)),
+                      child: const PandaMark(size: 48),
+                    ),
                     const SizedBox(height: AppSpace.lg),
-                    Text(_title, style: textTheme.headlineSmall),
+                    Text(_title, style: BambooFonts.heading(24, color: BambooInk.onSlate)),
                     const SizedBox(height: AppSpace.xs),
-                    Text(_subtitle, style: textTheme.bodyMedium),
+                    Text(_subtitle, style: BambooFonts.ui(14, color: BambooInk.onSlateMuted)),
                     const SizedBox(height: AppSpace.xl),
                     if (!_otpRequested) ...[
                       // Only returning users choose an identifier; sign-up
@@ -297,6 +308,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     // account at all, not just someone temporarily signed out.
                     Center(
                       child: TextButton.icon(
+                        style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
                         onPressed: () => context.push(AppRoute.emergencyCardInfo),
                         icon: const Icon(Icons.emergency_outlined, size: 16),
                         label: const Text('Lost or stolen card? Get emergency help — no sign-in needed'),
@@ -313,7 +325,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Center(
                         child: Text(
                           'By continuing you agree to PandaPay\'s Terms & Privacy Policy.',
-                          style: textTheme.bodySmall,
+                          style: BambooFonts.ui(12, color: BambooInk.onSlateMuted),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -339,8 +351,8 @@ class _MethodToggle extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        color: BambooInk.slateLow,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
@@ -383,33 +395,27 @@ class _MethodSegment extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
         decoration: BoxDecoration(
-          color: selected ? AppColors.surface : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          boxShadow: selected
-              ? [
-                  const BoxShadow(
-                      color: Color(0x14000000),
-                      blurRadius: 4,
-                      offset: Offset(0, 1))
-                ]
-              : null,
+          color: selected ? BambooInk.slate : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon,
                 size: 16,
-                color: selected ? AppColors.teal600 : AppColors.ink500),
+                color: selected ? BambooInk.lime : BambooInk.onSlateMuted),
             const SizedBox(width: AppSpace.xs),
             Text(
               label,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: selected ? AppColors.navy900 : AppColors.ink500,
-                  ),
+              style: BambooFonts.ui(
+                13.5,
+                weight: FontWeight.w600,
+                color: selected ? BambooInk.onSlate : BambooInk.onSlateMuted,
+              ),
             ),
           ],
         ),
@@ -453,9 +459,28 @@ class _IdentifierStep extends StatelessWidget {
     required this.onOptInMarketingChanged,
   });
 
+  static InputDecoration _fieldDecoration({required String hint, required IconData icon}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: BambooFonts.ui(14, color: BambooInk.onSlateMuted),
+      prefixIcon: Icon(icon, color: BambooInk.onSlateMuted),
+      filled: true,
+      fillColor: BambooInk.slateLow,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.slateHairline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.lime, width: 1.5),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final labelStyle = Theme.of(context).textTheme.labelLarge;
+    final labelStyle = BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.onSlateMuted);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -471,12 +496,10 @@ class _IdentifierStep extends StatelessWidget {
             usesEmail ? AutofillHints.email : AutofillHints.telephoneNumber
           ],
           onSubmitted: isSignUp ? null : (_) => loading ? null : onSubmit(),
-          style: Theme.of(context).textTheme.bodyLarge,
-          decoration: InputDecoration(
-            hintText: usesEmail ? 'you@example.com' : '+91 98765 43210',
-            prefixIcon: Icon(usesEmail
-                ? Icons.mail_outline_rounded
-                : Icons.phone_outlined),
+          style: BambooFonts.ui(15, color: BambooInk.onSlate),
+          decoration: _fieldDecoration(
+            hint: usesEmail ? 'you@example.com' : '+91 98765 43210',
+            icon: usesEmail ? Icons.mail_outline_rounded : Icons.phone_outlined,
           ),
         ),
         if (isSignUp) ...[
@@ -485,7 +508,7 @@ class _IdentifierStep extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             'Used to detect card transactions from your bank SMS.',
-            style: Theme.of(context).textTheme.bodySmall,
+            style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
           ),
           const SizedBox(height: AppSpace.sm),
           TextField(
@@ -494,23 +517,20 @@ class _IdentifierStep extends StatelessWidget {
             textInputAction: TextInputAction.done,
             autofillHints: const [AutofillHints.telephoneNumber],
             onSubmitted: (_) => loading ? null : onSubmit(),
-            style: Theme.of(context).textTheme.bodyLarge,
-            decoration: const InputDecoration(
-              hintText: '+91 98765 43210',
-              prefixIcon: Icon(Icons.phone_outlined),
-            ),
+            style: BambooFonts.ui(15, color: BambooInk.onSlate),
+            decoration: _fieldDecoration(hint: '+91 98765 43210', icon: Icons.phone_outlined),
           ),
           const SizedBox(height: AppSpace.sm),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Icon(Icons.info_outline_rounded,
-                  size: 14, color: AppColors.ink500),
+                  size: 14, color: BambooInk.onSlateMuted),
               const SizedBox(width: AppSpace.xs),
               Expanded(
                 child: Text(
                   'We\'ll send your verification code to your email.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
                 ),
               ),
             ],
@@ -538,13 +558,20 @@ class _IdentifierStep extends StatelessWidget {
         ],
         const SizedBox(height: AppSpace.xl),
         FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: BambooInk.lime,
+            foregroundColor: BambooInk.slate,
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+          ),
           onPressed: loading ? null : onSubmit,
           child: loading
               ? const SizedBox(
                   width: 22,
                   height: 22,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2.4, color: Colors.white),
+                      strokeWidth: 2.4, color: BambooInk.slate),
                 )
               : const Text('Send code'),
         ),
@@ -581,9 +608,12 @@ class _ConsentCheckbox extends StatelessWidget {
         controlAffinity: ListTileControlAffinity.leading,
         contentPadding: EdgeInsets.zero,
         dense: true,
+        activeColor: BambooInk.lime,
+        checkColor: BambooInk.slate,
+        side: const BorderSide(color: BambooInk.slateHairline),
         title: Text(
           required ? '$label (required)' : '$label (optional)',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
         ),
       ),
     );
@@ -611,7 +641,7 @@ class _OtpStep extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('Verification code',
-            style: Theme.of(context).textTheme.labelLarge),
+            style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.onSlateMuted)),
         const SizedBox(height: AppSpace.sm),
         TextField(
           controller: controller,
@@ -621,20 +651,33 @@ class _OtpStep extends StatelessWidget {
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           onSubmitted: (_) => loading ? null : onSubmit(),
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .headlineSmall
-              ?.copyWith(letterSpacing: 8),
-          decoration: const InputDecoration(hintText: '••••'),
+          style: BambooFonts.money(28, color: BambooInk.onSlate, letterSpacing: 8),
+          decoration: InputDecoration(
+            hintText: '••••',
+            hintStyle: BambooFonts.money(28, color: BambooInk.onSlateMuted, letterSpacing: 8),
+            filled: true,
+            fillColor: BambooInk.slateLow,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: BambooInk.slateHairline),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: BambooInk.lime, width: 1.5),
+            ),
+          ),
         ),
         const SizedBox(height: AppSpace.md),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             TextButton(
+                style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
                 onPressed: loading ? null : onChangeIdentifier,
                 child: const Text('Change')),
             TextButton(
+                style: TextButton.styleFrom(foregroundColor: BambooInk.lime),
                 onPressed: loading ? null : onResend,
                 child: const Text('Resend code')),
           ],
@@ -647,6 +690,7 @@ class _OtpStep extends StatelessWidget {
         // password flow bolted onto a system that doesn't have one.
         Center(
           child: TextButton(
+            style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const FeedbackSupportScreen(
@@ -660,13 +704,20 @@ class _OtpStep extends StatelessWidget {
         ),
         const SizedBox(height: AppSpace.lg),
         FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: BambooInk.lime,
+            foregroundColor: BambooInk.slate,
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+          ),
           onPressed: loading ? null : onSubmit,
           child: loading
               ? const SizedBox(
                   width: 22,
                   height: 22,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2.4, color: Colors.white),
+                      strokeWidth: 2.4, color: BambooInk.slate),
                 )
               : const Text('Verify & continue'),
         ),
@@ -684,22 +735,20 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpace.md),
       decoration: BoxDecoration(
-        color: AppColors.errorBg,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        color: BambooInk.clay.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BambooInk.clay.withValues(alpha: 0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.error_outline_rounded,
-              color: AppColors.error, size: 20),
+              color: BambooInk.clay, size: 20),
           const SizedBox(width: AppSpace.sm),
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: AppColors.error),
+              style: BambooFonts.ui(13, color: BambooInk.onSlate),
             ),
           ),
         ],
