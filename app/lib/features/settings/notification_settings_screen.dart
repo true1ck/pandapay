@@ -46,13 +46,47 @@ class NotificationSettingsScreen extends ConsumerWidget {
     final signedOut = ref.watch(accessTokenProvider) == null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
-      body: signedOut
-          ? const EmptyState(
-              icon: Icons.notifications_off_outlined,
-              title: 'Sign in to manage notification settings',
-            )
-          : const _NotificationSettingsBody(),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Notifications', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        // Every SwitchListTile below relies on the ambient SwitchThemeData
+        // for its colors rather than each setting its own activeColor —
+        // one Theme override here restyles all eight consistently instead
+        // of eight near-identical edits.
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            switchTheme: SwitchThemeData(
+              thumbColor: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.selected) ? BambooInk.lime : Colors.white,
+              ),
+              trackColor: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.selected) ? BambooInk.slate : BambooInk.paperMuted,
+              ),
+              trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+            ),
+          ),
+          child: signedOut
+              ? const EmptyState(
+                  icon: Icons.notifications_off_outlined,
+                  title: 'Sign in to manage notification settings',
+                )
+              : const _NotificationSettingsBody(),
+        ),
+      ),
     );
   }
 }
@@ -167,8 +201,8 @@ class _SectionHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
       child: Text(
-        title,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.ink500),
+        title.toUpperCase(),
+        style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: 1.1),
       ),
     );
   }
@@ -218,22 +252,25 @@ class _QuietHoursTile extends StatelessWidget {
             isOff
                 ? 'Off — notifications may arrive any time'
                 : 'No notifications between ${start?.format(context) ?? '--:--'} and ${end?.format(context) ?? '--:--'}',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.sm),
           Wrap(
             spacing: AppSpace.sm,
             children: [
               TextButton(
+                style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
                 onPressed: () => _pick(context, isStart: true),
                 child: Text('Start: ${start?.format(context) ?? 'Off'}'),
               ),
               TextButton(
+                style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
                 onPressed: () => _pick(context, isStart: false),
                 child: Text('End: ${end?.format(context) ?? 'Off'}'),
               ),
               if (!isOff)
                 TextButton(
+                  style: TextButton.styleFrom(foregroundColor: BambooInk.ink500),
                   onPressed: () => onUpdate({'quiet_hours_start': null, 'quiet_hours_end': null}),
                   child: const Text('Clear'),
                 ),
@@ -275,16 +312,25 @@ class _DailyCapTileState extends State<_DailyCapTile> {
         children: [
           Text(
             'Up to ${_value.round()} notification${_value.round() == 1 ? '' : 's'} per day',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
           ),
-          Slider(
-            value: _value,
-            min: 0,
-            max: 20,
-            divisions: 20,
-            label: '${_value.round()}',
-            onChanged: (v) => setState(() => _value = v),
-            onChangeEnd: (v) => widget.onUpdate({'daily_cap': v.round()}),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: BambooInk.slate,
+              inactiveTrackColor: BambooInk.paperMuted,
+              thumbColor: BambooInk.slate,
+              overlayColor: BambooInk.slate.withValues(alpha: 0.12),
+              valueIndicatorColor: BambooInk.slate,
+            ),
+            child: Slider(
+              value: _value,
+              min: 0,
+              max: 20,
+              divisions: 20,
+              label: '${_value.round()}',
+              onChanged: (v) => setState(() => _value = v),
+              onChangeEnd: (v) => widget.onUpdate({'daily_cap': v.round()}),
+            ),
           ),
         ],
       ),
@@ -328,6 +374,7 @@ class _MutedMerchantsList extends ConsumerWidget {
               ListTile(
                 title: Text(m.merchantName),
                 trailing: TextButton(
+                  style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
                   onPressed: () async {
                     final repo = ref.read(_notificationPreferencesRepositoryProvider);
                     if (repo == null) return;
