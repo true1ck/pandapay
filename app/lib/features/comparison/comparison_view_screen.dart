@@ -63,8 +63,24 @@ class _ComparisonViewScreenState extends ConsumerState<ComparisonViewScreen> {
   Widget build(BuildContext context) {
     final ranked = ref.watch(rankedRecommendationsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Compare cards')),
-      body: ranked.when(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Compare cards', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: ranked.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
         data: (recommendations) {
@@ -114,6 +130,7 @@ class _ComparisonViewScreenState extends ConsumerState<ComparisonViewScreen> {
             ],
           );
         },
+        ),
       ),
     );
   }
@@ -139,8 +156,15 @@ class _SortHeaderButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: active ? FontWeight.w800 : FontWeight.w500)),
-              if (active) Icon(ascending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: 14),
+              Text(
+                label,
+                style: BambooFonts.ui(
+                  13.5,
+                  weight: active ? FontWeight.w800 : FontWeight.w500,
+                  color: active ? BambooInk.ink900 : BambooInk.ink500,
+                ),
+              ),
+              if (active) Icon(ascending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: 14, color: BambooInk.ink900),
             ],
           ),
         ),
@@ -168,28 +192,33 @@ class _ComparisonRowState extends State<_ComparisonRow> {
   @override
   Widget build(BuildContext context) {
     final rec = widget.recommendation;
-    final textTheme = Theme.of(context).textTheme;
     return Card(
+      color: BambooInk.glassFillOnPaper,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ListTile(
             onTap: () => setState(() => _expanded = !_expanded),
-            title: Text(rec.card.name, style: textTheme.titleSmall),
+            title: Text(rec.card.name, style: BambooFonts.heading(15, color: BambooInk.ink900)),
             subtitle: rec.isExcluded
-                ? Text(rec.exclusionReason!, style: textTheme.bodySmall?.copyWith(color: AppColors.ink500))
+                ? Text(rec.exclusionReason!, style: BambooFonts.ui(12.5, color: BambooInk.ink500))
                 : Wrap(
                     spacing: AppSpace.xs,
                     children: [
-                      if (_mentions('cap')) const StatusPill(label: 'Cap-aware', foreground: AppColors.navy800, background: AppColors.surfaceMuted),
-                      if (_mentions('milestone')) const StatusPill(label: 'Milestone', foreground: AppColors.navy800, background: AppColors.surfaceMuted),
-                      if (_mentions('forex')) const StatusPill(label: 'Forex', foreground: AppColors.navy800, background: AppColors.surfaceMuted),
+                      if (_mentions('cap')) const StatusPill(label: 'Cap-aware', foreground: BambooInk.ink900, background: BambooInk.paperMuted),
+                      if (_mentions('milestone')) const StatusPill(label: 'Milestone', foreground: BambooInk.ink900, background: BambooInk.paperMuted),
+                      if (_mentions('forex')) const StatusPill(label: 'Forex', foreground: BambooInk.ink900, background: BambooInk.paperMuted),
                     ],
                   ),
             trailing: rec.isExcluded
-                ? const Icon(Icons.block_rounded, color: AppColors.ink500)
-                : MoneyText(rec.expectedValue, confidence: rec.confidence),
+                ? const Icon(Icons.block_rounded, color: BambooInk.ink500)
+                : MoneyText(rec.expectedValue, confidence: rec.confidence, style: BambooFonts.money(17, color: BambooInk.ink900)),
           ),
           if (_expanded && !rec.isExcluded)
             Padding(
@@ -198,7 +227,10 @@ class _ComparisonRowState extends State<_ComparisonRow> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final line in rec.reasonLines)
-                    Padding(padding: const EdgeInsets.only(top: 2), child: Text('•  $line', style: textTheme.bodySmall)),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text('•  $line', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    ),
                 ],
               ),
             ),
