@@ -42,7 +42,7 @@ class DueDateCalendarScreen extends ConsumerWidget {
         return ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
-            Text('${_monthName(now.month)} ${now.year}', style: Theme.of(context).textTheme.titleMedium),
+            Text('${_monthName(now.month)} ${now.year}', style: BambooFonts.heading(16, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.lg),
             if (withDates.isEmpty)
               const EmptyState(
@@ -87,16 +87,15 @@ class _CardDateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final now = DateTime.now();
     final nextDue = userCard.dueDay == null ? null : _nextOccurrence(userCard.dueDay!, now);
     final nextStatement = userCard.statementDay == null ? null : _nextOccurrence(userCard.statementDay!, now);
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -107,14 +106,14 @@ class _CardDateTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-                  style: textTheme.titleSmall,
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                 ),
               ),
               IconButton(
                 tooltip: reminderOn ? 'Reminder on (this device only)' : 'Remind me (this device only)',
                 icon: Icon(
                   reminderOn ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
-                  color: reminderOn ? AppColors.teal600 : AppColors.ink300,
+                  color: reminderOn ? BambooInk.jade : BambooInk.ink300,
                 ),
                 onPressed: onToggleReminder,
               ),
@@ -149,14 +148,13 @@ class _DateRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final daysLeft = date.difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)).inDays;
     return Row(
       children: [
-        Icon(icon, size: 16, color: emphasize ? AppColors.warning : AppColors.ink500),
+        Icon(icon, size: 16, color: emphasize ? BambooInk.clay : BambooInk.ink500),
         const SizedBox(width: AppSpace.sm),
-        Expanded(child: Text('$label — ${date.day}/${date.month}/${date.year}', style: textTheme.bodyMedium)),
-        Text('${daysLeft}d', style: textTheme.bodySmall?.copyWith(color: emphasize ? AppColors.warning : null)),
+        Expanded(child: Text('$label — ${date.day}/${date.month}/${date.year}', style: BambooFonts.ui(13.5, color: BambooInk.ink900))),
+        Text('${daysLeft}d', style: BambooFonts.ui(12.5, color: emphasize ? BambooInk.clay : BambooInk.ink500)),
       ],
     );
   }
