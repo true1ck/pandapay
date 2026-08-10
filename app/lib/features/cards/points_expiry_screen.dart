@@ -23,33 +23,50 @@ class PointsExpiryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final pairs = ref.watch(ownedCardsWithProductProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Points & expiry')),
-      body: pairs.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(
-          message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(userCardsProvider),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Points & expiry', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
         ),
-        data: (owned) {
-          if (owned.isEmpty) {
-            return const EmptyState(
-              icon: Icons.stars_outlined,
-              title: 'No points to track yet',
-              message: 'Add a card to see its points balance and any expiry dates here.',
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            itemCount: owned.length,
-            itemBuilder: (context, index) {
-              final (userCard, product) = owned[index];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.md),
-                child: _ProgramCard(userCard: userCard, product: product),
+        child: pairs.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(userCardsProvider),
+          ),
+          data: (owned) {
+            if (owned.isEmpty) {
+              return const EmptyState(
+                icon: Icons.stars_outlined,
+                title: 'No points to track yet',
+                message: 'Add a card to see its points balance and any expiry dates here.',
               );
-            },
-          );
-        },
+            }
+            return ListView.builder(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              itemCount: owned.length,
+              itemBuilder: (context, index) {
+                final (userCard, product) = owned[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpace.md),
+                  child: _ProgramCard(userCard: userCard, product: product),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -62,7 +79,6 @@ class _ProgramCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final textTheme = Theme.of(context).textTheme;
     final ledger = ref.watch(pointsLedgerProvider(userCard.id));
     final valueEstimate = Money.fromRupees(userCard.totalPointsEarned * product.pointValueInr);
 
@@ -78,9 +94,9 @@ class _ProgramCard extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -88,32 +104,32 @@ class _ProgramCard extends ConsumerWidget {
         children: [
           Text(
             userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-            style: textTheme.titleSmall,
+            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
           ),
           const SizedBox(height: AppSpace.sm),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(userCard.totalPointsEarned.toStringAsFixed(0), style: textTheme.headlineSmall),
+              Text(userCard.totalPointsEarned.toStringAsFixed(0), style: BambooFonts.heading(24, color: BambooInk.ink900)),
               const SizedBox(width: AppSpace.xs),
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: Text('points', style: textTheme.bodySmall),
+                child: Text('points', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
               ),
             ],
           ),
           const SizedBox(height: 2),
           Row(
             children: [
-              Text('Estimated value ', style: textTheme.bodySmall),
-              MoneyText(valueEstimate, confidence: Confidence.estimated, style: textTheme.bodySmall),
+              Text('Estimated value ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              MoneyText(valueEstimate, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
             ],
           ),
           if (product.pointValueInr <= 0) ...[
             const SizedBox(height: AppSpace.xs),
             Text(
               'No ₹/point value on file for this card — estimate unavailable.',
-              style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],
           if (nearestExpiry != null && daysToExpiry != null) ...[
@@ -124,6 +140,7 @@ class _ProgramCard extends ConsumerWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
               onPressed: () => _showCorrectionSheet(context, ref),
               icon: const Icon(Icons.edit_outlined, size: 16),
               label: const Text('Correct balance'),
@@ -139,6 +156,10 @@ class _ProgramCard extends ConsumerWidget {
     final result = await showModalBottomSheet<double>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
       builder: (context) => Padding(
         padding: EdgeInsets.only(
           left: AppSpace.lg,
@@ -150,18 +171,40 @@ class _ProgramCard extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Correct points balance', style: Theme.of(context).textTheme.titleMedium),
+            Text('Correct points balance', style: BambooFonts.heading(17, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.sm),
-            const Text('This is the starting point — we track from here.'),
+            Text('This is the starting point — we track from here.', style: BambooFonts.ui(13, color: BambooInk.ink500)),
             const SizedBox(height: AppSpace.lg),
             TextField(
               controller: controller,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Actual points balance'),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: InputDecoration(
+                labelText: 'Actual points balance',
+                labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                ),
+              ),
               autofocus: true,
             ),
             const SizedBox(height: AppSpace.lg),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+              ),
               onPressed: () {
                 final value = double.tryParse(controller.text.trim());
                 Navigator.of(context).pop(value);
@@ -193,7 +236,7 @@ class _ExpiryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final urgent = daysLeft <= 30;
-    final color = urgent ? AppColors.warning : AppColors.ink500;
+    final color = urgent ? BambooInk.amber : BambooInk.ink500;
     final label = daysLeft >= 0
         ? '${points.toStringAsFixed(0)} pts expire in $daysLeft days'
         : '${points.toStringAsFixed(0)} pts expired ${-daysLeft} days ago';
@@ -202,7 +245,7 @@ class _ExpiryChip extends StatelessWidget {
       children: [
         Icon(urgent ? Icons.warning_amber_rounded : Icons.schedule_rounded, size: 14, color: color),
         const SizedBox(width: 4),
-        Flexible(child: Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color))),
+        Flexible(child: Text(label, style: BambooFonts.ui(12.5, color: color))),
       ],
     );
   }
