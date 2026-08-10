@@ -45,34 +45,47 @@ class AccountScreen extends ConsumerWidget {
     return profile.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(profileProvider)),
-      data: (profileData) => ListView(
+      data: (profileData) => DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.7),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
         children: [
           Container(
             padding: const EdgeInsets.all(AppSpace.lg),
             decoration: BoxDecoration(
-              color: AppColors.navy900,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+              ),
+              borderRadius: BorderRadius.circular(22),
             ),
             child: Row(
               children: [
                 Container(
                   width: 48,
                   height: 48,
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), shape: BoxShape.circle),
-                  child: const Icon(Icons.person_rounded, color: Colors.white, size: 24),
+                  decoration: BoxDecoration(color: BambooInk.lime.withValues(alpha: 0.16), shape: BoxShape.circle),
+                  child: const Icon(Icons.person_rounded, color: BambooInk.lime, size: 24),
                 ),
                 const SizedBox(width: AppSpace.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Signed in', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white)),
+                      Text('Signed in', style: BambooFonts.heading(16, color: BambooInk.onSlate)),
                       if (profileData != null) ...[
                         const SizedBox(height: 2),
                         Text(
                           'ID · ${profileData['id']}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white60),
+                          style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -83,7 +96,7 @@ class AccountScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: AppSpace.xxl),
-          Text('Tools', style: Theme.of(context).textTheme.labelLarge),
+          Text('TOOLS', style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: 1.1)),
           const SizedBox(height: AppSpace.sm),
           // UA-8 (Chunk 32): foreground-triggered geofencing + home-screen
           // widget entry points — both scoped-down per PROGRESS.md.
@@ -131,7 +144,7 @@ class AccountScreen extends ConsumerWidget {
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ToolsHubScreen())),
           ),
           const SizedBox(height: AppSpace.xxl),
-          Text('Settings', style: Theme.of(context).textTheme.labelLarge),
+          Text('SETTINGS', style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: 1.1)),
           const SizedBox(height: AppSpace.sm),
           _AccountTile(
             icon: Icons.person_outline_rounded,
@@ -183,6 +196,7 @@ class AccountScreen extends ConsumerWidget {
           const SizedBox(height: AppSpace.sm),
           _WhatsNewTile(ref: ref),
         ],
+        ),
       ),
     );
   }
@@ -205,7 +219,7 @@ class _WhatsNewTile extends StatelessWidget {
       icon: Icons.new_releases_outlined,
       label: "What's New",
       trailing: hasUnseen
-          ? const StatusPill(label: 'New', foreground: Colors.white, background: AppColors.teal600)
+          ? const StatusPill(label: 'New', foreground: BambooInk.slate, background: BambooInk.lime)
           : null,
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WhatsNewScreen())),
     );
@@ -223,21 +237,25 @@ class _AccountTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(AppRadius.md), border: Border.all(color: AppColors.ink100)),
+          decoration: BoxDecoration(
+            color: BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
           child: Row(
             children: [
-              Icon(icon, size: 20, color: AppColors.navy800),
+              Icon(icon, size: 20, color: BambooInk.ink900),
               const SizedBox(width: AppSpace.md),
-              Expanded(child: Text(label, style: Theme.of(context).textTheme.bodyLarge)),
+              Expanded(child: Text(label, style: BambooFonts.ui(14.5, weight: FontWeight.w500, color: BambooInk.ink900))),
               if (trailing != null) ...[trailing!, const SizedBox(width: AppSpace.sm)],
-              const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.ink300),
+              const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink300),
             ],
           ),
         ),
