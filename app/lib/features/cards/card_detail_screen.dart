@@ -27,12 +27,20 @@ class CardDetailScreen extends ConsumerWidget {
     return DefaultTabController(
       length: 6,
       child: Scaffold(
+        backgroundColor: BambooInk.paper,
         appBar: AppBar(
-          title: Text(pairs.valueOrNull
-                  ?.where((p) => p.$1.id == userCardId)
-                  .map((p) => p.$1.nickname?.isNotEmpty == true ? p.$1.nickname! : p.$2.name)
-                  .firstOrNull ??
-              'Card detail'),
+          backgroundColor: BambooInk.paper,
+          foregroundColor: BambooInk.ink900,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          title: Text(
+            pairs.valueOrNull
+                    ?.where((p) => p.$1.id == userCardId)
+                    .map((p) => p.$1.nickname?.isNotEmpty == true ? p.$1.nickname! : p.$2.name)
+                    .firstOrNull ??
+                'Card detail',
+            style: BambooFonts.heading(17, color: BambooInk.ink900),
+          ),
           actions: [
             if (pairs.valueOrNull?.any((p) => p.$1.id == userCardId) ?? false) ...[
               IconButton(
@@ -49,9 +57,14 @@ class CardDetailScreen extends ConsumerWidget {
               ),
             ],
           ],
-          bottom: const TabBar(
+          bottom: TabBar(
             isScrollable: true,
-            tabs: [
+            labelColor: BambooInk.slate,
+            unselectedLabelColor: BambooInk.ink500,
+            indicatorColor: BambooInk.slate,
+            labelStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
+            unselectedLabelStyle: BambooFonts.ui(13.5, weight: FontWeight.w500),
+            tabs: const [
               Tab(text: 'Rewards'),
               Tab(text: 'Caps'),
               Tab(text: 'Milestones'),
@@ -61,7 +74,16 @@ class CardDetailScreen extends ConsumerWidget {
             ],
           ),
         ),
-        body: pairs.when(
+        body: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(0.9, -0.5),
+              radius: 1.3,
+              colors: [BambooInk.wash, BambooInk.paper],
+              stops: [0.0, 0.6],
+            ),
+          ),
+          child: pairs.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),
@@ -84,6 +106,7 @@ class CardDetailScreen extends ConsumerWidget {
               ],
             );
           },
+          ),
         ),
       ),
     );
@@ -117,7 +140,7 @@ class _RewardsTab extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: AppSpace.md),
             child: Text(
               'Verified ${_monthYear(product.verifiedAt!)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: BambooInk.ink500),
             ),
           ),
         for (final rule in rules)
@@ -125,9 +148,9 @@ class _RewardsTab extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: Container(
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: BambooInk.glassFillOnPaper,
                 borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: AppColors.ink100),
+                border: Border.all(color: BambooInk.hairlineOnPaper),
               ),
               padding: const EdgeInsets.all(AppSpace.lg),
               child: Row(
@@ -206,9 +229,9 @@ class _CapsTab extends StatelessWidget {
               final isCount = cap.measure == CapMeasure.txnCount;
               return Container(
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: BambooInk.glassFillOnPaper,
                   borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: AppColors.ink100),
+                  border: Border.all(color: BambooInk.hairlineOnPaper),
                 ),
                 padding: const EdgeInsets.all(AppSpace.lg),
                 child: Column(
@@ -221,8 +244,8 @@ class _CapsTab extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: ratio,
                         minHeight: 8,
-                        backgroundColor: AppColors.surfaceMuted,
-                        color: ratio >= 0.9 ? AppColors.warning : AppColors.teal600,
+                        backgroundColor: BambooInk.paperMuted,
+                        color: ratio >= 0.9 ? BambooInk.clay : BambooInk.jade,
                       ),
                     ),
                     const SizedBox(height: AppSpace.sm),
@@ -282,9 +305,9 @@ class _MilestonesTab extends StatelessWidget {
 
               return Container(
                 decoration: BoxDecoration(
-                  color: reached ? AppColors.successBg : AppColors.surface,
+                  color: reached ? const Color(0xFFE3F3EA) : BambooInk.glassFillOnPaper,
                   borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: reached ? AppColors.success : AppColors.ink100),
+                  border: Border.all(color: reached ? BambooInk.jade : BambooInk.hairlineOnPaper),
                 ),
                 padding: const EdgeInsets.all(AppSpace.lg),
                 child: Column(
@@ -297,7 +320,7 @@ class _MilestonesTab extends StatelessWidget {
                           const StatusPill(
                             label: 'REACHED',
                             foreground: Colors.white,
-                            background: AppColors.success,
+                            background: BambooInk.jade,
                             icon: Icons.check_rounded,
                           ),
                       ],
@@ -308,8 +331,8 @@ class _MilestonesTab extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: ratio,
                         minHeight: 8,
-                        backgroundColor: AppColors.surfaceMuted,
-                        color: reached ? AppColors.success : AppColors.teal600,
+                        backgroundColor: BambooInk.paperMuted,
+                        color: BambooInk.jade,
                       ),
                     ),
                     const SizedBox(height: AppSpace.sm),
@@ -358,9 +381,9 @@ class _FeesTab extends StatelessWidget {
               final ratio = capRatio(fw.qualifiedSpend, fw.thresholdSpend);
               return Container(
                 decoration: BoxDecoration(
-                  color: waived ? AppColors.successBg : AppColors.surface,
+                  color: waived ? const Color(0xFFE3F3EA) : BambooInk.glassFillOnPaper,
                   borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: waived ? AppColors.success : AppColors.ink100),
+                  border: Border.all(color: waived ? BambooInk.jade : BambooInk.hairlineOnPaper),
                 ),
                 padding: const EdgeInsets.all(AppSpace.lg),
                 child: Column(
@@ -375,7 +398,7 @@ class _FeesTab extends StatelessWidget {
                           const StatusPill(
                             label: 'WAIVED',
                             foreground: Colors.white,
-                            background: AppColors.success,
+                            background: BambooInk.jade,
                             icon: Icons.check_rounded,
                           ),
                       ],
@@ -387,8 +410,8 @@ class _FeesTab extends StatelessWidget {
                         child: LinearProgressIndicator(
                           value: ratio,
                           minHeight: 8,
-                          backgroundColor: AppColors.surfaceMuted,
-                          color: ratio >= 0.9 ? AppColors.warning : AppColors.teal600,
+                          backgroundColor: BambooInk.paperMuted,
+                          color: ratio >= 0.9 ? BambooInk.clay : BambooInk.jade,
                         ),
                       ),
                       const SizedBox(height: AppSpace.sm),
@@ -430,9 +453,9 @@ class _BenefitsTab extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: Container(
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: BambooInk.glassFillOnPaper,
                 borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: AppColors.ink100),
+                border: Border.all(color: BambooInk.hairlineOnPaper),
               ),
               padding: const EdgeInsets.all(AppSpace.lg),
               child: Column(
@@ -476,9 +499,9 @@ class _StatementTab extends StatelessWidget {
       children: [
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: BambooInk.glassFillOnPaper,
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.ink100),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
           ),
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Column(
