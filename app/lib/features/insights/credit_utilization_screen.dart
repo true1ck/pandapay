@@ -48,20 +48,20 @@ class CreditUtilizationScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(AppSpace.md),
               decoration: BoxDecoration(
-                color: AppColors.surfaceMuted,
+                color: BambooInk.paperMuted,
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.ink100),
+                border: Border.all(color: BambooInk.hairlineOnPaper),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.ink500),
+                  const Icon(Icons.info_outline_rounded, size: 18, color: BambooInk.ink500),
                   const SizedBox(width: AppSpace.sm),
                   Expanded(
                     child: Text(
                       'This is informational only — PandaPay does not guarantee how any '
                       'credit bureau computes or reports your credit score.',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ),
                 ],
@@ -83,7 +83,7 @@ class CreditUtilizationScreen extends ConsumerWidget {
             ],
             if (withoutLimit.isNotEmpty) ...[
               const SizedBox(height: AppSpace.md),
-              Text('Add a credit limit to track these', style: Theme.of(context).textTheme.labelLarge),
+              Text('Add a credit limit to track these', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
               const SizedBox(height: AppSpace.sm),
               for (final (userCard, product) in withoutLimit)
                 Padding(
@@ -121,9 +121,9 @@ class _AddLimitPrompt extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.md),
       child: Row(
@@ -131,13 +131,13 @@ class _AddLimitPrompt extends StatelessWidget {
           Expanded(
             child: Text(
               userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: BambooFonts.ui(13.5, color: BambooInk.ink900),
             ),
           ),
           // C4 Edit Card isn't confirmed built yet in this pass — a plain
           // disabled-looking hint rather than a broken navigation target,
           // per the plan's "acceptable stopgap" note on this exact gap.
-          Text('Add credit limit in Cards → Edit', style: Theme.of(context).textTheme.bodySmall),
+          Text('Add credit limit in Cards → Edit', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
         ],
       ),
     );
@@ -152,16 +152,15 @@ class _UtilizationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final ratio = result.ratio.clamp(0.0, 1.0);
     final over = result.overThreshold;
-    final color = over ? AppColors.error : AppColors.success;
+    final color = over ? BambooInk.clay : BambooInk.jade;
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -172,7 +171,7 @@ class _UtilizationTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-                  style: textTheme.titleSmall,
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                 ),
               ),
               // Never colour-alone: icon + text alongside the colour.
@@ -182,7 +181,7 @@ class _UtilizationTile extends StatelessWidget {
                 color: color,
               ),
               const SizedBox(width: 4),
-              Text('${(ratio * 100).toStringAsFixed(0)}%', style: textTheme.labelLarge?.copyWith(color: color)),
+              Text('${(ratio * 100).toStringAsFixed(0)}%', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: color)),
             ],
           ),
           const SizedBox(height: AppSpace.md),
@@ -191,22 +190,22 @@ class _UtilizationTile extends StatelessWidget {
             child: LinearProgressIndicator(
               value: ratio,
               minHeight: 8,
-              backgroundColor: AppColors.surfaceMuted,
+              backgroundColor: BambooInk.paperMuted,
               color: color,
             ),
           ),
           const SizedBox(height: AppSpace.sm),
           Row(
             children: [
-              Text('Limit ', style: textTheme.bodySmall),
-              MoneyText(userCard.creditLimit!, confidence: Confidence.confirmed, style: textTheme.bodySmall),
+              Text('Limit ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              MoneyText(userCard.creditLimit!, confidence: Confidence.confirmed, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
             ],
           ),
           if (over) ...[
             const SizedBox(height: AppSpace.sm),
             Text(
               'Above the 30% guideline most bureaus use — consider moving spend to another card.',
-              style: textTheme.bodySmall?.copyWith(color: AppColors.error),
+              style: BambooFonts.ui(12.5, color: BambooInk.clay),
             ),
           ],
         ],
