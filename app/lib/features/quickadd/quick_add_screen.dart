@@ -293,104 +293,160 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   Widget build(BuildContext context) {
     final userCards = ref.watch(userCardsProvider);
     final categories = ref.watch(categoriesProvider);
+    final inputDecoration = (String label, {String? prefix, String? error, Widget? suffixIcon}) => InputDecoration(
+          labelText: label,
+          prefixText: prefix,
+          errorText: error,
+          suffixIcon: suffixIcon,
+          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          filled: true,
+          fillColor: BambooInk.glassFillOnPaper,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+          ),
+        );
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Quick add')),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        child: ListView(
-          children: [
-            TextField(
-              controller: _amountController,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
-              decoration: InputDecoration(labelText: 'Amount', prefixText: '₹ ', errorText: _amountError),
-              onChanged: (_) => setState(() => _amountError = null),
-            ),
-            const SizedBox(height: AppSpace.md),
-            TextField(
-              controller: _merchantController,
-              focusNode: _merchantFocusNode,
-              decoration: InputDecoration(
-                labelText: 'Merchant (optional)',
-                suffixIcon: _merchantSearching
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Quick add', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          child: ListView(
+            children: [
+              TextField(
+                controller: _amountController,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: inputDecoration('Amount', prefix: '₹ ', error: _amountError),
+                onChanged: (_) => setState(() => _amountError = null),
+              ),
+              const SizedBox(height: AppSpace.md),
+              TextField(
+                controller: _merchantController,
+                focusNode: _merchantFocusNode,
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: inputDecoration(
+                  'Merchant (optional)',
+                  suffixIcon: _merchantSearching
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        )
+                      : null,
+                ),
+                onChanged: _onMerchantTextChanged,
+              ),
+              if (_showMerchantSuggestions)
+                _MerchantSuggestions(
+                  query: _merchantController.text,
+                  recent: _recentMerchants,
+                  results: _merchantResults,
+                  onPick: _pickMerchant,
+                ),
+              const SizedBox(height: AppSpace.md),
+              userCards.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                data: (cards) => DropdownButtonFormField<String>(
+                  initialValue: _selectedUserCardId,
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  decoration: inputDecoration('Card'),
+                  items: cards
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: c.id,
+                          child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                        ),
                       )
-                    : null,
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedUserCardId = v),
+                ),
               ),
-              onChanged: _onMerchantTextChanged,
-            ),
-            if (_showMerchantSuggestions)
-              _MerchantSuggestions(
-                query: _merchantController.text,
-                recent: _recentMerchants,
-                results: _merchantResults,
-                onPick: _pickMerchant,
+              const SizedBox(height: AppSpace.md),
+              categories.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                data: (list) => DropdownButtonFormField<String>(
+                  initialValue: _selectedCategoryId,
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  decoration: inputDecoration('Category (optional)'),
+                  items: list.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                  onChanged: (v) => setState(() => _selectedCategoryId = v),
+                ),
               ),
-            const SizedBox(height: AppSpace.md),
-            userCards.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (err, _) => Text(userFacingErrorMessage(err)),
-              data: (cards) => DropdownButtonFormField<String>(
-                initialValue: _selectedUserCardId,
-                decoration: const InputDecoration(labelText: 'Card'),
-                items: cards
-                    .map(
-                      (c) => DropdownMenuItem(
-                        value: c.id,
-                        child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedUserCardId = v),
+              const SizedBox(height: AppSpace.md),
+              Material(
+                color: BambooInk.glassFillOnPaper,
+                borderRadius: BorderRadius.circular(16),
+                child: ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  ),
+                  title: Text(
+                    _date == null
+                        ? 'Today'
+                        : '${_date!.year}-${_date!.month.toString().padLeft(2, '0')}-${_date!.day.toString().padLeft(2, '0')}',
+                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  ),
+                  trailing: const Icon(Icons.calendar_today_rounded, color: BambooInk.ink500),
+                  onTap: () async {
+                    final now = ref.read(clockProvider).now();
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _date ?? now,
+                      firstDate: DateTime(now.year - 2),
+                      lastDate: DateTime(now.year + 1),
+                    );
+                    if (picked != null) setState(() => _date = picked);
+                  },
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpace.md),
-            categories.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (err, _) => Text(userFacingErrorMessage(err)),
-              data: (list) => DropdownButtonFormField<String>(
-                initialValue: _selectedCategoryId,
-                decoration: const InputDecoration(labelText: 'Category (optional)'),
-                items: list.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-                onChanged: (v) => setState(() => _selectedCategoryId = v),
+              const SizedBox(height: AppSpace.md),
+              TextField(
+                controller: _noteController,
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: inputDecoration('Note (optional)'),
               ),
-            ),
-            const SizedBox(height: AppSpace.md),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                _date == null
-                    ? 'Today'
-                    : '${_date!.year}-${_date!.month.toString().padLeft(2, '0')}-${_date!.day.toString().padLeft(2, '0')}',
+              const SizedBox(height: AppSpace.lg),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: BambooInk.slate,
+                  foregroundColor: BambooInk.lime,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                ),
+                onPressed: _canSave && !_saving ? _save : null,
+                child: _saving
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
+                    : const Text('Save'),
               ),
-              trailing: const Icon(Icons.calendar_today_rounded),
-              onTap: () async {
-                final now = ref.read(clockProvider).now();
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _date ?? now,
-                  firstDate: DateTime(now.year - 2),
-                  lastDate: DateTime(now.year + 1),
-                );
-                if (picked != null) setState(() => _date = picked);
-              },
-            ),
-            const SizedBox(height: AppSpace.md),
-            TextField(
-              controller: _noteController,
-              decoration: const InputDecoration(labelText: 'Note (optional)'),
-            ),
-            const SizedBox(height: AppSpace.lg),
-            FilledButton(
-              onPressed: _canSave && !_saving ? _save : null,
-              child: _saving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Save'),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -419,8 +475,13 @@ class _MerchantSuggestions extends StatelessWidget {
     if (showRecent && recent.isEmpty) return const SizedBox.shrink();
     if (!showRecent && results.isEmpty) return const SizedBox.shrink();
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(top: 4),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -429,16 +490,16 @@ class _MerchantSuggestions extends StatelessWidget {
             for (final name in items!)
               ListTile(
                 dense: true,
-                leading: const Icon(Icons.history_rounded, size: 18),
-                title: Text(name),
+                leading: const Icon(Icons.history_rounded, size: 18, color: BambooInk.ink500),
+                title: Text(name, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
                 onTap: () => onPick(name: name),
               )
           else
             for (final candidate in results)
               ListTile(
                 dense: true,
-                leading: const Icon(Icons.storefront_rounded, size: 18),
-                title: Text(candidate.displayName ?? 'Unnamed merchant'),
+                leading: const Icon(Icons.storefront_rounded, size: 18, color: BambooInk.ink500),
+                title: Text(candidate.displayName ?? 'Unnamed merchant', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
                 onTap: () => onPick(name: candidate.displayName ?? '', categoryId: candidate.categoryId),
               ),
         ],
