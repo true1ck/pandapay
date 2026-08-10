@@ -55,21 +55,36 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
   Widget build(BuildContext context) {
     final catalogue = ref.watch(catalogueProvider);
     return Scaffold(
+      backgroundColor: BambooInk.paper,
       appBar: AppBar(
-        title: const Text('Add a card'),
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Add a card', style: BambooFonts.heading(18, color: BambooInk.ink900)),
         actions: [
           if (_selected.isNotEmpty)
             TextButton(
+              style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
               onPressed: () {
                 final catalogueValue = catalogue.valueOrNull ?? const [];
                 final picked = catalogueValue.where((c) => _selected.contains(c.id)).toList();
                 Navigator.of(context).pop(picked);
               },
-              child: Text('Add (${_selected.length})', style: const TextStyle(color: Colors.white)),
+              child: Text('Add (${_selected.length})', style: BambooFonts.ui(14, weight: FontWeight.w700, color: BambooInk.jade)),
             ),
         ],
       ),
-      body: catalogue.when(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: catalogue.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => ErrorState(
           message: userFacingErrorMessage(err),
@@ -92,9 +107,22 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                   children: [
                     TextField(
                       controller: _searchController,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search_rounded),
+                      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search_rounded, color: BambooInk.ink500),
                         hintText: 'Search by issuer or card name',
+                        hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+                        filled: true,
+                        fillColor: BambooInk.glassFillOnPaper,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                        ),
                       ),
                       onChanged: (_) => setState(() {}),
                     ),
@@ -109,7 +137,16 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                               padding: const EdgeInsets.only(right: AppSpace.xs),
                               child: FilterChip(
                                 label: Text(network == CardNetwork.amex ? 'Amex/Diners' : _networkLabel(network)),
+                                labelStyle: BambooFonts.ui(
+                                  13,
+                                  weight: FontWeight.w600,
+                                  color: _networkFilters.contains(network) ? BambooInk.onSlate : BambooInk.ink900,
+                                ),
                                 selected: _networkFilters.contains(network),
+                                selectedColor: BambooInk.slate,
+                                backgroundColor: BambooInk.paperMuted,
+                                side: BorderSide.none,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                                 onSelected: (selected) => setState(() {
                                   if (selected) {
                                     _networkFilters.add(network);
@@ -134,7 +171,7 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                           for (final issuer in issuers) ...[
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-                              child: Text(issuer, style: Theme.of(context).textTheme.titleSmall),
+                              child: Text(issuer, style: BambooFonts.heading(13, color: BambooInk.ink500)),
                             ),
                             for (final card in byIssuer[issuer]!) _CardRow(
                               card: card,
@@ -152,6 +189,7 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                             padding: const EdgeInsets.symmetric(vertical: AppSpace.lg),
                             child: Center(
                               child: TextButton(
+                                style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
                                 onPressed: widget.onCardNotListed,
                                 child: const Text("My card isn't listed"),
                               ),
@@ -163,6 +201,7 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
             ],
           );
         },
+        ),
       ),
     );
   }
@@ -186,7 +225,7 @@ class _CardRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onToggle,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
         child: Row(
@@ -194,12 +233,18 @@ class _CardRow extends StatelessWidget {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: AppColors.teal50, borderRadius: BorderRadius.circular(AppRadius.sm)),
-              child: const Icon(Icons.credit_card_rounded, color: AppColors.teal600, size: 20),
+              decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.credit_card_rounded, color: BambooInk.lime, size: 20),
             ),
             const SizedBox(width: AppSpace.md),
-            Expanded(child: Text(card.name, style: Theme.of(context).textTheme.bodyLarge)),
-            Checkbox(value: selected, onChanged: (_) => onToggle()),
+            Expanded(child: Text(card.name, style: BambooFonts.ui(15, color: BambooInk.ink900))),
+            Checkbox(
+              value: selected,
+              onChanged: (_) => onToggle(),
+              activeColor: BambooInk.slate,
+              checkColor: BambooInk.lime,
+              side: const BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
           ],
         ),
       ),
