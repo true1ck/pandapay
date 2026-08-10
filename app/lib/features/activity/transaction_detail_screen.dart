@@ -26,8 +26,13 @@ class TransactionDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final txn = ref.watch(_transactionProvider(transactionId));
     return Scaffold(
+      backgroundColor: BambooInk.paper,
       appBar: AppBar(
-        title: const Text('Transaction'),
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Transaction', style: BambooFonts.heading(18, color: BambooInk.ink900)),
         actions: [
           if (txn.valueOrNull?.status == 'active')
             IconButton(
@@ -37,13 +42,23 @@ class TransactionDetailScreen extends ConsumerWidget {
             ),
         ],
       ),
-      body: txn.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(
-          message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(_transactionProvider(transactionId)),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
         ),
-        data: (entry) => _DetailBody(entry: entry),
+        child: txn.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(_transactionProvider(transactionId)),
+          ),
+          data: (entry) => _DetailBody(entry: entry),
+        ),
       ),
     );
   }
@@ -88,16 +103,23 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<void> _showIgnoreSheet() async {
     final reason = await showModalBottomSheet<String>(
       context: context,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
-              padding: EdgeInsets.all(AppSpace.lg),
-              child: Text('Why is this being ignored?'),
+            Padding(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              child: Text('Why is this being ignored?', style: BambooFonts.heading(16, color: BambooInk.ink900)),
             ),
             for (final r in const ['refund', 'reversal', 'transfer'])
-              ListTile(title: Text(_reasonLabel(r)), onTap: () => Navigator.of(context).pop(r)),
+              ListTile(
+                title: Text(_reasonLabel(r), style: BambooFonts.ui(14.5, color: BambooInk.ink900)),
+                onTap: () => Navigator.of(context).pop(r),
+              ),
           ],
         ),
       ),
@@ -115,7 +137,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
-    final textTheme = Theme.of(context).textTheme;
     final isActive = entry.status == 'active';
 
     return ListView(
@@ -125,16 +146,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           Container(
             margin: const EdgeInsets.only(bottom: AppSpace.lg),
             padding: const EdgeInsets.all(AppSpace.md),
-            decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+            decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.visibility_off_outlined, size: 16, color: AppColors.ink500),
+                const Icon(Icons.visibility_off_outlined, size: 16, color: BambooInk.ink500),
                 const SizedBox(width: AppSpace.xs),
                 Expanded(
                   child: Text(
                     'This transaction is ${entry.status} — excluded from caps and rankings.',
-                    style: textTheme.bodySmall,
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 ),
               ],
@@ -143,9 +164,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         Center(
           child: Column(
             children: [
-              MoneyText(entry.amount, confidence: Confidence.estimated, style: textTheme.headlineMedium),
+              MoneyText(entry.amount, confidence: Confidence.estimated, style: BambooFonts.money(26, color: BambooInk.ink900)),
               const SizedBox(height: AppSpace.xs),
-              Text(entry.merchantName ?? 'Spend', style: textTheme.bodyMedium),
+              Text(entry.merchantName ?? 'Spend', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
             ],
           ),
         ),
@@ -160,6 +181,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         const SizedBox(height: AppSpace.xl),
         if (isActive)
           OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BambooInk.ink900,
+              side: const BorderSide(color: BambooInk.hairlineOnPaper),
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+            ),
             onPressed: _ignoring ? null : _showIgnoreSheet,
             icon: _ignoring
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
@@ -203,8 +231,8 @@ class _DetailRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 90, child: Text(label, style: Theme.of(context).textTheme.bodySmall)),
-          Expanded(child: Text(value, style: Theme.of(context).textTheme.bodyMedium)),
+          SizedBox(width: 90, child: Text(label, style: BambooFonts.ui(12.5, color: BambooInk.ink500))),
+          Expanded(child: Text(value, style: BambooFonts.ui(13.5, color: BambooInk.ink900))),
         ],
       ),
     );
