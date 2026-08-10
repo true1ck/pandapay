@@ -29,16 +29,15 @@ class MyContributionsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(contributionNetworkStatsProvider);
     final optedIn = ref.watch(contributionsOptInProvider);
-    final textTheme = Theme.of(context).textTheme;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
       children: [
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: BambooInk.glassFillOnPaper,
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.ink100),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
           ),
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Row(
@@ -47,13 +46,13 @@ class MyContributionsScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Share what you see', style: textTheme.titleSmall),
+                    Text('Share what you see', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                     const SizedBox(height: 4),
                     Text(
                       'When on, PandaPay may anonymously log a merchant name/MCC/rough location '
                       '(never an amount, exact time, or your identity) to help other users\' '
                       'recommendations. You can turn this off any time.',
-                      style: textTheme.bodySmall,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ],
                 ),
@@ -61,6 +60,8 @@ class MyContributionsScreen extends ConsumerWidget {
               const SizedBox(width: AppSpace.md),
               Switch(
                 value: optedIn,
+                activeTrackColor: BambooInk.jade,
+                activeColor: BambooInk.lime,
                 onChanged: (v) async {
                   final repo = ref.read(userCardsRepositoryProvider);
                   if (repo == null) return;
@@ -79,7 +80,7 @@ class MyContributionsScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: AppSpace.xl),
-        Text('Network-wide', style: textTheme.labelLarge),
+        Text('Network-wide', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
         const SizedBox(height: AppSpace.sm),
         stats.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -96,20 +97,20 @@ class MyContributionsScreen extends ConsumerWidget {
             }
             return Container(
               padding: const EdgeInsets.all(AppSpace.lg),
-              decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.lg)),
+              decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.lg)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${s.publishedMerchantCount}', style: textTheme.displaySmall),
-                  Text('merchants published across all contributors', style: textTheme.bodySmall),
+                  Text('${s.publishedMerchantCount}', style: BambooFonts.heading(26, color: BambooInk.ink900)),
+                  Text('merchants published across all contributors', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                   const SizedBox(height: AppSpace.md),
-                  Text('${s.contributingDeviceCount}', style: textTheme.displaySmall),
-                  Text('devices have contributed at least one report', style: textTheme.bodySmall),
+                  Text('${s.contributingDeviceCount}', style: BambooFonts.heading(26, color: BambooInk.ink900)),
+                  Text('devices have contributed at least one report', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                   const SizedBox(height: AppSpace.md),
                   Text(
                     'This is a network-wide total, not specific to your own contributions — '
                     'per-contributor counts aren\'t tracked, by design (see the privacy note above).',
-                    style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 ],
               ),
