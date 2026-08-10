@@ -88,10 +88,27 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
   Widget build(BuildContext context) {
     final catalogue = ref.watch(catalogueProvider);
     return Scaffold(
+      backgroundColor: BambooInk.paper,
       appBar: AppBar(
-        title: Text(_selected.isEmpty ? 'Add your cards' : '${_selected.length} selected'),
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          _selected.isEmpty ? 'Add your cards' : '${_selected.length} selected',
+          style: BambooFonts.heading(17, color: BambooInk.ink900),
+        ),
       ),
-      body: catalogue.when(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: catalogue.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => ErrorState(
           message: userFacingErrorMessage(err),
@@ -116,15 +133,28 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         'Add every card you own — the advice is only as good as what it knows about.',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        style: BambooFonts.ui(13.5, color: BambooInk.ink500),
                       ),
                     ),
                     const SizedBox(height: AppSpace.md),
                     TextField(
                       controller: _searchController,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search_rounded),
+                      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search_rounded, color: BambooInk.ink500),
                         hintText: 'Search by issuer or card name',
+                        hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+                        filled: true,
+                        fillColor: BambooInk.glassFillOnPaper,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                        ),
                       ),
                       onChanged: (_) => setState(() {}),
                     ),
@@ -139,7 +169,16 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                               padding: const EdgeInsets.only(right: AppSpace.xs),
                               child: FilterChip(
                                 label: Text(network == CardNetwork.amex ? 'Amex/Diners' : _networkLabel(network)),
+                                labelStyle: BambooFonts.ui(
+                                  13,
+                                  weight: FontWeight.w600,
+                                  color: _networkFilters.contains(network) ? BambooInk.onSlate : BambooInk.ink900,
+                                ),
                                 selected: _networkFilters.contains(network),
+                                selectedColor: BambooInk.slate,
+                                backgroundColor: BambooInk.paperMuted,
+                                side: BorderSide.none,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                                 onSelected: (selected) => setState(() {
                                   if (selected) {
                                     _networkFilters.add(network);
@@ -164,7 +203,7 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                           for (final issuer in issuers) ...[
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-                              child: Text(issuer, style: Theme.of(context).textTheme.titleSmall),
+                              child: Text(issuer, style: BambooFonts.heading(13, color: BambooInk.ink500)),
                             ),
                             for (final card in byIssuer[issuer]!)
                               _CardRow(
@@ -183,6 +222,7 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                             padding: const EdgeInsets.symmetric(vertical: AppSpace.lg),
                             child: Center(
                               child: TextButton(
+                                style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
                                 onPressed: () => Navigator.of(context).push(
                                   MaterialPageRoute(builder: (_) => const RequestUnsupportedCardScreen()),
                                 ),
@@ -196,16 +236,23 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
-                  child: Text(_error!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.error)),
+                  child: Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
                 ),
               SafeArea(
                 top: false,
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpace.lg),
                   child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: BambooInk.slate,
+                      foregroundColor: BambooInk.lime,
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                    ),
                     onPressed: _selected.isEmpty || _adding ? null : () => _continue(cards),
                     child: _adding
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
                         : Text(_selected.isEmpty ? 'Continue' : 'Add ${_selected.length} card${_selected.length == 1 ? '' : 's'}'),
                   ),
                 ),
@@ -213,6 +260,7 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
             ],
           );
         },
+        ),
       ),
     );
   }
@@ -236,7 +284,7 @@ class _CardRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onToggle,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
         child: Row(
@@ -244,12 +292,18 @@ class _CardRow extends StatelessWidget {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: AppColors.teal50, borderRadius: BorderRadius.circular(AppRadius.sm)),
-              child: const Icon(Icons.credit_card_rounded, color: AppColors.teal600, size: 20),
+              decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.credit_card_rounded, color: BambooInk.lime, size: 20),
             ),
             const SizedBox(width: AppSpace.md),
-            Expanded(child: Text(card.name, style: Theme.of(context).textTheme.bodyLarge)),
-            Checkbox(value: selected, onChanged: (_) => onToggle()),
+            Expanded(child: Text(card.name, style: BambooFonts.ui(15, color: BambooInk.ink900))),
+            Checkbox(
+              value: selected,
+              onChanged: (_) => onToggle(),
+              activeColor: BambooInk.slate,
+              checkColor: BambooInk.lime,
+              side: const BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
           ],
         ),
       ),
