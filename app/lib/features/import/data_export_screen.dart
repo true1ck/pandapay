@@ -53,88 +53,139 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final repo = ref.watch(importRepositoryProvider);
     if (repo == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Export your data')),
+        backgroundColor: BambooInk.paper,
+        appBar: AppBar(
+          backgroundColor: BambooInk.paper,
+          foregroundColor: BambooInk.ink900,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          title: Text('Export your data', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+        ),
         body: const EmptyState(icon: Icons.download_outlined, title: 'Sign in to export your data'),
       );
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Export your data')),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Your data is yours.', style: textTheme.titleMedium),
-            const SizedBox(height: AppSpace.sm),
-            Text(
-              'Export a copy of your transactions and/or cards. Nothing here is shared with anyone else.',
-              style: textTheme.bodyMedium,
-            ),
-            const SizedBox(height: AppSpace.lg),
-            Text('Scope', style: textTheme.labelLarge),
-            const SizedBox(height: AppSpace.xs),
-            Wrap(
-              spacing: AppSpace.sm,
-              children: [
-                for (final s in const ['transactions', 'cards', 'all'])
-                  ChoiceChip(label: Text(s), selected: _scope == s, onSelected: (_) => setState(() => _scope = s)),
-              ],
-            ),
-            const SizedBox(height: AppSpace.lg),
-            Text('Format', style: textTheme.labelLarge),
-            const SizedBox(height: AppSpace.xs),
-            Wrap(
-              spacing: AppSpace.sm,
-              children: [
-                for (final f in const ['json', 'csv'])
-                  ChoiceChip(
-                    label: Text(f.toUpperCase()),
-                    selected: _format == f,
-                    onSelected: (_) => setState(() => _format = f),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.lg),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.download_outlined),
-              label: Text(_generating ? 'Generating…' : 'Generate export'),
-              onPressed: _generating ? null : _generate,
-            ),
-            const SizedBox(height: AppSpace.lg),
-            if (_preview != null) ...[
-              Row(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Export your data', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Your data is yours.', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                'Export a copy of your transactions and/or cards. Nothing here is shared with anyone else.',
+                style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+              ),
+              const SizedBox(height: AppSpace.lg),
+              Text('Scope', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+              const SizedBox(height: AppSpace.xs),
+              Wrap(
+                spacing: AppSpace.sm,
                 children: [
-                  Expanded(child: Text('Export ready (${_preview!.length} chars)', style: textTheme.titleSmall)),
-                  IconButton(
-                    icon: const Icon(Icons.copy_rounded),
-                    tooltip: 'Copy to clipboard',
-                    onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: _preview!));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(const SnackBar(content: Text('Copied — paste it wherever you want to save it')));
-                      }
-                    },
-                  ),
+                  for (final s in const ['transactions', 'cards', 'all'])
+                    ChoiceChip(
+                      label: Text(s),
+                      labelStyle: BambooFonts.ui(13, weight: FontWeight.w600, color: _scope == s ? BambooInk.onSlate : BambooInk.ink900),
+                      selected: _scope == s,
+                      selectedColor: BambooInk.slate,
+                      backgroundColor: BambooInk.paperMuted,
+                      side: BorderSide.none,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                      onSelected: (_) => setState(() => _scope = s),
+                    ),
                 ],
               ),
-              const SizedBox(height: AppSpace.sm),
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(AppSpace.md),
-                  decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
-                  child: SingleChildScrollView(
-                    child: Text(_preview!, style: textTheme.bodySmall?.copyWith(fontFamily: 'monospace')),
+              const SizedBox(height: AppSpace.lg),
+              Text('Format', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+              const SizedBox(height: AppSpace.xs),
+              Wrap(
+                spacing: AppSpace.sm,
+                children: [
+                  for (final f in const ['json', 'csv'])
+                    ChoiceChip(
+                      label: Text(f.toUpperCase()),
+                      labelStyle: BambooFonts.ui(13, weight: FontWeight.w600, color: _format == f ? BambooInk.onSlate : BambooInk.ink900),
+                      selected: _format == f,
+                      selectedColor: BambooInk.slate,
+                      backgroundColor: BambooInk.paperMuted,
+                      side: BorderSide.none,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                      onSelected: (_) => setState(() => _format = f),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.lg),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: BambooInk.slate,
+                  foregroundColor: BambooInk.lime,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+                ),
+                icon: const Icon(Icons.download_outlined),
+                label: Text(_generating ? 'Generating…' : 'Generate export'),
+                onPressed: _generating ? null : _generate,
+              ),
+              const SizedBox(height: AppSpace.lg),
+              if (_preview != null) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Export ready (${_preview!.length} chars)',
+                        style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy_rounded, color: BambooInk.ink900),
+                      tooltip: 'Copy to clipboard',
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: _preview!));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(content: Text('Copied — paste it wherever you want to save it')));
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpace.sm),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpace.md),
+                    decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+                    child: SingleChildScrollView(
+                      child: Text(
+                        _preview!,
+                        style: BambooFonts.ui(12.5, color: BambooInk.ink900).copyWith(fontFamily: 'monospace'),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
