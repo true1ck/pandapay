@@ -97,8 +97,24 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
   Widget build(BuildContext context) {
     final pairs = ref.watch(myCardsWithProductProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit card')),
-      body: pairs.when(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Edit card', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: pairs.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
         data: (owned) {
@@ -112,7 +128,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
           return ListView(
             padding: const EdgeInsets.all(AppSpace.lg),
             children: [
-              Text(product.name, style: Theme.of(context).textTheme.bodySmall),
+              Text(product.name, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
               const SizedBox(height: AppSpace.lg),
               TextField(
                 controller: _nicknameController,
@@ -160,32 +176,46 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: AppSpace.md),
-                Text(_error!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.error)),
+                Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
               ],
               const SizedBox(height: AppSpace.xl),
               FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: BambooInk.slate,
+                  foregroundColor: BambooInk.lime,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                ),
                 onPressed: _saving ? null : _save,
                 child: _saving
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
                     : const Text('Save'),
               ),
               const SizedBox(height: AppSpace.md),
               OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BambooInk.clay,
+                  minimumSize: const Size.fromHeight(48),
+                  side: BorderSide(color: BambooInk.clay.withValues(alpha: 0.4)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
                 onPressed: _archiving ? null : _archive,
                 icon: _archiving
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.clay))
                     : const Icon(Icons.archive_outlined),
                 label: const Text('Archive card'),
               ),
               const SizedBox(height: AppSpace.sm),
               Text(
                 "Archiving keeps this card's full transaction history — nothing is deleted, and you can restore it any time from My Cards.",
-                style: Theme.of(context).textTheme.bodySmall,
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
                 textAlign: TextAlign.center,
               ),
             ],
           );
         },
+        ),
       ),
     );
   }
