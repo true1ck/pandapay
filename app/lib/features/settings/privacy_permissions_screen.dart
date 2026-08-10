@@ -45,8 +45,24 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy & Permissions')),
-      body: ListView(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Privacy & Permissions', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
         children: [
           Text('App permissions', style: textTheme.labelLarge),
@@ -115,6 +131,7 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
           else
             const _ConsentHistoryList(),
         ],
+        ),
       ),
     );
   }
@@ -140,9 +157,9 @@ class _PermissionRow extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Row(
@@ -150,8 +167,8 @@ class _PermissionRow extends ConsumerWidget {
           Container(
             width: 40,
             height: 40,
-            decoration: const BoxDecoration(color: AppColors.surfaceMuted, shape: BoxShape.circle),
-            child: Icon(icon, size: 20, color: AppColors.navy800),
+            decoration: const BoxDecoration(color: BambooInk.paperMuted, shape: BoxShape.circle),
+            child: Icon(icon, size: 20, color: BambooInk.ink900),
           ),
           const SizedBox(width: AppSpace.md),
           Expanded(
@@ -163,8 +180,8 @@ class _PermissionRow extends ConsumerWidget {
                 Text(caption, style: textTheme.bodySmall),
                 const SizedBox(height: 4),
                 status.when(
-                  loading: () => Text('Checking…', style: textTheme.bodySmall?.copyWith(color: AppColors.ink500)),
-                  error: (_, _) => Text('Unknown', style: textTheme.bodySmall?.copyWith(color: AppColors.ink500)),
+                  loading: () => Text('Checking…', style: textTheme.bodySmall?.copyWith(color: BambooInk.ink500)),
+                  error: (_, _) => Text('Unknown', style: textTheme.bodySmall?.copyWith(color: BambooInk.ink500)),
                   data: (s) => _StatusBadge(status: s),
                 ),
               ],
@@ -197,16 +214,16 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, fg, bg) = switch (status) {
-      PermissionStatus.granted => ('Allowed', AppColors.success, AppColors.successBg),
-      PermissionStatus.limited => ('Limited', AppColors.warning, AppColors.warningBg),
-      PermissionStatus.permanentlyDenied => ('Denied — set in Settings', AppColors.error, AppColors.errorBg),
-      PermissionStatus.denied => ('Not allowed', AppColors.error, AppColors.errorBg),
-      _ => ('Unknown', AppColors.ink500, AppColors.surfaceMuted),
+      PermissionStatus.granted => ('Allowed', BambooInk.jade, BambooInk.jade.withValues(alpha: 0.12)),
+      PermissionStatus.limited => ('Limited', BambooInk.clay, BambooInk.clay.withValues(alpha: 0.12)),
+      PermissionStatus.permanentlyDenied => ('Denied — set in Settings', BambooInk.clay, BambooInk.clay.withValues(alpha: 0.12)),
+      PermissionStatus.denied => ('Not allowed', BambooInk.clay, BambooInk.clay.withValues(alpha: 0.12)),
+      _ => ('Unknown', BambooInk.ink500, BambooInk.paperMuted),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: 2),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
-      child: Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: fg)),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(label, style: BambooFonts.ui(11, weight: FontWeight.w600, color: fg)),
     );
   }
 }
@@ -222,7 +239,7 @@ class _DataHandlingSection extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: BambooInk.paperMuted,
         borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -262,9 +279,9 @@ class _ContributionToggle extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: SwitchListTile(
@@ -320,9 +337,9 @@ class _ConsentHistoryList extends ConsumerWidget {
               Container(
                 margin: const EdgeInsets.only(bottom: AppSpace.sm),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: BambooInk.glassFillOnPaper,
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.ink100),
+                  border: Border.all(color: BambooInk.hairlineOnPaper),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
                 child: Text(
