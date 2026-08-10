@@ -121,6 +121,12 @@ abstract final class BambooInk {
 
   static const warningBg = Color(0xFFFFF3ED);
   static const warningBorder = Color(0xFFFBD9C9);
+
+  // Mid-severity amber — the token set otherwise defines only a two-tier
+  // clay/jade pairing, but a few Insights screens (caps, fee waivers) have
+  // a genuine third "getting close" tier between "fine" (jade) and "over
+  // the line" (clay) that's real functional signal, not decoration.
+  static const amber = Color(0xFFD97706);
 }
 
 /// Bamboo Ink's two-face type system: Bricolage Grotesque for money and

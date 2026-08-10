@@ -75,7 +75,6 @@ class _FeeWaiverTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final waived = fw.waivedAt != null;
     final ratio = capRatio(fw.qualifiedSpend, fw.thresholdSpend);
     final anniversaryDays =
@@ -83,9 +82,9 @@ class _FeeWaiverTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: waived ? AppColors.successBg : AppColors.surface,
+        color: waived ? BambooInk.jade.withValues(alpha: 0.10) : BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: waived ? AppColors.success : AppColors.ink100),
+        border: Border.all(color: waived ? BambooInk.jade : BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -99,13 +98,13 @@ class _FeeWaiverTile extends StatelessWidget {
                   children: [
                     Text(
                       userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-                      style: textTheme.titleSmall,
+                      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                     ),
                     const SizedBox(height: 2),
                     Row(
                       children: [
-                        Text('Fee waived at ', style: textTheme.bodySmall),
-                        MoneyText(fw.waivesFee, confidence: Confidence.estimated, style: textTheme.bodySmall),
+                        Text('Fee waived at ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                        MoneyText(fw.waivesFee, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                       ],
                     ),
                   ],
@@ -114,12 +113,12 @@ class _FeeWaiverTile extends StatelessWidget {
               if (waived)
                 const StatusPill(
                   label: 'WAIVED',
-                  foreground: Colors.white,
-                  background: AppColors.success,
+                  foreground: BambooInk.onSlate,
+                  background: BambooInk.jade,
                   icon: Icons.check_rounded,
                 )
               else if (ratio >= 0.9)
-                const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
+                const Icon(Icons.warning_amber_rounded, size: 16, color: BambooInk.amber),
             ],
           ),
           const SizedBox(height: AppSpace.md),
@@ -129,8 +128,8 @@ class _FeeWaiverTile extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: ratio,
                 minHeight: 8,
-                backgroundColor: AppColors.surfaceMuted,
-                color: ratio >= 0.9 ? AppColors.warning : AppColors.teal600,
+                backgroundColor: BambooInk.paperMuted,
+                color: ratio >= 0.9 ? BambooInk.amber : BambooInk.jade,
               ),
             ),
             const SizedBox(height: AppSpace.sm),
@@ -139,9 +138,9 @@ class _FeeWaiverTile extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    MoneyText(fw.qualifiedSpend, confidence: Confidence.estimated, style: textTheme.bodySmall),
-                    Text(' of ', style: textTheme.bodySmall),
-                    MoneyText(fw.thresholdSpend, confidence: Confidence.estimated, style: textTheme.bodySmall),
+                    MoneyText(fw.qualifiedSpend, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    Text(' of ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    MoneyText(fw.thresholdSpend, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                   ],
                 ),
               ],
@@ -153,7 +152,7 @@ class _FeeWaiverTile extends StatelessWidget {
               anniversaryDays >= 0
                   ? 'Card anniversary in $anniversaryDays days'
                   : 'Card anniversary was ${-anniversaryDays} days ago',
-              style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],
         ],
