@@ -44,8 +44,24 @@ class _HelpFaqScreenState extends State<HelpFaqScreen> {
             .toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Help & FAQ')),
-      body: Padding(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Help & FAQ', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
         padding: const EdgeInsets.all(AppSpace.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -53,23 +69,33 @@ class _HelpFaqScreenState extends State<HelpFaqScreen> {
             TextField(
               controller: _searchController,
               onChanged: (value) => setState(() => _query = value),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
               decoration: InputDecoration(
                 hintText: 'Search FAQs',
-                prefixIcon: const Icon(Icons.search_rounded),
+                hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+                prefixIcon: const Icon(Icons.search_rounded, color: BambooInk.ink500),
                 suffixIcon: _query.isEmpty
                     ? null
                     : IconButton(
-                        icon: const Icon(Icons.close_rounded),
+                        icon: const Icon(Icons.close_rounded, color: BambooInk.ink500),
                         onPressed: () => setState(() {
                           _searchController.clear();
                           _query = '';
                         }),
                       ),
                 filled: true,
-                fillColor: AppColors.surfaceMuted,
+                fillColor: BambooInk.glassFillOnPaper,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
                 ),
               ),
             ),
@@ -84,6 +110,7 @@ class _HelpFaqScreenState extends State<HelpFaqScreen> {
                     ),
             ),
           ],
+        ),
         ),
       ),
     );
@@ -102,7 +129,7 @@ class _EmptyResults extends StatelessWidget {
         child: Text(
           "No results for '$query' — try a different word.",
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.ink500),
+          style: BambooFonts.ui(14, color: BambooInk.ink500),
         ),
       ),
     );
@@ -115,31 +142,33 @@ class _FaqTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.ink100),
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
         ),
         child: Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
+            iconColor: BambooInk.ink500,
+            collapsedIconColor: BambooInk.ink500,
             tilePadding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
             childrenPadding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.lg),
             expandedAlignment: Alignment.centerLeft,
             title: Text(
               entry.question,
-              style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, color: AppColors.ink900),
+              style: BambooFonts.heading(14.5, color: BambooInk.ink900),
             ),
             children: [
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   entry.answer,
-                  style: textTheme.bodyMedium?.copyWith(color: AppColors.ink700, height: 1.4),
+                  style: BambooFonts.ui(13, color: BambooInk.ink500, height: 1.45),
                 ),
               ),
             ],
