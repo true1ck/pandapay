@@ -33,8 +33,24 @@ class AppearanceScreen extends ConsumerWidget {
     final numberFormat = ref.watch(numberFormatProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Appearance')),
-      body: MediaQuery(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Appearance', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: MediaQuery(
         data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)),
         child: ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
@@ -67,36 +83,39 @@ class AppearanceScreen extends ConsumerWidget {
             Text(
               'Applies within this screen as a preview. Stacks on top of your device\'s own '
               'accessibility text size setting, if you have one.',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.xl),
             _SectionHeader('Card art style'),
             const SizedBox(height: AppSpace.sm),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpace.lg),
-                child: Opacity(
-                  opacity: 0.5,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.style_outlined, color: AppColors.ink500),
-                      const SizedBox(width: AppSpace.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Default', style: Theme.of(context).textTheme.titleSmall),
-                            const SizedBox(height: 2),
-                            Text(
-                              'More styles coming soon — this catalogue doesn\'t have alternate '
-                              'card art assets yet.',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
+            Container(
+              decoration: BoxDecoration(
+                color: BambooInk.glassFillOnPaper,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: BambooInk.hairlineOnPaper),
+              ),
+              padding: const EdgeInsets.all(AppSpace.lg),
+              child: Opacity(
+                opacity: 0.5,
+                child: Row(
+                  children: [
+                    const Icon(Icons.style_outlined, color: BambooInk.ink500),
+                    const SizedBox(width: AppSpace.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Default', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                          const SizedBox(height: 2),
+                          Text(
+                            'More styles coming soon — this catalogue doesn\'t have alternate '
+                            'card art assets yet.',
+                            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -112,19 +131,27 @@ class AppearanceScreen extends ConsumerWidget {
               onChanged: (format) => ref.read(numberFormatProvider.notifier).setNumberFormat(format),
             ),
             const SizedBox(height: AppSpace.md),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpace.lg),
-                child: Row(
-                  children: [
-                    Text('Preview', style: Theme.of(context).textTheme.bodyMedium),
-                    const SizedBox(width: AppSpace.md),
-                    MoneyText(Money.fromRupees(1234567), confidence: Confidence.confirmed),
-                  ],
-                ),
+            Container(
+              decoration: BoxDecoration(
+                color: BambooInk.glassFillOnPaper,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: BambooInk.hairlineOnPaper),
+              ),
+              padding: const EdgeInsets.all(AppSpace.lg),
+              child: Row(
+                children: [
+                  Text('Preview', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+                  const SizedBox(width: AppSpace.md),
+                  MoneyText(
+                    Money.fromRupees(1234567),
+                    confidence: Confidence.confirmed,
+                    style: BambooFonts.money(16, color: BambooInk.ink900),
+                  ),
+                ],
               ),
             ),
           ],
+        ),
         ),
       ),
     );
@@ -138,8 +165,8 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      label,
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.ink500),
+      label.toUpperCase(),
+      style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: 1.1),
     );
   }
 }
@@ -156,25 +183,28 @@ class _SegmentedCard<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpace.xs),
-        child: Row(
-          children: [
-            for (final option in options)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: _SegmentButton<T>(
-                    selected: option.$1 == value,
-                    label: option.$2,
-                    icon: option.$3,
-                    onTap: () => onChanged(option.$1),
-                  ),
+    return Container(
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      padding: const EdgeInsets.all(AppSpace.xs),
+      child: Row(
+        children: [
+          for (final option in options)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: _SegmentButton<T>(
+                  selected: option.$1 == value,
+                  label: option.$2,
+                  icon: option.$3,
+                  onTap: () => onChanged(option.$1),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -191,10 +221,10 @@ class _SegmentButton<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.teal50 : Colors.transparent,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      color: selected ? BambooInk.slate : Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpace.md, horizontal: AppSpace.sm),
@@ -202,15 +232,16 @@ class _SegmentButton<T> extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (icon != null)
-                Icon(icon, size: 18, color: selected ? AppColors.teal600 : AppColors.ink500),
+                Icon(icon, size: 18, color: selected ? BambooInk.lime : BambooInk.ink500),
               if (icon != null) const SizedBox(height: 4),
               Text(
                 label,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: selected ? AppColors.teal600 : AppColors.ink700,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    ),
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: selected ? FontWeight.w700 : FontWeight.w600,
+                  color: selected ? BambooInk.onSlate : BambooInk.ink900,
+                ),
               ),
             ],
           ),
