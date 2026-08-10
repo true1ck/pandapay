@@ -74,16 +74,36 @@ class _MerchantSearchScreenState extends ConsumerState<MerchantSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: BambooInk.paper,
       appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         title: TextField(
           controller: _controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Search merchants', border: InputBorder.none),
+          style: BambooFonts.ui(15, color: BambooInk.ink900),
+          decoration: InputDecoration(
+            hintText: 'Search merchants',
+            hintStyle: BambooFonts.ui(15, color: BambooInk.ink500),
+            border: InputBorder.none,
+          ),
           onSubmitted: _search,
         ),
-        actions: [IconButton(icon: const Icon(Icons.search_rounded), onPressed: () => _search(_controller.text))],
+        actions: [IconButton(icon: const Icon(Icons.search_rounded, color: BambooInk.ink900), onPressed: () => _search(_controller.text))],
       ),
-      body: _buildBody(),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: _buildBody(),
+      ),
     );
   }
 
@@ -98,11 +118,11 @@ class _MerchantSearchScreenState extends ConsumerState<MerchantSearchScreen> {
       return ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
         children: [
-          Text('Recent searches', style: Theme.of(context).textTheme.labelLarge),
+          Text('Recent searches', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
           for (final q in _recent)
             ListTile(
-              leading: const Icon(Icons.history_rounded),
-              title: Text(q),
+              leading: const Icon(Icons.history_rounded, color: BambooInk.ink500),
+              title: Text(q, style: BambooFonts.ui(14.5, color: BambooInk.ink900)),
               onTap: () {
                 _controller.text = q;
                 _search(q);
@@ -142,17 +162,25 @@ class _MerchantResultTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final best = ref.watch(bestCardForMerchantProvider(candidate.categoryId));
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
       child: ListTile(
-        title: Text(candidate.displayName ?? 'Unnamed merchant'),
+        title: Text(candidate.displayName ?? 'Unnamed merchant', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
         subtitle: best.when(
-          loading: () => const Text('Ranking…'),
-          error: (err, _) => Text(userFacingErrorMessage(err)),
-          data: (rec) => rec == null ? const Text('No usable card for this merchant.') : Text('Use ${rec.card.name}'),
+          loading: () => Text('Ranking…', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+          error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(12.5, color: BambooInk.clay)),
+          data: (rec) => Text(
+            rec == null ? 'No usable card for this merchant.' : 'Use ${rec.card.name}',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
         ),
         trailing: best.valueOrNull != null
-            ? MoneyText(best.value!.expectedValue, confidence: best.value!.confidence)
+            ? MoneyText(best.value!.expectedValue, confidence: best.value!.confidence, style: BambooFonts.money(14, color: BambooInk.ink900))
             : null,
       ),
     );
@@ -172,7 +200,10 @@ class _CategoryFallback extends ConsumerWidget {
       data: (list) => ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
         children: [
-          Text('No merchant found for "$query" — pick a category instead:', style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            'No merchant found for "$query" — pick a category instead:',
+            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          ),
           const SizedBox(height: AppSpace.md),
           Wrap(
             spacing: AppSpace.xs,
@@ -180,6 +211,10 @@ class _CategoryFallback extends ConsumerWidget {
               for (final c in list)
                 ActionChip(
                   label: Text(c.name),
+                  labelStyle: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink900),
+                  backgroundColor: BambooInk.paperMuted,
+                  side: BorderSide.none,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                   onPressed: () {
                     ref.read(selectedCategoryProvider.notifier).state = c.slug;
                     Navigator.of(context).pop();
