@@ -31,33 +31,48 @@ class ForcedUpgradeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.navy900,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpace.xl),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.system_update_rounded, color: Colors.white, size: 56),
-              const SizedBox(height: AppSpace.lg),
-              Text(
-                'Update required',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
-              ),
-              const SizedBox(height: AppSpace.sm),
-              Text(
-                "This version of PandaPay is no longer supported. Update to keep using the app.",
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
-              ),
-              const SizedBox(height: AppSpace.xl),
-              FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.navy900),
-                onPressed: () => _openStore(context),
-                child: const Text('Update now'),
-              ),
-            ],
+      backgroundColor: BambooInk.slate,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpace.xl),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.system_update_rounded, color: BambooInk.lime, size: 56),
+                const SizedBox(height: AppSpace.lg),
+                Text(
+                  'Update required',
+                  textAlign: TextAlign.center,
+                  style: BambooFonts.heading(22, color: BambooInk.onSlate),
+                ),
+                const SizedBox(height: AppSpace.sm),
+                Text(
+                  "This version of PandaPay is no longer supported. Update to keep using the app.",
+                  textAlign: TextAlign.center,
+                  style: BambooFonts.ui(14.5, color: BambooInk.onSlateMuted),
+                ),
+                const SizedBox(height: AppSpace.xl),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.lime,
+                    foregroundColor: BambooInk.slate,
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                  ),
+                  onPressed: () => _openStore(context),
+                  child: const Text('Update now'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
