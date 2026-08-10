@@ -21,7 +21,6 @@ class WhatsNewContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final changelog = ref.watch(changelogProvider);
-    final textTheme = Theme.of(context).textTheme;
 
     return changelog.when(
       loading: () => const Padding(
@@ -40,7 +39,7 @@ class WhatsNewContent extends ConsumerWidget {
           return Padding(
             padding: const EdgeInsets.all(AppSpace.xxl),
             child: Center(
-              child: Text("No updates yet", style: textTheme.bodyMedium),
+              child: Text("No updates yet", style: BambooFonts.ui(14, color: BambooInk.ink500)),
             ),
           );
         }
@@ -63,8 +62,13 @@ class _ChangelogEntryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Card(
+      color: BambooInk.glassFillOnPaper,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpace.lg),
         child: Column(
@@ -73,14 +77,14 @@ class _ChangelogEntryCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(entry.title, style: textTheme.titleMedium),
+                  child: Text(entry.title, style: BambooFonts.heading(16, color: BambooInk.ink900)),
                 ),
                 if (entry.highlightsDataChange) ...[
                   const SizedBox(width: AppSpace.sm),
-                  const StatusPill(
+                  StatusPill(
                     label: 'Affects your recommendations',
-                    foreground: AppColors.warning,
-                    background: AppColors.warningBg,
+                    foreground: BambooInk.clay,
+                    background: BambooInk.clay.withValues(alpha: 0.12),
                     icon: Icons.bolt_rounded,
                   ),
                 ],
@@ -89,7 +93,7 @@ class _ChangelogEntryCard extends StatelessWidget {
             const SizedBox(height: AppSpace.xs),
             Text(
               '${entry.appVersion} · ${DateFormat.yMMMd().format(entry.publishedAt)}',
-              style: textTheme.labelSmall,
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.md),
             _MarkdownLiteBody(source: entry.bodyMarkdown),
@@ -112,7 +116,7 @@ class _MarkdownLiteBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bodyStyle = Theme.of(context).textTheme.bodyMedium;
+    final bodyStyle = BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.45);
     final lines = source.split('\n').where((l) => l.trim().isNotEmpty).toList();
 
     return Column(
@@ -161,8 +165,25 @@ class WhatsNewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("What's New")),
-      body: const WhatsNewContent(),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text("What's New", style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: const WhatsNewContent(),
+      ),
     );
   }
 }
