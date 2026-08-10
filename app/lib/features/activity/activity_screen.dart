@@ -37,56 +37,66 @@ class ActivityScreen extends ConsumerWidget {
     final filter = ref.watch(_activityFilterProvider);
     final transactions = ref.watch(_filteredTransactionsProvider);
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
-          child: _FilterRow(filter: filter),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0.9, -0.7),
+          radius: 1.3,
+          colors: [BambooInk.wash, BambooInk.paper],
+          stops: [0.0, 0.6],
         ),
-        Expanded(
-          child: transactions.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => ErrorState(
-              message: userFacingErrorMessage(err),
-              onRetry: () => ref.invalidate(_filteredTransactionsProvider),
-            ),
-            data: (entries) {
-              if (entries.isEmpty) {
-                return EmptyState(
-                  icon: Icons.receipt_long_outlined,
-                  title: filter.isActive ? 'No activity matches these filters' : 'No activity yet',
-                  message: filter.isActive ? null : 'Spend you log from the Cards tab shows up here.',
-                );
-              }
-              final grouped = _groupByDay(entries);
-              final totalSpend = entries.fold<Money>(const Money.zero(), (a, e) => a + e.amount);
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
+            child: _FilterRow(filter: filter),
+          ),
+          Expanded(
+            child: transactions.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, _) => ErrorState(
+                message: userFacingErrorMessage(err),
+                onRetry: () => ref.invalidate(_filteredTransactionsProvider),
+              ),
+              data: (entries) {
+                if (entries.isEmpty) {
+                  return EmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    title: filter.isActive ? 'No activity matches these filters' : 'No activity yet',
+                    message: filter.isActive ? null : 'Spend you log from the Cards tab shows up here.',
+                  );
+                }
+                final grouped = _groupByDay(entries);
+                final totalSpend = entries.fold<Money>(const Money.zero(), (a, e) => a + e.amount);
 
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
-                children: [
-                  _SummaryCard(totalSpend: totalSpend, count: entries.length),
-                  const SizedBox(height: AppSpace.lg),
-                  for (final group in grouped) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                      child: Text(_dayLabel(group.day), style: Theme.of(context).textTheme.titleSmall),
-                    ),
-                    for (final entry in group.entries)
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
+                  children: [
+                    _SummaryCard(totalSpend: totalSpend, count: entries.length),
+                    const SizedBox(height: AppSpace.lg),
+                    for (final group in grouped) ...[
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                        child: _TransactionTile(
-                          entry,
-                          onTap: () => context.push('/activity/${entry.id}'),
-                        ),
+                        child: Text(_dayLabel(group.day), style: BambooFonts.heading(13, color: BambooInk.ink500)),
                       ),
-                    const SizedBox(height: AppSpace.sm),
+                      for (final entry in group.entries)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                          child: _TransactionTile(
+                            entry,
+                            onTap: () => context.push('/activity/${entry.id}'),
+                          ),
+                        ),
+                      const SizedBox(height: AppSpace.sm),
+                    ],
                   ],
-                ],
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -266,8 +276,10 @@ class _FilterChipButton extends StatelessWidget {
       padding: const EdgeInsets.only(right: 0),
       child: ActionChip(
         label: Text(label, overflow: TextOverflow.ellipsis),
-        backgroundColor: active ? AppColors.teal50 : AppColors.surfaceMuted,
-        labelStyle: TextStyle(color: active ? AppColors.teal600 : AppColors.ink700),
+        backgroundColor: active ? BambooInk.slate : BambooInk.paperMuted,
+        side: BorderSide.none,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+        labelStyle: BambooFonts.ui(13, weight: FontWeight.w600, color: active ? BambooInk.onSlate : BambooInk.ink900),
         onPressed: onTap,
       ),
     );
@@ -281,11 +293,14 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.navy900,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+        ),
+        borderRadius: BorderRadius.circular(22),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Row(
@@ -294,12 +309,15 @@ class _SummaryCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Spend', style: textTheme.bodySmall?.copyWith(color: AppColors.ink300)),
+              Text('Spend', style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
               const SizedBox(height: 2),
-              MoneyText(totalSpend, confidence: Confidence.estimated, style: textTheme.titleLarge?.copyWith(color: Colors.white)),
+              MoneyText(totalSpend, confidence: Confidence.estimated, style: BambooFonts.money(26, color: BambooInk.lime)),
             ],
           ),
-          Text('$count transaction${count == 1 ? '' : 's'}', style: textTheme.bodySmall?.copyWith(color: AppColors.ink300)),
+          Text(
+            '$count transaction${count == 1 ? '' : 's'}',
+            style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+          ),
         ],
       ),
     );
@@ -313,19 +331,18 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final subtitleParts = <String>[
       if (entry.cardDisplayName != null) entry.cardDisplayName!,
       if (entry.categoryName != null) entry.categoryName!,
     ];
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.ink100),
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
         ),
         padding: const EdgeInsets.all(AppSpace.md),
         child: Row(
@@ -333,24 +350,28 @@ class _TransactionTile extends StatelessWidget {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.sm)),
-              child: const Icon(Icons.shopping_bag_outlined, size: 18, color: AppColors.ink700),
+              decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.shopping_bag_outlined, size: 18, color: BambooInk.ink900),
             ),
             const SizedBox(width: AppSpace.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(entry.merchantName ?? 'Spend', style: textTheme.titleSmall, overflow: TextOverflow.ellipsis),
+                  Text(
+                    entry.merchantName ?? 'Spend',
+                    style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   if (subtitleParts.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text(subtitleParts.join(' · '), style: textTheme.bodySmall),
+                    Text(subtitleParts.join(' · '), style: BambooFonts.ui(12, color: BambooInk.ink500)),
                   ],
                 ],
               ),
             ),
             const SizedBox(width: AppSpace.sm),
-            MoneyText(entry.amount, confidence: Confidence.estimated, style: textTheme.titleSmall),
+            MoneyText(entry.amount, confidence: Confidence.estimated, style: BambooFonts.money(15, color: BambooInk.ink900)),
           ],
         ),
       ),
