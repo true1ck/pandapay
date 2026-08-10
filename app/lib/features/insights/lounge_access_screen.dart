@@ -127,7 +127,6 @@ class _LoungeTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final textTheme = Theme.of(context).textTheme;
     final quotaValue = benefit.quotaCount;
     final unlimited = quotaValue == null;
     final quota = quotaValue ?? 0;
@@ -136,9 +135,9 @@ class _LoungeTile extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -150,17 +149,18 @@ class _LoungeTile extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(benefit.label, style: textTheme.titleSmall),
+                    Text(benefit.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                     const SizedBox(height: 2),
                     Text(
                       '${userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name}'
                       '${benefit.networkProgram != null ? " · ${benefit.networkProgram}" : ""}',
-                      style: textTheme.bodySmall,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ],
                 ),
               ),
               TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
                 icon: const Icon(Icons.add_rounded, size: 16),
                 label: const Text('Log visit'),
                 onPressed: () => _showLogVisitSheet(context, ref, userCard, benefit),
@@ -169,25 +169,25 @@ class _LoungeTile extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpace.sm),
           if (unlimited)
-            Text('$usedThisWindow visits logged this period · unlimited quota', style: textTheme.bodySmall)
+            Text('$usedThisWindow visits logged this period · unlimited quota', style: BambooFonts.ui(12.5, color: BambooInk.ink500))
           else ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.pill),
               child: LinearProgressIndicator(
                 value: ratio,
                 minHeight: 8,
-                backgroundColor: AppColors.surfaceMuted,
-                color: ratio >= 1.0 ? AppColors.error : AppColors.teal600,
+                backgroundColor: BambooInk.paperMuted,
+                color: ratio >= 1.0 ? BambooInk.clay : BambooInk.jade,
               ),
             ),
             const SizedBox(height: AppSpace.sm),
             Row(
               children: [
-                if (ratio >= 1.0) const Icon(Icons.block_rounded, size: 14, color: AppColors.error),
+                if (ratio >= 1.0) const Icon(Icons.block_rounded, size: 14, color: BambooInk.clay),
                 if (ratio >= 1.0) const SizedBox(width: 4),
                 Text(
                   '$usedThisWindow of $quota used this period ($remaining left)',
-                  style: textTheme.bodySmall?.copyWith(color: ratio >= 1.0 ? AppColors.error : null),
+                  style: BambooFonts.ui(12.5, color: ratio >= 1.0 ? BambooInk.clay : BambooInk.ink500),
                 ),
               ],
             ),
@@ -203,6 +203,10 @@ class _LoungeTile extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
       builder: (sheetContext) => Padding(
         padding: EdgeInsets.only(
           left: AppSpace.lg,
@@ -214,14 +218,36 @@ class _LoungeTile extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Log a lounge visit', style: Theme.of(sheetContext).textTheme.titleMedium),
+            Text('Log a lounge visit', style: BambooFonts.heading(17, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.md),
             TextField(
               controller: airportController,
-              decoration: const InputDecoration(labelText: 'Airport (optional)'),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: InputDecoration(
+                labelText: 'Airport (optional)',
+                labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                filled: true,
+                fillColor: BambooInk.glassFillOnPaper,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                ),
+              ),
             ),
             const SizedBox(height: AppSpace.lg),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+              ),
               onPressed: () async {
                 final repo = ref.read(userCardsRepositoryProvider);
                 if (repo == null) return;
