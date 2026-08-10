@@ -42,7 +42,6 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final signedIn = ref.watch(accessTokenProvider) != null;
-    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -65,7 +64,7 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
         child: ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
         children: [
-          Text('App permissions', style: textTheme.labelLarge),
+          Text('App permissions', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
           _PermissionRow(
             icon: Icons.location_on_outlined,
@@ -90,7 +89,7 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: AppSpace.xl),
-          Text('How your data is handled', style: textTheme.labelLarge),
+          Text('How your data is handled', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
           const _DataHandlingSection(
             title: 'Stays on this phone',
@@ -117,14 +116,14 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: AppSpace.xl),
-          Text('Crowdsourced contributions', style: textTheme.labelLarge),
+          Text('Crowdsourced contributions', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
           if (!signedIn)
             const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
           else
             const _ContributionToggle(),
           const SizedBox(height: AppSpace.xl),
-          Text('Consent history', style: textTheme.labelLarge),
+          Text('Consent history', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
           if (!signedIn)
             const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
@@ -153,7 +152,6 @@ class _PermissionRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(statusProvider);
-    final textTheme = Theme.of(context).textTheme;
 
     return Container(
       decoration: BoxDecoration(
@@ -175,13 +173,13 @@ class _PermissionRow extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: textTheme.titleSmall),
+                Text(title, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                 const SizedBox(height: 2),
-                Text(caption, style: textTheme.bodySmall),
+                Text(caption, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                 const SizedBox(height: 4),
                 status.when(
-                  loading: () => Text('Checking…', style: textTheme.bodySmall?.copyWith(color: BambooInk.ink500)),
-                  error: (_, _) => Text('Unknown', style: textTheme.bodySmall?.copyWith(color: BambooInk.ink500)),
+                  loading: () => Text('Checking…', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  error: (_, _) => Text('Unknown', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                   data: (s) => _StatusBadge(status: s),
                 ),
               ],
@@ -191,6 +189,7 @@ class _PermissionRow extends ConsumerWidget {
           status.maybeWhen(
             data: (s) => (s.isDenied || s.isPermanentlyDenied)
                 ? TextButton(
+                    style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
                     onPressed: () async {
                       await openAppSettings();
                       ref.invalidate(statusProvider);
@@ -236,7 +235,6 @@ class _DataHandlingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Container(
       decoration: BoxDecoration(
         color: BambooInk.paperMuted,
@@ -246,7 +244,7 @@ class _DataHandlingSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: textTheme.titleSmall),
+          Text(title, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
           for (final b in bullets)
             Padding(
@@ -254,8 +252,8 @@ class _DataHandlingSection extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('•  '),
-                  Expanded(child: Text(b, style: textTheme.bodySmall)),
+                  Text('•  ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  Expanded(child: Text(b, style: BambooFonts.ui(12.5, color: BambooInk.ink500))),
                 ],
               ),
             ),
@@ -275,7 +273,6 @@ class _ContributionToggle extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final optedIn = ref.watch(contributionsOptInProvider);
-    final textTheme = Theme.of(context).textTheme;
 
     return Container(
       decoration: BoxDecoration(
@@ -286,12 +283,14 @@ class _ContributionToggle extends ConsumerWidget {
       padding: const EdgeInsets.all(AppSpace.lg),
       child: SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: Text('Share what you see', style: textTheme.titleSmall),
+        title: Text('Share what you see', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
         subtitle: Text(
           'Anonymously log a merchant name/MCC/rough location (never an amount, exact time, or '
           'your identity) to help other users\' recommendations.',
-          style: textTheme.bodySmall,
+          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
         ),
+        activeTrackColor: BambooInk.jade,
+        activeColor: BambooInk.lime,
         value: optedIn,
         onChanged: (v) async {
           final repo = ref.read(userCardsRepositoryProvider);
@@ -316,7 +315,6 @@ class _ConsentHistoryList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(_consentHistoryProvider);
-    final textTheme = Theme.of(context).textTheme;
 
     return history.when(
       loading: () => const Padding(
@@ -344,7 +342,7 @@ class _ConsentHistoryList extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
                 child: Text(
                   '${_purposeLabel(r.purpose)} — ${r.granted ? 'accepted' : 'declined'} ${_formatDate(r.grantedAt)}',
-                  style: textTheme.bodyMedium,
+                  style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                 ),
               ),
           ],
