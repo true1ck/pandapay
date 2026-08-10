@@ -128,70 +128,122 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
   @override
   Widget build(BuildContext context) {
     final userCards = ref.watch(userCardsProvider);
-    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Import SMS backup file')),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        child: _messageCount != null
-            ? EmptyState(
-                icon: Icons.check_circle_outline_rounded,
-                title: 'Import complete',
-                message: '$_messageCount messages · $_parsedCount logged · $_failedCount could not be parsed.',
-                action: OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Done')),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'This is a one-time import from an SMS backup file (e.g. exported from your phone\'s backup '
-                    'app) — separate from, and always available regardless of, the live auto-read listener. '
-                    'Parsing happens on-device using the same parser the live listener uses.',
-                    style: textTheme.bodyMedium,
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Import SMS backup file', style: BambooFonts.heading(16, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          child: _messageCount != null
+              ? EmptyState(
+                  icon: Icons.check_circle_outline_rounded,
+                  title: 'Import complete',
+                  message: '$_messageCount messages · $_parsedCount logged · $_failedCount could not be parsed.',
+                  action: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: BambooInk.ink900,
+                      side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Done'),
                   ),
-                  const SizedBox(height: AppSpace.lg),
-                  if (_pickError != null) ...[
-                    Text(_pickError!, style: textTheme.bodySmall?.copyWith(color: AppColors.ink500)),
-                    const SizedBox(height: AppSpace.sm),
-                  ],
-                  if (_messages == null)
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.upload_file_outlined),
-                      label: const Text('Select backup file'),
-                      onPressed: _pickFile,
-                    )
-                  else ...[
-                    Container(
-                      padding: const EdgeInsets.all(AppSpace.md),
-                      decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
-                      child: Text(
-                        '$_fileName selected — ${_messages!.length} messages found.',
-                        style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
-                      ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'This is a one-time import from an SMS backup file (e.g. exported from your phone\'s backup '
+                      'app) — separate from, and always available regardless of, the live auto-read listener. '
+                      'Parsing happens on-device using the same parser the live listener uses.',
+                      style: BambooFonts.ui(13.5, color: BambooInk.ink500),
                     ),
                     const SizedBox(height: AppSpace.lg),
-                    userCards.when(
-                      loading: () => const CircularProgressIndicator(),
-                      error: (err, _) => Text(userFacingErrorMessage(err)),
-                      data: (cards) => DropdownButtonFormField<String>(
-                        initialValue: _selectedCardId,
-                        decoration: const InputDecoration(labelText: 'Import against which card?', border: OutlineInputBorder()),
-                        items: [
-                          for (final c in cards)
-                            DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
-                        ],
-                        onChanged: (v) => setState(() => _selectedCardId = v),
+                    if (_pickError != null) ...[
+                      Text(_pickError!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
+                      const SizedBox(height: AppSpace.sm),
+                    ],
+                    if (_messages == null)
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BambooInk.slate,
+                          foregroundColor: BambooInk.lime,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+                        ),
+                        icon: const Icon(Icons.upload_file_outlined),
+                        label: const Text('Select backup file'),
+                        onPressed: _pickFile,
+                      )
+                    else ...[
+                      Container(
+                        padding: const EdgeInsets.all(AppSpace.md),
+                        decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+                        child: Text(
+                          '$_fileName selected — ${_messages!.length} messages found.',
+                          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpace.lg),
-                    ElevatedButton(
-                      onPressed: (_importing || _selectedCardId == null) ? null : _runImport,
-                      child: Text(_importing ? 'Importing…' : 'Import messages'),
-                    ),
+                      const SizedBox(height: AppSpace.lg),
+                      userCards.when(
+                        loading: () => const CircularProgressIndicator(),
+                        error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                        data: (cards) => DropdownButtonFormField<String>(
+                          initialValue: _selectedCardId,
+                          style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                          decoration: InputDecoration(
+                            labelText: 'Import against which card?',
+                            labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                            filled: true,
+                            fillColor: BambooInk.glassFillOnPaper,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                            ),
+                          ),
+                          items: [
+                            for (final c in cards)
+                              DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
+                          ],
+                          onChanged: (v) => setState(() => _selectedCardId = v),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpace.lg),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BambooInk.slate,
+                          foregroundColor: BambooInk.lime,
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                        ),
+                        onPressed: (_importing || _selectedCardId == null) ? null : _runImport,
+                        child: Text(_importing ? 'Importing…' : 'Import messages'),
+                      ),
+                    ],
                   ],
-                ],
-              ),
+                ),
+        ),
       ),
     );
   }
