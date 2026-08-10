@@ -71,8 +71,13 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final engine = ref.watch(recommendationEngineProvider);
 
     return Scaffold(
+      backgroundColor: BambooInk.paper,
       appBar: AppBar(
-        title: const Text('Scan result'),
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Scan result', style: BambooFonts.heading(18, color: BambooInk.ink900)),
         actions: [
           IconButton(
             tooltip: 'Compare all cards',
@@ -82,7 +87,17 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           ),
         ],
       ),
-      body: _buildBody(catalogue, categories, userCards, overrides, engine),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: _buildBody(catalogue, categories, userCards, overrides, engine),
+      ),
     );
   }
 
@@ -171,7 +186,22 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       children: [
         TextField(
           controller: _merchantController,
-          decoration: const InputDecoration(labelText: 'Merchant name'),
+          style: BambooFonts.ui(15, color: BambooInk.ink900),
+          decoration: InputDecoration(
+            labelText: 'Merchant name',
+            labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+            filled: true,
+            fillColor: BambooInk.glassFillOnPaper,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+            ),
+          ),
           // No onChanged/setState needed: _payWith reads _merchantController.text
           // directly at tap time, not from a build-time-captured value, so
           // typing here doesn't need to trigger a rebuild of anything else.
@@ -188,7 +218,23 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         ),
         const SizedBox(height: AppSpace.sm),
         TextField(
-          decoration: const InputDecoration(labelText: 'Amount', prefixText: '₹ '),
+          style: BambooFonts.ui(15, color: BambooInk.ink900),
+          decoration: InputDecoration(
+            labelText: 'Amount',
+            labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+            prefixText: '₹ ',
+            filled: true,
+            fillColor: BambooInk.glassFillOnPaper,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+            ),
+          ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           controller: _amountController,
           onChanged: (v) {
@@ -204,11 +250,11 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           Container(
             margin: const EdgeInsets.only(bottom: AppSpace.md),
             padding: const EdgeInsets.all(AppSpace.md),
-            decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+            decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(16)),
             child: Text(
               'Scan-and-pay earns ${bestUpi.expectedValue.format()} · swiping your ${bestSwipe.card.name} '
               'earns ${bestSwipe.expectedValue.format()} instead.',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ),
         if (upiRanked.isEmpty)
@@ -232,6 +278,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               padding: const EdgeInsets.only(bottom: AppSpace.md),
               child: _ScanResultCard(
                 recommendation: rec,
+                isHero: bestUpi != null && rec.card.id == bestUpi.card.id,
                 onNotAccepted: () => setState(() => _locallyRejectedCardIds.add(rec.card.id)),
                 onPay: () => _payWith(rec),
                 onAlwaysUseHere: () => _createOverride(rec, wallet),
@@ -291,11 +338,17 @@ class _CategoryPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return Wrap(
       spacing: AppSpace.xs,
+      runSpacing: AppSpace.xs,
       children: [
         for (final c in categories)
           ChoiceChip(
             label: Text(c.name),
+            labelStyle: BambooFonts.ui(13, weight: FontWeight.w600, color: selectedId == c.id ? BambooInk.onSlate : BambooInk.ink900),
             selected: selectedId == c.id,
+            selectedColor: BambooInk.slate,
+            backgroundColor: BambooInk.paperMuted,
+            side: BorderSide.none,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
             onSelected: (_) => onSelected(c.id),
           ),
       ],
@@ -320,12 +373,14 @@ class _P2PNotice extends StatelessWidget {
 
 class _ScanResultCard extends StatelessWidget {
   final Recommendation recommendation;
+  final bool isHero;
   final VoidCallback onNotAccepted;
   final VoidCallback onPay;
   final VoidCallback onAlwaysUseHere;
 
   const _ScanResultCard({
     required this.recommendation,
+    required this.isHero,
     required this.onNotAccepted,
     required this.onPay,
     required this.onAlwaysUseHere,
@@ -334,22 +389,45 @@ class _ScanResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final excluded = recommendation.isExcluded;
-    final textTheme = Theme.of(context).textTheme;
+    final hero = isHero && !excluded;
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
-        color: excluded ? AppColors.surfaceMuted : AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        color: hero ? BambooInk.lime : (excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper),
+        borderRadius: BorderRadius.circular(24),
+        border: hero ? null : Border.all(color: BambooInk.hairlineOnPaper),
+        boxShadow: hero
+            ? [BoxShadow(color: BambooInk.lime.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))]
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(child: Text(recommendation.card.name, style: textTheme.titleMedium)),
+              if (hero) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(999)),
+                  child: Text(
+                    'TAP THIS ONE',
+                    style: BambooFonts.ui(10.5, weight: FontWeight.w700, color: BambooInk.lime).copyWith(letterSpacing: 0.6),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: Text(
+                  recommendation.card.name,
+                  style: BambooFonts.heading(16, color: excluded ? BambooInk.ink500 : BambooInk.ink900),
+                ),
+              ),
               if (recommendation.isOverride)
-                const StatusPill(label: 'Override', foreground: AppColors.navy800, background: AppColors.surfaceMuted),
+                StatusPill(
+                  label: 'Override',
+                  foreground: hero ? BambooInk.slate : BambooInk.ink900,
+                  background: hero ? Colors.white.withValues(alpha: 0.5) : BambooInk.paperMuted,
+                ),
             ],
           ),
           const SizedBox(height: AppSpace.xs),
@@ -363,23 +441,50 @@ class _ScanResultCard extends StatelessWidget {
             // its own RuPay/UPI eligibility logic.
             Row(
               children: [
-                const Icon(Icons.block_rounded, size: 16, color: AppColors.ink500),
+                const Icon(Icons.block_rounded, size: 16, color: BambooInk.ink500),
                 const SizedBox(width: AppSpace.xs),
-                Expanded(child: Text(recommendation.exclusionReason!, style: textTheme.bodySmall)),
+                Expanded(child: Text(recommendation.exclusionReason!, style: BambooFonts.ui(13, color: BambooInk.ink500))),
               ],
             )
           else ...[
-            MoneyText(recommendation.expectedValue, confidence: recommendation.confidence, style: textTheme.headlineSmall),
+            MoneyText(
+              recommendation.expectedValue,
+              confidence: recommendation.confidence,
+              style: BambooFonts.money(hero ? 34 : 22, color: BambooInk.ink900),
+            ),
             for (final line in recommendation.reasonLines)
-              Padding(padding: const EdgeInsets.only(top: 2), child: Text('•  $line', style: textTheme.bodySmall)),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('•  $line', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              ),
             const SizedBox(height: AppSpace.sm),
             Wrap(
               spacing: AppSpace.sm,
               runSpacing: AppSpace.xs,
               children: [
-                FilledButton(onPressed: onPay, child: Text('Pay with ${recommendation.card.name}')),
-                OutlinedButton(onPressed: onAlwaysUseHere, child: const Text('Always use this card here')),
-                TextButton(onPressed: onNotAccepted, child: const Text("Wasn't accepted")),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.slate,
+                    foregroundColor: BambooInk.lime,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: onPay,
+                  child: Text('Pay with ${recommendation.card.name}'),
+                ),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: hero ? BambooInk.slate : BambooInk.ink900,
+                    side: BorderSide(color: hero ? BambooInk.slate.withValues(alpha: 0.4) : BambooInk.hairlineOnPaper),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: onAlwaysUseHere,
+                  child: const Text('Always use this card here'),
+                ),
+                TextButton(
+                  style: TextButton.styleFrom(foregroundColor: hero ? BambooInk.slate : BambooInk.ink500),
+                  onPressed: onNotAccepted,
+                  child: const Text("Wasn't accepted"),
+                ),
               ],
             ),
           ],
