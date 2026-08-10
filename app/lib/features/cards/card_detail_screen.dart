@@ -140,7 +140,7 @@ class _RewardsTab extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: AppSpace.md),
             child: Text(
               'Verified ${_monthYear(product.verifiedAt!)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: BambooInk.ink500),
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ),
         for (final rule in rules)
@@ -159,15 +159,15 @@ class _RewardsTab extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(categoryName(rule.categoryId), style: Theme.of(context).textTheme.titleSmall),
+                        Text(categoryName(rule.categoryId), style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                         if (rule.rail != null) ...[
                           const SizedBox(height: 2),
-                          Text(_railLabel(rule.rail!), style: Theme.of(context).textTheme.bodySmall),
+                          Text(_railLabel(rule.rail!), style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                         ],
                       ],
                     ),
                   ),
-                  Text(_rateLabel(rule), style: Theme.of(context).textTheme.titleMedium),
+                  Text(_rateLabel(rule), style: BambooFonts.heading(17, color: BambooInk.ink900)),
                 ],
               ),
             ),
@@ -216,7 +216,6 @@ class _CapsTab extends StatelessWidget {
     if (product.capRules.isEmpty) {
       return const EmptyState(icon: Icons.speed_outlined, title: 'No caps on this card');
     }
-    final textTheme = Theme.of(context).textTheme;
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
       children: [
@@ -237,7 +236,7 @@ class _CapsTab extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(cap.label, style: textTheme.titleSmall),
+                    Text(cap.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                     const SizedBox(height: AppSpace.sm),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -253,10 +252,10 @@ class _CapsTab extends StatelessWidget {
                       isCount
                           ? '${consumed.paise ~/ 100} / ${cap.capValue.paise ~/ 100} transactions'
                           : '${consumed.format()} of ${cap.capValue.format()}',
-                      style: textTheme.bodySmall,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                     const SizedBox(height: 2),
-                    Text('Resets: ${_periodLabel(cap.period)}', style: textTheme.bodySmall),
+                    Text('Resets: ${_periodLabel(cap.period)}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                   ],
                 ),
               );
@@ -286,7 +285,6 @@ class _MilestonesTab extends StatelessWidget {
     if (product.milestoneRules.isEmpty) {
       return const EmptyState(icon: Icons.flag_outlined, title: 'No milestones on this card');
     }
-    final textTheme = Theme.of(context).textTheme;
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
       children: [
@@ -305,7 +303,7 @@ class _MilestonesTab extends StatelessWidget {
 
               return Container(
                 decoration: BoxDecoration(
-                  color: reached ? const Color(0xFFE3F3EA) : BambooInk.glassFillOnPaper,
+                  color: reached ? BambooInk.jade.withValues(alpha: 0.10) : BambooInk.glassFillOnPaper,
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                   border: Border.all(color: reached ? BambooInk.jade : BambooInk.hairlineOnPaper),
                 ),
@@ -315,11 +313,11 @@ class _MilestonesTab extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text(milestone.label, style: textTheme.titleSmall)),
+                        Expanded(child: Text(milestone.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900))),
                         if (reached)
                           const StatusPill(
                             label: 'REACHED',
-                            foreground: Colors.white,
+                            foreground: BambooInk.onSlate,
                             background: BambooInk.jade,
                             icon: Icons.check_rounded,
                           ),
@@ -339,16 +337,19 @@ class _MilestonesTab extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(reached ? 'Reached' : '${remaining.format()} to go', style: textTheme.labelLarge),
+                        Text(
+                          reached ? 'Reached' : '${remaining.format()} to go',
+                          style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                        ),
                         Row(children: [
-                          Text('Reward ', style: textTheme.bodySmall),
-                          MoneyText(milestone.rewardValue, confidence: Confidence.estimated, style: textTheme.bodySmall),
+                          Text('Reward ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                          MoneyText(milestone.rewardValue, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                         ]),
                       ],
                     ),
                     if (!reached && daysLeft != null) ...[
                       const SizedBox(height: AppSpace.xs),
-                      Text('$daysLeft days left this period', style: textTheme.bodySmall),
+                      Text('$daysLeft days left this period', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                     ],
                   ],
                 ),
@@ -369,7 +370,6 @@ class _FeesTab extends StatelessWidget {
     if (userCard.feeWaiverStates.isEmpty) {
       return const EmptyState(icon: Icons.card_giftcard_outlined, title: 'No fee-waiver rule on this card');
     }
-    final textTheme = Theme.of(context).textTheme;
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
       children: [
@@ -381,7 +381,7 @@ class _FeesTab extends StatelessWidget {
               final ratio = capRatio(fw.qualifiedSpend, fw.thresholdSpend);
               return Container(
                 decoration: BoxDecoration(
-                  color: waived ? const Color(0xFFE3F3EA) : BambooInk.glassFillOnPaper,
+                  color: waived ? BambooInk.jade.withValues(alpha: 0.10) : BambooInk.glassFillOnPaper,
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                   border: Border.all(color: waived ? BambooInk.jade : BambooInk.hairlineOnPaper),
                 ),
@@ -391,13 +391,13 @@ class _FeesTab extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text('Fee waived at ', style: textTheme.bodySmall),
-                        MoneyText(fw.waivesFee, confidence: Confidence.estimated, style: textTheme.bodySmall),
+                        Text('Fee waived at ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                        MoneyText(fw.waivesFee, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                         const Spacer(),
                         if (waived)
                           const StatusPill(
                             label: 'WAIVED',
-                            foreground: Colors.white,
+                            foreground: BambooInk.onSlate,
                             background: BambooInk.jade,
                             icon: Icons.check_rounded,
                           ),
@@ -415,7 +415,10 @@ class _FeesTab extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: AppSpace.sm),
-                      Text('${fw.qualifiedSpend.format()} of ${fw.thresholdSpend.format()}', style: textTheme.bodySmall),
+                      Text(
+                        '${fw.qualifiedSpend.format()} of ${fw.thresholdSpend.format()}',
+                        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                      ),
                     ],
                   ],
                 ),
@@ -427,7 +430,7 @@ class _FeesTab extends StatelessWidget {
             padding: const EdgeInsets.only(top: AppSpace.sm),
             child: Text(
               'Card anniversary: ${userCard.anniversaryOn!.toLocal().toString().split(' ').first}',
-              style: textTheme.bodySmall,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ),
       ],
@@ -444,7 +447,6 @@ class _BenefitsTab extends StatelessWidget {
     if (product.benefits.isEmpty) {
       return const EmptyState(icon: Icons.workspace_premium_outlined, title: 'No benefits on file for this card');
     }
-    final textTheme = Theme.of(context).textTheme;
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
       children: [
@@ -461,14 +463,14 @@ class _BenefitsTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(benefit.label, style: textTheme.titleSmall),
+                  Text(benefit.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                   if (benefit.description != null) ...[
                     const SizedBox(height: 4),
-                    Text(benefit.description!, style: textTheme.bodyMedium),
+                    Text(benefit.description!, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
                   ],
                   if (benefit.quotaCount != null) ...[
                     const SizedBox(height: 4),
-                    Text('${benefit.quotaCount} / period', style: textTheme.bodySmall),
+                    Text('${benefit.quotaCount} / period', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                   ],
                 ],
               ),
@@ -485,7 +487,6 @@ class _StatementTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     if (userCard.statementDay == null) {
       return const EmptyState(
         icon: Icons.receipt_long_outlined,
@@ -507,18 +508,18 @@ class _StatementTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Statement cuts on day ${userCard.statementDay}', style: textTheme.titleSmall),
+              Text('Statement cuts on day ${userCard.statementDay}', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
               const SizedBox(height: AppSpace.sm),
-              Text('Next statement in ${float.daysUntilStatement} days', style: textTheme.bodyMedium),
+              Text('Next statement in ${float.daysUntilStatement} days', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
               const SizedBox(height: AppSpace.xs),
               Text(
                 'Spending today gets up to ${float.totalInterestFreeDays} interest-free days '
                 '(assumes a $_assumedGracePeriodDays-day grace period to the due date).',
-                style: textTheme.bodySmall,
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),
               if (userCard.dueDay != null) ...[
                 const SizedBox(height: AppSpace.sm),
-                Text('Payment due on day ${userCard.dueDay}', style: textTheme.bodyMedium),
+                Text('Payment due on day ${userCard.dueDay}', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
               ],
             ],
           ),
