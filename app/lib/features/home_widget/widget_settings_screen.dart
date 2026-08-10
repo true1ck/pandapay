@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../main.dart' show MoneyText;
 
@@ -49,49 +50,76 @@ class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
     final best = ref.watch(bestOverallCardProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Home-screen widget')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Shows the single best card to use right now on your phone\'s '
-              'home screen, without opening the app. Native widget rendering '
-              'was not verified on a real device in this build — this screen '
-              'only proves the data that would be written to it.',
-              style: TextStyle(fontSize: 13, color: Colors.black54),
-            ),
-            const SizedBox(height: 16),
-            best.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Text('Could not compute a best card: $err'),
-              data: (rec) => Card(
-                child: Padding(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Home-screen widget', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Shows the single best card to use right now on your phone\'s '
+                'home screen, without opening the app. Native widget rendering '
+                'was not verified on a real device in this build — this screen '
+                'only proves the data that would be written to it.',
+                style: BambooFonts.ui(13, color: BambooInk.ink500),
+              ),
+              const SizedBox(height: 16),
+              best.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) => Text('Could not compute a best card: $err', style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                data: (rec) => Container(
+                  decoration: BoxDecoration(
+                    color: BambooInk.glassFillOnPaper,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: BambooInk.hairlineOnPaper),
+                  ),
                   padding: const EdgeInsets.all(14),
                   child: rec == null
-                      ? const Text('No usable card yet — add one first.')
+                      ? Text('No usable card yet — add one first.', style: BambooFonts.ui(13.5, color: BambooInk.ink500))
                       : Row(
                           children: [
-                            const Icon(Icons.credit_card),
+                            const Icon(Icons.credit_card, color: BambooInk.ink900),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(rec.card.name)),
-                            MoneyText(rec.expectedValue, confidence: rec.confidence),
+                            Expanded(child: Text(rec.card.name, style: BambooFonts.heading(14.5, color: BambooInk.ink900))),
+                            MoneyText(rec.expectedValue, confidence: rec.confidence, style: BambooFonts.money(14, color: BambooInk.ink900)),
                           ],
                         ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _refreshing ? null : _refreshWidget,
-              child: Text(_refreshing ? 'Updating…' : 'Update home-screen widget now'),
-            ),
-            if (_lastResult != null) ...[
-              const SizedBox(height: 8),
-              Text(_lastResult!, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 16),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: BambooInk.slate,
+                  foregroundColor: BambooInk.lime,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                ),
+                onPressed: _refreshing ? null : _refreshWidget,
+                child: Text(_refreshing ? 'Updating…' : 'Update home-screen widget now'),
+              ),
+              if (_lastResult != null) ...[
+                const SizedBox(height: 8),
+                Text(_lastResult!, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
