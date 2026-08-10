@@ -39,14 +39,13 @@ class MonthlySavingsScreen extends ConsumerWidget {
                 'never shown as ₹0 while there\'s simply no data yet.',
           );
         }
-        final textTheme = Theme.of(context).textTheme;
         return ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
             Container(
               padding: const EdgeInsets.all(AppSpace.lg),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [AppColors.navy900, AppColors.navy700]),
+                gradient: const LinearGradient(colors: [BambooInk.slateRaised, BambooInk.slate]),
                 borderRadius: BorderRadius.circular(AppRadius.lg),
               ),
               child: Column(
@@ -54,14 +53,14 @@ class MonthlySavingsScreen extends ConsumerWidget {
                 children: [
                   Text(
                     '${_monthLabel(r.periodMonth)}',
-                    style: textTheme.labelLarge?.copyWith(color: Colors.white60),
+                    style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.onSlateSubtle),
                   ),
                   const SizedBox(height: AppSpace.sm),
-                  Text('Rewards earned', style: textTheme.bodyMedium?.copyWith(color: Colors.white70)),
+                  Text('Rewards earned', style: BambooFonts.ui(13.5, color: BambooInk.onSlateMuted)),
                   MoneyText(
                     r.rewardsEarned,
                     confidence: Confidence.estimated,
-                    style: textTheme.displaySmall?.copyWith(color: Colors.white),
+                    style: BambooFonts.money(30, color: BambooInk.lime),
                   ),
                 ],
               ),
@@ -75,18 +74,18 @@ class MonthlySavingsScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(AppSpace.md),
               decoration: BoxDecoration(
-                color: AppColors.surfaceMuted,
+                color: BambooInk.paperMuted,
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.ink500),
+                  const Icon(Icons.info_outline_rounded, size: 16, color: BambooInk.ink500),
                   const SizedBox(width: AppSpace.sm),
                   Expanded(
                     child: Text(
                       'What a single best-overall card would have earned instead — and what a '
                       'suboptimal choice may have cost — isn\'t computed yet. Not shown as ₹0.',
-                      style: textTheme.bodySmall,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ),
                 ],
@@ -117,7 +116,7 @@ class _StatRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+        Text(label, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
         child,
       ],
     );
