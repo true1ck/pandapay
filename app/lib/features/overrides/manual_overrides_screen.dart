@@ -25,30 +25,49 @@ class ManualOverridesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final overrides = ref.watch(cardOverridesProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Manual overrides')),
-      body: overrides.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(
-          message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(cardOverridesProvider),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Manual overrides', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
         ),
-        data: (list) {
-          if (list.isEmpty) {
-            return const EmptyState(
-              icon: Icons.rule_rounded,
-              title: 'No overrides yet',
-              message: 'Create one from a Scan Result screen with "Always use this '
-                  'card here", or add one manually below.',
+        child: overrides.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(cardOverridesProvider),
+          ),
+          data: (list) {
+            if (list.isEmpty) {
+              return const EmptyState(
+                icon: Icons.rule_rounded,
+                title: 'No overrides yet',
+                message: 'Create one from a Scan Result screen with "Always use this '
+                    'card here", or add one manually below.',
+              );
+            }
+            return ListView.builder(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              itemCount: list.length,
+              itemBuilder: (context, index) => _OverrideTile(list[index]),
             );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            itemCount: list.length,
-            itemBuilder: (context, index) => _OverrideTile(list[index]),
-          );
-        },
+          },
+        ),
       ),
       floatingActionButton: FloatingActionButton(
+        backgroundColor: BambooInk.slate,
+        foregroundColor: BambooInk.lime,
         onPressed: () => _openCreateSheet(context, ref),
         child: const Icon(Icons.add_rounded),
       ),
@@ -79,56 +98,61 @@ class _OverrideTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: AppSpace.md),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpace.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(_targetLabel, style: Theme.of(context).textTheme.titleSmall),
-                ),
-                StatusPill(
-                  label: rule.isEnabled ? 'Active' : 'Disabled',
-                  foreground: rule.isEnabled ? Colors.white : AppColors.ink500,
-                  background: rule.isEnabled ? AppColors.teal600 : AppColors.surfaceMuted,
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text('→ ${rule.cardDisplayName}', style: Theme.of(context).textTheme.bodyMedium),
-            if (rule.reasonNote?.isNotEmpty == true) ...[
-              const SizedBox(height: 2),
-              Text(rule.reasonNote!, style: Theme.of(context).textTheme.bodySmall),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      padding: const EdgeInsets.all(AppSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(_targetLabel, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+              ),
+              StatusPill(
+                label: rule.isEnabled ? 'Active' : 'Disabled',
+                foreground: rule.isEnabled ? BambooInk.onSlate : BambooInk.ink500,
+                background: rule.isEnabled ? BambooInk.slate : BambooInk.paperMuted,
+              ),
             ],
-            Text(
-              'Created ${rule.createdAt.toLocal().toString().split(' ').first}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.ink500),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => _openEditSheet(context, ref),
-                  child: const Text('Edit'),
-                ),
-                TextButton(
-                  onPressed: () => _toggle(context, ref),
-                  child: Text(rule.isEnabled ? 'Disable' : 'Enable'),
-                ),
-                TextButton(
-                  onPressed: () => _confirmDelete(context, ref),
-                  style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                  child: const Text('Delete'),
-                ),
-              ],
-            ),
+          ),
+          const SizedBox(height: 4),
+          Text('→ ${rule.cardDisplayName}', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+          if (rule.reasonNote?.isNotEmpty == true) ...[
+            const SizedBox(height: 2),
+            Text(rule.reasonNote!, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
           ],
-        ),
+          Text(
+            'Created ${rule.createdAt.toLocal().toString().split(' ').first}',
+            style: BambooFonts.ui(12, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: BambooInk.ink900),
+                onPressed: () => _openEditSheet(context, ref),
+                child: const Text('Edit'),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
+                onPressed: () => _toggle(context, ref),
+                child: Text(rule.isEnabled ? 'Disable' : 'Enable'),
+              ),
+              TextButton(
+                onPressed: () => _confirmDelete(context, ref),
+                style: TextButton.styleFrom(foregroundColor: BambooInk.clay),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -181,7 +205,7 @@ class _OverrideTile extends ConsumerWidget {
           TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(foregroundColor: BambooInk.clay),
             child: const Text('Delete'),
           ),
         ],
@@ -270,7 +294,27 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final inputDecoration = (String label) => InputDecoration(
+          labelText: label,
+          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          filled: true,
+          fillColor: BambooInk.glassFillOnPaper,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+          ),
+        );
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: BambooInk.paper,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
       padding: EdgeInsets.only(
         left: AppSpace.lg, right: AppSpace.lg, top: AppSpace.lg,
         bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
@@ -280,11 +324,12 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('New override', style: Theme.of(context).textTheme.titleMedium),
+            Text('New override', style: BambooFonts.heading(17, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.md),
             DropdownButtonFormField<String>(
               initialValue: _selectedUserCardId,
-              decoration: const InputDecoration(labelText: 'Card'),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: inputDecoration('Card'),
               items: widget.userCards
                   .map((c) => DropdownMenuItem(
                         value: c.id,
@@ -295,6 +340,13 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
             ),
             const SizedBox(height: AppSpace.md),
             SegmentedButton<OverrideScope>(
+              style: SegmentedButton.styleFrom(
+                backgroundColor: BambooInk.paperMuted,
+                foregroundColor: BambooInk.ink900,
+                selectedBackgroundColor: BambooInk.slate,
+                selectedForegroundColor: BambooInk.lime,
+                side: const BorderSide(color: BambooInk.hairlineOnPaper),
+              ),
               segments: const [
                 ButtonSegment(value: OverrideScope.category, label: Text('Category')),
                 ButtonSegment(value: OverrideScope.merchantName, label: Text('Merchant')),
@@ -307,32 +359,43 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
             if (_scope == OverrideScope.category)
               DropdownButtonFormField<String>(
                 initialValue: _selectedCategoryId,
-                decoration: const InputDecoration(labelText: 'Category'),
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: inputDecoration('Category'),
                 items: widget.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
                 onChanged: (v) => setState(() => _selectedCategoryId = v),
               )
             else if (_scope == OverrideScope.merchantName)
               TextField(
                 controller: _merchantController,
-                decoration: const InputDecoration(labelText: 'Merchant name'),
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: inputDecoration('Merchant name'),
                 onChanged: (_) => setState(() {}),
               )
             else
               TextField(
                 controller: _vpaController,
-                decoration: const InputDecoration(labelText: 'VPA (e.g. shop@upi)'),
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: inputDecoration('VPA (e.g. shop@upi)'),
                 onChanged: (_) => setState(() {}),
               ),
             const SizedBox(height: AppSpace.md),
             TextField(
               controller: _noteController,
-              decoration: const InputDecoration(labelText: 'Note (optional)'),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: inputDecoration('Note (optional)'),
             ),
             const SizedBox(height: AppSpace.lg),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+              ),
               onPressed: _canSave && !_saving ? _save : null,
               child: _saving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
                   : const Text('Save override'),
             ),
           ],
@@ -410,7 +473,27 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final inputDecoration = (String label) => InputDecoration(
+          labelText: label,
+          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          filled: true,
+          fillColor: BambooInk.glassFillOnPaper,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+          ),
+        );
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: BambooInk.paper,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
       padding: EdgeInsets.only(
         left: AppSpace.lg, right: AppSpace.lg, top: AppSpace.lg,
         bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
@@ -420,11 +503,12 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Edit override', style: Theme.of(context).textTheme.titleMedium),
+            Text('Edit override', style: BambooFonts.heading(17, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.md),
             DropdownButtonFormField<String>(
               initialValue: _selectedUserCardId,
-              decoration: const InputDecoration(labelText: 'Card'),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: inputDecoration('Card'),
               items: widget.userCards
                   .map((c) => DropdownMenuItem(
                         value: c.id,
@@ -436,13 +520,21 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
             const SizedBox(height: AppSpace.md),
             TextField(
               controller: _noteController,
-              decoration: const InputDecoration(labelText: 'Note (optional)'),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: inputDecoration('Note (optional)'),
             ),
             const SizedBox(height: AppSpace.lg),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+              ),
               onPressed: _canSave && !_saving ? _save : null,
               child: _saving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
                   : const Text('Save changes'),
             ),
           ],
