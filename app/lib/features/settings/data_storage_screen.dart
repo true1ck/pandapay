@@ -47,8 +47,24 @@ class DataStorageScreen extends ConsumerWidget {
     final txnCountAsync = ref.watch(_transactionCountProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Data & Storage')),
-      body: ListView(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Data & Storage', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
         children: [
           _SectionLabel('Storage used'),
@@ -88,6 +104,7 @@ class DataStorageScreen extends ConsumerWidget {
             onTap: () => _confirmResetAllData(context, ref),
           ),
         ],
+        ),
       ),
     );
   }
@@ -119,7 +136,7 @@ class DataStorageScreen extends ConsumerWidget {
           TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Reset', style: TextStyle(color: AppColors.error)),
+            child: const Text('Reset', style: TextStyle(color: BambooInk.clay)),
           ),
         ],
       ),
@@ -149,7 +166,7 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.ink500, letterSpacing: 0.5),
+      style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: 1.1),
     );
   }
 }
@@ -163,10 +180,10 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: BambooInk.paperMuted,
         borderRadius: BorderRadius.circular(AppRadius.md),
       ),
-      child: Text(text, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.ink500)),
+      child: Text(text, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: BambooInk.ink500)),
     );
   }
 }
@@ -180,13 +197,13 @@ class _StorageRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       child: Row(
         children: [
-          const Icon(Icons.sd_storage_outlined, size: 20, color: AppColors.navy800),
+          const Icon(Icons.sd_storage_outlined, size: 20, color: BambooInk.ink900),
           const SizedBox(width: AppSpace.md),
           const Expanded(child: Text('Cache size')),
           cacheSize.when(
@@ -214,9 +231,9 @@ class _RecordCountsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,7 +270,7 @@ class _CountLine extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: AppColors.ink500),
+        Icon(icon, size: 18, color: BambooInk.ink500),
         const SizedBox(width: AppSpace.sm),
         Text(label, style: Theme.of(context).textTheme.bodyMedium),
       ],
@@ -278,9 +295,9 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = destructive ? AppColors.error : AppColors.navy800;
+    final color = destructive ? BambooInk.clay : BambooInk.ink900;
     return Material(
-      color: destructive ? AppColors.errorBg : AppColors.surface,
+      color: destructive ? BambooInk.clay.withValues(alpha: 0.1) : BambooInk.glassFillOnPaper,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -288,7 +305,7 @@ class _ActionTile extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: destructive ? AppColors.error.withValues(alpha: 0.3) : AppColors.ink100),
+            border: Border.all(color: destructive ? BambooInk.clay.withValues(alpha: 0.3) : BambooInk.hairlineOnPaper),
           ),
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Row(
@@ -305,7 +322,7 @@ class _ActionTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, size: 20, color: destructive ? AppColors.error : AppColors.ink300),
+              Icon(Icons.chevron_right_rounded, size: 20, color: destructive ? BambooInk.clay : BambooInk.ink300),
             ],
           ),
         ),
