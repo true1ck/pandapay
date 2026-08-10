@@ -149,9 +149,9 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 16, color: AppColors.ink500),
+                Icon(icon, size: 16, color: BambooInk.ink500),
                 const SizedBox(width: AppSpace.xs),
-                Flexible(child: Text(text, style: Theme.of(context).textTheme.bodySmall)),
+                Flexible(child: Text(text, style: BambooFonts.ui(12.5, color: BambooInk.ink500))),
               ],
             ),
           ),
