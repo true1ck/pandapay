@@ -175,7 +175,7 @@ class _ScrimPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(inflated, const Radius.circular(AppRadius.md)),
       Paint()
-        ..color = AppColors.teal400
+        ..color = BambooInk.lime
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
@@ -210,7 +210,6 @@ class _TooltipCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     // Place the card below the target if there's room, otherwise above it;
     // centered vertically when there's no target to anchor to at all. All
     // measurements here are in the overlay's own local space (see
@@ -232,7 +231,7 @@ class _TooltipCard extends StatelessWidget {
       left: left,
       width: cardWidth,
       child: Material(
-        color: AppColors.surface,
+        color: BambooInk.slate,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         elevation: 8,
         child: Padding(
@@ -251,23 +250,33 @@ class _TooltipCard extends StatelessWidget {
                         height: 6,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: i == stepIndex ? AppColors.teal600 : AppColors.ink100,
+                          color: i == stepIndex ? BambooInk.lime : BambooInk.onSlateMuted,
                         ),
                       ),
                     ),
                 ],
               ),
               const SizedBox(height: AppSpace.sm),
-              Text(title, style: textTheme.titleMedium),
+              Text(title, style: BambooFonts.heading(16, color: BambooInk.onSlate)),
               const SizedBox(height: 4),
-              Text(body, style: textTheme.bodySmall),
+              Text(body, style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
               const SizedBox(height: AppSpace.lg),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  TextButton(onPressed: onSkip, child: const Text('Skip tour')),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
+                    onPressed: onSkip,
+                    child: const Text('Skip tour'),
+                  ),
                   FilledButton(
-                    style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: BambooInk.lime,
+                      foregroundColor: BambooInk.slate,
+                      minimumSize: const Size(0, 40),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
+                    ),
                     onPressed: onNext,
                     child: Text(isLast ? 'Done' : 'Next'),
                   ),
