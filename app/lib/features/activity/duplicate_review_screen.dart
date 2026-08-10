@@ -21,30 +21,47 @@ class DuplicateReviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final candidates = ref.watch(duplicateCandidatesProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Duplicate review')),
-      body: candidates.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(
-          message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(duplicateCandidatesProvider),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Duplicate review', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
         ),
-        data: (list) {
-          if (list.isEmpty) {
-            return const EmptyState(
-              icon: Icons.content_copy_outlined,
-              title: 'No duplicates to review',
-              message: 'When the same spend seems to arrive from two channels (e.g. SMS and a later statement import), it shows up here.',
+        child: candidates.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(duplicateCandidatesProvider),
+          ),
+          data: (list) {
+            if (list.isEmpty) {
+              return const EmptyState(
+                icon: Icons.content_copy_outlined,
+                title: 'No duplicates to review',
+                message: 'When the same spend seems to arrive from two channels (e.g. SMS and a later statement import), it shows up here.',
+              );
+            }
+            return ListView.builder(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              itemCount: list.length,
+              itemBuilder: (context, index) => Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.lg),
+                child: _DuplicatePairCard(list[index]),
+              ),
             );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            itemCount: list.length,
-            itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpace.lg),
-              child: _DuplicatePairCard(list[index]),
-            ),
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -84,12 +101,11 @@ class _DuplicatePairCardState extends ConsumerState<_DuplicatePairCard> {
   @override
   Widget build(BuildContext context) {
     final candidate = widget.candidate;
-    final textTheme = Theme.of(context).textTheme;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -97,9 +113,9 @@ class _DuplicatePairCardState extends ConsumerState<_DuplicatePairCard> {
         children: [
           Row(
             children: [
-              const Icon(Icons.info_outline_rounded, size: 14, color: AppColors.ink500),
+              const Icon(Icons.info_outline_rounded, size: 14, color: BambooInk.ink500),
               const SizedBox(width: 4),
-              Expanded(child: Text(candidate.matchReason, style: textTheme.bodySmall)),
+              Expanded(child: Text(candidate.matchReason, style: BambooFonts.ui(12.5, color: BambooInk.ink500))),
             ],
           ),
           const SizedBox(height: AppSpace.md),
@@ -123,6 +139,7 @@ class _DuplicatePairCardState extends ConsumerState<_DuplicatePairCard> {
           const SizedBox(height: AppSpace.md),
           Center(
             child: TextButton(
+              style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
               onPressed: _busy ? null : () => _resolve('kept_both'),
               child: _busy
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
@@ -142,26 +159,30 @@ class _TxnColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(AppSpace.md),
-      decoration: BoxDecoration(color: AppColors.surfaceMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+      decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          MoneyText(txn.amount, confidence: Confidence.estimated, style: textTheme.titleSmall),
+          MoneyText(txn.amount, confidence: Confidence.estimated, style: BambooFonts.money(14, color: BambooInk.ink900)),
           const SizedBox(height: 2),
-          Text(txn.merchantName ?? 'Spend', style: textTheme.bodySmall, overflow: TextOverflow.ellipsis),
-          Text(_sourceLabel(txn.source), style: textTheme.bodySmall?.copyWith(color: AppColors.ink500)),
+          Text(txn.merchantName ?? 'Spend', style: BambooFonts.ui(12.5, color: BambooInk.ink900), overflow: TextOverflow.ellipsis),
+          Text(_sourceLabel(txn.source), style: BambooFonts.ui(12, color: BambooInk.ink500)),
           if (txn.cardDisplayName != null)
-            Text(txn.cardDisplayName!, style: textTheme.bodySmall?.copyWith(color: AppColors.ink500)),
+            Text(txn.cardDisplayName!, style: BambooFonts.ui(12, color: BambooInk.ink500)),
           const SizedBox(height: AppSpace.sm),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
               onPressed: onKeepThis,
-              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: AppSpace.xs)),
-              child: const Text('Keep this one', style: TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BambooInk.ink900,
+                side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text('Keep this one', style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.ink900)),
             ),
           ),
         ],
