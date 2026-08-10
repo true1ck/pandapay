@@ -24,80 +24,122 @@ class MissedOpportunitiesScreen extends ConsumerWidget {
     final missed = ref.watch(_missedOpportunitiesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Missed opportunities')),
-      body: missed.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(
-          message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(_missedOpportunitiesProvider),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Missed opportunities', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
         ),
-        data: (all) {
-          final cardsInvolved = {for (final m in all) m.entry.userCardId: m.entry.cardDisplayName};
-          final filtered = filterCardId == null ? all : all.where((m) => m.entry.userCardId == filterCardId).toList();
-          final runningTotal = filtered.fold<Money>(const Money.zero(), (a, m) => a + m.comparison.missedValue);
+        child: missed.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(_missedOpportunitiesProvider),
+          ),
+          data: (all) {
+            final cardsInvolved = {for (final m in all) m.entry.userCardId: m.entry.cardDisplayName};
+            final filtered = filterCardId == null ? all : all.where((m) => m.entry.userCardId == filterCardId).toList();
+            final runningTotal = filtered.fold<Money>(const Money.zero(), (a, m) => a + m.comparison.missedValue);
 
-          return Column(
-            children: [
-              if (cardsInvolved.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
-                  child: SizedBox(
-                    height: 36,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('All cards'),
-                          selected: filterCardId == null,
-                          onSelected: (_) => ref.read(_missedOppCardFilterProvider.notifier).state = null,
-                        ),
-                        const SizedBox(width: AppSpace.xs),
-                        for (final entry in cardsInvolved.entries)
-                          Padding(
-                            padding: const EdgeInsets.only(right: AppSpace.xs),
-                            child: ChoiceChip(
-                              label: Text(entry.value ?? 'Card'),
-                              selected: filterCardId == entry.key,
-                              onSelected: (_) => ref.read(_missedOppCardFilterProvider.notifier).state = entry.key,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              Expanded(
-                child: filtered.isEmpty
-                    ? const EmptyState(
-                        icon: Icons.check_circle_outline_rounded,
-                        title: 'No missed opportunities in the last 90 days',
-                        message: 'Every transaction we can compare used one of your best-rated cards for its category.',
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.all(AppSpace.lg),
+            return Column(
+              children: [
+                if (cardsInvolved.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
+                    child: SizedBox(
+                      height: 36,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
                         children: [
-                          Container(
-                            decoration: BoxDecoration(color: AppColors.navy900, borderRadius: BorderRadius.circular(AppRadius.lg)),
-                            padding: const EdgeInsets.all(AppSpace.lg),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Last 90 days', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.ink300)),
-                                MoneyText(runningTotal, confidence: Confidence.estimated, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white)),
-                              ],
+                          ChoiceChip(
+                            label: const Text('All cards'),
+                            labelStyle: BambooFonts.ui(
+                              13,
+                              weight: FontWeight.w600,
+                              color: filterCardId == null ? BambooInk.onSlate : BambooInk.ink900,
                             ),
+                            selected: filterCardId == null,
+                            selectedColor: BambooInk.slate,
+                            backgroundColor: BambooInk.paperMuted,
+                            side: BorderSide.none,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                            onSelected: (_) => ref.read(_missedOppCardFilterProvider.notifier).state = null,
                           ),
-                          const SizedBox(height: AppSpace.lg),
-                          for (final m in filtered)
+                          const SizedBox(width: AppSpace.xs),
+                          for (final entry in cardsInvolved.entries)
                             Padding(
-                              padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                              child: _MissedOpportunityTile(m),
+                              padding: const EdgeInsets.only(right: AppSpace.xs),
+                              child: ChoiceChip(
+                                label: Text(entry.value ?? 'Card'),
+                                labelStyle: BambooFonts.ui(
+                                  13,
+                                  weight: FontWeight.w600,
+                                  color: filterCardId == entry.key ? BambooInk.onSlate : BambooInk.ink900,
+                                ),
+                                selected: filterCardId == entry.key,
+                                selectedColor: BambooInk.slate,
+                                backgroundColor: BambooInk.paperMuted,
+                                side: BorderSide.none,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                                onSelected: (_) => ref.read(_missedOppCardFilterProvider.notifier).state = entry.key,
+                              ),
                             ),
                         ],
                       ),
-              ),
-            ],
-          );
-        },
+                    ),
+                  ),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? const EmptyState(
+                          icon: Icons.check_circle_outline_rounded,
+                          title: 'No missed opportunities in the last 90 days',
+                          message: 'Every transaction we can compare used one of your best-rated cards for its category.',
+                        )
+                      : ListView(
+                          padding: const EdgeInsets.all(AppSpace.lg),
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [BambooInk.slateRaised, BambooInk.slate],
+                                ),
+                                borderRadius: BorderRadius.circular(AppRadius.lg),
+                              ),
+                              padding: const EdgeInsets.all(AppSpace.lg),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Last 90 days', style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
+                                  MoneyText(runningTotal, confidence: Confidence.estimated, style: BambooFonts.money(22, color: BambooInk.lime)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: AppSpace.lg),
+                            for (final m in filtered)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                                child: _MissedOpportunityTile(m),
+                              ),
+                          ],
+                        ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -146,14 +188,13 @@ class _MissedOpportunityTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final entry = missed.entry;
     final comparison = missed.comparison;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -162,21 +203,21 @@ class _MissedOpportunityTile extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(entry.merchantName ?? 'Spend', style: textTheme.titleSmall, overflow: TextOverflow.ellipsis),
+                child: Text(entry.merchantName ?? 'Spend', style: BambooFonts.heading(14.5, color: BambooInk.ink900), overflow: TextOverflow.ellipsis),
               ),
-              MoneyText(entry.amount, confidence: Confidence.estimated, style: textTheme.titleSmall),
+              MoneyText(entry.amount, confidence: Confidence.estimated, style: BambooFonts.money(14, color: BambooInk.ink900)),
             ],
           ),
           const SizedBox(height: AppSpace.sm),
-          Text('Used ${entry.cardDisplayName ?? comparison.usedCard.name}', style: textTheme.bodySmall),
+          Text('Used ${entry.cardDisplayName ?? comparison.usedCard.name}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
           Row(
             children: [
-              const Icon(Icons.trending_up_rounded, size: 14, color: AppColors.warning),
+              const Icon(Icons.trending_up_rounded, size: 14, color: BambooInk.amber),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
                   '${comparison.betterCard!.name} would have earned ${comparison.missedValue.format()} more',
-                  style: textTheme.bodySmall?.copyWith(color: AppColors.warning),
+                  style: BambooFonts.ui(12.5, color: BambooInk.amber),
                 ),
               ),
             ],
