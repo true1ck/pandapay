@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../data/api_exception.dart';
 import '../data/app_status_repository.dart' show isVersionOlderThan;
+import 'design/app_theme.dart';
 import '../features/account/account_screen.dart';
 import '../features/activity/activity_screen.dart';
 import '../features/activity/duplicate_review_screen.dart';
@@ -615,8 +616,13 @@ class _AppShellState extends ConsumerState<_AppShell> {
     final showTutorial =
         widget.location == AppRoute.home && !(ref.watch(tutorialSeenProvider).valueOrNull ?? true);
     return Scaffold(
+      backgroundColor: BambooInk.paper,
       appBar: AppBar(
-        title: Text('PandaPay — $_currentLabel'),
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('PandaPay — $_currentLabel', style: BambooFonts.heading(17, color: BambooInk.ink900)),
         // "Scan a UPI QR to pay" used to be a second FAB stacked directly
         // on top of "Scan a card" below — two near-identical QR icons
         // glued together read as a mistake, not two features, and doubled
@@ -628,7 +634,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
           IconButton(
             onPressed: _scanToPay,
             tooltip: 'Scan a UPI QR to pay',
-            icon: const Icon(Icons.qr_code_2_rounded),
+            icon: const Icon(Icons.qr_code_2_rounded, color: BambooInk.ink900),
           ),
         ],
       ),
@@ -647,18 +653,22 @@ class _AppShellState extends ConsumerState<_AppShell> {
       floatingActionButton: FloatingActionButton.large(
         heroTag: 'scanFab',
         key: tutorialKeys.scanFab,
+        backgroundColor: BambooInk.slate,
+        foregroundColor: BambooInk.lime,
         onPressed: _scanning ? null : _scanFromFab,
         tooltip: 'Scan a card',
         child: _scanning
             ? const SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
               )
             : const Icon(Icons.qr_code_scanner_rounded),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
+        color: BambooInk.paper,
+        surfaceTintColor: Colors.transparent,
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
         padding: EdgeInsets.zero,
@@ -682,7 +692,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
   Widget _navButton((String, String, IconData) destination) {
     final (path, label, icon) = destination;
     final selected = widget.location == path;
-    final color = selected ? Theme.of(context).colorScheme.primary : const Color(0xFF6B7684);
+    final color = selected ? BambooInk.jade : BambooInk.ink500;
     return Expanded(
       child: InkWell(
         onTap: () {
@@ -708,10 +718,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
               const SizedBox(height: 2),
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: color,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
+                style: BambooFonts.ui(11, weight: selected ? FontWeight.w700 : FontWeight.w500, color: color),
               ),
             ],
           ),
