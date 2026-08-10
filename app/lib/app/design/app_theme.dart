@@ -309,7 +309,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.teal600,
+          foregroundColor: BambooInk.ink900,
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -329,6 +329,46 @@ class AppTheme {
         contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+      ),
+      // Bamboo Ink dialog/date-picker chrome — additive, same reasoning as
+      // every per-screen restyle this session: AlertDialog/showDatePicker
+      // are cross-cutting overlays used from dozens of already-restyled
+      // screens (delete/restore confirmations, the future-date warning,
+      // help dialogs, tutorial completion) that would otherwise still pop
+      // up in this theme's old navy/teal M3 defaults, clashing with the
+      // Bamboo Ink screen underneath. Deliberately identical in light()
+      // and dark(): every Bamboo-restyled screen already renders on
+      // BambooInk.paper regardless of ThemeMode (see appearance_screen.dart's
+      // own doc-comment on text-scale/theme-mode scope), so a dialog that
+      // swapped to a dark surface under dark ThemeMode would itself clash
+      // with the light Bamboo screen behind it.
+      dialogTheme: DialogThemeData(
+        backgroundColor: BambooInk.paper,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        titleTextStyle: BambooFonts.heading(17, color: BambooInk.ink900),
+        contentTextStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: BambooInk.paper,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        headerBackgroundColor: BambooInk.slate,
+        headerForegroundColor: BambooInk.lime,
+        todayForegroundColor: const WidgetStatePropertyAll(BambooInk.jade),
+        todayBorder: const BorderSide(color: BambooInk.jade, width: 1),
+        dayForegroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? BambooInk.onSlate : BambooInk.ink900,
+        ),
+        dayBackgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? BambooInk.slate : null,
+        ),
+        yearForegroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? BambooInk.onSlate : BambooInk.ink900,
+        ),
+        yearBackgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? BambooInk.slate : null,
+        ),
       ),
     );
   }
@@ -444,7 +484,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.teal400,
+          foregroundColor: BambooInk.ink900,
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -464,6 +504,39 @@ class AppTheme {
         contentTextStyle: textTheme.bodyMedium?.copyWith(color: _AppColorsDark.ink900),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+      ),
+      // Same Bamboo Ink dialog/date-picker chrome as light() — deliberately
+      // identical rather than swapped to the dark navy surfaces this
+      // method otherwise uses, since every Bamboo-restyled screen already
+      // renders on BambooInk.paper regardless of ThemeMode. See light()'s
+      // own comment on this block for the full reasoning.
+      dialogTheme: DialogThemeData(
+        backgroundColor: BambooInk.paper,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        titleTextStyle: BambooFonts.heading(17, color: BambooInk.ink900),
+        contentTextStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: BambooInk.paper,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        headerBackgroundColor: BambooInk.slate,
+        headerForegroundColor: BambooInk.lime,
+        todayForegroundColor: const WidgetStatePropertyAll(BambooInk.jade),
+        todayBorder: const BorderSide(color: BambooInk.jade, width: 1),
+        dayForegroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? BambooInk.onSlate : BambooInk.ink900,
+        ),
+        dayBackgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? BambooInk.slate : null,
+        ),
+        yearForegroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? BambooInk.onSlate : BambooInk.ink900,
+        ),
+        yearBackgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? BambooInk.slate : null,
+        ),
       ),
     );
   }
