@@ -34,18 +34,35 @@ class FeedbackSupportScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final token = ref.watch(accessTokenProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Feedback & Support')),
-      body: token == null
-          ? const EmptyState(
-              icon: Icons.support_agent_outlined,
-              title: 'Sign in to send feedback',
-              message: 'Support tickets are tied to your account so we can follow up with you.',
-            )
-          : _FeedbackForm(
-              accessToken: token,
-              prefilledKind: prefilledKind,
-              prefilledMessage: prefilledMessage,
-            ),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Feedback & Support', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: token == null
+            ? const EmptyState(
+                icon: Icons.support_agent_outlined,
+                title: 'Sign in to send feedback',
+                message: 'Support tickets are tied to your account so we can follow up with you.',
+              )
+            : _FeedbackForm(
+                accessToken: token,
+                prefilledKind: prefilledKind,
+                prefilledMessage: prefilledMessage,
+              ),
+      ),
     );
   }
 }
@@ -165,11 +182,10 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
       children: [
-        Text('What kind of feedback is this?', style: textTheme.labelLarge),
+        Text('What kind of feedback is this?', style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink500)),
         const SizedBox(height: AppSpace.sm),
         Wrap(
           spacing: AppSpace.sm,
@@ -178,7 +194,16 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
               .map(
                 (entry) => ChoiceChip(
                   label: Text(entry.value),
+                  labelStyle: BambooFonts.ui(
+                    13,
+                    weight: FontWeight.w600,
+                    color: _kind == entry.key ? BambooInk.onSlate : BambooInk.ink900,
+                  ),
                   selected: _kind == entry.key,
+                  selectedColor: BambooInk.slate,
+                  backgroundColor: BambooInk.paperMuted,
+                  side: BorderSide.none,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                   onSelected: (_) => setState(() => _kind = entry.key),
                 ),
               )
@@ -189,6 +214,7 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
+              style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const RequestUnsupportedCardScreen()),
               ),
@@ -197,15 +223,27 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
           ),
         ],
         const SizedBox(height: AppSpace.xl),
-        Text('Tell us what happened', style: textTheme.labelLarge),
+        Text('Tell us what happened', style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink500)),
         const SizedBox(height: AppSpace.sm),
         TextField(
           controller: _messageController,
           minLines: 4,
           maxLines: 8,
-          decoration: const InputDecoration(
+          style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+          decoration: InputDecoration(
             hintText: 'Describe the issue or request…',
-            border: OutlineInputBorder(),
+            hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+            filled: true,
+            fillColor: BambooInk.glassFillOnPaper,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+            ),
           ),
         ),
         const SizedBox(height: AppSpace.xl),
@@ -216,16 +254,23 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
         ),
         if (_error != null) ...[
           const SizedBox(height: AppSpace.lg),
-          Text(_error!, style: textTheme.bodyMedium?.copyWith(color: AppColors.error)),
+          Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
         ],
         const SizedBox(height: AppSpace.xxl),
         FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: BambooInk.slate,
+            foregroundColor: BambooInk.lime,
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+          ),
           onPressed: _submitting ? null : _submit,
           child: _submitting
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
                 )
               : const Text('Send'),
         ),
@@ -249,26 +294,28 @@ class _DiagnosticsPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.ink100),
+        color: BambooInk.paperMuted,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
-            borderRadius: BorderRadius.circular(AppRadius.md),
+            borderRadius: BorderRadius.circular(16),
             onTap: onToggle,
             child: Padding(
               padding: const EdgeInsets.all(AppSpace.md),
               child: Row(
                 children: [
-                  const Icon(Icons.data_object_rounded, size: 18, color: AppColors.ink500),
+                  const Icon(Icons.data_object_rounded, size: 18, color: BambooInk.ink500),
                   const SizedBox(width: AppSpace.sm),
-                  const Expanded(child: Text('Show what we\'ll send')),
+                  Expanded(
+                    child: Text('Show what we\'ll send', style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900)),
+                  ),
                   Icon(
                     expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                    color: AppColors.ink500,
+                    color: BambooInk.ink500,
                   ),
                 ],
               ),
@@ -279,7 +326,7 @@ class _DiagnosticsPreview extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(AppSpace.md, 0, AppSpace.md, AppSpace.md),
               child: Text(
                 diagnosticsJson ?? 'Loading…',
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: AppColors.ink700),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: BambooInk.ink900),
               ),
             ),
         ],
