@@ -5,6 +5,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../app/design/app_theme.dart';
+
 /// ui-spec B2. Full-screen camera scan of a merchant's UPI *payment* QR —
 /// distinct from `scan_card_screen.dart`, which scans a QR/barcode off a
 /// physical card to identify a card *product* for the wallet. Works fully
@@ -72,21 +74,21 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: BambooInk.slate,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Scan to pay', style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Scan to pay', style: BambooFonts.heading(16, color: BambooInk.onSlate)),
+        iconTheme: const IconThemeData(color: BambooInk.onSlate),
         actions: [
           IconButton(
             tooltip: 'Toggle torch',
-            icon: Icon(_torchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded, color: Colors.white),
+            icon: Icon(_torchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded, color: _torchOn ? BambooInk.lime : BambooInk.onSlate),
             onPressed: _toggleTorch,
           ),
           IconButton(
             tooltip: 'Import from gallery',
-            icon: const Icon(Icons.photo_library_rounded, color: Colors.white),
+            icon: const Icon(Icons.photo_library_rounded, color: BambooInk.onSlate),
             onPressed: _pickFromGallery,
           ),
         ],
@@ -105,7 +107,7 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
             child: Container(
               width: 240,
               height: 240,
-              decoration: BoxDecoration(border: Border.all(color: Colors.white70, width: 2), borderRadius: BorderRadius.circular(16)),
+              decoration: BoxDecoration(border: Border.all(color: BambooInk.lime, width: 2), borderRadius: BorderRadius.circular(16)),
             ),
           ),
           if (_hint != null)
@@ -115,8 +117,8 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
               right: 24,
               child: Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(12)),
-                child: Text(_hint!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
+                decoration: BoxDecoration(color: BambooInk.slateLow.withValues(alpha: 0.92), borderRadius: BorderRadius.circular(12)),
+                child: Text(_hint!, textAlign: TextAlign.center, style: BambooFonts.ui(13.5, color: BambooInk.onSlate)),
               ),
             ),
         ],
@@ -143,17 +145,21 @@ class _PermissionExplainer extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.no_photography_rounded, color: Colors.white70, size: 48),
+            const Icon(Icons.no_photography_rounded, color: BambooInk.onSlateMuted, size: 48),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Camera access is needed to scan a QR code.',
-              style: TextStyle(color: Colors.white),
+              style: BambooFonts.ui(14.5, color: BambooInk.onSlate),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             OutlinedButton(
               onPressed: openAppSettings,
-              style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white70)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BambooInk.onSlate,
+                side: const BorderSide(color: BambooInk.onSlateMuted),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
               child: const Text('Open Settings'),
             ),
           ],
