@@ -178,15 +178,25 @@ class InsightsHubScreen extends ConsumerWidget {
 
     final tiles = [for (final (_, tile) in urgentTiles) tile, ...unorderedTiles];
 
-    return GridView(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: AppSpace.md,
-        mainAxisSpacing: AppSpace.md,
-        childAspectRatio: 1.1,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0.9, -0.7),
+          radius: 1.3,
+          colors: [BambooInk.wash, BambooInk.paper],
+          stops: [0.0, 0.6],
+        ),
       ),
-      children: tiles,
+      child: GridView(
+        padding: const EdgeInsets.all(AppSpace.lg),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: AppSpace.md,
+          mainAxisSpacing: AppSpace.md,
+          childAspectRatio: 1.1,
+        ),
+        children: tiles,
+      ),
     );
   }
 }
@@ -206,18 +216,21 @@ class _InsightTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Material(
       key: ValueKey(label),
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(22),
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.ink100),
+            color: BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+            boxShadow: [
+              BoxShadow(color: BambooInk.ink900.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
+            ],
           ),
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Column(
@@ -227,16 +240,16 @@ class _InsightTile extends StatelessWidget {
               Container(
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(color: AppColors.teal50, borderRadius: BorderRadius.circular(AppRadius.sm)),
-                child: Icon(icon, color: AppColors.teal600, size: 20),
+                decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, color: BambooInk.lime, size: 20),
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: textTheme.titleSmall),
+                  Text(label, style: BambooFonts.heading(14, color: BambooInk.ink900)),
                   if (headline != null) ...[
                     const SizedBox(height: 2),
-                    Text(headline!, style: textTheme.bodySmall),
+                    Text(headline!, style: BambooFonts.ui(12, color: BambooInk.ink500)),
                   ],
                 ],
               ),
