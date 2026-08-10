@@ -17,46 +17,77 @@ class SmsConsentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Before you continue')),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('SMS auto-import reads your bank SMS on-device', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: AppSpace.lg),
-            const _Point(
-              icon: Icons.phone_iphone_rounded,
-              text: 'Parsing happens entirely on this device — message text is never uploaded, only the '
-                  'extracted amount/merchant/date needed to log a transaction.',
-            ),
-            const _Point(
-              icon: Icons.filter_alt_outlined,
-              text: 'Only messages matching a known bank-alert pattern are used; everything else is ignored.',
-            ),
-            const _Point(
-              icon: Icons.toggle_off_outlined,
-              text: 'You can turn this off at any time; it never runs without this permission granted.',
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('Not now'),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Before you continue', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('SMS auto-import reads your bank SMS on-device', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+              const SizedBox(height: AppSpace.lg),
+              const _Point(
+                icon: Icons.phone_iphone_rounded,
+                text: 'Parsing happens entirely on this device — message text is never uploaded, only the '
+                    'extracted amount/merchant/date needed to log a transaction.',
+              ),
+              const _Point(
+                icon: Icons.filter_alt_outlined,
+                text: 'Only messages matching a known bank-alert pattern are used; everything else is ignored.',
+              ),
+              const _Point(
+                icon: Icons.toggle_off_outlined,
+                text: 'You can turn this off at any time; it never runs without this permission granted.',
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: BambooInk.ink900,
+                        side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Not now'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text('Continue'),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: BambooInk.slate,
+                        foregroundColor: BambooInk.lime,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Continue'),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -75,9 +106,9 @@ class _Point extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: AppColors.navy800),
+          Icon(icon, size: 20, color: BambooInk.ink900),
           const SizedBox(width: AppSpace.md),
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+          Expanded(child: Text(text, style: BambooFonts.ui(13.5, color: BambooInk.ink500))),
         ],
       ),
     );
