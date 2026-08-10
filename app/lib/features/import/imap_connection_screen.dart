@@ -84,136 +84,189 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
   @override
   Widget build(BuildContext context) {
     final connection = ref.watch(imapConnectionProvider);
-    final textTheme = Theme.of(context).textTheme;
+    final inputDecoration = (String label, {String? hint, String? helper, Widget? suffixIcon}) => InputDecoration(
+          labelText: label,
+          hintText: hint,
+          helperText: helper,
+          suffixIcon: suffixIcon,
+          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          hintStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          helperStyle: BambooFonts.ui(11.5, color: BambooInk.ink500),
+          filled: true,
+          fillColor: BambooInk.glassFillOnPaper,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+          ),
+        );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('IMAP connection')),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(AppSpace.md),
-            decoration: BoxDecoration(color: AppColors.warningBg, borderRadius: BorderRadius.circular(AppRadius.md)),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('IMAP connection', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpace.md),
+              decoration: BoxDecoration(color: BambooInk.warningBg, borderRadius: BorderRadius.circular(AppRadius.md)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded, size: 18, color: BambooInk.amber),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: Text(
+                      'Google is progressively restricting basic-auth IMAP access. If this stops working, '
+                      'switch to Email Forwarding instead — it doesn\'t depend on IMAP at all.',
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink900),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            connection.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, _) =>
+                  ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(imapConnectionProvider)),
+              data: (conn) {
+                if (conn != null) {
+                  return Container(
+                    padding: const EdgeInsets.all(AppSpace.lg),
+                    decoration: BoxDecoration(
+                      color: BambooInk.glassFillOnPaper,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: BambooInk.hairlineOnPaper),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(conn.email, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                        const SizedBox(height: 4),
+                        Text('${conn.imapHost}:${conn.imapPort}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                        const SizedBox(height: AppSpace.sm),
+                        Row(
+                          children: [
+                            Icon(
+                              conn.verifiedAt != null ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                              size: 16,
+                              color: conn.verifiedAt != null ? BambooInk.jade : BambooInk.amber,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              conn.verifiedAt != null ? 'Login verified' : 'Not yet verified',
+                              style: BambooFonts.ui(12.5, color: BambooInk.ink900),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            const SizedBox(height: AppSpace.xxl),
+            Text('Connect a mailbox', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+            const SizedBox(height: AppSpace.sm),
+            TextField(
+              controller: _emailController,
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: inputDecoration('Email address'),
+            ),
+            const SizedBox(height: AppSpace.md),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: inputDecoration(
+                'App password',
+                helper: 'Not your normal password.',
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.help_outline_rounded, size: 18, color: BambooInk.ink500),
+                  tooltip: 'How to generate an app password',
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('App passwords'),
+                      content: const Text(
+                        'Most providers (e.g. Google) let you generate a scoped "app password" separate from your '
+                        'normal login, under Account → Security → App passwords. Use that here, never your real password.',
+                      ),
+                      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Got it'))],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Row(
               children: [
-                const Icon(Icons.warning_amber_rounded, size: 18, color: AppColors.warning),
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: _hostController,
+                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                    decoration: inputDecoration('IMAP server'),
+                  ),
+                ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
-                  child: Text(
-                    'Google is progressively restricting basic-auth IMAP access. If this stops working, '
-                    'switch to Email Forwarding instead — it doesn\'t depend on IMAP at all.',
-                    style: textTheme.bodySmall,
+                  child: TextField(
+                    controller: _portController,
+                    keyboardType: TextInputType.number,
+                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                    decoration: inputDecoration('Port'),
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: AppSpace.lg),
-          connection.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) =>
-                ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(imapConnectionProvider)),
-            data: (conn) {
-              if (conn != null) {
-                return Container(
-                  padding: const EdgeInsets.all(AppSpace.lg),
-                  decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppRadius.md), border: Border.all(color: AppColors.ink100)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(conn.email, style: textTheme.titleSmall),
-                      const SizedBox(height: 4),
-                      Text('${conn.imapHost}:${conn.imapPort}', style: textTheme.bodySmall?.copyWith(color: AppColors.ink500)),
-                      const SizedBox(height: AppSpace.sm),
-                      Row(
-                        children: [
-                          Icon(
-                            conn.verifiedAt != null ? Icons.check_circle_rounded : Icons.error_outline_rounded,
-                            size: 16,
-                            color: conn.verifiedAt != null ? AppColors.success : AppColors.warning,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            conn.verifiedAt != null ? 'Login verified' : 'Not yet verified',
-                            style: textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          const SizedBox(height: AppSpace.xxl),
-          Text('Connect a mailbox', style: textTheme.labelLarge),
-          const SizedBox(height: AppSpace.sm),
-          TextField(controller: _emailController, decoration: const InputDecoration(labelText: 'Email address', border: OutlineInputBorder())),
-          const SizedBox(height: AppSpace.md),
-          TextField(
-            controller: _passwordController,
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: 'App password',
-              border: const OutlineInputBorder(),
-              helperText: 'Not your normal password.',
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.help_outline_rounded, size: 18),
-                tooltip: 'How to generate an app password',
-                onPressed: () => showDialog<void>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('App passwords'),
-                    content: const Text(
-                      'Most providers (e.g. Google) let you generate a scoped "app password" separate from your '
-                      'normal login, under Account → Security → App passwords. Use that here, never your real password.',
-                    ),
-                    actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Got it'))],
-                  ),
-                ),
-              ),
+            const SizedBox(height: AppSpace.md),
+            TextField(
+              controller: _senderFilterController,
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: inputDecoration('Sender filter (optional)', hint: 'e.g. alerts@hdfcbank.net'),
             ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: TextField(controller: _hostController, decoration: const InputDecoration(labelText: 'IMAP server', border: OutlineInputBorder())),
+            const SizedBox(height: AppSpace.lg),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
-              const SizedBox(width: AppSpace.sm),
-              Expanded(
-                child: TextField(
-                  controller: _portController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Port', border: OutlineInputBorder()),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.md),
-          TextField(
-            controller: _senderFilterController,
-            decoration: const InputDecoration(
-              labelText: 'Sender filter (optional)',
-              hintText: 'e.g. alerts@hdfcbank.net',
-              border: OutlineInputBorder(),
+              onPressed: _saving ? null : _save,
+              child: Text(_saving ? 'Saving…' : 'Save & test connection'),
             ),
-          ),
-          const SizedBox(height: AppSpace.lg),
-          ElevatedButton(
-            onPressed: _saving ? null : _save,
-            child: Text(_saving ? 'Saving…' : 'Save & test connection'),
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Text(
-            '"Test connection" performs a real IMAP login against your mail server to confirm the credentials work. '
-            'No background poller is wired up yet to read the mailbox automatically (see this screen\'s doc-comment).',
-            style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
-          ),
-        ],
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              '"Test connection" performs a real IMAP login against your mail server to confirm the credentials work. '
+              'No background poller is wired up yet to read the mailbox automatically (see this screen\'s doc-comment).',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+          ],
+        ),
       ),
     );
   }
