@@ -59,7 +59,6 @@ class _AuditTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final textTheme = Theme.of(context).textTheme;
     final annualFee = product.annualFeeInr;
     final rewardsEarnedInr = Money.fromRupees(userCard.totalPointsEarned * product.pointValueInr);
     final breakEven = annualFee == null ? null : rewardsEarnedInr.paise >= annualFee.paise;
@@ -80,9 +79,9 @@ class _AuditTile extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -90,25 +89,25 @@ class _AuditTile extends ConsumerWidget {
         children: [
           Text(
             userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-            style: textTheme.titleSmall,
+            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
           ),
           const SizedBox(height: AppSpace.md),
           if (annualFee == null)
-            Text('Annual fee not listed for this card', style: textTheme.bodySmall)
+            Text('Annual fee not listed for this card', style: BambooFonts.ui(12.5, color: BambooInk.ink500))
           else ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Annual fee', style: textTheme.bodySmall),
-                MoneyText(annualFee, confidence: Confidence.confirmed, style: textTheme.bodySmall),
+                Text('Annual fee', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                MoneyText(annualFee, confidence: Confidence.confirmed, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
               ],
             ),
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Rewards earned (lifetime)', style: textTheme.bodySmall),
-                MoneyText(rewardsEarnedInr, confidence: Confidence.estimated, style: textTheme.bodySmall),
+                Text('Rewards earned (lifetime)', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                MoneyText(rewardsEarnedInr, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
               ],
             ),
             const SizedBox(height: AppSpace.sm),
@@ -117,12 +116,12 @@ class _AuditTile extends ConsumerWidget {
                 Icon(
                   breakEven! ? Icons.check_circle_outline_rounded : Icons.trending_down_rounded,
                   size: 16,
-                  color: breakEven ? AppColors.success : AppColors.warning,
+                  color: breakEven ? BambooInk.jade : BambooInk.amber,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   breakEven ? 'This card has paid for itself' : 'Hasn\'t earned back its fee yet',
-                  style: textTheme.bodySmall?.copyWith(color: breakEven ? AppColors.success : AppColors.warning),
+                  style: BambooFonts.ui(12.5, color: breakEven ? BambooInk.jade : BambooInk.amber),
                 ),
               ],
             ),
@@ -130,14 +129,14 @@ class _AuditTile extends ConsumerWidget {
           const SizedBox(height: AppSpace.md),
           usageAsync.when(
             loading: () => const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-            error: (_, __) => Text('Usage frequency unavailable', style: textTheme.bodySmall),
-            data: (count) => Text('$count transactions logged on this card', style: textTheme.bodySmall),
+            error: (_, __) => Text('Usage frequency unavailable', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+            data: (count) => Text('$count transactions logged on this card', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
           ),
           if (untrackedBenefits.isNotEmpty) ...[
             const SizedBox(height: AppSpace.sm),
             Text(
               '${untrackedBenefits.length} other benefit(s) on this card — usage not tracked, so "unused" can\'t be measured honestly.',
-              style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],
         ],
