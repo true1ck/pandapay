@@ -37,30 +37,47 @@ class EmergencyCardInfoScreen extends ConsumerWidget {
     final result = ref.watch(emergencyContactsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Emergency Card Info')),
-      body: result.when(
-        // Only reachable on a genuine first paint before the provider
-        // resolves — resolves near-instantly even fully offline, since the
-        // bundled fallback requires no IO at all.
-        loading: () => const Center(child: CircularProgressIndicator()),
-        // The service is designed to never throw; this path exists only for
-        // a genuine unexpected bug, not for "no network" (that's handled,
-        // not an error, per the provider's own doc-comment).
-        error: (err, _) => ErrorState(
-          message: 'Something went wrong loading emergency contacts.',
-          onRetry: () => ref.invalidate(emergencyContactsProvider),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Emergency Card Info', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
         ),
-        data: (data) => ListView(
-          padding: const EdgeInsets.all(AppSpace.lg),
-          children: [
-            _SourceBanner(source: data.source, lastSyncedAt: data.lastSyncedAt),
-            const SizedBox(height: AppSpace.lg),
-            for (final group in _groupByIssuer(data.contacts))
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.lg),
-                child: _IssuerGroup(issuerName: group.$1, contacts: group.$2),
-              ),
-          ],
+        child: result.when(
+          // Only reachable on a genuine first paint before the provider
+          // resolves — resolves near-instantly even fully offline, since the
+          // bundled fallback requires no IO at all.
+          loading: () => const Center(child: CircularProgressIndicator()),
+          // The service is designed to never throw; this path exists only for
+          // a genuine unexpected bug, not for "no network" (that's handled,
+          // not an error, per the provider's own doc-comment).
+          error: (err, _) => ErrorState(
+            message: 'Something went wrong loading emergency contacts.',
+            onRetry: () => ref.invalidate(emergencyContactsProvider),
+          ),
+          data: (data) => ListView(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            children: [
+              _SourceBanner(source: data.source, lastSyncedAt: data.lastSyncedAt),
+              const SizedBox(height: AppSpace.lg),
+              for (final group in _groupByIssuer(data.contacts))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpace.lg),
+                  child: _IssuerGroup(issuerName: group.$1, contacts: group.$2),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -86,7 +103,6 @@ class _SourceBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     late final String message;
     late final IconData icon;
     late final Color color;
@@ -94,7 +110,7 @@ class _SourceBanner extends StatelessWidget {
       case EmergencyContactsSource.live:
         message = 'Up to date — refreshed just now.';
         icon = Icons.cloud_done_outlined;
-        color = AppColors.success;
+        color = BambooInk.jade;
         break;
       case EmergencyContactsSource.cached:
         final synced = lastSyncedAt;
@@ -103,14 +119,14 @@ class _SourceBanner extends StatelessWidget {
             : 'Showing data saved on this device on ${_formatDate(synced)} — you appear to be '
                 'offline right now.';
         icon = Icons.offline_bolt_outlined;
-        color = AppColors.ink500;
+        color = BambooInk.ink500;
         break;
       case EmergencyContactsSource.bundled:
         message = 'No issuer data has synced to this device yet — showing general safety guidance '
             'below instead of your specific banks\' hotlines. Connect to the internet once to '
             'download the real numbers for your cards.';
         icon = Icons.info_outline_rounded;
-        color = AppColors.error;
+        color = BambooInk.clay;
         break;
     }
     return Container(
@@ -125,7 +141,7 @@ class _SourceBanner extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(width: AppSpace.sm),
-          Expanded(child: Text(message, style: textTheme.bodySmall)),
+          Expanded(child: Text(message, style: BambooFonts.ui(12.5, color: BambooInk.ink900))),
         ],
       ),
     );
@@ -143,15 +159,15 @@ class _IssuerGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(issuerName, style: Theme.of(context).textTheme.titleSmall),
+          Text(issuerName, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
           for (final contact in contacts)
             Padding(
@@ -170,7 +186,6 @@ class _ContactRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final hasPhone = contact.phone.trim().isNotEmpty;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,21 +196,21 @@ class _ContactRow extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(child: Text(contact.label, style: textTheme.bodyMedium)),
+                  Expanded(child: Text(contact.label, style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900))),
                   if (contact.isInternational)
-                    const StatusPill(label: 'International', foreground: AppColors.navy800, background: AppColors.surfaceMuted),
+                    StatusPill(label: 'International', foreground: BambooInk.ink900, background: BambooInk.paperMuted),
                 ],
               ),
               if (hasPhone) ...[
                 const SizedBox(height: 2),
                 Text(
                   contact.phone + (contact.isCollectCall ? ' (collect call)' : ''),
-                  style: textTheme.bodySmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
                 ),
               ],
               if (contact.blockProcedure != null) ...[
                 const SizedBox(height: 4),
-                Text(contact.blockProcedure!, style: textTheme.bodySmall),
+                Text(contact.blockProcedure!, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
               ],
             ],
           ),
@@ -231,7 +246,7 @@ class _DialButton extends StatelessWidget {
       child: IconButton(
         onPressed: () => _dial(context),
         icon: const Icon(Icons.call_rounded),
-        color: AppColors.teal600,
+        color: BambooInk.jade,
         tooltip: 'Call $phone',
       ),
     );
