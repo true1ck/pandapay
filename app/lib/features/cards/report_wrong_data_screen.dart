@@ -74,10 +74,27 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
   Widget build(BuildContext context) {
     final product = ref.watch(catalogueProvider).valueOrNull?.where((c) => c.id == widget.cardProductId).firstOrNull;
     return Scaffold(
-      appBar: AppBar(title: const Text('Report wrong data')),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        child: _submitted ? _buildConfirmation(context) : _buildForm(context, product?.name),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Report wrong data', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          child: _submitted ? _buildConfirmation(context) : _buildForm(context, product?.name),
+        ),
       ),
     );
   }
@@ -87,51 +104,94 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.check_circle_outline_rounded, size: 48, color: AppColors.success),
+          const Icon(Icons.check_circle_outline_rounded, size: 48, color: BambooInk.jade),
           const SizedBox(height: AppSpace.lg),
-          Text('Thanks — we verify before publishing.', style: Theme.of(context).textTheme.titleMedium, textAlign: TextAlign.center),
+          Text(
+            'Thanks — we verify before publishing.',
+            style: BambooFonts.heading(17, color: BambooInk.ink900),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: AppSpace.xl),
-          FilledButton(onPressed: () => context.pop(), child: const Text('Done')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: BambooInk.slate,
+              foregroundColor: BambooInk.lime,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+            ),
+            onPressed: () => context.pop(),
+            child: const Text('Done'),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildForm(BuildContext context, String? cardName) {
+    final inputDecoration = (String label, {String? hint}) => InputDecoration(
+          labelText: label,
+          hintText: hint,
+          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          hintStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          filled: true,
+          fillColor: BambooInk.glassFillOnPaper,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+          ),
+        );
+
     return ListView(
       children: [
         if (cardName != null) ...[
-          Text(cardName, style: Theme.of(context).textTheme.titleMedium),
+          Text(cardName, style: BambooFonts.heading(17, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.lg),
         ],
         TextField(
           controller: _fieldController,
-          decoration: const InputDecoration(labelText: 'Which field is wrong?', hintText: 'e.g. "5% cashback on dining"'),
+          style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+          decoration: inputDecoration('Which field is wrong?', hint: 'e.g. "5% cashback on dining"'),
         ),
         const SizedBox(height: AppSpace.lg),
         TextField(
           controller: _shownController,
-          decoration: const InputDecoration(labelText: 'What we currently show'),
+          style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+          decoration: inputDecoration('What we currently show'),
         ),
         const SizedBox(height: AppSpace.lg),
         TextField(
           controller: _claimedController,
-          decoration: const InputDecoration(labelText: 'What it should be'),
+          style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+          decoration: inputDecoration('What it should be'),
         ),
         const SizedBox(height: AppSpace.lg),
         TextField(
           controller: _sourceController,
-          decoration: const InputDecoration(labelText: 'Source link (optional)'),
+          style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+          decoration: inputDecoration('Source link (optional)'),
         ),
         if (_error != null) ...[
           const SizedBox(height: AppSpace.md),
-          Text(_error!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.error)),
+          Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
         ],
         const SizedBox(height: AppSpace.xl),
         FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: BambooInk.slate,
+            foregroundColor: BambooInk.lime,
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+          ),
           onPressed: _submitting ? null : _submit,
           child: _submitting
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
               : const Text('Submit report'),
         ),
       ],
