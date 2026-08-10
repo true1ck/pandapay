@@ -82,7 +82,6 @@ class _MilestoneTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final qualified = userCard.milestoneQualifiedSpend[milestone.id] ?? const Money.zero();
     final remainingPaise =
         (milestone.thresholdSpend.paise - qualified.paise).clamp(0, milestone.thresholdSpend.paise);
@@ -114,9 +113,9 @@ class _MilestoneTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: reached ? AppColors.successBg : AppColors.surface,
+        color: reached ? BambooInk.jade.withValues(alpha: 0.10) : BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: reached ? AppColors.success : AppColors.ink100),
+        border: Border.all(color: reached ? BambooInk.jade : BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -128,11 +127,11 @@ class _MilestoneTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(milestone.label, style: textTheme.titleSmall),
+                    Text(milestone.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                     const SizedBox(height: 2),
                     Text(
                       userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-                      style: textTheme.bodySmall,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ],
                 ),
@@ -140,12 +139,12 @@ class _MilestoneTile extends StatelessWidget {
               if (reached)
                 const StatusPill(
                   label: 'REACHED',
-                  foreground: Colors.white,
-                  background: AppColors.success,
+                  foreground: BambooInk.onSlate,
+                  background: BambooInk.jade,
                   icon: Icons.check_rounded,
                 )
               else if (milestone.isRepeatable)
-                const StatusPill(label: 'Repeats', foreground: AppColors.navy800, background: AppColors.surfaceMuted),
+                const StatusPill(label: 'Repeats', foreground: BambooInk.ink900, background: BambooInk.paperMuted),
             ],
           ),
           const SizedBox(height: AppSpace.md),
@@ -154,8 +153,8 @@ class _MilestoneTile extends StatelessWidget {
             child: LinearProgressIndicator(
               value: ratio,
               minHeight: 8,
-              backgroundColor: AppColors.surfaceMuted,
-              color: reached ? AppColors.success : AppColors.teal600,
+              backgroundColor: BambooInk.paperMuted,
+              color: BambooInk.jade,
             ),
           ),
           const SizedBox(height: AppSpace.sm),
@@ -164,12 +163,12 @@ class _MilestoneTile extends StatelessWidget {
             children: [
               Text(
                 reached ? 'Milestone reached' : '${remaining.format()} to go',
-                style: textTheme.labelLarge?.copyWith(color: reached ? AppColors.success : AppColors.navy800),
+                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: reached ? BambooInk.jade : BambooInk.ink900),
               ),
               Row(
                 children: [
-                  Text('Reward ', style: textTheme.bodySmall),
-                  MoneyText(milestone.rewardValue, confidence: Confidence.estimated, style: textTheme.bodySmall),
+                  Text('Reward ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  MoneyText(milestone.rewardValue, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                 ],
               ),
             ],
@@ -178,19 +177,19 @@ class _MilestoneTile extends StatelessWidget {
             const SizedBox(height: AppSpace.sm),
             Text(
               daysLeft >= 0 ? '$daysLeft days left this period' : 'Period ended ${-daysLeft} days ago',
-              style: textTheme.bodySmall?.copyWith(color: AppColors.ink500),
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],
           if (chase != null && chase.beatsBaseRate) ...[
             const SizedBox(height: AppSpace.sm),
             Row(
               children: [
-                const Icon(Icons.bolt_rounded, size: 14, color: AppColors.teal600),
+                const Icon(Icons.bolt_rounded, size: 14, color: BambooInk.jade),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     'Chasing this beats your base rate — worth prioritizing this spend here.',
-                    style: textTheme.bodySmall?.copyWith(color: AppColors.teal600, fontWeight: FontWeight.w600),
+                    style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.jade),
                   ),
                 ),
               ],
