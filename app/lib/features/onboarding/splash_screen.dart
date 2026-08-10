@@ -14,10 +14,16 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.canvas,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+        ),
+      ),
       child: const Center(
-        child: AppLogoMark(size: 88),
+        child: PandaMark(size: 96),
       )
           // A brief, purposeful entrance — not decoration for its own sake.
           // Respects reduced-motion automatically (flutter_animate honours
