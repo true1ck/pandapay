@@ -23,14 +23,30 @@ class BenefitsCheatSheetScreen extends ConsumerWidget {
     final owned = ref.watch(ownedCardsWithProductProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Benefits cheat sheet')),
-      body: owned.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(
-          message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(userCardsProvider),
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Benefits cheat sheet', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.9, -0.5),
+            radius: 1.3,
+            colors: [BambooInk.wash, BambooInk.paper],
+            stops: [0.0, 0.6],
+          ),
         ),
-        data: (pairs) {
+        child: owned.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(userCardsProvider),
+          ),
+          data: (pairs) {
           // One (CardBenefit, ownerCardDisplayName) tuple per benefit,
           // across every owned card — a card with two benefits of the
           // same kind (e.g. domestic + international lounge) shows both,
@@ -77,7 +93,7 @@ class BenefitsCheatSheetScreen extends ConsumerWidget {
                 if (grouped[kind] case final items? when items.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpace.lg, bottom: AppSpace.sm),
-                    child: Text(_kindLabel(kind), style: Theme.of(context).textTheme.titleMedium),
+                    child: Text(_kindLabel(kind), style: BambooFonts.heading(16, color: BambooInk.ink900)),
                   ),
                   for (final (benefit, cardLabel) in items)
                     Padding(
@@ -87,7 +103,8 @@ class BenefitsCheatSheetScreen extends ConsumerWidget {
                 ],
             ],
           );
-        },
+          },
+        ),
       ),
     );
   }
@@ -128,7 +145,6 @@ class _BenefitTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final quotaParts = <String>[
       if (benefit.quotaCount != null) '${benefit.quotaCount} / ${_periodLabel(benefit.quotaPeriod)}',
       if (benefit.networkProgram != null) benefit.networkProgram!,
@@ -136,9 +152,9 @@ class _BenefitTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.ink100),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Row(
@@ -147,20 +163,20 @@ class _BenefitTile extends StatelessWidget {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: AppColors.teal50, borderRadius: BorderRadius.circular(AppRadius.sm)),
-            child: Icon(BenefitsCheatSheetScreen._kindIcon(benefit.kind), color: AppColors.teal600, size: 20),
+            decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(AppRadius.sm)),
+            child: Icon(BenefitsCheatSheetScreen._kindIcon(benefit.kind), color: BambooInk.lime, size: 20),
           ),
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(benefit.label, style: textTheme.titleSmall),
+                Text(benefit.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                 const SizedBox(height: 2),
-                Text(cardLabel, style: textTheme.bodySmall),
+                Text(cardLabel, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                 if (benefit.description != null) ...[
                   const SizedBox(height: AppSpace.xs),
-                  Text(benefit.description!, style: textTheme.bodyMedium),
+                  Text(benefit.description!, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
                 ],
                 if (quotaParts.isNotEmpty) ...[
                   const SizedBox(height: AppSpace.xs),
@@ -169,7 +185,7 @@ class _BenefitTile extends StatelessWidget {
                     runSpacing: AppSpace.xs,
                     children: [
                       for (final part in quotaParts)
-                        StatusPill(label: part, foreground: AppColors.navy800, background: AppColors.surfaceMuted),
+                        StatusPill(label: part, foreground: BambooInk.ink900, background: BambooInk.paperMuted),
                     ],
                   ),
                 ],
@@ -177,8 +193,8 @@ class _BenefitTile extends StatelessWidget {
                   const SizedBox(height: AppSpace.xs),
                   Row(
                     children: [
-                      Text('Est. value: ', style: textTheme.bodySmall),
-                      MoneyText(benefit.valueEstimate!, confidence: Confidence.estimated, style: textTheme.bodySmall),
+                      Text('Est. value: ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                      MoneyText(benefit.valueEstimate!, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                     ],
                   ),
                 ],
