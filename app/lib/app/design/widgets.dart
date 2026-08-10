@@ -59,7 +59,6 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     // A scroll view rather than a bare Center+Column: on a short viewport
     // (landscape phone, split-screen, or a keyboard eating half the
     // available height) a fixed-size icon plus title plus message plus
@@ -74,14 +73,14 @@ class EmptyState extends StatelessWidget {
             Container(
               width: 64,
               height: 64,
-              decoration: const BoxDecoration(color: AppColors.surfaceMuted, shape: BoxShape.circle),
-              child: Icon(icon, size: 30, color: AppColors.ink500),
+              decoration: const BoxDecoration(color: BambooInk.paperMuted, shape: BoxShape.circle),
+              child: Icon(icon, size: 30, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.lg),
-            Text(title, style: textTheme.titleMedium, textAlign: TextAlign.center),
+            Text(title, style: BambooFonts.heading(16, color: BambooInk.ink900), textAlign: TextAlign.center),
             if (message != null) ...[
               const SizedBox(height: AppSpace.sm),
-              Text(message!, style: textTheme.bodyMedium, textAlign: TextAlign.center),
+              Text(message!, style: BambooFonts.ui(13.5, color: BambooInk.ink500), textAlign: TextAlign.center),
             ],
             if (action != null) ...[const SizedBox(height: AppSpace.lg), action!],
           ],
@@ -102,7 +101,6 @@ class ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     // See EmptyState's build() for why this scrolls rather than overflows.
     return Center(
       child: SingleChildScrollView(
@@ -113,16 +111,25 @@ class ErrorState extends StatelessWidget {
             Container(
               width: 64,
               height: 64,
-              decoration: const BoxDecoration(color: AppColors.errorBg, shape: BoxShape.circle),
-              child: const Icon(Icons.error_outline_rounded, size: 30, color: AppColors.error),
+              decoration: BoxDecoration(color: BambooInk.clay.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: const Icon(Icons.error_outline_rounded, size: 30, color: BambooInk.clay),
             ),
             const SizedBox(height: AppSpace.lg),
-            Text('Something went wrong', style: textTheme.titleMedium, textAlign: TextAlign.center),
+            Text('Something went wrong', style: BambooFonts.heading(16, color: BambooInk.ink900), textAlign: TextAlign.center),
             const SizedBox(height: AppSpace.sm),
-            Text(message, style: textTheme.bodyMedium, textAlign: TextAlign.center),
+            Text(message, style: BambooFonts.ui(13.5, color: BambooInk.ink500), textAlign: TextAlign.center),
             if (onRetry != null) ...[
               const SizedBox(height: AppSpace.lg),
-              OutlinedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh_rounded), label: const Text('Try again')),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BambooInk.ink900,
+                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Try again'),
+              ),
             ],
           ],
         ),
@@ -159,7 +166,7 @@ class StatusPill extends StatelessWidget {
           if (icon != null) ...[Icon(icon, size: 12, color: foreground), const SizedBox(width: 4)],
           Text(
             label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: foreground, fontWeight: FontWeight.w600),
+            style: BambooFonts.ui(11, weight: FontWeight.w600, color: foreground),
           ),
         ],
       ),
