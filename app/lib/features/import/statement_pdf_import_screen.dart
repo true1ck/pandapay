@@ -93,7 +93,8 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
       if (parsed.transactions.isEmpty) {
         setState(() {
           _step = _Step.error;
-          _errorMessage = "Couldn't find any transactions in this statement — it may use a layout this app "
+          _errorMessage =
+              "Couldn't find any transactions in this statement — it may use a layout this app "
               "doesn't recognize yet.";
         });
         return;
@@ -160,19 +161,8 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
         elevation: 0,
         title: Text('Import statement PDF', style: BambooFonts.heading(16, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpace.lg),
-          child: _buildStep(context),
-        ),
+      body: AppBackground(
+        child: Padding(padding: const EdgeInsets.all(AppSpace.lg), child: _buildStep(context)),
       ),
     );
   }
@@ -218,7 +208,10 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
                 labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
@@ -265,17 +258,27 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
             const SizedBox(height: AppSpace.sm),
             Row(
               children: [
-                Text('${parsed.transactions.length} transactions found', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+                Text(
+                  '${parsed.transactions.length} transactions found',
+                  style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                ),
                 if (parsed.closingBalance != null) ...[
                   Text(' · closing balance ', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
-                  MoneyText(parsed.closingBalance!, confidence: Confidence.estimated, style: BambooFonts.money(14, color: BambooInk.ink900)),
+                  MoneyText(
+                    parsed.closingBalance!,
+                    confidence: Confidence.estimated,
+                    style: BambooFonts.money(14, color: BambooInk.ink900),
+                  ),
                 ],
               ],
             ),
             const SizedBox(height: AppSpace.md),
             Container(
               padding: const EdgeInsets.all(AppSpace.md),
-              decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+              decoration: BoxDecoration(
+                color: BambooInk.paperMuted,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -291,7 +294,11 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          MoneyText(txn.amount, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink900)),
+                          MoneyText(
+                            txn.amount,
+                            confidence: Confidence.estimated,
+                            style: BambooFonts.ui(12.5, color: BambooInk.ink900),
+                          ),
                         ],
                       ),
                     ),
@@ -309,7 +316,8 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
             const SizedBox(height: AppSpace.lg),
             userCards.when(
               loading: () => const CircularProgressIndicator(),
-              error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+              error: (err, _) =>
+                  Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
               data: (cards) => DropdownButtonFormField<String>(
                 initialValue: _selectedCardId,
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
@@ -318,7 +326,10 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
                   labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
                   filled: true,
                   fillColor: BambooInk.glassFillOnPaper,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
@@ -330,7 +341,10 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
                 ),
                 items: [
                   for (final c in cards)
-                    DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
+                    DropdownMenuItem(
+                      value: c.id,
+                      child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                    ),
                 ],
                 onChanged: (v) => setState(() => _selectedCardId = v),
               ),

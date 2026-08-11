@@ -33,15 +33,7 @@ class ManualOverridesScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Manual overrides', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: overrides.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
@@ -53,7 +45,8 @@ class ManualOverridesScreen extends ConsumerWidget {
               return const EmptyState(
                 icon: Icons.rule_rounded,
                 title: 'No overrides yet',
-                message: 'Create one from a Scan Result screen with "Always use this '
+                message:
+                    'Create one from a Scan Result screen with "Always use this '
                     'card here", or add one manually below.',
               );
             }
@@ -91,10 +84,10 @@ class _OverrideTile extends ConsumerWidget {
   const _OverrideTile(this.rule);
 
   String get _targetLabel => switch (rule.scope) {
-        OverrideScope.vpa => 'VPA: ${rule.vpa}',
-        OverrideScope.merchantName => 'Merchant: ${rule.merchantName}',
-        OverrideScope.category => 'Category: ${rule.categoryName ?? rule.categoryId}',
-      };
+    OverrideScope.vpa => 'VPA: ${rule.vpa}',
+    OverrideScope.merchantName => 'Merchant: ${rule.merchantName}',
+    OverrideScope.category => 'Category: ${rule.categoryName ?? rule.categoryId}',
+  };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -175,8 +168,9 @@ class _OverrideTile extends ConsumerWidget {
     final repo = ref.read(cardOverridesRepositoryProvider);
     if (repo == null) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('You need to be signed in to do that.')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('You need to be signed in to do that.')));
       }
       return;
     }
@@ -212,11 +206,13 @@ class _OverrideTile extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
+    destructiveActionHaptic();
     final repo = ref.read(cardOverridesRepositoryProvider);
     if (repo == null) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('You need to be signed in to do that.')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('You need to be signed in to do that.')));
       }
       return;
     }
@@ -295,20 +291,20 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
   @override
   Widget build(BuildContext context) {
     final inputDecoration = (String label) => InputDecoration(
-          labelText: label,
-          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          filled: true,
-          fillColor: BambooInk.glassFillOnPaper,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-          ),
-        );
+      labelText: label,
+      labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+      filled: true,
+      fillColor: BambooInk.glassFillOnPaper,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+      ),
+    );
 
     return Container(
       decoration: const BoxDecoration(
@@ -316,7 +312,9 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
       ),
       padding: EdgeInsets.only(
-        left: AppSpace.lg, right: AppSpace.lg, top: AppSpace.lg,
+        left: AppSpace.lg,
+        right: AppSpace.lg,
+        top: AppSpace.lg,
         bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
       ),
       child: SingleChildScrollView(
@@ -331,10 +329,12 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
               decoration: inputDecoration('Card'),
               items: widget.userCards
-                  .map((c) => DropdownMenuItem(
-                        value: c.id,
-                        child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
-                      ))
+                  .map(
+                    (c) => DropdownMenuItem(
+                      value: c.id,
+                      child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                    ),
+                  )
                   .toList(),
               onChanged: (v) => setState(() => _selectedUserCardId = v),
             ),
@@ -361,7 +361,9 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
                 initialValue: _selectedCategoryId,
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                 decoration: inputDecoration('Category'),
-                items: widget.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                items: widget.categories
+                    .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                    .toList(),
                 onChanged: (v) => setState(() => _selectedCategoryId = v),
               )
             else if (_scope == OverrideScope.merchantName)
@@ -395,7 +397,11 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
               ),
               onPressed: _canSave && !_saving ? _save : null,
               child: _saving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                    )
                   : const Text('Save override'),
             ),
           ],
@@ -444,8 +450,9 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
     final repo = ref.read(cardOverridesRepositoryProvider);
     if (repo == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('You need to be signed in to do that.')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('You need to be signed in to do that.')));
       }
       return;
     }
@@ -474,20 +481,20 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
   @override
   Widget build(BuildContext context) {
     final inputDecoration = (String label) => InputDecoration(
-          labelText: label,
-          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          filled: true,
-          fillColor: BambooInk.glassFillOnPaper,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-          ),
-        );
+      labelText: label,
+      labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+      filled: true,
+      fillColor: BambooInk.glassFillOnPaper,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+      ),
+    );
 
     return Container(
       decoration: const BoxDecoration(
@@ -495,7 +502,9 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
       ),
       padding: EdgeInsets.only(
-        left: AppSpace.lg, right: AppSpace.lg, top: AppSpace.lg,
+        left: AppSpace.lg,
+        right: AppSpace.lg,
+        top: AppSpace.lg,
         bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
       ),
       child: SingleChildScrollView(
@@ -510,10 +519,12 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
               decoration: inputDecoration('Card'),
               items: widget.userCards
-                  .map((c) => DropdownMenuItem(
-                        value: c.id,
-                        child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
-                      ))
+                  .map(
+                    (c) => DropdownMenuItem(
+                      value: c.id,
+                      child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                    ),
+                  )
                   .toList(),
               onChanged: (v) => setState(() => _selectedUserCardId = v),
             ),
@@ -534,7 +545,11 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
               ),
               onPressed: _canSave && !_saving ? _save : null,
               child: _saving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                    )
                   : const Text('Save changes'),
             ),
           ],

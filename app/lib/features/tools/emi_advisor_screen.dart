@@ -50,15 +50,7 @@ class _EmiAdvisorScreenState extends ConsumerState<EmiAdvisorScreen> {
         elevation: 0,
         title: Text('EMI Advisor', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: owned.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
@@ -99,7 +91,10 @@ class _EmiAdvisorScreenState extends ConsumerState<EmiAdvisorScreen> {
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: BambooInk.glassFillOnPaper,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
@@ -114,28 +109,19 @@ class _EmiAdvisorScreenState extends ConsumerState<EmiAdvisorScreen> {
                       DropdownMenuItem(
                         value: product.id,
                         child: Text(
-                          userCard.nickname?.isNotEmpty == true
-                              ? userCard.nickname!
-                              : product.name,
+                          userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
                         ),
                       ),
                   ],
                   onChanged: (v) => setState(() => _selectedCardProductId = v),
                 ),
                 const SizedBox(height: AppSpace.lg),
-                Text(
-                  'Purchase amount',
-                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-                ),
+                Text('Purchase amount', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                 const SizedBox(height: AppSpace.sm),
                 TextField(
                   controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                   style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                   decoration: InputDecoration(
                     prefixText: '₹ ',
@@ -143,7 +129,10 @@ class _EmiAdvisorScreenState extends ConsumerState<EmiAdvisorScreen> {
                     hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
                     filled: true,
                     fillColor: BambooInk.glassFillOnPaper,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
@@ -179,25 +168,21 @@ class _EmiAdvisorScreenState extends ConsumerState<EmiAdvisorScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpace.lg),
-                Text(
-                  'Annual interest rate (%)',
-                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-                ),
+                Text('Annual interest rate (%)', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                 const SizedBox(height: AppSpace.sm),
                 TextField(
                   controller: _rateController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                   style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                   decoration: InputDecoration(
                     suffixText: '% per year',
                     filled: true,
                     fillColor: BambooInk.glassFillOnPaper,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
@@ -214,15 +199,13 @@ class _EmiAdvisorScreenState extends ConsumerState<EmiAdvisorScreen> {
                   const EmptyState(
                     icon: Icons.receipt_long_outlined,
                     title: 'Enter a purchase amount',
-                    message:
-                        'PandaPay will compare paying via EMI against paying in full on this card.',
+                    message: 'PandaPay will compare paying via EMI against paying in full on this card.',
                   )
                 else if (advice == null)
                   const EmptyState(
                     icon: Icons.error_outline_rounded,
                     title: 'Can\'t compute this yet',
-                    message:
-                        'Check the amount and tenure are both greater than zero.',
+                    message: 'Check the amount and tenure are both greater than zero.',
                   )
                 else
                   _AdviceResult(advice: advice),
@@ -247,9 +230,7 @@ class _AdviceResult extends StatelessWidget {
       children: [
         Container(
           decoration: BoxDecoration(
-            color: costly
-                ? BambooInk.clay.withValues(alpha: 0.12)
-                : BambooInk.jade.withValues(alpha: 0.12),
+            color: costly ? BambooInk.clay.withValues(alpha: 0.12) : BambooInk.jade.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           padding: const EdgeInsets.all(AppSpace.lg),
@@ -257,9 +238,7 @@ class _AdviceResult extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                costly
-                    ? Icons.trending_down_rounded
-                    : Icons.check_circle_outline_rounded,
+                costly ? Icons.trending_down_rounded : Icons.check_circle_outline_rounded,
                 color: costly ? BambooInk.clay : BambooInk.jade,
               ),
               const SizedBox(width: AppSpace.sm),
@@ -274,15 +253,8 @@ class _AdviceResult extends StatelessWidget {
         ),
         const SizedBox(height: AppSpace.lg),
         _AdviceRow(label: 'Total interest', amount: advice.totalInterest),
-        _AdviceRow(
-          label: 'Rewards you\'d forfeit by not paying in full',
-          amount: advice.forfeitedRewards,
-        ),
-        _AdviceRow(
-          label: 'Effective cost of choosing EMI',
-          amount: advice.effectiveCost,
-          emphasized: true,
-        ),
+        _AdviceRow(label: 'Rewards you\'d forfeit by not paying in full', amount: advice.forfeitedRewards),
+        _AdviceRow(label: 'Effective cost of choosing EMI', amount: advice.effectiveCost, emphasized: true),
       ],
     );
   }
@@ -292,11 +264,7 @@ class _AdviceRow extends StatelessWidget {
   final String label;
   final Money amount;
   final bool emphasized;
-  const _AdviceRow({
-    required this.label,
-    required this.amount,
-    this.emphasized = false,
-  });
+  const _AdviceRow({required this.label, required this.amount, this.emphasized = false});
 
   @override
   Widget build(BuildContext context) {

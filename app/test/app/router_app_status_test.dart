@@ -8,6 +8,7 @@ import 'package:pandapay/data/app_status_repository.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/system/forced_upgrade_screen.dart';
 import 'package:pandapay/features/system/maintenance_screen.dart';
+import 'package:pandapay/features/home/home_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -56,7 +57,7 @@ void main() {
     );
 
     expect(find.byType(MaintenanceScreen), findsOneWidget);
-    expect(find.text('PandaPay — Home'), findsNothing);
+    expect(find.byType(HomeScreen), findsNothing);
   });
 
   testWidgets('a too-old app version blocks the app with ForcedUpgradeScreen', (tester) async {
@@ -71,7 +72,7 @@ void main() {
     );
 
     expect(find.byType(ForcedUpgradeScreen), findsOneWidget);
-    expect(find.text('PandaPay — Home'), findsNothing);
+    expect(find.byType(HomeScreen), findsNothing);
   });
 
   testWidgets('a current-enough app version and no maintenance mode reaches Home normally', (tester) async {
@@ -85,7 +86,7 @@ void main() {
       ],
     );
 
-    expect(find.text('PandaPay — Home'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.byType(MaintenanceScreen), findsNothing);
     expect(find.byType(ForcedUpgradeScreen), findsNothing);
   });
@@ -98,7 +99,7 @@ void main() {
       ],
     );
 
-    expect(find.text('PandaPay — Home'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.byType(MaintenanceScreen), findsNothing);
     expect(find.byType(ForcedUpgradeScreen), findsNothing);
   });

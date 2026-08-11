@@ -9,7 +9,7 @@ class ApiException implements Exception {
   final String debugMessage;
 
   ApiException(this.debugMessage, {String? userMessage})
-      : userMessage = userMessage ?? friendlyMessageFrom(debugMessage);
+    : userMessage = userMessage ?? friendlyMessageFrom(debugMessage);
 
   @override
   String toString() => debugMessage;

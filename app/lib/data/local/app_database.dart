@@ -45,6 +45,24 @@ CREATE TABLE IF NOT EXISTS transaction_outbox_entries (
   created_at INTEGER NOT NULL,
   last_error TEXT
 );
+
+-- Guest/no-account mode (ui-spec.md A3): the on-device wallet for a user
+-- who never signs in. Deliberately just card ownership + ordering, not a
+-- relational mirror of the signed-in schema's cap/points/transaction
+-- tracking — a guest has no synced spend history to compute those from,
+-- so LocalUserCardsRepository always reports zero usage rather than
+-- fabricating numbers. sort_order is a plain float (like signed-in
+-- reorderCards) so a drag-drop insert between two cards never requires
+-- renumbering every other row.
+CREATE TABLE IF NOT EXISTS local_user_cards (
+  id TEXT PRIMARY KEY,
+  card_product_id TEXT NOT NULL,
+  nickname TEXT,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  is_archived INTEGER NOT NULL DEFAULT 0,
+  sort_order REAL NOT NULL,
+  created_at INTEGER NOT NULL
+);
 ''';
 
 class AppDatabase {

@@ -21,12 +21,12 @@ class ImportRepository {
   final http.Client _client;
 
   ImportRepository({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $accessToken',
+    'Content-Type': 'application/json',
+  };
 
   // ---- F3 Email Forwarding -------------------------------------------------
 
@@ -80,7 +80,9 @@ class ImportRepository {
       }),
     );
     if (response.statusCode != 201) {
-      throw ApiException('POST /inbound-emails/:id/create-transaction failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /inbound-emails/:id/create-transaction failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -92,7 +94,10 @@ class ImportRepository {
       throw ApiException('GET /statement-imports failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['statementImports'] as List).cast<Map<String, dynamic>>().map(StatementImport.fromJson).toList();
+    return (body['statementImports'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(StatementImport.fromJson)
+        .toList();
   }
 
   Future<StatementImport> confirmStatementImport({
@@ -134,7 +139,10 @@ class ImportRepository {
       throw ApiException('GET /sms-import-batches failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['smsImportBatches'] as List).cast<Map<String, dynamic>>().map(SmsImportBatch.fromJson).toList();
+    return (body['smsImportBatches'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(SmsImportBatch.fromJson)
+        .toList();
   }
 
   Future<SmsImportBatch> recordSmsImportBatch({
@@ -145,7 +153,11 @@ class ImportRepository {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/sms-import-batches'),
       headers: _headers,
-      body: jsonEncode({'messageCount': messageCount, 'parsedCount': parsedCount, 'failedCount': failedCount}),
+      body: jsonEncode({
+        'messageCount': messageCount,
+        'parsedCount': parsedCount,
+        'failedCount': failedCount,
+      }),
     );
     if (response.statusCode != 201) {
       throw ApiException('POST /sms-import-batches failed: ${response.statusCode} ${response.body}');
@@ -178,10 +190,7 @@ class ImportRepository {
   /// (Dart doesn't allow naming positional record fields in a type
   /// signature, only via `({...})` named records) — callers destructure it
   /// positionally, e.g. `final (body, filename, mime) = await ...`.
-  Future<(String, String, String)> fetchExport({
-    required String scope,
-    required String format,
-  }) async {
+  Future<(String, String, String)> fetchExport({required String scope, required String format}) async {
     final uri = Uri.parse('$apiBaseUrl/export').replace(queryParameters: {'scope': scope, 'format': format});
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
@@ -229,7 +238,10 @@ class ImportRepository {
   }
 
   Future<ImapTestResult> testImapConnection(String id) async {
-    final response = await _client.post(Uri.parse('$apiBaseUrl/imap-connections/$id/test'), headers: _headers);
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/imap-connections/$id/test'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
       throw ApiException('POST /imap-connections/:id/test failed: ${response.statusCode} ${response.body}');
     }
@@ -269,13 +281,13 @@ class ForwardingAddress {
   String get fullAddress => '$localPart@in.pandapay.app';
 
   factory ForwardingAddress.fromJson(Map<String, dynamic> json) => ForwardingAddress(
-        id: json['id'] as String,
-        localPart: json['local_part'] as String,
-        isActive: json['is_active'] as bool? ?? true,
-        verifiedAt: json['verified_at'] == null ? null : DateTime.parse(json['verified_at'] as String),
-        firstEmailAt: json['first_email_at'] == null ? null : DateTime.parse(json['first_email_at'] as String),
-        emailCount: (json['email_count'] as num?)?.toInt() ?? 0,
-      );
+    id: json['id'] as String,
+    localPart: json['local_part'] as String,
+    isActive: json['is_active'] as bool? ?? true,
+    verifiedAt: json['verified_at'] == null ? null : DateTime.parse(json['verified_at'] as String),
+    firstEmailAt: json['first_email_at'] == null ? null : DateTime.parse(json['first_email_at'] as String),
+    emailCount: (json['email_count'] as num?)?.toInt() ?? 0,
+  );
 }
 
 class InboundEmail {
@@ -298,14 +310,14 @@ class InboundEmail {
   });
 
   factory InboundEmail.fromJson(Map<String, dynamic> json) => InboundEmail(
-        id: json['id'] as String,
-        sender: json['sender'] as String?,
-        subject: json['subject'] as String?,
-        receivedAt: DateTime.parse(json['received_at'] as String),
-        isKnownBankSender: json['is_known_bank_sender'] as bool? ?? false,
-        parsedOk: json['parsed_ok'] as bool?,
-        producedTxnId: json['produced_txn_id'] as String?,
-      );
+    id: json['id'] as String,
+    sender: json['sender'] as String?,
+    subject: json['subject'] as String?,
+    receivedAt: DateTime.parse(json['received_at'] as String),
+    isKnownBankSender: json['is_known_bank_sender'] as bool? ?? false,
+    parsedOk: json['parsed_ok'] as bool?,
+    producedTxnId: json['produced_txn_id'] as String?,
+  );
 }
 
 /// F2.
@@ -333,18 +345,18 @@ class StatementImport {
   });
 
   factory StatementImport.fromJson(Map<String, dynamic> json) => StatementImport(
-        id: json['id'] as String,
-        userCardId: json['user_card_id'] as String,
-        statementFrom: DateTime.parse(json['statement_from'] as String),
-        statementTo: DateTime.parse(json['statement_to'] as String),
-        closingBalance: _numOrNull(json['closing_balance_inr']) == null
-            ? null
-            : Money.fromRupees(_numOrNull(json['closing_balance_inr'])!),
-        pointsPosted: _numOrNull(json['points_posted']),
-        txnCount: (json['txn_count'] as num?)?.toInt() ?? 0,
-        reconciledCount: (json['reconciled_count'] as num?)?.toInt() ?? 0,
-        importedAt: DateTime.parse(json['imported_at'] as String),
-      );
+    id: json['id'] as String,
+    userCardId: json['user_card_id'] as String,
+    statementFrom: DateTime.parse(json['statement_from'] as String),
+    statementTo: DateTime.parse(json['statement_to'] as String),
+    closingBalance: _numOrNull(json['closing_balance_inr']) == null
+        ? null
+        : Money.fromRupees(_numOrNull(json['closing_balance_inr'])!),
+    pointsPosted: _numOrNull(json['points_posted']),
+    txnCount: (json['txn_count'] as num?)?.toInt() ?? 0,
+    reconciledCount: (json['reconciled_count'] as num?)?.toInt() ?? 0,
+    importedAt: DateTime.parse(json['imported_at'] as String),
+  );
 }
 
 /// F4 backup-file import summary.
@@ -364,12 +376,12 @@ class SmsImportBatch {
   });
 
   factory SmsImportBatch.fromJson(Map<String, dynamic> json) => SmsImportBatch(
-        id: json['id'] as String,
-        messageCount: (json['message_count'] as num?)?.toInt() ?? 0,
-        parsedCount: (json['parsed_count'] as num?)?.toInt() ?? 0,
-        failedCount: (json['failed_count'] as num?)?.toInt() ?? 0,
-        importedAt: DateTime.parse(json['imported_at'] as String),
-      );
+    id: json['id'] as String,
+    messageCount: (json['message_count'] as num?)?.toInt() ?? 0,
+    parsedCount: (json['parsed_count'] as num?)?.toInt() ?? 0,
+    failedCount: (json['failed_count'] as num?)?.toInt() ?? 0,
+    importedAt: DateTime.parse(json['imported_at'] as String),
+  );
 }
 
 /// F5 — see GET /backup-status' doc-comment for why this is ops-wide
@@ -423,13 +435,13 @@ class SyncConflict {
   });
 
   factory SyncConflict.fromJson(Map<String, dynamic> json) => SyncConflict(
-        id: json['id'] as String,
-        entity: json['entity'] as String,
-        field: json['field'] as String,
-        strategy: json['strategy'] as String,
-        userAcknowledged: json['user_acknowledged'] as bool? ?? false,
-        createdAt: DateTime.parse(json['created_at'] as String),
-      );
+    id: json['id'] as String,
+    entity: json['entity'] as String,
+    field: json['field'] as String,
+    strategy: json['strategy'] as String,
+    userAcknowledged: json['user_acknowledged'] as bool? ?? false,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
 }
 
 /// F7. Never carries the app password (server never returns it — see GET
@@ -458,16 +470,16 @@ class ImapConnection {
   });
 
   factory ImapConnection.fromJson(Map<String, dynamic> json) => ImapConnection(
-        id: json['id'] as String,
-        email: json['email'] as String,
-        imapHost: json['imap_host'] as String,
-        imapPort: (json['imap_port'] as num?)?.toInt() ?? 993,
-        senderFilter: json['sender_filter'] as String?,
-        isActive: json['is_active'] as bool? ?? true,
-        verifiedAt: json['verified_at'] == null ? null : DateTime.parse(json['verified_at'] as String),
-        lastPollAt: json['last_poll_at'] == null ? null : DateTime.parse(json['last_poll_at'] as String),
-        lastPollStatus: json['last_poll_status'] as String?,
-      );
+    id: json['id'] as String,
+    email: json['email'] as String,
+    imapHost: json['imap_host'] as String,
+    imapPort: (json['imap_port'] as num?)?.toInt() ?? 993,
+    senderFilter: json['sender_filter'] as String?,
+    isActive: json['is_active'] as bool? ?? true,
+    verifiedAt: json['verified_at'] == null ? null : DateTime.parse(json['verified_at'] as String),
+    lastPollAt: json['last_poll_at'] == null ? null : DateTime.parse(json['last_poll_at'] as String),
+    lastPollStatus: json['last_poll_status'] as String?,
+  );
 }
 
 class ImapTestResult {

@@ -11,7 +11,7 @@ class _FakeUserCardsRepository extends UserCardsRepository {
   _FakeUserCardsRepository({this.shouldFail = false}) : super(apiBaseUrl: 'http://test', accessToken: 'tok');
 
   @override
-  Future<void> logTransaction({
+  Future<String> logTransaction({
     required String userCardId,
     required Money amount,
     String? categoryId,
@@ -21,6 +21,7 @@ class _FakeUserCardsRepository extends UserCardsRepository {
   }) async {
     if (shouldFail) throw ApiException('offline');
     sent.add({'userCardId': userCardId, 'amount': amount});
+    return 'fake-txn-id';
   }
 }
 

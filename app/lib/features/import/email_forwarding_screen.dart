@@ -45,15 +45,7 @@ class EmailForwardingScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Email forwarding', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: forwarding.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
@@ -171,8 +163,9 @@ class _StatusView extends ConsumerWidget {
                     onPressed: () async {
                       await Clipboard.setData(ClipboardData(text: address.fullAddress));
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
                       }
                     },
                   ),
@@ -198,67 +191,82 @@ class _StatusView extends ConsumerWidget {
         ),
         if (connected) ...[
           const SizedBox(height: AppSpace.xxl),
-          Text('Recent emails', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+          Text(
+            'Recent emails',
+            style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+          ),
           const SizedBox(height: AppSpace.sm),
           inboundEmails.when(
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpace.md),
               child: Center(child: CircularProgressIndicator()),
             ),
-            error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(12.5, color: BambooInk.clay)),
+            error: (err, _) =>
+                Text(userFacingErrorMessage(err), style: BambooFonts.ui(12.5, color: BambooInk.clay)),
             data: (emails) {
               if (emails.isEmpty) {
                 return Text('No emails received yet.', style: BambooFonts.ui(12.5, color: BambooInk.ink500));
               }
               return Column(
                 children: emails
-                    .map((e) => Container(
-                          margin: const EdgeInsets.only(bottom: AppSpace.sm),
-                          padding: const EdgeInsets.all(AppSpace.md),
-                          decoration: BoxDecoration(
-                            color: BambooInk.glassFillOnPaper,
-                            borderRadius: BorderRadius.circular(AppRadius.md),
-                            border: Border.all(color: BambooInk.hairlineOnPaper),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                e.parsedOk == true
-                                    ? Icons.check_circle_rounded
-                                    : (e.parsedOk == false ? Icons.error_outline_rounded : Icons.hourglass_top_rounded),
-                                size: 16,
-                                color: e.parsedOk == true ? BambooInk.jade : BambooInk.amber,
+                    .map(
+                      (e) => Container(
+                        margin: const EdgeInsets.only(bottom: AppSpace.sm),
+                        padding: const EdgeInsets.all(AppSpace.md),
+                        decoration: BoxDecoration(
+                          color: BambooInk.glassFillOnPaper,
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(color: BambooInk.hairlineOnPaper),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              e.parsedOk == true
+                                  ? Icons.check_circle_rounded
+                                  : (e.parsedOk == false
+                                        ? Icons.error_outline_rounded
+                                        : Icons.hourglass_top_rounded),
+                              size: 16,
+                              color: e.parsedOk == true ? BambooInk.jade : BambooInk.amber,
+                            ),
+                            const SizedBox(width: AppSpace.sm),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    e.subject ?? e.sender ?? 'Email',
+                                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    e.parsedOk == true
+                                        ? (e.producedTxnId != null
+                                              ? 'Added as a transaction'
+                                              : 'Parsed — ready to add')
+                                        : (e.parsedOk == false
+                                              ? 'Could not parse automatically'
+                                              : 'Received'),
+                                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: AppSpace.sm),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      e.subject ?? e.sender ?? 'Email',
-                                      style: BambooFonts.ui(13.5, color: BambooInk.ink900),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    Text(
-                                      e.parsedOk == true
-                                          ? (e.producedTxnId != null ? 'Added as a transaction' : 'Parsed — ready to add')
-                                          : (e.parsedOk == false ? 'Could not parse automatically' : 'Received'),
-                                      style: BambooFonts.ui(12, color: BambooInk.ink500),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ))
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                     .toList(),
               );
             },
           ),
         ],
         const SizedBox(height: AppSpace.xxl),
-        Text('How to set up forwarding', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+        Text(
+          'How to set up forwarding',
+          style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+        ),
         const SizedBox(height: AppSpace.sm),
         const _StepTile(
           step: 1,
@@ -272,7 +280,10 @@ class _StatusView extends ConsumerWidget {
         const SizedBox(height: AppSpace.md),
         Container(
           padding: const EdgeInsets.all(AppSpace.md),
-          decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+          decoration: BoxDecoration(
+            color: BambooInk.paperMuted,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
           child: Text(
             'Provider-specific step-by-step guides with screenshots (Gmail/Outlook/Yahoo/Other) and Gmail\'s '
             'forwarding-verification-code paste step aren\'t available yet — both need a live inbound-email '
@@ -311,10 +322,15 @@ class _StepTile extends StatelessWidget {
           CircleAvatar(
             radius: 11,
             backgroundColor: BambooInk.slate,
-            child: Text('$step', style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.lime)),
+            child: Text(
+              '$step',
+              style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.lime),
+            ),
           ),
           const SizedBox(width: AppSpace.sm),
-          Expanded(child: Text(text, style: BambooFonts.ui(13.5, color: BambooInk.ink900))),
+          Expanded(
+            child: Text(text, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+          ),
         ],
       ),
     );

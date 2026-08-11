@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 
 /// ui-spec.md F4 SMS Import: an explicit consent/declaration step before
 /// the OS permission dialog. Per the plan: "matches F3's 'explicit
@@ -25,30 +26,27 @@ class SmsConsentScreen extends StatelessWidget {
         elevation: 0,
         title: Text('Before you continue', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('SMS auto-import reads your bank SMS on-device', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+              Text(
+                'SMS auto-import reads your bank SMS on-device',
+                style: BambooFonts.heading(17, color: BambooInk.ink900),
+              ),
               const SizedBox(height: AppSpace.lg),
               const _Point(
                 icon: Icons.phone_iphone_rounded,
-                text: 'Parsing happens entirely on this device — message text is never uploaded, only the '
+                text:
+                    'Parsing happens entirely on this device — message text is never uploaded, only the '
                     'extracted amount/merchant/date needed to log a transaction.',
               ),
               const _Point(
                 icon: Icons.filter_alt_outlined,
-                text: 'Only messages matching a known bank-alert pattern are used; everything else is ignored.',
+                text:
+                    'Only messages matching a known bank-alert pattern are used; everything else is ignored.',
               ),
               const _Point(
                 icon: Icons.toggle_off_outlined,
@@ -108,7 +106,9 @@ class _Point extends StatelessWidget {
         children: [
           Icon(icon, size: 20, color: BambooInk.ink900),
           const SizedBox(width: AppSpace.md),
-          Expanded(child: Text(text, style: BambooFonts.ui(13.5, color: BambooInk.ink500))),
+          Expanded(
+            child: Text(text, style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+          ),
         ],
       ),
     );

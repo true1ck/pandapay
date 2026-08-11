@@ -54,15 +54,7 @@ class NotificationSettingsScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Notifications', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         // Every SwitchListTile below relies on the ambient SwitchThemeData
         // for its colors rather than each setting its own activeColor —
         // one Theme override here restyles all eight consistently instead
@@ -202,7 +194,11 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
       child: Text(
         title.toUpperCase(),
-        style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: 1.1),
+        style: BambooFonts.ui(
+          12,
+          weight: FontWeight.w700,
+          color: BambooInk.ink500,
+        ).copyWith(letterSpacing: 1.1),
       ),
     );
   }
@@ -383,8 +379,9 @@ class _MutedMerchantsList extends ConsumerWidget {
                       ref.invalidate(_mutedMerchantsProvider);
                     } catch (e) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
                       }
                     }
                   },

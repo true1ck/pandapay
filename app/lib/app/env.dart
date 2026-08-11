@@ -1,0 +1,90 @@
+/// Build-time environment configuration (plan Phase 0.3).
+///
+/// Before this file, `providers.dart` hardcoded `http://localhost:4000` and
+/// `http://localhost:3210` as plain `const`s, which meant a release build
+/// pointed at the handset itself and could never reach a real backend. These
+/// are `String.fromEnvironment`, so the value is fixed at compile time by
+/// `--dart-define` and is tree-shaken into the binary as a constant — no
+/// runtime lookup, no `.env` file shipped inside the APK/IPA (which would be
+/// trivially readable, OWASP M9), and no way for a running app to be pointed
+/// somewhere else.
+///
+/// The defaults are the local dev ports, so `flutter run` with no flags keeps
+/// behaving exactly as it did before this change. Every non-dev build is
+/// expected to pass all three defines:
+///
+/// ```bash
+/// flutter build apk --release \
+///   --dart-define=PANDAPAY_ENV=prod \
+///   --dart-define=PANDAPAY_API_BASE_URL=https://api.pandapay.example \
+///   --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.pandapay.example
+/// ```
+///
+/// [assertReleaseConfigured] turns a forgotten define into a loud startup
+/// failure rather than a release build that silently tries to reach
+/// `localhost` on a user's phone and shows them a generic network error.
+library;
+
+import 'package:flutter/foundation.dart';
+
+enum AppEnvironment { dev, staging, prod }
+
+class Env {
+  const Env._();
+
+  static const String _rawEnv = String.fromEnvironment(
+    'PANDAPAY_ENV',
+    defaultValue: 'dev',
+  );
+
+  /// api/'s base URL. Default is api/'s local dev port.
+  static const String apiBaseUrl = String.fromEnvironment(
+    'PANDAPAY_API_BASE_URL',
+    defaultValue: 'http://localhost:4000',
+  );
+
+  /// auth/'s base URL. Default is auth/'s local dev port.
+  static const String authBaseUrl = String.fromEnvironment(
+    'PANDAPAY_AUTH_BASE_URL',
+    defaultValue: 'http://localhost:3210',
+  );
+
+  static AppEnvironment get environment => switch (_rawEnv) {
+    'prod' => AppEnvironment.prod,
+    'staging' => AppEnvironment.staging,
+    _ => AppEnvironment.dev,
+  };
+
+  static bool get isDev => environment == AppEnvironment.dev;
+
+  /// True when either base URL still points at a loopback address. Used both
+  /// by [assertReleaseConfigured] and by the debug banner in H5 so a tester
+  /// can tell at a glance which backend a build is talking to.
+  static bool get pointsAtLocalhost =>
+      _isLoopback(apiBaseUrl) || _isLoopback(authBaseUrl);
+
+  static bool _isLoopback(String url) {
+    final host = Uri.tryParse(url)?.host ?? '';
+    // 10.0.2.2 is the Android emulator's alias for the host machine's
+    // loopback — just as unreachable from a real device as `localhost`.
+    return host == 'localhost' || host == '127.0.0.1' || host == '10.0.2.2';
+  }
+
+  /// Fails fast in a release build that was compiled without the defines.
+  ///
+  /// Deliberately an unconditional `throw` rather than an `assert`: asserts
+  /// are stripped from release builds, which is precisely the build this is
+  /// meant to catch. A crash on the first frame with an actionable message is
+  /// strictly better than shipping a build that can only ever show users a
+  /// network error, and it can only ever fire on a misconfigured release —
+  /// never on a real user's device once the build is correct.
+  static void assertReleaseConfigured() {
+    if (kReleaseMode && pointsAtLocalhost) {
+      throw StateError(
+        'Release build was compiled without --dart-define=PANDAPAY_API_BASE_URL / '
+        'PANDAPAY_AUTH_BASE_URL, so it points at $apiBaseUrl and $authBaseUrl. '
+        'See app/lib/app/env.dart for the required build flags.',
+      );
+    }
+  }
+}

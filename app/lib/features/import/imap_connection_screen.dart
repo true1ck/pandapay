@@ -67,9 +67,13 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
         final testResult = await repo.testImapConnection(conn.id);
         ref.invalidate(imapConnectionProvider);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(testResult.ok ? 'Connected — login succeeded.' : (testResult.reason ?? 'Login failed.')),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                testResult.ok ? 'Connected — login succeeded.' : (testResult.reason ?? 'Login failed.'),
+              ),
+            ),
+          );
         }
       }
     } catch (e) {
@@ -84,7 +88,8 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
   @override
   Widget build(BuildContext context) {
     final connection = ref.watch(imapConnectionProvider);
-    final inputDecoration = (String label, {String? hint, String? helper, Widget? suffixIcon}) => InputDecoration(
+    final inputDecoration = (String label, {String? hint, String? helper, Widget? suffixIcon}) =>
+        InputDecoration(
           labelText: label,
           hintText: hint,
           helperText: helper,
@@ -114,21 +119,16 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
         elevation: 0,
         title: Text('IMAP connection', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
             Container(
               padding: const EdgeInsets.all(AppSpace.md),
-              decoration: BoxDecoration(color: BambooInk.warningBg, borderRadius: BorderRadius.circular(AppRadius.md)),
+              decoration: BoxDecoration(
+                color: BambooInk.warningBg,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -147,8 +147,10 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
             const SizedBox(height: AppSpace.lg),
             connection.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) =>
-                  ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(imapConnectionProvider)),
+              error: (err, _) => ErrorState(
+                message: userFacingErrorMessage(err),
+                onRetry: () => ref.invalidate(imapConnectionProvider),
+              ),
               data: (conn) {
                 if (conn != null) {
                   return Container(
@@ -163,12 +165,17 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
                       children: [
                         Text(conn.email, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                         const SizedBox(height: 4),
-                        Text('${conn.imapHost}:${conn.imapPort}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                        Text(
+                          '${conn.imapHost}:${conn.imapPort}',
+                          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                        ),
                         const SizedBox(height: AppSpace.sm),
                         Row(
                           children: [
                             Icon(
-                              conn.verifiedAt != null ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                              conn.verifiedAt != null
+                                  ? Icons.check_circle_rounded
+                                  : Icons.error_outline_rounded,
                               size: 16,
                               color: conn.verifiedAt != null ? BambooInk.jade : BambooInk.amber,
                             ),
@@ -187,7 +194,10 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
               },
             ),
             const SizedBox(height: AppSpace.xxl),
-            Text('Connect a mailbox', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+            Text(
+              'Connect a mailbox',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+            ),
             const SizedBox(height: AppSpace.sm),
             TextField(
               controller: _emailController,
@@ -213,7 +223,9 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
                         'Most providers (e.g. Google) let you generate a scoped "app password" separate from your '
                         'normal login, under Account → Security → App passwords. Use that here, never your real password.',
                       ),
-                      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Got it'))],
+                      actions: [
+                        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Got it')),
+                      ],
                     ),
                   ),
                 ),

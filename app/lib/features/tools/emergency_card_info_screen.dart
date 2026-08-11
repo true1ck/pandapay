@@ -45,15 +45,7 @@ class EmergencyCardInfoScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Emergency Card Info', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: result.when(
           // Only reachable on a genuine first paint before the provider
           // resolves — resolves near-instantly even fully offline, since the
@@ -117,12 +109,13 @@ class _SourceBanner extends StatelessWidget {
         message = synced == null
             ? 'Showing data saved on this device.'
             : 'Showing data saved on this device on ${_formatDate(synced)} — you appear to be '
-                'offline right now.';
+                  'offline right now.';
         icon = Icons.offline_bolt_outlined;
         color = BambooInk.ink500;
         break;
       case EmergencyContactsSource.bundled:
-        message = 'No issuer data has synced to this device yet — showing general safety guidance '
+        message =
+            'No issuer data has synced to this device yet — showing general safety guidance '
             'below instead of your specific banks\' hotlines. Connect to the internet once to '
             'download the real numbers for your cards.';
         icon = Icons.info_outline_rounded;
@@ -141,13 +134,16 @@ class _SourceBanner extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(width: AppSpace.sm),
-          Expanded(child: Text(message, style: BambooFonts.ui(12.5, color: BambooInk.ink900))),
+          Expanded(
+            child: Text(message, style: BambooFonts.ui(12.5, color: BambooInk.ink900)),
+          ),
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  String _formatDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 }
 
 class _IssuerGroup extends StatelessWidget {
@@ -196,16 +192,28 @@ class _ContactRow extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(child: Text(contact.label, style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900))),
+                  Expanded(
+                    child: Text(
+                      contact.label,
+                      style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                    ),
+                  ),
                   if (contact.isInternational)
-                    StatusPill(label: 'International', foreground: BambooInk.ink900, background: BambooInk.paperMuted),
+                    StatusPill(
+                      label: 'International',
+                      foreground: BambooInk.ink900,
+                      background: BambooInk.paperMuted,
+                    ),
                 ],
               ),
               if (hasPhone) ...[
                 const SizedBox(height: 2),
                 Text(
                   contact.phone + (contact.isCollectCall ? ' (collect call)' : ''),
-                  style: BambooFonts.ui(12.5, color: BambooInk.ink500).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                  style: BambooFonts.ui(
+                    12.5,
+                    color: BambooInk.ink500,
+                  ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
                 ),
               ],
               if (contact.blockProcedure != null) ...[
@@ -215,10 +223,7 @@ class _ContactRow extends StatelessWidget {
             ],
           ),
         ),
-        if (hasPhone) ...[
-          const SizedBox(width: AppSpace.sm),
-          _DialButton(phone: contact.phone),
-        ],
+        if (hasPhone) ...[const SizedBox(width: AppSpace.sm), _DialButton(phone: contact.phone)],
       ],
     );
   }
@@ -232,8 +237,9 @@ class _DialButton extends StatelessWidget {
     final uri = Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^0-9+]'), ''));
     final launched = await launchUrl(uri);
     if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Couldn\'t open the dialer for $phone.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Couldn\'t open the dialer for $phone.')));
     }
   }
 

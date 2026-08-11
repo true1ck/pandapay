@@ -46,32 +46,62 @@ Future<void> _pumpApp(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// `ensureVisible`, not `scrollUntilVisible`.
+///
+/// The tile grid is a `shrinkWrap: true` `GridView` nested in the tab's
+/// scroll view, so every tile is built and findable from first pump no
+/// matter where the viewport is. `scrollUntilVisible` sees the finder match
+/// immediately and returns without scrolling anything, leaving the tile at
+/// y≈718 in a 600pt-tall test surface — where the tap silently misses.
+/// `ensureVisible` actually walks up to the scrollable ancestor and brings
+/// the element on screen.
+Future<void> _reveal(WidgetTester tester, String label) async {
+  await tester.ensureVisible(find.text(label));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openInsights(WidgetTester tester) async {
+  await _pumpApp(tester);
+  await tester.tap(
+    find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('Insights')),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('shows the Credit Utilization tile alongside the other insight tiles', (tester) async {
-    await _pumpApp(tester);
-    await tester.tap(find.descendant(of: find.byType(BottomAppBar), matching: find.text('Insights')));
-    await tester.pumpAndSettle();
+    await _openInsights(tester);
 
-    expect(find.text('Caps & Limits'), findsOneWidget);
-    expect(find.text('Milestones'), findsOneWidget);
-    expect(find.text('Billing Float'), findsOneWidget);
+    // Every tile now needs a scroll, not just the later ones: design 04's
+    // content (earned hero, category bars, missed/best pair) sits above the
+    // grid, so no tile is in the initial viewport any more.
+    for (final label in const [
+      'Caps & Limits',
+      'Milestones',
+      'Billing Float',
+      'Credit Utilization',
+      'All Activity',
+    ]) {
+      await _reveal(tester, label);
+      expect(find.text(label), findsOneWidget, reason: '$label tile should be reachable by scrolling');
+    }
+  });
 
-    // The hub has grown to 15 tiles across Groups E/F/G — later tiles sit
-    // further down the grid than the fixed test surface shows without
-    // scrolling, so each needs an explicit scroll rather than assuming
-    // it's already laid out in the initial viewport.
-    await tester.scrollUntilVisible(find.text('Credit Utilization'), 200, scrollable: find.byType(Scrollable));
-    expect(find.text('Credit Utilization'), findsOneWidget);
+  testWidgets('leads with the earned figure, not the tile grid', (tester) async {
+    await _openInsights(tester);
 
-    await tester.scrollUntilVisible(find.text('All Activity'), 200, scrollable: find.byType(Scrollable));
-    expect(find.text('All Activity'), findsOneWidget);
+    // The point of the rebuild: the tab answers "what did I earn" on
+    // arrival. With no transactions that is the empty state, but it is
+    // still content rather than a wall of navigation tiles.
+    expect(find.text('Insights'), findsWidgets);
+    expect(find.text('This month'), findsOneWidget);
+    expect(find.text('Nothing to report yet'), findsOneWidget);
   });
 
   testWidgets('tapping Caps & Limits pushes CapsScreen with a back button', (tester) async {
-    await _pumpApp(tester);
-    await tester.tap(find.descendant(of: find.byType(BottomAppBar), matching: find.text('Insights')));
-    await tester.pumpAndSettle();
+    await _openInsights(tester);
 
+    await _reveal(tester, 'Caps & Limits');
     await tester.tap(find.text('Caps & Limits'));
     await tester.pumpAndSettle();
 

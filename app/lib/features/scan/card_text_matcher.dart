@@ -75,11 +75,7 @@ String? extractLastFourDigits(String text) {
 /// Normalizes text for fuzzy comparison: lowercase, strip anything that
 /// isn't a letter/digit/space, collapse whitespace.
 String _normalize(String s) {
-  return s
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
+  return s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 /// Very small token-overlap fuzzy score: fraction of the catalogue product

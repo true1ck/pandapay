@@ -53,6 +53,20 @@ abstract final class AppSpace {
   static const xxxl = 48.0;
 }
 
+/// Measurements the four tab screens share with the shell's floating nav
+/// pill (app/router.dart's `_FloatingNavBar`).
+abstract final class AppShell {
+  /// Bottom scroll padding every tab screen owes the pill — the mockups'
+  /// own `padding:58px 0 128px` on each tab's scroll container. Content
+  /// scrolls *under* the translucent bar (that's what its backdrop blur is
+  /// for); this is the clearance that keeps the last row reachable.
+  static const navClearance = 128.0;
+
+  /// The pill's own height and inset from the bottom of the frame.
+  static const navBarHeight = 66.0;
+  static const navBarBottomInset = 26.0;
+}
+
 abstract final class AppRadius {
   static const sm = 10.0;
   static const md = 14.0;
@@ -104,6 +118,12 @@ abstract final class BambooInk {
   static const wash = Color(0xFFE4F2CF);
   static const paperMuted = Color(0xFFF7F6F0);
 
+  /// The cool grey that lifts from the bottom-left of every light screen —
+  /// the second radial in the handoff's root background (see
+  /// [AppBackground]). Balances the bamboo wash so white screens don't read
+  /// as flat.
+  static const paperCool = Color(0xFFEFF3F6);
+
   // Text/icon colors on paper.
   static const ink900 = Color(0xFF2B313A);
   static const ink500 = Color(0xFF8B8F94);
@@ -121,6 +141,18 @@ abstract final class BambooInk {
 
   static const warningBg = Color(0xFFFFF3ED);
   static const warningBorder = Color(0xFFFBD9C9);
+
+  // Design 05's rank badge — the one place the deck sets a bamboo-tinted
+  // pill on paper. It works where [lime] wouldn't because the ink is a much
+  // darker olive, not the accent itself.
+  static const rankBadgeBg = Color(0xFFEEF7DA);
+  static const rankBadgeBorder = Color(0xFFDCEDB6);
+  static const rankBadgeInk = Color(0xFF4B7A12);
+
+  // Ink colours for text set ON [warningBg] — clay itself is a fill/border
+  // colour and fails contrast as body text on its own tint.
+  static const clayInk = Color(0xFFB4441F);
+  static const clayInkMuted = Color(0xFF8B5E4E);
 
   // Mid-severity amber — the token set otherwise defines only a two-tier
   // clay/jade pairing, but a few Insights screens (caps, fee waivers) have
@@ -142,15 +174,14 @@ abstract final class BambooFonts {
     FontWeight weight = FontWeight.w800,
     Color color = BambooInk.ink900,
     double? letterSpacing,
-  }) =>
-      GoogleFonts.bricolageGrotesque(
-        fontSize: size,
-        fontWeight: weight,
-        color: color,
-        letterSpacing: letterSpacing ?? -size * 0.045,
-        height: 1.0,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
+  }) => GoogleFonts.bricolageGrotesque(
+    fontSize: size,
+    fontWeight: weight,
+    color: color,
+    letterSpacing: letterSpacing ?? -size * 0.045,
+    height: 1.0,
+    fontFeatures: const [FontFeature.tabularFigures()],
+  );
 
   static TextStyle heading(
     double size, {
@@ -158,22 +189,20 @@ abstract final class BambooFonts {
     Color color = BambooInk.ink900,
     double? letterSpacing,
     double? height,
-  }) =>
-      GoogleFonts.bricolageGrotesque(
-        fontSize: size,
-        fontWeight: weight,
-        color: color,
-        letterSpacing: letterSpacing ?? -size * 0.035,
-        height: height,
-      );
+  }) => GoogleFonts.bricolageGrotesque(
+    fontSize: size,
+    fontWeight: weight,
+    color: color,
+    letterSpacing: letterSpacing ?? -size * 0.035,
+    height: height,
+  );
 
   static TextStyle ui(
     double size, {
     FontWeight weight = FontWeight.w400,
     Color color = BambooInk.ink900,
     double? height,
-  }) =>
-      GoogleFonts.instrumentSans(fontSize: size, fontWeight: weight, color: color, height: height);
+  }) => GoogleFonts.instrumentSans(fontSize: size, fontWeight: weight, color: color, height: height);
 }
 
 /// Dark-mode neutrals. `AppColors` above is a set of hardcoded light-mode
@@ -308,10 +337,7 @@ class AppTheme {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: BambooInk.ink900,
-          textStyle: textTheme.labelLarge,
-        ),
+        style: TextButton.styleFrom(foregroundColor: BambooInk.ink900, textStyle: textTheme.labelLarge),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.navy900,
@@ -483,10 +509,7 @@ class AppTheme {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: BambooInk.ink900,
-          textStyle: textTheme.labelLarge,
-        ),
+        style: TextButton.styleFrom(foregroundColor: BambooInk.ink900, textStyle: textTheme.labelLarge),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.teal500,

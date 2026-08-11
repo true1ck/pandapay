@@ -17,7 +17,8 @@ class HttpMerchantSearchRepository implements MerchantSearchRepository {
   final String baseUrl;
   final http.Client _client;
 
-  HttpMerchantSearchRepository({required this.baseUrl, http.Client? client}) : _client = client ?? http.Client();
+  HttpMerchantSearchRepository({required this.baseUrl, http.Client? client})
+    : _client = client ?? http.Client();
 
   @override
   Future<List<NearbyMerchantCandidate>> search(String query) async {

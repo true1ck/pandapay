@@ -76,15 +76,7 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
         elevation: 0,
         title: Text('Export your data', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Column(
@@ -97,7 +89,10 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
                 style: BambooFonts.ui(13.5, color: BambooInk.ink500),
               ),
               const SizedBox(height: AppSpace.lg),
-              Text('Scope', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+              Text(
+                'Scope',
+                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              ),
               const SizedBox(height: AppSpace.xs),
               Wrap(
                 spacing: AppSpace.sm,
@@ -105,7 +100,11 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
                   for (final s in const ['transactions', 'cards', 'all'])
                     ChoiceChip(
                       label: Text(s),
-                      labelStyle: BambooFonts.ui(13, weight: FontWeight.w600, color: _scope == s ? BambooInk.onSlate : BambooInk.ink900),
+                      labelStyle: BambooFonts.ui(
+                        13,
+                        weight: FontWeight.w600,
+                        color: _scope == s ? BambooInk.onSlate : BambooInk.ink900,
+                      ),
                       selected: _scope == s,
                       selectedColor: BambooInk.slate,
                       backgroundColor: BambooInk.paperMuted,
@@ -116,7 +115,10 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
                 ],
               ),
               const SizedBox(height: AppSpace.lg),
-              Text('Format', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+              Text(
+                'Format',
+                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              ),
               const SizedBox(height: AppSpace.xs),
               Wrap(
                 spacing: AppSpace.sm,
@@ -124,7 +126,11 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
                   for (final f in const ['json', 'csv'])
                     ChoiceChip(
                       label: Text(f.toUpperCase()),
-                      labelStyle: BambooFonts.ui(13, weight: FontWeight.w600, color: _format == f ? BambooInk.onSlate : BambooInk.ink900),
+                      labelStyle: BambooFonts.ui(
+                        13,
+                        weight: FontWeight.w600,
+                        color: _format == f ? BambooInk.onSlate : BambooInk.ink900,
+                      ),
                       selected: _format == f,
                       selectedColor: BambooInk.slate,
                       backgroundColor: BambooInk.paperMuted,
@@ -162,8 +168,9 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
                       onPressed: () async {
                         await Clipboard.setData(ClipboardData(text: _preview!));
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(content: Text('Copied — paste it wherever you want to save it')));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Copied — paste it wherever you want to save it')),
+                          );
                         }
                       },
                     ),
@@ -174,11 +181,17 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(AppSpace.md),
-                    decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+                    decoration: BoxDecoration(
+                      color: BambooInk.paperMuted,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
                     child: SingleChildScrollView(
                       child: Text(
                         _preview!,
-                        style: BambooFonts.ui(12.5, color: BambooInk.ink900).copyWith(fontFamily: 'monospace'),
+                        style: BambooFonts.ui(
+                          12.5,
+                          color: BambooInk.ink900,
+                        ).copyWith(fontFamily: 'monospace'),
                       ),
                     ),
                   ),

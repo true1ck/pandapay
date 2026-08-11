@@ -244,6 +244,12 @@ extension CardProductJson on CardProduct {
       network: _parseNetwork(json['network'] as String),
       isUpiLinkable: json['is_upi_linkable'] as bool? ?? false,
       pointValueInr: _numOrNull(json['point_value_inr']) ?? 0,
+      // The catalogue's everything-else rate. Both halves must be present
+      // for it to mean anything — a rate with no unit isn't a rate.
+      baseRewardUnit: json['base_reward_unit'] == null
+          ? null
+          : _parseRewardUnit(json['base_reward_unit'] as String),
+      baseRewardRate: _numOrNull(json['base_reward_rate']),
       rewardRules: ((json['reward_rules'] as List?) ?? const [])
           .map((e) => RewardRuleJson.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -276,6 +282,8 @@ extension CardProductJson on CardProduct {
         'network': network.name,
         'is_upi_linkable': isUpiLinkable,
         'point_value_inr': pointValueInr,
+        'base_reward_unit': baseRewardUnit == null ? null : _snakeFromCamel(baseRewardUnit!.name),
+        'base_reward_rate': baseRewardRate,
         'reward_rules': rewardRules.map((r) => r.toJson()).toList(),
         'cap_rules': capRules.map((r) => r.toJson()).toList(),
         'milestone_rules': milestoneRules.map((r) => r.toJson()).toList(),

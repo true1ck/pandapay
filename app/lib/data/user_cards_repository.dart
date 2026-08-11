@@ -47,6 +47,14 @@ class UserCard {
   /// false there by construction, not by checking this field.
   final bool isArchived;
 
+  /// Migration 0027 — what the user has told us about autopay on this card.
+  ///
+  /// Never observed from the issuer: PandaPay is read-only by design and has
+  /// no mandate integration, so [AutopayMode.off] means "hasn't said
+  /// otherwise", not "confirmed off". Anything shown to the user from this
+  /// must be phrased as their own answer, never as a fact about their bank.
+  final AutopayMode autopayMode;
+
   const UserCard({
     required this.id,
     required this.cardProductId,
@@ -64,15 +72,13 @@ class UserCard {
     this.dueDay,
     this.anniversaryOn,
     this.isArchived = false,
+    this.autopayMode = AutopayMode.off,
   });
 
   factory UserCard.fromJson(Map<String, dynamic> json) {
-    final capStates = (json['cap_states'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final milestoneStates = (json['milestone_states'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final feeWaiverStates = (json['fee_waiver_states'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
+    final capStates = (json['cap_states'] as List? ?? const []).cast<Map<String, dynamic>>();
+    final milestoneStates = (json['milestone_states'] as List? ?? const []).cast<Map<String, dynamic>>();
+    final feeWaiverStates = (json['fee_waiver_states'] as List? ?? const []).cast<Map<String, dynamic>>();
     return UserCard(
       id: json['id'] as String,
       cardProductId: json['card_product_id'] as String,
@@ -80,8 +86,7 @@ class UserCard {
       cardName: json['card_name'] as String,
       isDefault: json['is_default'] as bool? ?? false,
       capConsumed: {
-        for (final s in capStates)
-          s['cap_rule_id'] as String: Money.fromRupees(_num(s['consumed'])),
+        for (final s in capStates) s['cap_rule_id'] as String: Money.fromRupees(_num(s['consumed'])),
       },
       milestoneQualifiedSpend: {
         for (final s in milestoneStates)
@@ -100,6 +105,7 @@ class UserCard {
       dueDay: json['due_day'] as int?,
       anniversaryOn: json['anniversary_on'] == null ? null : DateTime.parse(json['anniversary_on'] as String),
       isArchived: json['is_archived'] as bool? ?? false,
+      autopayMode: AutopayMode.fromJson(json['autopay_mode'] as String?),
     );
   }
 
@@ -107,32 +113,111 @@ class UserCard {
   /// — mirrors [fromJson]'s keys exactly so a cached blob decodes through
   /// the unmodified fromJson parser above.
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'card_product_id': cardProductId,
-        'nickname': nickname,
-        'card_name': cardName,
-        'is_default': isDefault,
-        'cap_states': [
-          for (final entry in capConsumed.entries) {'cap_rule_id': entry.key, 'consumed': entry.value.rupees},
-        ],
-        'milestone_states': [
-          for (final entry in milestoneQualifiedSpend.entries)
-            {
-              'milestone_rule_id': entry.key,
-              'qualified_spend': entry.value.rupees,
-              if (milestonePeriodEnd[entry.key] != null)
-                'period_end': milestonePeriodEnd[entry.key]!.toIso8601String(),
-            },
-        ],
-        'fee_waiver_states': feeWaiverStates.map((fw) => fw.toJson()).toList(),
-        'total_points_earned': totalPointsEarned,
-        'statement_day': statementDay,
-        'opened_on': openedOn?.toIso8601String(),
-        'credit_limit_inr': creditLimit?.rupees,
-        'due_day': dueDay,
-        'anniversary_on': anniversaryOn?.toIso8601String(),
-        'is_archived': isArchived,
-      };
+    'id': id,
+    'card_product_id': cardProductId,
+    'nickname': nickname,
+    'card_name': cardName,
+    'is_default': isDefault,
+    'cap_states': [
+      for (final entry in capConsumed.entries) {'cap_rule_id': entry.key, 'consumed': entry.value.rupees},
+    ],
+    'milestone_states': [
+      for (final entry in milestoneQualifiedSpend.entries)
+        {
+          'milestone_rule_id': entry.key,
+          'qualified_spend': entry.value.rupees,
+          if (milestonePeriodEnd[entry.key] != null)
+            'period_end': milestonePeriodEnd[entry.key]!.toIso8601String(),
+        },
+    ],
+    'fee_waiver_states': feeWaiverStates.map((fw) => fw.toJson()).toList(),
+    'total_points_earned': totalPointsEarned,
+    'statement_day': statementDay,
+    'opened_on': openedOn?.toIso8601String(),
+    'credit_limit_inr': creditLimit?.rupees,
+    'due_day': dueDay,
+    'anniversary_on': anniversaryOn?.toIso8601String(),
+    'is_archived': isArchived,
+    'autopay_mode': autopayMode.wireValue,
+  };
+}
+
+/// What the user has told PandaPay about autopay on a card — migration
+/// 0027's `user_cards.autopay_mode`.
+///
+/// Three states, not a boolean, because the deck's own copy distinguishes
+/// them and the distinction carries real money: autopay set to the MINIMUM
+/// due still avoids a late-payment mark on the credit report, but leaves
+/// the rest of the balance revolving at around 42% p.a. Telling a user on
+/// [minimum] that they are "covered" would be false in the way that costs
+/// the most.
+enum AutopayMode {
+  /// Also the value for a card the user has never answered about — see
+  /// [UserCard.autopayMode]. Treat as "unknown", not as a verified negative.
+  off('off'),
+  minimum('minimum'),
+  full('full');
+
+  final String wireValue;
+  const AutopayMode(this.wireValue);
+
+  /// Unknown or missing values fall back to [off] rather than throwing: a
+  /// server that grows a fourth mode must not crash an older client, and
+  /// [off] is the conservative reading — it prompts the user to confirm
+  /// rather than reassuring them.
+  static AutopayMode fromJson(String? value) =>
+      AutopayMode.values.firstWhere((m) => m.wireValue == value, orElse: () => AutopayMode.off);
+
+  /// True only when the whole statement balance is covered. [minimum] is
+  /// deliberately excluded — see the enum's own doc-comment.
+  bool get coversFullStatement => this == AutopayMode.full;
+}
+
+/// One share of a split transaction — design 18 "Split this expense".
+///
+/// A split records **who owed what**, not a second payment. The parent
+/// transaction's cap, milestone and points state was computed once, on the
+/// card it was actually paid with; splits never re-enter that arithmetic,
+/// which is why this carries no confidence marker and never appears in an
+/// earnings total.
+///
+/// [id] is null for a split the user has built on screen but not yet
+/// saved — the server assigns ids on write, and the whole set is replaced
+/// on each save, so client-side ids would be meaningless.
+class TransactionSplit {
+  final String? id;
+  final String? userCardId;
+  final String? categoryId;
+  final String? categoryName;
+  final Money amount;
+  final String? note;
+
+  const TransactionSplit({
+    this.id,
+    this.userCardId,
+    this.categoryId,
+    this.categoryName,
+    required this.amount,
+    this.note,
+  });
+
+  factory TransactionSplit.fromJson(Map<String, dynamic> json) => TransactionSplit(
+    id: json['id'] as String?,
+    userCardId: json['user_card_id'] as String?,
+    categoryId: json['category_id'] as String?,
+    categoryName: json['category_name'] as String?,
+    amount: Money.fromRupees(_num(json['amount_inr'])),
+    note: json['note'] as String?,
+  );
+
+  /// The PUT body shape, which is camelCase and omits server-owned fields —
+  /// deliberately not the mirror of [fromJson].
+  Map<String, dynamic> toRequestJson() => {
+    'amountInr': amount.rupees,
+    if (userCardId != null) 'userCardId': userCardId,
+    if (categoryId != null) 'categoryId': categoryId,
+    if (note != null && note!.isNotEmpty) 'note': note,
+  };
 }
 
 /// Chunk 28: this card's fee-waiver progress for the CURRENT period only
@@ -167,13 +252,13 @@ class FeeWaiverProgress {
   }
 
   Map<String, dynamic> toJson() => {
-        'fee_waiver_rule_id': feeWaiverRuleId,
-        'qualified_spend': qualifiedSpend.rupees,
-        'threshold_spend_inr': thresholdSpend.rupees,
-        'waives_fee_inr': waivesFee.rupees,
-        'waived_at': waivedAt?.toIso8601String(),
-        'period_end': periodEnd.toIso8601String(),
-      };
+    'fee_waiver_rule_id': feeWaiverRuleId,
+    'qualified_spend': qualifiedSpend.rupees,
+    'threshold_spend_inr': thresholdSpend.rupees,
+    'waives_fee_inr': waivesFee.rupees,
+    'waived_at': waivedAt?.toIso8601String(),
+    'period_end': periodEnd.toIso8601String(),
+  };
 }
 
 /// Task C-6 (ui-spec C6 Points & Expiry) — one row in `points_ledger`.
@@ -301,32 +386,227 @@ class ContributionNetworkStats {
   }
 }
 
+/// Design 01's header strip: rewards this month, rewards all time, and the
+/// logging streak, from `GET /home-summary`. See that route's doc-comment
+/// for how each figure is derived — every one is a real aggregate over the
+/// user's own transactions, so the header never shows a number the app
+/// can't point at a row for.
+class HomeSummary {
+  final Money rewardsThisMonth;
+  final Money rewardsAllTime;
+  final int transactionCount;
+  final int streakDays;
+
+  const HomeSummary({
+    required this.rewardsThisMonth,
+    required this.rewardsAllTime,
+    required this.transactionCount,
+    required this.streakDays,
+  });
+
+  factory HomeSummary.fromJson(Map<String, dynamic> json) {
+    return HomeSummary(
+      rewardsThisMonth: Money.fromRupees(_num(json['rewardsThisMonthInr'])),
+      rewardsAllTime: Money.fromRupees(_num(json['rewardsAllTimeInr'])),
+      transactionCount: int.parse((json['transactionCount'] ?? 0).toString()),
+      streakDays: int.parse((json['streakDays'] ?? 0).toString()),
+    );
+  }
+}
+
+/// One row of design 19's notification inbox (`GET /notifications`).
+class AppNotification {
+  final String id;
+  final String category;
+  final String severity; // 'info' | 'good' | 'urgent'
+  final String title;
+  final String? body;
+
+  /// In-app route to open on tap, or null for a purely informational entry
+  /// — which the UI renders without a chevron rather than as a dead tap.
+  final String? deepLink;
+  final DateTime? readAt;
+  final DateTime createdAt;
+
+  const AppNotification({
+    required this.id,
+    required this.category,
+    required this.severity,
+    required this.title,
+    this.body,
+    this.deepLink,
+    this.readAt,
+    required this.createdAt,
+  });
+
+  bool get isUnread => readAt == null;
+
+  factory AppNotification.fromJson(Map<String, dynamic> json) {
+    return AppNotification(
+      id: json['id'] as String,
+      category: json['category'] as String,
+      severity: json['severity'] as String? ?? 'info',
+      title: json['title'] as String,
+      body: json['body'] as String?,
+      deepLink: json['deep_link'] as String?,
+      readAt: json['read_at'] == null ? null : DateTime.parse(json['read_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+}
+
+/// Design 25's Invite friends payload (`GET /referrals`).
+///
+/// [rewardsActive] is the programme's own `is_active` flag, not a client
+/// default: when it's false the screen shows the invite mechanics with no
+/// reward claim at all, because advertising money that isn't on offer is
+/// the one thing this screen must never do.
+class ReferralInfo {
+  final bool rewardsActive;
+  final Money referrerReward;
+  final Money refereeReward;
+  final String qualifyingAction;
+  final String? code;
+  final List<Referral> referrals;
+
+  const ReferralInfo({
+    required this.rewardsActive,
+    required this.referrerReward,
+    required this.refereeReward,
+    required this.qualifyingAction,
+    required this.code,
+    required this.referrals,
+  });
+
+  int get qualifiedCount => referrals.where((r) => r.isQualified).length;
+
+  factory ReferralInfo.fromJson(Map<String, dynamic> json) {
+    final program = json['program'] as Map<String, dynamic>?;
+    return ReferralInfo(
+      rewardsActive: program?['is_active'] as bool? ?? false,
+      referrerReward: Money.fromRupees(_num(program?['referrer_reward_inr'])),
+      refereeReward: Money.fromRupees(_num(program?['referee_reward_inr'])),
+      qualifyingAction: program?['qualifying_action'] as String? ?? 'first ranked payment',
+      code: json['code'] as String?,
+      referrals: ((json['referrals'] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()
+          .map(Referral.fromJson)
+          .toList(),
+    );
+  }
+}
+
+/// One person invited. [label] is their email local-part or a name the
+/// referrer typed — never a full address, which isn't the referrer's to see.
+class Referral {
+  final String id;
+  final String? label;
+  final String rewardState; // 'pending' | 'signed_up' | 'qualified'
+  final DateTime createdAt;
+
+  const Referral({required this.id, this.label, required this.rewardState, required this.createdAt});
+
+  bool get isQualified => rewardState == 'qualified';
+
+  factory Referral.fromJson(Map<String, dynamic> json) => Referral(
+    id: json['id'] as String,
+    label: json['label'] as String?,
+    rewardState: json['reward_state'] as String? ?? 'pending',
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+}
+
+/// One card the discovery matcher recognised in the user's bank email
+/// and/or SMS (`POST /card-discovery`).
+///
+/// [evidence] is the literal text that produced the match, so the UI can
+/// show *why* a card was suggested. Nothing is ever added automatically —
+/// see that route's doc-comment for why a wrong auto-add is worse than a
+/// missed suggestion.
+class DiscoveredCard {
+  final String cardProductId;
+  final String name;
+  final double score;
+  final List<String> evidence;
+
+  /// Last-4 digits seen next to the match, for display only. The app does
+  /// not store card numbers; this is read from the message and discarded
+  /// with it.
+  final List<String> last4;
+  final int messageCount;
+  final List<String> sources; // 'email' and/or 'sms'
+
+  const DiscoveredCard({
+    required this.cardProductId,
+    required this.name,
+    required this.score,
+    required this.evidence,
+    required this.last4,
+    required this.messageCount,
+    required this.sources,
+  });
+
+  factory DiscoveredCard.fromJson(Map<String, dynamic> json) => DiscoveredCard(
+    cardProductId: json['cardProductId'] as String,
+    name: json['name'] as String,
+    score: _num(json['score']),
+    evidence: ((json['evidence'] as List?) ?? const []).cast<String>(),
+    last4: ((json['last4'] as List?) ?? const []).cast<String>(),
+    messageCount: (json['messageCount'] as num?)?.toInt() ?? 1,
+    sources: ((json['sources'] as List?) ?? const []).cast<String>(),
+  );
+}
+
+/// What a discovery run looked at, so the screen can explain an empty
+/// result ("we read 0 emails" is a very different answer from "we read 40
+/// and matched nothing").
+class CardDiscoveryResult {
+  final List<DiscoveredCard> suggestions;
+  final int emailsScanned;
+  final int smsScanned;
+
+  const CardDiscoveryResult({
+    required this.suggestions,
+    required this.emailsScanned,
+    required this.smsScanned,
+  });
+
+  factory CardDiscoveryResult.fromJson(Map<String, dynamic> json) {
+    final scanned = (json['scanned'] as Map<String, dynamic>?) ?? const {};
+    return CardDiscoveryResult(
+      suggestions: ((json['suggestions'] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()
+          .map(DiscoveredCard.fromJson)
+          .toList(),
+      emailsScanned: (scanned['emails'] as num?)?.toInt() ?? 0,
+      smsScanned: (scanned['sms'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class UserCardsRepository {
   final String apiBaseUrl;
   final String accessToken;
   final http.Client _client;
 
   UserCardsRepository({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $accessToken',
+    'Content-Type': 'application/json',
+  };
 
   Future<List<UserCard>> fetchUserCards({bool includeArchived = false}) async {
-    final uri = Uri.parse('$apiBaseUrl/user-cards').replace(
-      queryParameters: includeArchived ? {'includeArchived': 'true'} : null,
-    );
+    final uri = Uri.parse(
+      '$apiBaseUrl/user-cards',
+    ).replace(queryParameters: includeArchived ? {'includeArchived': 'true'} : null);
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
       throw ApiException('GET /user-cards failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['userCards'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(UserCard.fromJson)
-        .toList();
+    return (body['userCards'] as List).cast<Map<String, dynamic>>().map(UserCard.fromJson).toList();
   }
 
   /// Returns the newly-created `user_cards.id`. A9 (Card Details Setup)
@@ -354,6 +634,19 @@ class UserCardsRepository {
     );
     if (response.statusCode != 200) {
       throw ApiException('archive failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// Design 23 "Card actions" — set as default. Server-side this clears any
+  /// existing default in the same transaction, so callers never have to
+  /// unset the previous one themselves.
+  Future<void> setDefaultCard(String userCardId) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/user-cards/$userCardId/default'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('set default failed: ${response.statusCode} ${response.body}');
     }
   }
 
@@ -393,6 +686,7 @@ class UserCardsRepository {
     int? statementDay,
     int? dueDay,
     double? pointsBalance,
+    AutopayMode? autopayMode,
   }) async {
     final body = <String, dynamic>{
       if (nickname != null) 'nickname': nickname,
@@ -400,6 +694,9 @@ class UserCardsRepository {
       if (statementDay != null) 'statementDay': statementDay,
       if (dueDay != null) 'dueDay': dueDay,
       if (pointsBalance != null) 'pointsBalance': pointsBalance,
+      // Sent by wire value, not enum name — they happen to match today, but
+      // the server's CHECK constraint is the contract, not Dart's naming.
+      if (autopayMode != null) 'autopayMode': autopayMode.wireValue,
     };
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/user-cards/$userCardId'),
@@ -420,7 +717,12 @@ class UserCardsRepository {
   /// Updates cap_states/milestone_states server-side in the same write, so a
   /// follow-up GET /user-cards (userCardsProvider.invalidate) immediately
   /// reflects real consumed headroom.
-  Future<void> logTransaction({
+  /// Returns the newly-created `transactions.id` — B6 Quick-Add's Undo
+  /// snackbar needs it to call [ignoreTransaction] with reason 'reversal',
+  /// which already exists server-side and does exactly what an undo needs
+  /// (reverses cap/milestone/points/fee-waiver state, marks the row
+  /// non-active) despite there being no DELETE /transactions/:id route.
+  Future<String> logTransaction({
     required String userCardId,
     required Money amount,
     String? categoryId,
@@ -443,6 +745,56 @@ class UserCardsRepository {
     if (response.statusCode != 201) {
       throw ApiException('POST /transactions failed: ${response.statusCode} ${response.body}');
     }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['transaction'] as Map<String, dynamic>)['id'] as String;
+  }
+
+  /// Design 18 "Add a note". Its own endpoint rather than a field on
+  /// [updateTransaction] — see PATCH /transactions/:id/note's doc-comment
+  /// in api/ for why a note must not trigger the reward-state recompute
+  /// that a full transaction edit does. Pass null to clear.
+  Future<void> updateTransactionNote(String transactionId, String? note) async {
+    final response = await _client.patch(
+      Uri.parse('$apiBaseUrl/transactions/$transactionId/note'),
+      headers: _headers,
+      body: jsonEncode({'note': note}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('note update failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// Design 18 "Split this expense" — the current split set for one
+  /// transaction, empty when it has never been split.
+  Future<List<TransactionSplit>> fetchSplits(String transactionId) async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/transactions/$transactionId/splits'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('GET splits failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['splits'] as List).cast<Map<String, dynamic>>().map(TransactionSplit.fromJson).toList();
+  }
+
+  /// Replaces the whole split set. Replace rather than append is the
+  /// server's contract too — a split is a partition of one amount, so the
+  /// set is the only coherent unit of edit. An empty list clears the
+  /// splits.
+  Future<List<TransactionSplit>> saveSplits(String transactionId, List<TransactionSplit> splits) async {
+    final response = await _client.put(
+      Uri.parse('$apiBaseUrl/transactions/$transactionId/splits'),
+      headers: _headers,
+      body: jsonEncode({
+        'splits': [for (final s in splits) s.toRequestJson()],
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('save splits failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['splits'] as List).cast<Map<String, dynamic>>().map(TransactionSplit.fromJson).toList();
   }
 
   /// UA-5.3 (Chunk 31): SMS auto-import. Sends the raw SMS sender+body to
@@ -466,22 +818,13 @@ class UserCardsRepository {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/transactions/from-sms'),
       headers: _headers,
-      body: jsonEncode({
-        'userCardId': userCardId,
-        'sender': sender,
-        'body': body,
-      }),
+      body: jsonEncode({'userCardId': userCardId, 'sender': sender, 'body': body}),
     );
     if (response.statusCode != 201 && response.statusCode != 200) {
-      throw ApiException(
-        'POST /transactions/from-sms failed: ${response.statusCode} ${response.body}',
-      );
+      throw ApiException('POST /transactions/from-sms failed: ${response.statusCode} ${response.body}');
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return SmsImportResult(
-      parsed: json['parsed'] == true,
-      reason: json['reason'] as String?,
-    );
+    return SmsImportResult(parsed: json['parsed'] == true, reason: json['reason'] as String?);
   }
 
   /// UA-3+ (Chunk 18): the Activity tab's data source. [from]/[to] (E10/E11,
@@ -494,6 +837,7 @@ class UserCardsRepository {
     String? cardId,
     String? categoryId,
     String? source,
+    String? query,
   }) async {
     final params = <String, String>{
       if (from != null) 'from': _dateOnly(from),
@@ -501,8 +845,14 @@ class UserCardsRepository {
       if (cardId != null) 'cardId': cardId,
       if (categoryId != null) 'categoryId': categoryId,
       if (source != null) 'source': source,
+      // Server-side match over merchant name and note. Blank/whitespace is
+      // dropped rather than sent, so an empty search box is "no filter"
+      // rather than a query that matches everything with a wildcard.
+      if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
     };
-    final uri = Uri.parse('$apiBaseUrl/transactions').replace(queryParameters: params.isEmpty ? null : params);
+    final uri = Uri.parse(
+      '$apiBaseUrl/transactions',
+    ).replace(queryParameters: params.isEmpty ? null : params);
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
       throw ApiException('GET /transactions failed: ${response.statusCode} ${response.body}');
@@ -601,10 +951,15 @@ class UserCardsRepository {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/duplicate-candidates/$id/resolve'),
       headers: _headers,
-      body: jsonEncode({'resolution': resolution, if (keepTransactionId != null) 'keepTransactionId': keepTransactionId}),
+      body: jsonEncode({
+        'resolution': resolution,
+        if (keepTransactionId != null) 'keepTransactionId': keepTransactionId,
+      }),
     );
     if (response.statusCode != 200) {
-      throw ApiException('POST /duplicate-candidates/:id/resolve failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /duplicate-candidates/:id/resolve failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -613,12 +968,18 @@ class UserCardsRepository {
 
   /// Task C-6: GET /user-cards/:id/points-ledger.
   Future<List<PointsLedgerEntry>> fetchPointsLedger(String userCardId) async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/user-cards/$userCardId/points-ledger'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/user-cards/$userCardId/points-ledger'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
       throw ApiException('GET /user-cards/:id/points-ledger failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['pointsLedger'] as List).cast<Map<String, dynamic>>().map(PointsLedgerEntry.fromJson).toList();
+    return (body['pointsLedger'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(PointsLedgerEntry.fromJson)
+        .toList();
   }
 
   /// Task C-6 (ui-spec C6 "manual balance correction, feeds
@@ -626,17 +987,20 @@ class UserCardsRepository {
   /// correction, not a delta — the server computes the delta itself from
   /// the current ledger sum, same as C4's points-balance field conceptually
   /// means "this is the real number," not "add this many."
-  Future<void> adjustPointsBalance(String userCardId, {required double newBalance, DateTime? expiresOn}) async {
+  Future<void> adjustPointsBalance(
+    String userCardId, {
+    required double newBalance,
+    DateTime? expiresOn,
+  }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/user-cards/$userCardId/points-adjustment'),
       headers: _headers,
-      body: jsonEncode({
-        'newBalance': newBalance,
-        if (expiresOn != null) 'expiresOn': _dateOnly(expiresOn),
-      }),
+      body: jsonEncode({'newBalance': newBalance, if (expiresOn != null) 'expiresOn': _dateOnly(expiresOn)}),
     );
     if (response.statusCode != 201) {
-      throw ApiException('POST /user-cards/:id/points-adjustment failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /user-cards/:id/points-adjustment failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -671,6 +1035,103 @@ class UserCardsRepository {
     }
   }
 
+  /// "Find my cards" over forwarded bank email and, on Android, SMS bodies
+  /// the device reads locally. [smsBodies] are sent for this request only
+  /// and never stored server-side — see POST /card-discovery.
+  Future<CardDiscoveryResult> discoverCards({List<String> smsBodies = const []}) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/card-discovery'),
+      headers: _headers,
+      body: jsonEncode({'smsBodies': smsBodies}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('POST /card-discovery failed: ${response.statusCode} ${response.body}');
+    }
+    return CardDiscoveryResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// Design 25's Invite friends screen, in one call.
+  Future<ReferralInfo> fetchReferrals() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/referrals'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw ApiException('GET /referrals failed: ${response.statusCode} ${response.body}');
+    }
+    return ReferralInfo.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// Design 19's inbox. Newest first; the server does no grouping — the
+  /// client buckets Today/Earlier in the device's own timezone.
+  Future<({List<AppNotification> items, int unreadCount})> fetchNotifications() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/notifications'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw ApiException('GET /notifications failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (
+      items: (body['notifications'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(AppNotification.fromJson)
+          .toList(),
+      unreadCount: (body['unreadCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  /// Marks one notification read, or every unread one when [id] is null
+  /// (design 19's "Mark all read").
+  Future<void> markNotificationsRead({String? id}) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/notifications/read'),
+      headers: _headers,
+      body: jsonEncode(id == null ? <String, dynamic>{} : {'id': id}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('POST /notifications/read failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// Records a delivery. [dedupeKey] makes it idempotent — re-recording the
+  /// same logical event updates the row instead of stacking copies.
+  /// Silently does nothing (204) when the user has that category muted.
+  Future<void> recordNotification({
+    required String category,
+    required String title,
+    String? body,
+    String severity = 'info',
+    String? deepLink,
+    String? dedupeKey,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/notifications'),
+      headers: _headers,
+      body: jsonEncode({
+        'category': category,
+        'title': title,
+        'body': body,
+        'severity': severity,
+        'deepLink': deepLink,
+        'dedupeKey': dedupeKey,
+      }),
+    );
+    if (response.statusCode != 201 && response.statusCode != 204) {
+      throw ApiException('POST /notifications failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
+  /// Design 01 header: GET /home-summary. Sends the device's IANA zone so
+  /// the streak buckets on the user's local calendar day, not UTC.
+  Future<HomeSummary?> fetchHomeSummary({String? timeZone}) async {
+    final uri = Uri.parse(
+      '$apiBaseUrl/home-summary',
+    ).replace(queryParameters: timeZone == null ? null : {'tz': timeZone});
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw ApiException('GET /home-summary failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final summary = body['homeSummary'];
+    return summary == null ? null : HomeSummary.fromJson(summary as Map<String, dynamic>);
+  }
+
   /// Task E9: GET /monthly-reports. Null [month] means "the current month."
   Future<MonthlyReport?> fetchMonthlyReport({DateTime? month}) async {
     final params = month == null ? null : {'month': _dateOnly(DateTime(month.year, month.month, 1))};
@@ -703,7 +1164,9 @@ class UserCardsRepository {
       body: jsonEncode({'optIn': optIn}),
     );
     if (response.statusCode != 200) {
-      throw ApiException('POST /profile/contributions-opt-in failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /profile/contributions-opt-in failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 }
@@ -728,6 +1191,25 @@ class TransactionEntry {
   final String status;
   final String? note;
 
+  /// What this transaction actually earned — `transactions.expected_value_inr`,
+  /// written at insert time by the same server-side helper that updates cap
+  /// and milestone state.
+  ///
+  /// `GET /transactions` already stored this per row but never selected it,
+  /// so every client-side "what did I earn" figure had to be re-derived from
+  /// base rates instead. Design 04 Insights breaks earnings down by category
+  /// and those bars have to add up to the same total design 01 Home puts in
+  /// its header — Home reads `GET /home-summary`, which is
+  /// `SUM(expected_value_inr)` over these very rows, so reading the stored
+  /// value here is what makes the two screens agree. A re-derivation would
+  /// have quietly disagreed with Home by whatever caps and milestones
+  /// applied at the time.
+  ///
+  /// Null for rows written before the column was populated, and for imports
+  /// that never ran through the ranking engine — callers must treat null as
+  /// "unknown", never as zero earned.
+  final Money? rewardValue;
+
   const TransactionEntry({
     required this.id,
     required this.amount,
@@ -741,6 +1223,7 @@ class TransactionEntry {
     required this.source,
     required this.status,
     this.note,
+    this.rewardValue,
   });
 
   factory TransactionEntry.fromJson(Map<String, dynamic> json) {
@@ -759,6 +1242,9 @@ class TransactionEntry {
       source: json['source'] as String? ?? 'manual',
       status: json['status'] as String? ?? 'active',
       note: json['note'] as String?,
+      rewardValue: json['expected_value_inr'] == null
+          ? null
+          : Money.fromRupees(_num(json['expected_value_inr'])),
     );
   }
 

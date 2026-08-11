@@ -18,12 +18,12 @@ class CardFeedbackRepository {
   final http.Client _client;
 
   CardFeedbackRepository({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $accessToken',
+    'Content-Type': 'application/json',
+  };
 
   Future<void> requestNewCard({
     required String issuerName,
@@ -33,11 +33,7 @@ class CardFeedbackRepository {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/card-requests'),
       headers: _headers,
-      body: jsonEncode({
-        'issuerName': issuerName,
-        'productName': productName,
-        'networkGuess': ?networkGuess,
-      }),
+      body: jsonEncode({'issuerName': issuerName, 'productName': productName, 'networkGuess': ?networkGuess}),
     );
     if (response.statusCode != 201) {
       throw ApiException('POST /card-requests failed: ${response.statusCode} ${response.body}');

@@ -42,15 +42,7 @@ class FeedbackSupportScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Feedback & Support', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: token == null
             ? const EmptyState(
                 icon: Icons.support_agent_outlined,
@@ -119,10 +111,7 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
     super.dispose();
   }
 
-  Map<String, dynamic> get _diagnostics => {
-        'appVersion': _appVersion,
-        'platform': Platform.operatingSystem,
-      };
+  Map<String, dynamic> get _diagnostics => {'appVersion': _appVersion, 'platform': Platform.operatingSystem};
 
   String get _appVersion {
     final info = _packageInfo;
@@ -148,7 +137,7 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
       _error = null;
     });
     try {
-      final api = SupportApi(apiBaseUrl: _supportApiBaseUrl, accessToken: widget.accessToken);
+      final api = SupportApi(apiBaseUrl: supportApiBaseUrl, accessToken: widget.accessToken);
       await api.submitTicket(
         kind: _kind,
         message: message,
@@ -161,12 +150,7 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
         builder: (context) => AlertDialog(
           title: const Text('Thanks for letting us know'),
           content: const Text('We typically respond within 2 business days.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
+          actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
         ),
       );
       if (!mounted) return;
@@ -185,7 +169,10 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
       children: [
-        Text('What kind of feedback is this?', style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink500)),
+        Text(
+          'What kind of feedback is this?',
+          style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink500),
+        ),
         const SizedBox(height: AppSpace.sm),
         Wrap(
           spacing: AppSpace.sm,
@@ -215,15 +202,18 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
             alignment: Alignment.centerLeft,
             child: TextButton(
               style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const RequestUnsupportedCardScreen()),
-              ),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const RequestUnsupportedCardScreen())),
               child: const Text('Request a specific card instead'),
             ),
           ),
         ],
         const SizedBox(height: AppSpace.xl),
-        Text('Tell us what happened', style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink500)),
+        Text(
+          'Tell us what happened',
+          style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink500),
+        ),
         const SizedBox(height: AppSpace.sm),
         TextField(
           controller: _messageController,
@@ -311,7 +301,10 @@ class _DiagnosticsPreview extends StatelessWidget {
                   const Icon(Icons.data_object_rounded, size: 18, color: BambooInk.ink500),
                   const SizedBox(width: AppSpace.sm),
                   Expanded(
-                    child: Text('Show what we\'ll send', style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900)),
+                    child: Text(
+                      'Show what we\'ll send',
+                      style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                    ),
                   ),
                   Icon(
                     expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
@@ -335,4 +328,6 @@ class _DiagnosticsPreview extends StatelessWidget {
   }
 }
 
-const _supportApiBaseUrl = 'http://localhost:4000';
+/// Shared with design 26's report screen (report_transaction_screen.dart) so
+/// the two support surfaces can't drift onto different hosts.
+const supportApiBaseUrl = 'http://localhost:4000';

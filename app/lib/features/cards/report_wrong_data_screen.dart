@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 
@@ -55,7 +56,9 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
       _error = null;
     });
     try {
-      await ref.read(cardFeedbackRepositoryProvider)!.reportWrongData(
+      await ref
+          .read(cardFeedbackRepositoryProvider)!
+          .reportWrongData(
             cardProductId: widget.cardProductId,
             fieldPath: _fieldController.text.trim(),
             shownValue: _shownController.text.trim().isEmpty ? null : _shownController.text.trim(),
@@ -72,7 +75,11 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final product = ref.watch(catalogueProvider).valueOrNull?.where((c) => c.id == widget.cardProductId).firstOrNull;
+    final product = ref
+        .watch(catalogueProvider)
+        .valueOrNull
+        ?.where((c) => c.id == widget.cardProductId)
+        .firstOrNull;
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -82,15 +89,7 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
         elevation: 0,
         title: Text('Report wrong data', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.lg),
           child: _submitted ? _buildConfirmation(context) : _buildForm(context, product?.name),
@@ -130,22 +129,22 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
 
   Widget _buildForm(BuildContext context, String? cardName) {
     final inputDecoration = (String label, {String? hint}) => InputDecoration(
-          labelText: label,
-          hintText: hint,
-          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          hintStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          filled: true,
-          fillColor: BambooInk.glassFillOnPaper,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-          ),
-        );
+      labelText: label,
+      hintText: hint,
+      labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+      hintStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+      filled: true,
+      fillColor: BambooInk.glassFillOnPaper,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+      ),
+    );
 
     return ListView(
       children: [
@@ -191,7 +190,11 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
           ),
           onPressed: _submitting ? null : _submit,
           child: _submitting
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                )
               : const Text('Submit report'),
         ),
       ],

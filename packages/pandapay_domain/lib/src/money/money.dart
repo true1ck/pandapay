@@ -48,7 +48,17 @@ class Money {
   /// [compact] (Cr/L/K suffixes) is Indian-numbering-specific and ignores
   /// [format] — there's no equivalent short form defined for international
   /// grouping in this app.
-  String format({bool compact = false, bool showSymbol = true, MoneyNumberFormat format = MoneyNumberFormat.lakhCrore}) {
+  /// [hidePaise] drops the `.00` when the amount is a whole number of
+  /// rupees — the design deck writes headline figures as "₹125"/"₹1,842",
+  /// never "₹125.00", and a two-decimal tail on a 44pt display number eats
+  /// a third of the width for no information. Non-zero paise are always
+  /// shown regardless, so nothing is ever silently rounded away.
+  String format({
+    bool compact = false,
+    bool showSymbol = true,
+    bool hidePaise = false,
+    MoneyNumberFormat format = MoneyNumberFormat.lakhCrore,
+  }) {
     final negative = paise < 0;
     final absPaise = paise.abs();
     final rupeePart = absPaise ~/ 100;
@@ -75,6 +85,7 @@ class Money {
     final grouped = format == MoneyNumberFormat.international
         ? _groupInternational(rupeePart.toString())
         : _groupIndian(rupeePart.toString());
+    if (hidePaise && paisePart == 0) return '$sign$symbol$grouped';
     final paiseStr = paisePart.toString().padLeft(2, '0');
     return '$sign$symbol$grouped.$paiseStr';
   }

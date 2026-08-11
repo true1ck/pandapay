@@ -7,6 +7,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 
@@ -15,14 +16,13 @@ const _recentMerchantsKey = 'pandapay_app.quick_add_recent_merchants_v1';
 const _maxRecentMerchants = 8;
 const _merchantSearchDebounce = Duration(milliseconds: 300);
 
-/// ui-spec B6 — "under 3 taps." No true undo: there is no
-/// DELETE /transactions/:id route in this codebase (verified against
-/// api/src/index.js — see Task 15's header note), so this posts the
-/// transaction immediately on Save and the "Undo" snackbar action is
-/// dismiss-only (it removes the snackbar and shows a follow-up notice that
-/// the entry was already saved) rather than faking a revert that doesn't
-/// actually happen server-side. A real undo is future work once a delete
-/// route exists.
+/// ui-spec B6 — "under 3 taps." Save posts the transaction immediately;
+/// the "Undo" snackbar action is a real undo despite there being no
+/// DELETE /transactions/:id route — it calls
+/// POST /transactions/:id/ignore with reason 'reversal', which already
+/// existed server-side (used by the duplicate/needs-review flows) and
+/// reverses the exact cap/milestone/points/fee-waiver state update Save
+/// just made, then marks the row 'ignored' so it stops counting anywhere.
 ///
 /// Merchant field: typeahead against merchantSearchRepositoryProvider (the
 /// same GET /merchants/search Task 13/14 already wired up), plus a locally
@@ -34,7 +34,16 @@ const _merchantSearchDebounce = Duration(milliseconds: 300);
 /// override afterward; typing a merchant name freehand (no suggestion
 /// picked) leaves category as a manual choice, same as before.
 class QuickAddScreen extends ConsumerStatefulWidget {
-  const QuickAddScreen({super.key});
+  /// Prefill from Home's hero-card "Pay with this card" action (design 01):
+  /// Home already knows the amount/category/winning card from the ranked
+  /// list, so landing here with the form blank would just make the user
+  /// retype what they already told Home. Null when opened from the plain
+  /// "+" entry point, which has none of this context.
+  final Money? initialAmount;
+  final String? initialCategoryId;
+  final String? initialUserCardId;
+
+  const QuickAddScreen({super.key, this.initialAmount, this.initialCategoryId, this.initialUserCardId});
 
   @override
   ConsumerState<QuickAddScreen> createState() => _QuickAddScreenState();
@@ -60,7 +69,15 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   @override
   void initState() {
     super.initState();
-    _loadLastUsedCard();
+    if (widget.initialAmount != null && !widget.initialAmount!.isZero) {
+      _amountController.text = widget.initialAmount!.rupees.toStringAsFixed(0);
+    }
+    _selectedCategoryId = widget.initialCategoryId;
+    _selectedUserCardId = widget.initialUserCardId;
+    // Only fall back to the remembered card when Home didn't already hand
+    // us a winning one — _loadLastUsedCard's own membership check still
+    // protects against a stale cross-user id either way.
+    if (widget.initialUserCardId == null) _loadLastUsedCard();
     _loadRecentMerchants();
     _merchantFocusNode.addListener(_onMerchantFocusChanged);
   }
@@ -106,7 +123,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     if (name.trim().isEmpty) return;
     final trimmed = name.trim();
     final prefs = await SharedPreferences.getInstance();
-    final updated = [trimmed, ..._recentMerchants.where((m) => m != trimmed)].take(_maxRecentMerchants).toList();
+    final updated = [
+      trimmed,
+      ..._recentMerchants.where((m) => m != trimmed),
+    ].take(_maxRecentMerchants).toList();
     await prefs.setStringList(_recentMerchantsKey, updated);
     if (mounted) setState(() => _recentMerchants = updated);
   }
@@ -184,7 +204,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           content: const Text('Save it anyway?'),
           actions: [
             TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Save anyway')),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Save anyway'),
+            ),
           ],
         ),
       );
@@ -197,7 +220,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final merchantName = _merchantController.text.trim().isEmpty ? null : _merchantController.text.trim();
     final note = _noteController.text.trim().isEmpty ? null : _noteController.text.trim();
     try {
-      await repo.logTransaction(
+      final transactionId = await repo.logTransaction(
         userCardId: _selectedUserCardId!,
         amount: Money.fromRupees(amount),
         categoryId: _selectedCategoryId,
@@ -220,29 +243,40 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       if (mounted) {
         // Captured BEFORE pop() — by the time a user actually taps "Undo"
         // (the snackbar lives ~4s, the pop animation completes in ~300ms),
-        // this screen's own `context` is deactivated and
-        // ScaffoldMessenger.of(context) inside the closure below would
-        // throw. `messenger` stays valid because it's the ScaffoldMessenger
-        // instance itself, not a context lookup.
+        // this screen's own `context`/`State` is deactivated/disposed.
+        // `messenger` stays valid because it's the ScaffoldMessenger
+        // instance itself, not a context lookup. `container` (the
+        // ProviderContainer, not this State's `ref`) is the same fix for
+        // Riverpod: `ref.invalidate(...)` after this State disposes throws
+        // "used after dispose" — caught by the try/catch below, so it never
+        // crashed, but silently always fell to "Could not undo." instead of
+        // ever running the real undo. Found by actually exercising this
+        // path in a test, not assumed correct from reading the code.
         final messenger = ScaffoldMessenger.of(context);
+        final container = ProviderScope.containerOf(context, listen: false);
         Navigator.of(context).pop();
         messenger.showSnackBar(
           SnackBar(
             content: const Text('Transaction logged'),
             action: SnackBarAction(
               label: 'Undo',
-              // Deliberately NOT a real undo — see the class doc comment.
-              // Tapping this cannot silently do nothing: it tells the user
-              // plainly that the save already happened and can't be
-              // reversed from here, instead of pretending an undo occurred.
-              onPressed: () {
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      "This app can't undo a saved transaction yet — there's no delete option either; edit it from Activity instead.",
-                    ),
-                  ),
-                );
+              // Real undo: POST /transactions/:id/ignore with reason
+              // 'reversal' already exists server-side and does exactly
+              // what this needs — reverseTransactionState() reverses the
+              // cap/milestone/points/fee-waiver update logTransaction just
+              // made, and the row is marked 'ignored' so it no longer
+              // counts anywhere. No DELETE route needed.
+              onPressed: () async {
+                try {
+                  await repo.ignoreTransaction(transactionId, reason: 'reversal');
+                  container.invalidate(userCardsProvider);
+                  container.invalidate(transactionsProvider);
+                  messenger.showSnackBar(const SnackBar(content: Text('Undone.')));
+                } catch (e) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Could not undo. ${userFacingErrorMessage(e)}')),
+                  );
+                }
               },
             ),
           ),
@@ -256,7 +290,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       // just fail identically on retry.
       final isOnline = ref.read(isOnlineProvider).valueOrNull ?? true;
       if (!isOnline) {
-        await ref.read(outboxRepositoryProvider.future).then(
+        await ref
+            .read(outboxRepositoryProvider.future)
+            .then(
               (outbox) => outbox.enqueue(
                 userCardId: _selectedUserCardId!,
                 amount: Money.fromRupees(amount),
@@ -293,7 +329,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   Widget build(BuildContext context) {
     final userCards = ref.watch(userCardsProvider);
     final categories = ref.watch(categoriesProvider);
-    final inputDecoration = (String label, {String? prefix, String? error, Widget? suffixIcon}) => InputDecoration(
+    final inputDecoration = (String label, {String? prefix, String? error, Widget? suffixIcon}) =>
+        InputDecoration(
           labelText: label,
           prefixText: prefix,
           errorText: error,
@@ -321,15 +358,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         elevation: 0,
         title: Text('Quick add', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.lg),
           child: ListView(
@@ -353,7 +382,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                   suffixIcon: _merchantSearching
                       ? const Padding(
                           padding: EdgeInsets.all(12),
-                          child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
                         )
                       : null,
                 ),
@@ -369,7 +402,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               const SizedBox(height: AppSpace.md),
               userCards.when(
                 loading: () => const LinearProgressIndicator(),
-                error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                error: (err, _) =>
+                    Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
                 data: (cards) => DropdownButtonFormField<String>(
                   initialValue: _selectedUserCardId,
                   style: BambooFonts.ui(14.5, color: BambooInk.ink900),
@@ -388,7 +422,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               const SizedBox(height: AppSpace.md),
               categories.when(
                 loading: () => const LinearProgressIndicator(),
-                error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                error: (err, _) =>
+                    Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
                 data: (list) => DropdownButtonFormField<String>(
                   initialValue: _selectedCategoryId,
                   style: BambooFonts.ui(14.5, color: BambooInk.ink900),
@@ -442,7 +477,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 ),
                 onPressed: _canSave && !_saving ? _save : null,
                 child: _saving
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                      )
                     : const Text('Save'),
               ),
             ],
@@ -466,7 +505,12 @@ class _MerchantSuggestions extends StatelessWidget {
   final List<NearbyMerchantCandidate> results;
   final void Function({required String name, String? categoryId}) onPick;
 
-  const _MerchantSuggestions({required this.query, required this.recent, required this.results, required this.onPick});
+  const _MerchantSuggestions({
+    required this.query,
+    required this.recent,
+    required this.results,
+    required this.onPick,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -475,34 +519,44 @@ class _MerchantSuggestions extends StatelessWidget {
     if (showRecent && recent.isEmpty) return const SizedBox.shrink();
     if (!showRecent && results.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      margin: const EdgeInsets.only(top: 4),
-      decoration: BoxDecoration(
+    // A Material, not a plain Container: ListTile paints its background and
+    // ink splashes onto the nearest Material ancestor, so a coloured
+    // DecoratedBox/Container wrapper hides them (Flutter asserts on exactly
+    // this). Same visual result, correct ancestry.
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Material(
         color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (showRecent)
-            for (final name in items!)
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.history_rounded, size: 18, color: BambooInk.ink500),
-                title: Text(name, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
-                onTap: () => onPick(name: name),
-              )
-          else
-            for (final candidate in results)
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.storefront_rounded, size: 18, color: BambooInk.ink500),
-                title: Text(candidate.displayName ?? 'Unnamed merchant', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
-                onTap: () => onPick(name: candidate.displayName ?? '', categoryId: candidate.categoryId),
-              ),
-        ],
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: BambooInk.hairlineOnPaper),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (showRecent)
+              for (final name in items!)
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.history_rounded, size: 18, color: BambooInk.ink500),
+                  title: Text(name, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+                  onTap: () => onPick(name: name),
+                )
+            else
+              for (final candidate in results)
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.storefront_rounded, size: 18, color: BambooInk.ink500),
+                  title: Text(
+                    candidate.displayName ?? 'Unnamed merchant',
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                  ),
+                  onTap: () => onPick(name: candidate.displayName ?? '', categoryId: candidate.categoryId),
+                ),
+          ],
+        ),
       ),
     );
   }

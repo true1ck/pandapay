@@ -83,8 +83,10 @@ class _MilestoneTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final qualified = userCard.milestoneQualifiedSpend[milestone.id] ?? const Money.zero();
-    final remainingPaise =
-        (milestone.thresholdSpend.paise - qualified.paise).clamp(0, milestone.thresholdSpend.paise);
+    final remainingPaise = (milestone.thresholdSpend.paise - qualified.paise).clamp(
+      0,
+      milestone.thresholdSpend.paise,
+    );
     final remaining = Money.fromPaise(remainingPaise);
     final ratio = milestone.thresholdSpend.isZero
         ? 0.0
@@ -102,8 +104,10 @@ class _MilestoneTile extends StatelessWidget {
       ..sort((a, b) => a.priority.compareTo(b.priority));
     MilestoneChase? chase;
     if (!reached && baseRule.isNotEmpty) {
-      final baseRate =
-          baseRule.first.unit.effectiveRatePerRupee(baseRule.first.rate, pointValueInr: product.pointValueInr);
+      final baseRate = baseRule.first.unit.effectiveRatePerRupee(
+        baseRule.first.rate,
+        pointValueInr: product.pointValueInr,
+      );
       chase = evaluateMilestoneChase(
         rewardValue: milestone.rewardValue,
         remainingSpend: remaining,
@@ -144,7 +148,11 @@ class _MilestoneTile extends StatelessWidget {
                   icon: Icons.check_rounded,
                 )
               else if (milestone.isRepeatable)
-                const StatusPill(label: 'Repeats', foreground: BambooInk.ink900, background: BambooInk.paperMuted),
+                const StatusPill(
+                  label: 'Repeats',
+                  foreground: BambooInk.ink900,
+                  background: BambooInk.paperMuted,
+                ),
             ],
           ),
           const SizedBox(height: AppSpace.md),
@@ -163,12 +171,20 @@ class _MilestoneTile extends StatelessWidget {
             children: [
               Text(
                 reached ? 'Milestone reached' : '${remaining.format()} to go',
-                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: reached ? BambooInk.jade : BambooInk.ink900),
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w700,
+                  color: reached ? BambooInk.jade : BambooInk.ink900,
+                ),
               ),
               Row(
                 children: [
                   Text('Reward ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                  MoneyText(milestone.rewardValue, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  MoneyText(
+                    milestone.rewardValue,
+                    confidence: Confidence.estimated,
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                 ],
               ),
             ],

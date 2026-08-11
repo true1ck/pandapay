@@ -8,6 +8,7 @@ const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require
 const { parseSmsAgainstPatterns, redactSmsShape, senderMatches } = require('./sms_parser');
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
+const { discoverCardsAcrossMessages } = require('./card_discovery');
 const { registerRuleFamilyRoutes } = require('./admin_rule_families');
 
 const app = express();
@@ -42,15 +43,30 @@ app.get('/profile', requireAuth, async (req, res) => {
  * — the id column is never taken from the request body.
  */
 app.post('/profile', requireAuth, async (req, res) => {
-  const { displayName, locale, currency } = req.body || {};
+  const { displayName, locale, currency, email, phoneNumber } = req.body || {};
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `INSERT INTO profiles (id, display_name, locale, currency)
-         VALUES ($1, $2, COALESCE($3, 'en-IN'), COALESCE($4, 'INR'))
-         ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name
+        // COALESCE on update, not EXCLUDED: this route runs on every sign-in,
+        // and a client that omits a field means "I have nothing new to say
+        // about it", not "clear it". EXCLUDED.display_name alone used to
+        // wipe a stored name on the next login that didn't resend one.
+        `INSERT INTO profiles (id, display_name, locale, currency, email, phone_number)
+         VALUES ($1, $2, COALESCE($3, 'en-IN'), COALESCE($4, 'INR'), $5, $6)
+         ON CONFLICT (id) DO UPDATE
+           SET display_name = COALESCE(EXCLUDED.display_name, profiles.display_name),
+               email        = COALESCE(EXCLUDED.email, profiles.email),
+               phone_number = COALESCE(EXCLUDED.phone_number, profiles.phone_number),
+               updated_at   = now()
          RETURNING *`,
-        [req.userId, displayName || null, locale || null, currency || null]
+        [
+          req.userId,
+          displayName || null,
+          locale || null,
+          currency || null,
+          email || null,
+          phoneNumber || null,
+        ]
       )
     );
     res.status(201).json({ profile: result.rows[0] });
@@ -1216,7 +1232,7 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         `SELECT uc.id, uc.card_product_id, uc.nickname, uc.is_default, uc.sort_order,
                 uc.created_at, uc.statement_day, uc.due_day, uc.opened_on,
                 uc.credit_limit_inr, uc.anniversary_on, uc.is_archived,
-                uc.points_balance, uc.points_balance_state,
+                uc.points_balance, uc.points_balance_state, uc.autopay_mode,
                 cp.name AS card_name, cp.network, cp.is_upi_linkable
            FROM user_cards uc
            JOIN card_products cp ON cp.id = uc.card_product_id
@@ -1321,6 +1337,141 @@ app.post('/user-cards', requireAuth, async (req, res) => {
 });
 
 /**
+ * POST /user-cards/import — plan Phase 1.2. Hands a guest's on-device
+ * wallet to the account they just created or signed into.
+ *
+ * Guest mode (`POST /auth/guest-login` in auth/) issues a random UUID with,
+ * in that route's own words, "NO DATABASE RECORD" — a guest's cards live
+ * only in the client's `local_user_cards` sqlite table. Until this route,
+ * nothing carried them across, so a guest who spent time building a wallet
+ * and then signed up watched it vanish at exactly the moment they committed
+ * to the product. That is the single worst place in the funnel for silent
+ * data loss, which is why this exists.
+ *
+ * IDEMPOTENT BY CARD PRODUCT, not by a client-supplied id. The client cannot
+ * distinguish "the request timed out" from "the request succeeded and the
+ * response was lost", so a retry has to be safe; and a guest id like
+ * `local_1723...` means nothing to this database, so it can't be a dedupe
+ * key without a new column to store it in. Instead, a card product the
+ * profile already owns is skipped and reported as `already_present`.
+ *
+ * The honest cost of that choice: a user who genuinely holds two of the same
+ * product gets one row, not two. That is a rare case, it is visible and
+ * fixable in one tap from Add Card, and it is strictly better than the
+ * alternative failure — a retry silently doubling someone's entire wallet,
+ * which is neither visible nor obviously fixable.
+ *
+ * Partial success is a real outcome, reported per card rather than collapsed
+ * into one status: an unpublished or unknown `cardProductId` (a guest can
+ * hold a card that has since been unpublished) must not fail the other nine.
+ */
+app.post('/user-cards/import', requireAuth, async (req, res) => {
+  const cards = (req.body || {}).cards;
+  if (!Array.isArray(cards)) {
+    return res.status(400).json({ error: 'cards must be an array' });
+  }
+  if (cards.length === 0) {
+    return res.json({ results: [], importedCount: 0 });
+  }
+  if (cards.length > 100) {
+    return res.status(413).json({ error: 'too many cards in one import' });
+  }
+
+  try {
+    const results = await withUserClient(req.userId, async (client) => {
+      // One read up front rather than a per-card existence query: the set of
+      // products this profile already owns can't change inside the
+      // transaction, and this also lets `isDefault` below be decided from
+      // the true "did they have any cards at all before this import" state.
+      const existing = await client.query(
+        `SELECT card_product_id FROM user_cards WHERE profile_id = $1`,
+        [req.userId]
+      );
+      const owned = new Set(existing.rows.map((r) => r.card_product_id));
+      const hadNoCards = owned.size === 0;
+
+      const maxOrder = await client.query(
+        `SELECT COALESCE(MAX(sort_order), 0) AS m FROM user_cards WHERE profile_id = $1`,
+        [req.userId]
+      );
+      let nextOrder = Number(maxOrder.rows[0].m);
+      let firstImportedId = null;
+      const out = [];
+
+      for (const card of cards) {
+        const cardProductId = card && card.cardProductId;
+        const localId = (card && card.localId) || null;
+        if (!cardProductId || typeof cardProductId !== 'string') {
+          out.push({ localId, status: 'invalid' });
+          continue;
+        }
+        if (owned.has(cardProductId)) {
+          out.push({ localId, cardProductId, status: 'already_present' });
+          continue;
+        }
+
+        const product = await client.query(
+          `SELECT id FROM card_products WHERE id = $1 AND status = 'published'`,
+          [cardProductId]
+        );
+        if (product.rows.length === 0) {
+          out.push({ localId, cardProductId, status: 'unknown_product' });
+          continue;
+        }
+
+        nextOrder += 1;
+        const inserted = await client.query(
+          `INSERT INTO user_cards (profile_id, card_product_id, nickname, is_archived, sort_order)
+                VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, card_product_id, nickname, is_default, is_archived, sort_order, created_at`,
+          [
+            req.userId,
+            cardProductId,
+            typeof card.nickname === 'string' && card.nickname.trim() !== '' ? card.nickname : null,
+            card.isArchived === true,
+            nextOrder,
+          ]
+        );
+        owned.add(cardProductId);
+        if (firstImportedId === null && card.isArchived !== true) {
+          firstImportedId = inserted.rows[0].id;
+        }
+        out.push({ localId, cardProductId, status: 'imported', userCard: inserted.rows[0] });
+      }
+
+      // Default card: only ever set when the account had none before, and
+      // only from the guest's own choice — never overriding a default an
+      // existing account already has, which would silently change what the
+      // Home screen recommends first for a returning user.
+      if (hadNoCards && firstImportedId !== null) {
+        const guestDefault = cards.find((c) => c && c.isDefault === true && c.cardProductId);
+        let targetId = firstImportedId;
+        if (guestDefault) {
+          const match = out.find(
+            (r) => r.status === 'imported' && r.cardProductId === guestDefault.cardProductId
+          );
+          if (match) targetId = match.userCard.id;
+        }
+        await client.query(
+          `UPDATE user_cards SET is_default = (id = $2) WHERE profile_id = $1`,
+          [req.userId, targetId]
+        );
+      }
+
+      return out;
+    });
+
+    res.status(201).json({
+      results,
+      importedCount: results.filter((r) => r.status === 'imported').length,
+    });
+  } catch (err) {
+    console.error('POST /user-cards/import error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * POST /user-cards/:id/archive — R4: "archive, never delete." There is
  * deliberately no DELETE /user-cards/:id route.
  */
@@ -1338,6 +1489,37 @@ app.post('/user-cards/:id/archive', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('POST /user-cards/:id/archive error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /user-cards/:id/default — design 23 "Card actions": set as default.
+ * A dedicated route rather than a PATCH field because only one card per
+ * profile may be default, so this is two statements (clear the old, set the
+ * new) that must not half-apply — hence the explicit transaction, not the
+ * generic single-UPDATE PATCH above.
+ */
+app.post('/user-cards/:id/default', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const owns = await client.query(
+        `SELECT id FROM user_cards WHERE id = $1 AND profile_id = $2 AND is_archived = false`,
+        [req.params.id, req.userId]
+      );
+      if (owns.rows.length === 0) return null;
+      await client.query(`UPDATE user_cards SET is_default = false WHERE profile_id = $1 AND is_default = true`, [
+        req.userId,
+      ]);
+      return client.query(
+        `UPDATE user_cards SET is_default = true WHERE id = $1 AND profile_id = $2 RETURNING id, is_default`,
+        [req.params.id, req.userId]
+      );
+    });
+    if (!result) return res.status(404).json({ error: 'user_card not found' });
+    res.json({ userCard: result.rows[0] });
+  } catch (err) {
+    console.error('POST /user-cards/:id/default error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1561,7 +1743,11 @@ const USER_CARD_PATCH_FIELDS = {
   statementDay: 'statement_day',
   dueDay: 'due_day',
   pointsBalance: 'points_balance',
+  autopayMode: 'autopay_mode',
 };
+
+/** Mirrors the CHECK constraint in migration 0027. */
+const AUTOPAY_MODES = ['off', 'minimum', 'full'];
 
 /**
  * PATCH /user-cards/:id — Task C-4 (ui-spec C4 Edit Card). Fields: nickname,
@@ -1604,6 +1790,12 @@ app.patch('/user-cards/:id', requireAuth, async (req, res) => {
     const l = Number(body.creditLimitInr);
     if (!Number.isFinite(l) || l < 0) return res.status(400).json({ error: 'creditLimitInr must be a non-negative number' });
   }
+  // Rejected here as a 400 rather than left to the CHECK constraint, which
+  // would surface as an opaque 500. autopay_mode is NOT NULL, so an
+  // explicit null is a client bug too, not "clear it".
+  if ('autopayMode' in body && !AUTOPAY_MODES.includes(body.autopayMode)) {
+    return res.status(400).json({ error: `autopayMode must be one of ${AUTOPAY_MODES.join(', ')}` });
+  }
 
   values.push(req.params.id, req.userId);
   const idParam = values.length - 1;
@@ -1614,7 +1806,8 @@ app.patch('/user-cards/:id', requireAuth, async (req, res) => {
       client.query(
         `UPDATE user_cards SET ${sets.join(', ')}
           WHERE id = $${idParam} AND profile_id = $${profileParam} AND is_archived = false
-          RETURNING id, nickname, credit_limit_inr, statement_day, due_day, points_balance, points_balance_state`,
+          RETURNING id, nickname, credit_limit_inr, statement_day, due_day, points_balance,
+                    points_balance_state, autopay_mode`,
         values
       )
     );
@@ -2125,7 +2318,7 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
 });
 
 /**
- * GET /transactions?from=&to=&cardId=&limit= — E10/E11/D1's shared gap
+ * GET /transactions?from=&to=&cardId=&categoryId=&source=&q=&limit= — E10/E11/D1's shared gap
  * (implementation-plan-group-e-f-g.md: "third consumer of the same missing
  * query param — build it once"). All three are optional; omitting them
  * keeps the original "last 50, no filter" behaviour so existing callers
@@ -2134,9 +2327,22 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
  * a caller doesn't need to think about timezone-of-day edge cases.
  */
 app.get('/transactions', requireAuth, async (req, res) => {
-  const { from, to, cardId, categoryId, source } = req.query;
+  const { from, to, cardId, categoryId, source, q } = req.query;
   const conditions = [`t.profile_id = $1`, `t.status = 'active'`];
   const params = [req.userId];
+  // Task D-1's last missing filter: free-text search. activity_screen.dart
+  // shipped without a search box because there was no server-side text
+  // match to call, and filtering client-side would only ever have searched
+  // the 50 rows already loaded rather than the user's history.
+  //
+  // ILIKE over merchant and note, not full-text search: these are short
+  // free-text fields where users type fragments ("zep", "swig"), and
+  // to_tsvector would tokenise those into non-matching lexemes. The `%`
+  // wrappers are bound as a parameter value, never concatenated into SQL.
+  if (typeof q === 'string' && q.trim().length > 0) {
+    params.push(`%${q.trim()}%`);
+    conditions.push(`(t.merchant_name ILIKE $${params.length} OR t.note ILIKE $${params.length})`);
+  }
   if (from) {
     params.push(from);
     conditions.push(`t.occurred_at >= $${params.length}::date`);
@@ -2171,6 +2377,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
       client.query(
         `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
+                t.expected_value_inr,
                 cp.name AS card_name, uc.nickname AS card_nickname
            FROM transactions t
            LEFT JOIN user_cards uc ON uc.id = t.user_card_id
@@ -2201,6 +2408,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
       client.query(
         `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
+                t.expected_value_inr,
                 cp.name AS card_name, uc.nickname AS card_nickname
            FROM transactions t
            LEFT JOIN user_cards uc ON uc.id = t.user_card_id
@@ -2422,6 +2630,164 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
 const IGNORE_REASONS = ['refund', 'reversal', 'transfer'];
 
 /**
+ * PATCH /transactions/:id/note — design 18 "Add a note".
+ *
+ * Deliberately its own route rather than another field on
+ * PATCH /transactions/:id. That route is a reverse-then-reapply of the
+ * whole transaction: it takes a row lock, unwinds this transaction's
+ * cap/milestone/points/fee-waiver contribution, rewrites the row, and
+ * reapplies state. A note affects none of that, and routing a note edit
+ * through it would make typing a comment recompute reward state — slow,
+ * lock-contending, and a real risk of drift for zero benefit.
+ *
+ * Not filtered on `status = 'active'`: an ignored transaction is exactly
+ * the kind you want to annotate ("this was the duplicate from the refund").
+ */
+app.patch('/transactions/:id/note', requireAuth, async (req, res) => {
+  const { note } = req.body || {};
+  if (note !== null && typeof note !== 'string') {
+    return res.status(400).json({ error: 'note must be a string or null' });
+  }
+  if (typeof note === 'string' && note.length > 2000) {
+    return res.status(400).json({ error: 'note must be 2000 characters or fewer' });
+  }
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `UPDATE transactions SET note = $1
+          WHERE id = $2 AND profile_id = $3
+          RETURNING id, note`,
+        [note === '' ? null : note, req.params.id, req.userId]
+      )
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'transaction not found' });
+    res.json({ transaction: result.rows[0] });
+  } catch (err) {
+    console.error('PATCH /transactions/:id/note error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /transactions/:id/splits — design 18 "Split this expense".
+ *
+ * The `transaction_splits` table has existed since migration 0004 with an
+ * RLS policy scoping it through the parent transaction's owner, but no
+ * route ever read or wrote it — the client-side doc-comment on
+ * transaction_detail_screen.dart called that out as a real gap rather than
+ * faking the feature. These two routes close it.
+ */
+app.get('/transactions/:id/splits', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const owns = await client.query(`SELECT id FROM transactions WHERE id = $1 AND profile_id = $2`, [
+        req.params.id,
+        req.userId,
+      ]);
+      if (owns.rows.length === 0) return null;
+      return client.query(
+        `SELECT ts.id, ts.user_card_id, ts.category_id, ts.amount_inr, ts.note,
+                sc.name AS category_name
+           FROM transaction_splits ts
+           LEFT JOIN spend_categories sc ON sc.id = ts.category_id
+          WHERE ts.transaction_id = $1
+          ORDER BY ts.amount_inr DESC`,
+        [req.params.id]
+      );
+    });
+    if (!result) return res.status(404).json({ error: 'transaction not found' });
+    res.json({ splits: result.rows });
+  } catch (err) {
+    console.error('GET /transactions/:id/splits error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * PUT /transactions/:id/splits — replace this transaction's whole split set.
+ *
+ * Replace, not append: a split is a partition of one amount, so the only
+ * coherent unit of edit is the whole set. Appending would let a client
+ * build a set summing to more than the transaction, and per-row PATCH would
+ * make "move ₹100 from A to B" two writes with an invalid state in between.
+ *
+ * The sum is validated against the parent amount and rejected if it
+ * exceeds it — over-splitting is always a bug. Splitting to *less* than the
+ * full amount is allowed: partially splitting a bill ("₹400 of this ₹1,000
+ * was Priya's") is a real thing users do, and the remainder is simply
+ * unallocated.
+ *
+ * **These do not touch reward state.** Cap, milestone and points state were
+ * computed from the transaction as a whole, on the card it was actually
+ * paid with; splits record who owed what, not a second set of payments.
+ * Recomputing state from splits would double-count the spend.
+ */
+app.put('/transactions/:id/splits', requireAuth, async (req, res) => {
+  const splits = (req.body || {}).splits;
+  if (!Array.isArray(splits)) return res.status(400).json({ error: 'splits must be an array' });
+  if (splits.length > 20) return res.status(400).json({ error: 'at most 20 splits per transaction' });
+
+  for (const split of splits) {
+    const amount = Number(split && split.amountInr);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'each split needs a positive amountInr' });
+    }
+    if (split.note !== undefined && split.note !== null && typeof split.note !== 'string') {
+      return res.status(400).json({ error: 'split note must be a string or null' });
+    }
+  }
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const parent = await client.query(
+        `SELECT id, amount_inr FROM transactions WHERE id = $1 AND profile_id = $2`,
+        [req.params.id, req.userId]
+      );
+      if (parent.rows.length === 0) return { status: 404, error: 'transaction not found' };
+
+      const total = splits.reduce((sum, s) => sum + Number(s.amountInr), 0);
+      // Compared in paise to avoid a float sum tripping the check on an
+      // exact split (three ₹33.34 shares of ₹100.02, say).
+      if (Math.round(total * 100) > Math.round(Number(parent.rows[0].amount_inr) * 100)) {
+        return { status: 400, error: 'splits total more than the transaction amount' };
+      }
+
+      await client.query(`DELETE FROM transaction_splits WHERE transaction_id = $1`, [req.params.id]);
+      for (const split of splits) {
+        await client.query(
+          `INSERT INTO transaction_splits (transaction_id, user_card_id, category_id, amount_inr, note)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            req.params.id,
+            split.userCardId || null,
+            split.categoryId || null,
+            Number(split.amountInr),
+            split.note || null,
+          ]
+        );
+      }
+
+      const saved = await client.query(
+        `SELECT ts.id, ts.user_card_id, ts.category_id, ts.amount_inr, ts.note,
+                sc.name AS category_name
+           FROM transaction_splits ts
+           LEFT JOIN spend_categories sc ON sc.id = ts.category_id
+          WHERE ts.transaction_id = $1
+          ORDER BY ts.amount_inr DESC`,
+        [req.params.id]
+      );
+      return { status: 200, splits: saved.rows };
+    });
+
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    res.json({ splits: result.splits });
+  } catch (err) {
+    console.error('PUT /transactions/:id/splits error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * POST /transactions/:id/ignore — Task C-0c (ui-spec D2 "mark ignored
  * (refund/reversal/transfer)"). Reverses this transaction's cap/milestone/
  * points/fee-waiver contribution (via [reverseTransactionState]) and sets
@@ -2606,6 +2972,374 @@ app.get('/monthly-reports', requireAuth, async (req, res) => {
     res.json({ monthlyReport: result });
   } catch (err) {
     console.error('GET /monthly-reports error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /card-discovery — "find my cards", from forwarded bank email and/or
+ * SMS bodies the device passes up.
+ *
+ * Design 30 offers "Find them in my SMS" as the fastest way to add cards.
+ * Email is the other half of the same idea and is in some ways the better
+ * one: it works on iOS, where no app may read SMS at all, and the user has
+ * already opted into it by setting up a forwarding address.
+ *
+ * Two sources, one matcher (src/card_discovery.js), so the same card is
+ * recognised identically in an SMS alert and a statement email.
+ *
+ * This returns SUGGESTIONS ONLY and adds nothing. Every candidate carries
+ * the text that produced it so the user can see why it was suggested and
+ * reject a wrong one — silently adding a card someone doesn't own would
+ * then rank against a card they can't pay with.
+ *
+ * SMS bodies (`smsBodies`) are accepted in the request and used in memory
+ * for this response only. They are never written to the database, matching
+ * the on-device-only promise SmsConsentScreen makes to the user.
+ */
+app.post('/card-discovery', requireAuth, async (req, res) => {
+  const { smsBodies } = req.body || {};
+  if (smsBodies !== undefined && !Array.isArray(smsBodies)) {
+    return res.status(400).json({ error: 'smsBodies must be an array of strings' });
+  }
+  try {
+    const payload = await withUserClient(req.userId, async (client) => {
+      const catalogue = await client.query(
+        `SELECT id, slug, name, issuer_name, issuer_slug FROM v_card_catalogue_export`
+      );
+
+      // Only sender-verified bank mail is scanned. Anyone can send mail to a
+      // forwarding address, and a stranger writing "HDFC Millennia" in an
+      // email should not put a card in your wallet's suggestion list.
+      const emails = await client.query(
+        `SELECT subject, body_text AS body, sender
+           FROM inbound_emails
+          WHERE profile_id = $1 AND is_known_bank_sender
+          ORDER BY received_at DESC
+          LIMIT 200`,
+        [req.userId]
+      );
+
+      const smsMessages = (smsBodies || [])
+        .filter((b) => typeof b === 'string' && b.trim())
+        .slice(0, 500)
+        .map((body) => ({ body }));
+
+      const owned = await client.query(
+        `SELECT card_product_id FROM user_cards WHERE profile_id = $1 AND archived_at IS NULL`,
+        [req.userId]
+      );
+      const ownedIds = new Set(owned.rows.map((r) => r.card_product_id));
+
+      const fromEmail = discoverCardsAcrossMessages(emails.rows, catalogue.rows);
+      const fromSms = discoverCardsAcrossMessages(smsMessages, catalogue.rows);
+
+      // Tag each suggestion with where it came from, so the UI can say
+      // "found in your email" vs "found in your SMS" rather than an
+      // unexplained list.
+      const merged = new Map();
+      for (const [source, hits] of [
+        ['email', fromEmail],
+        ['sms', fromSms],
+      ]) {
+        for (const hit of hits) {
+          if (ownedIds.has(hit.cardProductId)) continue; // already in the wallet
+          const existing = merged.get(hit.cardProductId);
+          if (existing) {
+            existing.sources.push(source);
+            existing.score = Math.max(existing.score, hit.score);
+            existing.messageCount += hit.messageCount;
+          } else {
+            merged.set(hit.cardProductId, { ...hit, sources: [source] });
+          }
+        }
+      }
+
+      return {
+        suggestions: [...merged.values()].sort((a, b) => b.score - a.score),
+        scanned: { emails: emails.rowCount, sms: smsMessages.length },
+      };
+    });
+    res.json(payload);
+  } catch (err) {
+    console.error('POST /card-discovery error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /referrals — design 25's Invite friends screen in one call: the
+ * programme terms, this user's own code (minted on first read), and every
+ * referral they've made.
+ *
+ * The terms come from the `referral_program` config row rather than being
+ * baked into the app, because "Give ₹100, get ₹100" is a commercial
+ * commitment the business changes without shipping a release. When
+ * `is_active` is false the client shows the invite mechanics with no reward
+ * claim at all — it never advertises money that isn't on offer.
+ */
+app.get('/referrals', requireAuth, async (req, res) => {
+  try {
+    const payload = await withUserClient(req.userId, async (client) => {
+      const program = await client.query(`SELECT * FROM referral_program WHERE id = 1`);
+
+      // Mint on first read rather than at sign-up: most users never open
+      // this screen, and a code nobody has seen is a row nobody needs.
+      // ON CONFLICT DO NOTHING + re-select keeps it idempotent under a
+      // double-tap without a second round trip in the common case.
+      const existing = await client.query(
+        `SELECT code FROM referral_codes WHERE profile_id = $1`,
+        [req.userId]
+      );
+      let code = existing.rows[0]?.code;
+      if (!code) {
+        // Crockford-ish base32: no I/L/O/U, so a code read aloud or typed
+        // from a screenshot can't be ambiguous.
+        const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+        for (let attempt = 0; attempt < 5 && !code; attempt += 1) {
+          const suffix = Array.from(
+            { length: 6 },
+            () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]
+          ).join('');
+          const inserted = await client.query(
+            `INSERT INTO referral_codes (profile_id, code) VALUES ($1, $2)
+             ON CONFLICT DO NOTHING RETURNING code`,
+            [req.userId, `PANDA-${suffix}`]
+          );
+          code = inserted.rows[0]?.code;
+          if (!code) {
+            const reread = await client.query(
+              `SELECT code FROM referral_codes WHERE profile_id = $1`,
+              [req.userId]
+            );
+            code = reread.rows[0]?.code;
+          }
+        }
+      }
+
+      const referrals = await client.query(
+        `SELECT r.id, r.reward_state, r.created_at, r.qualified_at,
+                COALESCE(r.referee_label, split_part(p.email, '@', 1)) AS label
+           FROM referrals r
+           LEFT JOIN profiles p ON p.id = r.referee_id
+          WHERE r.referrer_id = $1
+          ORDER BY r.created_at DESC`,
+        [req.userId]
+      );
+
+      return { program: program.rows[0] || null, code, referrals: referrals.rows };
+    });
+    res.json(payload);
+  } catch (err) {
+    console.error('GET /referrals error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /notifications — design 19's inbox, newest first.
+ *
+ * Read-only over the `notifications` table (0024). Nothing is synthesised
+ * here: if a notification wasn't delivered and recorded, it doesn't appear.
+ * The client groups Today/Earlier off `created_at` in the device's own
+ * timezone rather than the server guessing which local day a row belongs to.
+ */
+app.get('/notifications', requireAuth, async (req, res) => {
+  const limit = Math.min(Number.parseInt(req.query.limit, 10) || 50, 200);
+  try {
+    const rows = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT id, category, severity, title, body, deep_link, read_at, created_at
+           FROM notifications
+          WHERE profile_id = $1
+          ORDER BY created_at DESC
+          LIMIT $2`,
+        [req.userId, limit]
+      )
+    );
+    const unread = rows.rows.filter((r) => r.read_at === null).length;
+    res.json({ notifications: rows.rows, unreadCount: unread });
+  } catch (err) {
+    console.error('GET /notifications error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /notifications/read — marks one notification read, or all of them
+ * when no id is given (design 19's "Mark all read").
+ *
+ * `read_at` is only ever set, never cleared to a *later* time on re-read:
+ * COALESCE keeps the first-read timestamp, which is the honest one.
+ */
+app.post('/notifications/read', requireAuth, async (req, res) => {
+  const { id } = req.body || {};
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      id
+        ? client.query(
+            `UPDATE notifications SET read_at = COALESCE(read_at, now())
+              WHERE profile_id = $1 AND id = $2 RETURNING id`,
+            [req.userId, id]
+          )
+        : client.query(
+            `UPDATE notifications SET read_at = COALESCE(read_at, now())
+              WHERE profile_id = $1 AND read_at IS NULL RETURNING id`,
+            [req.userId]
+          )
+    );
+    res.json({ updated: result.rowCount });
+  } catch (err) {
+    console.error('POST /notifications/read error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /notifications — records a delivery.
+ *
+ * Called by the app itself for the events it is the one to observe (a card
+ * added, a streak reached) as well as by any server-side job. `dedupeKey`
+ * makes it idempotent: re-evaluating "SBI Cashback due in 4 days" nightly
+ * updates the one row instead of stacking copies, which is the whole reason
+ * that unique index exists.
+ *
+ * The user's notification_preferences are honoured HERE rather than at read
+ * time — a muted category should never have been written to the inbox in
+ * the first place, and filtering on read would leave rows that silently
+ * reappear if the preference is turned back on later.
+ */
+app.post('/notifications', requireAuth, async (req, res) => {
+  const { category, severity, title, body, deepLink, dedupeKey } = req.body || {};
+  if (!category || !title) {
+    return res.status(400).json({ error: 'category and title are required' });
+  }
+  // 'streak' and 'card_added' have no preference column — they're in-app
+  // consequences of the user's own action, not push-style interruptions.
+  const PREFERENCE_COLUMN = {
+    location: 'category_location',
+    caps: 'category_caps',
+    milestones: 'category_milestones',
+    fee_waivers: 'category_fee_waivers',
+    bills: 'category_bills',
+    expiry: 'category_expiry',
+    monthly_report: 'category_monthly_report',
+    needs_review: 'category_needs_review',
+  };
+  try {
+    const inserted = await withUserClient(req.userId, async (client) => {
+      const column = PREFERENCE_COLUMN[category];
+      if (column) {
+        const pref = await client.query(
+          `SELECT ${column} AS enabled FROM notification_preferences WHERE profile_id = $1`,
+          [req.userId]
+        );
+        // No preferences row yet means the user has never opted out of
+        // anything; 0019's own column defaults are the intent, so deliver.
+        if (pref.rowCount > 0 && pref.rows[0].enabled === false) return null;
+      }
+      const result = await client.query(
+        `INSERT INTO notifications (profile_id, category, severity, title, body, deep_link, dedupe_key)
+         VALUES ($1, $2, COALESCE($3, 'info'), $4, $5, $6, $7)
+         ON CONFLICT (profile_id, dedupe_key) WHERE dedupe_key IS NOT NULL
+         DO UPDATE SET title = EXCLUDED.title,
+                       body = EXCLUDED.body,
+                       severity = EXCLUDED.severity,
+                       deep_link = EXCLUDED.deep_link,
+                       created_at = now(),
+                       read_at = NULL
+         RETURNING *`,
+        [req.userId, category, severity, title, body || null, deepLink || null, dedupeKey || null]
+      );
+      return result.rows[0];
+    });
+    // 204 (not an error) when the user has that category muted — the caller
+    // asked for a delivery and got a definitive "not delivered, by choice".
+    if (!inserted) return res.status(204).end();
+    res.status(201).json({ notification: inserted });
+  } catch (err) {
+    console.error('POST /notifications error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /home-summary — backs design 01's header strip, which shows three
+ * figures side by side: rewards earned this month, rewards earned all time,
+ * and a logging streak in days.
+ *
+ * Only the first of those was derivable client-side (GET /monthly-reports
+ * returns the current month and nothing else), so the other two shipped as
+ * nothing at all rather than as invented numbers. All three are real
+ * aggregates over the same `transactions` rows /monthly-reports already
+ * sums — no new tables, no new writes.
+ *
+ * `streakDays` counts back from the most recent day with at least one
+ * active transaction, and is 0 unless that day is today or yesterday: a
+ * streak that already lapsed is not a streak. Days are bucketed in the
+ * request's IANA timezone (`?tz=`, default Asia/Kolkata) because "did I log
+ * something today" is a local-calendar question — bucketing in UTC would
+ * break the streak at 05:30 IST every night.
+ */
+app.get('/home-summary', requireAuth, async (req, res) => {
+  const tz = typeof req.query.tz === 'string' && req.query.tz.length > 0 ? req.query.tz : 'Asia/Kolkata';
+  try {
+    const summary = await withUserClient(req.userId, async (client) => {
+      // Validate the timezone against Postgres' own catalogue before
+      // interpolating it — AT TIME ZONE takes a string, and an unknown name
+      // raises rather than falling back, which would 500 the whole header.
+      const tzOk = await client.query(`SELECT 1 FROM pg_timezone_names WHERE name = $1`, [tz]);
+      const zone = tzOk.rowCount > 0 ? tz : 'Asia/Kolkata';
+
+      const totals = await client.query(
+        `SELECT
+           COALESCE(SUM(expected_value_inr), 0) AS all_time,
+           COALESCE(SUM(expected_value_inr) FILTER (
+             WHERE occurred_at >= date_trunc('month', (now() AT TIME ZONE $2))
+           ), 0) AS this_month,
+           COUNT(*) AS txn_count
+         FROM transactions
+         WHERE profile_id = $1 AND status = 'active'`,
+        [req.userId, zone]
+      );
+
+      // Streak: number the run of consecutive local days ending at the most
+      // recent logged day, using the classic date-minus-row_number gaps-and-
+      // islands trick (every day in one unbroken run shares an anchor date).
+      const streak = await client.query(
+        `WITH days AS (
+           SELECT DISTINCT (occurred_at AT TIME ZONE $2)::date AS d
+             FROM transactions
+            WHERE profile_id = $1 AND status = 'active'
+         ), islands AS (
+           SELECT d, d - (ROW_NUMBER() OVER (ORDER BY d))::int AS anchor FROM days
+         ), latest AS (
+           SELECT anchor, MAX(d) AS last_day, COUNT(*)::int AS len
+             FROM islands GROUP BY anchor ORDER BY last_day DESC LIMIT 1
+         )
+         SELECT len, last_day FROM latest`,
+        [req.userId, zone]
+      );
+
+      let streakDays = 0;
+      if (streak.rowCount > 0) {
+        const today = await client.query(`SELECT (now() AT TIME ZONE $1)::date AS today`, [zone]);
+        const gap = Math.round(
+          (today.rows[0].today.getTime() - streak.rows[0].last_day.getTime()) / 86400000
+        );
+        if (gap <= 1) streakDays = streak.rows[0].len;
+      }
+
+      return {
+        rewardsThisMonthInr: Number(totals.rows[0].this_month),
+        rewardsAllTimeInr: Number(totals.rows[0].all_time),
+        transactionCount: Number(totals.rows[0].txn_count),
+        streakDays,
+      };
+    });
+    res.json({ homeSummary: summary });
+  } catch (err) {
+    console.error('GET /home-summary error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -2881,6 +3615,108 @@ app.delete('/notification-preferences/muted-merchants/:merchantId', requireAuth,
     res.json({ ok: true });
   } catch (err) {
     console.error('DELETE /notification-preferences/muted-merchants/:merchantId error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /user-settings — plan Phase 1.1. The account-level preference blob a
+ * newly-signed-in device pulls so it doesn't re-run onboarding and reset
+ * every display preference the user already chose (migration 0028).
+ *
+ * Returns `{}` rather than 404 for a user who has never written any: "no
+ * preferences stored" and "all preferences at their defaults" are the same
+ * state, and making the client branch on 404 to reach that conclusion would
+ * be a distinction without a difference.
+ */
+app.get('/user-settings', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query('SELECT settings, revision, updated_at FROM user_settings WHERE profile_id = $1', [
+        req.userId,
+      ])
+    );
+    const row = result.rows[0];
+    res.json({
+      settings: row ? row.settings : {},
+      revision: row ? Number(row.revision) : 0,
+      updatedAt: row ? row.updated_at : null,
+    });
+  } catch (err) {
+    console.error('GET /user-settings error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * PUT /user-settings — merges the posted keys into the stored blob.
+ *
+ * A per-key MERGE (`settings || excluded.settings`), not a whole-blob
+ * replace, and that choice is load-bearing rather than incidental. With
+ * replace semantics, a phone that changed only the theme would post its own
+ * full view of the blob and silently revert a text-scale change a tablet made
+ * thirty seconds earlier — the exact silent-clobber class of bug
+ * 0005_sync.sql's header warns about. Merging means each device only ever
+ * overwrites the keys it actually touched, so the operation is commutative
+ * and two devices editing different preferences both win.
+ *
+ * `null` for a key is a real value here, not an absence: it deletes the key
+ * (jsonb `-`), which is how a client resets a preference to "never set" as
+ * opposed to a stored default.
+ *
+ * Deliberately no schema validation of the keys. The server never reads them
+ * (see 0028's table comment) — validating a namespace it doesn't interpret
+ * would just mean a backend deploy every time the app adds a toggle. Size is
+ * bounded instead, which is the property that actually protects the server.
+ */
+const USER_SETTINGS_MAX_BYTES = 16 * 1024;
+
+app.put('/user-settings', requireAuth, async (req, res) => {
+  const patch = req.body && req.body.settings;
+  if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) {
+    return res.status(400).json({ error: 'settings must be a JSON object' });
+  }
+  if (Buffer.byteLength(JSON.stringify(patch), 'utf8') > USER_SETTINGS_MAX_BYTES) {
+    return res.status(413).json({ error: 'settings payload too large' });
+  }
+
+  // Split the patch: real values are merged in, explicit nulls are removed.
+  const nullKeys = Object.keys(patch).filter((k) => patch[k] === null);
+  const setEntries = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== null));
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const upserted = await client.query(
+        `INSERT INTO user_settings (profile_id, settings)
+              VALUES ($1, $2::jsonb)
+         ON CONFLICT (profile_id) DO UPDATE
+                SET settings   = user_settings.settings || excluded.settings,
+                    revision   = user_settings.revision + 1,
+                    updated_at = now()
+          RETURNING settings, revision, updated_at`,
+        [req.userId, JSON.stringify(setEntries)]
+      );
+      if (nullKeys.length === 0) return upserted.rows[0];
+
+      const pruned = await client.query(
+        `UPDATE user_settings
+            SET settings   = settings - $2::text[],
+                revision   = revision + 1,
+                updated_at = now()
+          WHERE profile_id = $1
+      RETURNING settings, revision, updated_at`,
+        [req.userId, nullKeys]
+      );
+      return pruned.rows[0];
+    });
+
+    res.json({
+      settings: result.settings,
+      revision: Number(result.revision),
+      updatedAt: result.updated_at,
+    });
+  } catch (err) {
+    console.error('PUT /user-settings error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });

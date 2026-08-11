@@ -83,7 +83,10 @@ class CreditUtilizationScreen extends ConsumerWidget {
             ],
             if (withoutLimit.isNotEmpty) ...[
               const SizedBox(height: AppSpace.md),
-              Text('Add a credit limit to track these', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+              Text(
+                'Add a credit limit to track these',
+                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              ),
               const SizedBox(height: AppSpace.sm),
               for (final (userCard, product) in withoutLimit)
                 Padding(
@@ -106,7 +109,8 @@ class _NoLimitsYetNotice extends StatelessWidget {
     return const EmptyState(
       icon: Icons.credit_score_outlined,
       title: 'Add a credit limit to see utilization',
-      message: 'None of your cards have a credit limit entered yet — utilization can\'t be '
+      message:
+          'None of your cards have a credit limit entered yet — utilization can\'t be '
           'calculated without one.',
     );
   }
@@ -181,7 +185,10 @@ class _UtilizationTile extends StatelessWidget {
                 color: color,
               ),
               const SizedBox(width: 4),
-              Text('${(ratio * 100).toStringAsFixed(0)}%', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: color)),
+              Text(
+                '${(ratio * 100).toStringAsFixed(0)}%',
+                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: color),
+              ),
             ],
           ),
           const SizedBox(height: AppSpace.md),
@@ -198,7 +205,11 @@ class _UtilizationTile extends StatelessWidget {
           Row(
             children: [
               Text('Limit ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-              MoneyText(userCard.creditLimit!, confidence: Confidence.confirmed, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              MoneyText(
+                userCard.creditLimit!,
+                confidence: Confidence.confirmed,
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
             ],
           ),
           if (over) ...[

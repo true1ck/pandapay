@@ -18,6 +18,7 @@ class _FakeCatalogueRepository implements CatalogueRepository {
 class _RecordingUserCardsRepository implements UserCardsRepository {
   Map<String, dynamic>? lastUpdateArgs;
   bool archived = false;
+  String? defaultedId;
 
   @override
   Future<void> updateCard(
@@ -27,6 +28,7 @@ class _RecordingUserCardsRepository implements UserCardsRepository {
     int? statementDay,
     int? dueDay,
     double? pointsBalance,
+    AutopayMode? autopayMode,
   }) async {
     lastUpdateArgs = {
       'userCardId': userCardId,
@@ -35,11 +37,15 @@ class _RecordingUserCardsRepository implements UserCardsRepository {
       'statementDay': statementDay,
       'dueDay': dueDay,
       'pointsBalance': pointsBalance,
+      'autopayMode': autopayMode,
     };
   }
 
   @override
   Future<void> archiveCard(String userCardId) async => archived = true;
+
+  @override
+  Future<void> setDefaultCard(String userCardId) async => defaultedId = userCardId;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -111,7 +117,7 @@ void main() {
     expect(repo.lastUpdateArgs?['nickname'], 'Renamed');
   });
 
-  testWidgets('Archive card calls archiveCard on the repository', (tester) async {
+  testWidgets('Remove card confirms in a sheet before calling archiveCard', (tester) async {
     final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
     final owned = [
       const UserCard(id: 'uc1', cardProductId: 'p1', nickname: 'Old', cardName: 'Test Card', isDefault: false),
@@ -119,9 +125,72 @@ void main() {
     final repo = _RecordingUserCardsRepository();
     await _pump(tester, catalogue: [product], owned: owned, repo: repo);
 
-    await tester.tap(find.text('Archive card'));
+    await tester.scrollUntilVisible(find.text('Remove card'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Remove card'));
+    await tester.pumpAndSettle();
+
+    // Design 23: destructive actions confirm in a sheet — nothing has been
+    // archived yet at this point.
+    expect(repo.archived, isFalse);
+    expect(find.text('Remove this card?'), findsOneWidget);
+
+    // 'Remove card' now matches both the screen button and the sheet's own
+    // confirm button, so scope to the one inside the sheet.
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove card'));
     await tester.pumpAndSettle();
 
     expect(repo.archived, isTrue);
+  });
+
+  testWidgets('cancelling the remove sheet leaves the card alone', (tester) async {
+    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+    final owned = [
+      const UserCard(id: 'uc1', cardProductId: 'p1', nickname: 'Old', cardName: 'Test Card', isDefault: false),
+    ];
+    final repo = _RecordingUserCardsRepository();
+    await _pump(tester, catalogue: [product], owned: owned, repo: repo);
+
+    await tester.scrollUntilVisible(find.text('Remove card'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Remove card'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Keep it'));
+    await tester.pumpAndSettle();
+
+    expect(repo.archived, isFalse);
+  });
+
+  testWidgets('Set as default card calls setDefaultCard', (tester) async {
+    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+    final repo = _RecordingUserCardsRepository();
+    await _pump(
+      tester,
+      catalogue: [product],
+      owned: [const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Card', isDefault: false)],
+      repo: repo,
+    );
+
+    await tester.scrollUntilVisible(find.text('Set as default card'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Set as default card'));
+    await tester.pumpAndSettle();
+
+    expect(repo.defaultedId, 'uc1');
+  });
+
+  testWidgets('a card that is already default shows a state row, not the action', (tester) async {
+    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+    await _pump(
+      tester,
+      catalogue: [product],
+      owned: [const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Card', isDefault: true)],
+      repo: _RecordingUserCardsRepository(),
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('This is your default card'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Set as default card'), findsNothing);
   });
 }

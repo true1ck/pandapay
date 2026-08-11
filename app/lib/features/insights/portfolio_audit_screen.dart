@@ -74,8 +74,9 @@ class _AuditTile extends ConsumerWidget {
     // has no tracked consumption anywhere in this schema, so it's labelled
     // "not tracked" rather than guessed at, per the cross-cutting "never
     // display a number the app can't justify" rule.
-    final untrackedBenefits =
-        product.benefits.where((b) => b.kind != BenefitKind.loungeDomestic && b.kind != BenefitKind.loungeInternational);
+    final untrackedBenefits = product.benefits.where(
+      (b) => b.kind != BenefitKind.loungeDomestic && b.kind != BenefitKind.loungeInternational,
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -99,7 +100,11 @@ class _AuditTile extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Annual fee', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                MoneyText(annualFee, confidence: Confidence.confirmed, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                MoneyText(
+                  annualFee,
+                  confidence: Confidence.confirmed,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
               ],
             ),
             const SizedBox(height: 4),
@@ -107,7 +112,11 @@ class _AuditTile extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Rewards earned (lifetime)', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                MoneyText(rewardsEarnedInr, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                MoneyText(
+                  rewardsEarnedInr,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
               ],
             ),
             const SizedBox(height: AppSpace.sm),
@@ -128,9 +137,14 @@ class _AuditTile extends ConsumerWidget {
           ],
           const SizedBox(height: AppSpace.md),
           usageAsync.when(
-            loading: () => const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-            error: (_, __) => Text('Usage frequency unavailable', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-            data: (count) => Text('$count transactions logged on this card', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+            loading: () =>
+                const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            error: (_, __) =>
+                Text('Usage frequency unavailable', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+            data: (count) => Text(
+              '$count transactions logged on this card',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
           ),
           if (untrackedBenefits.isNotEmpty) ...[
             const SizedBox(height: AppSpace.sm),

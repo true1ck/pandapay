@@ -116,6 +116,11 @@ dependencies:
   # by a real `pub get`/build in this environment — flagged, not hidden.
   url_launcher: ^6.3.1
   path_provider: ^2.1.6
+  # E9 Monthly Savings Report "share-as-image" — F6's own screen judged
+  # Clipboard sufficient for its text-only case (see that comment further
+  # up), but sharing an actual rendered image has no clipboard-only
+  # equivalent, so this is a genuinely new need, not a repeat of F6's.
+  share_plus: ^13.3.0
   package_info_plus: ^10.2.1
   intl: ^0.20.3
 

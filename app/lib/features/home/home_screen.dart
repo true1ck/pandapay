@@ -6,70 +6,52 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
+import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
-import '../calculator/big_purchase_calculator_screen.dart';
 import '../comparison/comparison_view_screen.dart';
+import '../insights/credit_utilization_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
 import '../quickadd/quick_add_screen.dart';
-import '../search/merchant_search_screen.dart';
 import 'home_alerts.dart';
 import 'home_context_line.dart';
 
-/// B1 Home, restyled onto the "Bamboo Ink" design system from the Claude
-/// Design handoff (`PandaPay Redesign.dc.html` — see that bundle's
-/// `chats/chat1.md`/`chat2.md` for how the system was arrived at, and
-/// [BambooInk]'s own doc-comment in app_theme.dart for why it's landed
-/// additively rather than as a global theme swap). This is a VISUAL
-/// restyle on top of the real functionality B1 already had — every
-/// provider wired here is the same real one, nothing is mocked to look
-/// good:
+/// B1 Home — design 01 "Home · the verdict". Section order, gutters, type
+/// sizes and the header composition are transcribed from that mockup; the
+/// functionality underneath is the real B1 feature set, nothing mocked:
 ///
-/// - Amount entry, category chips, offline banner, alerts strip, the
-///   ranked list (hero + backup + rest), "Why this card?"/"Compare all
-///   cards", and the override pill are unchanged in behaviour from
-///   before this pass — only their visuals moved.
-/// - The mockup's greeting line personalizes with a name and a login
-///   streak ("Evening, Aarav" / "14-day streak") — neither exists as
-///   real data anywhere in this codebase (no `name` field on the
-///   profile API, no streak tracking at all), so neither is faked here;
-///   the header shows a real time-of-day greeting only (via
-///   `clockProvider`, never `DateTime.now()` directly — see
-///   `no_datetime_now_outside_clock` in packages/pandapay_lints).
-/// - The mockup's "Saved with PandaPay — ₹24,180 since Mar 2024" strip
-///   is backed by `MonthlyReport.extraEarned`, which `GET
-///   /monthly-reports` always returns as a hardcoded 0 (see that
-///   route's own doc-comment in api/src/index.js — the historical
-///   recompute it needs doesn't exist yet). Showing it would mean
-///   showing ₹0 forever, which is exactly the "never display a number
-///   the app can't justify" rule this codebase applies everywhere else
-///   (see MonthlySavingsScreen). [_MonthlyRewardsStrip] shows the one
-///   figure that IS real instead — this month's actual rewards earned —
-///   and taps through to the real Monthly Savings Report screen.
-/// - The mockup's hero-card "Pay with this card" primary button has no
-///   real destination on Home: there's no merchant/payee bound at this
-///   point in the flow (that only exists after a UPI QR scan — see
-///   ScanResultScreen's real "Pay with [card]" button, reachable from
-///   the shell's own "Scan a UPI QR to pay" entry point). Adding a
-///   same-looking button here with nothing real behind it would be
-///   exactly the kind of decorative dead end this pass is trying not to
-///   ship, so it's left out; "Compare all cards" (real, tested, unchanged)
-///   is the hero card's one action.
-/// - AppBar/BottomAppBar (app/router.dart's `_AppShell`) are NOT
-///   restyled this pass — they're shared chrome across all four tabs
-///   and covered by shell-level tests (router_test.dart,
-///   router_onboarding_test.dart, tutorial_overlay_test.dart) that
-///   assert on their exact structure/copy. Confirmed with the user as
-///   next-phase scope, not silently skipped.
+/// - Amount entry, category chips, offline banner, alerts strip, the ranked
+///   list (hero + backup + rest), "Why this card?"/"Compare all cards", and
+///   the override pill are unchanged in behaviour — only their order and
+///   visuals moved.
+/// - The header's three figures ("₹1,842 earned", "₹24,180 all-time", a
+///   "14-day streak" pill) are hardcoded in the mockup. Here they come from
+///   `homeSummaryProvider` / `GET /home-summary`, which aggregates the
+///   user's own transactions — and the whole line collapses to a bare
+///   greeting when there's nothing real to aggregate (signed out, or no
+///   transactions logged yet). Same rule the rest of the app follows: never
+///   display a number the app can't point at a row for.
+/// - The mockup's `MonthlyReport.extraEarned`-based "saved vs a single
+///   card" figure is still not shown anywhere: `GET /monthly-reports`
+///   returns it hardcoded to 0 (see that route's doc-comment) so it would
+///   read as "you saved ₹0" forever.
+/// - The mockup's three Home action icons (search / quick-add /
+///   calculator) aren't on design 01 at all — the deck files those under
+///   You → Tools (design 05), which is where they now live. Nothing became
+///   unreachable.
+/// - The greeting is time-of-day only, via `clockProvider`, never
+///   `DateTime.now()` directly (see `no_datetime_now_outside_clock` in
+///   packages/pandapay_lints). The mockup's "Evening, Aarav" needs a name
+///   the profile API doesn't carry.
 ///
-/// Missing vs the full ui-spec B1 (unchanged from before this pass):
-/// offline bundling. Hero-card treatment, the backup-card row, the
-/// alerts strip, and the geofence-driven context line (HomeContextLine
-/// in home_context_line.dart, untouched by this pass) are done.
+/// The shell (app/router.dart's `_AppShell`) deliberately draws no AppBar,
+/// so this screen's own scroll padding covers the status bar — see that
+/// file for why.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -83,6 +65,15 @@ class HomeScreen extends ConsumerWidget {
   ];
 
   static const _gutter = 20.0;
+
+  /// Display label for a category slug, or null if it isn't one of Home's
+  /// own chips (nothing selected, or a slug that came from elsewhere).
+  static String? categoryLabelFor(String? slug) {
+    for (final (s, label, _) in _categories) {
+      if (s == slug) return label;
+    }
+    return null;
+  }
 
   static String _greetingFor(DateTime now) {
     if (now.hour < 12) return 'Good morning';
@@ -98,72 +89,45 @@ class HomeScreen extends ConsumerWidget {
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     final now = ref.watch(clockProvider).now();
 
-    return DecoratedBox(
-      // The mockup's screens sit on white under a faint bamboo wash
-      // falling from the top-right, not a flat fill.
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0.9, -0.7),
-          radius: 1.3,
-          colors: [BambooInk.wash, BambooInk.paper],
-          stops: [0.0, 0.6],
-        ),
-      ),
+    // Section order is design 01's, top to bottom: header, "What are you
+    // paying for?", category chips, amount, "Panda says use" + the verdict,
+    // backups, utilisation warning. It used to run header → action icons →
+    // rewards strip → amount → chips, which buried the question the screen
+    // exists to answer under two strips of chrome.
+    return AppBackground(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: AppSpace.xxxl),
+        // 58pt top / 128pt bottom, the mockup's own scroll padding — the
+        // top inset stands in for the status bar now that the shell has no
+        // AppBar, and the shell reserves the bottom 128 for the nav pill.
+        padding: EdgeInsets.only(
+          top: MediaQuery.paddingOf(context).top + AppSpace.sm,
+          bottom: AppShell.navClearance,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: AppSpace.sm),
             Padding(
-              padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 0),
+              padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
               child: _BrandHeader(greeting: _greetingFor(now)),
-            ),
-            const SizedBox(height: AppSpace.md),
-            // B5 entry point (unchanged from before this pass): a search
-            // icon, quick-add, and calculator alongside the geofence-driven
-            // context line — HomeScreen has no AppBar of its own (that
-            // lives in _AppShell in router.dart), so this Row is where
-            // those three actions live.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(_gutter, 0, 8, 0),
-              child: Row(
-                children: [
-                  const Expanded(child: HomeContextLine()),
-                  IconButton(
-                    tooltip: 'Search merchants',
-                    icon: const Icon(Icons.search_rounded, size: 20, color: BambooInk.ink500),
-                    onPressed: () =>
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MerchantSearchScreen())),
-                  ),
-                  IconButton(
-                    tooltip: 'Quick add a transaction',
-                    icon: const Icon(Icons.add_circle_outline_rounded, size: 20, color: BambooInk.ink500),
-                    onPressed: () =>
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QuickAddScreen())),
-                  ),
-                  IconButton(
-                    tooltip: 'Big-purchase calculator',
-                    icon: const Icon(Icons.calculate_outlined, size: 20, color: BambooInk.ink500),
-                    onPressed: () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => const BigPurchaseCalculatorScreen())),
-                  ),
-                ],
-              ),
             ),
             if (!signedIn)
               const Padding(
-                padding: EdgeInsets.fromLTRB(_gutter, AppSpace.md, _gutter, 0),
+                padding: EdgeInsets.fromLTRB(_gutter, AppSpace.lg, _gutter, 0),
                 child: _SignInBanner(),
               ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(_gutter, AppSpace.md, _gutter, 0),
-              child: _MonthlyRewardsStrip(),
-            ),
             Padding(
-              key: tutorialKeys.amountField,
-              padding: const EdgeInsets.fromLTRB(_gutter, AppSpace.md, _gutter, 0),
-              child: const _AmountCard(),
+              padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 0),
+              child: Text(
+                'What are you paying for?',
+                style: BambooFonts.heading(24, color: BambooInk.ink900, height: 1.15),
+              ),
+            ),
+            // B5's geofence context ("you look like you're at X") reads as
+            // the answer-in-progress to the heading above it, so it sits
+            // directly under the question rather than in its own strip.
+            const Padding(
+              padding: EdgeInsets.fromLTRB(_gutter, AppSpace.xs, _gutter, 0),
+              child: HomeContextLine(),
             ),
             const SizedBox(height: AppSpace.lg),
             SizedBox(
@@ -186,14 +150,28 @@ class HomeScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            Padding(
+              key: tutorialKeys.amountField,
+              padding: const EdgeInsets.fromLTRB(_gutter, AppSpace.lg, _gutter, 0),
+              child: const _AmountCard(),
+            ),
             const SizedBox(height: AppSpace.sm),
-            const _OfflineBanner(),
+            OfflineBanner(
+              gutter: _gutter,
+              onRetry: () {
+                ref.invalidate(catalogueProvider);
+                ref.invalidate(userCardsProvider);
+                ref.invalidate(cardOverridesProvider);
+              },
+            ),
             const _AlertsStrip(),
             const SizedBox(height: AppSpace.xs),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: _gutter),
               child: _RankedSection(ranked: ranked, tutorialKeys: tutorialKeys),
             ),
+            const _UtilizationWarningBanner(),
+            const SizedBox(height: AppSpace.lg),
           ],
         ),
       ),
@@ -201,83 +179,108 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _BrandHeader extends StatelessWidget {
+/// Design 01's header row, transcribed from the mockup: a bare 42pt panda
+/// mark (no bordered tile), then greeting-over-earnings, then a slate
+/// streak pill. Tapping the earnings line opens the monthly recap, exactly
+/// as the mockup's `<a href="#screen-recap">` does.
+///
+/// Every figure here comes from `homeSummaryProvider` (GET /home-summary).
+/// Where the mockup hardcodes "₹1,842 earned · ₹24,180 all-time" and a
+/// "14-day streak", this collapses to just the greeting when there's
+/// nothing real to show — signed out, or signed in with no transactions
+/// logged yet.
+class _BrandHeader extends ConsumerWidget {
   final String greeting;
   const _BrandHeader({required this.greeting});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(homeSummaryProvider).valueOrNull;
+    final hasEarnings = summary != null && summary.transactionCount > 0;
+
     return Row(
       children: [
-        Container(
-          width: 46,
-          height: 46,
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: BambooInk.paper,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: BambooInk.hairlineOnPaper),
-          ),
-          child: const PandaMark(size: 36),
-        ),
+        const PandaMark(size: 42),
         const SizedBox(width: AppSpace.md),
-        Expanded(child: Text(greeting, style: BambooFonts.heading(19))),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(greeting, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              if (hasEarnings)
+                GestureDetector(
+                  onTap: () => context.push(AppRoute.monthlySavings),
+                  behavior: HitTestBehavior.opaque,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Flexible(
+                        child: MoneyText(
+                          summary.rewardsThisMonth,
+                          confidence: Confidence.estimated,
+                          style: BambooFonts.heading(17, color: BambooInk.ink900),
+                          suffix: ' earned',
+                          hidePaise: true,
+                          // One confidence marker for the pair, on the
+                          // all-time figure — not two on one 42pt row.
+                          showConfidenceIcon: false,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Flexible(
+                        child: MoneyText(
+                          summary.rewardsAllTime,
+                          confidence: Confidence.estimated,
+                          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                          suffix: ' all-time ›',
+                          hidePaise: true,
+                          showConfidenceIcon: false,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (summary != null && summary.streakDays > 0) ...[
+          const SizedBox(width: AppSpace.sm),
+          _StreakPill(days: summary.streakDays),
+        ],
       ],
     );
   }
 }
 
-/// See [HomeScreen]'s doc-comment: this shows the one real figure the
-/// backend actually computes (this month's rewards earned,
-/// `MonthlyReport.rewardsEarned` from the real `GET /monthly-reports`),
-/// not the mockup's `extraEarned`-based "saved vs. a single card" figure
-/// — that field is hardcoded to 0 server-side today. Hidden entirely
-/// while there's no real report yet, same "no data yet reads as nothing
-/// to show, not a fabricated ₹0" rule MonthlySavingsScreen already
-/// follows for the exact same field.
-class _MonthlyRewardsStrip extends ConsumerWidget {
-  const _MonthlyRewardsStrip();
+/// The slate "14-day streak" pill from design 01 — lime dot, lime label.
+/// Shown only on a live streak (see GET /home-summary: a run that already
+/// lapsed returns 0), so this never congratulates a user for a streak they
+/// broke last week.
+class _StreakPill extends StatelessWidget {
+  final int days;
+  const _StreakPill({required this.days});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final report = ref.watch(currentMonthlyReportProvider).valueOrNull;
-    if (report == null || report.totalSpend.isZero) return const SizedBox.shrink();
-
-    return GestureDetector(
-      onTap: () => context.push(AppRoute.monthlySavings),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(AppRadius.pill)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(color: BambooInk.lime, shape: BoxShape.circle),
           ),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'REWARDS THIS MONTH',
-                    style: BambooFonts.ui(11, weight: FontWeight.w600, color: BambooInk.onSlateMuted)
-                        .copyWith(letterSpacing: 1.1),
-                  ),
-                  const SizedBox(height: 4),
-                  MoneyText(
-                    report.rewardsEarned,
-                    confidence: Confidence.estimated,
-                    style: BambooFonts.money(24, color: BambooInk.lime),
-                  ),
-                ],
-              ),
-            ),
-            Text('Details ›', style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.lime)),
-          ],
-        ),
+          const SizedBox(width: 6),
+          Text(
+            '$days-day streak',
+            style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.lime),
+          ),
+        ],
       ),
     );
   }
@@ -311,9 +314,15 @@ class _SignInBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("You're browsing as a guest", style: BambooFonts.ui(14, weight: FontWeight.w600, color: BambooInk.onSlate)),
+                Text(
+                  "You're browsing as a guest",
+                  style: BambooFonts.ui(14, weight: FontWeight.w600, color: BambooInk.onSlate),
+                ),
                 const SizedBox(height: 2),
-                Text('Sign in to track your own cards & spend', style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
+                Text(
+                  'Sign in to track your own cards & spend',
+                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+                ),
               ],
             ),
           ),
@@ -326,9 +335,9 @@ class _SignInBanner extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
               textStyle: BambooFonts.ui(13, weight: FontWeight.w700),
             ),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const Scaffold(body: LoginScreen())),
-            ),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const Scaffold(body: LoginScreen()))),
             child: const Text('Sign in'),
           ),
         ],
@@ -364,51 +373,12 @@ class _CategoryChip extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               label,
-              style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: selected ? BambooInk.onSlate : BambooInk.ink900),
+              style: BambooFonts.ui(
+                13.5,
+                weight: FontWeight.w600,
+                color: selected ? BambooInk.onSlate : BambooInk.ink900,
+              ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// UA-0.3 offline cache (GAP_ANALYSIS.md §2): visible only when the device
-/// currently reads as offline — catalogueProvider/userCardsProvider/
-/// cardOverridesProvider fall back to last-cached data silently underneath
-/// this, so without this banner a user has no way to tell the ranked list
-/// they're looking at might be stale. Pending-outbox count only shown when
-/// non-zero, matching this screen's "don't show an empty state as if it
-/// were content" pattern elsewhere. Unchanged in behaviour from before
-/// this pass — only restyled.
-class _OfflineBanner extends ConsumerWidget {
-  const _OfflineBanner();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isOnline = ref.watch(isOnlineProvider).valueOrNull ?? true;
-    if (isOnline) return const SizedBox.shrink();
-
-    final pendingCount = ref.watch(pendingOutboxCountProvider).valueOrNull ?? 0;
-    final message = pendingCount > 0
-        ? "You're offline — showing your last synced cards. "
-            '$pendingCount transaction${pendingCount == 1 ? '' : 's'} will sync when you\'re back.'
-        : "You're offline — showing your last synced cards.";
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(HomeScreen._gutter, AppSpace.md, HomeScreen._gutter, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
-        decoration: BoxDecoration(
-          color: BambooInk.paperMuted,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: BambooInk.hairlineOnPaper),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.cloud_off_rounded, size: 16, color: BambooInk.ink500),
-            const SizedBox(width: AppSpace.sm),
-            Expanded(child: Text(message, style: BambooFonts.ui(12.5, color: BambooInk.ink500))),
           ],
         ),
       ),
@@ -429,9 +399,11 @@ class _AlertsStrip extends ConsumerWidget {
     if (!userCards.hasValue || !catalogue.hasValue) return const SizedBox.shrink();
 
     final now = ref.watch(clockProvider).now();
-    final alerts = computeHomeAlerts(wallet: userCards.requireValue, catalogue: catalogue.requireValue, now: now)
-        .take(2)
-        .toList();
+    final alerts = computeHomeAlerts(
+      wallet: userCards.requireValue,
+      catalogue: catalogue.requireValue,
+      now: now,
+    ).take(2).toList();
     if (alerts.isEmpty) return const SizedBox.shrink();
 
     return Padding(
@@ -460,13 +432,100 @@ class _AlertsStrip extends ConsumerWidget {
                   // Icon + text label together, not color alone, carry the
                   // "this needs attention" signal — a clay-only box would
                   // fail for colorblind users.
-                  Expanded(child: Text(alert.message, style: BambooFonts.ui(13, color: BambooInk.ink900))),
+                  Expanded(
+                    child: Text(alert.message, style: BambooFonts.ui(13, color: BambooInk.ink900)),
+                  ),
                 ],
               ),
             ),
         ],
       ),
     );
+  }
+}
+
+/// Design 01's clay utilisation banner ("SBI Cashback is 78% utilised —
+/// paying before the due date protects your score"). E3 Credit Utilization
+/// already computes this for real (creditUtilizationProvider, 30%-of-limit
+/// bureau-guideline threshold) — this surfaces the single worst-utilised
+/// card right on Home instead of leaving it a screen away. Same estimate
+/// caveat as E3 itself (see creditUtilizationProvider's own doc comment):
+/// "current balance" is a spend-proxy, not a real statement balance, so
+/// this only fires once a card is actually over the 30% guideline, never a
+/// fabricated number. Silent (no banner) for guest mode / cards with no
+/// credit limit entered, same as E3.
+class _UtilizationWarningBanner extends ConsumerWidget {
+  const _UtilizationWarningBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pairs = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+    final utilization = ref.watch(creditUtilizationProvider);
+    if (pairs.isEmpty || utilization.isEmpty) return const SizedBox.shrink();
+
+    (UserCard, CardProduct)? worst;
+    UtilizationResult? worstResult;
+    for (final pair in pairs) {
+      final result = utilization[pair.$1.id];
+      if (result == null || !result.overThreshold) continue;
+      if (worstResult == null || result.ratio > worstResult.ratio) {
+        worst = pair;
+        worstResult = result;
+      }
+    }
+    if (worst == null || worstResult == null) return const SizedBox.shrink();
+
+    final (userCard, product) = worst;
+    final name = userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name;
+    final pct = (worstResult.ratio * 100).toStringAsFixed(0);
+    final now = ref.watch(clockProvider).now();
+    final due = userCard.dueDay == null ? null : _nextOccurrence(userCard.dueDay!, now);
+    final dueClause = due == null ? 'Paying it down' : 'Paying it down before ${due.day}/${due.month}';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(HomeScreen._gutter, AppSpace.md, HomeScreen._gutter, 0),
+      child: GestureDetector(
+        onTap: () =>
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CreditUtilizationScreen())),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.md),
+          decoration: BoxDecoration(
+            color: BambooInk.warningBg,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: BambooInk.warningBorder),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.warning_amber_rounded, size: 18, color: BambooInk.clay),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$name is $pct% utilised',
+                      style: BambooFonts.ui(13, weight: FontWeight.w700, color: BambooInk.ink900),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$dueClause protects your score.',
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static DateTime _nextOccurrence(int day, DateTime now) {
+    var next = DateTime(now.year, now.month, day);
+    if (!next.isAfter(now)) next = DateTime(now.year, now.month + 1, day);
+    return next;
   }
 }
 
@@ -516,7 +575,11 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
         borderRadius: BorderRadius.circular(26),
         border: Border.all(color: BambooInk.hairlineOnPaper),
         boxShadow: [
-          BoxShadow(color: BambooInk.ink900.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 2)),
+          BoxShadow(
+            color: BambooInk.ink900.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
@@ -525,7 +588,10 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('How much are you spending?', style: BambooFonts.ui(12.5, weight: FontWeight.w500, color: BambooInk.ink500)),
+              Text(
+                'How much are you spending?',
+                style: BambooFonts.ui(12.5, weight: FontWeight.w500, color: BambooInk.ink500),
+              ),
               Text('Tap to change', style: BambooFonts.ui(12, color: BambooInk.ink300)),
             ],
           ),
@@ -592,7 +658,10 @@ class _QuickAmountChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 9),
         alignment: Alignment.center,
         decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(14)),
-        child: Text(label, style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink900)),
+        child: Text(
+          label,
+          style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink900),
+        ),
       ),
     );
   }
@@ -696,7 +765,10 @@ class _BackupCardRow extends StatelessWidget {
                 style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 children: [
                   const TextSpan(text: 'If not accepted: '),
-                  TextSpan(text: backup.card.name, style: const TextStyle(fontWeight: FontWeight.w600, color: BambooInk.ink900)),
+                  TextSpan(
+                    text: backup.card.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600, color: BambooInk.ink900),
+                  ),
                 ],
               ),
             ),
@@ -712,7 +784,7 @@ class _BackupCardRow extends StatelessWidget {
   }
 }
 
-class _RecommendationCard extends StatefulWidget {
+class _RecommendationCard extends ConsumerStatefulWidget {
   final Recommendation recommendation;
   final int rank;
   // Anchor GlobalKey for the onboarding tutorial overlay to measure this
@@ -726,10 +798,10 @@ class _RecommendationCard extends StatefulWidget {
   const _RecommendationCard(this.recommendation, {required this.rank, this.cardAnchorKey});
 
   @override
-  State<_RecommendationCard> createState() => _RecommendationCardState();
+  ConsumerState<_RecommendationCard> createState() => _RecommendationCardState();
 }
 
-class _RecommendationCardState extends State<_RecommendationCard> {
+class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
   bool _expanded = false;
 
   @override
@@ -738,8 +810,9 @@ class _RecommendationCardState extends State<_RecommendationCard> {
     final excluded = recommendation.isExcluded;
     final isHero = widget.rank == 0 && !excluded;
 
-    return Container(
+    final card = Container(
       key: widget.cardAnchorKey,
+      clipBehavior: isHero ? Clip.antiAlias : Clip.none,
       decoration: BoxDecoration(
         // ui-spec B1.2: the hero card gets its own art/color treatment,
         // not just a thin border like every other ranked-list row — a
@@ -757,7 +830,13 @@ class _RecommendationCardState extends State<_RecommendationCard> {
         borderRadius: BorderRadius.circular(isHero ? 28 : 20),
         border: isHero ? null : Border.all(color: BambooInk.hairlineOnPaper),
         boxShadow: isHero
-            ? [BoxShadow(color: BambooInk.slate.withValues(alpha: 0.28), blurRadius: 24, offset: const Offset(0, 12))]
+            ? [
+                BoxShadow(
+                  color: BambooInk.slate.withValues(alpha: 0.28),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ]
             : null,
       ),
       padding: EdgeInsets.all(isHero ? 22 : 16),
@@ -767,32 +846,57 @@ class _RecommendationCardState extends State<_RecommendationCard> {
           Row(
             children: [
               Expanded(
-                child: Row(
-                  children: [
-                    if (isHero) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-                        decoration: BoxDecoration(color: BambooInk.lime, borderRadius: BorderRadius.circular(999)),
-                        child: Text(
-                          'BEST',
-                          style: BambooFonts.ui(11, weight: FontWeight.w700, color: BambooInk.slate)
-                              .copyWith(letterSpacing: 0.6),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Flexible(
-                      child: Text(
+                child: isHero
+                    // Design 01 stacks the verdict card's header: a
+                    // "BEST PICK" badge and the rate it won at on one row,
+                    // then the card name on its own line beneath. Inlining
+                    // the name beside the badge (as this did) squeezed both
+                    // and lost the rate line entirely.
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: BambooInk.lime,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  'BEST PICK',
+                                  style: BambooFonts.ui(
+                                    11,
+                                    weight: FontWeight.w700,
+                                    color: BambooInk.slate,
+                                  ).copyWith(letterSpacing: 0.9),
+                                ),
+                              ),
+                              if (_rateLabel(recommendation) != null) ...[
+                                const SizedBox(width: 10),
+                                Flexible(
+                                  child: Text(
+                                    _rateLabel(recommendation)!,
+                                    style: BambooFonts.ui(12, color: BambooInk.onSlateMuted),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            recommendation.card.name,
+                            style: BambooFonts.heading(20, color: BambooInk.onSlate),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      )
+                    : Text(
                         recommendation.card.name,
-                        style: BambooFonts.heading(
-                          17,
-                          color: isHero ? BambooInk.onSlate : (excluded ? BambooInk.ink500 : BambooInk.ink900),
-                        ),
+                        style: BambooFonts.heading(17, color: excluded ? BambooInk.ink500 : BambooInk.ink900),
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
-                ),
               ),
               if (recommendation.isOverride)
                 Padding(
@@ -807,9 +911,9 @@ class _RecommendationCardState extends State<_RecommendationCard> {
                       // pill takes the user straight to where they can
                       // see/undo it.
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const ManualOverridesScreen()),
-                      ),
+                      onTap: () => Navigator.of(
+                        context,
+                      ).push(MaterialPageRoute(builder: (_) => const ManualOverridesScreen())),
                       child: Center(
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -820,11 +924,19 @@ class _RecommendationCardState extends State<_RecommendationCard> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.push_pin_rounded, size: 12, color: isHero ? BambooInk.onSlate : BambooInk.ink900),
+                              Icon(
+                                Icons.push_pin_rounded,
+                                size: 12,
+                                color: isHero ? BambooInk.onSlate : BambooInk.ink900,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 'Override active',
-                                style: BambooFonts.ui(11, weight: FontWeight.w600, color: isHero ? BambooInk.onSlate : BambooInk.ink900),
+                                style: BambooFonts.ui(
+                                  11,
+                                  weight: FontWeight.w600,
+                                  color: isHero ? BambooInk.onSlate : BambooInk.ink900,
+                                ),
                               ),
                             ],
                           ),
@@ -842,16 +954,57 @@ class _RecommendationCardState extends State<_RecommendationCard> {
               children: [
                 const Icon(Icons.block_rounded, size: 16, color: BambooInk.ink500),
                 const SizedBox(width: 6),
-                Expanded(child: Text(recommendation.exclusionReason!, style: BambooFonts.ui(13, color: BambooInk.ink500))),
+                Expanded(
+                  child: Text(
+                    recommendation.exclusionReason!,
+                    style: BambooFonts.ui(13, color: BambooInk.ink500),
+                  ),
+                ),
               ],
             )
           else ...[
-            MoneyText(
-              recommendation.expectedValue,
-              confidence: recommendation.confidence,
-              style: isHero ? BambooFonts.money(40, color: BambooInk.lime) : BambooFonts.money(22, color: BambooInk.ink900),
-            ),
-            const SizedBox(height: 6),
+            if (isHero)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  MoneyText(
+                    recommendation.expectedValue,
+                    confidence: recommendation.confidence,
+                    style: BambooFonts.money(44, color: BambooInk.lime),
+                    hidePaise: true,
+                    // The confidence marker belongs after the whole phrase,
+                    // not wedged between "₹125" and "back".
+                    showConfidenceIcon: false,
+                  ),
+                  const SizedBox(width: 10),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: Row(
+                      children: [
+                        Text('back', style: BambooFonts.ui(13, color: BambooInk.onSlateMuted)),
+                        const SizedBox(width: 6),
+                        Icon(
+                          recommendation.confidence.isConfirmed
+                              ? Icons.check_circle_rounded
+                              : Icons.hourglass_top_rounded,
+                          size: 13,
+                          color: recommendation.confidence.isConfirmed
+                              ? BambooInk.lime
+                              : BambooInk.onSlateMuted,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            else
+              MoneyText(
+                recommendation.expectedValue,
+                confidence: recommendation.confidence,
+                style: BambooFonts.money(22, color: BambooInk.ink900),
+                hidePaise: true,
+              ),
+            const SizedBox(height: 8),
             // ui-spec B1.3 "Why this card?" — collapsed to the first reason
             // line by default, full arithmetic behind an explicit tap.
             if (recommendation.reasonLines.isNotEmpty) ...[
@@ -873,7 +1026,11 @@ class _RecommendationCardState extends State<_RecommendationCard> {
                           children: [
                             Text(
                               _expanded ? 'Hide the full breakdown' : 'Why this card?',
-                              style: BambooFonts.ui(13, weight: FontWeight.w600, color: isHero ? BambooInk.lime : BambooInk.jade),
+                              style: BambooFonts.ui(
+                                13,
+                                weight: FontWeight.w600,
+                                color: isHero ? BambooInk.lime : BambooInk.jade,
+                              ),
                             ),
                             Icon(
                               _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
@@ -897,7 +1054,10 @@ class _RecommendationCardState extends State<_RecommendationCard> {
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               '•  $line',
-                              style: BambooFonts.ui(13, color: isHero ? BambooInk.onSlateSubtle : BambooInk.ink500),
+                              style: BambooFonts.ui(
+                                13,
+                                color: isHero ? BambooInk.onSlateSubtle : BambooInk.ink500,
+                              ),
                             ),
                           ),
                       ],
@@ -906,26 +1066,130 @@ class _RecommendationCardState extends State<_RecommendationCard> {
               ],
             ],
           ],
-          // ui-spec B4 entry point: only the hero card gets this — see
-          // HomeScreen's doc-comment for why there's no "Pay with this
-          // card" button here (no real payee bound at this point in the
-          // flow).
+          // Design 01's verdict card action row: a bamboo "Pay with this
+          // card" primary CTA plus a "See the math" link to 09 Compare.
+          // Home has no scanned merchant/VPA to hand off to a UPI intent
+          // (that's ScanResultScreen's real "Pay with [card]", which DOES
+          // launch one) — so "paying" here means what Home's own manual
+          // amount+category entry can honestly mean: log this spend
+          // against the winning card. Routes into QuickAddScreen prefilled
+          // with the amount/category/card Home already resolved, which is
+          // the app's real (tested) spend-logging path, not a fabricated
+          // confirmation screen.
           if (isHero) ...[
             const SizedBox(height: 14),
             Container(height: 1, color: BambooInk.slateHairline),
             const SizedBox(height: 14),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ComparisonViewScreen())),
-                style: TextButton.styleFrom(foregroundColor: BambooInk.lime),
-                child: const Text('Compare all cards'),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: BambooInk.lime,
+                      foregroundColor: BambooInk.slate,
+                      minimumSize: const Size(0, 44),
+                      padding: EdgeInsets.zero,
+                      textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      final wallet = ref.read(userCardsProvider).valueOrNull ?? const [];
+                      final owned = wallet.firstWhereOrNull(
+                        (w) => w.cardProductId == widget.recommendation.card.id,
+                      );
+                      // selectedCategoryProvider holds a slug ('online'), not
+                      // the reward_rules.category_id UUID QuickAddScreen's
+                      // dropdown is keyed by — same slug/UUID split
+                      // rankedRecommendationsProvider itself resolves via
+                      // categoriesProvider (see that provider's doc comment).
+                      // Passing the slug straight through crashes
+                      // DropdownButton's "exactly one matching item" assert.
+                      primaryActionHaptic();
+                      final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
+                      final selectedSlug = ref.read(selectedCategoryProvider);
+                      final categoryId = categories.firstWhereOrNull((c) => c.slug == selectedSlug)?.id;
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => QuickAddScreen(
+                            initialAmount: ref.read(enteredAmountProvider),
+                            initialCategoryId: categoryId,
+                            initialUserCardId: owned?.id,
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('Pay with this card'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton(
+                  onPressed: () => Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const ComparisonViewScreen())),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.slateRaised,
+                    foregroundColor: BambooInk.lime,
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: const Text('See the math'),
+                ),
+              ],
             ),
           ],
         ],
       ),
     );
+
+    if (!isHero) return card;
+    // Design 01 bleeds a soft lime bloom out of the verdict card's
+    // top-right corner (a 180pt circle at 10% lime, clipped by the card's
+    // own 28pt radius) — it's what keeps the slate block from reading as a
+    // flat rectangle. Painted behind the content, never over it.
+    return Stack(
+      children: [
+        // The card sizes the stack; the bloom fills whatever it measures.
+        Positioned.fill(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: Stack(
+              children: [
+                Positioned(
+                  top: -60,
+                  right: -50,
+                  child: Container(
+                    width: 180,
+                    height: 180,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: BambooInk.lime.withValues(alpha: 0.10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        card,
+      ],
+    );
+  }
+
+  /// Design 01's rate line beside the BEST PICK badge — "5% on Online".
+  /// Null when the engine couldn't attribute a per-rupee rate, so the badge
+  /// stands alone rather than claiming a rate that wasn't computed.
+  String? _rateLabel(Recommendation recommendation) {
+    final rate = recommendation.effectiveRatePerRupee;
+    if (rate == null || rate <= 0) return null;
+    final pct = rate * 100;
+    final formatted = pct >= 10 || pct == pct.roundToDouble()
+        ? pct.toStringAsFixed(0)
+        : pct.toStringAsFixed(1);
+    final slug = ref.read(selectedCategoryProvider);
+    final label = HomeScreen.categoryLabelFor(slug);
+    return label == null ? '$formatted% back' : '$formatted% on $label';
   }
 }
 

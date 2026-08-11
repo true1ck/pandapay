@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/features/comparison/comparison_view_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
-import 'package:pandapay/features/search/merchant_search_screen.dart';
+import 'package:pandapay/features/quickadd/quick_add_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 CardProduct _card(String id) => CardProduct(id: id, name: 'Card $id', network: CardNetwork.visa);
@@ -27,10 +27,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('BEST'), findsOneWidget);
+    expect(find.text('BEST PICK'), findsOneWidget);
     expect(find.text('Why this card?'), findsOneWidget);
     expect(find.textContaining('Cap headroom'), findsNothing);
 
+    await tester.ensureVisible(find.text('Why this card?'));
     await tester.tap(find.text('Why this card?'));
     await tester.pumpAndSettle();
 
@@ -38,7 +39,11 @@ void main() {
     expect(find.text('Hide the full breakdown'), findsOneWidget);
   });
 
-  testWidgets('B5: the search icon next to the context line opens Merchant Search', (tester) async {
+  // Merchant Search moved off Home to You -> Tools when Home was rebuilt to
+  // design 01, which has no action-icon row (see ToolsHubScreen). Home's own
+  // contract is now that it does NOT carry those icons; the destination
+  // itself is covered by the Tools hub's tests.
+  testWidgets('Home carries no secondary action icons — design 01 has none', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [rankedRecommendationsProvider.overrideWithValue(const AsyncValue.data([]))],
@@ -47,10 +52,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Search merchants'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(MerchantSearchScreen), findsOneWidget);
+    expect(find.byTooltip('Search merchants'), findsNothing);
+    expect(find.byTooltip('Quick add a transaction'), findsNothing);
+    expect(find.byTooltip('Big-purchase calculator'), findsNothing);
+    expect(find.text('What are you paying for?'), findsOneWidget);
   });
 
   testWidgets('an override pill navigates to Manual Overrides on tap', (tester) async {
@@ -114,6 +119,7 @@ void main() {
     // Expand card A (currently at rank 0) — both cards have a toggle, so
     // scope to the first one found (rank order == visual top-to-bottom
     // order, so this is card A's).
+    await tester.ensureVisible(find.text('Why this card?').first);
     await tester.tap(find.text('Why this card?').first);
     await tester.pumpAndSettle();
     expect(find.textContaining('A reason two'), findsOneWidget);
@@ -201,7 +207,7 @@ void main() {
   });
 
 
-  testWidgets('hero card\'s "Compare all cards" button opens the B4 comparison screen', (tester) async {
+  testWidgets('hero card\'s "See the math" link opens the B4 comparison screen', (tester) async {
     final recs = [
       Recommendation(card: _card('c1'), expectedValue: Money.fromRupees(120), confidence: Confidence.estimated, reasonLines: const ['Base rate 5.0%']),
       Recommendation(card: _card('c2'), expectedValue: Money.fromRupees(80), confidence: Confidence.estimated, reasonLines: const ['Base rate 2.0%']),
@@ -215,13 +221,35 @@ void main() {
     await tester.pumpAndSettle();
 
     // Only the hero (rank 0) card gets the entry point, not every row.
-    expect(find.text('Compare all cards'), findsOneWidget);
+    expect(find.text('See the math'), findsOneWidget);
 
-    await tester.tap(find.text('Compare all cards'));
+    await tester.ensureVisible(find.text('See the math'));
+    await tester.tap(find.text('See the math'));
     await tester.pumpAndSettle();
 
     expect(find.byType(ComparisonViewScreen), findsOneWidget);
     expect(find.text('Compare cards'), findsOneWidget);
+  });
+
+  testWidgets('hero card\'s "Pay with this card" button opens Quick Add prefilled', (tester) async {
+    final recs = [
+      Recommendation(card: _card('c1'), expectedValue: Money.fromRupees(120), confidence: Confidence.estimated, reasonLines: const ['Base rate 5.0%']),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [rankedRecommendationsProvider.overrideWithValue(AsyncValue.data(recs))],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pay with this card'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Pay with this card'));
+    await tester.tap(find.text('Pay with this card'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(QuickAddScreen), findsOneWidget);
   });
 
 }

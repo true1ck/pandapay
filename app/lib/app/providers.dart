@@ -19,19 +19,26 @@ import '../data/import_repository.dart';
 import '../data/local/app_database.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/transaction_outbox_repository.dart';
+import '../data/local_user_cards_repository.dart';
 import '../data/merchant_search_repository.dart';
 import '../data/needs_review_repository.dart';
 import '../data/override_resolver.dart';
 import '../data/token_store.dart';
 import '../data/user_cards_repository.dart';
+import '../data/user_settings_api.dart';
 import '../features/geofence/geofence_monitor_service.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
+import '../features/settings/settings_sync.dart';
+import 'env.dart';
 
-/// api/'s and auth/'s default local dev ports. Overridden per-flavor once
-/// flavors exist (UA-0.1.2) — there is only one build target today.
-const _apiBaseUrl = 'http://localhost:4000';
-const _authBaseUrl = 'http://localhost:3210';
+/// api/'s and auth/'s base URLs, fixed at compile time by `--dart-define`
+/// (plan Phase 0.3). These were plain hardcoded `localhost` consts until
+/// `env.dart` was added — see that file for the build flags and for why a
+/// release build compiled without them throws on startup instead of silently
+/// trying to reach the handset itself.
+const _apiBaseUrl = Env.apiBaseUrl;
+const _authBaseUrl = Env.authBaseUrl;
 
 final authApiProvider = Provider<AuthApi>((ref) => AuthApi(authBaseUrl: _authBaseUrl));
 
@@ -62,6 +69,16 @@ final consentsApiProvider = Provider<ConsentsApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
   return ConsentsApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// Plan Phase 1.1 — account-level preference sync (migration 0028). Same
+/// null-when-signed-out shape as every other repository provider here, which
+/// is also what makes `SettingsSync` a no-op for a guest: there is no account
+/// for their preferences to follow, so they stay device-local.
+final userSettingsApiProvider = Provider<UserSettingsApi?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return UserSettingsApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
 });
 
 /// Same pattern as console/lib/app/providers.dart's sessionInitProvider:
@@ -99,8 +116,7 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
 /// How often to proactively rotate the access token. Must stay comfortably
 /// below auth/'s JWT_ACCESS_TTL (15m by default) — overridable so tests can
 /// drive the timer without waiting in real time.
-final sessionRefreshIntervalProvider =
-    Provider<Duration>((ref) => const Duration(minutes: 10));
+final sessionRefreshIntervalProvider = Provider<Duration>((ref) => const Duration(minutes: 10));
 
 final sessionKeepAliveProvider = Provider<void>((ref) {
   Timer? timer;
@@ -126,8 +142,7 @@ final sessionKeepAliveProvider = Provider<void>((ref) {
   ref.listen<String?>(accessTokenProvider, (previous, next) {
     timer?.cancel();
     if (next != null) {
-      timer = Timer.periodic(
-          ref.read(sessionRefreshIntervalProvider), (_) => tick());
+      timer = Timer.periodic(ref.read(sessionRefreshIntervalProvider), (_) => tick());
     }
   }, fireImmediately: true);
 
@@ -143,12 +158,13 @@ final sessionKeepAliveProvider = Provider<void>((ref) {
 /// welcome flow again).
 const _onboardingCompleteKey = 'pandapay_app.onboarding_complete_v1';
 
-final onboardingCompleteProvider =
-    StateNotifierProvider<OnboardingController, AsyncValue<bool>>(
-        (ref) => OnboardingController());
+final onboardingCompleteProvider = StateNotifierProvider<OnboardingController, AsyncValue<bool>>(
+  OnboardingController.new,
+);
 
 class OnboardingController extends StateNotifier<AsyncValue<bool>> {
-  OnboardingController() : super(const AsyncValue.loading()) {
+  final Ref _ref;
+  OnboardingController(this._ref) : super(const AsyncValue.loading()) {
     _load();
   }
 
@@ -161,6 +177,10 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_onboardingCompleteKey, true);
     state = const AsyncValue.data(true);
+    // Plan Phase 1.1: the highest-value key in the sync registry. Without
+    // it, an existing user signing in on a second device is sent back
+    // through Welcome and Account Choice as though they were brand new.
+    _ref.read(settingsSyncProvider).pushKeyQuietly(_onboardingCompleteKey);
   }
 
   /// Settings' "Replay tutorial" (Task 21) hook — lets a user re-see the
@@ -170,6 +190,7 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_onboardingCompleteKey, false);
     state = const AsyncValue.data(false);
+    _ref.read(settingsSyncProvider).pushKeyQuietly(_onboardingCompleteKey);
   }
 }
 
@@ -181,10 +202,12 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
 const _tutorialSeenKey = 'pandapay_app.tutorial_seen_v1';
 
 final tutorialSeenProvider = StateNotifierProvider<TutorialController, AsyncValue<bool>>(
-    (ref) => TutorialController());
+  TutorialController.new,
+);
 
 class TutorialController extends StateNotifier<AsyncValue<bool>> {
-  TutorialController() : super(const AsyncValue.loading()) {
+  final Ref _ref;
+  TutorialController(this._ref) : super(const AsyncValue.loading()) {
     _load();
   }
 
@@ -197,12 +220,14 @@ class TutorialController extends StateNotifier<AsyncValue<bool>> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_tutorialSeenKey, true);
     state = const AsyncValue.data(true);
+    _ref.read(settingsSyncProvider).pushKeyQuietly(_tutorialSeenKey);
   }
 
   Future<void> reset() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_tutorialSeenKey, false);
     state = const AsyncValue.data(false);
+    _ref.read(settingsSyncProvider).pushKeyQuietly(_tutorialSeenKey);
   }
 }
 
@@ -216,11 +241,13 @@ class TutorialController extends StateNotifier<AsyncValue<bool>> {
 /// territory (out of scope here) — this only owns the on/off state.
 const _dueDateRemindersKey = 'pandapay_app.due_date_reminders_v1';
 
-final dueDateRemindersProvider =
-    StateNotifierProvider<DueDateRemindersController, Set<String>>((ref) => DueDateRemindersController());
+final dueDateRemindersProvider = StateNotifierProvider<DueDateRemindersController, Set<String>>(
+  DueDateRemindersController.new,
+);
 
 class DueDateRemindersController extends StateNotifier<Set<String>> {
-  DueDateRemindersController() : super(const {}) {
+  final Ref _ref;
+  DueDateRemindersController(this._ref) : super(const {}) {
     _load();
   }
 
@@ -239,6 +266,7 @@ class DueDateRemindersController extends StateNotifier<Set<String>> {
     }
     state = next;
     await prefs.setStringList(_dueDateRemindersKey, next.toList());
+    _ref.read(settingsSyncProvider).pushKeyQuietly(_dueDateRemindersKey);
   }
 }
 
@@ -288,13 +316,26 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
   return UserCardsRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
 });
 
+/// Guest/no-account counterpart to [userCardsRepositoryProvider] (ui-spec.md
+/// A3) — always available, even signed in, but only actually read by
+/// [userCardsProvider]/[myCardsProvider] when [userCardsRepositoryProvider]
+/// is null. A FutureProvider because opening the sqlite file
+/// ([appDatabaseProvider]) is itself async.
+final localUserCardsRepositoryProvider = FutureProvider<LocalUserCardsRepository>((ref) async {
+  return LocalUserCardsRepository(await ref.watch(appDatabaseProvider.future));
+});
+
 /// The signed-in user's own wallet — empty (not an error) when signed out,
 /// so rankedRecommendationsProvider below can fall back to the whole
 /// catalogue without a special-cased branch for "not signed in" vs.
 /// "signed in but owns nothing yet."
 final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   final repo = ref.watch(userCardsRepositoryProvider);
-  if (repo == null) return const [];
+  if (repo == null) {
+    final local = await ref.watch(localUserCardsRepositoryProvider.future);
+    final catalogue = await ref.watch(catalogueProvider.future);
+    return local.fetchUserCards(catalogue: catalogue);
+  }
   try {
     final cards = await repo.fetchUserCards();
     final cache = await _cacheOrNull(ref);
@@ -331,7 +372,10 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
   try {
     final overrides = await repo.fetchOverrides();
     final cache = await _cacheOrNull(ref);
-    await cache?.put(_cardOverridesCacheKey, jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}));
+    await cache?.put(
+      _cardOverridesCacheKey,
+      jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
+    );
     return overrides;
   } catch (_) {
     final cache = await _cacheOrNull(ref);
@@ -418,8 +462,12 @@ final showArchivedCardsProvider = StateProvider<bool>((ref) => false);
 
 final myCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   final repo = ref.watch(userCardsRepositoryProvider);
-  if (repo == null) return const [];
   final includeArchived = ref.watch(showArchivedCardsProvider);
+  if (repo == null) {
+    final local = await ref.watch(localUserCardsRepositoryProvider.future);
+    final catalogue = await ref.watch(catalogueProvider.future);
+    return local.fetchUserCards(includeArchived: includeArchived, catalogue: catalogue);
+  }
   return repo.fetchUserCards(includeArchived: includeArchived);
 });
 
@@ -579,9 +627,7 @@ final emiAdviceProvider = Provider.family<EmiAdvice?, EmiAdviceParams>((ref, par
   final engine = ref.watch(recommendationEngineProvider);
   final principal = Money.fromRupees(params.principalRupees);
   final snapshot = _userCardSnapshots([product], [userCard]).first;
-  final rec = engine
-      .rank(RecommendationContext(amount: principal, rail: TxnRail.swipe), [snapshot])
-      .first;
+  final rec = engine.rank(RecommendationContext(amount: principal, rail: TxnRail.swipe), [snapshot]).first;
   final forgoneRewardValue = rec.isExcluded ? const Money.zero() : rec.expectedValue;
 
   return adviseEmi(
@@ -640,6 +686,83 @@ final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((ref) async 
   if (repo == null) return null;
   return repo.fetchMonthlyReport();
 });
+
+/// Design 01's header figures (this month / all time / streak) — see
+/// `GET /home-summary` in api/src/index.js. Null while signed out: guest
+/// mode keeps cards locally but has no transaction history to aggregate,
+/// and the header hides the figures rather than showing ₹0 as if that were
+/// a measured result.
+final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  if (repo == null) return null;
+  return repo.fetchHomeSummary(timeZone: ref.watch(deviceTimeZoneProvider));
+});
+
+/// Design 19's notification inbox. Empty (not an error) when signed out —
+/// the inbox lives server-side, so guest mode simply has none.
+final notificationsProvider = FutureProvider<({List<AppNotification> items, int unreadCount})>((ref) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  if (repo == null) return (items: const <AppNotification>[], unreadCount: 0);
+  return repo.fetchNotifications();
+});
+
+/// Records an inbox entry for something the app itself just observed, and
+/// refreshes the inbox so the badge updates immediately.
+///
+/// Deliberately a helper rather than a side effect inside
+/// `UserCardsRepository.addCard`: "add a card" and "tell the user a card was
+/// added" are different decisions, and a repository that silently writes
+/// notifications is one you can't call from a bulk import without spamming
+/// someone's inbox. Failures are swallowed — a missing read-receipt must
+/// never fail the action that earned it.
+Future<void> recordAppNotification(
+  // Typed loosely on purpose: `Ref` and `WidgetRef` both expose read() and
+  // invalidate() but share no supertype, and this is called from both a
+  // widget and (in future) a provider body.
+  dynamic ref, {
+  required String category,
+  required String title,
+  String? body,
+  String severity = 'info',
+  String? deepLink,
+  String? dedupeKey,
+}) async {
+  final repo = ref.read(userCardsRepositoryProvider);
+  if (repo == null) return; // guest mode has no server-side inbox
+  try {
+    await repo.recordNotification(
+      category: category,
+      title: title,
+      body: body,
+      severity: severity,
+      deepLink: deepLink,
+      dedupeKey: dedupeKey,
+    );
+    ref.invalidate(notificationsProvider);
+  } catch (_) {
+    // Intentionally silent — see the doc comment.
+  }
+}
+
+/// Just the badge count, so a widget showing the badge doesn't rebuild on
+/// every unrelated change to the list itself.
+final unreadNotificationCountProvider = Provider<int>((ref) {
+  return ref.watch(notificationsProvider).valueOrNull?.unreadCount ?? 0;
+});
+
+/// Design 25's Invite friends payload. Null when signed out — an invite
+/// code belongs to an account.
+final referralsProvider = FutureProvider<ReferralInfo?>((ref) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  if (repo == null) return null;
+  return repo.fetchReferrals();
+});
+
+/// The device's IANA zone name, overridable in tests. `DateTime.now()`'s
+/// offset can't be turned back into a zone name (+05:30 is India *and*
+/// Sri Lanka), so this is a plain, honest default rather than a guess —
+/// the server falls back to the same value for an unknown name.
+final deviceTimeZoneProvider = Provider<String>((ref) => 'Asia/Kolkata');
 
 /// Task E12: network-wide aggregate stats (see ContributionNetworkStats'
 /// doc-comment for the R2 privacy reason this isn't per-user).
@@ -784,6 +907,27 @@ Future<ResponseCache?> _cacheOrNull(Ref ref) async {
   }
 }
 
+/// Design 21's "Showing your last synced balances from 6:40 PM" — the
+/// newest write across the whole response cache (see
+/// [ResponseCache.lastFetchedAt] for why newest-of-all rather than
+/// per-key).
+///
+/// Null when nothing has ever been cached, which is a real state: a user
+/// who has been offline since install has no synced data to date-stamp,
+/// and the banner drops the timestamp clause rather than inventing one.
+/// Best-effort like every other cache-aware provider here — a local-DB
+/// failure degrades to "no timestamp", never to an error the banner would
+/// have to render.
+final lastSyncedAtProvider = FutureProvider<DateTime?>((ref) async {
+  final cache = await _cacheOrNull(ref);
+  if (cache == null) return null;
+  try {
+    return await cache.lastFetchedAt();
+  } catch (_) {
+    return null;
+  }
+});
+
 const _catalogueCacheKey = 'catalogue';
 const _categoriesCacheKey = 'categories';
 const _userCardsCacheKey = 'user_cards';
@@ -813,7 +957,10 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
   try {
     final categories = await ref.watch(categoryRepositoryProvider).fetchCategories();
     final cache = await _cacheOrNull(ref);
-    await cache?.put(_categoriesCacheKey, jsonEncode({'categories': categories.map((c) => c.toJson()).toList()}));
+    await cache?.put(
+      _categoriesCacheKey,
+      jsonEncode({'categories': categories.map((c) => c.toJson()).toList()}),
+    );
     return categories;
   } catch (_) {
     final cache = await _cacheOrNull(ref);
@@ -997,18 +1144,30 @@ final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {
 // rankedRecommendationsProvider above) — B8's spec scopes override
 // wiring to Home's ranking; extending it to the geofence tile's
 // per-merchant ranking is a natural follow-up, not done here.
-final bestCardForMerchantProvider =
-    Provider.family<AsyncValue<Recommendation?>, String?>((ref, categoryId) {
+/// B8 manual overrides now feed this too, not just Home's
+/// rankedRecommendationsProvider — this is what Nearby Merchants'
+/// per-tile "Use X" recommendation actually calls
+/// ([bestCardForMerchantProvider] usage in nearby_merchants_screen.dart),
+/// so an override the user set for a category previously had no effect
+/// there even though it visibly changed the exact same category's
+/// recommendation on Home. Same resolveActiveOverrideCardProductId call
+/// rankedRecommendationsProvider makes, so the two never disagree about
+/// which override is active for a given category.
+final bestCardForMerchantProvider = Provider.family<AsyncValue<Recommendation?>, String?>((ref, categoryId) {
   final catalogue = ref.watch(catalogueProvider);
   final userCards = ref.watch(userCardsProvider);
+  final overrides = ref.watch(cardOverridesProvider);
   final picker = ref.watch(_bestCardForWidgetProvider);
 
-  if (catalogue.isLoading || userCards.isLoading) {
+  if (catalogue.isLoading || userCards.isLoading || overrides.isLoading) {
     return const AsyncValue.loading();
   }
-  final combinedError = catalogue.error ?? userCards.error;
+  final combinedError = catalogue.error ?? userCards.error ?? overrides.error;
   if (combinedError != null) {
-    return AsyncValue.error(combinedError, catalogue.stackTrace ?? userCards.stackTrace!);
+    return AsyncValue.error(
+      combinedError,
+      catalogue.stackTrace ?? userCards.stackTrace ?? overrides.stackTrace!,
+    );
   }
 
   final allCards = catalogue.requireValue;
@@ -1017,7 +1176,13 @@ final bestCardForMerchantProvider =
       ? allCards
       : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
 
-  final snapshots = _userCardSnapshots(cards, wallet);
+  final overrideProductId = resolveActiveOverrideCardProductId(
+    overrides: overrides.requireValue,
+    wallet: wallet,
+    categoryId: categoryId,
+  );
+
+  final snapshots = _userCardSnapshots(cards, wallet, forcedOverrideCardId: overrideProductId);
 
   return AsyncValue.data(picker.pickBestCard(cards: snapshots, categoryId: categoryId));
 });

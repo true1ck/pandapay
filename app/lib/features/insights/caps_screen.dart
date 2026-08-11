@@ -78,7 +78,10 @@ class CapsScreen extends ConsumerWidget {
                 child: _CapTile(userCard: userCard, product: product, cap: cap, allOwned: owned),
               ),
             if (fuelRows.isNotEmpty) ...[
-              Text('Fuel surcharge waivers', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+              Text(
+                'Fuel surcharge waivers',
+                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              ),
               const SizedBox(height: AppSpace.sm),
               for (final (userCard, product, fuel) in fuelRows)
                 Padding(
@@ -171,11 +174,21 @@ class _CapTile extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(headline, style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: barColor)),
+              Text(
+                headline,
+                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: barColor),
+              ),
               if (cap.measure != CapMeasure.txnCount)
-                MoneyText(consumed, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500))
+                MoneyText(
+                  consumed,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                )
               else
-                Text('${consumed.rupees.toInt()} / ${cap.capValue.rupees.toInt()}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                Text(
+                  '${consumed.rupees.toInt()} / ${cap.capValue.rupees.toInt()}',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
             ],
           ),
           if (ratio >= 0.9) ...[

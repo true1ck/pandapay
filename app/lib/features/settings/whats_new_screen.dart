@@ -144,10 +144,12 @@ class _MarkdownLiteBody extends StatelessWidget {
       if (match.start > cursor) {
         spans.add(TextSpan(text: line.substring(cursor, match.start)));
       }
-      spans.add(TextSpan(
-        text: match.group(1),
-        style: const TextStyle(fontWeight: FontWeight.w700),
-      ));
+      spans.add(
+        TextSpan(
+          text: match.group(1),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      );
       cursor = match.end;
     }
     if (cursor < line.length) {
@@ -173,17 +175,7 @@ class WhatsNewScreen extends StatelessWidget {
         elevation: 0,
         title: Text("What's New", style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
-        child: const WhatsNewContent(),
-      ),
+      body: AppBackground(child: const WhatsNewContent()),
     );
   }
 }

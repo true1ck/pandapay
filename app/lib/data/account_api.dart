@@ -17,11 +17,8 @@ class AccountApi {
   final String accessToken;
   final http.Client _client;
 
-  AccountApi({
-    required this.apiBaseUrl,
-    required this.accessToken,
-    http.Client? client,
-  }) : _client = client ?? http.Client();
+  AccountApi({required this.apiBaseUrl, required this.accessToken, http.Client? client})
+    : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer $accessToken',
@@ -31,22 +28,15 @@ class AccountApi {
   /// Schedules deletion 30 days out. Returns the `deletion_due_at` the
   /// server computed (never trust a client-computed date for this).
   Future<DateTime> requestDeletion() async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/account/delete-request'),
-      headers: _headers,
-    );
+    final response = await _client.post(Uri.parse('$apiBaseUrl/account/delete-request'), headers: _headers);
     if (response.statusCode != 200) {
-      throw ApiException(
-        'POST /account/delete-request failed: ${response.statusCode} ${response.body}',
-      );
+      throw ApiException('POST /account/delete-request failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final profile = body['profile'] as Map<String, dynamic>?;
     final dueAt = profile?['deletion_due_at'] as String?;
     if (dueAt == null) {
-      throw ApiException(
-        'POST /account/delete-request did not return deletion_due_at',
-      );
+      throw ApiException('POST /account/delete-request did not return deletion_due_at');
     }
     return DateTime.parse(dueAt);
   }
@@ -54,14 +44,9 @@ class AccountApi {
   /// Cancels a pending deletion — clears both `deletion_requested_at` and
   /// `deletion_due_at` server-side.
   Future<void> cancelDeletion() async {
-    final response = await _client.delete(
-      Uri.parse('$apiBaseUrl/account/delete-request'),
-      headers: _headers,
-    );
+    final response = await _client.delete(Uri.parse('$apiBaseUrl/account/delete-request'), headers: _headers);
     if (response.statusCode != 200) {
-      throw ApiException(
-        'DELETE /account/delete-request failed: ${response.statusCode} ${response.body}',
-      );
+      throw ApiException('DELETE /account/delete-request failed: ${response.statusCode} ${response.body}');
     }
   }
 }

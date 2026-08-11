@@ -32,15 +32,7 @@ class MissedOpportunitiesScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Missed opportunities', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: missed.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
@@ -49,8 +41,13 @@ class MissedOpportunitiesScreen extends ConsumerWidget {
           ),
           data: (all) {
             final cardsInvolved = {for (final m in all) m.entry.userCardId: m.entry.cardDisplayName};
-            final filtered = filterCardId == null ? all : all.where((m) => m.entry.userCardId == filterCardId).toList();
-            final runningTotal = filtered.fold<Money>(const Money.zero(), (a, m) => a + m.comparison.missedValue);
+            final filtered = filterCardId == null
+                ? all
+                : all.where((m) => m.entry.userCardId == filterCardId).toList();
+            final runningTotal = filtered.fold<Money>(
+              const Money.zero(),
+              (a, m) => a + m.comparison.missedValue,
+            );
 
             return Column(
               children: [
@@ -92,7 +89,8 @@ class MissedOpportunitiesScreen extends ConsumerWidget {
                                 backgroundColor: BambooInk.paperMuted,
                                 side: BorderSide.none,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                                onSelected: (_) => ref.read(_missedOppCardFilterProvider.notifier).state = entry.key,
+                                onSelected: (_) =>
+                                    ref.read(_missedOppCardFilterProvider.notifier).state = entry.key,
                               ),
                             ),
                         ],
@@ -104,7 +102,8 @@ class MissedOpportunitiesScreen extends ConsumerWidget {
                       ? const EmptyState(
                           icon: Icons.check_circle_outline_rounded,
                           title: 'No missed opportunities in the last 90 days',
-                          message: 'Every transaction we can compare used one of your best-rated cards for its category.',
+                          message:
+                              'Every transaction we can compare used one of your best-rated cards for its category.',
                         )
                       : ListView(
                           padding: const EdgeInsets.all(AppSpace.lg),
@@ -122,8 +121,15 @@ class MissedOpportunitiesScreen extends ConsumerWidget {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('Last 90 days', style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
-                                  MoneyText(runningTotal, confidence: Confidence.estimated, style: BambooFonts.money(22, color: BambooInk.lime)),
+                                  Text(
+                                    'Last 90 days',
+                                    style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+                                  ),
+                                  MoneyText(
+                                    runningTotal,
+                                    confidence: Confidence.estimated,
+                                    style: BambooFonts.money(22, color: BambooInk.lime),
+                                  ),
                                 ],
                               ),
                             ),
@@ -203,13 +209,24 @@ class _MissedOpportunityTile extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(entry.merchantName ?? 'Spend', style: BambooFonts.heading(14.5, color: BambooInk.ink900), overflow: TextOverflow.ellipsis),
+                child: Text(
+                  entry.merchantName ?? 'Spend',
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              MoneyText(entry.amount, confidence: Confidence.estimated, style: BambooFonts.money(14, color: BambooInk.ink900)),
+              MoneyText(
+                entry.amount,
+                confidence: Confidence.estimated,
+                style: BambooFonts.money(14, color: BambooInk.ink900),
+              ),
             ],
           ),
           const SizedBox(height: AppSpace.sm),
-          Text('Used ${entry.cardDisplayName ?? comparison.usedCard.name}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+          Text(
+            'Used ${entry.cardDisplayName ?? comparison.usedCard.name}',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
           Row(
             children: [
               const Icon(Icons.trending_up_rounded, size: 14, color: BambooInk.amber),

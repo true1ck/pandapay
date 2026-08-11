@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../sms_import/sms_import_screen.dart';
 import 'data_export_screen.dart';
@@ -37,89 +38,96 @@ class ImportHubScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Import & Sync', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: ListView(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        children: [
-          Text(
-            'Bring your existing spending history into PandaPay, or keep it flowing automatically.',
-            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: AppSpace.lg),
-          _ChannelCard(
-            icon: Icons.sms_outlined,
-            title: 'SMS import',
-            status: smsBatches.when(
-              data: (batches) => batches.isEmpty
-                  ? const _Status('Not set up', BambooInk.ink500)
-                  : _Status('Active — ${batches.length} import${batches.length == 1 ? '' : 's'}', BambooInk.jade),
-              loading: () => const _Status('Checking…', BambooInk.ink500),
-              error: (_, __) => const _Status('Error', BambooInk.clay),
+          padding: const EdgeInsets.all(AppSpace.lg),
+          children: [
+            Text(
+              'Bring your existing spending history into PandaPay, or keep it flowing automatically.',
+              style: BambooFonts.ui(13.5, color: BambooInk.ink500),
             ),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ChannelCard(
-            icon: Icons.picture_as_pdf_outlined,
-            title: 'Statement PDF import',
-            status: const _Status('One-off action — tap to import a statement', BambooInk.ink500),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StatementPdfImportScreen())),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ChannelCard(
-            icon: Icons.email_outlined,
-            title: 'Email forwarding',
-            status: forwarding.when(
-              data: (addr) {
-                if (addr == null) return const _Status('Not set up', BambooInk.ink500);
-                if (addr.emailCount > 0) return _Status('Connected — ${addr.emailCount} received', BambooInk.jade);
-                return const _Status('Waiting for first email…', BambooInk.amber);
-              },
-              loading: () => const _Status('Checking…', BambooInk.ink500),
-              error: (_, __) => const _Status('Error', BambooInk.clay),
+            const SizedBox(height: AppSpace.lg),
+            _ChannelCard(
+              icon: Icons.sms_outlined,
+              title: 'SMS import',
+              status: smsBatches.when(
+                data: (batches) => batches.isEmpty
+                    ? const _Status('Not set up', BambooInk.ink500)
+                    : _Status(
+                        'Active — ${batches.length} import${batches.length == 1 ? '' : 's'}',
+                        BambooInk.jade,
+                      ),
+                loading: () => const _Status('Checking…', BambooInk.ink500),
+                error: (_, __) => const _Status('Error', BambooInk.clay),
+              ),
+              onTap: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
             ),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmailForwardingScreen())),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ChannelCard(
-            icon: Icons.alternate_email_rounded,
-            title: 'IMAP connection (fallback)',
-            status: imap.when(
-              data: (conn) {
-                if (conn == null) return const _Status('Not set up', BambooInk.ink500);
-                if (conn.verifiedAt != null) return const _Status('Connected', BambooInk.jade);
-                return const _Status('Set up — not yet verified', BambooInk.amber);
-              },
-              loading: () => const _Status('Checking…', BambooInk.ink500),
-              error: (_, __) => const _Status('Error', BambooInk.clay),
+            const SizedBox(height: AppSpace.md),
+            _ChannelCard(
+              icon: Icons.picture_as_pdf_outlined,
+              title: 'Statement PDF import',
+              status: const _Status('One-off action — tap to import a statement', BambooInk.ink500),
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const StatementPdfImportScreen())),
             ),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImapConnectionScreen())),
-          ),
-          const SizedBox(height: AppSpace.xxl),
-          Text('Data', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
-          const SizedBox(height: AppSpace.sm),
-          _ChannelCard(
-            icon: Icons.cloud_sync_outlined,
-            title: 'Sync & backup',
-            status: const _Status('Backup status & conflict log', BambooInk.ink500),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SyncBackupScreen())),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ChannelCard(
-            icon: Icons.download_outlined,
-            title: 'Export your data',
-            status: const _Status('Your data is yours', BambooInk.ink500),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DataExportScreen())),
-          ),
-        ],
+            const SizedBox(height: AppSpace.md),
+            _ChannelCard(
+              icon: Icons.email_outlined,
+              title: 'Email forwarding',
+              status: forwarding.when(
+                data: (addr) {
+                  if (addr == null) return const _Status('Not set up', BambooInk.ink500);
+                  if (addr.emailCount > 0)
+                    return _Status('Connected — ${addr.emailCount} received', BambooInk.jade);
+                  return const _Status('Waiting for first email…', BambooInk.amber);
+                },
+                loading: () => const _Status('Checking…', BambooInk.ink500),
+                error: (_, __) => const _Status('Error', BambooInk.clay),
+              ),
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const EmailForwardingScreen())),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _ChannelCard(
+              icon: Icons.alternate_email_rounded,
+              title: 'IMAP connection (fallback)',
+              status: imap.when(
+                data: (conn) {
+                  if (conn == null) return const _Status('Not set up', BambooInk.ink500);
+                  if (conn.verifiedAt != null) return const _Status('Connected', BambooInk.jade);
+                  return const _Status('Set up — not yet verified', BambooInk.amber);
+                },
+                loading: () => const _Status('Checking…', BambooInk.ink500),
+                error: (_, __) => const _Status('Error', BambooInk.clay),
+              ),
+              onTap: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImapConnectionScreen())),
+            ),
+            const SizedBox(height: AppSpace.xxl),
+            Text(
+              'Data',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            _ChannelCard(
+              icon: Icons.cloud_sync_outlined,
+              title: 'Sync & backup',
+              status: const _Status('Backup status & conflict log', BambooInk.ink500),
+              onTap: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SyncBackupScreen())),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _ChannelCard(
+              icon: Icons.download_outlined,
+              title: 'Export your data',
+              status: const _Status('Your data is yours', BambooInk.ink500),
+              onTap: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DataExportScreen())),
+            ),
+          ],
         ),
       ),
     );
@@ -149,7 +157,10 @@ class _ChannelCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.md),
         onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(AppRadius.md), border: Border.all(color: BambooInk.hairlineOnPaper)),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+          ),
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Row(
             children: [

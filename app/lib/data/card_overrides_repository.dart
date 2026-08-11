@@ -7,17 +7,17 @@ import 'api_exception.dart';
 enum OverrideScope { vpa, merchantName, category }
 
 OverrideScope _scopeFromJson(String raw) => switch (raw) {
-      'vpa' => OverrideScope.vpa,
-      'merchant_name' => OverrideScope.merchantName,
-      'category' => OverrideScope.category,
-      _ => throw ApiException('Unknown override scope: $raw'),
-    };
+  'vpa' => OverrideScope.vpa,
+  'merchant_name' => OverrideScope.merchantName,
+  'category' => OverrideScope.category,
+  _ => throw ApiException('Unknown override scope: $raw'),
+};
 
 String _scopeToJson(OverrideScope scope) => switch (scope) {
-      OverrideScope.vpa => 'vpa',
-      OverrideScope.merchantName => 'merchant_name',
-      OverrideScope.category => 'category',
-    };
+  OverrideScope.vpa => 'vpa',
+  OverrideScope.merchantName => 'merchant_name',
+  OverrideScope.category => 'category',
+};
 
 /// B8: a single "always use X here" rule — mirrors `card_overrides`
 /// (db/supabase/migrations/0004_user_domain.sql). Exactly one of
@@ -58,35 +58,35 @@ class CardOverride {
   String get cardDisplayName => (cardNickname?.isNotEmpty == true) ? cardNickname! : cardName;
 
   factory CardOverride.fromJson(Map<String, dynamic> json) => CardOverride(
-        id: json['id'] as String,
-        userCardId: json['user_card_id'] as String,
-        scope: _scopeFromJson(json['scope'] as String),
-        vpa: json['vpa'] as String?,
-        merchantName: json['merchant_name'] as String?,
-        categoryId: json['category_id'] as String?,
-        categoryName: json['category_name'] as String?,
-        reasonNote: json['reason_note'] as String?,
-        isEnabled: json['is_enabled'] as bool,
-        createdAt: DateTime.parse(json['created_at'] as String),
-        cardName: json['card_name'] as String,
-        cardNickname: json['card_nickname'] as String?,
-      );
+    id: json['id'] as String,
+    userCardId: json['user_card_id'] as String,
+    scope: _scopeFromJson(json['scope'] as String),
+    vpa: json['vpa'] as String?,
+    merchantName: json['merchant_name'] as String?,
+    categoryId: json['category_id'] as String?,
+    categoryName: json['category_name'] as String?,
+    reasonNote: json['reason_note'] as String?,
+    isEnabled: json['is_enabled'] as bool,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    cardName: json['card_name'] as String,
+    cardNickname: json['card_nickname'] as String?,
+  );
 
   /// Offline-cache round-trip only (docs/superpowers/plans/2026-08-08-offline-first-local-cache.md).
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'user_card_id': userCardId,
-        'scope': _scopeToJson(scope),
-        'vpa': vpa,
-        'merchant_name': merchantName,
-        'category_id': categoryId,
-        'category_name': categoryName,
-        'reason_note': reasonNote,
-        'is_enabled': isEnabled,
-        'created_at': createdAt.toIso8601String(),
-        'card_name': cardName,
-        'card_nickname': cardNickname,
-      };
+    'id': id,
+    'user_card_id': userCardId,
+    'scope': _scopeToJson(scope),
+    'vpa': vpa,
+    'merchant_name': merchantName,
+    'category_id': categoryId,
+    'category_name': categoryName,
+    'reason_note': reasonNote,
+    'is_enabled': isEnabled,
+    'created_at': createdAt.toIso8601String(),
+    'card_name': cardName,
+    'card_nickname': cardNickname,
+  };
 }
 
 class CardOverridesRepository {
@@ -95,12 +95,12 @@ class CardOverridesRepository {
   final http.Client _client;
 
   CardOverridesRepository({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $accessToken',
+    'Content-Type': 'application/json',
+  };
 
   Future<List<CardOverride>> fetchOverrides() async {
     final response = await _client.get(Uri.parse('$apiBaseUrl/card-overrides'), headers: _headers);
@@ -135,7 +135,9 @@ class CardOverridesRepository {
     if (response.statusCode != 201) {
       throw ApiException('POST /card-overrides failed: ${response.statusCode} ${response.body}');
     }
-    return CardOverride.fromJson((jsonDecode(response.body) as Map<String, dynamic>)['override'] as Map<String, dynamic>);
+    return CardOverride.fromJson(
+      (jsonDecode(response.body) as Map<String, dynamic>)['override'] as Map<String, dynamic>,
+    );
   }
 
   /// B8 edit: PATCHes only the fields the caller actually passes (mirrors

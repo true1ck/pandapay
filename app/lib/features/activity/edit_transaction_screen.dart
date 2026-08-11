@@ -59,7 +59,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       _error = null;
     });
     try {
-      await ref.read(userCardsRepositoryProvider)!.editTransaction(
+      await ref
+          .read(userCardsRepositoryProvider)!
+          .editTransaction(
             widget.transactionId,
             amountInr: amount,
             occurredAt: _occurredAt,
@@ -84,20 +86,20 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
 
     final inputDecoration = (String label) => InputDecoration(
-          labelText: label,
-          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          filled: true,
-          fillColor: BambooInk.glassFillOnPaper,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-          ),
-        );
+      labelText: label,
+      labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+      filled: true,
+      fillColor: BambooInk.glassFillOnPaper,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+      ),
+    );
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -115,15 +117,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           ),
         ],
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: txn.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
@@ -151,7 +145,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                   decoration: inputDecoration('Card'),
                   items: [
                     for (final c in cards)
-                      DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
+                      DropdownMenuItem(
+                        value: c.id,
+                        child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                      ),
                   ],
                   onChanged: (v) => setState(() => _userCardId = v),
                 ),
@@ -160,9 +157,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                   initialValue: _categoryId,
                   style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                   decoration: inputDecoration('Category'),
-                  items: [
-                    for (final c in categories) DropdownMenuItem(value: c.id, child: Text(c.name)),
-                  ],
+                  items: [for (final c in categories) DropdownMenuItem(value: c.id, child: Text(c.name))],
                   onChanged: (v) => setState(() => _categoryId = v),
                 ),
                 const SizedBox(height: AppSpace.lg),
@@ -206,7 +201,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                   ),
                   onPressed: _saving ? null : _save,
                   child: _saving
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                        )
                       : const Text('Save'),
                 ),
               ],

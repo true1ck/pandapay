@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 
@@ -23,13 +24,13 @@ class AccountChoiceScreen extends ConsumerWidget {
   const AccountChoiceScreen({super.key});
 
   void _useWithoutAccount(WidgetRef ref, BuildContext context) {
-    context.go(AppRoute.addFirstCard);
+    context.go(AppRoute.permissions);
   }
 
   Future<void> _createAccount(WidgetRef ref, BuildContext context) async {
     await context.push(AppRoute.signUp);
     if (ref.read(accessTokenProvider) != null && context.mounted) {
-      context.go(AppRoute.addFirstCard);
+      context.go(AppRoute.permissions);
     }
     // Otherwise the user backed out of sign-up without completing it —
     // stay right here, no navigation.
@@ -37,15 +38,7 @@ class AccountChoiceScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0.9, -0.6),
-          radius: 1.3,
-          colors: [BambooInk.wash, BambooInk.paper],
-          stops: [0.0, 0.6],
-        ),
-      ),
+    return AppBackground(
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.xl),
@@ -121,10 +114,7 @@ class _ChoiceCard extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
-                decoration: BoxDecoration(
-                  color: BambooInk.slate,
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(14)),
                 child: Icon(icon, color: BambooInk.lime, size: 22),
               ),
               const SizedBox(width: AppSpace.md),
@@ -134,7 +124,9 @@ class _ChoiceCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Flexible(child: Text(title, style: BambooFonts.heading(16, color: BambooInk.ink900))),
+                        Flexible(
+                          child: Text(title, style: BambooFonts.heading(16, color: BambooInk.ink900)),
+                        ),
                         if (badge != null) ...[
                           const SizedBox(width: AppSpace.xs),
                           Container(
@@ -145,7 +137,11 @@ class _ChoiceCard extends StatelessWidget {
                             ),
                             child: Text(
                               badge!,
-                              style: BambooFonts.ui(10, weight: FontWeight.w700, color: BambooInk.slate).copyWith(letterSpacing: 0.5),
+                              style: BambooFonts.ui(
+                                10,
+                                weight: FontWeight.w700,
+                                color: BambooInk.slate,
+                              ).copyWith(letterSpacing: 0.5),
                             ),
                           ),
                         ],

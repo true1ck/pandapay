@@ -19,8 +19,7 @@ class HttpCatalogueRepository implements CatalogueRepository {
   final String baseUrl;
   final http.Client _client;
 
-  HttpCatalogueRepository({required this.baseUrl, http.Client? client})
-      : _client = client ?? http.Client();
+  HttpCatalogueRepository({required this.baseUrl, http.Client? client}) : _client = client ?? http.Client();
 
   @override
   Future<List<CardProduct>> fetchCatalogue() async {
@@ -43,11 +42,8 @@ class SpendCategory {
   final String name;
   const SpendCategory({required this.id, required this.slug, required this.name});
 
-  factory SpendCategory.fromJson(Map<String, dynamic> json) => SpendCategory(
-        id: json['id'] as String,
-        slug: json['slug'] as String,
-        name: json['name'] as String,
-      );
+  factory SpendCategory.fromJson(Map<String, dynamic> json) =>
+      SpendCategory(id: json['id'] as String, slug: json['slug'] as String, name: json['name'] as String);
 
   Map<String, dynamic> toJson() => {'id': id, 'slug': slug, 'name': name};
 }
@@ -60,8 +56,7 @@ class HttpCategoryRepository implements CategoryRepository {
   final String baseUrl;
   final http.Client _client;
 
-  HttpCategoryRepository({required this.baseUrl, http.Client? client})
-      : _client = client ?? http.Client();
+  HttpCategoryRepository({required this.baseUrl, http.Client? client}) : _client = client ?? http.Client();
 
   @override
   Future<List<SpendCategory>> fetchCategories() async {

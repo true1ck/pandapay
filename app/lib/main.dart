@@ -1,12 +1,38 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'app/design/app_theme.dart';
+import 'app/env.dart';
 import 'app/router.dart';
 import 'features/settings/appearance_providers.dart';
 
 void main() {
+  // Plan Phase 0.3: refuse to start a release build that was compiled
+  // without the backend --dart-defines, rather than shipping one that can
+  // only ever show users a network error. No-op in debug/profile and in any
+  // correctly-configured release. See app/env.dart.
+  Env.assertReleaseConfigured();
+
+  // Debug-only: materialise the semantics tree even when no assistive
+  // technology is attached.
+  //
+  // Two reasons. It is what lets `uiautomator` (and so the emulator
+  // tooling this project drives QA with) see the app as labelled nodes
+  // rather than one opaque rectangle. And it means the semantics added
+  // this pass — MoneyText announcing "estimated", Pressable's button
+  // roles, the tile labels — are exercised on every debug run instead of
+  // only when someone turns TalkBack on.
+  //
+  // Release builds are untouched: Flutter already builds the tree on
+  // demand there when a real accessibility service asks for it, and
+  // forcing it on unconditionally would be a permanent cost for no gain.
+  if (kDebugMode) {
+    WidgetsFlutterBinding.ensureInitialized();
+    SemanticsBinding.instance.ensureSemantics();
+  }
   runApp(const ProviderScope(child: PandaPayApp()));
 }
 
@@ -16,26 +42,63 @@ void main() {
 /// app/router.dart as of the go_router migration (Task 3) — this widget
 /// just wires the router into MaterialApp.
 ///
-/// Task H6 (Appearance): themeMode/theme/darkTheme are wired to
-/// themeModeProvider (app/lib/features/settings/appearance_providers.dart)
-/// here, at the app root, same as any other MaterialApp.router config would
-/// need. Text-scale is deliberately NOT applied at this root level yet — see
-/// appearance_screen.dart's own doc-comment for why that's left as a
-/// follow-up rather than wrapped in here blind.
+/// Task H6 (Appearance): the app's display preferences are applied here, at
+/// the root, since that is the only place they can reach every screen.
+///
+/// **Theme mode is pinned to light.** Every screen migrated to Bamboo Ink
+/// paints its own surfaces from that palette's fixed constants — including
+/// [AppBackground], which is a hardcoded white-plus-wash — so `ThemeMode`
+/// no longer changes what the user sees on any of them. Leaving the app
+/// free to resolve to [AppTheme.dark] produced the worst of both: Bamboo
+/// screens stayed light while Material-supplied chrome underneath them
+/// (segmented buttons, tab indicators, unstyled text) went dark, on the
+/// same screen. Note that pinning here is what makes that impossible, not
+/// merely the Appearance screen no longer offering the choice — `System`
+/// would otherwise still flip the app on any device set to dark.
+/// [AppTheme.dark] is left in place, unreferenced by this widget, because
+/// it is the honest starting point for the real dark ramp whenever the
+/// design system grows one.
+///
+/// **Text scale is applied here too**, which it previously wasn't: the
+/// preference only ever affected the Appearance screen's own body via a
+/// local override there, so choosing 130% did nothing anywhere else in the
+/// app. See [_scaledTextMediaQuery] for how it composes with the OS
+/// setting.
 class PandaPayApp extends ConsumerWidget {
   const PandaPayApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider);
+    final textScale = ref.watch(textScaleProvider);
     return MaterialApp.router(
       title: 'PandaPay',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      themeMode: themeMode,
+      themeMode: ThemeMode.light,
+      builder: (context, child) => _scaledTextMediaQuery(context, child, textScale),
       routerConfig: ref.watch(goRouterProvider),
     );
   }
+}
+
+/// Applies the in-app text-size preference *on top of* whatever the OS
+/// accessibility setting already asks for, then clamps the combination to
+/// 200% — H6's own stated ceiling, and the point past which the money
+/// figures on the verdict card stop fitting their row.
+///
+/// The OS scaler is read back as a plain factor via `scale(1.0)` and
+/// re-expressed as a linear one. On iOS at the largest accessibility sizes
+/// the platform scaler is non-linear, so this is an approximation of it
+/// rather than an exact composition — deliberately so: the alternative is
+/// leaving the app preference unapplied, which is what the app did before
+/// and is a worse answer for the user who set it.
+Widget _scaledTextMediaQuery(BuildContext context, Widget? child, double appScale) {
+  final media = MediaQuery.of(context);
+  final combined = (media.textScaler.scale(1.0) * appScale).clamp(0.85, 2.0);
+  return MediaQuery(
+    data: media.copyWith(textScaler: TextScaler.linear(combined)),
+    child: child ?? const SizedBox.shrink(),
+  );
 }
 
 /// UA-0.2.4: financial figures must always render through a widget that
@@ -51,28 +114,76 @@ class MoneyText extends ConsumerWidget {
   final Confidence confidence;
   final TextStyle? style;
 
-  const MoneyText(this.amount, {super.key, required this.confidence, this.style});
+  /// Trailing words that belong to the figure and must wrap/ellipsize with
+  /// it — "₹1,842 earned", "₹24,180 all-time ›". Set here rather than as a
+  /// sibling `Text` so the whole phrase stays one line box, and so the
+  /// no_bare_money_text lint still has one widget owning the number.
+  final String? suffix;
+
+  /// Design 01's header sets three figures on one 42pt-tall row; a
+  /// confidence chip beside each turns it into a row of icons. Callers that
+  /// carry the confidence signal elsewhere on the screen (or, as here, on
+  /// the primary figure only) can drop the secondary one.
+  final bool showConfidenceIcon;
+
+  /// Drops a `.00` tail on whole-rupee amounts — see [Money.format]. For
+  /// headline display figures, which the design deck always writes without
+  /// paise ("₹125", never "₹125.00"). Non-zero paise still render in full,
+  /// so nothing is rounded away.
+  final bool hidePaise;
+
+  const MoneyText(
+    this.amount, {
+    super.key,
+    required this.confidence,
+    this.style,
+    this.suffix,
+    this.showConfidenceIcon = true,
+    this.hidePaise = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final baseStyle = style ?? Theme.of(context).textTheme.titleMedium;
     final numberFormat = ref.watch(numberFormatProvider);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // This *is* the required Money-rendering widget — exempt by design.
-        // ignore: no_bare_money_text
-        Text(
-          amount.format(format: numberFormat),
-          style: baseStyle?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
-        ),
-        const SizedBox(width: 6),
-        Icon(
-          confidence.isConfirmed ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
-          size: 14,
-          color: confidence.isConfirmed ? BambooInk.jade : BambooInk.amber,
-        ),
-      ],
+    final formatted = '${amount.format(format: numberFormat, hidePaise: hidePaise)}${suffix ?? ''}';
+
+    // One Semantics wrapper here covers every money figure in the app —
+    // 40+ call sites — rather than each screen remembering to label its
+    // own. Two things a screen reader would otherwise miss: the ₹ glyph
+    // and grouping are announced inconsistently across engines, and the
+    // confidence icon beside the number is pure visual signal with no text
+    // equivalent. Saying "estimated" out loud is the whole point of that
+    // icon; a user who can't see it would otherwise take an estimate for a
+    // settled figure.
+    return Semantics(
+      label: confidence.isConfirmed ? formatted : '$formatted, estimated',
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // This *is* the required Money-rendering widget — exempt by design.
+          // Deliberately NOT wrapped in Flexible: this Row is mainAxisSize.min
+          // and several of the 40+ call sites render it under unbounded width,
+          // where a flex child asserts. Callers that need clipping wrap the
+          // whole MoneyText instead.
+          // ignore: no_bare_money_text
+          Text(
+            formatted,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: baseStyle?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+          ),
+          if (showConfidenceIcon) ...[
+            const SizedBox(width: 6),
+            Icon(
+              confidence.isConfirmed ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+              size: 14,
+              color: confidence.isConfirmed ? BambooInk.jade : BambooInk.amber,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

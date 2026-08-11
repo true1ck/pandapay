@@ -126,10 +126,7 @@ class _TutorialOverlayState extends ConsumerState<TutorialOverlay> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: IgnorePointer(
-                ignoring: true,
-                child: CustomPaint(painter: _ScrimPainter(targetRect)),
-              ),
+              child: IgnorePointer(ignoring: true, child: CustomPaint(painter: _ScrimPainter(targetRect))),
             ),
             _TooltipCard(
               title: step.title,
@@ -168,8 +165,7 @@ class _ScrimPainter extends CustomPainter {
     }
 
     final inflated = target!.inflate(8);
-    final cutout = Path()
-      ..addRRect(RRect.fromRectAndRadius(inflated, const Radius.circular(AppRadius.md)));
+    final cutout = Path()..addRRect(RRect.fromRectAndRadius(inflated, const Radius.circular(AppRadius.md)));
     final scrimWithHole = Path.combine(PathOperation.difference, fullScreen, cutout);
     canvas.drawPath(scrimWithHole, scrimPaint);
     canvas.drawRRect(
@@ -215,16 +211,30 @@ class _TooltipCard extends StatelessWidget {
     // measurements here are in the overlay's own local space (see
     // _localTargetRect's doc comment), matching what Positioned expects.
     const cardWidth = 300.0;
+    const cardHeight = 180.0;
+    // The floating nav dock (router.dart's _FloatingNavBar) sits ON TOP of
+    // this overlay in the shell's Stack and covers the bottom ~128px — the
+    // same reserve router.dart pads its own body content by. Positioning
+    // the card into that band leaves its Skip/Next/Done buttons visible but
+    // NOT tappable, because the dock's BackdropFilter wins the hit test.
+    // This is the same "content hidden behind the frosted dock" failure the
+    // design handoff flags as its one known unresolved issue, so it's
+    // guarded here rather than left to chance.
+    const dockReserve = 128.0;
+    final maxTop = (overlaySize.height - dockReserve - cardHeight).clamp(AppSpace.xxl, overlaySize.height);
     double top;
     if (targetRect == null) {
-      top = (overlaySize.height - 220) / 2;
-    } else if (targetRect!.bottom + 180 < overlaySize.height) {
+      top = (overlaySize.height - dockReserve - 220) / 2;
+    } else if (targetRect!.bottom + cardHeight + dockReserve < overlaySize.height) {
       top = targetRect!.bottom + AppSpace.lg;
     } else {
-      top = (targetRect!.top - 180).clamp(AppSpace.xxl, overlaySize.height);
+      top = targetRect!.top - cardHeight;
     }
-    final left =
-        ((overlaySize.width - cardWidth) / 2).clamp(AppSpace.lg, overlaySize.width - cardWidth - AppSpace.lg);
+    top = top.clamp(AppSpace.xxl, maxTop);
+    final left = ((overlaySize.width - cardWidth) / 2).clamp(
+      AppSpace.lg,
+      overlaySize.width - cardWidth - AppSpace.lg,
+    );
 
     return Positioned(
       top: top,

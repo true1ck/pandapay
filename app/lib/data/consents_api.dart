@@ -49,12 +49,12 @@ class ConsentsApi {
   final http.Client _client;
 
   ConsentsApi({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $accessToken',
+    'Content-Type': 'application/json',
+  };
 
   /// GET /consents — latest row per purpose (server-side `DISTINCT ON`).
   Future<List<ConsentRecord>> fetchLatest() async {

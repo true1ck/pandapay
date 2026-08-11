@@ -5,6 +5,7 @@ import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/features/cards/my_cards_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -95,9 +96,9 @@ void main() {
     // The overlay must not intercept nav-bar taps just because it's on top;
     // a user backing out to another tab should still work while the coach
     // marks are up (they simply stop being relevant to a non-Home screen).
-    await tester.tap(find.descendant(of: find.byType(BottomAppBar), matching: find.text('Cards')));
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('Wallet')));
     await tester.pumpAndSettle();
 
-    expect(find.text('PandaPay — Cards'), findsOneWidget);
+    expect(find.byType(MyCardsScreen), findsOneWidget);
   });
 }

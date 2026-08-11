@@ -72,8 +72,9 @@ class TransactionOutboxRepository {
         amountPaise: row['amount_paise'] as int,
         categoryId: row['category_id'] as String?,
         merchantName: row['merchant_name'] as String?,
-        occurredAt:
-            row['occurred_at'] == null ? null : DateTime.fromMillisecondsSinceEpoch(row['occurred_at'] as int),
+        occurredAt: row['occurred_at'] == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(row['occurred_at'] as int),
         note: row['note'] as String?,
         createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
         lastError: row['last_error'] as String?,
@@ -99,10 +100,10 @@ class TransactionOutboxRepository {
         _appDb.db.execute('DELETE FROM transaction_outbox_entries WHERE id = ?', [entry.id]);
         sent++;
       } catch (e) {
-        _appDb.db.execute(
-          'UPDATE transaction_outbox_entries SET last_error = ? WHERE id = ?',
-          [e.toString(), entry.id],
-        );
+        _appDb.db.execute('UPDATE transaction_outbox_entries SET last_error = ? WHERE id = ?', [
+          e.toString(),
+          entry.id,
+        ]);
       }
     }
     return sent;

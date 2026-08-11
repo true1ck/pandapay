@@ -75,16 +75,28 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
       // C4's own "only provided fields update" contract, and avoids a
       // pointless write for a card the user skipped outright.
       final nicknameChanged = nickname.isNotEmpty && nickname != card.cardName;
-      if (nicknameChanged || creditLimit.isNotEmpty || _statementDay != null || _dueDay != null || points.isNotEmpty) {
-        final repo = ref.read(userCardsRepositoryProvider)!;
-        await repo.updateCard(
-          card.id,
-          nickname: nicknameChanged ? nickname : null,
-          creditLimitInr: creditLimit.isEmpty ? null : double.tryParse(creditLimit),
-          statementDay: _statementDay,
-          dueDay: _dueDay,
-          pointsBalance: points.isEmpty ? null : double.tryParse(points),
-        );
+      if (nicknameChanged ||
+          creditLimit.isNotEmpty ||
+          _statementDay != null ||
+          _dueDay != null ||
+          points.isNotEmpty) {
+        final repo = ref.read(userCardsRepositoryProvider);
+        if (repo == null) {
+          // Guest mode: only nickname is meaningful locally (no
+          // cap/points tracking to feed credit limit / statement day /
+          // points balance into — see LocalUserCardsRepository).
+          final local = await ref.read(localUserCardsRepositoryProvider.future);
+          await local.updateCard(card.id, nickname: nicknameChanged ? nickname : null);
+        } else {
+          await repo.updateCard(
+            card.id,
+            nickname: nicknameChanged ? nickname : null,
+            creditLimitInr: creditLimit.isEmpty ? null : double.tryParse(creditLimit),
+            statementDay: _statementDay,
+            dueDay: _dueDay,
+            pointsBalance: points.isEmpty ? null : double.tryParse(points),
+          );
+        }
         ref.invalidate(userCardsProvider);
         ref.invalidate(myCardsProvider);
       }
@@ -118,125 +130,124 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
           style: BambooFonts.heading(17, color: BambooInk.ink900),
         ),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: userCards.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(userCardsProvider)),
-        data: (cards) {
-          final card = cards.where((c) => c.id == id).firstOrNull;
-          if (card == null) {
-            // Card vanished (e.g. archived elsewhere mid-flow) — skip ahead
-            // rather than get stuck on a card that no longer exists.
-            return ErrorState(
-              message: 'This card could not be found.',
-              onRetry: _isLast ? null : () => setState(() => _index++),
-            );
-          }
-          _initFrom(card);
-          return ListView(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            children: [
-              Text(card.cardName, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-              const SizedBox(height: AppSpace.lg),
-              TextField(
-                controller: _nicknameController,
-                decoration: const InputDecoration(labelText: 'Nickname'),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              TextField(
-                controller: _creditLimitController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Credit limit (₹)',
-                  helperText: 'Used to protect your credit score',
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(userCardsProvider),
+          ),
+          data: (cards) {
+            final card = cards.where((c) => c.id == id).firstOrNull;
+            if (card == null) {
+              // Card vanished (e.g. archived elsewhere mid-flow) — skip ahead
+              // rather than get stuck on a card that no longer exists.
+              return ErrorState(
+                message: 'This card could not be found.',
+                onRetry: _isLast ? null : () => setState(() => _index++),
+              );
+            }
+            _initFrom(card);
+            return ListView(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              children: [
+                Text(card.cardName, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                const SizedBox(height: AppSpace.lg),
+                TextField(
+                  controller: _nicknameController,
+                  decoration: const InputDecoration(labelText: 'Nickname'),
                 ),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue: _statementDay,
-                      decoration: const InputDecoration(
-                        labelText: 'Statement day',
-                        helperText: 'Maximises interest-free days',
-                      ),
-                      items: [for (var d = 1; d <= 31; d++) DropdownMenuItem(value: d, child: Text('$d'))],
-                      onChanged: (v) => setState(() => _statementDay = v),
-                    ),
+                const SizedBox(height: AppSpace.lg),
+                TextField(
+                  controller: _creditLimitController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Credit limit (₹)',
+                    helperText: 'Used to protect your credit score',
                   ),
-                  const SizedBox(width: AppSpace.md),
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue: _dueDay,
-                      decoration: const InputDecoration(
-                        labelText: 'Due day',
-                        helperText: 'For bill reminders',
-                      ),
-                      items: [for (var d = 1; d <= 31; d++) DropdownMenuItem(value: d, child: Text('$d'))],
-                      onChanged: (v) => setState(() => _dueDay = v),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpace.lg),
-              TextField(
-                controller: _pointsBalanceController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Current points balance',
-                  helperText: "Starting point — we'll track from here",
                 ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: AppSpace.md),
-                Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
-              ],
-              const SizedBox(height: AppSpace.xl),
-              Row(
-                children: [
-                  if (_index > 0)
+                const SizedBox(height: AppSpace.lg),
+                Row(
+                  children: [
                     Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: BambooInk.ink900,
-                          minimumSize: const Size.fromHeight(52),
-                          side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: DropdownButtonFormField<int>(
+                        initialValue: _statementDay,
+                        decoration: const InputDecoration(
+                          labelText: 'Statement day',
+                          helperText: 'Maximises interest-free days',
                         ),
-                        onPressed: _saving ? null : () => setState(() => _index--),
-                        child: const Text('Back'),
+                        items: [for (var d = 1; d <= 31; d++) DropdownMenuItem(value: d, child: Text('$d'))],
+                        onChanged: (v) => setState(() => _statementDay = v),
                       ),
                     ),
-                  if (_index > 0) const SizedBox(width: AppSpace.md),
-                  Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: BambooInk.slate,
-                        foregroundColor: BambooInk.lime,
-                        minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                    const SizedBox(width: AppSpace.md),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        initialValue: _dueDay,
+                        decoration: const InputDecoration(
+                          labelText: 'Due day',
+                          helperText: 'For bill reminders',
+                        ),
+                        items: [for (var d = 1; d <= 31; d++) DropdownMenuItem(value: d, child: Text('$d'))],
+                        onChanged: (v) => setState(() => _dueDay = v),
                       ),
-                      onPressed: _saving ? null : () => _next(card),
-                      child: _saving
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
-                          : Text(_isLast ? 'Finish' : 'Next'),
                     ),
+                  ],
+                ),
+                const SizedBox(height: AppSpace.lg),
+                TextField(
+                  controller: _pointsBalanceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Current points balance',
+                    helperText: "Starting point — we'll track from here",
                   ),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: AppSpace.md),
+                  Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
                 ],
-              ),
-            ],
-          );
-        },
+                const SizedBox(height: AppSpace.xl),
+                Row(
+                  children: [
+                    if (_index > 0)
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: BambooInk.ink900,
+                            minimumSize: const Size.fromHeight(52),
+                            side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: _saving ? null : () => setState(() => _index--),
+                          child: const Text('Back'),
+                        ),
+                      ),
+                    if (_index > 0) const SizedBox(width: AppSpace.md),
+                    Expanded(
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BambooInk.slate,
+                          foregroundColor: BambooInk.lime,
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                        ),
+                        onPressed: _saving ? null : () => _next(card),
+                        child: _saving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                              )
+                            : Text(_isLast ? 'Finish' : 'Next'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

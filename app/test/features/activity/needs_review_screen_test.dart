@@ -11,7 +11,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   Map<String, dynamic>? lastLogArgs;
 
   @override
-  Future<void> logTransaction({
+  Future<String> logTransaction({
     required String userCardId,
     required dynamic amount,
     String? categoryId,
@@ -20,6 +20,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     String? note,
   }) async {
     lastLogArgs = {'userCardId': userCardId, 'amount': amount, 'categoryId': categoryId};
+    return 'fake-txn-id';
   }
 
   @override

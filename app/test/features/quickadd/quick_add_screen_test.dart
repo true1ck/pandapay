@@ -38,14 +38,17 @@ class _FakeUserCardsRepository extends UserCardsRepository {
   _FakeUserCardsRepository() : super(apiBaseUrl: 'http://localhost', accessToken: 't');
 
   @override
-  Future<void> logTransaction({
+  Future<String> logTransaction({
     required String userCardId,
     required Money amount,
     String? categoryId,
     String? merchantName,
     DateTime? occurredAt,
     String? note,
-  }) async {}
+  }) async => 'fake-txn-id';
+
+  @override
+  Future<void> ignoreTransaction(String id, {required String reason}) async {}
 }
 
 void main() {
@@ -432,9 +435,8 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
     await tester.pumpAndSettle();
-    expect(
-      find.text("This app can't undo a saved transaction yet — there's no delete option either; edit it from Activity instead."),
-      findsOneWidget,
-    );
+    // Real undo now (POST /transactions/:id/ignore, reason: 'reversal') —
+    // no longer the old "can't undo yet" placeholder message.
+    expect(find.text('Undone.'), findsOneWidget);
   });
 }

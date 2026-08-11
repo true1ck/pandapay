@@ -25,6 +25,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     String? cardId,
     String? categoryId,
     String? source,
+    String? query,
   }) async =>
       transactions;
 

@@ -14,7 +14,7 @@ import '../../data/user_cards_repository.dart';
 /// across Indian issuers per RBI's fair-practices guidance — used as an
 /// explicit, documented floor rather than a fabricated precise value. Every
 /// place this number reaches the UI says "up to" for exactly this reason.
-const _assumedGracePeriodDays = 20;
+const assumedGracePeriodDays = 20;
 
 /// ui-spec.md E7 Billing Cycle / Float. `billingCycleFloat()` was fully
 /// built and tested in the engine with zero callers. Needs
@@ -85,7 +85,10 @@ class _BillingFloatTile extends StatelessWidget {
                 children: [
                   Text(displayName, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                   const SizedBox(height: 2),
-                  Text('Set a statement day to see this card\'s float.', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  Text(
+                    'Set a statement day to see this card\'s float.',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                 ],
               ),
             ),
@@ -96,7 +99,7 @@ class _BillingFloatTile extends StatelessWidget {
 
     final result = billingCycleFloat(
       statementDay: userCard.statementDay!,
-      gracePeriodDays: _assumedGracePeriodDays,
+      gracePeriodDays: assumedGracePeriodDays,
       clock: clock,
     );
 
@@ -119,7 +122,7 @@ class _BillingFloatTile extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Text(
             'Statement cuts in ${result.daysUntilStatement} day${result.daysUntilStatement == 1 ? '' : 's'} '
-            '(assumes a $_assumedGracePeriodDays-day grace period to the due date).',
+            '(assumes a $assumedGracePeriodDays-day grace period to the due date).',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
         ],

@@ -54,9 +54,7 @@ class NotificationPreferences {
       categoryNeedsReview: json['category_needs_review'] as bool? ?? true,
       quietHoursStart: json['quiet_hours_start'] as String?,
       quietHoursEnd: json['quiet_hours_end'] as String?,
-      dailyCap: json['daily_cap'] is int
-          ? json['daily_cap'] as int
-          : int.parse(json['daily_cap'].toString()),
+      dailyCap: json['daily_cap'] is int ? json['daily_cap'] as int : int.parse(json['daily_cap'].toString()),
     );
   }
 }
@@ -68,11 +66,7 @@ class MutedMerchant {
   final DateTime mutedAt;
   final String merchantName;
 
-  const MutedMerchant({
-    required this.merchantId,
-    required this.mutedAt,
-    required this.merchantName,
-  });
+  const MutedMerchant({required this.merchantId, required this.mutedAt, required this.merchantName});
 
   factory MutedMerchant.fromJson(Map<String, dynamic> json) {
     return MutedMerchant(
@@ -95,15 +89,12 @@ class NotificationPreferencesRepository {
   }) : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $accessToken',
+    'Content-Type': 'application/json',
+  };
 
   Future<NotificationPreferences> fetch() async {
-    final response = await _client.get(
-      Uri.parse('$apiBaseUrl/notification-preferences'),
-      headers: _headers,
-    );
+    final response = await _client.get(Uri.parse('$apiBaseUrl/notification-preferences'), headers: _headers);
     if (response.statusCode != 200) {
       throw ApiException('GET /notification-preferences failed: ${response.statusCode} ${response.body}');
     }
@@ -138,10 +129,7 @@ class NotificationPreferencesRepository {
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['mutedMerchants'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(MutedMerchant.fromJson)
-        .toList();
+    return (body['mutedMerchants'] as List).cast<Map<String, dynamic>>().map(MutedMerchant.fromJson).toList();
   }
 
   Future<void> muteMerchant(String merchantId) async {

@@ -48,7 +48,8 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
   bool _matchesSearch(CardProduct card) {
     final query = _searchController.text.trim().toLowerCase();
     if (query.isEmpty) return true;
-    return card.name.toLowerCase().contains(query) || (card.issuerName?.toLowerCase().contains(query) ?? false);
+    return card.name.toLowerCase().contains(query) ||
+        (card.issuerName?.toLowerCase().contains(query) ?? false);
   }
 
   @override
@@ -71,148 +72,156 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                 final picked = catalogueValue.where((c) => _selected.contains(c.id)).toList();
                 Navigator.of(context).pop(picked);
               },
-              child: Text('Add (${_selected.length})', style: BambooFonts.ui(14, weight: FontWeight.w700, color: BambooInk.jade)),
+              child: Text(
+                'Add (${_selected.length})',
+                style: BambooFonts.ui(14, weight: FontWeight.w700, color: BambooInk.jade),
+              ),
             ),
         ],
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: catalogue.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(
-          message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(catalogueProvider),
-        ),
-        data: (cards) {
-          final filtered = cards.where(_matchesSearch).where(_matchesNetworkFilter).toList()
-            ..sort((a, b) => a.name.compareTo(b.name));
-          final byIssuer = <String, List<CardProduct>>{};
-          for (final c in filtered) {
-            byIssuer.putIfAbsent(c.issuerName ?? 'Other', () => []).add(c);
-          }
-          final issuers = byIssuer.keys.toList()..sort();
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(catalogueProvider),
+          ),
+          data: (cards) {
+            final filtered = cards.where(_matchesSearch).where(_matchesNetworkFilter).toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+            final byIssuer = <String, List<CardProduct>>{};
+            for (final c in filtered) {
+              byIssuer.putIfAbsent(c.issuerName ?? 'Other', () => []).add(c);
+            }
+            final issuers = byIssuer.keys.toList()..sort();
 
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, AppSpace.sm),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _searchController,
-                      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search_rounded, color: BambooInk.ink500),
-                        hintText: 'Search by issuer or card name',
-                        hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
-                        filled: true,
-                        fillColor: BambooInk.glassFillOnPaper,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, AppSpace.sm),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _searchController,
+                        style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.search_rounded, color: BambooInk.ink500),
+                          hintText: 'Search by issuer or card name',
+                          hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+                          filled: true,
+                          fillColor: BambooInk.glassFillOnPaper,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                          ),
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-                        ),
+                        onChanged: (_) => setState(() {}),
                       ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: AppSpace.sm),
-                    SizedBox(
-                      height: 36,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          for (final network in [CardNetwork.rupay, CardNetwork.visa, CardNetwork.mastercard, CardNetwork.amex])
-                            Padding(
-                              padding: const EdgeInsets.only(right: AppSpace.xs),
-                              child: FilterChip(
-                                label: Text(network == CardNetwork.amex ? 'Amex/Diners' : _networkLabel(network)),
-                                labelStyle: BambooFonts.ui(
-                                  13,
-                                  weight: FontWeight.w600,
-                                  color: _networkFilters.contains(network) ? BambooInk.onSlate : BambooInk.ink900,
+                      const SizedBox(height: AppSpace.sm),
+                      SizedBox(
+                        height: 36,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: [
+                            for (final network in [
+                              CardNetwork.rupay,
+                              CardNetwork.visa,
+                              CardNetwork.mastercard,
+                              CardNetwork.amex,
+                            ])
+                              Padding(
+                                padding: const EdgeInsets.only(right: AppSpace.xs),
+                                child: FilterChip(
+                                  label: Text(
+                                    network == CardNetwork.amex ? 'Amex/Diners' : _networkLabel(network),
+                                  ),
+                                  labelStyle: BambooFonts.ui(
+                                    13,
+                                    weight: FontWeight.w600,
+                                    color: _networkFilters.contains(network)
+                                        ? BambooInk.onSlate
+                                        : BambooInk.ink900,
+                                  ),
+                                  selected: _networkFilters.contains(network),
+                                  selectedColor: BambooInk.slate,
+                                  backgroundColor: BambooInk.paperMuted,
+                                  side: BorderSide.none,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                                  onSelected: (selected) => setState(() {
+                                    if (selected) {
+                                      _networkFilters.add(network);
+                                    } else {
+                                      _networkFilters.remove(network);
+                                    }
+                                  }),
                                 ),
-                                selected: _networkFilters.contains(network),
-                                selectedColor: BambooInk.slate,
-                                backgroundColor: BambooInk.paperMuted,
-                                side: BorderSide.none,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                                onSelected: (selected) => setState(() {
-                                  if (selected) {
-                                    _networkFilters.add(network);
-                                  } else {
-                                    _networkFilters.remove(network);
-                                  }
-                                }),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: filtered.isEmpty
-                    ? const EmptyState(icon: Icons.search_off_rounded, title: 'No cards match')
-                    : ListView(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
-                        children: [
-                          for (final issuer in issuers) ...[
+                Expanded(
+                  child: filtered.isEmpty
+                      ? const EmptyState(icon: Icons.search_off_rounded, title: 'No cards match')
+                      : ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                          children: [
+                            for (final issuer in issuers) ...[
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+                                child: Text(issuer, style: BambooFonts.heading(13, color: BambooInk.ink500)),
+                              ),
+                              for (final card in byIssuer[issuer]!)
+                                _CardRow(
+                                  card: card,
+                                  selected: _selected.contains(card.id),
+                                  onToggle: () => setState(() {
+                                    if (_selected.contains(card.id)) {
+                                      _selected.remove(card.id);
+                                    } else {
+                                      _selected.add(card.id);
+                                    }
+                                  }),
+                                ),
+                            ],
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-                              child: Text(issuer, style: BambooFonts.heading(13, color: BambooInk.ink500)),
-                            ),
-                            for (final card in byIssuer[issuer]!) _CardRow(
-                              card: card,
-                              selected: _selected.contains(card.id),
-                              onToggle: () => setState(() {
-                                if (_selected.contains(card.id)) {
-                                  _selected.remove(card.id);
-                                } else {
-                                  _selected.add(card.id);
-                                }
-                              }),
+                              padding: const EdgeInsets.symmetric(vertical: AppSpace.lg),
+                              child: Center(
+                                child: TextButton(
+                                  style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
+                                  onPressed: widget.onCardNotListed,
+                                  child: const Text("My card isn't listed"),
+                                ),
+                              ),
                             ),
                           ],
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: AppSpace.lg),
-                            child: Center(
-                              child: TextButton(
-                                style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
-                                onPressed: widget.onCardNotListed,
-                                child: const Text("My card isn't listed"),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ],
-          );
-        },
+                        ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
   static String _networkLabel(CardNetwork n) => switch (n) {
-        CardNetwork.rupay => 'RuPay',
-        CardNetwork.visa => 'Visa',
-        CardNetwork.mastercard => 'Mastercard',
-        CardNetwork.amex => 'Amex',
-        CardNetwork.diners => 'Diners',
-      };
+    CardNetwork.rupay => 'RuPay',
+    CardNetwork.visa => 'Visa',
+    CardNetwork.mastercard => 'Mastercard',
+    CardNetwork.amex => 'Amex',
+    CardNetwork.diners => 'Diners',
+  };
 }
 
 class _CardRow extends StatelessWidget {
@@ -237,7 +246,9 @@ class _CardRow extends StatelessWidget {
               child: const Icon(Icons.credit_card_rounded, color: BambooInk.lime, size: 20),
             ),
             const SizedBox(width: AppSpace.md),
-            Expanded(child: Text(card.name, style: BambooFonts.ui(15, color: BambooInk.ink900))),
+            Expanded(
+              child: Text(card.name, style: BambooFonts.ui(15, color: BambooInk.ink900)),
+            ),
             Checkbox(
               value: selected,
               onChanged: (_) => onToggle(),

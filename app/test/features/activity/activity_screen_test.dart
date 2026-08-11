@@ -23,9 +23,10 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     String? cardId,
     String? categoryId,
     String? source,
+    String? query,
   }) async {
     lastFetchArgs = [
-      {'from': from, 'to': to, 'cardId': cardId, 'categoryId': categoryId, 'source': source},
+      {'from': from, 'to': to, 'cardId': cardId, 'categoryId': categoryId, 'source': source, 'query': query},
     ];
     var result = transactions;
     if (cardId != null) result = result.where((t) => t.userCardId == cardId).toList();
@@ -113,5 +114,37 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('detail t1'), findsOneWidget);
+  });
+
+  testWidgets('typing in the search box sends the query to the server, debounced', (tester) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(id: 't1', amount: Money.fromRupees(500), occurredAt: DateTime.now(), merchantName: 'Zepto'),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    repo.lastFetchArgs = null;
+    await tester.enterText(find.byType(TextField).first, 'zep');
+
+    // Nothing yet: the whole point of the debounce is that a burst of
+    // keystrokes is not a burst of ILIKE scans.
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(repo.lastFetchArgs, isNull, reason: 'should not refetch mid-typing');
+
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(repo.lastFetchArgs!.first['query'], 'zep');
+  });
+
+  testWidgets('a blank search is no filter at all, not a match-everything query', (tester) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(id: 't1', amount: Money.fromRupees(500), occurredAt: DateTime.now(), merchantName: 'Zepto'),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    await tester.enterText(find.byType(TextField).first, '   ');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastFetchArgs!.first['query'], isNull);
   });
 }

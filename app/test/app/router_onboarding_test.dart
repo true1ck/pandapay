@@ -6,6 +6,7 @@ import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/features/home/home_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -52,19 +53,20 @@ void main() {
     await _pumpApp(tester, onboardingComplete: false);
 
     expect(find.text('Know which card to use — before you pay.'), findsOneWidget);
-    expect(find.text('PandaPay — Home'), findsNothing);
+    expect(find.byType(HomeScreen), findsNothing);
   });
 
   testWidgets('a device that already finished onboarding goes straight to Home', (tester) async {
     await _pumpApp(tester, onboardingComplete: true);
 
-    expect(find.text('PandaPay — Home'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.text('Know which card to use — before you pay.'), findsNothing);
   });
 
   testWidgets(
-      'choosing "use without an account" continues to Add Your First Card, NOT Home '
-      '(Task A7-A10: onboarding now only completes at the end of A10)', (tester) async {
+      'choosing "use without an account" continues through Permissions + Tour to Add Your '
+      'First Card, NOT Home (design 15/27-29 sit between Account Choice and A7; onboarding '
+      'still only completes at the end of A10)', (tester) async {
     await _pumpApp(tester, onboardingComplete: false);
 
     await tester.tap(find.text('Get started'));
@@ -74,10 +76,28 @@ void main() {
     await tester.tap(find.text('Use without an account'));
     await tester.pumpAndSettle();
 
+    // Design 15: permissions screen, all-optional, no grant required to
+    // continue.
+    expect(find.text('Set up a few permissions'), findsOneWidget);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    // Design 27-29: the 3-step tour, Skip available every step but this
+    // walks it forward instead to also cover Next.
+    expect(find.text('Your cards already pay you back.'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(find.text('Point it at the QR, get an answer.'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(find.text('See what you kept, and what slipped.'), findsOneWidget);
+    await tester.tap(find.text('Add my cards'));
+    await tester.pumpAndSettle();
+
     // Lands on A7 (Add Your First Card), not Home — the empty test
     // catalogue renders its app-bar default title.
     expect(find.text('Add your cards'), findsOneWidget);
-    expect(find.text('PandaPay — Home'), findsNothing);
+    expect(find.byType(HomeScreen), findsNothing);
 
     // Onboarding must NOT be marked complete yet — A10 is now the only
     // place that happens.
@@ -95,7 +115,7 @@ void main() {
     GoRouter.of(context).go(AppRoute.welcome);
     await tester.pumpAndSettle();
 
-    expect(find.text('PandaPay — Home'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.text('Know which card to use — before you pay.'), findsNothing);
   });
 }

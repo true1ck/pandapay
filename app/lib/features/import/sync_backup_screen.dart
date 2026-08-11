@@ -41,19 +41,13 @@ class SyncBackupScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Sync & backup', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: status.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) =>
-              ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(backupStatusProvider)),
+          error: (err, _) => ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(backupStatusProvider),
+          ),
           data: (backupStatus) {
             if (backupStatus == null || repo == null) {
               return const EmptyState(icon: Icons.cloud_off_outlined, title: 'Sign in to see backup status');
@@ -63,7 +57,10 @@ class SyncBackupScreen extends ConsumerWidget {
               children: [
                 Container(
                   padding: const EdgeInsets.all(AppSpace.md),
-                  decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+                  decoration: BoxDecoration(
+                    color: BambooInk.paperMuted,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
                   child: Text(
                     'Multi-device sync (pending-change count, live conflict resolution) isn\'t built yet — this app '
                     'talks directly to the server today, with no offline queue. This screen only shows real backup/'
@@ -108,26 +105,34 @@ class SyncBackupScreen extends ConsumerWidget {
                       await repo.triggerBackupNow();
                       ref.invalidate(backupStatusProvider);
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Backup requested and logged.')),
-                        );
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(const SnackBar(content: Text('Backup requested and logged.')));
                       }
                     } catch (e) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
                       }
                     }
                   },
                 ),
                 const SizedBox(height: AppSpace.xxl),
-                Text('Conflict log', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+                Text(
+                  'Conflict log',
+                  style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                ),
                 const SizedBox(height: AppSpace.sm),
                 if (backupStatus.conflicts.isEmpty)
                   Text('No conflicts on record.', style: BambooFonts.ui(13.5, color: BambooInk.ink500))
                 else
                   for (final c in backupStatus.conflicts) _ConflictTile(conflict: c),
                 const SizedBox(height: AppSpace.xxl),
-                Text('Restore', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+                Text(
+                  'Restore',
+                  style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                ),
                 const SizedBox(height: AppSpace.sm),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
@@ -147,7 +152,8 @@ class SyncBackupScreen extends ConsumerWidget {
     );
   }
 
-  static String _fmt(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  static String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<void> _confirmRestore(BuildContext context) async {
     // Destructive action — double-confirmed, no shortcut, per spec. No real
@@ -157,7 +163,9 @@ class SyncBackupScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Restore from backup?'),
-        content: const Text('This will overwrite data on this device with the last backup. This cannot be undone.'),
+        content: const Text(
+          'This will overwrite data on this device with the last backup. This cannot be undone.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
           TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Continue')),
@@ -170,7 +178,10 @@ class SyncBackupScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Type RESTORE to confirm'),
-        content: TextField(controller: typed, decoration: const InputDecoration(hintText: 'RESTORE')),
+        content: TextField(
+          controller: typed,
+          decoration: const InputDecoration(hintText: 'RESTORE'),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
           TextButton(
@@ -232,7 +243,10 @@ class _ConflictTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpace.sm),
       child: Container(
         padding: const EdgeInsets.all(AppSpace.md),
-        decoration: BoxDecoration(color: BambooInk.warningBg, borderRadius: BorderRadius.circular(AppRadius.md)),
+        decoration: BoxDecoration(
+          color: BambooInk.warningBg,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
         child: Text(
           '${conflict.entity}.${conflict.field} — resolved via ${conflict.strategy}'
           '${conflict.userAcknowledged ? '' : ' (not yet acknowledged)'}',

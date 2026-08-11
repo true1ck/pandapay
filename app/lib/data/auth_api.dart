@@ -88,12 +88,7 @@ class AuthApi {
   /// where they already belong to different accounts. The key is omitted
   /// entirely when absent — sending an explicit null would fail that route's
   /// validatePhone() check rather than being treated as "not provided".
-  Future<AuthTokens> verifyEmailOtp(
-    String email,
-    String code,
-    String deviceId, {
-    String? phoneNumber,
-  }) async {
+  Future<AuthTokens> verifyEmailOtp(String email, String code, String deviceId, {String? phoneNumber}) async {
     final trimmedPhone = phoneNumber?.trim();
     final response = await _client.post(
       Uri.parse('$authBaseUrl/auth/verify-email-otp'),
@@ -102,8 +97,7 @@ class AuthApi {
         'email': email,
         'code': code,
         'device_id': deviceId,
-        if (trimmedPhone != null && trimmedPhone.isNotEmpty)
-          'phone_number': trimmedPhone,
+        if (trimmedPhone != null && trimmedPhone.isNotEmpty) 'phone_number': trimmedPhone,
       }),
     );
     if (response.statusCode != 200) {
@@ -125,12 +119,12 @@ class ProfileApi {
   final String accessToken;
   final http.Client _client;
   ProfileApi({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $accessToken',
+    'Content-Type': 'application/json',
+  };
 
   Future<Map<String, dynamic>?> fetchProfile() async {
     final response = await _client.get(Uri.parse('$apiBaseUrl/profile'), headers: _headers);
@@ -144,11 +138,23 @@ class ProfileApi {
   /// Idempotent — api/'s POST /profile is an upsert (ON CONFLICT DO UPDATE),
   /// so calling this on every login is the correct "ensure my profile row
   /// exists" pattern, not a bug waiting to duplicate anything.
-  Future<Map<String, dynamic>> ensureProfile({String? displayName}) async {
+  /// [email]/[phoneNumber] are the values just verified/collected at
+  /// sign-in. api/ COALESCEs them, so passing null means "nothing new to
+  /// say" rather than "clear it" — a later sign-in that doesn't resend the
+  /// phone won't wipe it.
+  Future<Map<String, dynamic>> ensureProfile({
+    String? displayName,
+    String? email,
+    String? phoneNumber,
+  }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/profile'),
       headers: _headers,
-      body: jsonEncode({'displayName': displayName}),
+      body: jsonEncode({
+        'displayName': displayName,
+        'email': email,
+        'phoneNumber': phoneNumber,
+      }),
     );
     if (response.statusCode != 201) {
       throw ApiException('POST /profile failed: ${response.statusCode} ${response.body}');

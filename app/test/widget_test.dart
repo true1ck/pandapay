@@ -13,6 +13,7 @@ import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/auth/login_screen.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/main.dart';
+import 'package:pandapay/features/home/home_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Chunk 15 added a startup session-resume step (sessionInitProvider) that
@@ -79,7 +80,7 @@ Widget _appWithFakeCatalogue(List<CardProduct> cards, {List<Override> extraOverr
 /// that changed wholesale in the design-system pass, and a nav test should not
 /// break because a rounded icon variant was adopted.
 Finder _navTab(String label) => find.descendant(
-      of: find.byType(BottomAppBar),
+      of: find.byKey(const ValueKey('appShellNavBar')),
       matching: find.text(label),
     );
 
@@ -89,7 +90,7 @@ void main() {
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
     await tester.pumpAndSettle();
 
-    expect(find.text('PandaPay — Home'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.text('Test RuPay Card'), findsOneWidget);
     expect(find.textContaining('Base rate 5.0%'), findsOneWidget);
   });
@@ -134,11 +135,12 @@ void main() {
     // Material's 5-item ceiling meant Insights displaced it, not joined it.
     await tester.tap(_navTab('Insights'));
     await tester.pumpAndSettle();
-    // Insights Hub has grown to 15 tiles across Groups E/F/G — 'All
-    // Activity' isn't mounted at all until scrolled into the grid's
-    // viewport (a plain ensureVisible needs the element to already exist),
-    // so this scrolls the sliver grid until it appears.
-    await tester.scrollUntilVisible(find.text('All Activity'), 200, scrollable: find.byType(Scrollable));
+    // The tile grid now sits below design 04's content (earned hero,
+    // category bars, missed/best pair) and is a shrinkWrap GridView, so
+    // every tile is built from first pump but laid out off-screen.
+    // scrollUntilVisible would match immediately and never scroll;
+    // ensureVisible is what actually brings the tile into the viewport.
+    await tester.ensureVisible(find.text('All Activity'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('All Activity'));
     await tester.pumpAndSettle();
@@ -188,11 +190,12 @@ void main() {
 
     await tester.tap(_navTab('Insights'));
     await tester.pumpAndSettle();
-    // Insights Hub has grown to 15 tiles across Groups E/F/G — 'All
-    // Activity' isn't mounted at all until scrolled into the grid's
-    // viewport (a plain ensureVisible needs the element to already exist),
-    // so this scrolls the sliver grid until it appears.
-    await tester.scrollUntilVisible(find.text('All Activity'), 200, scrollable: find.byType(Scrollable));
+    // The tile grid now sits below design 04's content (earned hero,
+    // category bars, missed/best pair) and is a shrinkWrap GridView, so
+    // every tile is built from first pump but laid out off-screen.
+    // scrollUntilVisible would match immediately and never scroll;
+    // ensureVisible is what actually brings the tile into the viewport.
+    await tester.ensureVisible(find.text('All Activity'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('All Activity'));
     await tester.pumpAndSettle();
@@ -205,14 +208,22 @@ void main() {
     expect(find.text('₹1,000.00'), findsWidgets);
   });
 
-  testWidgets('Chunk 16: Cards tab shows the login screen when signed out', (tester) async {
+  testWidgets('Chunk 16 + guest mode: Cards tab renders (no login wall) when signed out', (tester) async {
+    // A3 guest/local mode (see LocalUserCardsRepository) made this screen a
+    // real destination for signed-out users too — the login gate this test
+    // originally asserted was removed on purpose, not a regression.
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
     await tester.pumpAndSettle();
 
-    await tester.tap(_navTab('Cards'));
+    await tester.tap(_navTab('Wallet'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
+    // Design 02 puts adding a card in the header pill, which opens a sheet —
+    // the permanently docked "Add a card" bar this used to assert on is
+    // gone on purpose.
+    expect(find.text('Wallet'), findsWidgets);
+    expect(find.text('Add card'), findsOneWidget);
   });
 
   testWidgets('Chunk 16: Cards tab shows a real owned card and lets it be archived', (tester) async {
@@ -253,7 +264,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(_navTab('Cards'));
+    await tester.tap(_navTab('Wallet'));
     await tester.pumpAndSettle();
 
     expect(find.text('Test RuPay Card'), findsWidgets);
@@ -308,22 +319,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(_navTab('Cards'));
+    await tester.tap(_navTab('Wallet'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('10000 pts earned'), findsOneWidget);
     expect(find.textContaining('Fee waived'), findsOneWidget);
   });
 
-  testWidgets('Chunk 15: Account tab shows the login screen when signed out', (tester) async {
+  testWidgets('Chunk 15 + guest mode: Account tab shows the guest banner, not a login wall', (tester) async {
+    // Same A3 guest/local mode change as the Cards tab above — the login
+    // gate this test originally asserted was removed on purpose.
     await tester.pumpWidget(_appWithFakeCatalogue([_rupayCard()]));
     await tester.pumpAndSettle();
 
-    await tester.tap(_navTab('Account'));
+    await tester.tap(_navTab('You'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(LoginScreen), findsOneWidget);
-    expect(find.text('Send code'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
+    expect(find.text("You're browsing as a guest"), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
   });
 
   testWidgets(
@@ -353,12 +367,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(_navTab('Account'));
+    await tester.tap(_navTab('You'));
     await tester.pumpAndSettle();
     await tester.pump();
 
-    expect(find.text('Signed in'), findsOneWidget);
-    expect(find.textContaining('profile-123'), findsOneWidget);
+    // Design 05 replaced the bare "Signed in · ID · <uuid>" strip with a
+    // profile card: name, card count, and the two stat tiles.
+    expect(find.text('Lifetime earned'), findsOneWidget);
+    expect(find.text('Panda rank'), findsOneWidget);
     // H1: sign-out moved off this top-level screen into the pushed Account
     // settings screen (H2) — this tab now shows the Settings hub row list
     // instead of a bare sign-out button. The hub's ListView is long enough

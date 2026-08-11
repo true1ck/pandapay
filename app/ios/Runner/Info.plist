@@ -8,7 +8,7 @@
 	     only — could not be verified to actually prompt/grant on a real
 	     device/simulator in this sandbox. See PROGRESS.md. -->
 	<key>NSCameraUsageDescription</key>
-	<string>Pandapay uses the camera to scan a QR/barcode on a card mailer or statement to help identify which card you're adding.</string>
+	<string>PandaPay uses the camera to scan a merchant's UPI QR at checkout so it can recommend the best card to pay with, and to read a QR/barcode on a card mailer or statement when you add a card.</string>
 	<!-- UA-8 (Chunk 32, extended): "check nearby merchants" geofencing.
 	     WhenInUse covers the default one-shot check; the Always key below
 	     backs the opt-in background-alerts toggle (GeofenceMonitorService)

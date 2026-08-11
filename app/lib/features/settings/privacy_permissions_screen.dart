@@ -32,7 +32,9 @@ final _consentHistoryProvider = FutureProvider.autoDispose<List<ConsentRecord>>(
 
 /// Local device-permission status, refreshable via `ref.invalidate` after
 /// returning from `openAppSettings()`.
-final _locationStatusProvider = FutureProvider.autoDispose<PermissionStatus>((ref) => Permission.location.status);
+final _locationStatusProvider = FutureProvider.autoDispose<PermissionStatus>(
+  (ref) => Permission.location.status,
+);
 final _cameraStatusProvider = FutureProvider.autoDispose<PermissionStatus>((ref) => Permission.camera.status);
 final _smsStatusProvider = FutureProvider.autoDispose<PermissionStatus>((ref) => Permission.sms.status);
 
@@ -52,84 +54,88 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Privacy & Permissions', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: ListView(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        children: [
-          Text('App permissions', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
-          const SizedBox(height: AppSpace.sm),
-          _PermissionRow(
-            icon: Icons.location_on_outlined,
-            title: 'Location',
-            caption: 'used to detect which store you\'re at',
-            statusProvider: _locationStatusProvider,
-          ),
-          const SizedBox(height: AppSpace.sm),
-          _PermissionRow(
-            icon: Icons.qr_code_scanner_rounded,
-            title: 'Camera',
-            caption: 'used to scan payment QR codes',
-            statusProvider: _cameraStatusProvider,
-          ),
-          if (Platform.isAndroid) ...[
+          padding: const EdgeInsets.all(AppSpace.lg),
+          children: [
+            Text(
+              'App permissions',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+            ),
             const SizedBox(height: AppSpace.sm),
             _PermissionRow(
-              icon: Icons.sms_outlined,
-              title: 'SMS',
-              caption: 'used to auto-detect transactions from bank messages',
-              statusProvider: _smsStatusProvider,
+              icon: Icons.location_on_outlined,
+              title: 'Location',
+              caption: 'used to detect which store you\'re at',
+              statusProvider: _locationStatusProvider,
             ),
+            const SizedBox(height: AppSpace.sm),
+            _PermissionRow(
+              icon: Icons.qr_code_scanner_rounded,
+              title: 'Camera',
+              caption: 'used to scan payment QR codes',
+              statusProvider: _cameraStatusProvider,
+            ),
+            if (Platform.isAndroid) ...[
+              const SizedBox(height: AppSpace.sm),
+              _PermissionRow(
+                icon: Icons.sms_outlined,
+                title: 'SMS',
+                caption: 'used to auto-detect transactions from bank messages',
+                statusProvider: _smsStatusProvider,
+              ),
+            ],
+            const SizedBox(height: AppSpace.xl),
+            Text(
+              'How your data is handled',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            const _DataHandlingSection(
+              title: 'Stays on this phone',
+              bullets: [
+                'Transaction amounts and exact timestamps are never uploaded.',
+                'Your device\'s raw location is only used locally to match nearby merchants.',
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            const _DataHandlingSection(
+              title: 'Uploaded to sync your account',
+              bullets: [
+                'Your cards, wallet, and profile settings sync so you can restore them on a new device.',
+                'Auth exists for your own benefit (sync, backup) — never to attach identity to shared data.',
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            const _DataHandlingSection(
+              title: 'Anonymized before it ever leaves your phone',
+              bullets: [
+                'Merchant records carry no user identity, ever — the row is about the shop, not the shopper.',
+                'No amounts and no individual timestamps are included in shared records.',
+                'Coordinates are grid-snapped (~50m) before upload — we store "a shop exists near here," never "a person was here."',
+              ],
+            ),
+            const SizedBox(height: AppSpace.xl),
+            Text(
+              'Crowdsourced contributions',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            if (!signedIn)
+              const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
+            else
+              const _ContributionToggle(),
+            const SizedBox(height: AppSpace.xl),
+            Text(
+              'Consent history',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            if (!signedIn)
+              const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
+            else
+              const _ConsentHistoryList(),
           ],
-          const SizedBox(height: AppSpace.xl),
-          Text('How your data is handled', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
-          const SizedBox(height: AppSpace.sm),
-          const _DataHandlingSection(
-            title: 'Stays on this phone',
-            bullets: [
-              'Transaction amounts and exact timestamps are never uploaded.',
-              'Your device\'s raw location is only used locally to match nearby merchants.',
-            ],
-          ),
-          const SizedBox(height: AppSpace.md),
-          const _DataHandlingSection(
-            title: 'Uploaded to sync your account',
-            bullets: [
-              'Your cards, wallet, and profile settings sync so you can restore them on a new device.',
-              'Auth exists for your own benefit (sync, backup) — never to attach identity to shared data.',
-            ],
-          ),
-          const SizedBox(height: AppSpace.md),
-          const _DataHandlingSection(
-            title: 'Anonymized before it ever leaves your phone',
-            bullets: [
-              'Merchant records carry no user identity, ever — the row is about the shop, not the shopper.',
-              'No amounts and no individual timestamps are included in shared records.',
-              'Coordinates are grid-snapped (~50m) before upload — we store "a shop exists near here," never "a person was here."',
-            ],
-          ),
-          const SizedBox(height: AppSpace.xl),
-          Text('Crowdsourced contributions', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
-          const SizedBox(height: AppSpace.sm),
-          if (!signedIn)
-            const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
-          else
-            const _ContributionToggle(),
-          const SizedBox(height: AppSpace.xl),
-          Text('Consent history', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
-          const SizedBox(height: AppSpace.sm),
-          if (!signedIn)
-            const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
-          else
-            const _ConsentHistoryList(),
-        ],
         ),
       ),
     );
@@ -215,14 +221,21 @@ class _StatusBadge extends StatelessWidget {
     final (label, fg, bg) = switch (status) {
       PermissionStatus.granted => ('Allowed', BambooInk.jade, BambooInk.jade.withValues(alpha: 0.12)),
       PermissionStatus.limited => ('Limited', BambooInk.clay, BambooInk.clay.withValues(alpha: 0.12)),
-      PermissionStatus.permanentlyDenied => ('Denied — set in Settings', BambooInk.clay, BambooInk.clay.withValues(alpha: 0.12)),
+      PermissionStatus.permanentlyDenied => (
+        'Denied — set in Settings',
+        BambooInk.clay,
+        BambooInk.clay.withValues(alpha: 0.12),
+      ),
       PermissionStatus.denied => ('Not allowed', BambooInk.clay, BambooInk.clay.withValues(alpha: 0.12)),
       _ => ('Unknown', BambooInk.ink500, BambooInk.paperMuted),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: 2),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Text(label, style: BambooFonts.ui(11, weight: FontWeight.w600, color: fg)),
+      child: Text(
+        label,
+        style: BambooFonts.ui(11, weight: FontWeight.w600, color: fg),
+      ),
     );
   }
 }
@@ -253,7 +266,9 @@ class _DataHandlingSection extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('•  ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                  Expanded(child: Text(b, style: BambooFonts.ui(12.5, color: BambooInk.ink500))),
+                  Expanded(
+                    child: Text(b, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  ),
                 ],
               ),
             ),
@@ -364,9 +379,7 @@ class _ConsentHistoryList extends ConsumerWidget {
     }
   }
 
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   String _formatDate(DateTime d) {
     return '${d.day} ${_months[d.month - 1]} ${d.year}';

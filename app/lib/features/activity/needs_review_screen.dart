@@ -40,15 +40,7 @@ class NeedsReviewScreen extends ConsumerWidget {
             ),
         ],
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: items.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
@@ -57,7 +49,8 @@ class NeedsReviewScreen extends ConsumerWidget {
               return const EmptyState(
                 icon: Icons.mark_email_read_outlined,
                 title: 'Nothing needs review',
-                message: 'Messages we couldn\'t automatically parse show up here — nothing is ever dropped silently.',
+                message:
+                    'Messages we couldn\'t automatically parse show up here — nothing is ever dropped silently.',
               );
             }
             return ListView.builder(
@@ -101,7 +94,9 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
     if (result == null) return;
     setState(() => _busy = true);
     try {
-      await ref.read(userCardsRepositoryProvider)!.logTransaction(
+      await ref
+          .read(userCardsRepositoryProvider)!
+          .logTransaction(
             userCardId: result.cardId,
             amount: Money.fromRupees(result.amount),
             categoryId: result.categoryId,
@@ -136,7 +131,10 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           const SizedBox(height: AppSpace.xs),
           Container(
             padding: const EdgeInsets.all(AppSpace.sm),
-            decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.sm)),
+            decoration: BoxDecoration(
+              color: BambooInk.paperMuted,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
             child: Text(item.body, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
           ),
           if (item.reason != null) ...[
@@ -171,7 +169,11 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                   ),
                   onPressed: _busy ? null : _fillManually,
                   child: _busy
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                        )
                       : const Text('Fill in fields'),
                 ),
               ),
@@ -208,20 +210,20 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
 
     final inputDecoration = (String label) => InputDecoration(
-          labelText: label,
-          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          filled: true,
-          fillColor: BambooInk.glassFillOnPaper,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-          ),
-        );
+      labelText: label,
+      labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+      filled: true,
+      fillColor: BambooInk.glassFillOnPaper,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+      ),
+    );
 
     return Container(
       decoration: const BoxDecoration(
@@ -254,7 +256,10 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
             decoration: inputDecoration('Card'),
             items: [
               for (final c in cards)
-                DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
+                DropdownMenuItem(
+                  value: c.id,
+                  child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                ),
             ],
             onChanged: (v) => setState(() => _cardId = v),
           ),

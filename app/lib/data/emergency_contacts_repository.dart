@@ -47,16 +47,16 @@ class IssuerEmergencyContact {
   }
 
   Map<String, dynamic> toCacheJson() => {
-        'id': id,
-        'issuer_name': issuerName,
-        'issuer_slug': issuerSlug,
-        'label': label,
-        'phone': phone,
-        'is_international': isInternational,
-        'is_collect_call': isCollectCall,
-        'block_procedure': blockProcedure,
-        'sort_order': sortOrder,
-      };
+    'id': id,
+    'issuer_name': issuerName,
+    'issuer_slug': issuerSlug,
+    'label': label,
+    'phone': phone,
+    'is_international': isInternational,
+    'is_collect_call': isCollectCall,
+    'block_procedure': blockProcedure,
+    'sort_order': sortOrder,
+  };
 }
 
 abstract class EmergencyContactsRepository {
@@ -68,7 +68,7 @@ class HttpEmergencyContactsRepository implements EmergencyContactsRepository {
   final http.Client _client;
 
   HttpEmergencyContactsRepository({required this.baseUrl, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   @override
   Future<List<IssuerEmergencyContact>> fetch() async {
@@ -79,9 +79,7 @@ class HttpEmergencyContactsRepository implements EmergencyContactsRepository {
         .get(Uri.parse('$baseUrl/issuer-emergency-contacts'))
         .timeout(const Duration(seconds: 6));
     if (response.statusCode != 200) {
-      throw ApiException(
-        'GET /issuer-emergency-contacts failed: ${response.statusCode} ${response.body}',
-      );
+      throw ApiException('GET /issuer-emergency-contacts failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['contacts'] as List)
@@ -104,11 +102,7 @@ class EmergencyContactsResult {
   final EmergencyContactsSource source;
   final DateTime? lastSyncedAt; // null only when source == bundled
 
-  const EmergencyContactsResult({
-    required this.contacts,
-    required this.source,
-    this.lastSyncedAt,
-  });
+  const EmergencyContactsResult({required this.contacts, required this.source, this.lastSyncedAt});
 }
 
 /// Persists the last successfully-fetched contact list to on-device storage

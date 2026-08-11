@@ -5,6 +5,10 @@ import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/features/account/account_screen.dart';
+import 'package:pandapay/features/home/home_screen.dart';
+import 'package:pandapay/features/insights/insights_hub_screen.dart';
+import 'package:pandapay/features/cards/my_cards_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -54,39 +58,39 @@ void main() {
   testWidgets('initial route renders Home inside the shell with Home highlighted', (tester) async {
     await _pumpApp(tester);
 
-    expect(find.text('PandaPay — Home'), findsOneWidget);
-    expect(find.byType(BottomAppBar), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byKey(const ValueKey('appShellNavBar')), findsOneWidget);
   });
 
-  testWidgets('tapping Cards navigates to /cards and shows the Cards screen', (tester) async {
+  testWidgets('tapping Wallet navigates to /cards and shows the Wallet screen', (tester) async {
     await _pumpApp(tester);
 
-    await tester.tap(find.descendant(of: find.byType(BottomAppBar), matching: find.text('Cards')));
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('Wallet')));
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('PandaPay — Cards'), findsOneWidget);
+    expect(find.byType(MyCardsScreen), findsOneWidget);
   });
 
-  testWidgets('tapping Insights then Account navigates correctly (order-independent)', (tester) async {
+  testWidgets('tapping Insights then You navigates correctly (order-independent)', (tester) async {
     await _pumpApp(tester);
 
-    await tester.tap(find.descendant(of: find.byType(BottomAppBar), matching: find.text('Insights')));
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('Insights')));
     await tester.pump();
     await tester.pump();
-    expect(find.text('PandaPay — Insights'), findsOneWidget);
+    expect(find.byType(InsightsHubScreen), findsOneWidget);
 
-    await tester.tap(find.descendant(of: find.byType(BottomAppBar), matching: find.text('Account')));
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('You')));
     await tester.pump();
     await tester.pump();
-    expect(find.text('PandaPay — Account'), findsOneWidget);
+    expect(find.byType(AccountScreen), findsOneWidget);
   });
 
   testWidgets('the scan FAB is present on every tab (not just Home)', (tester) async {
     await _pumpApp(tester);
     expect(find.byIcon(Icons.qr_code_scanner_rounded), findsOneWidget);
 
-    await tester.tap(find.descendant(of: find.byType(BottomAppBar), matching: find.text('Cards')));
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('Wallet')));
     await tester.pump();
     await tester.pump();
     expect(find.byIcon(Icons.qr_code_scanner_rounded), findsOneWidget);

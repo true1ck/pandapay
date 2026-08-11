@@ -3,15 +3,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'settings_sync.dart';
+
 /// Task H6 (Appearance). Three local, device-only display preferences —
 /// theme mode, text scale, and money-number-format — following the exact
 /// SharedPreferences-backed load-on-construction pattern
 /// `OnboardingController`/`TutorialController` already establish in
 /// app/lib/app/providers.dart. Deliberately NOT added to providers.dart
 /// itself (multiple agents are touching sibling screens in parallel this
-/// session; keeping these here avoids a shared-file merge conflict) and
-/// deliberately local-only — there's no server-side column for any of
-/// these three, and ui-spec.md doesn't ask for cross-device sync of them.
+/// session; keeping these here avoids a shared-file merge conflict).
+///
+/// As of plan Phase 1.1 these are no longer local-only: each setter still
+/// writes SharedPreferences first (so the control responds instantly, works
+/// offline, and works signed-out) and then mirrors the key to
+/// `user_settings` via [SettingsSync.pushKeyQuietly]. The mirror is
+/// best-effort and never surfaces an error — the local write has already
+/// given the user what they asked for.
 
 const _themeModeKey = 'appearance_theme_mode_v1';
 const _textScaleKey = 'appearance_text_scale_v1';
@@ -55,11 +62,12 @@ String _numberFormatToString(MoneyNumberFormat format) {
 }
 
 final themeModeProvider = StateNotifierProvider<ThemeModeController, ThemeMode>(
-  (ref) => ThemeModeController(),
+  ThemeModeController.new,
 );
 
 class ThemeModeController extends StateNotifier<ThemeMode> {
-  ThemeModeController() : super(ThemeMode.system) {
+  final Ref _ref;
+  ThemeModeController(this._ref) : super(ThemeMode.system) {
     _load();
   }
 
@@ -72,15 +80,15 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
     state = mode;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_themeModeKey, _themeModeToString(mode));
+    _ref.read(settingsSyncProvider).pushKeyQuietly(_themeModeKey);
   }
 }
 
-final textScaleProvider = StateNotifierProvider<TextScaleController, double>(
-  (ref) => TextScaleController(),
-);
+final textScaleProvider = StateNotifierProvider<TextScaleController, double>(TextScaleController.new);
 
 class TextScaleController extends StateNotifier<double> {
-  TextScaleController() : super(1.0) {
+  final Ref _ref;
+  TextScaleController(this._ref) : super(1.0) {
     _load();
   }
 
@@ -94,6 +102,7 @@ class TextScaleController extends StateNotifier<double> {
     state = scale;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_textScaleKey, scale);
+    _ref.read(settingsSyncProvider).pushKeyQuietly(_textScaleKey);
   }
 }
 
@@ -102,11 +111,12 @@ class TextScaleController extends StateNotifier<double> {
 /// threading a parameter through each one. Defaults to lakhCrore, matching
 /// `profiles.number_format`'s own server-side default of `'lakh_crore'`.
 final numberFormatProvider = StateNotifierProvider<NumberFormatController, MoneyNumberFormat>(
-  (ref) => NumberFormatController(),
+  NumberFormatController.new,
 );
 
 class NumberFormatController extends StateNotifier<MoneyNumberFormat> {
-  NumberFormatController() : super(MoneyNumberFormat.lakhCrore) {
+  final Ref _ref;
+  NumberFormatController(this._ref) : super(MoneyNumberFormat.lakhCrore) {
     _load();
   }
 
@@ -119,5 +129,6 @@ class NumberFormatController extends StateNotifier<MoneyNumberFormat> {
     state = format;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_numberFormatKey, _numberFormatToString(format));
+    _ref.read(settingsSyncProvider).pushKeyQuietly(_numberFormatKey);
   }
 }

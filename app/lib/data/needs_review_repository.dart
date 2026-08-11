@@ -35,20 +35,20 @@ class NeedsReviewItem {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'sender': sender,
-        'body': body,
-        'reason': reason,
-        'receivedAt': receivedAt.toIso8601String(),
-      };
+    'id': id,
+    'sender': sender,
+    'body': body,
+    'reason': reason,
+    'receivedAt': receivedAt.toIso8601String(),
+  };
 
   factory NeedsReviewItem.fromJson(Map<String, dynamic> json) => NeedsReviewItem(
-        id: json['id'] as String,
-        sender: json['sender'] as String,
-        body: json['body'] as String,
-        reason: json['reason'] as String?,
-        receivedAt: DateTime.parse(json['receivedAt'] as String),
-      );
+    id: json['id'] as String,
+    sender: json['sender'] as String,
+    body: json['body'] as String,
+    reason: json['reason'] as String?,
+    receivedAt: DateTime.parse(json['receivedAt'] as String),
+  );
 }
 
 const _needsReviewKey = 'pandapay_app.needs_review_queue_v1';

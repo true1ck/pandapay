@@ -110,8 +110,14 @@ class LegalScreen extends StatelessWidget {
             child: ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               leading: const Icon(Icons.code_rounded, color: BambooInk.ink900),
-              title: Text('View open-source licences', style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900)),
-              subtitle: Text('Every package this app depends on, and its licence', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              title: Text(
+                'View open-source licences',
+                style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900),
+              ),
+              subtitle: Text(
+                'Every package this app depends on, and its licence',
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
               trailing: const Icon(Icons.chevron_right_rounded, color: BambooInk.ink300),
               onTap: () => showLicensePage(context: context, applicationName: 'PandaPay'),
             ),
@@ -141,10 +147,7 @@ class _SectionHeader extends StatelessWidget {
     return Row(
       children: [
         Text(title, style: BambooFonts.heading(16, color: BambooInk.ink900)),
-        if (showDraftBadge) ...[
-          const SizedBox(width: AppSpace.sm),
-          const _DraftBadge(),
-        ],
+        if (showDraftBadge) ...[const SizedBox(width: AppSpace.sm), const _DraftBadge()],
       ],
     );
   }
@@ -181,9 +184,6 @@ class _BodyText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.5),
-    );
+    return Text(text, style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.5));
   }
 }

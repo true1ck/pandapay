@@ -26,7 +26,7 @@ class HttpNearbyMerchantsRepository implements NearbyMerchantsRepository {
   final http.Client _client;
 
   HttpNearbyMerchantsRepository({required this.baseUrl, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   @override
   Future<List<NearbyMerchantCandidate>> fetchNearby({
@@ -34,11 +34,9 @@ class HttpNearbyMerchantsRepository implements NearbyMerchantsRepository {
     required double lng,
     double radiusM = 2000,
   }) async {
-    final uri = Uri.parse('$baseUrl/merchants/nearby').replace(queryParameters: {
-      'lat': lat.toString(),
-      'lng': lng.toString(),
-      'radiusM': radiusM.toString(),
-    });
+    final uri = Uri.parse(
+      '$baseUrl/merchants/nearby',
+    ).replace(queryParameters: {'lat': lat.toString(), 'lng': lng.toString(), 'radiusM': radiusM.toString()});
     final response = await _client.get(uri);
     if (response.statusCode != 200) {
       throw ApiException('GET /merchants/nearby failed: ${response.statusCode} ${response.body}');

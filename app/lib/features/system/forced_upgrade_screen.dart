@@ -23,7 +23,9 @@ class ForcedUpgradeScreen extends StatelessWidget {
     final launched = await launchUrl(Uri.parse(_storeSearchUrl), mode: LaunchMode.externalApplication);
     if (!launched && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't open the store — update PandaPay from your device's app store.")),
+        const SnackBar(
+          content: Text("Couldn't open the store — update PandaPay from your device's app store."),
+        ),
       );
     }
   }

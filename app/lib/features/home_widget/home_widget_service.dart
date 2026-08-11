@@ -52,10 +52,7 @@ class HomeWidgetService {
   /// [nowIso] is passed in rather than read via `DateTime.now()` directly,
   /// matching this codebase's `no_datetime_now_outside_clock` custom_lint
   /// rule — callers should pass `clock.now().toIso8601String()`.
-  Future<void> updateBestCardWidget({
-    required Recommendation? recommendation,
-    required String nowIso,
-  }) async {
+  Future<void> updateBestCardWidget({required Recommendation? recommendation, required String nowIso}) async {
     await configure();
     if (recommendation == null) {
       await HomeWidget.saveWidgetData<bool>(noCardKey, true);
@@ -64,16 +61,10 @@ class HomeWidgetService {
     } else {
       await HomeWidget.saveWidgetData<bool>(noCardKey, false);
       await HomeWidget.saveWidgetData<String>(cardNameKey, recommendation.card.name);
-      await HomeWidget.saveWidgetData<String>(
-        cardValueKey,
-        recommendation.expectedValue.format(),
-      );
+      await HomeWidget.saveWidgetData<String>(cardValueKey, recommendation.expectedValue.format());
     }
     await HomeWidget.saveWidgetData<String>(updatedAtKey, nowIso);
 
-    await HomeWidget.updateWidget(
-      androidName: androidWidgetName,
-      iOSName: iosWidgetName,
-    );
+    await HomeWidget.updateWidget(androidName: androidWidgetName, iOSName: iosWidgetName);
   }
 }

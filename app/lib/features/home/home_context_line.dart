@@ -81,7 +81,11 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
       );
       final repo = ref.read(nearbyMerchantsRepositoryProvider);
-      final candidates = await repo.fetchNearby(lat: position.latitude, lng: position.longitude, radiusM: 500);
+      final candidates = await repo.fetchNearby(
+        lat: position.latitude,
+        lng: position.longitude,
+        radiusM: 500,
+      );
       final matches = findNearbyMerchants(
         origin: GeoPoint(lat: position.latitude, lng: position.longitude),
         candidates: candidates,
@@ -115,10 +119,13 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
     final (icon, text) = switch (_state) {
       _ContextState.locating => (Icons.my_location_rounded, 'Finding where you are…'),
       _ContextState.found => (
-          Icons.place_rounded,
-          "You're near ${_closest!.candidate.displayName ?? 'a known merchant'}",
-        ),
-      _ContextState.noMatch => (Icons.explore_off_rounded, 'Not sure where you are — scan or pick a category.'),
+        Icons.place_rounded,
+        "You're near ${_closest!.candidate.displayName ?? 'a known merchant'}",
+      ),
+      _ContextState.noMatch => (
+        Icons.explore_off_rounded,
+        'Not sure where you are — scan or pick a category.',
+      ),
       // ui-spec B1 States: "No location permission -> chips primary, no
       // nag" — this line stays factual and unobtrusive, never a permission
       // prompt/nag of its own.
@@ -151,7 +158,9 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
               children: [
                 Icon(icon, size: 16, color: BambooInk.ink500),
                 const SizedBox(width: AppSpace.xs),
-                Flexible(child: Text(text, style: BambooFonts.ui(12.5, color: BambooInk.ink500))),
+                Flexible(
+                  child: Text(text, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                ),
               ],
             ),
           ),

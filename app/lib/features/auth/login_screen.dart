@@ -9,6 +9,7 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../settings/feedback_support_screen.dart';
+import 'account_recovery_screen.dart';
 
 /// A4: DPDP §8.2 — purpose-specific, unbundled consent, never a single
 /// bundled "I agree to everything" checkbox. Bumped by hand whenever the
@@ -18,17 +19,20 @@ const currentPolicyVersion = '2026-08-07';
 
 /// Whether this screen is creating a new account or signing an existing one in.
 ///
-/// The two differ in what they collect, not in how they verify:
-///   * [signUp] collects BOTH email and phone. The OTP goes to the email; the
-///     phone is stored on the same account so SMS-based transaction detection
-///     (UA-5.3) works from day one without a second onboarding prompt later.
-///   * [logIn] collects a single identifier — either one already linked to the
-///     account is enough, so returning users aren't made to retype both.
+/// Both modes collect the same two fields — email and phone — and verify the
+/// same way: an OTP to the email. Design 06 is explicit that these are two
+/// separate required fields, never an either/or toggle, so a returning user
+/// isn't left implying one substitutes for the other. The two modes differ
+/// only in what happens with the phone number once OTP verification
+/// succeeds: [signUp] links it to the new account (so SMS-based transaction
+/// detection, UA-5.3, works from day one); [logIn] does NOT send it to the
+/// backend at all — there is no "verify phone matches this account" call in
+/// auth/'s actual API, so silently linking/overwriting a returning user's
+/// phone from an unverified login-time text field would be a real account-
+/// integrity risk. It's still collected and format-validated because the
+/// design requires the field to exist and be filled, just never wired to a
+/// write.
 enum AuthMode { signUp, logIn }
-
-/// Which identifier a returning user is signing in with. Sign-up has no such
-/// choice: it is always email-plus-phone.
-enum _SignInMethod { phone, email }
 
 /// UA-3: OTP sign-in/sign-up against the real auth/ service.
 ///
@@ -44,15 +48,16 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  /// In sign-up this is always the email. In log-in it is whichever identifier
-  /// [_method] currently selects.
+  /// The email — both modes verify by email OTP, so this is always the
+  /// email field regardless of mode.
   final _identifierController = TextEditingController();
 
-  /// Sign-up only — the phone we link to the account alongside the email.
+  /// Both modes collect this now (design 06). Sign-up links it to the new
+  /// account; log-in validates its format but never sends it anywhere — see
+  /// [AuthMode]'s own doc comment for why.
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
 
-  _SignInMethod _method = _SignInMethod.phone;
   bool _otpRequested = false;
   bool _loading = false;
   String? _error;
@@ -65,9 +70,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   bool get _isSignUp => widget.mode == AuthMode.signUp;
 
-  /// Sign-up always verifies by email; log-in follows the toggle.
-  bool get _usesEmail => _isSignUp || _method == _SignInMethod.email;
-
   @override
   void dispose() {
     _identifierController.dispose();
@@ -76,33 +78,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  void _switchMethod(_SignInMethod method) {
-    if (method == _method) return;
-    setState(() {
-      _method = method;
-      _identifierController.clear();
-      _error = null;
-    });
-  }
-
   /// Client-side checks that mirror auth/'s own validators, so an obviously
   /// malformed entry gets an inline message instead of a round-trip and a
   /// generic server error.
   String? _validate() {
     final identifier = _identifierController.text.trim();
     if (identifier.isEmpty) {
-      return _usesEmail ? 'Enter your email address.' : 'Enter your phone number.';
+      return 'Enter your email address.';
     }
-    if (_usesEmail && !identifier.contains('@')) {
+    if (!identifier.contains('@')) {
       return 'That email address doesn\'t look right.';
     }
+    // Design 06: email and phone are both mandatory in every mode, never an
+    // either/or — see AuthMode's doc comment for what log-in does (and
+    // doesn't) do with this once it's collected.
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) return 'Enter your phone number.';
+    // auth/ normalises a bare 10-digit number to +91; anything else must
+    // already be E.164.
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length < 10) return 'That phone number looks too short.';
     if (_isSignUp) {
-      final phone = _phoneController.text.trim();
-      if (phone.isEmpty) return 'Enter your phone number.';
-      // auth/ normalises a bare 10-digit number to +91; anything else must
-      // already be E.164.
-      final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-      if (digits.length < 10) return 'That phone number looks too short.';
       if (!_acceptedTerms) return 'You need to accept the Terms & Privacy Policy to continue.';
     }
     return null;
@@ -120,11 +116,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       final identifier = _identifierController.text.trim();
-      if (_usesEmail) {
-        await ref.read(authApiProvider).requestEmailOtp(identifier);
-      } else {
-        await ref.read(authApiProvider).requestOtp(identifier);
-      }
+      await ref.read(authApiProvider).requestEmailOtp(identifier);
       setState(() => _otpRequested = true);
     } catch (e) {
       setState(() => _error = userFacingErrorMessage(e));
@@ -143,25 +135,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final code = _codeController.text.trim();
       final authApi = ref.read(authApiProvider);
 
-      final tokens = _usesEmail
-          ? await authApi.verifyEmailOtp(
-              identifier,
-              code,
-              'app-mobile',
-              // Only sign-up has a phone to link; log-in leaves the account's
-              // existing linkage untouched.
-              phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
-            )
-          : await authApi.verifyOtp(identifier, code, 'app-mobile');
+      final tokens = await authApi.verifyEmailOtp(
+        identifier,
+        code,
+        'app-mobile',
+        // Only sign-up has a phone to link; log-in leaves the account's
+        // existing linkage untouched — see AuthMode's doc comment.
+        phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
+      );
 
       final store = await ref.read(tokenStoreProvider.future);
-      await store.save(
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      );
+      await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
 
-      await ref.read(profileApiProvider)!.ensureProfile();
+      // Persist what we just verified so design 22's Email & phone screen
+      // has something real to show. Only sign-up sends the phone — see
+      // AuthMode's doc comment for why log-in never writes it.
+      await ref.read(profileApiProvider)!.ensureProfile(
+        email: identifier,
+        phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
+      );
 
       // A4: record the three purpose-specific consents now that a profile
       // row exists to attach them to. Each POST /consents call inserts its
@@ -218,14 +211,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
-  String get _title => _isSignUp ? 'Create your account' : 'Welcome back';
+  /// Design 06's headline, verbatim, for the first-run/sign-up case:
+  /// "Never pay with the wrong card again." with the last word in lime.
+  /// Log-in keeps its own shorter greeting — the deck only draws first run.
+  String get _title => _isSignUp ? 'Never pay with the wrong card' : 'Welcome';
+
+  /// The lime-accented tail of [_title], set as a separate span.
+  String get _titleAccent => _isSignUp ? ' again.' : ' back.';
 
   String get _subtitle {
     if (_otpRequested) {
       return 'Enter the code we sent to ${_identifierController.text.trim()}';
     }
     return _isSignUp
-        ? 'Track your cards, log spend, and never miss a reward.'
+        ? 'Add your cards once. We rank them at every counter.'
         : 'Sign in to pick up where you left off.';
   }
 
@@ -243,37 +242,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpace.xl, AppSpace.xxl, AppSpace.xl, AppSpace.xl),
+              padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.xxl, AppSpace.xl, AppSpace.xl),
               child: ConstrainedBox(
-                constraints: BoxConstraints(
-                    minHeight:
-                        constraints.maxHeight - AppSpace.xxl - AppSpace.xl),
+                constraints: BoxConstraints(minHeight: constraints.maxHeight - AppSpace.xxl - AppSpace.xl),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: BambooInk.paper, borderRadius: BorderRadius.circular(20)),
-                      child: const PandaMark(size: 48),
+                    // Design 06 sets a bare 76pt mark on the slate, no tile.
+                    // This was a 64pt white-filled Container — but inside a
+                    // CrossAxisAlignment.stretch Column its width was
+                    // ignored, so it painted as a full-bleed white bar
+                    // across the top of the screen.
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: PandaMark(size: 76),
                     ),
-                    const SizedBox(height: AppSpace.lg),
-                    Text(_title, style: BambooFonts.heading(24, color: BambooInk.onSlate)),
-                    const SizedBox(height: AppSpace.xs),
-                    Text(_subtitle, style: BambooFonts.ui(14, color: BambooInk.onSlateMuted)),
+                    const SizedBox(height: 18),
+                    _Headline(title: _title, accent: _titleAccent),
+                    const SizedBox(height: 10),
+                    Text(
+                      _subtitle,
+                      style: BambooFonts.ui(13.5, color: BambooInk.onSlateMuted, height: 1.5),
+                    ),
                     const SizedBox(height: AppSpace.xl),
                     if (!_otpRequested) ...[
-                      // Only returning users choose an identifier; sign-up
-                      // always takes both.
-                      if (!_isSignUp) ...[
-                        _MethodToggle(method: _method, onChanged: _switchMethod),
-                        const SizedBox(height: AppSpace.lg),
-                      ],
                       _IdentifierStep(
                         isSignUp: _isSignUp,
-                        usesEmail: _usesEmail,
                         identifierController: _identifierController,
                         phoneController: _phoneController,
                         loading: _loading,
@@ -297,6 +291,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     if (_error != null) ...[
                       const SizedBox(height: AppSpace.lg),
                       _ErrorBanner(message: _error!),
+                    ],
+                    // Design 06: "Includes a link to 24 Account recovery."
+                    // Log-in only — sign-up has no existing account to
+                    // recover into yet.
+                    if (!_isSignUp && !_otpRequested) ...[
+                      const SizedBox(height: AppSpace.md),
+                      Center(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(
+                            context,
+                          ).push(MaterialPageRoute(builder: (_) => const AccountRecoveryScreen())),
+                          style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
+                          child: const Text("Can't sign in? Recover your account"),
+                        ),
+                      ),
                     ],
                     const SizedBox(height: AppSpace.xl),
                     // G4's "zero login" requirement in practice: AccountScreen
@@ -341,95 +350,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-class _MethodToggle extends StatelessWidget {
-  final _SignInMethod method;
-  final ValueChanged<_SignInMethod> onChanged;
-  const _MethodToggle({required this.method, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: BambooInk.slateLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _MethodSegment(
-              label: 'Phone',
-              icon: Icons.phone_outlined,
-              selected: method == _SignInMethod.phone,
-              onTap: () => onChanged(_SignInMethod.phone),
-            ),
-          ),
-          Expanded(
-            child: _MethodSegment(
-              label: 'Email',
-              icon: Icons.mail_outline_rounded,
-              selected: method == _SignInMethod.email,
-              onTap: () => onChanged(_SignInMethod.email),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MethodSegment extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _MethodSegment({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-        decoration: BoxDecoration(
-          color: selected ? BambooInk.slate : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon,
-                size: 16,
-                color: selected ? BambooInk.lime : BambooInk.onSlateMuted),
-            const SizedBox(width: AppSpace.xs),
-            Text(
-              label,
-              style: BambooFonts.ui(
-                13.5,
-                weight: FontWeight.w600,
-                color: selected ? BambooInk.onSlate : BambooInk.onSlateMuted,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The identifier step. In sign-up this renders TWO fields — email (which
-/// receives the code) and phone (linked to the account for SMS detection). In
-/// log-in it renders exactly one, matching the selected method.
+/// The identifier step — design 06: always TWO required fields, email (which
+/// receives the code) and phone, never a toggle between them. Sign-up links
+/// the phone to the new account; log-in collects and validates it but never
+/// sends it anywhere (see AuthMode's doc comment).
 class _IdentifierStep extends StatelessWidget {
   final bool isSignUp;
-  final bool usesEmail;
   final TextEditingController identifierController;
   final TextEditingController phoneController;
   final bool loading;
@@ -446,7 +372,6 @@ class _IdentifierStep extends StatelessWidget {
 
   const _IdentifierStep({
     required this.isSignUp,
-    required this.usesEmail,
     required this.identifierController,
     required this.phoneController,
     required this.loading,
@@ -484,57 +409,53 @@ class _IdentifierStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(usesEmail ? 'Email address' : 'Phone number', style: labelStyle),
+        Text('Email address', style: labelStyle),
         const SizedBox(height: AppSpace.sm),
         TextField(
           controller: identifierController,
-          keyboardType:
-              usesEmail ? TextInputType.emailAddress : TextInputType.phone,
-          textInputAction:
-              isSignUp ? TextInputAction.next : TextInputAction.done,
-          autofillHints: [
-            usesEmail ? AutofillHints.email : AutofillHints.telephoneNumber
-          ],
-          onSubmitted: isSignUp ? null : (_) => loading ? null : onSubmit(),
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.email],
           style: BambooFonts.ui(15, color: BambooInk.onSlate),
-          decoration: _fieldDecoration(
-            hint: usesEmail ? 'you@example.com' : '+91 98765 43210',
-            icon: usesEmail ? Icons.mail_outline_rounded : Icons.phone_outlined,
-          ),
+          decoration: _fieldDecoration(hint: 'you@example.com', icon: Icons.mail_outline_rounded),
+        ),
+        const SizedBox(height: AppSpace.lg),
+        Text('Phone number', style: labelStyle),
+        const SizedBox(height: 2),
+        Text(
+          // Sign-up genuinely wires this phone into SMS transaction
+          // detection; log-in only validates its format (see AuthMode's doc
+          // comment) — the copy says so rather than implying otherwise.
+          isSignUp
+              ? 'Used to detect card transactions from your bank SMS.'
+              : 'The phone number on your account.',
+          style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+        ),
+        const SizedBox(height: AppSpace.sm),
+        TextField(
+          controller: phoneController,
+          keyboardType: TextInputType.phone,
+          textInputAction: TextInputAction.done,
+          autofillHints: const [AutofillHints.telephoneNumber],
+          onSubmitted: (_) => loading ? null : onSubmit(),
+          style: BambooFonts.ui(15, color: BambooInk.onSlate),
+          decoration: _fieldDecoration(hint: '+91 98765 43210', icon: Icons.phone_outlined),
+        ),
+        const SizedBox(height: AppSpace.sm),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.info_outline_rounded, size: 14, color: BambooInk.onSlateMuted),
+            const SizedBox(width: AppSpace.xs),
+            Expanded(
+              child: Text(
+                'We\'ll send your verification code to your email.',
+                style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+              ),
+            ),
+          ],
         ),
         if (isSignUp) ...[
-          const SizedBox(height: AppSpace.lg),
-          Text('Phone number', style: labelStyle),
-          const SizedBox(height: 2),
-          Text(
-            'Used to detect card transactions from your bank SMS.',
-            style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
-          ),
-          const SizedBox(height: AppSpace.sm),
-          TextField(
-            controller: phoneController,
-            keyboardType: TextInputType.phone,
-            textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.telephoneNumber],
-            onSubmitted: (_) => loading ? null : onSubmit(),
-            style: BambooFonts.ui(15, color: BambooInk.onSlate),
-            decoration: _fieldDecoration(hint: '+91 98765 43210', icon: Icons.phone_outlined),
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.info_outline_rounded,
-                  size: 14, color: BambooInk.onSlateMuted),
-              const SizedBox(width: AppSpace.xs),
-              Expanded(
-                child: Text(
-                  'We\'ll send your verification code to your email.',
-                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: AppSpace.lg),
           // A4: three separate, purpose-specific checkboxes — DPDP §8.2
           // forbids bundling these into one "I agree" tick. Only the first
@@ -570,8 +491,7 @@ class _IdentifierStep extends StatelessWidget {
               ? const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2.4, color: BambooInk.slate),
+                  child: CircularProgressIndicator(strokeWidth: 2.4, color: BambooInk.slate),
                 )
               : const Text('Send code'),
         ),
@@ -640,8 +560,10 @@ class _OtpStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Verification code',
-            style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.onSlateMuted)),
+        Text(
+          'Verification code',
+          style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.onSlateMuted),
+        ),
         const SizedBox(height: AppSpace.sm),
         TextField(
           controller: controller,
@@ -673,13 +595,15 @@ class _OtpStep extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             TextButton(
-                style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
-                onPressed: loading ? null : onChangeIdentifier,
-                child: const Text('Change')),
+              style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
+              onPressed: loading ? null : onChangeIdentifier,
+              child: const Text('Change'),
+            ),
             TextButton(
-                style: TextButton.styleFrom(foregroundColor: BambooInk.lime),
-                onPressed: loading ? null : onResend,
-                child: const Text('Resend code')),
+              style: TextButton.styleFrom(foregroundColor: BambooInk.lime),
+              onPressed: loading ? null : onResend,
+              child: const Text('Resend code'),
+            ),
           ],
         ),
         // A6: this app is OTP-only (no password ever exists — see
@@ -716,8 +640,7 @@ class _OtpStep extends StatelessWidget {
               ? const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2.4, color: BambooInk.slate),
+                  child: CircularProgressIndicator(strokeWidth: 2.4, color: BambooInk.slate),
                 )
               : const Text('Verify & continue'),
         ),
@@ -742,16 +665,39 @@ class _ErrorBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: BambooInk.clay, size: 20),
+          const Icon(Icons.error_outline_rounded, color: BambooInk.clay, size: 20),
           const SizedBox(width: AppSpace.sm),
           Expanded(
-            child: Text(
-              message,
-              style: BambooFonts.ui(13, color: BambooInk.onSlate),
-            ),
+            child: Text(message, style: BambooFonts.ui(13, color: BambooInk.onSlate)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Design 06's 30pt headline with its last phrase in bamboo lime — one of
+/// the very few places the deck sets lime as text rather than on a chip,
+/// and it works here because the surface underneath is slate (see
+/// [BambooInk.lime]'s own doc-comment on why lime never goes on paper).
+class _Headline extends StatelessWidget {
+  final String title;
+  final String accent;
+  const _Headline({required this.title, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    final base = BambooFonts.heading(
+      30,
+      weight: FontWeight.w800,
+      color: BambooInk.onSlate,
+      height: 1.1,
+    );
+    return Text.rich(
+      TextSpan(
+        text: title,
+        style: base,
+        children: [TextSpan(text: accent, style: base.copyWith(color: BambooInk.lime))],
       ),
     );
   }

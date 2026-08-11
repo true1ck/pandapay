@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/needs_review_repository.dart';
@@ -39,9 +40,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
   /// permission dialog (previously this went straight to
   /// `requestPermissions()`) — see sms_consent_screen.dart's doc-comment.
   Future<void> _requestPermission() async {
-    final consented = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const SmsConsentScreen()),
-    );
+    final consented = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const SmsConsentScreen()));
     if (consented != true || !mounted) return;
 
     setState(() => _requesting = true);
@@ -63,7 +64,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
   void _startListening() {
     if (_selectedCardId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick a card first — a parsed SMS needs to know which card to log it against.')),
+        const SnackBar(
+          content: Text('Pick a card first — a parsed SMS needs to know which card to log it against.'),
+        ),
       );
       return;
     }
@@ -80,7 +83,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
           setState(() {
             _recentLog.insert(
               0,
-              result.parsed ? 'Logged a transaction from SMS ($sender)' : 'Could not parse SMS from $sender — added to Needs Review',
+              result.parsed
+                  ? 'Logged a transaction from SMS ($sender)'
+                  : 'Could not parse SMS from $sender — added to Needs Review',
             );
           });
           if (result.parsed) {
@@ -89,13 +94,17 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
             // Task D-4: never silently drop an unparsed message — the raw
             // text is right here, on-device, and would otherwise vanish
             // once this screen's ephemeral _recentLog scrolls away.
-            await ref.read(needsReviewRepositoryProvider).add(NeedsReviewItem(
-                  id: '${sender}_${DateTime.now().microsecondsSinceEpoch}',
-                  sender: sender,
-                  body: body,
-                  reason: result.reason,
-                  receivedAt: DateTime.now(),
-                ));
+            await ref
+                .read(needsReviewRepositoryProvider)
+                .add(
+                  NeedsReviewItem(
+                    id: '${sender}_${DateTime.now().microsecondsSinceEpoch}',
+                    sender: sender,
+                    body: body,
+                    reason: result.reason,
+                    receivedAt: DateTime.now(),
+                  ),
+                );
             ref.invalidate(needsReviewItemsProvider);
           }
         }
@@ -121,15 +130,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
         elevation: 0,
         title: Text('SMS auto-import', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -152,13 +153,17 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                 ),
                 icon: const Icon(Icons.upload_file_outlined),
                 label: const Text('Import from an SMS backup file (one-time)'),
-                onPressed: () => Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => const SmsBackupImportScreen())),
+                onPressed: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const SmsBackupImportScreen())),
               ),
               const SizedBox(height: 16),
               const Divider(color: BambooInk.hairlineOnPaper),
               const SizedBox(height: 16),
-              Text('Live auto-read (Android)', style: BambooFonts.ui(13, weight: FontWeight.w700, color: BambooInk.ink900)),
+              Text(
+                'Live auto-read (Android)',
+                style: BambooFonts.ui(13, weight: FontWeight.w700, color: BambooInk.ink900),
+              ),
               const SizedBox(height: 8),
               if (!_permissionGranted)
                 FilledButton(
@@ -175,14 +180,21 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
               const SizedBox(height: 16),
               userCards.when(
                 loading: () => const CircularProgressIndicator(),
-                error: (err, _) => Text('Failed to load cards: $err', style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                error: (err, _) =>
+                    Text('Failed to load cards: $err', style: BambooFonts.ui(13.5, color: BambooInk.clay)),
                 data: (cards) => DropdownButton<String>(
-                  hint: Text('Log parsed SMS against which card?', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+                  hint: Text(
+                    'Log parsed SMS against which card?',
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                  ),
                   value: _selectedCardId,
                   style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                   items: [
                     for (final c in cards)
-                      DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
+                      DropdownMenuItem(
+                        value: c.id,
+                        child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                      ),
                   ],
                   onChanged: (v) => setState(() => _selectedCardId = v),
                 ),
@@ -206,7 +218,10 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
               const SizedBox(height: 16),
               Expanded(
                 child: ListView(
-                  children: [for (final line in _recentLog) Text(line, style: BambooFonts.ui(13, color: BambooInk.ink900))],
+                  children: [
+                    for (final line in _recentLog)
+                      Text(line, style: BambooFonts.ui(13, color: BambooInk.ink900)),
+                  ],
                 ),
               ),
             ],

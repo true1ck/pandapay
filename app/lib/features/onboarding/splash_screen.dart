@@ -22,9 +22,7 @@ class SplashScreen extends StatelessWidget {
           colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
         ),
       ),
-      child: const Center(
-        child: PandaMark(size: 96),
-      )
+      child: const Center(child: PandaMark(size: 96))
           // A brief, purposeful entrance — not decoration for its own sake.
           // Respects reduced-motion automatically (flutter_animate honours
           // MediaQuery.disableAnimations).

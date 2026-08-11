@@ -49,15 +49,7 @@ class _SplitPlannerScreenState extends ConsumerState<SplitPlannerScreen> {
         elevation: 0,
         title: Text('Multi-Card Split Planner', style: BambooFonts.heading(16.5, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: owned.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
@@ -75,19 +67,12 @@ class _SplitPlannerScreenState extends ConsumerState<SplitPlannerScreen> {
             return ListView(
               padding: const EdgeInsets.all(AppSpace.lg),
               children: [
-                Text(
-                  'Total amount to spend',
-                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-                ),
+                Text('Total amount to spend', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
                 const SizedBox(height: AppSpace.sm),
                 TextField(
                   controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                   style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                   decoration: InputDecoration(
                     prefixText: '₹ ',
@@ -95,7 +80,10 @@ class _SplitPlannerScreenState extends ConsumerState<SplitPlannerScreen> {
                     hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
                     filled: true,
                     fillColor: BambooInk.glassFillOnPaper,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
@@ -107,9 +95,7 @@ class _SplitPlannerScreenState extends ConsumerState<SplitPlannerScreen> {
                   ),
                   onChanged: (value) {
                     final parsed = double.tryParse(value);
-                    ref
-                        .read(splitPlannerAmountProvider.notifier)
-                        .state = parsed == null
+                    ref.read(splitPlannerAmountProvider.notifier).state = parsed == null
                         ? const Money.zero()
                         : Money.fromRupees(parsed);
                   },
@@ -133,7 +119,11 @@ class _SplitPlannerScreenState extends ConsumerState<SplitPlannerScreen> {
                         'utilization ceiling — try a smaller amount.',
                   )
                 else
-                  _SplitResult(plan: plan, total: amount),
+                  _SplitResult(
+                    plan: plan,
+                    total: amount,
+                    ownedProducts: [for (final (_, product) in pairs) product],
+                  ),
               ],
             );
           },
@@ -146,15 +136,31 @@ class _SplitPlannerScreenState extends ConsumerState<SplitPlannerScreen> {
 class _SplitResult extends StatelessWidget {
   final List<SplitAllocation> plan;
   final Money total;
-  const _SplitResult({required this.plan, required this.total});
+  final List<CardProduct> ownedProducts;
+  const _SplitResult({required this.plan, required this.total, required this.ownedProducts});
+
+  /// Design 11's counterfactual: what the best SINGLE card would have paid
+  /// on the whole purchase.
+  ///
+  /// Base rate only, via the shared [baseRateValueFor] — the same
+  /// deliberately-scoped calculator D6 and design 04 use, so this can't
+  /// disagree with them. That makes it a conservative comparison: it
+  /// ignores the caps that are usually the reason splitting wins at all,
+  /// so the real gap is typically wider than shown, never narrower.
+  Money get _singleBestCardValue {
+    var best = const Money.zero();
+    for (final product in ownedProducts) {
+      final value = baseRateValueFor(product: product, amount: total);
+      if (value > best) best = value;
+    }
+    return best;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final totalExpectedValue = plan.fold<Money>(
-      const Money.zero(),
-      (a, b) => a + b.expectedValue,
-    );
+    final totalExpectedValue = plan.fold<Money>(const Money.zero(), (a, b) => a + b.expectedValue);
     final placed = plan.fold<Money>(const Money.zero(), (a, b) => a + b.amount);
+    final singleCard = _singleBestCardValue;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -188,6 +194,29 @@ class _SplitResult extends StatelessWidget {
                   ],
                 ),
               ),
+              // Design 11's whole argument: the split total means nothing
+              // without what one card alone would have paid. Hidden when
+              // there's no counterfactual (a single owned card) or when
+              // splitting didn't actually win — claiming a gain of zero
+              // would be worse than saying nothing.
+              if (ownedProducts.length > 1 && totalExpectedValue > singleCard) ...[
+                const SizedBox(width: AppSpace.md),
+                Container(width: 1, height: 46, color: BambooInk.slateHairline),
+                const SizedBox(width: AppSpace.md),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('One card only', style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
+                    const SizedBox(height: 4),
+                    MoneyText(
+                      singleCard,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.money(20, color: BambooInk.onSlateSubtle),
+                      showConfidenceIcon: false,
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -221,9 +250,7 @@ class _AllocationBar extends StatelessWidget {
     // is double?, so this needs an explicit .toDouble() rather than
     // relying on the clamp() result being assignable directly (it isn't,
     // under sound null safety).
-    final rawFraction = total.isZero
-        ? 0.0
-        : allocation.amount.paise / total.paise;
+    final rawFraction = total.isZero ? 0.0 : allocation.amount.paise / total.paise;
     final fraction = rawFraction.clamp(0.0, 1.0).toDouble();
     return Container(
       decoration: BoxDecoration(

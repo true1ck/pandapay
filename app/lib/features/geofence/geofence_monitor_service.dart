@@ -70,9 +70,7 @@ class GeofenceMonitorService {
     if (_initialized) return;
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosInit = DarwinInitializationSettings();
-    await notifications.initialize(
-      const InitializationSettings(android: androidInit, iOS: iosInit),
-    );
+    await notifications.initialize(const InitializationSettings(android: androidInit, iOS: iosInit));
     _initialized = true;
   }
 
@@ -128,13 +126,13 @@ class GeofenceMonitorService {
             ),
           )
         : (Platform.isIOS
-            ? AppleSettings(
-                accuracy: LocationAccuracy.medium,
-                distanceFilter: 150,
-                pauseLocationUpdatesAutomatically: false,
-                showBackgroundLocationIndicator: true,
-              )
-            : const LocationSettings(accuracy: LocationAccuracy.medium, distanceFilter: 150));
+              ? AppleSettings(
+                  accuracy: LocationAccuracy.medium,
+                  distanceFilter: 150,
+                  pauseLocationUpdatesAutomatically: false,
+                  showBackgroundLocationIndicator: true,
+                )
+              : const LocationSettings(accuracy: LocationAccuracy.medium, distanceFilter: 150));
 
     _subscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(_onPosition);
   }

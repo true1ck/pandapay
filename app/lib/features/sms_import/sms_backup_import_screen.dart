@@ -89,13 +89,17 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
             // Task D-4: same "never silently drop" fix as the live listener
             // — a batch import's failures are just as real as one-at-a-time
             // failures, and this loop already has the raw text in hand.
-            await ref.read(needsReviewRepositoryProvider).add(NeedsReviewItem(
-                  id: '${sender}_${DateTime.now().microsecondsSinceEpoch}',
-                  sender: sender,
-                  body: body,
-                  reason: result.reason,
-                  receivedAt: DateTime.now(),
-                ));
+            await ref
+                .read(needsReviewRepositoryProvider)
+                .add(
+                  NeedsReviewItem(
+                    id: '${sender}_${DateTime.now().microsecondsSinceEpoch}',
+                    sender: sender,
+                    body: body,
+                    reason: result.reason,
+                    receivedAt: DateTime.now(),
+                  ),
+                );
           }
         } catch (_) {
           failed++;
@@ -138,22 +142,15 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
         elevation: 0,
         title: Text('Import SMS backup file', style: BambooFonts.heading(16, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.lg),
           child: _messageCount != null
               ? EmptyState(
                   icon: Icons.check_circle_outline_rounded,
                   title: 'Import complete',
-                  message: '$_messageCount messages · $_parsedCount logged · $_failedCount could not be parsed.',
+                  message:
+                      '$_messageCount messages · $_parsedCount logged · $_failedCount could not be parsed.',
                   action: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: BambooInk.ink900,
@@ -193,7 +190,10 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
                     else ...[
                       Container(
                         padding: const EdgeInsets.all(AppSpace.md),
-                        decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+                        decoration: BoxDecoration(
+                          color: BambooInk.paperMuted,
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
                         child: Text(
                           '$_fileName selected — ${_messages!.length} messages found.',
                           style: BambooFonts.ui(12.5, color: BambooInk.ink500),
@@ -202,7 +202,10 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
                       const SizedBox(height: AppSpace.lg),
                       userCards.when(
                         loading: () => const CircularProgressIndicator(),
-                        error: (err, _) => Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                        error: (err, _) => Text(
+                          userFacingErrorMessage(err),
+                          style: BambooFonts.ui(13.5, color: BambooInk.clay),
+                        ),
                         data: (cards) => DropdownButtonFormField<String>(
                           initialValue: _selectedCardId,
                           style: BambooFonts.ui(14.5, color: BambooInk.ink900),
@@ -211,7 +214,10 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
                             labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
                             filled: true,
                             fillColor: BambooInk.glassFillOnPaper,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
                               borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
@@ -223,7 +229,10 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
                           ),
                           items: [
                             for (final c in cards)
-                              DropdownMenuItem(value: c.id, child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName)),
+                              DropdownMenuItem(
+                                value: c.id,
+                                child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                              ),
                           ],
                           onChanged: (v) => setState(() => _selectedCardId = v),
                         ),

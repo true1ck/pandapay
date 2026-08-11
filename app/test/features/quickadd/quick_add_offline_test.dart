@@ -18,7 +18,7 @@ class _OfflineUserCardsRepository extends UserCardsRepository {
   _OfflineUserCardsRepository() : super(apiBaseUrl: 'http://localhost', accessToken: 't');
 
   @override
-  Future<void> logTransaction({
+  Future<String> logTransaction({
     required String userCardId,
     required Money amount,
     String? categoryId,

@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 
@@ -53,7 +54,8 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
     }
   }
 
-  bool get _canSubmit => _issuerController.text.trim().isNotEmpty && _productController.text.trim().isNotEmpty;
+  bool get _canSubmit =>
+      _issuerController.text.trim().isNotEmpty && _productController.text.trim().isNotEmpty;
 
   Future<void> _submit() async {
     final api = ref.read(cardRequestsApiProvider);
@@ -77,9 +79,7 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
           builder: (context) => AlertDialog(
             title: const Text('Thanks — we\'ve logged this.'),
             content: const Text("We'll let you know when it's added."),
-            actions: [
-              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK')),
-            ],
+            actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
           ),
         );
         if (mounted) Navigator.of(context).pop();
@@ -102,112 +102,108 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
         elevation: 0,
         title: Text("My card isn't listed", style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: ListView(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        children: [
-          Text(
-            "Tell us which card you own and we'll add it to the catalogue. We'll let you know once it's available.",
-            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: AppSpace.xl),
-          TextField(
-            controller: _issuerController,
-            decoration: const InputDecoration(labelText: 'Issuer (e.g. HDFC Bank)'),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: AppSpace.lg),
-          TextField(
-            controller: _productController,
-            decoration: const InputDecoration(labelText: 'Card name (e.g. Millennia)'),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: AppSpace.lg),
-          DropdownButtonFormField<CardNetwork>(
-            initialValue: _networkGuess,
-            decoration: const InputDecoration(labelText: 'Network (optional)'),
-            items: [
-              for (final n in CardNetwork.values) DropdownMenuItem(value: n, child: Text(_networkLabel(n))),
-            ],
-            onChanged: (v) => setState(() => _networkGuess = v),
-          ),
-          const SizedBox(height: AppSpace.xxl),
-          Text('Photo (optional)', style: BambooFonts.heading(14, color: BambooInk.ink900)),
-          const SizedBox(height: AppSpace.sm),
-          Container(
-            padding: const EdgeInsets.all(AppSpace.md),
-            decoration: BoxDecoration(
-              color: BambooInk.clay.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: BambooInk.clay.withValues(alpha: 0.3)),
+          padding: const EdgeInsets.all(AppSpace.lg),
+          children: [
+            Text(
+              "Tell us which card you own and we'll add it to the catalogue. We'll let you know once it's available.",
+              style: BambooFonts.ui(13.5, color: BambooInk.ink500),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.warning_amber_rounded, color: BambooInk.clay, size: 20),
-                const SizedBox(width: AppSpace.sm),
-                Expanded(
-                  child: Text(
-                    'Photograph the card face only — never the number, CVV, or expiry.',
-                    style: BambooFonts.ui(12.5, color: BambooInk.clay),
-                  ),
-                ),
-              ],
+            const SizedBox(height: AppSpace.xl),
+            TextField(
+              controller: _issuerController,
+              decoration: const InputDecoration(labelText: 'Issuer (e.g. HDFC Bank)'),
+              onChanged: (_) => setState(() {}),
             ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: BambooInk.ink900,
-              minimumSize: const Size.fromHeight(48),
-              side: const BorderSide(color: BambooInk.hairlineOnPaper),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
-            onPressed: _pickPhoto,
-            icon: const Icon(Icons.camera_alt_outlined),
-            label: Text(_photo == null ? 'Take a photo' : 'Retake photo'),
-          ),
-          if (_photo != null) ...[
-            const SizedBox(height: AppSpace.sm),
-            Text('Photo captured: ${_photo!.name}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-          ],
-          if (_error != null) ...[
             const SizedBox(height: AppSpace.lg),
-            Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
-          ],
-          const SizedBox(height: AppSpace.xxl),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: BambooInk.slate,
-              foregroundColor: BambooInk.lime,
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+            TextField(
+              controller: _productController,
+              decoration: const InputDecoration(labelText: 'Card name (e.g. Millennia)'),
+              onChanged: (_) => setState(() {}),
             ),
-            onPressed: !_canSubmit || _submitting ? null : _submit,
-            child: _submitting
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
-                : const Text('Submit request'),
-          ),
-        ],
+            const SizedBox(height: AppSpace.lg),
+            DropdownButtonFormField<CardNetwork>(
+              initialValue: _networkGuess,
+              decoration: const InputDecoration(labelText: 'Network (optional)'),
+              items: [
+                for (final n in CardNetwork.values) DropdownMenuItem(value: n, child: Text(_networkLabel(n))),
+              ],
+              onChanged: (v) => setState(() => _networkGuess = v),
+            ),
+            const SizedBox(height: AppSpace.xxl),
+            Text('Photo (optional)', style: BambooFonts.heading(14, color: BambooInk.ink900)),
+            const SizedBox(height: AppSpace.sm),
+            Container(
+              padding: const EdgeInsets.all(AppSpace.md),
+              decoration: BoxDecoration(
+                color: BambooInk.clay.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: BambooInk.clay.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: BambooInk.clay, size: 20),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: Text(
+                      'Photograph the card face only — never the number, CVV, or expiry.',
+                      style: BambooFonts.ui(12.5, color: BambooInk.clay),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BambooInk.ink900,
+                minimumSize: const Size.fromHeight(48),
+                side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: _pickPhoto,
+              icon: const Icon(Icons.camera_alt_outlined),
+              label: Text(_photo == null ? 'Take a photo' : 'Retake photo'),
+            ),
+            if (_photo != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text('Photo captured: ${_photo!.name}', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: AppSpace.lg),
+              Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
+            ],
+            const SizedBox(height: AppSpace.xxl),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+              ),
+              onPressed: !_canSubmit || _submitting ? null : _submit,
+              child: _submitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                    )
+                  : const Text('Submit request'),
+            ),
+          ],
         ),
       ),
     );
   }
 
   static String _networkLabel(CardNetwork n) => switch (n) {
-        CardNetwork.rupay => 'RuPay',
-        CardNetwork.visa => 'Visa',
-        CardNetwork.mastercard => 'Mastercard',
-        CardNetwork.amex => 'Amex',
-        CardNetwork.diners => 'Diners',
-      };
+    CardNetwork.rupay => 'RuPay',
+    CardNetwork.visa => 'Visa',
+    CardNetwork.mastercard => 'Mastercard',
+    CardNetwork.amex => 'Amex',
+    CardNetwork.diners => 'Diners',
+  };
 }

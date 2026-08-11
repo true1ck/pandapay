@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
@@ -42,8 +43,10 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
       if (enable) {
         final granted = await service.requestPermissions();
         if (!granted) {
-          setState(() => _backgroundError =
-              'Background location and notification permissions are needed for this — enable them in Settings.');
+          setState(
+            () => _backgroundError =
+                'Background location and notification permissions are needed for this — enable them in Settings.',
+          );
           return;
         }
         await service.start();
@@ -127,15 +130,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
         elevation: 0,
         title: Text('Nearby merchants', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -155,11 +150,14 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                   border: Border.all(color: BambooInk.hairlineOnPaper),
                 ),
                 child: SwitchListTile(
-                  title: Text('Background alerts', style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900)),
+                  title: Text(
+                    'Background alerts',
+                    style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                  ),
                   subtitle: Text(
                     backgroundEnabled
                         ? 'On — you\'ll get a notification when you\'re near a known merchant, '
-                            'even with the app closed. A persistent notification shows while this is active.'
+                              'even with the app closed. A persistent notification shows while this is active.'
                         : 'Off — checks only run when you tap the button below.',
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
@@ -203,16 +201,25 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
 
   Widget _buildBody() {
     if (_state == _LoadState.error) {
-      return Center(child: Text(_errorMessage ?? 'Something went wrong.', style: BambooFonts.ui(13.5, color: BambooInk.clay)));
+      return Center(
+        child: Text(
+          _errorMessage ?? 'Something went wrong.',
+          style: BambooFonts.ui(13.5, color: BambooInk.clay),
+        ),
+      );
     }
     if (_state == _LoadState.idle) {
-      return Center(child: Text('Tap the button above to check.', style: BambooFonts.ui(13.5, color: BambooInk.ink500)));
+      return Center(
+        child: Text('Tap the button above to check.', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+      );
     }
     if (_state == _LoadState.locating || _state == _LoadState.fetching) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_matches.isEmpty) {
-      return Center(child: Text('No known merchants within 2km.', style: BambooFonts.ui(13.5, color: BambooInk.ink500)));
+      return Center(
+        child: Text('No known merchants within 2km.', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+      );
     }
     return ListView.builder(
       itemCount: _matches.length,
@@ -251,15 +258,26 @@ class _NearbyMerchantTile extends ConsumerWidget {
           const SizedBox(height: 6),
           best.when(
             loading: () => const LinearProgressIndicator(),
-            error: (err, _) => Text('Could not rank cards: $err', style: BambooFonts.ui(12.5, color: BambooInk.clay)),
+            error: (err, _) =>
+                Text('Could not rank cards: $err', style: BambooFonts.ui(12.5, color: BambooInk.clay)),
             data: (rec) {
-              if (rec == null) return Text('No usable card for this spot.', style: BambooFonts.ui(12.5, color: BambooInk.ink500));
+              if (rec == null)
+                return Text(
+                  'No usable card for this spot.',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                );
               return Row(
                 children: [
                   const Icon(Icons.credit_card, size: 18, color: BambooInk.ink900),
                   const SizedBox(width: 6),
-                  Expanded(child: Text('Use ${rec.card.name}', style: BambooFonts.ui(13.5, color: BambooInk.ink900))),
-                  MoneyText(rec.expectedValue, confidence: rec.confidence, style: BambooFonts.money(14, color: BambooInk.ink900)),
+                  Expanded(
+                    child: Text('Use ${rec.card.name}', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+                  ),
+                  MoneyText(
+                    rec.expectedValue,
+                    confidence: rec.confidence,
+                    style: BambooFonts.money(14, color: BambooInk.ink900),
+                  ),
                 ],
               );
             },

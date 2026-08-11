@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
+import '../onboarding/tour_screen.dart';
 
 /// ui-spec.md H7 Help & FAQ — implementation-plan H7: "fully static,
 /// offline, searchable FAQ screen — no backend, no new providers needed at
@@ -39,9 +41,10 @@ class _HelpFaqScreenState extends State<HelpFaqScreen> {
     final results = query.isEmpty
         ? _faqEntries
         : _faqEntries
-            .where((e) =>
-                e.question.toLowerCase().contains(query) || e.answer.toLowerCase().contains(query))
-            .toList();
+              .where(
+                (e) => e.question.toLowerCase().contains(query) || e.answer.toLowerCase().contains(query),
+              )
+              .toList();
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -52,65 +55,96 @@ class _HelpFaqScreenState extends State<HelpFaqScreen> {
         elevation: 0,
         title: Text('Help & FAQ', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: Padding(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _searchController,
-              onChanged: (value) => setState(() => _query = value),
-              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-              decoration: InputDecoration(
-                hintText: 'Search FAQs',
-                hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
-                prefixIcon: const Icon(Icons.search_rounded, color: BambooInk.ink500),
-                suffixIcon: _query.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close_rounded, color: BambooInk.ink500),
-                        onPressed: () => setState(() {
-                          _searchController.clear();
-                          _query = '';
-                        }),
-                      ),
-                filled: true,
-                fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+          padding: const EdgeInsets.all(AppSpace.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // README: "This tour replays any time from You → Help." Pushed
+              // directly with onFinished set — see TourScreen's own doc
+              // comment for why a plain go_router AppRoute.tour navigation
+              // wouldn't work once onboarding is already complete.
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(18),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TourScreen(onFinished: () => Navigator.of(context).pop()),
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSpace.md),
+                    decoration: BoxDecoration(
+                      color: BambooInk.glassFillOnPaper,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: BambooInk.hairlineOnPaper),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.replay_rounded, color: BambooInk.ink900, size: 20),
+                        const SizedBox(width: AppSpace.sm),
+                        Expanded(
+                          child: Text(
+                            'Replay the tour',
+                            style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded, color: BambooInk.ink300),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: AppSpace.lg),
-            Expanded(
-              child: results.isEmpty
-                  ? _EmptyResults(query: _searchController.text.trim())
-                  : ListView.separated(
-                      itemCount: results.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: AppSpace.md),
-                      itemBuilder: (context, index) => _FaqTile(entry: results[index]),
-                    ),
-            ),
-          ],
-        ),
+              const SizedBox(height: AppSpace.md),
+              TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _query = value),
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: InputDecoration(
+                  hintText: 'Search FAQs',
+                  hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+                  prefixIcon: const Icon(Icons.search_rounded, color: BambooInk.ink500),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          icon: const Icon(Icons.close_rounded, color: BambooInk.ink500),
+                          onPressed: () => setState(() {
+                            _searchController.clear();
+                            _query = '';
+                          }),
+                        ),
+                  filled: true,
+                  fillColor: BambooInk.glassFillOnPaper,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpace.lg),
+              Expanded(
+                child: results.isEmpty
+                    ? _EmptyResults(query: _searchController.text.trim())
+                    : ListView.separated(
+                        itemCount: results.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: AppSpace.md),
+                        itemBuilder: (context, index) => _FaqTile(entry: results[index]),
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -142,37 +176,32 @@ class _FaqTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The fill/border live on the Material itself, not a Container nested
+    // inside a transparent one: ExpansionTile's internal ListTile paints its
+    // background and ink onto the nearest Material ancestor, so a coloured
+    // box between the two hides them (Flutter asserts on exactly this).
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: BambooInk.glassFillOnPaper,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: BambooInk.hairlineOnPaper),
-        ),
-        child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            iconColor: BambooInk.ink500,
-            collapsedIconColor: BambooInk.ink500,
-            tilePadding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
-            childrenPadding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.lg),
-            expandedAlignment: Alignment.centerLeft,
-            title: Text(
-              entry.question,
-              style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+      color: BambooInk.glassFillOnPaper,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          iconColor: BambooInk.ink500,
+          collapsedIconColor: BambooInk.ink500,
+          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+          childrenPadding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.lg),
+          expandedAlignment: Alignment.centerLeft,
+          title: Text(entry.question, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(entry.answer, style: BambooFonts.ui(13, color: BambooInk.ink500, height: 1.45)),
             ),
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  entry.answer,
-                  style: BambooFonts.ui(13, color: BambooInk.ink500, height: 1.45),
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -190,7 +219,8 @@ class FaqEntry {
 const List<FaqEntry> _faqEntries = [
   FaqEntry(
     question: 'What does setup actually involve?',
-    answer: 'Onboarding walks you through adding the credit cards you already carry so the '
+    answer:
+        'Onboarding walks you through adding the credit cards you already carry so the '
         'recommendation engine has something to rank. Creating an account is optional — PandaPay '
         'works fully in local-only mode, with sign-in unlocking sync and backup rather than gating '
         'any core feature. From there you can optionally set up a tracking channel (email '
@@ -199,7 +229,8 @@ const List<FaqEntry> _faqEntries = [
   ),
   FaqEntry(
     question: 'What are the different ways PandaPay can track my spending?',
-    answer: 'There are three channels, and none is required. Email forwarding gives you a '
+    answer:
+        'There are three channels, and none is required. Email forwarding gives you a '
         'dedicated address to forward bank emails to — works on any platform but depends on your '
         'bank actually emailing you. SMS auto-read parses bank SMS on-device in real time, but it '
         "is Android-only (iOS doesn't allow apps to read SMS) and needs the SMS permission granted. "
@@ -209,7 +240,8 @@ const List<FaqEntry> _faqEntries = [
   ),
   FaqEntry(
     question: 'Why did the recommended card look wrong for this purchase?',
-    answer: 'A few real reasons this happens. RuPay/UPI cards are excluded outright for UPI-QR '
+    answer:
+        'A few real reasons this happens. RuPay/UPI cards are excluded outright for UPI-QR '
         'transactions if they are not UPI-linkable, showing greyed out with a reason rather than '
         'disappearing. If a card\'s reward cap has already been exhausted this cycle, the engine '
         'blends pre-cap and post-cap rates (or drops fully to the lower post-cap rate), so the same '
@@ -222,7 +254,8 @@ const List<FaqEntry> _faqEntries = [
   ),
   FaqEntry(
     question: 'How accurate are the reward numbers I see?',
-    answer: 'Reward figures start as estimates computed from each card\'s published rate tables and '
+    answer:
+        'Reward figures start as estimates computed from each card\'s published rate tables and '
         'your live cap/milestone headroom — they are not bank-confirmed until backed by real data. '
         'Each card\'s reward details carry a data-freshness date so you can see how recently the '
         'rate table was checked. Importing a real statement (password-protected PDF, parsed '
@@ -231,7 +264,8 @@ const List<FaqEntry> _faqEntries = [
   ),
   FaqEntry(
     question: 'What does PandaPay know about where I shop?',
-    answer: 'Location signals used for merchant/category detection are grid-snapped to roughly 50 '
+    answer:
+        'Location signals used for merchant/category detection are grid-snapped to roughly 50 '
         'metres before anything is stored — the system knows "a shop exists near here," never '
         'exactly where you personally stood. If you opt in to crowdsourcing (off by default, a '
         'separate toggle you control), your contribution is anonymized and stripped of identity '

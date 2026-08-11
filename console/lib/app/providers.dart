@@ -6,8 +6,26 @@ import 'package:http/http.dart' as http;
 import '../data/admin_api.dart';
 import '../data/token_store.dart';
 
-const authBaseUrl = 'http://localhost:3210';
-const apiBaseUrl = 'http://localhost:4000';
+/// Same `--dart-define` contract as the user app's `app/lib/app/env.dart`
+/// (plan Phase 0.3) — kept as two plain consts here rather than a shared
+/// package because the console is a separate Flutter target that does not
+/// depend on `app/`, and duplicating two `String.fromEnvironment` calls is
+/// cheaper than a package just to hold them. Defaults are the local dev
+/// ports, so `flutter run -d chrome` is unchanged.
+///
+/// ```bash
+/// flutter build web --release \
+///   --dart-define=PANDAPAY_API_BASE_URL=https://api.pandapay.example \
+///   --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.pandapay.example
+/// ```
+const authBaseUrl = String.fromEnvironment(
+  'PANDAPAY_AUTH_BASE_URL',
+  defaultValue: 'http://localhost:3210',
+);
+const apiBaseUrl = String.fromEnvironment(
+  'PANDAPAY_API_BASE_URL',
+  defaultValue: 'http://localhost:4000',
+);
 
 final authApiProvider = Provider<AuthApi>((ref) => AuthApi(authBaseUrl: authBaseUrl));
 

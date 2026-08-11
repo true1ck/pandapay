@@ -46,11 +46,13 @@ List<HomeAlert> computeHomeAlerts({
       if (consumed == null || cap.capValue.isZero) continue;
       final fraction = consumed.paise / cap.capValue.paise;
       if (fraction >= _capNearlyHitThreshold) {
-        alerts.add(HomeAlert(
-          kind: HomeAlertKind.capNearlyHit,
-          message: '${userCard.cardName}: ${cap.label} cap almost reached this cycle',
-          priority: 0,
-        ));
+        alerts.add(
+          HomeAlert(
+            kind: HomeAlertKind.capNearlyHit,
+            message: '${userCard.cardName}: ${cap.label} cap almost reached this cycle',
+            priority: 0,
+          ),
+        );
       }
     }
 
@@ -61,12 +63,15 @@ List<HomeAlert> computeHomeAlerts({
       if (daysLeft <= _feeWaiverDeadlineWindow) {
         final remaining = waiver.thresholdSpend - waiver.qualifiedSpend;
         final remainingDisplay = remaining.isNegative ? const Money.zero() : remaining;
-        alerts.add(HomeAlert(
-          kind: HomeAlertKind.feeWaiverDeadline,
-          message: '${userCard.cardName}: spend ${remainingDisplay.format()} more in '
-              '${daysLeft.inDays}d to waive the fee',
-          priority: 1,
-        ));
+        alerts.add(
+          HomeAlert(
+            kind: HomeAlertKind.feeWaiverDeadline,
+            message:
+                '${userCard.cardName}: spend ${remainingDisplay.format()} more in '
+                '${daysLeft.inDays}d to waive the fee',
+            priority: 1,
+          ),
+        );
       }
     }
   }

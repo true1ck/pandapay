@@ -29,15 +29,7 @@ class DuplicateReviewScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Duplicate review', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: candidates.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
@@ -49,7 +41,8 @@ class DuplicateReviewScreen extends ConsumerWidget {
               return const EmptyState(
                 icon: Icons.content_copy_outlined,
                 title: 'No duplicates to review',
-                message: 'When the same spend seems to arrive from two channels (e.g. SMS and a later statement import), it shows up here.',
+                message:
+                    'When the same spend seems to arrive from two channels (e.g. SMS and a later statement import), it shows up here.',
               );
             }
             return ListView.builder(
@@ -81,7 +74,9 @@ class _DuplicatePairCardState extends ConsumerState<_DuplicatePairCard> {
   Future<void> _resolve(String resolution, {String? keepTransactionId}) async {
     setState(() => _busy = true);
     try {
-      await ref.read(userCardsRepositoryProvider)!.resolveDuplicateCandidate(
+      await ref
+          .read(userCardsRepositoryProvider)!
+          .resolveDuplicateCandidate(
             widget.candidate.id,
             resolution: resolution,
             keepTransactionId: keepTransactionId,
@@ -115,7 +110,9 @@ class _DuplicatePairCardState extends ConsumerState<_DuplicatePairCard> {
             children: [
               const Icon(Icons.info_outline_rounded, size: 14, color: BambooInk.ink500),
               const SizedBox(width: 4),
-              Expanded(child: Text(candidate.matchReason, style: BambooFonts.ui(12.5, color: BambooInk.ink500))),
+              Expanded(
+                child: Text(candidate.matchReason, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              ),
             ],
           ),
           const SizedBox(height: AppSpace.md),
@@ -124,14 +121,18 @@ class _DuplicatePairCardState extends ConsumerState<_DuplicatePairCard> {
               Expanded(
                 child: _TxnColumn(
                   txn: candidate.txnA,
-                  onKeepThis: _busy ? null : () => _resolve('deleted_one', keepTransactionId: candidate.txnA.id),
+                  onKeepThis: _busy
+                      ? null
+                      : () => _resolve('deleted_one', keepTransactionId: candidate.txnA.id),
                 ),
               ),
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: _TxnColumn(
                   txn: candidate.txnB,
-                  onKeepThis: _busy ? null : () => _resolve('deleted_one', keepTransactionId: candidate.txnB.id),
+                  onKeepThis: _busy
+                      ? null
+                      : () => _resolve('deleted_one', keepTransactionId: candidate.txnB.id),
                 ),
               ),
             ],
@@ -161,13 +162,24 @@ class _TxnColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(AppSpace.md),
-      decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.md)),
+      decoration: BoxDecoration(
+        color: BambooInk.paperMuted,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          MoneyText(txn.amount, confidence: Confidence.estimated, style: BambooFonts.money(14, color: BambooInk.ink900)),
+          MoneyText(
+            txn.amount,
+            confidence: Confidence.estimated,
+            style: BambooFonts.money(14, color: BambooInk.ink900),
+          ),
           const SizedBox(height: 2),
-          Text(txn.merchantName ?? 'Spend', style: BambooFonts.ui(12.5, color: BambooInk.ink900), overflow: TextOverflow.ellipsis),
+          Text(
+            txn.merchantName ?? 'Spend',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink900),
+            overflow: TextOverflow.ellipsis,
+          ),
           Text(_sourceLabel(txn.source), style: BambooFonts.ui(12, color: BambooInk.ink500)),
           if (txn.cardDisplayName != null)
             Text(txn.cardDisplayName!, style: BambooFonts.ui(12, color: BambooInk.ink500)),
@@ -182,7 +194,10 @@ class _TxnColumn extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              child: Text('Keep this one', style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.ink900)),
+              child: Text(
+                'Keep this one',
+                style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.ink900),
+              ),
             ),
           ),
         ],
@@ -191,12 +206,12 @@ class _TxnColumn extends StatelessWidget {
   }
 
   static String _sourceLabel(String source) => switch (source) {
-        'manual' => 'Entered manually',
-        'sms' => 'SMS',
-        'email' => 'Email',
-        'statement' => 'Statement import',
-        'sms_bulk' => 'SMS backup import',
-        'imported' => 'Imported',
-        _ => source,
-      };
+    'manual' => 'Entered manually',
+    'sms' => 'SMS',
+    'email' => 'Email',
+    'statement' => 'Statement import',
+    'sms_bulk' => 'SMS backup import',
+    'imported' => 'Imported',
+    _ => source,
+  };
 }

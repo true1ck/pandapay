@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 
@@ -45,7 +46,9 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
       _error = null;
     });
     try {
-      await ref.read(cardFeedbackRepositoryProvider)!.requestNewCard(
+      await ref
+          .read(cardFeedbackRepositoryProvider)!
+          .requestNewCard(
             issuerName: _issuerController.text.trim(),
             productName: _productController.text.trim(),
             networkGuess: _networkGuess?.name,
@@ -69,15 +72,7 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
         elevation: 0,
         title: Text('Request a card', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.lg),
           child: _submitted ? _buildConfirmation(context) : _buildForm(context),
@@ -119,20 +114,20 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
 
   Widget _buildForm(BuildContext context) {
     final inputDecoration = (String label) => InputDecoration(
-          labelText: label,
-          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          filled: true,
-          fillColor: BambooInk.glassFillOnPaper,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-          ),
-        );
+      labelText: label,
+      labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+      filled: true,
+      fillColor: BambooInk.glassFillOnPaper,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+      ),
+    );
 
     return ListView(
       children: [
@@ -183,7 +178,11 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
           ),
           onPressed: _submitting ? null : _submit,
           child: _submitting
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime))
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                )
               : const Text('Submit request'),
         ),
       ],
@@ -191,10 +190,10 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
   }
 
   static String _networkLabel(CardNetwork n) => switch (n) {
-        CardNetwork.rupay => 'RuPay',
-        CardNetwork.visa => 'Visa',
-        CardNetwork.mastercard => 'Mastercard',
-        CardNetwork.amex => 'American Express',
-        CardNetwork.diners => 'Diners Club',
-      };
+    CardNetwork.rupay => 'RuPay',
+    CardNetwork.visa => 'Visa',
+    CardNetwork.mastercard => 'Mastercard',
+    CardNetwork.amex => 'American Express',
+    CardNetwork.diners => 'Diners Club',
+  };
 }

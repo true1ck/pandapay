@@ -19,12 +19,12 @@ class SupportApi {
   final http.Client _client;
 
   SupportApi({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $accessToken',
+    'Content-Type': 'application/json',
+  };
 
   /// [kind] must be one of 'bug' | 'wrong_card_data' | 'card_request' |
   /// 'general' — the same four values the backend's `SUPPORT_TICKET_KINDS`

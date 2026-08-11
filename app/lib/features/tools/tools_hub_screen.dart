@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../app/design/app_theme.dart';
+import '../calculator/big_purchase_calculator_screen.dart';
+import '../quickadd/quick_add_screen.dart';
+import '../search/merchant_search_screen.dart';
+import '../../app/design/widgets.dart';
 import 'emergency_card_info_screen.dart';
 import 'emi_advisor_screen.dart';
 import 'split_planner_screen.dart';
@@ -31,15 +35,7 @@ class ToolsHubScreen extends StatelessWidget {
         elevation: 0,
         title: Text('Tools & Travel', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
@@ -49,32 +45,66 @@ class ToolsHubScreen extends StatelessWidget {
               style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.4),
             ),
             const SizedBox(height: AppSpace.lg),
+            // These three used to be icon buttons in Home's header row.
+            // Design 01 has no such row — the deck files every secondary
+            // action under You → Tools (design 05), so they moved here
+            // rather than being dropped.
+            _ToolTile(
+              icon: Icons.add_circle_outline_rounded,
+              title: 'Quick add a spend',
+              subtitle: 'Log a transaction you made without the app open',
+              onTap: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QuickAddScreen())),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _ToolTile(
+              icon: Icons.search_rounded,
+              title: 'Search merchants',
+              subtitle: 'Look up a shop or brand and see which card wins there',
+              onTap: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MerchantSearchScreen())),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _ToolTile(
+              icon: Icons.shopping_cart_checkout_rounded,
+              title: 'Big-purchase calculator',
+              subtitle: 'Work out the best card and split for a one-off large spend',
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const BigPurchaseCalculatorScreen())),
+            ),
+            const SizedBox(height: AppSpace.md),
             _ToolTile(
               icon: Icons.flight_takeoff_rounded,
               title: 'Travel Mode',
               subtitle: 'Re-rank cards by forex markup, lounge access abroad, travel insurance',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TravelModeScreen())),
+              onTap: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TravelModeScreen())),
             ),
             const SizedBox(height: AppSpace.md),
             _ToolTile(
               icon: Icons.call_split_rounded,
               title: 'Multi-Card Split Planner',
               subtitle: 'Divide a big purchase across your cards for maximum rewards',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SplitPlannerScreen())),
+              onTap: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SplitPlannerScreen())),
             ),
             const SizedBox(height: AppSpace.md),
             _ToolTile(
               icon: Icons.calculate_outlined,
               title: 'EMI Advisor',
               subtitle: 'See the real cost of converting a purchase to EMI',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmiAdvisorScreen())),
+              onTap: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmiAdvisorScreen())),
             ),
             const SizedBox(height: AppSpace.md),
             _ToolTile(
               icon: Icons.emergency_outlined,
               title: 'Emergency Card Info',
               subtitle: 'Lost-card hotlines — works offline and without signing in',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmergencyCardInfoScreen())),
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const EmergencyCardInfoScreen())),
             ),
           ],
         ),
@@ -93,37 +123,40 @@ class _ToolTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: BambooInk.glassFillOnPaper,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(AppRadius.md), border: Border.all(color: BambooInk.hairlineOnPaper)),
-          padding: const EdgeInsets.all(AppSpace.lg),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(color: BambooInk.slate, shape: BoxShape.circle),
-                child: Icon(icon, size: 20, color: BambooInk.lime),
+    // See account_screen.dart's _AccountTile for why Pressable, not
+    // Material+InkWell. The fill Material used to carry moves onto the
+    // Container's own decoration, since there's no Material left to hold it.
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: '$title. $subtitle',
+      child: Container(
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        padding: const EdgeInsets.all(AppSpace.lg),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(color: BambooInk.slate, shape: BoxShape.circle),
+              child: Icon(icon, size: 20, color: BambooInk.lime),
+            ),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                ],
               ),
-              const SizedBox(width: AppSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink300),
-            ],
-          ),
+            ),
+            const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink300),
+          ],
         ),
       ),
     );

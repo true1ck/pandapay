@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../main.dart' show MoneyText;
 import 'appearance_providers.dart';
 
@@ -11,24 +12,24 @@ import 'appearance_providers.dart';
 /// AppearanceScreen()))` from Settings Hub (H1), same pushed-screen pattern
 /// tools_hub_screen.dart's own tiles use — not a registered go_router route.
 ///
-/// Text-size root-level wiring: this screen demonstrates the effect on its
-/// own body via a local `MediaQuery` override (see build() below), which is
-/// enough to prove the preference round-trips through SharedPreferences.
-/// Applying it at the whole-app root (wrapping `MaterialApp.router` in
-/// main.dart's `PandaPayApp` with a `Builder` that overrides
-/// `MediaQuery.textScalerOf`) is real app-wide behavior and is intentionally
-/// left as a follow-up rather than done here: main.dart is already being
-/// touched by this task for the theme-mode wiring (see its own doc-comment),
-/// and stacking a second unrelated MediaQuery override in the same pass
-/// risks fighting the OS-level accessibility text scale in ways that need
-/// their own dedicated verification pass (per H6's own DoD note about the
-/// 200% ceiling), not a drive-by addition here.
+/// Text size is now applied app-wide from `main.dart`'s `PandaPayApp`, not
+/// previewed locally here. The local `MediaQuery` override this screen used
+/// to wrap its own body in has been removed along with that change — kept
+/// alongside a root-level override it would have double-applied the scale,
+/// so this screen alone would have rendered at 130% of 130%.
+///
+/// The theme control is gone for the same class of reason: it no longer did
+/// anything. Every Bamboo Ink screen paints from fixed light constants, so
+/// `ThemeMode` changed nothing a user could see — see `PandaPayApp`'s
+/// doc-comment for the full reasoning and for where the pinning actually
+/// happens. What replaces the control is a plain statement of the current
+/// state, rather than a silently missing section that would read as a bug
+/// to anyone who remembered the toggle being there.
 class AppearanceScreen extends ConsumerWidget {
   const AppearanceScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider);
     final textScale = ref.watch(textScaleProvider);
     final numberFormat = ref.watch(numberFormatProvider);
 
@@ -41,31 +42,13 @@ class AppearanceScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Appearance', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
-        child: MediaQuery(
-        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)),
+      body: AppBackground(
         child: ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
             _SectionHeader('Theme'),
             const SizedBox(height: AppSpace.sm),
-            _SegmentedCard<ThemeMode>(
-              value: themeMode,
-              options: const [
-                (ThemeMode.light, 'Light', Icons.light_mode_outlined),
-                (ThemeMode.dark, 'Dark', Icons.dark_mode_outlined),
-                (ThemeMode.system, 'System', Icons.brightness_auto_outlined),
-              ],
-              onChanged: (mode) => ref.read(themeModeProvider.notifier).setThemeMode(mode),
-            ),
+            const _ThemeStatusCard(),
             const SizedBox(height: AppSpace.xl),
             _SectionHeader('Text size'),
             const SizedBox(height: AppSpace.sm),
@@ -81,8 +64,8 @@ class AppearanceScreen extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpace.sm),
             Text(
-              'Applies within this screen as a preview. Stacks on top of your device\'s own '
-              'accessibility text size setting, if you have one.',
+              "Applies everywhere in the app. Stacks on top of your device's own "
+              'accessibility text size setting, if you have one, up to 200% in total.',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.xl),
@@ -152,7 +135,46 @@ class AppearanceScreen extends ConsumerWidget {
             ),
           ],
         ),
-        ),
+      ),
+    );
+  }
+}
+
+/// What the Theme section became once `ThemeMode` stopped changing
+/// anything a user could see. States the current behaviour plainly and
+/// says dark is coming, rather than leaving a control that does nothing or
+/// a gap where one used to be.
+class _ThemeStatusCard extends StatelessWidget {
+  const _ThemeStatusCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: Row(
+        children: [
+          const Icon(Icons.light_mode_outlined, color: BambooInk.ink500),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Light', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                const SizedBox(height: 2),
+                Text(
+                  'PandaPay is light-only for now. A dark theme is coming — until it '
+                  'lands, a switch here would not have changed anything on screen.',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -166,7 +188,11 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label.toUpperCase(),
-      style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: 1.1),
+      style: BambooFonts.ui(
+        12,
+        weight: FontWeight.w700,
+        color: BambooInk.ink500,
+      ).copyWith(letterSpacing: 1.1),
     );
   }
 }
@@ -216,7 +242,12 @@ class _SegmentButton<T> extends StatelessWidget {
   final IconData? icon;
   final VoidCallback onTap;
 
-  const _SegmentButton({required this.selected, required this.label, required this.icon, required this.onTap});
+  const _SegmentButton({
+    required this.selected,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -231,8 +262,7 @@ class _SegmentButton<T> extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (icon != null)
-                Icon(icon, size: 18, color: selected ? BambooInk.lime : BambooInk.ink500),
+              if (icon != null) Icon(icon, size: 18, color: selected ? BambooInk.lime : BambooInk.ink500),
               if (icon != null) const SizedBox(height: 4),
               Text(
                 label,

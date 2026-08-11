@@ -28,3 +28,10 @@ scraper/.venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.design_preview/
+
+# macOS
+.DS_Store
+
+# Local test/QA screenshots
+session_screenshots/

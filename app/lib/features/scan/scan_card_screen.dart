@@ -132,8 +132,14 @@ class _ResultPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Scanned text', style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500)),
-          Text(extracted.rawText, style: const TextStyle(fontFamily: 'monospace', color: BambooInk.ink900)),
+          Text(
+            'Scanned text',
+            style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500),
+          ),
+          Text(
+            extracted.rawText,
+            style: const TextStyle(fontFamily: 'monospace', color: BambooInk.ink900),
+          ),
           const SizedBox(height: 12),
           if (confident.isEmpty)
             Text(
@@ -141,22 +147,34 @@ class _ResultPanel extends StatelessWidget {
               style: BambooFonts.ui(13, color: BambooInk.amber),
             )
           else
-            Text('Possible matches', style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500)),
+            Text(
+              'Possible matches',
+              style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500),
+            ),
           for (final match in matches.take(5))
             ListTile(
               title: Text(match.product.name, style: BambooFonts.ui(14.5, color: BambooInk.ink900)),
-              subtitle: Text('${match.confidence.name} confidence · ${match.reason}', style: BambooFonts.ui(12, color: BambooInk.ink500)),
+              subtitle: Text(
+                '${match.confidence.name} confidence · ${match.reason}',
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
               trailing: match.confidence == MatchConfidence.low
                   ? null
                   : FilledButton(
-                      style: FilledButton.styleFrom(backgroundColor: BambooInk.slate, foregroundColor: BambooInk.lime),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: BambooInk.slate,
+                        foregroundColor: BambooInk.lime,
+                      ),
                       onPressed: () => onConfirm(match.product),
                       child: const Text('Use this'),
                     ),
             ),
           const SizedBox(height: 8),
           OutlinedButton(
-            style: OutlinedButton.styleFrom(foregroundColor: BambooInk.ink900, side: const BorderSide(color: BambooInk.hairlineOnPaper)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BambooInk.ink900,
+              side: const BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
             onPressed: onRescan,
             child: const Text('Scan again'),
           ),

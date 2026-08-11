@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +14,7 @@ import '../features/activity/duplicate_review_screen.dart';
 import '../features/activity/edit_transaction_screen.dart';
 import '../features/activity/needs_review_screen.dart';
 import '../features/activity/transaction_detail_screen.dart';
+import '../features/auth/guest_migration.dart';
 import '../features/auth/login_screen.dart';
 import '../features/cards/benefits_cheat_sheet_screen.dart';
 import '../features/cards/card_detail_screen.dart';
@@ -38,13 +41,15 @@ import '../features/insights/spending_overview_screen.dart';
 import '../features/onboarding/account_choice_screen.dart';
 import '../features/onboarding/add_first_card_screen.dart';
 import '../features/onboarding/card_details_setup_screen.dart';
+import '../features/onboarding/permissions_screen.dart';
 import '../features/onboarding/splash_screen.dart';
+import '../features/onboarding/tour_screen.dart';
 import '../features/onboarding/tracking_setup_screen.dart';
 import '../features/onboarding/tutorial_overlay.dart';
 import '../features/onboarding/welcome_screen.dart';
-import '../features/scan/scan_card_screen.dart';
 import '../features/scan/scan_result_screen.dart';
 import '../features/scan/upi_qr_scanner_screen.dart';
+import '../features/settings/settings_sync.dart';
 import '../features/system/forced_upgrade_screen.dart';
 import '../features/system/maintenance_screen.dart';
 import '../features/tools/emergency_card_info_screen.dart';
@@ -149,6 +154,12 @@ abstract final class AppRoute {
   static const cardDetailsSetup = '/onboarding/card-details';
   static const trackingSetup = '/onboarding/tracking-setup';
 
+  /// Design 15/27-29: inserted between Account Choice and Add First Card —
+  /// see the "First run, once only" sequence in the design README's
+  /// Interactions & behavior section (15 -> 27 -> 28 -> 29 -> 30 -> 31).
+  static const permissions = '/onboarding/permissions';
+  static const tour = '/onboarding/tour';
+
   /// Screens shown before onboarding is complete — the redirect guard below
   /// treats this set as its whole "am I in the pre-onboarding flow" check.
   static const preOnboarding = {
@@ -157,6 +168,8 @@ abstract final class AppRoute {
     accountChoice,
     logIn,
     signUp,
+    permissions,
+    tour,
     addFirstCard,
     cardDetailsSetup,
     trackingSetup,
@@ -205,6 +218,58 @@ class _RouterRefreshNotifier extends ChangeNotifier {
 /// title/tab highlight that didn't match — a confirmed, reproduced bug.
 /// `_navButton` below uses this key to unwind that stack before navigating.
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
+
+/// True while something is pushed on top of the current tab (a card detail,
+/// Sign in, Tools, a settings page…).
+///
+/// The nav pill is drawn by the shell, *above* its child, so it stayed
+/// visible over every pushed screen — including full-bleed dark ones like
+/// design 06 Sign in, where a translucent slate bar over a slate background
+/// read as a rendering fault. No detail screen in the deck carries the tab
+/// bar; only the four tab roots do. This lets the shell hide it for exactly
+/// as long as something sits on top.
+final _shellStackNotEmpty = ValueNotifier<bool>(false);
+
+/// Feeds [_shellStackNotEmpty]. A route with a null `settings.name` and no
+/// [Page] is an imperative `Navigator.push` — go_router's own tab pages come
+/// through as [Page]-based routes, so counting every route would make the
+/// pill vanish on the tabs themselves.
+class _ShellStackObserver extends NavigatorObserver {
+  int _depth = 0;
+
+  void _sync(int delta) {
+    _depth = (_depth + delta).clamp(0, 1 << 30);
+    // Deferred: this fires mid-build during a push, and writing to a
+    // ValueNotifier a widget is already listening to would rebuild it
+    // inside its own build phase.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _shellStackNotEmpty.value = _depth > 0;
+    });
+  }
+
+  bool _isImperative(Route<dynamic> route) => route is! ModalRoute || route.settings is! Page;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (_isImperative(route)) _sync(1);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (_isImperative(route)) _sync(-1);
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (_isImperative(route)) _sync(-1);
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    if (oldRoute != null && _isImperative(oldRoute)) _sync(-1);
+    if (newRoute != null && _isImperative(newRoute)) _sync(1);
+  }
+}
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   final refresh = _RouterRefreshNotifier(ref);
@@ -283,13 +348,25 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.logIn,
-        pageBuilder: (context, state) =>
-            const NoTransitionPage(child: Scaffold(body: LoginScreen(mode: AuthMode.logIn))),
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: Scaffold(body: LoginScreen(mode: AuthMode.logIn)),
+        ),
       ),
       GoRoute(
         path: AppRoute.signUp,
-        pageBuilder: (context, state) =>
-            const NoTransitionPage(child: Scaffold(body: LoginScreen(mode: AuthMode.signUp))),
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: Scaffold(body: LoginScreen(mode: AuthMode.signUp)),
+        ),
+      ),
+      // Design 15/27-29: permissions + tour, inserted between Account Choice
+      // and Add First Card — same linear-step reasoning as A7/A9/A10 below.
+      GoRoute(
+        path: AppRoute.permissions,
+        pageBuilder: (context, state) => const NoTransitionPage(child: PermissionsScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.tour,
+        pageBuilder: (context, state) => const NoTransitionPage(child: TourScreen()),
       ),
       // A7/A9/A10: the rest of the onboarding chain, reached via
       // context.go(...) as forward linear steps (not pushed-and-returned
@@ -301,9 +378,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.cardDetailsSetup,
-        pageBuilder: (context, state) => NoTransitionPage(
-          child: CardDetailsSetupScreen(userCardIds: state.extra! as List<String>),
-        ),
+        pageBuilder: (context, state) =>
+            NoTransitionPage(child: CardDetailsSetupScreen(userCardIds: state.extra! as List<String>)),
       ),
       GoRoute(
         path: AppRoute.trackingSetup,
@@ -350,14 +426,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // reproduced bug: opening Needs Review 500'd with a Postgres
       // "invalid input syntax for type uuid" error). Same fix applied to
       // cardDetail's '/cards/:id' vs. its own static siblings above.
-      GoRoute(
-        path: AppRoute.needsReview,
-        builder: (context, state) => const NeedsReviewScreen(),
-      ),
-      GoRoute(
-        path: AppRoute.duplicateReview,
-        builder: (context, state) => const DuplicateReviewScreen(),
-      ),
+      GoRoute(path: AppRoute.needsReview, builder: (context, state) => const NeedsReviewScreen()),
+      GoRoute(path: AppRoute.duplicateReview, builder: (context, state) => const DuplicateReviewScreen()),
       GoRoute(
         path: AppRoute.transactionDetail,
         builder: (context, state) => TransactionDetailScreen(transactionId: state.pathParameters['id']!),
@@ -443,20 +513,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // (That's exactly what happened here before this fix; see the same
       // bug on the /activity/:id vs. needsReview/duplicateReview routes
       // below, which gets the identical fix.)
-      GoRoute(
-        path: AppRoute.pointsExpiry,
-        builder: (context, state) => const PointsExpiryScreen(),
-      ),
+      GoRoute(path: AppRoute.pointsExpiry, builder: (context, state) => const PointsExpiryScreen()),
       GoRoute(
         path: AppRoute.reportWrongData,
-        builder: (context, state) => ReportWrongDataScreen(
-          cardProductId: state.uri.queryParameters['cardProductId']!,
-        ),
+        builder: (context, state) =>
+            ReportWrongDataScreen(cardProductId: state.uri.queryParameters['cardProductId']!),
       ),
-      GoRoute(
-        path: AppRoute.requestNewCard,
-        builder: (context, state) => const RequestNewCardScreen(),
-      ),
+      GoRoute(path: AppRoute.requestNewCard, builder: (context, state) => const RequestNewCardScreen()),
       GoRoute(
         path: AppRoute.cardDetail,
         builder: (context, state) => CardDetailScreen(userCardId: state.pathParameters['id']!),
@@ -468,23 +531,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // F1 Import Hub already builds its own Scaffold+AppBar (its F2-F7
       // children are reached via plain pushed routes from inside it, not
       // more go_router entries — see AppRoute.importHub's doc-comment).
-      GoRoute(
-        path: AppRoute.importHub,
-        builder: (context, state) => const ImportHubScreen(),
-      ),
+      GoRoute(path: AppRoute.importHub, builder: (context, state) => const ImportHubScreen()),
       // Group G — same "already builds its own Scaffold+AppBar" shape as
       // importHub above.
-      GoRoute(
-        path: AppRoute.toolsHub,
-        builder: (context, state) => const ToolsHubScreen(),
-      ),
+      GoRoute(path: AppRoute.toolsHub, builder: (context, state) => const ToolsHubScreen()),
       // G4: reachable with or without a session — see AppRoute.
       // emergencyCardInfo's own doc-comment for why this is a top-level
       // route rather than nested under toolsHub's push chain.
-      GoRoute(
-        path: AppRoute.emergencyCardInfo,
-        builder: (context, state) => const EmergencyCardInfoScreen(),
-      ),
+      GoRoute(path: AppRoute.emergencyCardInfo, builder: (context, state) => const EmergencyCardInfoScreen()),
       // S5/S6: unbypassable full-screen blocks — see the redirect guard
       // above and both AppRoute constants' doc-comments.
       GoRoute(
@@ -497,10 +551,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
-        builder: (context, state, child) => _AppShell(
-          location: state.uri.path,
-          child: child,
-        ),
+        observers: [_ShellStackObserver()],
+        builder: (context, state, child) => _AppShell(location: state.uri.path, child: child),
         routes: [
           // NoTransitionPage on every tab: a bottom-nav switch should feel
           // instant, the same as the setState-based int-index switch this
@@ -543,57 +595,42 @@ class _AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<_AppShell> {
   bool _scanning = false;
 
+  // Labels match the design doc's own nav copy ("02 Wallet" / "05 You")
+  // exactly — routes/AppRoute names stay unchanged since those are wired
+  // through go_router paths and tests, not user-visible.
   static const _destinations = [
     (AppRoute.home, 'Home', Icons.home_rounded),
-    (AppRoute.cards, 'Cards', Icons.credit_card_rounded),
+    (AppRoute.cards, 'Wallet', Icons.credit_card_rounded),
     (AppRoute.insights, 'Insights', Icons.insights_rounded),
-    (AppRoute.account, 'Account', Icons.person_rounded),
+    (AppRoute.account, 'You', Icons.person_rounded),
   ];
 
-  String get _currentLabel =>
-      _destinations.firstWhere((d) => d.$1 == widget.location, orElse: () => _destinations[0]).$2;
-
-  /// UA-4: pushes the scanner as an imperative overlay on top of whichever
-  /// tab is current — a one-off flow, not a bottom-nav destination, so it
-  /// stays a plain Navigator.push rather than a registered go_router route.
-  /// On a pick, hands the result to Cards via pendingScannedCardIdProvider
-  /// (same handoff as before the router migration) and navigates there.
-  Future<void> _scanFromFab() async {
+  /// Design 03 "Tap to Sniff": the lime circle in the middle of the nav bar
+  /// is the *merchant* scanner — point it at a UPI QR or a bill and get a
+  /// card recommendation before you pay. It used to open the add-a-card OCR
+  /// scanner instead, with merchant-scan demoted to a small app-bar icon,
+  /// which inverted the design's whole core loop. Adding a card isn't lost:
+  /// it's still on Wallet's own "Scan a card" action and on onboarding's
+  /// "Photograph the card" — which is exactly where the deck puts it.
+  Future<void> _scanToPay() async {
     setState(() => _scanning = true);
     try {
-      final catalogue = await ref.read(catalogueProvider.future);
-      if (!mounted) return;
-      final picked = await Navigator.of(context).push<CardProduct>(
-        MaterialPageRoute(builder: (_) => ScanCardScreen(catalogue: catalogue)),
-      );
-      if (picked != null && mounted) {
-        ref.read(pendingScannedCardIdProvider.notifier).state = picked.id;
-        context.go(AppRoute.cards);
+      final parsed = await Navigator.of(
+        context,
+      ).push<ParsedUpiQr>(MaterialPageRoute(builder: (_) => const UpiQrScannerScreen()));
+      if (parsed != null && mounted) {
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => ScanResultScreen(parsed: parsed)));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Could not start the scanner. ${userFacingErrorMessage(e)}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start the scanner. ${userFacingErrorMessage(e)}')),
+        );
       }
     } finally {
       if (mounted) setState(() => _scanning = false);
-    }
-  }
-
-  /// B2/B3: "scan a merchant's UPI QR to pay" — a second, separate scan
-  /// entry point from the existing FAB's "scan to add a card" flow. Reachable
-  /// from a new IconButton next to the FAB rather than repurposing the FAB
-  /// itself, since the FAB's tooltip/semantics ("Scan a card") is already
-  /// load-bearing for the add-card flow tested in
-  /// app/test/app/router_test.dart.
-  Future<void> _scanToPay() async {
-    final parsed = await Navigator.of(context).push<ParsedUpiQr>(
-      MaterialPageRoute(builder: (_) => const UpiQrScannerScreen()),
-    );
-    if (parsed != null && mounted) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => ScanResultScreen(parsed: parsed)),
-      );
     }
   }
 
@@ -608,6 +645,11 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // sessionKeepAliveProvider above.
     ref.watch(cacheLifecycleProvider);
     ref.watch(outboxFlushProvider);
+    // Plan Phase 1.1/1.2: on each sign-in, pull the account's preference
+    // blob down onto this device and hand any guest wallet built before
+    // sign-up to the server. Same "read once from the shell" reasoning.
+    ref.watch(settingsSyncLifecycleProvider);
+    ref.watch(guestMigrationLifecycleProvider);
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     // Task 5: the coach-mark tour only makes sense over Home (that's where
     // every one of its four targets lives) — a user who backs out to
@@ -617,71 +659,143 @@ class _AppShellState extends ConsumerState<_AppShell> {
         widget.location == AppRoute.home && !(ref.watch(tutorialSeenProvider).valueOrNull ?? true);
     return Scaffold(
       backgroundColor: BambooInk.paper,
-      appBar: AppBar(
-        backgroundColor: BambooInk.paper,
-        foregroundColor: BambooInk.ink900,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: Text('PandaPay — $_currentLabel', style: BambooFonts.heading(17, color: BambooInk.ink900)),
-        // "Scan a UPI QR to pay" used to be a second FAB stacked directly
-        // on top of "Scan a card" below — two near-identical QR icons
-        // glued together read as a mistake, not two features, and doubled
-        // how much of the screen the docked FAB ate into. It's a much
-        // better fit as a plain app-bar action (every other one-off,
-        // non-primary action in this shell already lives here), leaving
-        // the FAB to do the one thing it's sized for.
-        actions: [
-          IconButton(
-            onPressed: _scanToPay,
-            tooltip: 'Scan a UPI QR to pay',
-            icon: const Icon(Icons.qr_code_2_rounded, color: BambooInk.ink900),
+      // No AppBar. Not one of the deck's 32 mockups gives a tab screen a
+      // title bar — each one opens straight onto its own content header
+      // ("Evening, Aarav" on 01, "Your wallet" on 02, …) drawn on the same
+      // continuous background. A shared "PandaPay — Home" chrome strip on
+      // top of that reads as a separate app bolted above the design, which
+      // is exactly what it looked like.
+      //
+      // Design (every "01 Home" .. "32 Monthly recap" mockup): the nav is a
+      // floating dark glass pill drawn INSIDE each screen's own bottom
+      // inset, not a native Scaffold bottomNavigationBar/FAB pairing — the
+      // scan button lives inside the bar itself as a raised lime circle,
+      // not a docked FAB elevated above a notch. Reserve 128 (bar's ~92
+      // total footprint + comfortable clearance) at the bottom of every tab
+      // body, same number the mockup uses for its scroll padding.
+      body: Stack(
+        children: [
+          // Full-bleed, NOT inset by the pill's height: the mockups scroll
+          // content *under* the bar (hence its backdrop blur), and insetting
+          // it left a bare white band between the screen's own background
+          // and the bar. Each tab pays the clearance itself as bottom scroll
+          // padding — AppShell.navClearance.
+          widget.child,
+          if (showTutorial) const TutorialOverlay(),
+          // `bottom: 26` measured from the physical bottom of the 390×844
+          // frame, exactly as the mockup positions it — NOT 26 above the
+          // home-indicator inset. Wrapping this in a SafeArea added the
+          // device's 34pt bottom inset underneath and floated the bar at
+          // 60pt, visibly higher than every mockup.
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 26,
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _shellStackNotEmpty,
+              builder: (context, pushedOnTop, child) =>
+                  pushedOnTop ? const SizedBox.shrink() : child!,
+              child: _FloatingNavBar(
+                key: const ValueKey('appShellNavBar'),
+                destinations: _destinations,
+                location: widget.location,
+                scanning: _scanning,
+                scanKey: tutorialKeys.scanFab,
+                onSelect: (path) {
+                  _shellNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+                  context.go(path);
+                },
+                onScan: _scanning ? null : _scanToPay,
+              ),
+            ),
           ),
         ],
       ),
-      // The docked FAB is centered on the bottom bar's top edge, so
-      // roughly half its height floats above the bar and over whatever
-      // this shell's body currently is — every tab root and every screen
-      // pushed on top of it (Import Hub, Sync & Backup, IMAP connection,
-      // etc. all live inside this same body). Reserve that space so the
-      // FAB never sits on top of tappable content.
-      body: Stack(
-        children: [
-          Padding(padding: const EdgeInsets.only(bottom: 72), child: widget.child),
-          if (showTutorial) const TutorialOverlay(),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.large(
-        heroTag: 'scanFab',
-        key: tutorialKeys.scanFab,
-        backgroundColor: BambooInk.slate,
-        foregroundColor: BambooInk.lime,
-        onPressed: _scanning ? null : _scanFromFab,
-        tooltip: 'Scan a card',
-        child: _scanning
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
-              )
-            : const Icon(Icons.qr_code_scanner_rounded),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        color: BambooInk.paper,
-        surfaceTintColor: Colors.transparent,
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        padding: EdgeInsets.zero,
-        child: SizedBox(
-          height: 64,
+    );
+  }
+}
+
+/// The floating glass pill nav bar itself — matches the design doc's
+/// literal box model (16px side margins, 26px from the bottom, 66pt tall,
+/// 24pt corner radius, rgba(43,49,58,0.86) + blur, hairline white border)
+/// rather than a Material BottomAppBar, since a BottomAppBar can't float
+/// off the screen edge with margins on all four sides or host a raised
+/// circular action inline instead of docked above a notch.
+class _FloatingNavBar extends StatelessWidget {
+  final List<(String, String, IconData)> destinations;
+  final String location;
+  final bool scanning;
+  final Key? scanKey;
+  final ValueChanged<String> onSelect;
+  final VoidCallback? onScan;
+
+  const _FloatingNavBar({
+    super.key,
+    required this.destinations,
+    required this.location,
+    required this.scanning,
+    required this.scanKey,
+    required this.onSelect,
+    required this.onScan,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: Container(
+          height: 66,
+          decoration: BoxDecoration(
+            color: BambooInk.slate.withValues(alpha: 0.86),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+            boxShadow: [
+              BoxShadow(
+                color: BambooInk.slate.withValues(alpha: 0.26),
+                blurRadius: 34,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _navButton(_destinations[0]),
-              _navButton(_destinations[1]),
-              const SizedBox(width: 56),
-              _navButton(_destinations[2]),
-              _navButton(_destinations[3]),
+              _navItem(destinations[0]),
+              _navItem(destinations[1]),
+              SizedBox(
+                width: 60,
+                child: Center(
+                  child: GestureDetector(
+                    key: scanKey,
+                    onTap: onScan,
+                    child: Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: BambooInk.lime,
+                        borderRadius: BorderRadius.circular(19),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.22),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: scanning
+                          ? const Padding(
+                              padding: EdgeInsets.all(15),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.slate),
+                            )
+                          : const Icon(Icons.qr_code_scanner_rounded, color: BambooInk.slate, size: 24),
+                    ),
+                  ),
+                ),
+              ),
+              _navItem(destinations[2]),
+              _navItem(destinations[3]),
             ],
           ),
         ),
@@ -689,24 +803,14 @@ class _AppShellState extends ConsumerState<_AppShell> {
     );
   }
 
-  Widget _navButton((String, String, IconData) destination) {
+  Widget _navItem((String, String, IconData) destination) {
     final (path, label, icon) = destination;
-    final selected = widget.location == path;
-    final color = selected ? BambooInk.jade : BambooInk.ink500;
+    final selected = location == path;
+    final color = selected ? BambooInk.lime : Colors.white.withValues(alpha: 0.74);
     return Expanded(
       child: InkWell(
-        onTap: () {
-          // Unwind anything pushed on top of the shell's own Navigator
-          // (Import Hub, Travel Mode, a pushed card/transaction detail,
-          // etc.) BEFORE switching tabs — see _shellNavigatorKey's own
-          // doc-comment for why this is needed. popUntil(isFirst) is safe
-          // here specifically because this key only ever points at the
-          // ShellRoute's Navigator, whose sole declarative entry is
-          // whichever of the 4 tabs is current; it can't over-pop into
-          // Welcome/Splash or any other outer route.
-          _shellNavigatorKey.currentState?.popUntil((route) => route.isFirst);
-          context.go(path);
-        },
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => onSelect(path),
         child: Semantics(
           label: label,
           selected: selected,
@@ -714,11 +818,11 @@ class _AppShellState extends ConsumerState<_AppShell> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(height: 2),
+              Icon(icon, color: color, size: 21),
+              const SizedBox(height: 4),
               Text(
                 label,
-                style: BambooFonts.ui(11, weight: selected ? FontWeight.w700 : FontWeight.w500, color: color),
+                style: BambooFonts.ui(10, weight: selected ? FontWeight.w600 : FontWeight.w500, color: color),
               ),
             ],
           ),

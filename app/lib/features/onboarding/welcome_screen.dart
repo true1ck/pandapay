@@ -21,15 +21,7 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0.9, -0.6),
-          radius: 1.3,
-          colors: [BambooInk.wash, BambooInk.paper],
-          stops: [0.0, 0.6],
-        ),
-      ),
+    return AppBackground(
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.xl, AppSpace.xl, AppSpace.xl),

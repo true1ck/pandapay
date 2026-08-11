@@ -70,8 +70,9 @@ class MyContributionsScreen extends ConsumerWidget {
                     ref.invalidate(profileProvider);
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
                     }
                   }
                 },
@@ -80,7 +81,10 @@ class MyContributionsScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: AppSpace.xl),
-        Text('Network-wide', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+        Text(
+          'Network-wide',
+          style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+        ),
         const SizedBox(height: AppSpace.sm),
         stats.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -90,22 +94,34 @@ class MyContributionsScreen extends ConsumerWidget {
           ),
           data: (s) {
             if (s == null) {
-              return const EmptyState(
-                icon: Icons.groups_outlined,
-                title: 'Sign in to see network stats',
-              );
+              return const EmptyState(icon: Icons.groups_outlined, title: 'Sign in to see network stats');
             }
             return Container(
               padding: const EdgeInsets.all(AppSpace.lg),
-              decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.lg)),
+              decoration: BoxDecoration(
+                color: BambooInk.paperMuted,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${s.publishedMerchantCount}', style: BambooFonts.heading(26, color: BambooInk.ink900)),
-                  Text('merchants published across all contributors', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  Text(
+                    '${s.publishedMerchantCount}',
+                    style: BambooFonts.heading(26, color: BambooInk.ink900),
+                  ),
+                  Text(
+                    'merchants published across all contributors',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                   const SizedBox(height: AppSpace.md),
-                  Text('${s.contributingDeviceCount}', style: BambooFonts.heading(26, color: BambooInk.ink900)),
-                  Text('devices have contributed at least one report', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  Text(
+                    '${s.contributingDeviceCount}',
+                    style: BambooFonts.heading(26, color: BambooInk.ink900),
+                  ),
+                  Text(
+                    'devices have contributed at least one report',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                   const SizedBox(height: AppSpace.md),
                   Text(
                     'This is a network-wide total, not specific to your own contributions — '

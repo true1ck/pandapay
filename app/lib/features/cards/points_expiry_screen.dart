@@ -31,15 +31,7 @@ class PointsExpiryScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Points & expiry', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: pairs.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
@@ -85,10 +77,9 @@ class _ProgramCard extends ConsumerWidget {
     // Nearest expiry across every ledger row this card has, if any — most
     // rows have no expires_on (see PointsLedgerEntry's own doc-comment), so
     // this degrades to "no expiry on file" rather than fabricating one.
-    final withExpiry = (ledger.valueOrNull ?? const <PointsLedgerEntry>[])
-        .where((e) => e.expiresOn != null)
-        .toList()
-      ..sort((a, b) => a.expiresOn!.compareTo(b.expiresOn!));
+    final withExpiry =
+        (ledger.valueOrNull ?? const <PointsLedgerEntry>[]).where((e) => e.expiresOn != null).toList()
+          ..sort((a, b) => a.expiresOn!.compareTo(b.expiresOn!));
     final nearestExpiry = withExpiry.firstOrNull;
     final daysToExpiry = nearestExpiry == null ? null : daysUntil(nearestExpiry.expiresOn!, DateTime.now());
 
@@ -110,7 +101,10 @@ class _ProgramCard extends ConsumerWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(userCard.totalPointsEarned.toStringAsFixed(0), style: BambooFonts.heading(24, color: BambooInk.ink900)),
+              Text(
+                userCard.totalPointsEarned.toStringAsFixed(0),
+                style: BambooFonts.heading(24, color: BambooInk.ink900),
+              ),
               const SizedBox(width: AppSpace.xs),
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
@@ -122,7 +116,11 @@ class _ProgramCard extends ConsumerWidget {
           Row(
             children: [
               Text('Estimated value ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-              MoneyText(valueEstimate, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              MoneyText(
+                valueEstimate,
+                confidence: Confidence.estimated,
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
             ],
           ),
           if (product.pointValueInr <= 0) ...[
@@ -173,7 +171,10 @@ class _ProgramCard extends ConsumerWidget {
           children: [
             Text('Correct points balance', style: BambooFonts.heading(17, color: BambooInk.ink900)),
             const SizedBox(height: AppSpace.sm),
-            Text('This is the starting point — we track from here.', style: BambooFonts.ui(13, color: BambooInk.ink500)),
+            Text(
+              'This is the starting point — we track from here.',
+              style: BambooFonts.ui(13, color: BambooInk.ink500),
+            ),
             const SizedBox(height: AppSpace.lg),
             TextField(
               controller: controller,
@@ -184,7 +185,10 @@ class _ProgramCard extends ConsumerWidget {
                 labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
@@ -245,7 +249,9 @@ class _ExpiryChip extends StatelessWidget {
       children: [
         Icon(urgent ? Icons.warning_amber_rounded : Icons.schedule_rounded, size: 14, color: color),
         const SizedBox(width: 4),
-        Flexible(child: Text(label, style: BambooFonts.ui(12.5, color: color))),
+        Flexible(
+          child: Text(label, style: BambooFonts.ui(12.5, color: color)),
+        ),
       ],
     );
   }

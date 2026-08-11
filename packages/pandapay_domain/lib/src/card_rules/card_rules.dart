@@ -245,12 +245,25 @@ class CardProduct {
   final String? artAssetUrl;
   final String? artPrimaryColor;
 
+  /// The card's everything-else earn rate — what it pays on spend that no
+  /// category rule covers. Every real card has one, and leaving it off the
+  /// model made the engine report "No applicable reward rule" (i.e. ₹0) for
+  /// any category the catalogue hadn't enumerated, which is wrong: a 1%
+  /// cashback card still earns 1% at a pharmacy.
+  ///
+  /// Null only when the catalogue genuinely doesn't state a base rate, in
+  /// which case the engine still excludes rather than inventing one.
+  final RewardUnit? baseRewardUnit;
+  final double? baseRewardRate;
+
   const CardProduct({
     required this.id,
     required this.name,
     required this.network,
     this.isUpiLinkable = false,
     this.pointValueInr = 0,
+    this.baseRewardUnit,
+    this.baseRewardRate,
     this.rewardRules = const [],
     this.capRules = const [],
     this.milestoneRules = const [],

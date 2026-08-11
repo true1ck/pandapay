@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import 'storage_util.dart';
 
@@ -55,55 +56,47 @@ class DataStorageScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Data & Storage', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: ListView(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        children: [
-          _SectionLabel('Storage used'),
-          const SizedBox(height: AppSpace.sm),
-          _StorageRow(cacheSize: cacheSize),
-          const SizedBox(height: AppSpace.xl),
-          _SectionLabel('Record counts'),
-          const SizedBox(height: AppSpace.sm),
-          if (!signedIn)
-            const _InfoCard(text: 'Sign in to see your record counts')
-          else
-            _RecordCountsCard(cardsAsync: cardsAsync, txnCountAsync: txnCountAsync),
-          const SizedBox(height: AppSpace.xl),
-          _SectionLabel('Manage'),
-          const SizedBox(height: AppSpace.sm),
-          _ActionTile(
-            icon: Icons.cleaning_services_outlined,
-            title: 'Clear cache',
-            subtitle: 'Deletes cached images and temp files only',
-            onTap: () => _clearCache(context, ref),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ActionTile(
-            icon: Icons.refresh_rounded,
-            title: 'Re-download bundled data',
-            subtitle: 'Refreshes the card catalogue and nearby-merchant data',
-            onTap: () => _redownloadBundledData(context, ref),
-          ),
-          const SizedBox(height: AppSpace.xl),
-          _SectionLabel('Danger zone'),
-          const SizedBox(height: AppSpace.sm),
-          _ActionTile(
-            icon: Icons.restart_alt_rounded,
-            title: 'Reset all data',
-            subtitle: 'Clears local cache and preferences — does not sign you out',
-            destructive: true,
-            onTap: () => _confirmResetAllData(context, ref),
-          ),
-        ],
+          padding: const EdgeInsets.all(AppSpace.lg),
+          children: [
+            _SectionLabel('Storage used'),
+            const SizedBox(height: AppSpace.sm),
+            _StorageRow(cacheSize: cacheSize),
+            const SizedBox(height: AppSpace.xl),
+            _SectionLabel('Record counts'),
+            const SizedBox(height: AppSpace.sm),
+            if (!signedIn)
+              const _InfoCard(text: 'Sign in to see your record counts')
+            else
+              _RecordCountsCard(cardsAsync: cardsAsync, txnCountAsync: txnCountAsync),
+            const SizedBox(height: AppSpace.xl),
+            _SectionLabel('Manage'),
+            const SizedBox(height: AppSpace.sm),
+            _ActionTile(
+              icon: Icons.cleaning_services_outlined,
+              title: 'Clear cache',
+              subtitle: 'Deletes cached images and temp files only',
+              onTap: () => _clearCache(context, ref),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _ActionTile(
+              icon: Icons.refresh_rounded,
+              title: 'Re-download bundled data',
+              subtitle: 'Refreshes the card catalogue and nearby-merchant data',
+              onTap: () => _redownloadBundledData(context, ref),
+            ),
+            const SizedBox(height: AppSpace.xl),
+            _SectionLabel('Danger zone'),
+            const SizedBox(height: AppSpace.sm),
+            _ActionTile(
+              icon: Icons.restart_alt_rounded,
+              title: 'Reset all data',
+              subtitle: 'Clears local cache and preferences — does not sign you out',
+              destructive: true,
+              onTap: () => _confirmResetAllData(context, ref),
+            ),
+          ],
         ),
       ),
     );
@@ -166,7 +159,11 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: 1.1),
+      style: BambooFonts.ui(
+        12,
+        weight: FontWeight.w700,
+        color: BambooInk.ink500,
+      ).copyWith(letterSpacing: 1.1),
     );
   }
 }
@@ -205,14 +202,14 @@ class _StorageRow extends StatelessWidget {
         children: [
           const Icon(Icons.sd_storage_outlined, size: 20, color: BambooInk.ink900),
           const SizedBox(width: AppSpace.md),
-          Expanded(child: Text('Cache size', style: BambooFonts.ui(13.5, color: BambooInk.ink900))),
+          Expanded(
+            child: Text('Cache size', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+          ),
           cacheSize.when(
-            data: (bytes) => Text(formatBytes(bytes), style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
-            loading: () => const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+            data: (bytes) =>
+                Text(formatBytes(bytes), style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+            loading: () =>
+                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
             error: (_, _) => Text('—', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
           ),
         ],
@@ -305,7 +302,9 @@ class _ActionTile extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: destructive ? BambooInk.clay.withValues(alpha: 0.3) : BambooInk.hairlineOnPaper),
+            border: Border.all(
+              color: destructive ? BambooInk.clay.withValues(alpha: 0.3) : BambooInk.hairlineOnPaper,
+            ),
           ),
           padding: const EdgeInsets.all(AppSpace.lg),
           child: Row(
@@ -322,7 +321,11 @@ class _ActionTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, size: 20, color: destructive ? BambooInk.clay : BambooInk.ink300),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: destructive ? BambooInk.clay : BambooInk.ink300,
+              ),
             ],
           ),
         ),

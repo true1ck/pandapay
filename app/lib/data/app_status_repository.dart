@@ -18,10 +18,10 @@ class AppStatus {
   });
 
   factory AppStatus.fromJson(Map<String, dynamic> json) => AppStatus(
-        minSupportedVersion: json['minSupportedVersion'] as String? ?? '1.0.0',
-        maintenanceMode: json['maintenanceMode'] as bool? ?? false,
-        maintenanceMessage: json['maintenanceMessage'] as String?,
-      );
+    minSupportedVersion: json['minSupportedVersion'] as String? ?? '1.0.0',
+    maintenanceMode: json['maintenanceMode'] as bool? ?? false,
+    maintenanceMessage: json['maintenanceMessage'] as String?,
+  );
 }
 
 /// Compares two dot-separated version strings as integer components (e.g.

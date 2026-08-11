@@ -36,7 +36,8 @@ class SpendingOverviewScreen extends ConsumerWidget {
           return const EmptyState(
             icon: Icons.donut_small_outlined,
             title: 'No spend logged this month yet',
-            message: 'Once you log a few transactions, a category and merchant breakdown shows up here — '
+            message:
+                'Once you log a few transactions, a category and merchant breakdown shows up here — '
                 'context on where money went, not a budget to hit.',
           );
         }
@@ -51,30 +52,44 @@ class SpendingOverviewScreen extends ConsumerWidget {
           final merch = t.merchantName ?? 'Unknown merchant';
           byMerchant[merch] = (byMerchant[merch] ?? const Money.zero()) + t.amount;
         }
-        final sortedCategories = byCategory.entries.toList()..sort((a, b) => b.value.paise.compareTo(a.value.paise));
-        final sortedMerchants = byMerchant.entries.toList()..sort((a, b) => b.value.paise.compareTo(a.value.paise));
+        final sortedCategories = byCategory.entries.toList()
+          ..sort((a, b) => b.value.paise.compareTo(a.value.paise));
+        final sortedMerchants = byMerchant.entries.toList()
+          ..sort((a, b) => b.value.paise.compareTo(a.value.paise));
 
         return ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
             Container(
               padding: const EdgeInsets.all(AppSpace.lg),
-              decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(AppRadius.lg)),
+              decoration: BoxDecoration(
+                color: BambooInk.paperMuted,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('This month', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
-                  MoneyText(total, confidence: Confidence.estimated, style: BambooFonts.money(28, color: BambooInk.ink900)),
+                  MoneyText(
+                    total,
+                    confidence: Confidence.estimated,
+                    style: BambooFonts.money(28, color: BambooInk.ink900),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: AppSpace.xl),
-            Text('By category', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+            Text(
+              'By category',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+            ),
             const SizedBox(height: AppSpace.sm),
-            for (final e in sortedCategories)
-              _BreakdownRow(label: e.key, amount: e.value, total: total),
+            for (final e in sortedCategories) _BreakdownRow(label: e.key, amount: e.value, total: total),
             const SizedBox(height: AppSpace.xl),
-            Text('By merchant', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900)),
+            Text(
+              'By merchant',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+            ),
             const SizedBox(height: AppSpace.sm),
             for (final e in sortedMerchants.take(10))
               _BreakdownRow(label: e.key, amount: e.value, total: total),
@@ -85,8 +100,10 @@ class SpendingOverviewScreen extends ConsumerWidget {
   }
 }
 
-final _monthTransactionsProvider =
-    FutureProvider.family<List<TransactionEntry>, (DateTime, DateTime)>((ref, range) async {
+final _monthTransactionsProvider = FutureProvider.family<List<TransactionEntry>, (DateTime, DateTime)>((
+  ref,
+  range,
+) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   // `to` is exclusive-by-a-day server-side convention (see GET /transactions'
@@ -111,8 +128,18 @@ class _BreakdownRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(child: Text(label, style: BambooFonts.ui(13.5, color: BambooInk.ink900), overflow: TextOverflow.ellipsis)),
-              MoneyText(amount, confidence: Confidence.estimated, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+              Expanded(
+                child: Text(
+                  label,
+                  style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              MoneyText(
+                amount,
+                confidence: Confidence.estimated,
+                style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+              ),
             ],
           ),
           const SizedBox(height: 4),

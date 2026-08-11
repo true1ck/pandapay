@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
@@ -14,11 +17,14 @@ import '../auth/login_screen.dart';
 /// D1 Transaction List (ui-spec Group D, implementation-plan-group-c-d.md)
 /// — extends the original flat list (UA-3+/Chunk 18) with date grouping,
 /// card/category filters, a spend summary for whatever's currently
-/// filtered in, and tap-through to D2 Transaction Detail. "Search" and the
-/// "needs-review" filter aren't built here — search has no server-side
-/// text-match route yet, and needs-review isn't a transactions-table
-/// concept (D4's parser_failures queue is a separate surface) — both
-/// flagged as real gaps, not silently faked. The optimality indicator (✓
+/// filtered in, tap-through to D2 Transaction Detail, and free-text search
+/// over merchant and note (`GET /transactions?q=`, debounced — see
+/// [_SearchField]). Search was previously flagged here as a real gap
+/// because no server-side text match existed; it does now.
+///
+/// The "needs-review" filter still isn't here, and shouldn't be: it isn't a
+/// transactions-table concept at all (D4's parser_failures queue is a
+/// separate surface with its own screen). The optimality indicator (✓
 /// best / ⚠ better existed) depends on the shared historical-recompute
 /// calculator, built separately and not yet wired into this row.
 class ActivityScreen extends ConsumerWidget {
@@ -37,24 +43,28 @@ class ActivityScreen extends ConsumerWidget {
     final filter = ref.watch(_activityFilterProvider);
     final transactions = ref.watch(_filteredTransactionsProvider);
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0.9, -0.7),
-          radius: 1.3,
-          colors: [BambooInk.wash, BambooInk.paper],
-          stops: [0.0, 0.6],
-        ),
-      ),
+    return AppBackground(
       child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
-            child: _FilterRow(filter: filter),
+            child: Column(
+              children: [
+                const _SearchField(),
+                const SizedBox(height: AppSpace.sm),
+                _FilterRow(filter: filter),
+              ],
+            ),
           ),
+          OfflineBanner(gutter: AppSpace.lg, onRetry: () => ref.invalidate(_filteredTransactionsProvider)),
           Expanded(
             child: transactions.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              // See my_cards_screen.dart for why a list-shaped skeleton
+              // rather than a centred spinner.
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                child: SkeletonList(count: 5),
+              ),
               error: (err, _) => ErrorState(
                 message: userFacingErrorMessage(err),
                 onRetry: () => ref.invalidate(_filteredTransactionsProvider),
@@ -78,15 +88,15 @@ class ActivityScreen extends ConsumerWidget {
                     for (final group in grouped) ...[
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                        child: Text(_dayLabel(group.day), style: BambooFonts.heading(13, color: BambooInk.ink500)),
+                        child: Text(
+                          _dayLabel(group.day),
+                          style: BambooFonts.heading(13, color: BambooInk.ink500),
+                        ),
                       ),
                       for (final entry in group.entries)
                         Padding(
                           padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                          child: _TransactionTile(
-                            entry,
-                            onTap: () => context.push('/activity/${entry.id}'),
-                          ),
+                          child: _TransactionTile(entry, onTap: () => context.push('/activity/${entry.id}')),
                         ),
                       const SizedBox(height: AppSpace.sm),
                     ],
@@ -116,9 +126,7 @@ class ActivityScreen extends ConsumerWidget {
     final diff = today.difference(day).inDays;
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${day.day} ${months[day.month - 1]} ${day.year}';
   }
 }
@@ -138,21 +146,35 @@ class ActivityFilter {
   final DateTime? from;
   final DateTime? to;
 
-  const ActivityFilter({this.cardId, this.categoryId, this.from, this.to});
+  /// Free-text search over merchant name and note, matched server-side
+  /// (`GET /transactions?q=`). Client-side filtering would only ever have
+  /// searched the rows already loaded, which is why this shipped as a
+  /// documented gap rather than a box that quietly searched the last 50
+  /// transactions.
+  final String? query;
 
-  bool get isActive => cardId != null || categoryId != null || from != null || to != null;
+  const ActivityFilter({this.cardId, this.categoryId, this.from, this.to, this.query});
+
+  bool get isActive =>
+      cardId != null ||
+      categoryId != null ||
+      from != null ||
+      to != null ||
+      (query != null && query!.isNotEmpty);
 
   ActivityFilter copyWith({
     String? Function()? cardId,
     String? Function()? categoryId,
     DateTime? Function()? from,
     DateTime? Function()? to,
+    String? Function()? query,
   }) {
     return ActivityFilter(
       cardId: cardId != null ? cardId() : this.cardId,
       categoryId: categoryId != null ? categoryId() : this.categoryId,
       from: from != null ? from() : this.from,
       to: to != null ? to() : this.to,
+      query: query != null ? query() : this.query,
     );
   }
 }
@@ -168,8 +190,73 @@ final _filteredTransactionsProvider = FutureProvider<List<TransactionEntry>>((re
     to: filter.to,
     cardId: filter.cardId,
     categoryId: filter.categoryId,
+    query: filter.query,
   );
 });
+
+/// D1's search box. Debounced, because every keystroke would otherwise be
+/// a round trip — and the ILIKE behind it scans, so a burst of them on a
+/// long history is exactly the query you don't want to fire six times.
+class _SearchField extends ConsumerStatefulWidget {
+  const _SearchField();
+
+  @override
+  ConsumerState<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends ConsumerState<_SearchField> {
+  final _controller = TextEditingController();
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      final trimmed = value.trim();
+      ref
+          .read(_activityFilterProvider.notifier)
+          .update((f) => f.copyWith(query: () => trimmed.isEmpty ? null : trimmed));
+    });
+    // Rebuild for the clear button's visibility, which shouldn't wait on
+    // the debounce.
+    setState(() {});
+  }
+
+  void _clear() {
+    _debounce?.cancel();
+    _controller.clear();
+    ref.read(_activityFilterProvider.notifier).update((f) => f.copyWith(query: () => null));
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      onChanged: _onChanged,
+      textInputAction: TextInputAction.search,
+      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+      decoration: InputDecoration(
+        hintText: 'Search merchant or note',
+        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: BambooInk.ink500),
+        suffixIcon: _controller.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear search',
+                icon: const Icon(Icons.close_rounded, size: 18, color: BambooInk.ink500),
+                onPressed: _clear,
+              ),
+        isDense: true,
+      ),
+    );
+  }
+}
 
 class _FilterRow extends ConsumerWidget {
   final ActivityFilter filter;
@@ -245,8 +332,10 @@ class _FilterRow extends ConsumerWidget {
                     : null,
               );
               if (range != null) {
-                ref.read(_activityFilterProvider.notifier).state =
-                    filter.copyWith(from: () => range.start, to: () => range.end);
+                ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
+                  from: () => range.start,
+                  to: () => range.end,
+                );
               }
             },
           ),
@@ -279,7 +368,11 @@ class _FilterChipButton extends StatelessWidget {
         backgroundColor: active ? BambooInk.slate : BambooInk.paperMuted,
         side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-        labelStyle: BambooFonts.ui(13, weight: FontWeight.w600, color: active ? BambooInk.onSlate : BambooInk.ink900),
+        labelStyle: BambooFonts.ui(
+          13,
+          weight: FontWeight.w600,
+          color: active ? BambooInk.onSlate : BambooInk.ink900,
+        ),
         onPressed: onTap,
       ),
     );
@@ -311,7 +404,11 @@ class _SummaryCard extends StatelessWidget {
             children: [
               Text('Spend', style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
               const SizedBox(height: 2),
-              MoneyText(totalSpend, confidence: Confidence.estimated, style: BambooFonts.money(26, color: BambooInk.lime)),
+              MoneyText(
+                totalSpend,
+                confidence: Confidence.estimated,
+                style: BambooFonts.money(26, color: BambooInk.lime),
+              ),
             ],
           ),
           Text(
@@ -335,9 +432,9 @@ class _TransactionTile extends StatelessWidget {
       if (entry.cardDisplayName != null) entry.cardDisplayName!,
       if (entry.categoryName != null) entry.categoryName!,
     ];
-    return InkWell(
+    // See account_screen.dart's _AccountTile for why Pressable, not InkWell.
+    return Pressable(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
       child: Container(
         decoration: BoxDecoration(
           color: BambooInk.glassFillOnPaper,
@@ -371,7 +468,11 @@ class _TransactionTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpace.sm),
-            MoneyText(entry.amount, confidence: Confidence.estimated, style: BambooFonts.money(15, color: BambooInk.ink900)),
+            MoneyText(
+              entry.amount,
+              confidence: Confidence.estimated,
+              style: BambooFonts.money(15, color: BambooInk.ink900),
+            ),
           ],
         ),
       ),

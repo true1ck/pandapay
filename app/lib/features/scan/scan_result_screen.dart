@@ -14,6 +14,7 @@ import '../../data/override_resolver.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import '../comparison/comparison_view_screen.dart';
+import 'payment_sent_screen.dart';
 
 /// ui-spec B3. See Task 12's plan-doc header for three stated scope
 /// reductions: no automatic VPA->merchant crowdsource lookup, no silent
@@ -52,7 +53,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     super.initState();
     _merchantController = TextEditingController(text: widget.parsed.pn ?? '');
     _amount = widget.parsed.am ?? const Money.zero();
-    _amountController = TextEditingController(text: _amount.rupees == 0 ? '' : _amount.rupees.toStringAsFixed(0));
+    _amountController = TextEditingController(
+      text: _amount.rupees == 0 ? '' : _amount.rupees.toStringAsFixed(0),
+    );
   }
 
   @override
@@ -87,17 +90,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           ),
         ],
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
-        child: _buildBody(catalogue, categories, userCards, overrides, engine),
-      ),
+      body: AppBackground(child: _buildBody(catalogue, categories, userCards, overrides, engine)),
     );
   }
 
@@ -131,7 +124,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final wallet = userCards.requireValue;
     final overrideList = overrides.requireValue;
 
-    final cards = wallet.isEmpty ? allCards : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
+    final cards = wallet.isEmpty
+        ? allCards
+        : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
 
     // Same reasoning as rankedRecommendationsProvider's own override
     // resolution (app/providers.dart), but with this screen's own vpa/
@@ -239,7 +234,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           controller: _amountController,
           onChanged: (v) {
             final parsedAmount = double.tryParse(v);
-            if (parsedAmount != null && parsedAmount >= 0) setState(() => _amount = Money.fromRupees(parsedAmount));
+            if (parsedAmount != null && parsedAmount >= 0)
+              setState(() => _amount = Money.fromRupees(parsedAmount));
           },
         ),
         const SizedBox(height: AppSpace.lg),
@@ -280,7 +276,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                 recommendation: rec,
                 isHero: bestUpi != null && rec.card.id == bestUpi.card.id,
                 onNotAccepted: () => setState(() => _locallyRejectedCardIds.add(rec.card.id)),
-                onPay: () => _payWith(rec),
+                onPay: () => _payWith(rec, wallet),
                 onAlwaysUseHere: () => _createOverride(rec, wallet),
               ),
             ),
@@ -288,10 +284,11 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     );
   }
 
-  Future<void> _payWith(Recommendation rec) async {
+  Future<void> _payWith(Recommendation rec, List<UserCard> wallet) async {
     final uri = Uri.parse(buildUpiPayUri(pa: widget.parsed.pa, pn: _merchantController.text, am: _amount));
     final launched = await canLaunchUrl(uri) && await launchUrl(uri);
-    if (!launched && mounted) {
+    if (!launched) {
+      if (!mounted) return;
       // ui-spec B3 edge case: no UPI app installed -> recommendation-only
       // with a copy-VPA action.
       await Clipboard.setData(ClipboardData(text: widget.parsed.pa));
@@ -299,7 +296,26 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No UPI app found — copied ${widget.parsed.pa} to your clipboard instead.')),
       );
+      return;
     }
+    if (!mounted) return;
+    // Design 17 "Payment sent" — only reachable once a UPI app genuinely
+    // opened (launched == true); see PaymentSentScreen's own doc-comment
+    // for why it doesn't just declare success outright.
+    final owned = wallet.where((w) => w.cardProductId == rec.card.id).firstOrNull;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PaymentSentScreen(
+          merchantName: _merchantController.text.trim(),
+          amount: _amount,
+          cardName: rec.card.name,
+          userCardId: owned?.id,
+          categoryId: _selectedCategoryId,
+          expectedValue: rec.expectedValue,
+          confidence: rec.confidence,
+        ),
+      ),
+    );
   }
 
   Future<void> _createOverride(Recommendation rec, List<UserCard> wallet) async {
@@ -320,10 +336,13 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       ref.invalidate(cardOverridesProvider);
       ref.invalidate(rankedRecommendationsProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${rec.card.name} will always be suggested here.')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${rec.card.name} will always be suggested here.')));
       }
     } catch (err) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
     }
   }
 }
@@ -343,7 +362,11 @@ class _CategoryPicker extends StatelessWidget {
         for (final c in categories)
           ChoiceChip(
             label: Text(c.name),
-            labelStyle: BambooFonts.ui(13, weight: FontWeight.w600, color: selectedId == c.id ? BambooInk.onSlate : BambooInk.ink900),
+            labelStyle: BambooFonts.ui(
+              13,
+              weight: FontWeight.w600,
+              color: selectedId == c.id ? BambooInk.onSlate : BambooInk.ink900,
+            ),
             selected: selectedId == c.id,
             selectedColor: BambooInk.slate,
             backgroundColor: BambooInk.paperMuted,
@@ -365,7 +388,8 @@ class _P2PNotice extends StatelessWidget {
     return EmptyState(
       icon: Icons.person_off_rounded,
       title: "Credit cards can't be used for personal transfers",
-      message: 'This looks like a personal UPI transfer to $vpa, not a merchant payment. '
+      message:
+          'This looks like a personal UPI transfer to $vpa, not a merchant payment. '
           "Use your bank account's UPI app to send this instead.",
     );
   }
@@ -397,7 +421,13 @@ class _ScanResultCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: hero ? null : Border.all(color: BambooInk.hairlineOnPaper),
         boxShadow: hero
-            ? [BoxShadow(color: BambooInk.lime.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))]
+            ? [
+                BoxShadow(
+                  color: BambooInk.lime.withValues(alpha: 0.35),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ]
             : null,
       ),
       child: Column(
@@ -411,7 +441,11 @@ class _ScanResultCard extends StatelessWidget {
                   decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(999)),
                   child: Text(
                     'TAP THIS ONE',
-                    style: BambooFonts.ui(10.5, weight: FontWeight.w700, color: BambooInk.lime).copyWith(letterSpacing: 0.6),
+                    style: BambooFonts.ui(
+                      10.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.lime,
+                    ).copyWith(letterSpacing: 0.6),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -443,7 +477,12 @@ class _ScanResultCard extends StatelessWidget {
               children: [
                 const Icon(Icons.block_rounded, size: 16, color: BambooInk.ink500),
                 const SizedBox(width: AppSpace.xs),
-                Expanded(child: Text(recommendation.exclusionReason!, style: BambooFonts.ui(13, color: BambooInk.ink500))),
+                Expanded(
+                  child: Text(
+                    recommendation.exclusionReason!,
+                    style: BambooFonts.ui(13, color: BambooInk.ink500),
+                  ),
+                ),
               ],
             )
           else ...[
@@ -474,7 +513,9 @@ class _ScanResultCard extends StatelessWidget {
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: hero ? BambooInk.slate : BambooInk.ink900,
-                    side: BorderSide(color: hero ? BambooInk.slate.withValues(alpha: 0.4) : BambooInk.hairlineOnPaper),
+                    side: BorderSide(
+                      color: hero ? BambooInk.slate.withValues(alpha: 0.4) : BambooInk.hairlineOnPaper,
+                    ),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   onPressed: onAlwaysUseHere,

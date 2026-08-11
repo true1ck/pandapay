@@ -22,8 +22,8 @@ class TokenStore {
   String? _cachedRefreshToken;
 
   TokenStore(this._secureStorage, {String? accessToken, String? refreshToken})
-      : _cachedAccessToken = accessToken,
-        _cachedRefreshToken = refreshToken;
+    : _cachedAccessToken = accessToken,
+      _cachedRefreshToken = refreshToken;
 
   static Future<TokenStore> load() async {
     const secureStorage = FlutterSecureStorage();

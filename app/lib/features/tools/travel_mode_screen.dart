@@ -37,15 +37,7 @@ class TravelModeScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Travel Mode', style: BambooFonts.heading(18, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: pairs.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
@@ -58,14 +50,10 @@ class TravelModeScreen extends ConsumerWidget {
               children: [
                 _TravelModeToggle(
                   enabled: travelMode,
-                  onChanged: (v) =>
-                      ref.read(travelModeProvider.notifier).state = v,
+                  onChanged: (v) => ref.read(travelModeProvider.notifier).state = v,
                 ),
                 const SizedBox(height: AppSpace.xxl),
-                Text(
-                  'Forex markup by card',
-                  style: BambooFonts.heading(16, color: BambooInk.ink900),
-                ),
+                Text('Forex markup by card', style: BambooFonts.heading(16, color: BambooInk.ink900)),
                 const SizedBox(height: AppSpace.xs),
                 Text(
                   'What each card actually charges on a foreign-currency swipe, including GST on the '
@@ -75,17 +63,11 @@ class TravelModeScreen extends ConsumerWidget {
                 const SizedBox(height: AppSpace.md),
                 _MarkupComparison(owned: owned),
                 const SizedBox(height: AppSpace.xxl),
-                Text(
-                  'Lounge access abroad',
-                  style: BambooFonts.heading(16, color: BambooInk.ink900),
-                ),
+                Text('Lounge access abroad', style: BambooFonts.heading(16, color: BambooInk.ink900)),
                 const SizedBox(height: AppSpace.sm),
                 _LoungeAbroadSection(owned: owned),
                 const SizedBox(height: AppSpace.xxl),
-                Text(
-                  'Travel insurance',
-                  style: BambooFonts.heading(16, color: BambooInk.ink900),
-                ),
+                Text('Travel insurance', style: BambooFonts.heading(16, color: BambooInk.ink900)),
                 const SizedBox(height: AppSpace.sm),
                 _TravelInsuranceSection(owned: owned),
                 const SizedBox(height: AppSpace.xxl),
@@ -117,10 +99,7 @@ class _TravelModeToggle extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Row(
         children: [
-          Icon(
-            Icons.flight_takeoff_rounded,
-            color: enabled ? BambooInk.lime : BambooInk.ink900,
-          ),
+          Icon(Icons.flight_takeoff_rounded, color: enabled ? BambooInk.lime : BambooInk.ink900),
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
@@ -167,8 +146,7 @@ class _MarkupComparison extends StatelessWidget {
     }
     final withForex = <(UserCard, CardProduct, double)>[
       for (final (uc, p) in owned)
-        if (p.forexRule != null)
-          (uc, p, p.forexRule!.effectiveMarkupFraction()),
+        if (p.forexRule != null) (uc, p, p.forexRule!.effectiveMarkupFraction()),
     ]..sort((a, b) => a.$3.compareTo(b.$3));
     final withoutForex = owned.where((p) => p.$2.forexRule == null).toList();
 
@@ -189,9 +167,7 @@ class _MarkupComparison extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      userCard.nickname?.isNotEmpty == true
-                          ? userCard.nickname!
-                          : product.name,
+                      userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
                       style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                     ),
                   ),
@@ -256,14 +232,9 @@ class _LoungeAbroadSection extends ConsumerWidget {
       );
     }
     return visits.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(AppSpace.md),
-        child: LinearProgressIndicator(),
-      ),
-      error: (err, _) => Text(
-        userFacingErrorMessage(err),
-        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-      ),
+      loading: () => const Padding(padding: EdgeInsets.all(AppSpace.md), child: LinearProgressIndicator()),
+      error: (err, _) =>
+          Text(userFacingErrorMessage(err), style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
       data: (visitList) => Column(
         children: [
           for (final (userCard, product, benefit) in rows)
@@ -274,17 +245,8 @@ class _LoungeAbroadSection extends ConsumerWidget {
                 product: product,
                 benefit: benefit,
                 usedThisWindow: visitList
-                    .where(
-                      (v) =>
-                          v.userCardId == userCard.id &&
-                          v.benefitId == benefit.id,
-                    )
-                    .where(
-                      (v) => isInCurrentLoungeWindow(
-                        v.usedOn,
-                        benefit.quotaPeriod,
-                      ),
-                    )
+                    .where((v) => v.userCardId == userCard.id && v.benefitId == benefit.id)
+                    .where((v) => isInCurrentLoungeWindow(v.usedOn, benefit.quotaPeriod))
                     .length,
               ),
             ),
@@ -316,9 +278,7 @@ class _LoungeAbroadTile extends StatelessWidget {
     final quotaValue = benefit.quotaCount;
     final unlimited = quotaValue == null;
     final quota = quotaValue ?? 0;
-    final remaining = unlimited
-        ? null
-        : (quota - usedThisWindow).clamp(0, quota);
+    final remaining = unlimited ? null : (quota - usedThisWindow).clamp(0, quota);
     final eligible = unlimited || (remaining ?? 0) > 0;
     return Container(
       decoration: BoxDecoration(
@@ -344,9 +304,7 @@ class _LoungeAbroadTile extends StatelessWidget {
                   style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                 ),
                 Text(
-                  unlimited
-                      ? 'Unlimited this period'
-                      : '${remaining ?? 0} of $quota visits left this period',
+                  unlimited ? 'Unlimited this period' : '${remaining ?? 0} of $quota visits left this period',
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
               ],
@@ -406,19 +364,13 @@ class _TravelInsuranceSection extends StatelessWidget {
                   ),
                   if (benefit.description != null) ...[
                     const SizedBox(height: 2),
-                    Text(
-                      benefit.description!,
-                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                    ),
+                    Text(benefit.description!, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                   ],
                   if (benefit.valueEstimate != null) ...[
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Text(
-                          'Estimated cover ',
-                          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                        ),
+                        Text('Estimated cover ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                         MoneyText(
                           benefit.valueEstimate!,
                           confidence: Confidence.estimated,
@@ -455,17 +407,10 @@ class _DccExplainer extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.warning_amber_rounded,
-                size: 18,
-                color: BambooInk.clay,
-              ),
+              const Icon(Icons.warning_amber_rounded, size: 18, color: BambooInk.clay),
               const SizedBox(width: AppSpace.sm),
               Expanded(
-                child: Text(
-                  'Watch out for DCC',
-                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-                ),
+                child: Text('Watch out for DCC', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
               ),
             ],
           ),
@@ -507,10 +452,7 @@ class _DestinationAcceptanceNotes extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Card acceptance abroad',
-            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-          ),
+          Text('Card acceptance abroad', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
           const SizedBox(height: AppSpace.sm),
           Text(
             'PandaPay doesn\'t have per-destination acceptance data (no country/merchant coverage '

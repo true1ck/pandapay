@@ -401,6 +401,44 @@ void main() {
       expect(r.isExcluded, isTrue);
     });
 
+    test("26b. a card whose category rule doesn't match still earns its own base rate, "
+        'rather than being excluded as if it earned nothing', () {
+      final card = CardProduct(
+        id: 'card',
+        name: 'card',
+        network: CardNetwork.rupay,
+        isUpiLinkable: true,
+        baseRewardUnit: RewardUnit.cashbackPercent,
+        baseRewardRate: 1,
+        rewardRules: [
+          RewardRule(id: 'r', unit: RewardUnit.cashbackPercent, rate: 5, categoryId: 'fuel'),
+        ],
+      );
+      final ctx =
+          RecommendationContext(amount: Money.fromRupees(1000), categoryId: 'dining', rail: TxnRail.swipe);
+      final r = engine.rank(ctx, [CardSnapshot(product: card)]).first;
+      expect(r.isExcluded, isFalse);
+      expect(r.expectedValue, Money.fromRupees(10)); // 1% of ₹1,000
+      expect(r.reasonLines.single, contains('Base rate 1.0%'));
+    });
+
+    test('26c. a flatPoints base rate is still an exclusion — it is a fixed bonus, not a '
+        'per-rupee rate, so it must not be advertised as "Base rate 0.0%"', () {
+      final card = CardProduct(
+        id: 'card',
+        name: 'card',
+        network: CardNetwork.rupay,
+        isUpiLinkable: true,
+        baseRewardUnit: RewardUnit.flatPoints,
+        baseRewardRate: 500,
+        pointValueInr: 1,
+      );
+      final ctx = RecommendationContext(amount: Money.fromRupees(1000), rail: TxnRail.swipe);
+      final r = engine.rank(ctx, [CardSnapshot(product: card)]).first;
+      expect(r.isExcluded, isTrue);
+      expect(r.exclusionReason, 'No applicable reward rule.');
+    });
+
     // --- Rule priority (1 scenario) ------------------------------------------
     test('27. of two matching reward rules, the lower-numbered priority wins', () {
       final card = CardProduct(

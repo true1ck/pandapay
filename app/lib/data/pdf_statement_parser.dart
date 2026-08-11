@@ -40,7 +40,9 @@ class PdfStatementReader {
     try {
       final text = PdfTextExtractor(document).extractText();
       if (text.trim().isEmpty) {
-        throw const StatementParseException("Couldn't read any text from this PDF — it may be a scanned image.");
+        throw const StatementParseException(
+          "Couldn't read any text from this PDF — it may be a scanned image.",
+        );
       }
       return text;
     } finally {
@@ -73,10 +75,7 @@ final _transactionLine = RegExp(
   r'^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\s+(.+?)\s+([\d,]+\.\d{2})\s*(?:Dr|Cr|DR|CR)?\s*$',
 );
 
-final _closingBalanceLine = RegExp(
-  r'closing\s*balance\D*([\d,]+\.\d{2})',
-  caseSensitive: false,
-);
+final _closingBalanceLine = RegExp(r'closing\s*balance\D*([\d,]+\.\d{2})', caseSensitive: false);
 
 DateTime? _parseDate(String d, String m, String y) {
   final day = int.tryParse(d);

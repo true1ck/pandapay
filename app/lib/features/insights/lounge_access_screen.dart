@@ -54,7 +54,8 @@ class LoungeAccessScreen extends ConsumerWidget {
               return const EmptyState(
                 icon: Icons.airline_seat_flat_angled_rounded,
                 title: 'No lounge benefits to track',
-                message: 'None of your cards have a lounge-access benefit — or you haven\'t added a card yet.',
+                message:
+                    'None of your cards have a lounge-access benefit — or you haven\'t added a card yet.',
               );
             }
             return ListView.builder(
@@ -169,7 +170,10 @@ class _LoungeTile extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpace.sm),
           if (unlimited)
-            Text('$usedThisWindow visits logged this period · unlimited quota', style: BambooFonts.ui(12.5, color: BambooInk.ink500))
+            Text(
+              '$usedThisWindow visits logged this period · unlimited quota',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            )
           else ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -228,7 +232,10 @@ class _LoungeTile extends ConsumerWidget {
                 labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
                 filled: true,
                 fillColor: BambooInk.glassFillOnPaper,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
@@ -262,8 +269,9 @@ class _LoungeTile extends ConsumerWidget {
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                 } catch (e) {
                   if (sheetContext.mounted) {
-                    ScaffoldMessenger.of(sheetContext)
-                        .showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+                    ScaffoldMessenger.of(
+                      sheetContext,
+                    ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
                   }
                 }
               },

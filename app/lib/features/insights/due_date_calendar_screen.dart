@@ -42,7 +42,10 @@ class DueDateCalendarScreen extends ConsumerWidget {
         return ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
-            Text('${_monthName(now.month)} ${now.year}', style: BambooFonts.heading(16, color: BambooInk.ink900)),
+            Text(
+              '${_monthName(now.month)} ${now.year}',
+              style: BambooFonts.heading(16, color: BambooInk.ink900),
+            ),
             const SizedBox(height: AppSpace.lg),
             if (withDates.isEmpty)
               const EmptyState(
@@ -68,9 +71,19 @@ class DueDateCalendarScreen extends ConsumerWidget {
   }
 
   static String _monthName(int month) => const [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December',
-      ][month - 1];
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ][month - 1];
 }
 
 class _CardDateTile extends StatelessWidget {
@@ -148,13 +161,23 @@ class _DateRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final daysLeft = date.difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)).inDays;
+    final daysLeft = date
+        .difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day))
+        .inDays;
     return Row(
       children: [
         Icon(icon, size: 16, color: emphasize ? BambooInk.clay : BambooInk.ink500),
         const SizedBox(width: AppSpace.sm),
-        Expanded(child: Text('$label — ${date.day}/${date.month}/${date.year}', style: BambooFonts.ui(13.5, color: BambooInk.ink900))),
-        Text('${daysLeft}d', style: BambooFonts.ui(12.5, color: emphasize ? BambooInk.clay : BambooInk.ink500)),
+        Expanded(
+          child: Text(
+            '$label — ${date.day}/${date.month}/${date.year}',
+            style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+          ),
+        ),
+        Text(
+          '${daysLeft}d',
+          style: BambooFonts.ui(12.5, color: emphasize ? BambooInk.clay : BambooInk.ink500),
+        ),
       ],
     );
   }

@@ -42,8 +42,7 @@ class ChangelogRepository {
   final String apiBaseUrl;
   final http.Client _client;
 
-  ChangelogRepository({required this.apiBaseUrl, http.Client? client})
-      : _client = client ?? http.Client();
+  ChangelogRepository({required this.apiBaseUrl, http.Client? client}) : _client = client ?? http.Client();
 
   Future<List<ChangelogEntry>> fetch() async {
     final response = await _client.get(Uri.parse('$apiBaseUrl/changelog'));
@@ -51,9 +50,6 @@ class ChangelogRepository {
       throw ApiException('GET /changelog failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['entries'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(ChangelogEntry.fromJson)
-        .toList();
+    return (body['entries'] as List).cast<Map<String, dynamic>>().map(ChangelogEntry.fromJson).toList();
   }
 }

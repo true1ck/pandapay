@@ -39,6 +39,83 @@ class CardSnapshot {
   });
 }
 
+/// The itemised arithmetic behind one [Recommendation] — design 09
+/// "Why this card?" reads this row by row.
+///
+/// Exists because that screen previously had to *keyword-match the engine's
+/// own prose*: [Recommendation.reasonLines] is written for humans, and
+/// deriving "was there a cap in the way" from a string like "₹380 at 5%
+/// (cap headroom)" is a parser that silently breaks the day the wording
+/// changes. Design 09 is the trust screen — the one place the app owes the
+/// user the actual calculation — so the numbers it shows are now carried
+/// as numbers.
+///
+/// Every field is what it says at the point the engine computed it. Nulls
+/// mean "not applicable to this card", never zero: a card with no cap has
+/// `capHeadroom == null`, which design 09 renders as "None", while a card
+/// whose cap is exhausted has `Money.zero()` and renders as "₹0 free".
+class RecommendationBreakdown {
+  /// The matched rule's nominal rate as a fraction of spend (0.05 == 5%).
+  final double baseRatePerRupee;
+
+  /// What the base rate alone would pay on this amount, before any cap
+  /// blending, forex deduction, fuel waiver or milestone bonus. Design 09's
+  /// "Base rate 5% on ₹2,500 → +₹125" row.
+  final Money baseValue;
+
+  /// Spend headroom left under the matched rule's cap.
+  ///
+  /// Only populated for [CapMeasure.spendAmount] caps: those are the only
+  /// ones whose remaining headroom is a rupee figure a user can read as
+  /// "₹380 free". Reward-value and transaction-count caps are real, and
+  /// still affect [Recommendation.expectedValue] — they surface through
+  /// [capNote] instead of being mis-rendered as spend.
+  final Money? capHeadroom;
+
+  /// A short human note for cap situations [capHeadroom] can't express —
+  /// "₹1,000 of reward value left", "3 transactions left", "cap reached".
+  /// Null when the card has no cap on the matched rule.
+  final String? capNote;
+
+  /// The matched rule's merchant pattern, if it only applies at specific
+  /// merchants. Null means unrestricted — design 09's "Merchant
+  /// restriction: None".
+  final String? merchantRestriction;
+
+  /// ₹ per point, but only for rules that actually earn points. Null for
+  /// cashback rules, where "points value used" is a meaningless row rather
+  /// than a zero.
+  final double? pointValueInr;
+
+  /// Forex markup deducted under travel mode; zero when it didn't apply.
+  final Money forexCost;
+
+  /// Fuel surcharge waiver added; zero when it didn't apply.
+  final Money fuelWaiver;
+
+  /// Pro-rated milestone bonus added; zero when no milestone was
+  /// materially advanced.
+  final Money milestoneBonus;
+
+  const RecommendationBreakdown({
+    required this.baseRatePerRupee,
+    required this.baseValue,
+    this.capHeadroom,
+    this.capNote,
+    this.merchantRestriction,
+    this.pointValueInr,
+    this.forexCost = const Money.zero(),
+    this.fuelWaiver = const Money.zero(),
+    this.milestoneBonus = const Money.zero(),
+  });
+
+  /// Whether anything beyond the plain base rate moved the number. Design
+  /// 09 hides the adjustment rows entirely for the common case where the
+  /// answer is just "5% of ₹2,500".
+  bool get hasAdjustments =>
+      !forexCost.isZero || !fuelWaiver.isZero || !milestoneBonus.isZero || capNote != null;
+}
+
 /// UA-2.1.3. `reasonLines` is required — "Why this card?" is not optional.
 class Recommendation {
   final CardProduct card;
@@ -48,6 +125,18 @@ class Recommendation {
   final List<String> reasonLines;
   final bool isOverride;
 
+  /// The headline earn rate this recommendation was computed at, as a
+  /// fraction of spend (0.05 == 5%). Design 01's verdict card sets it
+  /// beside the BEST PICK badge ("5% on Online"), which previously had to
+  /// be scraped back out of [reasonLines] prose. Null when the card is
+  /// excluded, or when the rate isn't a per-rupee one (flat point bonuses).
+  final double? effectiveRatePerRupee;
+
+  /// The itemised calculation, for design 09. Null on excluded cards and on
+  /// the base-rate fallback path, where there is no matched rule to break
+  /// down.
+  final RecommendationBreakdown? breakdown;
+
   const Recommendation({
     required this.card,
     required this.expectedValue,
@@ -55,6 +144,8 @@ class Recommendation {
     this.exclusionReason,
     required this.reasonLines,
     this.isOverride = false,
+    this.effectiveRatePerRupee,
+    this.breakdown,
   });
 
   bool get isExcluded => exclusionReason != null;
@@ -131,12 +222,37 @@ class RecommendationEngine {
       ..sort((a, b) => a.priority.compareTo(b.priority));
 
     if (matching.isEmpty) {
+      // No category rule — fall back to the card's own everything-else
+      // earn rate. This is what actually happens at the till: a 1% cashback
+      // card still pays 1% at a pharmacy the catalogue never enumerated.
+      // Excluding it instead reported ₹0 for the card and, when no card had
+      // a rule for the chosen category, left Home with no verdict at all.
+      final baseUnit = card.baseRewardUnit;
+      final baseRate = card.baseRewardRate;
+      // `flatPoints` deliberately normalizes to 0 (see RewardUnit's own
+      // doc-comment: it's a fixed bonus, not a per-rupee rate), so checking
+      // the *resolved* rate rather than the nominal one keeps such a card
+      // honestly excluded instead of advertising "Base rate 0.0%".
+      final ratePerRupee = baseUnit == null || baseRate == null
+          ? 0.0
+          : baseUnit.effectiveRatePerRupee(baseRate, pointValueInr: card.pointValueInr);
+      if (ratePerRupee <= 0) {
+        return Recommendation(
+          card: card,
+          expectedValue: const Money.zero(),
+          confidence: Confidence.estimated,
+          exclusionReason: 'No applicable reward rule.',
+          reasonLines: const [],
+        );
+      }
       return Recommendation(
         card: card,
-        expectedValue: const Money.zero(),
+        expectedValue: context.amount * ratePerRupee,
         confidence: Confidence.estimated,
-        exclusionReason: 'No applicable reward rule.',
-        reasonLines: const [],
+        effectiveRatePerRupee: ratePerRupee,
+        reasonLines: [
+          'Base rate ${(ratePerRupee * 100).toStringAsFixed(1)}% — no category bonus on this spend',
+        ],
       );
     }
 
@@ -148,6 +264,14 @@ class RecommendationEngine {
     // measure-aware (fixed — see PROGRESS.md Chunk 9; was previously always
     // treated as spend-amount headroom regardless of CapRule.measure).
     final capRule = card.capRules.where((c) => c.rewardRuleId == rule.id).firstOrNull;
+    // Design 09's breakdown rows, captured as the engine goes rather than
+    // reconstructed afterwards — see RecommendationBreakdown.
+    final baseValue = context.amount * baseRatePerRupee;
+    Money? capHeadroom;
+    String? capNote;
+    var forexCost = const Money.zero();
+    var fuelWaiver = const Money.zero();
+    var milestoneBonus = const Money.zero();
     Money value;
     if (capRule != null) {
       final postRate = capRule.postCapUnit
@@ -159,11 +283,13 @@ class RecommendationEngine {
           // capRemaining/capValue are literally spend headroom — blend the
           // amount directly against it, same as pre-fix behaviour.
           final remaining = snapshot.capRemaining[capRule.id] ?? capRule.capValue;
+          capHeadroom = remaining.isNegative ? const Money.zero() : remaining;
           if (remaining >= context.amount) {
             value = context.amount * baseRatePerRupee;
             reasons.add('Base rate ${(baseRatePerRupee * 100).toStringAsFixed(1)}% on '
                 '${context.amount.format()}');
           } else if (remaining.isZero || remaining.isNegative) {
+            capNote = 'Cap reached';
             value = context.amount * postRate;
             reasons.add('Cap already reached — post-cap rate '
                 '${(postRate * 100).toStringAsFixed(1)}% applies to the full amount');
@@ -184,6 +310,9 @@ class RecommendationEngine {
           // that, and let the reward-value portion be exactly `remaining`
           // (never re-derived from spend*rate, which would round differently).
           final remaining = snapshot.capRemaining[capRule.id] ?? capRule.capValue;
+          capNote = remaining.isZero || remaining.isNegative
+              ? 'Cap reached'
+              : '${remaining.format()} of reward value left';
           if (remaining.isZero || remaining.isNegative) {
             value = context.amount * postRate;
             reasons.add('Cap already reached — post-cap rate '
@@ -240,6 +369,7 @@ class RecommendationEngine {
     if (context.travelMode && card.forexRule != null) {
       final markupFraction = card.forexRule!.effectiveMarkupFraction();
       final markupCost = context.amount * markupFraction;
+      forexCost = markupCost;
       value -= markupCost;
       reasons.add('Less forex markup ${(markupFraction * 100).toStringAsFixed(2)}% '
           '(incl. GST): -${markupCost.format()}');
@@ -249,6 +379,7 @@ class RecommendationEngine {
     if (context.categoryId == 'fuel' && card.fuelRule != null) {
       final waiverFraction = card.fuelRule!.waiverPercent / 100;
       final waiverValue = context.amount * waiverFraction;
+      fuelWaiver = waiverValue;
       value += waiverValue;
       reasons.add('Fuel surcharge waiver: +${waiverValue.format()}');
     }
@@ -270,6 +401,7 @@ class RecommendationEngine {
       final closedPortion = context.amount < remaining ? context.amount : remaining;
       final bonus = milestone.rewardValue * (closedPortion.paise / milestone.thresholdSpend.paise);
       value += bonus;
+      milestoneBonus += bonus;
       final verb = context.amount >= remaining ? 'completes' : 'materially advances';
       reasons.add('$verb "${milestone.label}" milestone: +${bonus.format()}');
     }
@@ -283,8 +415,29 @@ class RecommendationEngine {
       card: card,
       expectedValue: value,
       confidence: Confidence.estimated,
+      // The matched rule's nominal rate, not `value / amount` — the latter
+      // would be diluted by cap blending and milestone bonuses, so a card
+      // advertised as "5% on Online" would read as e.g. 3.2% once its cap
+      // ran low. This is the rate the headline badge is naming.
+      effectiveRatePerRupee: baseRatePerRupee > 0 ? baseRatePerRupee : null,
       reasonLines: reasons,
       isOverride: isOverride,
+      breakdown: RecommendationBreakdown(
+        baseRatePerRupee: baseRatePerRupee,
+        baseValue: baseValue,
+        capHeadroom: capHeadroom,
+        capNote: capNote,
+        merchantRestriction: rule.merchantPattern,
+        // Only meaningful for rules that earn points — a ₹/point row on a
+        // cashback card is a zero pretending to be information.
+        pointValueInr: rule.unit == RewardUnit.cashbackPercent ||
+                rule.unit == RewardUnit.discountPercent
+            ? null
+            : card.pointValueInr,
+        forexCost: forexCost,
+        fuelWaiver: fuelWaiver,
+        milestoneBonus: milestoneBonus,
+      ),
     );
   }
 }

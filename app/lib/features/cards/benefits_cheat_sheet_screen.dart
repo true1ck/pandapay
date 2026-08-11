@@ -31,15 +31,7 @@ class BenefitsCheatSheetScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Benefits cheat sheet', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0.9, -0.5),
-            radius: 1.3,
-            colors: [BambooInk.wash, BambooInk.paper],
-            stops: [0.0, 0.6],
-          ),
-        ),
+      body: AppBackground(
         child: owned.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
@@ -47,62 +39,62 @@ class BenefitsCheatSheetScreen extends ConsumerWidget {
             onRetry: () => ref.invalidate(userCardsProvider),
           ),
           data: (pairs) {
-          // One (CardBenefit, ownerCardDisplayName) tuple per benefit,
-          // across every owned card — a card with two benefits of the
-          // same kind (e.g. domestic + international lounge) shows both,
-          // not a collapsed one, since their quotas/programs may differ.
-          final entries = <(CardBenefit, String)>[
-            for (final (userCard, product) in pairs)
-              for (final benefit in product.benefits)
-                (benefit, userCard.nickname?.isNotEmpty == true ? userCard.nickname! : userCard.cardName),
-          ];
+            // One (CardBenefit, ownerCardDisplayName) tuple per benefit,
+            // across every owned card — a card with two benefits of the
+            // same kind (e.g. domestic + international lounge) shows both,
+            // not a collapsed one, since their quotas/programs may differ.
+            final entries = <(CardBenefit, String)>[
+              for (final (userCard, product) in pairs)
+                for (final benefit in product.benefits)
+                  (benefit, userCard.nickname?.isNotEmpty == true ? userCard.nickname! : userCard.cardName),
+            ];
 
-          if (entries.isEmpty) {
-            return const EmptyState(
-              icon: Icons.workspace_premium_outlined,
-              title: 'No benefits to show yet',
-              message: 'Add a card to see its lounge access, insurance, warranty, and other benefits here.',
-            );
-          }
+            if (entries.isEmpty) {
+              return const EmptyState(
+                icon: Icons.workspace_premium_outlined,
+                title: 'No benefits to show yet',
+                message: 'Add a card to see its lounge access, insurance, warranty, and other benefits here.',
+              );
+            }
 
-          final grouped = <BenefitKind, List<(CardBenefit, String)>>{};
-          for (final entry in entries) {
-            grouped.putIfAbsent(entry.$1.kind, () => []).add(entry);
-          }
-          // Stable, meaningful order rather than enum declaration order —
-          // the highest-value/most-asked-about benefit types first.
-          const kindOrder = [
-            BenefitKind.loungeDomestic,
-            BenefitKind.loungeInternational,
-            BenefitKind.golf,
-            BenefitKind.insuranceTravel,
-            BenefitKind.insurancePurchase,
-            BenefitKind.extendedWarranty,
-            BenefitKind.diningProgram,
-            BenefitKind.movie,
-            BenefitKind.fuelSurcharge,
-            BenefitKind.roadsideAssistance,
-            BenefitKind.concierge,
-            BenefitKind.other,
-          ];
+            final grouped = <BenefitKind, List<(CardBenefit, String)>>{};
+            for (final entry in entries) {
+              grouped.putIfAbsent(entry.$1.kind, () => []).add(entry);
+            }
+            // Stable, meaningful order rather than enum declaration order —
+            // the highest-value/most-asked-about benefit types first.
+            const kindOrder = [
+              BenefitKind.loungeDomestic,
+              BenefitKind.loungeInternational,
+              BenefitKind.golf,
+              BenefitKind.insuranceTravel,
+              BenefitKind.insurancePurchase,
+              BenefitKind.extendedWarranty,
+              BenefitKind.diningProgram,
+              BenefitKind.movie,
+              BenefitKind.fuelSurcharge,
+              BenefitKind.roadsideAssistance,
+              BenefitKind.concierge,
+              BenefitKind.other,
+            ];
 
-          return ListView(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            children: [
-              for (final kind in kindOrder)
-                if (grouped[kind] case final items? when items.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpace.lg, bottom: AppSpace.sm),
-                    child: Text(_kindLabel(kind), style: BambooFonts.heading(16, color: BambooInk.ink900)),
-                  ),
-                  for (final (benefit, cardLabel) in items)
+            return ListView(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              children: [
+                for (final kind in kindOrder)
+                  if (grouped[kind] case final items? when items.isNotEmpty) ...[
                     Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                      child: _BenefitTile(benefit: benefit, cardLabel: cardLabel),
+                      padding: const EdgeInsets.only(top: AppSpace.lg, bottom: AppSpace.sm),
+                      child: Text(_kindLabel(kind), style: BambooFonts.heading(16, color: BambooInk.ink900)),
                     ),
-                ],
-            ],
-          );
+                    for (final (benefit, cardLabel) in items)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                        child: _BenefitTile(benefit: benefit, cardLabel: cardLabel),
+                      ),
+                  ],
+              ],
+            );
           },
         ),
       ),
@@ -110,32 +102,32 @@ class BenefitsCheatSheetScreen extends ConsumerWidget {
   }
 
   static String _kindLabel(BenefitKind kind) => switch (kind) {
-        BenefitKind.loungeDomestic => 'Domestic lounge access',
-        BenefitKind.loungeInternational => 'International lounge access',
-        BenefitKind.golf => 'Golf',
-        BenefitKind.concierge => 'Concierge',
-        BenefitKind.insuranceTravel => 'Travel insurance',
-        BenefitKind.insurancePurchase => 'Purchase protection insurance',
-        BenefitKind.extendedWarranty => 'Extended warranty',
-        BenefitKind.diningProgram => 'Dining',
-        BenefitKind.movie => 'Movies',
-        BenefitKind.fuelSurcharge => 'Fuel surcharge waiver',
-        BenefitKind.roadsideAssistance => 'Roadside assistance',
-        BenefitKind.other => 'Other benefits',
-      };
+    BenefitKind.loungeDomestic => 'Domestic lounge access',
+    BenefitKind.loungeInternational => 'International lounge access',
+    BenefitKind.golf => 'Golf',
+    BenefitKind.concierge => 'Concierge',
+    BenefitKind.insuranceTravel => 'Travel insurance',
+    BenefitKind.insurancePurchase => 'Purchase protection insurance',
+    BenefitKind.extendedWarranty => 'Extended warranty',
+    BenefitKind.diningProgram => 'Dining',
+    BenefitKind.movie => 'Movies',
+    BenefitKind.fuelSurcharge => 'Fuel surcharge waiver',
+    BenefitKind.roadsideAssistance => 'Roadside assistance',
+    BenefitKind.other => 'Other benefits',
+  };
 
   static IconData _kindIcon(BenefitKind kind) => switch (kind) {
-        BenefitKind.loungeDomestic || BenefitKind.loungeInternational => Icons.airline_seat_flat_rounded,
-        BenefitKind.golf => Icons.sports_golf_rounded,
-        BenefitKind.concierge => Icons.support_agent_rounded,
-        BenefitKind.insuranceTravel || BenefitKind.insurancePurchase => Icons.shield_outlined,
-        BenefitKind.extendedWarranty => Icons.verified_outlined,
-        BenefitKind.diningProgram => Icons.restaurant_outlined,
-        BenefitKind.movie => Icons.movie_outlined,
-        BenefitKind.fuelSurcharge => Icons.local_gas_station_outlined,
-        BenefitKind.roadsideAssistance => Icons.car_repair_outlined,
-        BenefitKind.other => Icons.card_giftcard_outlined,
-      };
+    BenefitKind.loungeDomestic || BenefitKind.loungeInternational => Icons.airline_seat_flat_rounded,
+    BenefitKind.golf => Icons.sports_golf_rounded,
+    BenefitKind.concierge => Icons.support_agent_rounded,
+    BenefitKind.insuranceTravel || BenefitKind.insurancePurchase => Icons.shield_outlined,
+    BenefitKind.extendedWarranty => Icons.verified_outlined,
+    BenefitKind.diningProgram => Icons.restaurant_outlined,
+    BenefitKind.movie => Icons.movie_outlined,
+    BenefitKind.fuelSurcharge => Icons.local_gas_station_outlined,
+    BenefitKind.roadsideAssistance => Icons.car_repair_outlined,
+    BenefitKind.other => Icons.card_giftcard_outlined,
+  };
 }
 
 class _BenefitTile extends StatelessWidget {
@@ -163,7 +155,10 @@ class _BenefitTile extends StatelessWidget {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(AppRadius.sm)),
+            decoration: BoxDecoration(
+              color: BambooInk.slate,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
             child: Icon(BenefitsCheatSheetScreen._kindIcon(benefit.kind), color: BambooInk.lime, size: 20),
           ),
           const SizedBox(width: AppSpace.md),
@@ -185,7 +180,11 @@ class _BenefitTile extends StatelessWidget {
                     runSpacing: AppSpace.xs,
                     children: [
                       for (final part in quotaParts)
-                        StatusPill(label: part, foreground: BambooInk.ink900, background: BambooInk.paperMuted),
+                        StatusPill(
+                          label: part,
+                          foreground: BambooInk.ink900,
+                          background: BambooInk.paperMuted,
+                        ),
                     ],
                   ),
                 ],
@@ -194,7 +193,11 @@ class _BenefitTile extends StatelessWidget {
                   Row(
                     children: [
                       Text('Est. value: ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                      MoneyText(benefit.valueEstimate!, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                      MoneyText(
+                        benefit.valueEstimate!,
+                        confidence: Confidence.estimated,
+                        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                      ),
                     ],
                   ),
                 ],
@@ -207,12 +210,12 @@ class _BenefitTile extends StatelessWidget {
   }
 
   static String _periodLabel(CapPeriod? period) => switch (period) {
-        CapPeriod.statementCycle => 'cycle',
-        CapPeriod.calendarMonth => 'month',
-        CapPeriod.quarter => 'quarter',
-        CapPeriod.halfYear => 'half-year',
-        CapPeriod.annual => 'year',
-        CapPeriod.lifetime => 'lifetime',
-        null => 'period',
-      };
+    CapPeriod.statementCycle => 'cycle',
+    CapPeriod.calendarMonth => 'month',
+    CapPeriod.quarter => 'quarter',
+    CapPeriod.halfYear => 'half-year',
+    CapPeriod.annual => 'year',
+    CapPeriod.lifetime => 'lifetime',
+    null => 'period',
+  };
 }

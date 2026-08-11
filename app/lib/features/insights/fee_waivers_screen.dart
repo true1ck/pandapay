@@ -77,8 +77,9 @@ class _FeeWaiverTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final waived = fw.waivedAt != null;
     final ratio = capRatio(fw.qualifiedSpend, fw.thresholdSpend);
-    final anniversaryDays =
-        userCard.anniversaryOn == null ? null : daysUntil(userCard.anniversaryOn!, DateTime.now());
+    final anniversaryDays = userCard.anniversaryOn == null
+        ? null
+        : daysUntil(userCard.anniversaryOn!, DateTime.now());
 
     return Container(
       decoration: BoxDecoration(
@@ -104,7 +105,11 @@ class _FeeWaiverTile extends StatelessWidget {
                     Row(
                       children: [
                         Text('Fee waived at ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                        MoneyText(fw.waivesFee, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                        MoneyText(
+                          fw.waivesFee,
+                          confidence: Confidence.estimated,
+                          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                        ),
                       ],
                     ),
                   ],
@@ -138,9 +143,17 @@ class _FeeWaiverTile extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    MoneyText(fw.qualifiedSpend, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    MoneyText(
+                      fw.qualifiedSpend,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
                     Text(' of ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                    MoneyText(fw.thresholdSpend, confidence: Confidence.estimated, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    MoneyText(
+                      fw.thresholdSpend,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
                   ],
                 ),
               ],
