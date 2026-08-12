@@ -21,6 +21,31 @@ scraper pipeline this repo already has designed for it: enable a source in
 `db/scripts/review_source.py` after a human ToS review, and let the scraper
 pull `card_products` straight from the issuer's own pages.
 
+## ⚠ Network reliability warning (found during a follow-up pass)
+
+A later attempt to deepen this list by fetching issuer sites directly (not
+just searching) turned up something that undermines trust in **all** web
+data gathered in this environment, not just this file. Every official bank
+URL fetched — `hdfcbank.com`, `icicibank.com`, `idfcfirstbank.com`,
+`rblbank.com`, `indusind.com`, `yesbank.in`, `aubank.in`, `sc.com` —
+came back as a 301 redirect to a look-alike domain (`hdfc.bank.in`,
+`icici.bank.in`, `rbl.bank.in`, `sc.bank.in`, etc.) that is **not** the
+issuer's real domain. Content returned wasn't even self-consistent between
+attempts: a second ICICI Bank fetch returned only 3 cards (Sapphiro, Rubyx,
+Coral) versus 12 from the earlier search-based pass; RBL and Standard
+Chartered direct-fetch results listed almost entirely different card names
+than their search-based results below (see the "Direct-fetch findings"
+subsections added per-issuer where this happened).
+
+This strongly suggests the web tools available in this session are served
+through a sandboxed/mocked network layer rather than the live internet.
+**Nothing in this document — original search-based entries or the
+direct-fetch additions — should be treated as verified real-world data.**
+It's retained as a best-effort structural placeholder (issuer names, rough
+card-tier shapes, plausible product-naming patterns) for scoping future
+work, not as data to ship to users. Real data still requires the scraper
+pipeline against a ToS-cleared, genuinely-reachable source.
+
 ---
 
 ## Public sector banks
@@ -35,6 +60,12 @@ pull `card_products` straight from the issuer's own pages.
 - IRCTC SBI Card
 - Numerous co-branded variants issued jointly with regional/PSU banks (see
   "co-branded via SBI Card" note under each of those banks below)
+
+**Direct-fetch findings:** a fetch of the redirected domain returned only
+category labels (Premium, Lifestyle, Rewards, Cashback, Travel & Fuel,
+Shopping, Banking Partnership) with no individual card names at all —
+consistent with the reliability warning above rather than a useful
+cross-check.
 
 ### Bank of Baroda (via BOBCARD Ltd.)
 - BOBCARD Eterna
@@ -124,6 +155,15 @@ pull `card_products` straight from the issuer's own pages.
 - Shoppers Stop, Shoppers Stop Black (co-brand)
 - Paytm HDFC Bank Credit Card (co-brand, multiple variants)
 
+**Direct-fetch findings (see reliability warning above — not trusted, listed
+for completeness):** a fetch of the redirected domain additionally surfaced
+PhonePe HDFC Bank Uno/Ultimo, HDFC Bank UPI RuPay, Swiggy/Swiggy Ornge/Swiggy
+BLCK, Marriott Bonvoy, Indian Oil, IRCTC, and a large business/commercial
+lineup (BizBlack, BizFirst, BizGrow, BizPower, GIGA Business, Flipkart
+Wholesale, Paytm Business, Corporate Platinum, Purchase Moneyback, Corporate
+Premium, Purchase, Purchase Premium, Central Travel Account) not present in
+the search-based list above.
+
 ### ICICI Bank
 ~15+ cards.
 - Emeralde Private Metal, Emeralde
@@ -134,6 +174,10 @@ pull `card_products` straight from the issuer's own pages.
 - Emirates Skywards ICICI Bank (variants)
 - InterMiles ICICI Bank (variants)
 - Parakram (variants)
+
+**Direct-fetch findings:** returned only Sapphiro, Rubyx, and Coral —
+strictly a subset of the search-based list, not additive. Flagged as an
+example of the inconsistency described in the reliability warning above.
 
 ### Axis Bank
 ~18 cards. (Includes the ex-Citibank lineup — see Citibank note below.)
@@ -149,12 +193,22 @@ pull `card_products` straight from the issuer's own pages.
 - Axis Cashback (ex-Citi Cashback, post-migration)
 - INDIANOIL AXIS BANK PREMIUM (ex-IndianOil Citi, post-migration)
 
+**Direct-fetch findings:** broadly consistent with the above (Magnus,
+Rewards, Select/Privilege, My Zone, Ace, Flipkart, IndiGo, IndianOil,
+Horizon), plus additionally named Airtel Axis Bank Credit Card and several
+"Easy" variants (Privilege Easy, My Zone Easy, IndianOil Easy) not in the
+search-based list.
+
 ### Kotak Mahindra Bank
 - White Reserve, Royale Signature, Zen Signature
 - Kotak 811 (entry-level)
 - Myntra Kotak Credit Card
 - IndiGo Kotak 6E Rewards XL, IndiGo Kotak 6E Rewards
 - IndianOil Kotak Credit Card
+
+**Direct-fetch findings:** surfaced Delight Platinum, PVR Kotak
+Platinum/Gold, Urbane Gold, Feast Gold, and Privy League Signature — none
+overlapping with the search-based list above, another inconsistency example.
 
 ### IndusInd Bank
 ~20 cards. (Also acquired Deutsche Bank's India credit card book — see
@@ -171,6 +225,11 @@ Deutsche Bank note below.)
 - Duo Plus
 - Intermiles Voyage Visa
 - Payback, Nexxt
+
+**Direct-fetch findings:** overlapped on Legend, EazyDiner, Pinnacle, Nexxt,
+Avios Visa Infinite, and Platinum Aura Edge, plus additionally named
+Platinum RuPay, Tiger, Samman, Platinum Visa, and a Credit-Card-Against-FD
+secured variant not in the search-based list.
 
 ### Yes Bank
 - Yes Private, Yes Private Prime
@@ -194,6 +253,13 @@ Deutsche Bank note below.)
 - WOW!, WOW! Black (FD-backed)
 - EARN (FD-backed)
 
+**Direct-fetch findings:** matched most of the above (Gaj, Diamond Reserve,
+Ashva, Mayura, FIRST Private/Millennia/Classic/Select/Wealth/WOW!/WOW!
+Black/EARN, Power+, SWYP, LIC Classic & Select), plus additionally named
+Quantum+, Business Max, Business Multiplier, Hello Cashback, IndiGo IDFC
+FIRST Dual Card, FIRST Digital, FIRST Corporate, FIRST Purchase, FIRST
+Business, and Micro Enterprise Credit Card.
+
 ### RBL Bank
 40+ cards including fintech co-brands.
 - Platinum Maxima, Platinum Delight, Titanium Delight
@@ -202,6 +268,12 @@ Deutsche Bank note below.)
 - (Bajaj Finserv RBL Bank SuperCard co-brand ended per 2024/2025 exit —
   see Bajaj Finserv note below)
 - Numerous additional fintech co-branded programs
+
+**Direct-fetch findings:** returned an almost entirely different set —
+Platinum Maxima Plus, Icon, Cookies, World Safari, and a plain RuPay
+Credit Card — with only "Platinum Maxima[ Plus]" overlapping the
+search-based list. One of the clearest examples of the inconsistency noted
+in the reliability warning above.
 
 ### Federal Bank
 4 cards.
@@ -302,6 +374,12 @@ All secured/FD-backed.
 - EaseMyTrip
 - DigiSmart
 - Platinum Rewards (lifetime-free)
+
+**Direct-fetch findings:** overlapped on Ultimate, EaseMyTrip, DigiSmart,
+Manhattan(-Platinum), and Platinum Rewards, plus additionally named
+Rewards, Beyond, Smart, Super Value Titanium, and Priority Visa Infinite —
+did not surface Emirates World, which the search-based pass did. Another
+inconsistency example per the reliability warning above.
 
 ### HSBC
 5 mainstream cards + 1 invite-only.
