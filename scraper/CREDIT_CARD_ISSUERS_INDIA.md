@@ -9,6 +9,11 @@ issuers are enabled for scraping; adding a source still requires the same
 robots.txt + human ToS review process documented in `CANDIDATE_SOURCES.md`
 and recorded via `db/scripts/review_source.py`.
 
+See `CARDS_BY_ISSUER_INDIA.md` for a per-issuer breakdown of individual card
+products against this list — same caveats apply, plus its own notes on
+where per-issuer coverage is weaker (e.g. PSU banks whose retail offering
+leans on co-branded SBI Card products).
+
 Issuer participation shifts over time (portfolio sales, mergers, new NBFC
 entrants) — treat this as a snapshot, not a guaranteed-current list.
 
