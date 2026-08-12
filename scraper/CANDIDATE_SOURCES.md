@@ -38,6 +38,21 @@ row — and only after that can `is_enabled` be set to true (enforced by the
 `Disallow: /` is a strong enough signal that it probably shouldn't be pursued at all
 without separate legal sign-off, independent of the ToS question.
 
+Use `db/scripts/review_source.py` to record that decision once you've made it — it
+doesn't decide anything for you (it requires `--confirm-tos-read` and a `--note`
+explaining what you read and concluded), it just turns the flip into an attributed,
+audited action instead of a hand-edit:
+
+```
+export DATABASE_URL=postgresql://app_user:...@host:5432/pandapay   # app_user, not postgres/scraper_role
+python db/scripts/review_source.py list
+python db/scripts/review_source.py review \
+    --source "ICICI Bank" --admin-email you@pandapay.example \
+    --tos-url https://www.icicibank.com/terms-and-conditions \
+    --note "Read site ToS 2026-08-12: ..." \
+    --confirm-tos-read --enable
+```
+
 All 12 rows already exist in the local `sources` table (`kind = 'bank_official'`),
 each with `tos_reviewed = false`, `is_enabled = false`. No page content was fetched or
 downloaded from any of these sites — only `robots.txt` was checked.
