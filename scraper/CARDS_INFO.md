@@ -26,6 +26,21 @@ Filling in the `TBD`s for real requires one of:
 - Manual entry by someone reading the issuer's actual current terms page
   and citing it in `source_url`.
 
+## Source URL guesses (added in a later pass)
+
+Every card's `source_url` field now carries an **issuer-level page guess**,
+e.g. `TBD -- issuer-page guess, unverified: https://...`. These come from
+`CANDIDATE_SOURCES.md`'s issuer domains (real, known bank domains —
+independent of this session's unreliable fetch tools) — not from a
+per-card deep link. Guessing an exact per-card URL slug (e.g.
+`/regalia-gold-credit-card`) would be a much lower-confidence guess likely
+to 404, so this deliberately stops at "here's the issuer's card section,
+go find this specific card on it" rather than pretending to know the exact
+path. Deutsche Bank and Citibank cards point at their successor issuers'
+pages (IndusInd Bank and Axis Bank respectively) since neither issuer is
+still live in India. The `TBD` is left in place because a guessed URL is
+still not a verified source — someone still needs to open it and confirm.
+
 ## Field glossary (maps 1:1 to `database.sql`)
 
 | Field | Source table.column | Notes |
@@ -105,7 +120,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sbicard.com/en/personal/credit-cards.page
 - verified_at: TBD
 - verified_by: TBD
 
@@ -129,7 +144,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sbicard.com/en/personal/credit-cards.page
 - verified_at: TBD
 - verified_by: TBD
 
@@ -153,7 +168,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sbicard.com/en/personal/credit-cards.page
 - verified_at: TBD
 - verified_by: TBD
 
@@ -177,7 +192,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sbicard.com/en/personal/credit-cards.page
 - verified_at: TBD
 - verified_by: TBD
 
@@ -201,7 +216,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sbicard.com/en/personal/credit-cards.page
 - verified_at: TBD
 - verified_by: TBD
 
@@ -225,7 +240,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sbicard.com/en/personal/credit-cards.page
 - verified_at: TBD
 - verified_by: TBD
 
@@ -249,7 +264,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sbicard.com/en/personal/credit-cards.page
 - verified_at: TBD
 - verified_by: TBD
 
@@ -273,7 +288,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sbicard.com/en/personal/credit-cards.page
 - verified_at: TBD
 - verified_by: TBD
 
@@ -300,7 +315,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.bobcard.co.in/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -324,7 +339,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.bobcard.co.in/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -348,7 +363,7 @@ Filling in the `TBD`s for real requires one of:
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.bobcard.co.in/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -373,7 +388,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.bobcard.co.in/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -397,7 +412,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.bobcard.co.in/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -421,7 +436,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.bobcard.co.in/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -448,7 +463,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.pnbindia.in/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -472,7 +487,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.pnbindia.in/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -496,7 +511,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.pnbindia.in/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -520,7 +535,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.pnbindia.in/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -544,7 +559,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.pnbindia.in/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -569,7 +584,7 @@ _fintech co-brand, lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.pnbindia.in/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -594,7 +609,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.pnbindia.in/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -619,7 +634,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.pnbindia.in/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -646,7 +661,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://canarabank.com/user_pages/Credit-Cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -670,7 +685,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://canarabank.com/user_pages/Credit-Cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -694,7 +709,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://canarabank.com/user_pages/Credit-Cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -718,7 +733,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://canarabank.com/user_pages/Credit-Cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -742,7 +757,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://canarabank.com/user_pages/Credit-Cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -766,7 +781,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://canarabank.com/user_pages/Credit-Cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -790,7 +805,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://canarabank.com/user_pages/Credit-Cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -814,7 +829,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://canarabank.com/user_pages/Credit-Cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -838,7 +853,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://canarabank.com/user_pages/Credit-Cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -865,7 +880,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.unionbankofindia.co.in/english/credit-card.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -889,7 +904,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.unionbankofindia.co.in/english/credit-card.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -913,7 +928,7 @@ _EaseMyTrip co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.unionbankofindia.co.in/english/credit-card.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -938,7 +953,7 @@ _women-focused_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.unionbankofindia.co.in/english/credit-card.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -962,7 +977,7 @@ _women-focused_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.unionbankofindia.co.in/english/credit-card.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -987,7 +1002,7 @@ _street vendors_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.unionbankofindia.co.in/english/credit-card.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1014,7 +1029,7 @@ _street vendors_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://bankofindia.co.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1038,7 +1053,7 @@ _street vendors_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://bankofindia.co.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1063,7 +1078,7 @@ _Indian Navy personnel_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://bankofindia.co.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1087,7 +1102,7 @@ _Indian Navy personnel_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://bankofindia.co.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1111,7 +1126,7 @@ _Indian Navy personnel_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://bankofindia.co.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1141,7 +1156,7 @@ _own-issued, free, low limit_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indianbank.in/personal-banking/credit-card/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1169,7 +1184,7 @@ _co-branded with SBI Card_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.centralbankofindia.co.in/en/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1194,7 +1209,7 @@ _FD-backed, against Cent Aspire term deposit_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.centralbankofindia.co.in/en/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1222,7 +1237,7 @@ _Visa_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.iob.in/Credit_Card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1247,7 +1262,7 @@ _Visa_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.iob.in/Credit_Card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1271,7 +1286,7 @@ _Visa_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.iob.in/Credit_Card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1295,7 +1310,7 @@ _Visa_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.iob.in/Credit_Card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1328,7 +1343,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.punjabandsindbank.co.in/en/credit-card/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1353,7 +1368,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.punjabandsindbank.co.in/en/credit-card/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1378,7 +1393,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.punjabandsindbank.co.in/en/credit-card/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1403,7 +1418,7 @@ _farmer-focused, distinct product line_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.punjabandsindbank.co.in/en/credit-card/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1433,7 +1448,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1457,7 +1472,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1481,7 +1496,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1505,7 +1520,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1529,7 +1544,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1553,7 +1568,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1577,7 +1592,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1601,7 +1616,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1625,7 +1640,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1649,7 +1664,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1673,7 +1688,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1697,7 +1712,7 @@ _invite-only, top-tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1722,7 +1737,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1746,7 +1761,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1771,7 +1786,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1796,7 +1811,7 @@ _co-brand, multiple variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hdfcbank.com/personal/pay/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1823,7 +1838,7 @@ _co-brand, multiple variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1847,7 +1862,7 @@ _co-brand, multiple variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1871,7 +1886,7 @@ _co-brand, multiple variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1895,7 +1910,7 @@ _co-brand, multiple variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1919,7 +1934,7 @@ _co-brand, multiple variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1943,7 +1958,7 @@ _co-brand, multiple variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1967,7 +1982,7 @@ _co-brand, multiple variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -1991,7 +2006,7 @@ _co-brand, multiple variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2015,7 +2030,7 @@ _co-brand, multiple variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2040,7 +2055,7 @@ _variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2065,7 +2080,7 @@ _variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2090,7 +2105,7 @@ _variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.icicibank.com/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2118,7 +2133,7 @@ _super-premium_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2142,7 +2157,7 @@ _super-premium_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2167,7 +2182,7 @@ _flat-rate cashback_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2191,7 +2206,7 @@ _flat-rate cashback_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2215,7 +2230,7 @@ _flat-rate cashback_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2240,7 +2255,7 @@ _RuPay, lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2264,7 +2279,7 @@ _RuPay, lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2289,7 +2304,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2313,7 +2328,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2337,7 +2352,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2361,7 +2376,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2386,7 +2401,7 @@ _co-brands_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2411,7 +2426,7 @@ _ex-Citi Rewards, post-migration_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2436,7 +2451,7 @@ _ex-Citi PremierMiles, post-migration_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2461,7 +2476,7 @@ _ex-Citi Cashback, post-migration_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2486,7 +2501,7 @@ _ex-IndianOil Citi, post-migration_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.axisbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2513,7 +2528,7 @@ _ex-IndianOil Citi, post-migration_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.kotak.com/en/personal-banking/cards/credit-cards.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2537,7 +2552,7 @@ _ex-IndianOil Citi, post-migration_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.kotak.com/en/personal-banking/cards/credit-cards.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2561,7 +2576,7 @@ _ex-IndianOil Citi, post-migration_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.kotak.com/en/personal-banking/cards/credit-cards.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2586,7 +2601,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.kotak.com/en/personal-banking/cards/credit-cards.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2610,7 +2625,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.kotak.com/en/personal-banking/cards/credit-cards.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2634,7 +2649,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.kotak.com/en/personal-banking/cards/credit-cards.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2658,7 +2673,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.kotak.com/en/personal-banking/cards/credit-cards.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2682,7 +2697,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.kotak.com/en/personal-banking/cards/credit-cards.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2709,7 +2724,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2733,7 +2748,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2757,7 +2772,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2781,7 +2796,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2805,7 +2820,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2829,7 +2844,7 @@ _entry-level_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2854,7 +2869,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2879,7 +2894,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2903,7 +2918,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2927,7 +2942,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2951,7 +2966,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2975,7 +2990,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -2999,7 +3014,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3023,7 +3038,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3047,7 +3062,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3071,7 +3086,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3095,7 +3110,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3119,7 +3134,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3143,7 +3158,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3167,7 +3182,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.indusind.com/in/en/personal/cards/credit-card.html
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3194,7 +3209,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3218,7 +3233,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3242,7 +3257,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3266,7 +3281,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3290,7 +3305,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3314,7 +3329,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3338,7 +3353,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3362,7 +3377,7 @@ _Qatar Airways / British Airways_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3387,7 +3402,7 @@ _with Kiwi, lifetime-free, fully digital_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3412,7 +3427,7 @@ _Build Your Own Card_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3436,7 +3451,7 @@ _Build Your Own Card_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.yesbank.in/personal-banking/yes-premia/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3464,7 +3479,7 @@ _top tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3489,7 +3504,7 @@ _invite-only, ₹12,500_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3514,7 +3529,7 @@ _₹5,999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3539,7 +3554,7 @@ _₹2,999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3563,7 +3578,7 @@ _₹2,999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3587,7 +3602,7 @@ _₹2,999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3611,7 +3626,7 @@ _₹2,999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3635,7 +3650,7 @@ _₹2,999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3660,7 +3675,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3685,7 +3700,7 @@ _fuel_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3710,7 +3725,7 @@ _youth-focused_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3734,7 +3749,7 @@ _youth-focused_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3759,7 +3774,7 @@ _co-branded_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3783,7 +3798,7 @@ _co-branded_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3808,7 +3823,7 @@ _FD-backed_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3833,7 +3848,7 @@ _FD-backed_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idfcfirstbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3860,7 +3875,7 @@ _FD-backed_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.rblbank.com/personal-banking/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3884,7 +3899,7 @@ _FD-backed_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.rblbank.com/personal-banking/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3908,7 +3923,7 @@ _FD-backed_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.rblbank.com/personal-banking/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3933,7 +3948,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.rblbank.com/personal-banking/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3957,7 +3972,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.rblbank.com/personal-banking/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -3981,7 +3996,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.rblbank.com/personal-banking/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4006,7 +4021,7 @@ _co-brands_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.rblbank.com/personal-banking/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4030,7 +4045,7 @@ _co-brands_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.rblbank.com/personal-banking/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4057,7 +4072,7 @@ _co-brands_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.federalbank.co.in/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4081,7 +4096,7 @@ _co-brands_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.federalbank.co.in/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4105,7 +4120,7 @@ _co-brands_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.federalbank.co.in/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4129,7 +4144,7 @@ _co-brands_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.federalbank.co.in/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4157,7 +4172,7 @@ _fintech co-brand, lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.southindianbank.com/content/credit-cards/70/108
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4181,7 +4196,7 @@ _fintech co-brand, lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.southindianbank.com/content/credit-cards/70/108
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4206,7 +4221,7 @@ _UPI-linked_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.southindianbank.com/content/credit-cards/70/108
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4234,7 +4249,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idbibank.in/credit-cards.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4259,7 +4274,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idbibank.in/credit-cards.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4283,7 +4298,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idbibank.in/credit-cards.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4308,7 +4323,7 @@ _FD-backed/secured, Visa_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idbibank.in/credit-cards.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4332,7 +4347,7 @@ _FD-backed/secured, Visa_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.idbibank.in/credit-cards.aspx
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4362,7 +4377,7 @@ _₹299 annual fee_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.bandhanbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4387,7 +4402,7 @@ _₹699 annual fee_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.bandhanbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4412,7 +4427,7 @@ _₹2,999 annual fee_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.bandhanbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4440,7 +4455,7 @@ _with Jupiter_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.csb.co.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4465,7 +4480,7 @@ _with Jupiter_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.csb.co.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4492,7 +4507,7 @@ _with Jupiter_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.dcbbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4516,7 +4531,7 @@ _with Jupiter_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.dcbbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4541,7 +4556,7 @@ _RuPay, FD-backed_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.dcbbank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4568,7 +4583,7 @@ _RuPay, FD-backed_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.tmb.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4593,7 +4608,7 @@ _business_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.tmb.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4617,7 +4632,7 @@ _business_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.tmb.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4641,7 +4656,7 @@ _business_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.tmb.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4665,7 +4680,7 @@ _business_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.tmb.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4689,7 +4704,7 @@ _business_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.tmb.in/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4717,7 +4732,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://karnatakabank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4742,7 +4757,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://karnatakabank.com/personal/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4770,7 +4785,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.cityunionbank.com/personal-credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4795,7 +4810,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.cityunionbank.com/personal-credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4819,7 +4834,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.cityunionbank.com/personal-credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4843,7 +4858,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.cityunionbank.com/personal-credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4867,7 +4882,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.cityunionbank.com/personal-credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4891,7 +4906,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.cityunionbank.com/personal-credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4915,7 +4930,7 @@ _co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.cityunionbank.com/personal-credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4945,7 +4960,7 @@ _₹4,999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.aubank.in/personal/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4970,7 +4985,7 @@ _₹2,999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.aubank.in/personal/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -4995,7 +5010,7 @@ _₹499_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.aubank.in/personal/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5020,7 +5035,7 @@ _₹199_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.aubank.in/personal/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5045,7 +5060,7 @@ _lifetime-free, travel co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.aubank.in/personal/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5070,7 +5085,7 @@ _lifetime-free, customizable feature packs_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.aubank.in/personal/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5095,7 +5110,7 @@ _invite-only_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.aubank.in/personal/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5123,7 +5138,7 @@ _digital-first_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.equitasbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5148,7 +5163,7 @@ _premium travel_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.equitasbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5172,7 +5187,7 @@ _premium travel_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.equitasbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5197,7 +5212,7 @@ _HDFC Bank co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.equitasbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5222,7 +5237,7 @@ _HDFC Bank co-brand, higher limit tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.equitasbank.com/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5250,7 +5265,7 @@ _BOBCARD co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.ujjivansfb.in/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5275,7 +5290,7 @@ _BOBCARD co-brand_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.ujjivansfb.in/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5300,7 +5315,7 @@ _secured_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.ujjivansfb.in/personal-banking/cards/credit-card
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5332,7 +5347,7 @@ _invite-only / highest tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.americanexpress.com/en-in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5357,7 +5372,7 @@ _no preset spending limit_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.americanexpress.com/en-in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5381,7 +5396,7 @@ _no preset spending limit_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.americanexpress.com/en-in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5405,7 +5420,7 @@ _no preset spending limit_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.americanexpress.com/en-in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5433,7 +5448,7 @@ _₹5,000_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sc.com/in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5457,7 +5472,7 @@ _₹5,000_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sc.com/in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5482,7 +5497,7 @@ _₹999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sc.com/in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5506,7 +5521,7 @@ _₹999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sc.com/in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5530,7 +5545,7 @@ _₹999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sc.com/in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5555,7 +5570,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.sc.com/in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5583,7 +5598,7 @@ _₹4,999_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hsbc.co.in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5608,7 +5623,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hsbc.co.in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5633,7 +5648,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hsbc.co.in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5658,7 +5673,7 @@ _lifetime-free_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hsbc.co.in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5683,7 +5698,7 @@ _₹999, upgraded to Visa Infinite mid-2026_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hsbc.co.in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5708,7 +5723,7 @@ _₹20,000, invite-only, Premier banking tier_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hsbc.co.in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5733,7 +5748,7 @@ _luxury-hotel specialist, sits outside the main lineup_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.hsbc.co.in/credit-cards/
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5763,7 +5778,7 @@ _premium/travel_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.dbs.com/in/treasures/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5788,7 +5803,7 @@ _Spark5 / Spark10 / Spark20 variants_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.dbs.com/in/treasures/cards/credit-cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5820,7 +5835,7 @@ _unsecured, plastic/metal card_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.getonecard.app
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5854,7 +5869,7 @@ _unsecured, plastic/metal card_
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.bajajfinserv.in/cards
 - verified_at: TBD
 - verified_by: TBD
 
@@ -5882,7 +5897,7 @@ _credit line-backed card issued via SBM Bank India, with an FD-backed "Booster" 
 - fuel_surcharge: TBD
 - billing_cycle_grace_days: TBD
 - redemption_options: TBD
-- source_url: TBD
+- source_url: TBD -- issuer-page guess, unverified: https://www.lazypay.in
 - verified_at: TBD
 - verified_by: TBD
 
