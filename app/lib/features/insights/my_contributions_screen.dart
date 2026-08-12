@@ -61,7 +61,7 @@ class MyContributionsScreen extends ConsumerWidget {
               Switch(
                 value: optedIn,
                 activeTrackColor: BambooInk.jade,
-                activeColor: BambooInk.lime,
+                activeThumbColor: BambooInk.lime,
                 onChanged: (v) async {
                   final repo = ref.read(userCardsRepositoryProvider);
                   if (repo == null) return;

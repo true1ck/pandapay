@@ -290,7 +290,7 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final inputDecoration = (String label) => InputDecoration(
+    InputDecoration inputDecoration(String label) => InputDecoration(
       labelText: label,
       labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       filled: true,
@@ -480,7 +480,7 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final inputDecoration = (String label) => InputDecoration(
+    InputDecoration inputDecoration(String label) => InputDecoration(
       labelText: label,
       labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       filled: true,

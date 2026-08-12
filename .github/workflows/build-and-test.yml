@@ -1,0 +1,174 @@
+# Plan Phase 0.2 — the build gate that did not exist.
+#
+# Before this the repo had exactly one workflow (the anonymization audit), so
+# nothing on any branch ever ran `flutter analyze`, `flutter test`, the domain
+# package's tests, or the API's tests. Every one of those was run by hand, and
+# a duplicate top-level `const` that made `api/src/index.js` fail to parse at
+# all still shipped — because the API's unit tests import individual modules
+# and never load the entry point. `npm test` now runs `node --check` on every
+# source file first, and this workflow makes that automatic.
+#
+# It also builds both container images and, on master, pushes them to GHCR —
+# the registry decision deploy/DEPLOY.md's own header used to call an open
+# owner action. `docker compose -f docker-compose.prod.yml pull` on the
+# deploy host then always gets exactly the image this workflow tested.
+
+name: Build and test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+# A new push to the same branch makes an in-flight run obsolete; cancelling it
+# keeps the queue honest rather than burning runners on a superseded commit.
+concurrency:
+  group: build-and-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API and auth (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install api dependencies
+        working-directory: api
+        run: npm install
+
+      # Runs `node --check` on every source file, then the unit tests.
+      - name: Test api
+        working-directory: api
+        env:
+          # src/auth.js throws at require-time without this, by design — it
+          # refuses to start with an unset signing secret rather than silently
+          # accepting unsigned tokens. A CI-only value satisfies the check.
+          JWT_ACCESS_SECRET: ci_only_not_a_real_secret
+        run: npm test
+
+      - name: Syntax-check auth
+        working-directory: auth
+        # auth/ has no test suite of its own yet. A parse check over every
+        # source file is a genuinely low bar, but it is strictly more than the
+        # zero automated verification this service had before, and it is the
+        # check that would have caught the api/ breakage described above.
+        run: |
+          find src -name '*.js' -print0 | xargs -0 -n1 node --check
+          echo "auth/: all source files parse"
+
+  flutter:
+    name: App, console and domain (Flutter)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Domain package tests
+        working-directory: packages/pandapay_domain
+        run: |
+          dart pub get
+          dart test
+
+      - name: App analyze and test
+        working-directory: app
+        run: |
+          flutter pub get
+          # `--fatal-infos` deliberately: the app is at zero issues as of this
+          # workflow landing, and the only way it stays there is if a new one
+          # fails the build. A warning threshold that nobody enforces is how
+          # 74 issues accumulated in the first place.
+          flutter analyze --fatal-infos
+          flutter test
+
+      - name: Console analyze
+        working-directory: console
+        run: |
+          flutter pub get
+          flutter analyze --fatal-infos
+
+  images:
+    name: Container images
+    runs-on: ubuntu-latest
+    # Needed to push to GHCR under GITHUB_TOKEN — this repo's default token
+    # permissions may be read-only, so this is explicit rather than assumed.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      # Pushed only on master, never on a pull_request build from a fork —
+      # forks don't get GITHUB_TOKEN write access anyway, but this also keeps
+      # PR runs from publishing untested images under a real tag.
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `latest` + the commit sha, not a floating tag alone — deploy/DEPLOY.md
+      # pins a specific sha when it matters, `latest` is for the common case.
+      - name: Build and push api image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/pandapay-api:latest
+            ghcr.io/${{ github.repository_owner }}/pandapay-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push auth image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./auth
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/pandapay-auth:latest
+            ghcr.io/${{ github.repository_owner }}/pandapay-auth:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  smoke:
+    name: End-to-end smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Brings up the real stack — both databases, both services, migrations
+      # and demo seeds — and drives it over HTTP.
+      #
+      # This job exists because unit tests structurally cannot catch the class
+      # of bug that actually shipped here. `POST /transactions` returned 201
+      # while never recording what the transaction earned, so every "rewards
+      # this month" figure was zero; `GET /catalogue` returned 200 with an
+      # empty list on a fresh stack, so the app had nothing to rank. Both are
+      # integration failures between services and data, and both are asserted
+      # on VALUES rather than status codes in scripts/smoke_test.py.
+      - name: Start the stack
+        run: |
+          docker compose up -d --wait --wait-timeout 180
+          docker compose ps
+
+      - name: Smoke test
+        run: python3 scripts/smoke_test.py
+
+      # Logs only on failure — a green run does not need 500 lines of output,
+      # and a red one is unreadable without them.
+      - name: Service logs (on failure)
+        if: failure()
+        run: docker compose logs --tail 120
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

@@ -6,8 +6,9 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart' show accessTokenProvider;
 import '../../data/api_exception.dart';
 import '../../data/notification_preferences_repository.dart';
+import '../../app/env.dart';
 
-const _apiBaseUrl = 'http://localhost:4000';
+const _apiBaseUrl = Env.apiBaseUrl; // plan Phase 0.3 — see app/env.dart
 
 /// Task H3 Notification Settings. Local providers only (per this pass's
 /// "create only new files, don't touch providers.dart" constraint) — same

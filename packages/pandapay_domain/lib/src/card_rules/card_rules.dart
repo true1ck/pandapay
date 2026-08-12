@@ -256,6 +256,18 @@ class CardProduct {
   final RewardUnit? baseRewardUnit;
   final double? baseRewardRate;
 
+  /// Whether the catalogue holds an issuer application link for this card
+  /// (plan Phase 2.3). A boolean, never the URL: the destination is produced
+  /// only by `pandapay.record_partner_click()` at tap time, which is what
+  /// guarantees the click is attributed rather than the app opening an
+  /// untracked link it already had.
+  ///
+  /// Display-only, like the fee and art fields above it — the ranking engine
+  /// does not read this and must never read it. A recommender that weighted
+  /// toward the cards it can earn commission on would be worthless to the
+  /// person relying on it. See migration 0030's header.
+  final bool hasApplyUrl;
+
   const CardProduct({
     required this.id,
     required this.name,
@@ -277,5 +289,6 @@ class CardProduct {
     this.issuerName,
     this.artAssetUrl,
     this.artPrimaryColor,
+    this.hasApplyUrl = false,
   });
 }

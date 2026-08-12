@@ -25,8 +25,6 @@
 /// `localhost` on a user's phone and shows them a generic network error.
 library;
 
-import 'package:flutter/foundation.dart';
-
 enum AppEnvironment { dev, staging, prod }
 
 class Env {
@@ -79,7 +77,15 @@ class Env {
   /// network error, and it can only ever fire on a misconfigured release —
   /// never on a real user's device once the build is correct.
   static void assertReleaseConfigured() {
-    if (kReleaseMode && pointsAtLocalhost) {
+    // `bool.fromEnvironment('dart.vm.product')` rather than Flutter's
+    // `kReleaseMode` — identical meaning, but it keeps this file free of any
+    // Flutter import. That matters because `tool/verify_live_*.dart` are
+    // plain `dart run` scripts with no Flutter engine: importing
+    // package:flutter/foundation here made them fail to compile with
+    // "Undefined name 'Image'" out of dart:ui, which is a confusing failure
+    // a long way from its cause.
+    const isRelease = bool.fromEnvironment('dart.vm.product');
+    if (isRelease && pointsAtLocalhost) {
       throw StateError(
         'Release build was compiled without --dart-define=PANDAPAY_API_BASE_URL / '
         'PANDAPAY_AUTH_BASE_URL, so it points at $apiBaseUrl and $authBaseUrl. '

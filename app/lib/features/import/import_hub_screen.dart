@@ -58,7 +58,7 @@ class ImportHubScreen extends ConsumerWidget {
                         BambooInk.jade,
                       ),
                 loading: () => const _Status('Checking…', BambooInk.ink500),
-                error: (_, __) => const _Status('Error', BambooInk.clay),
+                error: (_, _) => const _Status('Error', BambooInk.clay),
               ),
               onTap: () =>
                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
@@ -79,12 +79,13 @@ class ImportHubScreen extends ConsumerWidget {
               status: forwarding.when(
                 data: (addr) {
                   if (addr == null) return const _Status('Not set up', BambooInk.ink500);
-                  if (addr.emailCount > 0)
+                  if (addr.emailCount > 0) {
                     return _Status('Connected — ${addr.emailCount} received', BambooInk.jade);
+                  }
                   return const _Status('Waiting for first email…', BambooInk.amber);
                 },
                 loading: () => const _Status('Checking…', BambooInk.ink500),
-                error: (_, __) => const _Status('Error', BambooInk.clay),
+                error: (_, _) => const _Status('Error', BambooInk.clay),
               ),
               onTap: () => Navigator.of(
                 context,
@@ -101,7 +102,7 @@ class ImportHubScreen extends ConsumerWidget {
                   return const _Status('Set up — not yet verified', BambooInk.amber);
                 },
                 loading: () => const _Status('Checking…', BambooInk.ink500),
-                error: (_, __) => const _Status('Error', BambooInk.clay),
+                error: (_, _) => const _Status('Error', BambooInk.clay),
               ),
               onTap: () =>
                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImapConnectionScreen())),

@@ -139,7 +139,7 @@ class _AuditTile extends ConsumerWidget {
           usageAsync.when(
             loading: () =>
                 const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-            error: (_, __) =>
+            error: (_, _) =>
                 Text('Usage frequency unavailable', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
             data: (count) => Text(
               '$count transactions logged on this card',

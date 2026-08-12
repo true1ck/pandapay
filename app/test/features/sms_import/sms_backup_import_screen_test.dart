@@ -9,7 +9,6 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/import_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_import/sms_backup_import_screen.dart';
-import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _backupXml = '''

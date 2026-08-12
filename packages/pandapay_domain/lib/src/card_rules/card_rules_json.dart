@@ -273,6 +273,7 @@ extension CardProductJson on CardProduct {
       issuerName: json['issuer_name'] as String?,
       artAssetUrl: json['art_asset'] as String?,
       artPrimaryColor: json['art_primary_color'] as String?,
+      hasApplyUrl: json['has_apply_url'] == true,
     );
   }
 
@@ -297,5 +298,6 @@ extension CardProductJson on CardProduct {
         'issuer_name': issuerName,
         'art_asset': artAssetUrl,
         'art_primary_color': artPrimaryColor,
+        'has_apply_url': hasApplyUrl,
       };
 }

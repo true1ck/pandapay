@@ -23,6 +23,12 @@ auth/.env
 api/.env
 scraper/.env
 
+# Root-level env files for docker-compose.prod.yml / docker-compose.staging.yml
+# — real secrets. The .example templates ARE meant to be committed.
+/.env
+/.env.prod
+/.env.staging
+
 # Python
 scraper/.venv/
 __pycache__/

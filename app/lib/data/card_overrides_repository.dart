@@ -122,10 +122,10 @@ class CardOverridesRepository {
     final requestBody = {
       'userCardId': userCardId,
       'scope': _scopeToJson(scope),
-      if (vpa != null) 'vpa': vpa,
-      if (merchantName != null) 'merchantName': merchantName,
-      if (categoryId != null) 'categoryId': categoryId,
-      if (reasonNote != null) 'reasonNote': reasonNote,
+      'vpa': ?vpa,
+      'merchantName': ?merchantName,
+      'categoryId': ?categoryId,
+      'reasonNote': ?reasonNote,
     };
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/card-overrides'),
@@ -154,9 +154,9 @@ class CardOverridesRepository {
   /// untouched.
   Future<void> updateOverride(String id, {bool? isEnabled, String? reasonNote, String? userCardId}) async {
     final requestBody = <String, dynamic>{
-      if (isEnabled != null) 'isEnabled': isEnabled,
-      if (reasonNote != null) 'reasonNote': reasonNote,
-      if (userCardId != null) 'userCardId': userCardId,
+      'isEnabled': ?isEnabled,
+      'reasonNote': ?reasonNote,
+      'userCardId': ?userCardId,
     };
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/card-overrides/$id'),

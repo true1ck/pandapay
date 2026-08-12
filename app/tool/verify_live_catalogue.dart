@@ -1,14 +1,18 @@
+// ignore_for_file: avoid_print
+// This is a standalone CLI verification script (`dart run tool/verify_live_catalogue.dart`);
+// stdout is its output, not stray debug logging.
 // Manual verification script (not part of the automated test suite):
 // hits the REAL api/ HTTP endpoint via HttpCatalogueRepository — the exact
 // class the app uses — and runs the results through RecommendationEngine,
 // proving the app-side data layer works against a live backend, not just
-// against fixtures. Run with api/ already running on localhost:4000.
+// against fixtures.
+import 'package:pandapay/app/env.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 Future<void> main() async {
-  final repo = HttpCatalogueRepository(baseUrl: 'http://localhost:4000');
-  final categoryRepo = HttpCategoryRepository(baseUrl: 'http://localhost:4000');
+  final repo = HttpCatalogueRepository(baseUrl: Env.apiBaseUrl);
+  final categoryRepo = HttpCategoryRepository(baseUrl: Env.apiBaseUrl);
   final cards = await repo.fetchCatalogue();
   final categories = await categoryRepo.fetchCategories();
   print('Fetched ${cards.length} cards and ${categories.length} categories '

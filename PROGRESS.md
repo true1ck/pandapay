@@ -2837,3 +2837,75 @@ distribution code signing (needs a real Apple Developer Team ID + provisioning p
 
 **Verification**: `flutter analyze` 0 errors, `flutter test` 293/293 (1 new: `setAppGroupId` is
 called with the right App Group id before the first widget update).
+
+### Chunk 53 — Phase 0 backend readiness: scheduling, deploy, monitoring parity, host-agnostic secrets
+
+Closed the remaining items from `docs/superpowers/plans/2026-08-11-backend-readiness-data-capture-device-portability.md`'s
+Phase 0, targeting any Docker-capable Linux VM (Oracle Cloud is the intended eventual host, nothing
+here is Oracle-specific). Re-verified the audit against current code first rather than assumed: env.dart
+already solved 0.3's dart-define piece, and `db/scripts/backup.sh`/`restore_drill.sh` already existed
+and were correct — the actual gap in both cases was narrower than the original audit.
+
+- **Backup scheduling (0.1)**: `db/backup/Dockerfile` (postgres:16-alpine + dcron, so pg_dump/pg_restore
+  are guaranteed the same major version as the database) runs the existing scripts nightly/weekly via
+  `db/backup/crontab`. Wired into `docker-compose.prod.yml`/`docker-compose.staging.yml` as a `backup`
+  service with its own admin (superuser) `DATABASE_URL` — app_user is deliberately never granted
+  CREATE/DROP DATABASE, which restore_drill.sh needs.
+- **Bug found and fixed while verifying, not by inspection**: `restore_drill.sh`'s `find | xargs ls -t`
+  ran `ls -t` with zero arguments (listing the CWD) whenever no backup existed, instead of producing
+  empty output — so `LATEST` picked up `backup.sh` itself rather than tripping the script's own
+  "no backup found" guard. Reproduced by actually running the new backup container against a real dev
+  stack, not assumed; fixed with `xargs -r`. Full round trip then verified for real: backup.sh dumped
+  the dev DB (350KB), restore_drill.sh restored it into a throwaway database, verified 84 tables/0
+  profiles, and both `backup_runs`/`restore_drills` got real rows for the first time ever.
+- **A second real bug, same verification pass**: `db/setup_app_role.sql`'s original `APP_USER_PASSWORD`
+  parameterization put `:'app_user_password'` inside a `do $$ ... $$` block — psql does not substitute
+  variables inside dollar-quoted bodies, so the literal text `:'app_user_password'` was sent to the
+  server and failed with a syntax error, silently breaking `docker compose up` entirely until caught by
+  actually running it. Fixed by moving the conditional to psql's own `\if`/`\gset` meta-commands so the
+  `create role` statement is a plain top-level statement instead of embedded in dollar-quoted SQL.
+  `db/scripts/migrate.sh` (new) reuses the same migration ledger logic docker-compose.yml's dev
+  `db-migrate` runs inline, parameterized by an admin `DATABASE_URL` instead of a compose service name,
+  and refuses to run without a real `APP_USER_PASSWORD` — the dev literal only applies when that's unset.
+- **Deploy (0.2)**: `docker-compose.prod.yml` (api/auth/backup, external Postgres, `.env`-sourced
+  secrets, `127.0.0.1`-only ports so nginx is the only way in), `.env.prod.example`, `deploy/nginx/*`
+  reverse-proxy+TLS templates, `deploy/DEPLOY.md` walkthrough. `.github/workflows/build-and-test.yml`'s
+  `images` job now pushes to GHCR on `master` (previously built-but-not-pushed, calling the registry
+  choice an open owner decision) — `deploy/DEPLOY.md` notes the pull-instead-of-build swap as a
+  follow-up once a VM exists to point at it.
+- **Staging (0.5)**: `docker-compose.staging.yml` + `.env.staging.example` — same shape as prod, own
+  Postgres/secrets, `SEED_DEMO_DATA=true` (staging is what Phase 1+ verification actually exercises
+  against, unlike prod).
+- **Android build flavors (0.3's last gap)**: `dev`/`staging`/`prod` product flavors in
+  `app/android/app/build.gradle.kts` (`applicationIdSuffix`, distinct launcher name via `resValue` +
+  `AndroidManifest.xml`'s `android:label` switched to `@string/app_name`) so builds can coexist on one
+  device. iOS scheme/flavor work intentionally not attempted this pass — same "don't hand-edit
+  `project.pbxproj` without a way to verify it" caveat Chunk 52 named, documented as a manual step in
+  `deploy/DEPLOY.md` instead.
+- **Monitoring parity (0.4)**: `auth/src/observability.js` — same shape as `api/src/observability.js`
+  (redacting `requestLogger`, terminal `errorHandler`, `x-request-id` correlation), which `auth/` had
+  none of. No vendor SDK added to either service or the app — `api/src/observability.js`'s own
+  doc-comment already rejected that pending a DPDP review of PII capture; extending that decision
+  rather than silently overriding it.
+- **Host-agnostic secrets (adjacent to 0.1/0.2)**: `api/src/config.js` mirrors `auth/src/config.js`'s
+  fail-fast `REQUIRED_ENV` pattern — `DATABASE_URL`/`JWT_ACCESS_SECRET` always required,
+  `INBOUND_EMAIL_WEBHOOK_SECRET`/`PARTNER_WEBHOOK_SECRET`/`IMAP_ENCRYPTION_KEY` required only when
+  `NODE_ENV=production` (dev/CI keep today's graceful-fallback behavior). Deliberately not AWS SSM —
+  that's `auth/`'s pattern, built for AWS; this service's actual target is Oracle Cloud, so the module
+  stays agnostic to how env vars get populated. `api/src/index.js`/`auth.js`/`db.js` refactored onto it;
+  `api/example.env` completed with the four vars it was missing.
+
+**Not done, deliberately, not silently**: actually provisioning any VM, DNS, or TLS cert (owner
+actions — same class as the Play Store listing); a Sentry/vendor monitoring integration (would need
+the DPDP PII review `api/src/observability.js` already flagged as a precondition); iOS build flavors;
+switching `deploy/DEPLOY.md`'s step 5 from building-on-box to pulling the now-published GHCR images
+(needs the image names/org finalized against a real deploy first).
+
+**Verification**: `api/` — `npm test` 60/60 (unchanged pass count, confirms the `config.js` refactor
+didn't break anything). `docker compose -f docker-compose.prod.yml config` and the staging equivalent
+both parse cleanly against their `.example` env files. `db/backup/Dockerfile` built and run for real
+against the dev stack (see the two bugs above — both found by actually executing this, not by
+reading the scripts). `flutter build apk --flavor dev --debug` — built `app-dev-debug.apk`
+successfully after one fix (`buildFeatures { resValues = true }` needed explicitly enabling in a
+recent AGP for the flavors' `resValue()` calls; first attempt failed with "Product Flavor dev
+contains custom resource values, but the feature is disabled").

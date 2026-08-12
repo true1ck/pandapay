@@ -63,6 +63,48 @@ CREATE TABLE IF NOT EXISTS local_user_cards (
   sort_order REAL NOT NULL,
   created_at INTEGER NOT NULL
 );
+
+-- Plan Phase 4 multi-device sync. One row per local edit that hasn't reached
+-- the server yet, plus the per-device cursor.
+--
+-- Deliberately a queue of CHANGES rather than a mirror of the server's rows.
+-- A relational replica would have to be reconciled field by field on every
+-- pull and would duplicate every constraint the server already enforces; a
+-- change queue only has to answer "what have I done that the server hasn't
+-- seen", which is the actual question. It also composes with the existing
+-- `transaction_outbox_entries` model rather than competing with it.
+--
+-- `field_clocks` is a JSON map of field -> millisecond timestamp, sent to the
+-- server so the merge can be per-field. `attempts`/`last_error` exist so a
+-- change the server permanently rejects can be surfaced and dropped instead
+-- of retried forever, which is how a single bad row otherwise blocks the
+-- whole queue.
+CREATE TABLE IF NOT EXISTS sync_pending_changes (
+  client_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  op TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  field_clocks_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT
+);
+
+-- Coalescing index: repeated edits to the same field of the same row should
+-- collapse rather than queue N times (see SyncQueue.enqueue).
+CREATE INDEX IF NOT EXISTS idx_sync_pending_entity
+  ON sync_pending_changes (entity, entity_id, op);
+
+-- Single-row table (id = 1). Holds the server-issued device id and the pull
+-- cursor, both of which must survive an app restart or the device would
+-- re-register and re-pull the entire history every launch.
+CREATE TABLE IF NOT EXISTS sync_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  device_id TEXT,
+  last_server_seq INTEGER NOT NULL DEFAULT 0,
+  last_synced_at INTEGER
+);
 ''';
 
 class AppDatabase {

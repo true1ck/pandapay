@@ -11,6 +11,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/support_api.dart';
 import '../onboarding/request_unsupported_card_screen.dart';
+import '../../app/env.dart';
 
 /// H9 Feedback & Support. Standalone pushed screen — built per this task's
 /// plan without touching providers.dart/router.dart/account_screen.dart, so
@@ -330,4 +331,4 @@ class _DiagnosticsPreview extends StatelessWidget {
 
 /// Shared with design 26's report screen (report_transaction_screen.dart) so
 /// the two support surfaces can't drift onto different hosts.
-const supportApiBaseUrl = 'http://localhost:4000';
+const supportApiBaseUrl = Env.apiBaseUrl; // plan Phase 0.3 — see app/env.dart

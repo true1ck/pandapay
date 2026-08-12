@@ -1,10 +1,10 @@
 const jwt = require('jsonwebtoken');
+const config = require('./config');
 
-const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
-
-if (!ACCESS_SECRET) {
-  throw new Error('JWT_ACCESS_SECRET must be set — must match auth/\'s signing secret exactly.');
-}
+// config.js already throws at load if this is unset — no separate check
+// needed here, but the name stays local since the comment below is about
+// jwt.verify's options, not about where the secret comes from.
+const ACCESS_SECRET = config.jwtAccessSecret;
 
 // auth/src/services/tokenService.js signs with jwt.sign(payload, ACCESS_SECRET,
 // { expiresIn }) and no `issuer` option — despite payload.aud being the literal

@@ -1,0 +1,58 @@
+# nginx reverse proxy for api/ — copy to /etc/nginx/sites-available/api.your-domain.example
+# on the VM, edit `server_name`, symlink into sites-enabled, then run certbot
+# (see deploy/DEPLOY.md) which will rewrite the 443 block in place.
+#
+# api/ itself only listens on 127.0.0.1:4000 (docker-compose.prod.yml) — this
+# is the only thing meant to reach it from outside the host.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.your-domain.example;
+
+    # certbot's http-01 challenge needs plain HTTP to succeed once before any
+    # certificate exists — redirect everything else, but let certbot's own
+    # webroot/plugin handle this location if you use --webroot instead of
+    # --nginx (the --nginx plugin rewrites this file directly and you can
+    # ignore this comment).
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name api.your-domain.example;
+
+    # certbot --nginx fills these in; placeholders here so the file is valid
+    # nginx config even before the first `certbot` run (nginx -t will still
+    # fail until real cert paths exist — that's expected pre-certbot).
+    ssl_certificate     /etc/letsencrypt/live/api.your-domain.example/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.your-domain.example/privkey.pem;
+
+    # Card/transaction data over this connection — no weak/legacy TLS.
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    client_max_body_size 5m;
+
+    location /health {
+        proxy_pass http://127.0.0.1:4000;
+        access_log off;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # api/src/observability.js's requestLogger reuses an inbound
+        # x-request-id when present, so a trace survives the nginx hop
+        # instead of restarting here.
+        proxy_set_header X-Request-Id $request_id;
+    }
+}

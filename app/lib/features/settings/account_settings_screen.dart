@@ -8,6 +8,7 @@ import '../../app/providers.dart';
 import '../../data/account_api.dart';
 import '../../data/api_exception.dart';
 import '../auth/login_screen.dart';
+import '../../app/env.dart';
 
 /// H2 Account (real) — replaces AccountScreen's ~15%-built body (signed-in
 /// state + sign-out only) with the full spec surface: sign-out, "upgrade
@@ -264,7 +265,7 @@ class _BiometricLockTile extends ConsumerWidget {
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
           activeTrackColor: BambooInk.slate,
-          activeColor: BambooInk.lime,
+          activeThumbColor: BambooInk.lime,
         ),
       ),
     );
@@ -519,4 +520,4 @@ class _ScheduledDeletionState extends StatelessWidget {
 /// as a separate literal rather than importing that private top-level
 /// const (it's not exported), matching this task's "create only new
 /// files" constraint.
-const _accountApiBaseUrl = 'http://localhost:4000';
+const _accountApiBaseUrl = Env.apiBaseUrl; // plan Phase 0.3 — see app/env.dart

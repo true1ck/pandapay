@@ -74,6 +74,71 @@ router.get('/me', auth, userRateLimitRead, async (req, res) => {
 });
 
 
+// GET /users/me/recovery-status - Can this user still get in if they lose their phone?
+// Rate limited: Read operation
+//
+// Plan Phase 1.3. Authentication here is OTP-only — there is no password, by
+// design — so the ability to sign in is exactly the ability to receive a code
+// on a channel. A user whose only verified channel is a phone number loses
+// their entire account with the SIM: every card, every transaction, the whole
+// history. Nothing in the product told them that, and nothing asked them to
+// set up a second channel.
+//
+// Both sign-in paths already exist (`/auth/request-otp` on phone,
+// `/auth/request-email-otp` on email) and `users` already carries
+// `is_phone_verified` / `is_email_verified`. So recovery needs no new
+// mechanism — it needs the app to be able to SEE the gap and prompt. That is
+// what this returns.
+//
+// Deliberately returns booleans and a masked hint, never the raw secondary
+// address. This is read with an ordinary access token (no step-up), so it must
+// not become a way for a stolen token to harvest a full email address; a
+// masked hint is enough for the user to recognise their own.
+router.get('/me/recovery-status', auth, userRateLimitRead, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT phone_number, email, is_phone_verified, is_email_verified
+         FROM users WHERE id = $1 AND deleted = FALSE`,
+      [req.user.id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = rows[0];
+    const phoneVerified = Boolean(user.phone_number) && user.is_phone_verified;
+    const emailVerified = Boolean(user.email) && user.is_email_verified;
+    const verifiedCount = (phoneVerified ? 1 : 0) + (emailVerified ? 1 : 0);
+
+    return res.json({
+      phone_verified: phoneVerified,
+      email_verified: emailVerified,
+      // The whole point of the endpoint: with only one verified channel there
+      // is no way back into the account if that channel is lost.
+      has_backup_channel: verifiedCount >= 2,
+      // Which channel to offer, so the client doesn't have to re-derive it.
+      missing_channel: verifiedCount >= 2 ? null : phoneVerified ? 'email' : 'phone',
+      email_hint: emailVerified ? maskEmail(user.email) : null,
+    });
+  } catch (err) {
+    console.error('recovery status error', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Masks an email for display: `aarav.sharma@gmail.com` -> `aa••••••••@gmail.com`.
+ * Enough for someone to recognise their own address, not enough for a stolen
+ * access token to learn one. The domain is kept because that is what makes it
+ * recognisable, and a domain alone is not a contactable identifier.
+ */
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return null;
+  const [local, domain] = email.split('@');
+  const head = local.slice(0, Math.min(2, local.length));
+  return `${head}${'•'.repeat(Math.max(local.length - head.length, 1))}@${domain}`;
+}
+
 // PUT /users/me
 // Update user profile (name only).
 router.put(

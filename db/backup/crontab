@@ -1,0 +1,14 @@
+# Loaded as /etc/crontabs/root inside the backup container (see Dockerfile).
+#
+# BACKUP_DIR/RETENTION_DAYS/DATABASE_URL come from the container's
+# environment (set in docker-compose.prod.yml); busybox crond, unlike some
+# cron implementations, does inherit the environment it was started with, so
+# no extra env-forwarding wrapper is needed.
+#
+# Backup nightly at 02:15 UTC — off the hour, so it doesn't stack with
+# whatever else a host commonly schedules at :00.
+15 2 * * * /backup/backup.sh >> /proc/1/fd/1 2>> /proc/1/fd/2
+
+# Restore drill weekly, Sunday 03:00 UTC, after that night's backup — an
+# untested backup is not a backup (see restore_drill.sh's own header).
+0 3 * * 0 /backup/restore_drill.sh >> /proc/1/fd/1 2>> /proc/1/fd/2

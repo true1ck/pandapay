@@ -94,7 +94,7 @@ class ConsentsApi {
         'purpose': purpose,
         'granted': granted,
         'policyVersion': policyVersion,
-        if (sourceScreen != null) 'sourceScreen': sourceScreen,
+        'sourceScreen': ?sourceScreen,
       }),
     );
     if (response.statusCode != 201) {

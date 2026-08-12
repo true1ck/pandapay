@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../../app/env.dart';
 import '../../app/providers.dart';
+import '../../data/analytics.dart';
 import '../../data/api_exception.dart';
 
 /// Plan Phase 1.2 — carries a guest's on-device wallet onto the account they
@@ -111,6 +112,12 @@ final guestMigrationLifecycleProvider = Provider<void>((ref) {
       final result = await ref.read(guestMigrationProvider).run();
       if (!result.didAnything) return;
       ref.read(lastGuestMigrationProvider.notifier).state = result;
+      ref.read(analyticsProvider).track(
+        AnalyticsEvent.guestWalletMigrated,
+        // Bucketed, never the raw count — a distinctive wallet size is a
+        // weak identifier and the funnel only needs the shape.
+        props: {'count_bucket': result.imported > 3 ? '4+' : '${result.imported}'},
+      );
       // The wallet the user is about to look at is now the server's, not the
       // local table's — force the next read to come from the server rather
       // than a cached guest-mode response.

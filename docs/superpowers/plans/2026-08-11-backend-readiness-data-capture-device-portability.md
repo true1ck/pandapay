@@ -190,6 +190,84 @@ speculatively.
 
 ---
 
+## Implementation status (2026-08-12)
+
+Every code-implementable item in Phases 0–3 is built and verified. What remains
+is work no code can substitute for: choosing a host, and legal review.
+
+| Item | Status |
+|---|---|
+| 0.1 Backups + restore drill | **Done** — `db/scripts/backup.sh` (pg_dump, verified via `pg_restore --list`, honest `backup_runs` rows, prunes only after a verified success) and `restore_drill.sh` (restores into a throwaway DB, asserts row counts, records `restore_drills`). Both executed end-to-end. The lying `POST /backup-runs` stub and its "Back up now" button are gone. |
+| 0.2 Deploy | **Done** — `api/Dockerfile`, `auth/Dockerfile` (non-root, dumb-init, healthchecks), `docker-compose.yml` encoding the migration ordering, and a `build-and-test.yml` CI workflow. Registry/host still an owner decision. |
+| 0.3 App environment config | **Done** — `app/lib/app/env.dart`; **six** hardcoded localhost constants replaced across app + console; release builds without the defines fail fast. |
+| 0.4 Observability | **Done** — `api/src/observability.js`: JSON request logs with correlation ids, a terminal error handler, and query-value redaction (9 tests). No vendor SDK, no PII. |
+| 1.1 Server-side settings | **Done** — migration 0028, per-key server-side merge, `settings_sync.dart` registry, 7 tests. |
+| 1.2 Guest → account | **Done** — idempotent `POST /user-cards/import`, 7 tests covering every failure path. |
+| 1.3 Account recovery | **Done** — `GET /users/me/recovery-status` (masked hints only) + a banner that states the real consequence of having one channel. |
+| 1.4 Device management | **Done** — `linked_devices_screen.dart`. |
+| 1.5 Outbox visibility | **Done** — pending count surfaced; corrected the screen's false "no offline queue" claim. |
+| 2.1 Crowdsource ingest | **Done** — migration 0029, monthly-rotating pseudonyms, quota enforcement, in-app prompt, SQL regression test. |
+| 2.2 Product analytics | **Done** — migration 0032: closed event vocabulary, server-side prop allowlist, funnel + retention views; `analytics.dart` with a bounded buffer and lifecycle-driven flush (7 tests). Self-hosted, no third-party SDK. |
+| 2.3 Affiliate attribution | **Done** — migration 0030, click/conversion plumbing, disclosed Apply button. |
+| 2.4 Parser telemetry | **Done** — migration 0033, plus the RLS bug fix below. |
+| 3.2 DPDP consents | **Done** — migration 0031, two independently-revocable purposes, gating nothing until 3.3. |
+| 3.1 / 3.3 Legal | **Not started** — needs counsel, not code. Still blocks general release. |
+| Phase 4 sync engine | **Done** — migration 0034: per-field LWW over `change_log`, conflicts recorded rather than discarded, push/pull/ack API, local coalescing queue, human-readable conflict log. 12 queue tests + a SQL regression test in CI. |
+
+### Bugs found by execution, not review
+
+Every one of these was invisible to reading the code and passed all existing
+checks:
+
+1. **`recompute_merchant_confidence()` (migration 0010) had never run.** It
+   assigns an untyped `case` to a `record_confidence` enum and raises every
+   time. It is the merchant publication gate; nothing had ever called it.
+2. **The CI anonymization gate had been failing since migration 0024** — the
+   workflow never created the `app_user` role that 0024's `GRANT` needs, so the
+   deploy-blocking gate was not gating anything.
+3. **`api/src/index.js` did not parse.** A duplicate top-level `const
+   CARD_NETWORKS` made the entry point a syntax error while every unit test
+   passed, because the tests import individual modules and never load it.
+   `npm test` now runs `node --check` on every source file first.
+4. **Unparsed bank SMS returned a 500.** `parser_failures` is admin-only under
+   RLS, so the failure branch of `POST /transactions/from-sms` violated the
+   policy, aborted the transaction, and turned the documented
+   `200 { parsed: false }` into a server error — while collecting zero parser
+   telemetry, ever.
+5. **`welcome_screen.dart` overflowed on any viewport under ~570pt**, clipping
+   the not-financial-advice disclaimer A2 requires and failing two router tests.
+6. **`POST /backup-runs` recorded fake successes.** `backup_runs` was a clean
+   history of backups that never happened.
+7. **The backup scripts' first draft wrote columns that don't exist**
+   (`backup_runs.notes`, `restore_drills.status`) — caught by running them
+   against the real schema rather than trusting the column names.
+8. **`docker-compose.yml` as first written could not have worked.** It pointed
+   `auth/` and `api/` at the same database, but both define a `user_devices`
+   table with different columns, and auth's schema was never loaded at all.
+   They now get separate databases in one instance, matching what
+   `auth/db/pandapay-auth/docker-compose.yml` always did.
+
+### On the sync engine specifically
+
+The design decision worth knowing about: the merge is **per-field**, not
+per-row. Row-level last-write-wins would silently destroy work — categorise a
+transaction on your phone while a note you typed on your tablet is still
+unsynced, and the note vanishes with no trace. Each row carries a
+`field_clocks` map so only genuinely competing fields ever conflict, and when
+two devices do set the same field the losing value is written to
+`sync_conflicts` and shown to the user rather than discarded.
+
+Two limitations, stated rather than buried:
+
+- **Clocks are device wall-clock time.** A phone with a badly wrong clock wins
+  or loses every conflict against a correct one. A hybrid logical clock is the
+  right eventual fix; the damage is bounded because the losing value is always
+  recorded.
+- **Sync cannot create rows**, only edit and archive them. Creation goes
+  through the ordinary endpoints, which enforce invariants (a transaction
+  updates cap/milestone/points state; a card checks the product is published)
+  that a raw push would bypass.
+
 ## Sequencing summary
 
 ```

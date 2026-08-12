@@ -2,6 +2,7 @@ require('dotenv').config();
 const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
+const config = require('./config');
 const { withUserClient, pool } = require('./db');
 const { optionalAuth, requireAuth } = require('./auth');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
@@ -10,11 +11,15 @@ const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
 const { registerRuleFamilyRoutes } = require('./admin_rule_families');
+const { requestLogger, errorHandler } = require('./observability');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+// optionalAuth first so the request log can record which user a line belongs
+// to; requestLogger only writes on `finish`, so ordering costs nothing.
 app.use(optionalAuth);
+app.use(requestLogger);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -837,6 +842,461 @@ app.post('/data-error-reports', requireAuth, async (req, res) => {
  * bestCardForMerchantProvider machinery nearby_merchants_screen.dart
  * already uses, rather than a third parallel "merchant result" shape.
  */
+/**
+ * Sync — plan Phase 4. The producer/consumer for `change_log`, `sync_cursors`
+ * and `sync_conflicts`, which 0005_sync.sql designed and nothing ever wrote to.
+ *
+ * All of the resolution logic lives in migration 0034's functions rather than
+ * here, deliberately: a conflict rule split between SQL and JavaScript is a
+ * rule nobody can reason about, and this is the subsystem where 0005's header
+ * warns that "silent data loss during sync is the fastest way to lose a
+ * finance user". These routes are transport.
+ */
+
+/**
+ * POST /sync/register-device — exchanges a platform + label for the device id
+ * every other sync call needs. Idempotent when given a known id.
+ */
+app.post('/sync/register-device', requireAuth, async (req, res) => {
+  const { platform, label, appVersion, deviceId } = req.body || {};
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(`SELECT pandapay.register_sync_device($1, $2, $3, $4, $5) AS device_id`, [
+        req.userId,
+        typeof platform === 'string' ? platform : 'web',
+        typeof label === 'string' ? label : null,
+        typeof appVersion === 'string' ? appVersion : null,
+        typeof deviceId === 'string' && deviceId ? deviceId : null,
+      ])
+    );
+    res.status(201).json({ deviceId: result.rows[0].device_id });
+  } catch (err) {
+    console.error('POST /sync/register-device error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /sync/push — applies a batch of local changes.
+ *
+ * Each change is applied in its OWN transaction (a savepoint per item), not
+ * one transaction for the batch. That is the important design decision here:
+ * with a single transaction, one malformed change — a bad enum, a category id
+ * that no longer exists — rolls back every other change in the batch, and the
+ * client has no way to tell which one was at fault. It would retry the whole
+ * batch, fail identically, and the user's edits would never sync again. A
+ * per-item savepoint means one bad change is reported as one bad change.
+ *
+ * The response is per-change and ordered to match the request, so the client
+ * can drop exactly what succeeded from its outbox and keep the rest.
+ */
+app.post('/sync/push', requireAuth, async (req, res) => {
+  const { deviceId, changes } = req.body || {};
+  if (!deviceId || typeof deviceId !== 'string') {
+    return res.status(400).json({ error: 'deviceId is required' });
+  }
+  if (!Array.isArray(changes)) {
+    return res.status(400).json({ error: 'changes must be an array' });
+  }
+  if (changes.length > 200) {
+    return res.status(413).json({ error: 'too many changes in one push' });
+  }
+
+  try {
+    const results = await withUserClient(req.userId, async (client) => {
+      const out = [];
+      for (const change of changes) {
+        const { entity, entityId, op, payload, fieldClocks, clientSeq } = change || {};
+        if (!entity || !entityId || !['insert', 'update', 'delete'].includes(op)) {
+          out.push({ clientSeq: clientSeq ?? null, applied: false, reason: 'malformed' });
+          continue;
+        }
+        await client.query('SAVEPOINT sync_item');
+        try {
+          const r = await client.query(
+            `SELECT out_applied, out_conflicts, out_reason
+               FROM pandapay.sync_apply_change($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`,
+            [
+              req.userId,
+              deviceId,
+              entity,
+              entityId,
+              op,
+              JSON.stringify(payload || {}),
+              JSON.stringify(fieldClocks || {}),
+              Number.isFinite(clientSeq) ? clientSeq : 0,
+            ]
+          );
+          await client.query('RELEASE SAVEPOINT sync_item');
+          const row = r.rows[0];
+          out.push({
+            clientSeq: clientSeq ?? null,
+            entityId,
+            applied: row.out_applied,
+            conflicts: row.out_conflicts,
+            reason: row.out_reason,
+          });
+        } catch (itemErr) {
+          await client.query('ROLLBACK TO SAVEPOINT sync_item');
+          // The message, not the stack: a constraint violation names the
+          // column the client got wrong, which is exactly what it needs in
+          // order to stop resending it.
+          out.push({
+            clientSeq: clientSeq ?? null,
+            entityId,
+            applied: false,
+            reason: 'rejected',
+            detail: itemErr.message,
+          });
+        }
+      }
+      return out;
+    });
+
+    res.json({
+      results,
+      appliedCount: results.filter((r) => r.applied).length,
+    });
+  } catch (err) {
+    console.error('POST /sync/push error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /sync/pull?deviceId=…&since=…
+ *
+ * Returns changes made by OTHER devices only, oldest first, with the highest
+ * `server_seq` in the batch. The client applies them and then acknowledges —
+ * it does not treat receiving them as having applied them, which is why the
+ * cursor is not advanced here.
+ */
+app.get('/sync/pull', requireAuth, async (req, res) => {
+  const deviceId = req.query.deviceId;
+  if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+  const since = Number.parseInt(req.query.since, 10) || 0;
+  const limit = Number.parseInt(req.query.limit, 10) || 500;
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const changes = await client.query(
+        `SELECT * FROM pandapay.sync_pull($1, $2, $3, $4)`,
+        [req.userId, deviceId, since, limit]
+      );
+      const conflicts = await client.query(
+        `SELECT id, entity, entity_id, field, local_value, server_value, chosen_value, created_at
+           FROM sync_conflicts
+          WHERE profile_id = $1 AND NOT user_acknowledged
+          ORDER BY created_at DESC LIMIT 50`,
+        [req.userId]
+      );
+      return { changes: changes.rows, conflicts: conflicts.rows };
+    });
+
+    const rows = result.changes;
+    res.json({
+      changes: rows,
+      conflicts: result.conflicts,
+      // `hasMore` rather than making the client infer it from the row count:
+      // a batch that happens to be exactly `limit` long is indistinguishable
+      // from a full one otherwise, and guessing wrong strands the tail.
+      hasMore: rows.length === Math.min(Math.max(limit, 1), 1000),
+      latestServerSeq: rows.length > 0 ? Number(rows[rows.length - 1].server_seq) : since,
+    });
+  } catch (err) {
+    console.error('GET /sync/pull error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** POST /sync/ack — the client confirms it applied everything up to serverSeq. */
+app.post('/sync/ack', requireAuth, async (req, res) => {
+  const { deviceId, serverSeq } = req.body || {};
+  if (!deviceId || !Number.isFinite(serverSeq)) {
+    return res.status(400).json({ error: 'deviceId and serverSeq are required' });
+  }
+  try {
+    await withUserClient(req.userId, (client) =>
+      client.query(`SELECT pandapay.sync_ack($1, $2, $3)`, [req.userId, deviceId, serverSeq])
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /sync/ack error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** POST /sync/conflicts/:id/acknowledge — F5's "I've seen this" action. */
+app.post('/sync/conflicts/:id/acknowledge', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `UPDATE sync_conflicts SET user_acknowledged = true
+          WHERE id = $1 AND profile_id = $2 RETURNING id`,
+        [req.params.id, req.userId]
+      )
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'not_found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /sync/conflicts/:id/acknowledge error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /analytics/events — plan Phase 2.2. Batched first-party product
+ * telemetry (migration 0032).
+ *
+ * `optionalAuth`, not `requireAuth`, and that is the whole reason the
+ * activation funnel is measurable at all: `app_opened`, `onboarding_started`
+ * and `onboarding_completed` happen before an account exists. Those rows land
+ * with a null profile_id and are never back-filled once the user signs up —
+ * retroactively attaching pre-account activity to an identity is exactly the
+ * move this design is avoiding.
+ *
+ * Batched because the alternative is a network round trip per tap on a mobile
+ * connection, which costs the user battery and data to answer the company's
+ * questions. The client buffers and flushes.
+ *
+ * Always answers 202, even for events it rejected. Telemetry must never be a
+ * reason a user-facing action appears to fail, and the client has nothing
+ * useful to do with "event 3 of 12 had an unknown name" — that is a
+ * development-time mistake, visible in the accepted count and in the funnel
+ * view showing a permanent zero, not a runtime error to surface to a person
+ * trying to add a card.
+ */
+const ANALYTICS_MAX_BATCH = 50;
+
+app.post('/analytics/events', async (req, res) => {
+  const events = (req.body || {}).events;
+  if (!Array.isArray(events)) {
+    return res.status(400).json({ error: 'events must be an array' });
+  }
+
+  const batch = events.slice(0, ANALYTICS_MAX_BATCH);
+  try {
+    const accepted = await withUserClient(req.userId, async (client) => {
+      let count = 0;
+      for (const e of batch) {
+        if (!e || typeof e.event !== 'string') continue;
+        const result = await client.query(
+          `SELECT pandapay.record_analytics_event($1, $2, $3::jsonb, $4, $5) AS ok`,
+          [
+            req.userId,
+            e.event,
+            JSON.stringify(e.props && typeof e.props === 'object' ? e.props : {}),
+            typeof e.appVersion === 'string' ? e.appVersion : null,
+            typeof e.platform === 'string' ? e.platform : null,
+          ]
+        );
+        if (result.rows[0].ok) count += 1;
+      }
+      return count;
+    });
+    res.status(202).json({ accepted, received: batch.length });
+  } catch (err) {
+    console.error('POST /analytics/events error', err);
+    // Still 202. A telemetry outage must not turn into client-visible errors
+    // or a retry storm against an already-struggling database.
+    res.status(202).json({ accepted: 0, received: batch.length });
+  }
+});
+
+/**
+ * POST /partner-clicks — plan Phase 2.3. Records that this user tapped
+ * "Apply" on a card and returns the URL to open.
+ *
+ * Returns a URL for the client to open rather than issuing a 302, because the
+ * caller is a mobile app: it hands the destination to the OS browser, and a
+ * redirect the in-app HTTP client follows would just load the issuer's page
+ * into a JSON parser. It also means the app can show the user the real
+ * destination before leaving.
+ *
+ * The commercial terms never cross this boundary. `record_partner_click()`
+ * returns the decorated URL and the token, and nothing about payout model or
+ * amount — the app has no business knowing what a click is worth, and a value
+ * shipped to a client is a value that can be read out of the binary.
+ */
+app.post('/partner-clicks', requireAuth, async (req, res) => {
+  const { cardProductId, placement } = req.body || {};
+  if (!cardProductId || typeof cardProductId !== 'string') {
+    return res.status(400).json({ error: 'cardProductId is required' });
+  }
+  try {
+    const row = await withUserClient(req.userId, async (client) => {
+      const out = await client.query(
+        `SELECT out_url, out_click_token FROM pandapay.record_partner_click($1, $2, $3)`,
+        [req.userId, cardProductId, typeof placement === 'string' ? placement : null]
+      );
+      return out.rows[0];
+    });
+    // No row means the card has no apply_url. A 404 rather than an invented
+    // destination — sending a user to a guessed issuer page would be worse
+    // than telling the app there isn't one.
+    if (!row) return res.status(404).json({ error: 'no_apply_url' });
+    res.status(201).json({ url: row.out_url, clickToken: row.out_click_token });
+  } catch (err) {
+    console.error('POST /partner-clicks error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /partner-conversions/webhook — the affiliate network's postback.
+ *
+ * Authenticated by a shared secret, exactly like
+ * `POST /inbound-emails/webhook`: there is no user JWT on this request, and
+ * the caller is a third-party server. Uses the pool directly rather than
+ * `withUserClient` for the same reason — there is no `app.user_id` to set,
+ * and `partner_conversions` is admin-RLS, so this runs as the owner.
+ *
+ * `ON CONFLICT DO UPDATE` on (click_token, external_ref) rather than a plain
+ * insert: affiliate networks retry postbacks, and they legitimately re-send
+ * the same conversion when its status changes (pending → approved →
+ * reversed). Treating a retry as a new conversion would inflate reported
+ * revenue, which is the one number here nobody should be able to get wrong by
+ * accident.
+ *
+ * An unknown click_token is accepted with 202 rather than rejected. It means
+ * the token was never issued by us — a partner misconfiguration or a probe —
+ * and answering 4xx would let a caller enumerate which tokens are real.
+ */
+app.post('/partner-conversions/webhook', async (req, res) => {
+  const secret = config.partnerWebhookSecret;
+  if (!secret) {
+    console.error('POST /partner-conversions/webhook: PARTNER_WEBHOOK_SECRET is not configured');
+    return res.status(503).json({ error: 'webhook_not_configured' });
+  }
+  const provided = req.get('x-partner-signature') || '';
+  // Constant-time compare. The lengths must match first — timingSafeEqual
+  // throws on a length mismatch, which would itself be a timing signal.
+  const ok =
+    provided.length === secret.length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(secret));
+  if (!ok) return res.status(401).json({ error: 'invalid_signature' });
+
+  const { clickToken, status, commissionInr, externalRef } = req.body || {};
+  const ALLOWED = ['pending', 'approved', 'rejected', 'reversed'];
+  if (!clickToken || typeof clickToken !== 'string') {
+    return res.status(400).json({ error: 'clickToken is required' });
+  }
+  if (status && !ALLOWED.includes(status)) {
+    return res.status(400).json({ error: `status must be one of ${ALLOWED.join(', ')}` });
+  }
+
+  try {
+    const click = await pool.query(
+      `SELECT partner_program_id FROM partner_clicks WHERE click_token = $1`,
+      [clickToken]
+    );
+    if (click.rows.length === 0) {
+      return res.status(202).json({ ok: true, matched: false });
+    }
+
+    await pool.query(
+      `INSERT INTO partner_conversions
+            (click_token, partner_program_id, status, commission_inr, external_ref, raw_payload)
+          VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+     ON CONFLICT (click_token, external_ref) DO UPDATE
+            SET status         = excluded.status,
+                commission_inr = excluded.commission_inr,
+                raw_payload    = excluded.raw_payload,
+                reported_at    = now()`,
+      [
+        clickToken,
+        click.rows[0].partner_program_id,
+        status || 'pending',
+        Number.isFinite(commissionInr) ? commissionInr : null,
+        typeof externalRef === 'string' ? externalRef : null,
+        JSON.stringify(req.body || {}),
+      ]
+    );
+    res.status(202).json({ ok: true, matched: true });
+  } catch (err) {
+    console.error('POST /partner-conversions/webhook error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /acceptance-reports — plan Phase 2.1. "Did this card actually work
+ * here?", the one dataset in this product that cannot be scraped, bought, or
+ * inferred: it only exists because someone was standing at the till.
+ *
+ * Until migration 0029 there was no write path to `acceptance_reports` at all
+ * — not in this file, not in the scraper, not even in the seeds — so the
+ * console's acceptance-rate monitor, the publication gate, and
+ * `GET /my-contributions` have all been reading permanently empty tables.
+ *
+ * Everything privacy-relevant happens inside
+ * `pandapay.submit_acceptance_report()`, deliberately, and this route is thin
+ * on purpose. It passes `req.userId` in; the function checks
+ * `contributions_opt_in`, converts the id to a monthly-rotating salted hash,
+ * enforces the daily quota, and stores only the hash. No profile id, no
+ * amount, no timestamp finer than a date, and coordinates snapped to the 4dp
+ * grid ever reach these tables — which is what keeps the deploy-blocking
+ * `run_anonymization_audit()` gate green. Putting any of that logic here
+ * instead would mean a future caller could skip it.
+ *
+ * 403 rather than 400 for `not_opted_in`: the request is well-formed, the
+ * user simply hasn't agreed to contribute, and the client needs to tell those
+ * apart to know whether to show the opt-in prompt.
+ */
+// CARD_NETWORKS is already declared above (POST /card-requests uses the same
+// `card_network` enum); reusing it rather than shadowing keeps one definition
+// of what the database will accept.
+const ACCEPTANCE_RESULTS = ['accepted', 'declined', 'not_supported', 'unknown'];
+const TXN_RAILS = ['upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown'];
+
+app.post('/acceptance-reports', requireAuth, async (req, res) => {
+  const { vpa, displayName, network, rail, result, gridLat, gridLng, appVersion } = req.body || {};
+
+  if (!vpa || typeof vpa !== 'string') {
+    return res.status(400).json({ error: 'vpa is required' });
+  }
+  if (!CARD_NETWORKS.includes(network)) {
+    return res.status(400).json({ error: `network must be one of ${CARD_NETWORKS.join(', ')}` });
+  }
+  if (!TXN_RAILS.includes(rail)) {
+    return res.status(400).json({ error: `rail must be one of ${TXN_RAILS.join(', ')}` });
+  }
+  if (!ACCEPTANCE_RESULTS.includes(result)) {
+    return res.status(400).json({ error: `result must be one of ${ACCEPTANCE_RESULTS.join(', ')}` });
+  }
+
+  try {
+    const row = await withUserClient(req.userId, async (client) => {
+      const out = await client.query(
+        `SELECT out_merchant_id, out_accepted, out_reason
+           FROM pandapay.submit_acceptance_report($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          req.userId,
+          vpa,
+          typeof displayName === 'string' ? displayName : null,
+          network,
+          rail,
+          result,
+          Number.isFinite(gridLat) ? gridLat : null,
+          Number.isFinite(gridLng) ? gridLng : null,
+          typeof appVersion === 'string' ? appVersion : null,
+        ]
+      );
+      return out.rows[0];
+    });
+
+    if (!row || !row.out_accepted) {
+      const reason = (row && row.out_reason) || 'rejected';
+      const status = reason === 'not_opted_in' ? 403 : reason === 'quota_exceeded' ? 429 : 400;
+      return res.status(status).json({ error: reason });
+    }
+    res.status(201).json({ merchantId: row.out_merchant_id });
+  } catch (err) {
+    console.error('POST /acceptance-reports error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 app.get('/merchants/search', async (req, res) => {
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   if (q.length === 0) {
@@ -2107,6 +2567,34 @@ async function applyTransactionState(client, userId, userCard, {
     milestoneStateUpdates.push(upserted.rows[0]);
   }
 
+  // Write the estimated reward back onto the transaction.
+  //
+  // This was missing entirely, and the omission was invisible because every
+  // route still returned 200: `rewardRate` was computed right here, used for
+  // cap consumption and the points ledger, and then discarded without ever
+  // touching `transactions.expected_value_inr`. That column is what
+  // `GET /home-summary`, `GET /monthly-reports` and the missed-opportunity
+  // screens all SUM over — so "rewards earned this month" was structurally
+  // ₹0 for every user, forever, no matter how much they spent. Found by
+  // logging a ₹2,000 spend against a 5%-cashback rule on a running stack and
+  // watching the summary stay at zero.
+  //
+  // Applied on both signs so an edit or reversal recomputes rather than
+  // leaving a stale figure: `sign < 0` runs during the reverse half of an
+  // edit, and the subsequent apply half writes the new value.
+  if (sign > 0) {
+    const expectedValue = amount * rewardRate;
+    const expectedPoints = matchingRule.rows[0]
+      ? amount * effectivePointsPerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate))
+      : 0;
+    await client.query(
+      `UPDATE transactions
+          SET expected_value_inr = $2, expected_points = $3, updated_at = now()
+        WHERE id = $1`,
+      [txnId, expectedValue, expectedPoints]
+    );
+  }
+
   // Points ledger: one row per transaction (not bucketed) — apply inserts,
   // reverse deletes the row this exact transaction wrote. flat_points
   // rules earn 0 per this helper (a fixed bonus isn't a per-transaction
@@ -2248,7 +2736,7 @@ app.post('/transactions', requireAuth, async (req, res) => {
  * outcome for this route, not a server error.
  */
 app.post('/transactions/from-sms', requireAuth, async (req, res) => {
-  const { sender, body, userCardId, occurredAt, categoryId, rail } = req.body || {};
+  const { sender, body, userCardId, occurredAt, categoryId, rail, appVersion } = req.body || {};
   if (!body || typeof body !== 'string' || !body.trim()) {
     return res.status(400).json({ error: 'body is required' });
   }
@@ -2276,13 +2764,24 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
 
       if (!parsed.ok) {
+        // Through the RPC, not a direct INSERT. `parser_failures` is
+        // admin-only under RLS (0011), so the direct insert that used to be
+        // here raised "new row violates row-level security policy" for every
+        // real user — aborting this transaction and turning the documented
+        // `200 { parsed: false }` into a 500 for anyone whose bank SMS didn't
+        // match a pattern. See migration 0033's header; the RPC is SECURITY
+        // DEFINER and also aggregates repeats into `occurrences` instead of
+        // inserting a near-duplicate row per message.
         const failure = await client.query(
-          `INSERT INTO parser_failures (channel, sender_pattern, redacted_shape, occurrences)
-           VALUES ('sms', $1, $2, 1)
-           RETURNING id, redacted_shape, occurrences`,
-          [sender || null, redactSmsShape(body)]
+          `SELECT pandapay.record_parser_failure('sms', $1, $2, $3) AS id`,
+          [sender || null, redactSmsShape(body), appVersion || null]
         );
-        return { status: 200, parsed: false, reason: parsed.reason, parserFailure: failure.rows[0] };
+        return {
+          status: 200,
+          parsed: false,
+          reason: parsed.reason,
+          parserFailure: { id: failure.rows[0].id },
+        };
       }
 
       // Bump the winning pattern's telemetry in the same transaction as the
@@ -3403,7 +3902,26 @@ app.post('/profile/contributions-opt-in', requireAuth, async (req, res) => {
   }
 });
 
-const CONSENT_PURPOSES = ['terms', 'crowdsource', 'marketing'];
+/**
+ * Plan Phase 3.2 (migration 0031). Kept in step with `user_consents`'
+ * check constraint — the database is the enforcement, this list is the
+ * early, friendly rejection.
+ *
+ * `aggregate_insights` and `partner_sharing` are recordable and revocable
+ * here, and deliberately gate nothing yet: no export or partner pipeline
+ * reads them, because none may lawfully exist until the Terms and Privacy
+ * Policy stop being draft placeholder text and counsel has reviewed what is
+ * actually being asked for (plan Phase 3.3). Offering the toggle before the
+ * pipeline exists is the right order — collecting consent retroactively for
+ * processing that already happened is not a thing.
+ */
+const CONSENT_PURPOSES = [
+  'terms',
+  'crowdsource',
+  'marketing',
+  'aggregate_insights',
+  'partner_sharing',
+];
 
 /**
  * GET /consents — Task H-0 (Group H plan). Latest row per purpose for the
@@ -4762,7 +5280,7 @@ app.get('/forwarding-addresses/me', requireAuth, async (req, res) => {
  * not coupled into this route.
  */
 app.post('/inbound-emails/webhook', async (req, res) => {
-  const configuredSecret = process.env.INBOUND_EMAIL_WEBHOOK_SECRET;
+  const configuredSecret = config.inboundEmailWebhookSecret;
   if (!configuredSecret) {
     console.error('POST /inbound-emails/webhook: INBOUND_EMAIL_WEBHOOK_SECRET is not set');
     return res.status(500).json({ error: 'internal_error' });
@@ -5039,23 +5557,41 @@ app.get('/backup-status', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /backup-runs — F5's manual "Back up now" action. Since
- * `backup_runs` is genuinely ops-wide (whole-database, not per-user), this
- * is a STUB that records a user-triggered request as a `kind: 'logical'`
- * run rather than actually invoking a real backup job (no such job exists
- * in this pass — that's real ops infrastructure, e.g. a
- * pg_dump/WAL-archiving pipeline, not an Express route). Flagged
- * explicitly, not silently faked as a full backup engine.
+ * POST /backup-runs — F5's manual "Back up now".
+ *
+ * This used to insert a row claiming `status: 'success'` while performing no
+ * backup at all, with a location string that admitted it was a stub. The row
+ * was indistinguishable from a real one to anything reading the table, which
+ * made `backup_runs` actively worse than an empty table: it was a clean
+ * history of successes that would have held right up until someone needed a
+ * restore.
+ *
+ * Real backups now exist as `db/scripts/backup.sh` (pg_dump, verified with
+ * `pg_restore --list`, honestly recorded, pruned only after a verified
+ * success) and `db/scripts/restore_drill.sh`. Those run on a schedule as ops
+ * infrastructure — which is the right place for them, and genuinely not
+ * something an Express route can be.
+ *
+ * So this route no longer pretends to trigger one. It reports the real state
+ * of the backup system to the user, and 409s the manual trigger rather than
+ * fabricating a success. "We can't do that from here, and here's when it last
+ * actually happened" is honest and useful; a green tick that means nothing is
+ * neither.
  */
 app.post('/backup-runs', requireAuth, async (req, res) => {
   try {
-    const result = await withUserClient(req.userId, (client) =>
+    const latest = await withUserClient(req.userId, (client) =>
       client.query(
-        `INSERT INTO backup_runs (kind, status, location) VALUES ('logical', 'success', 'user-triggered (stub — no real backup job wired up)')
-         RETURNING *`
+        `SELECT status, ran_at, size_bytes FROM backup_runs
+          WHERE status = 'success' ORDER BY ran_at DESC LIMIT 1`
       )
     );
-    res.status(201).json({ backupRun: result.rows[0] });
+    res.status(409).json({
+      error: 'manual_backup_not_supported',
+      message:
+        'Backups run automatically on a schedule and cannot be triggered from the app.',
+      lastSuccessfulBackup: latest.rows[0] || null,
+    });
   } catch (err) {
     console.error('POST /backup-runs error', err);
     res.status(500).json({ error: 'internal_error' });
@@ -5161,7 +5697,7 @@ app.post('/imap-connections', requireAuth, async (req, res) => {
   if (!imapHost || typeof imapHost !== 'string') {
     return res.status(400).json({ error: 'imapHost is required' });
   }
-  const encryptionKey = process.env.IMAP_ENCRYPTION_KEY;
+  const encryptionKey = config.imapEncryptionKey;
   if (!encryptionKey) {
     // Fail loudly rather than silently falling back to plaintext storage.
     console.error('POST /imap-connections: IMAP_ENCRYPTION_KEY is not set');
@@ -5224,7 +5760,7 @@ app.get('/imap-connections/me', requireAuth, async (req, res) => {
  */
 app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
   try {
-    const encryptionKey = process.env.IMAP_ENCRYPTION_KEY;
+    const encryptionKey = config.imapEncryptionKey;
     const result = await withUserClient(req.userId, async (client) => {
       const existing = await client.query(
         encryptionKey
@@ -5305,5 +5841,10 @@ app.get('/issuer-emergency-contacts', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = config.port;
+// Terminal error handler — must be registered after every route, or
+// Express never reaches it. Catches anything the per-route try/catch
+// blocks miss, including a rejected async handler under Express 5.
+app.use(errorHandler);
+
 app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));

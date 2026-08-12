@@ -2,11 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/acceptance_reports_repository.dart';
+import '../data/analytics.dart';
 import '../data/app_status_repository.dart';
 import '../data/auth_api.dart';
 import '../data/card_feedback_repository.dart';
@@ -14,15 +17,20 @@ import '../data/card_overrides_repository.dart';
 import '../data/card_requests_api.dart';
 import '../data/catalogue_repository.dart';
 import '../data/consents_api.dart';
+import '../data/devices_api.dart';
 import '../data/emergency_contacts_repository.dart';
 import '../data/import_repository.dart';
 import '../data/local/app_database.dart';
 import '../data/local/response_cache.dart';
+import '../data/local/sync_queue.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local_user_cards_repository.dart';
 import '../data/merchant_search_repository.dart';
 import '../data/needs_review_repository.dart';
 import '../data/override_resolver.dart';
+import '../data/partner_apply_repository.dart';
+import '../data/recovery_api.dart';
+import '../data/sync_api.dart';
 import '../data/token_store.dart';
 import '../data/user_cards_repository.dart';
 import '../data/user_settings_api.dart';
@@ -69,6 +77,112 @@ final consentsApiProvider = Provider<ConsentsApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
   return ConsentsApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// Plan Phase 2.3 — attributed outbound "Apply" links. Null when signed out:
+/// a click has to belong to a profile for the attribution to mean anything.
+final partnerApplyRepositoryProvider = Provider<PartnerApplyRepository?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return PartnerApplyRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// Plan Phase 2.1 — acceptance reports ("did this card work here?"). Null
+/// when signed out: a guest has no profile for the server-side opt-in check
+/// to consult, and `submit_acceptance_report()` refuses without one.
+final acceptanceReportsRepositoryProvider = Provider<AcceptanceReportsRepository?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return AcceptanceReportsRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// Plan Phase 2.2 — product analytics. Deliberately NOT null when signed out:
+/// the activation funnel's most important steps (app opened, onboarding
+/// started/completed) happen before an account exists, and an analytics client
+/// that only works once you're signed in cannot measure activation at all.
+/// The token is read lazily at flush time, so events queued while signed out
+/// go up unattributed and events after sign-in are attributed.
+final analyticsProvider = Provider<Analytics>((ref) {
+  final analytics = Analytics(
+    apiBaseUrl: _apiBaseUrl,
+    tokenReader: () => ref.read(accessTokenProvider),
+    appVersion: ref.watch(appVersionProvider).valueOrNull,
+  );
+  ref.onDispose(analytics.dispose);
+  return analytics;
+});
+
+/// Fires `app_opened` exactly once per process, and flushes whatever is
+/// buffered when the session ends.
+///
+/// A `Provider` read once from `_AppShell` rather than a call in `main()`:
+/// `main()` runs before the ProviderScope exists, and putting it in the
+/// shell's `build` would count every tab switch as an app open — which would
+/// make the top of the funnel meaningless and every downstream conversion
+/// rate wrong in the flattering direction.
+final analyticsLifecycleProvider = Provider<void>((ref) {
+  final analytics = ref.read(analyticsProvider);
+  analytics.track(AnalyticsEvent.appOpened);
+
+  // Flush when the app goes to the background rather than on a repeating
+  // timer. This is both cheaper (no wakeups while the user is mid-task) and
+  // more reliable: backgrounding is the last moment guaranteed to happen
+  // before the OS may kill the process, so it is the point at which buffered
+  // events would otherwise be lost. `AppLifecycleListener` schedules nothing,
+  // which also keeps widget tests free of pending timers.
+  final listener = AppLifecycleListener(
+    onPause: analytics.flush,
+    onDetach: analytics.flush,
+  );
+  ref.onDispose(listener.dispose);
+
+  ref.listen<String?>(accessTokenProvider, (previous, next) {
+    // Flush on sign-out too, so events buffered before it aren't attributed
+    // to whoever signs in next on the same device.
+    if (previous != null && next == null) {
+      analytics.flush();
+    }
+  });
+});
+
+/// Plan Phase 4 — multi-device sync transport and local change queue.
+final syncApiProvider = Provider<SyncApi?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return SyncApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+final syncQueueProvider = FutureProvider<SyncQueue>((ref) async {
+  return SyncQueue(await ref.watch(appDatabaseProvider.future));
+});
+
+/// Local edits not yet accepted by the server. Distinct from
+/// [pendingOutboxCountProvider], which counts B6 quick-adds that were never
+/// created server-side at all — these are edits to rows that already exist.
+final pendingSyncCountProvider = FutureProvider<int>((ref) async {
+  return (await ref.watch(syncQueueProvider.future)).pendingCount;
+});
+
+/// Plan Phase 1.3 — whether this account has a second way in. Points at
+/// `authBaseUrl`: `users.is_email_verified` is the auth service's column.
+final recoveryApiProvider = Provider<RecoveryApi?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return RecoveryApi(authBaseUrl: _authBaseUrl, accessToken: token);
+});
+
+final recoveryStatusProvider = FutureProvider.autoDispose<RecoveryStatus?>((ref) async {
+  final api = ref.watch(recoveryApiProvider);
+  if (api == null) return null;
+  return api.fetchStatus();
+});
+
+/// Plan Phase 1.4 — linked-device management. Points at `authBaseUrl`, not
+/// `apiBaseUrl`: `user_devices` is the auth service's own table.
+final devicesApiProvider = Provider<DevicesApi?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return DevicesApi(authBaseUrl: _authBaseUrl, accessToken: token);
 });
 
 /// Plan Phase 1.1 — account-level preference sync (migration 0028). Same
@@ -181,6 +295,8 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
     // it, an existing user signing in on a second device is sent back
     // through Welcome and Account Choice as though they were brand new.
     _ref.read(settingsSyncProvider).pushKeyQuietly(_onboardingCompleteKey);
+    // Plan Phase 2.2: the activation funnel's first measurable completion.
+    _ref.read(analyticsProvider).track(AnalyticsEvent.onboardingCompleted);
   }
 
   /// Settings' "Replay tutorial" (Task 21) hook — lets a user re-see the

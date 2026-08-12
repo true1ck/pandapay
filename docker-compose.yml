@@ -1,0 +1,184 @@
+# Plan Phase 0.2 — the whole backend, runnable with one command.
+#
+# Before this, "run the backend" meant: start Postgres yourself, create a role,
+# apply thirty-odd migrations in order (skipping the one that needs pg_cron),
+# remember to re-run the grants afterwards, then start two Node services with
+# the right environment in two terminals. That is written down nowhere, which
+# is a large part of why every base URL in the app was still `localhost` — the
+# stack was only ever running on one machine.
+#
+#   docker compose up
+#
+# is now the whole thing, and `db-migrate` encodes the ordering that was
+# previously tribal knowledge.
+#
+# NOT a production topology. Postgres here is a container with a local volume;
+# production wants a managed instance with PITR (plan Phase 0.1). The secrets
+# below are the same dev literals `db/setup_app_role.sql` documents and must
+# never be reused anywhere real.
+
+name: pandapay
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pandapay
+    ports:
+      - "5433:5432" # 5433 on the host so it doesn't collide with a local Postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # TWO databases in one instance, not one shared database. `auth/` and
+      # `api/` both define a `user_devices` table with different columns —
+      # auth's is keyed by users.id and carries FCM tokens, the product's is
+      # keyed by profiles.id and is what change_log references. Pointing both
+      # services at the same database silently collides on that name and the
+      # second schema never lands. (The first draft of this file did exactly
+      # that; auth/db/pandapay-auth/docker-compose.yml has always used a
+      # separate `pandapay_auth` database, which is the correct arrangement.)
+      - ./db/scripts/compose-init-databases.sh:/docker-entrypoint-initdb.d/00-databases.sh:ro
+      - ./auth/db/pandapay-auth/init.sql:/docker-entrypoint-initdb.d/01-auth-schema.sql.tpl:ro
+    healthcheck:
+      # Checks the AUTH database specifically. Postgres accepts connections
+      # while `docker-entrypoint-initdb.d` scripts are still running, so
+      # `pg_isready` alone goes green before the auth schema exists —
+      # dependents would then start against a half-built instance. Querying a
+      # table that only exists once init finished is the honest signal.
+      test:
+        ["CMD-SHELL", "psql -U postgres -d pandapay_auth -c 'select 1 from users limit 1' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot. Applies the schema in the correct order, then exits.
+  db-migrate:
+    image: postgres:16-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
+      # Set to false for staging/production-shaped environments.
+      SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"
+    volumes:
+      - ./db:/db:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        PSQL="psql -h db -U postgres -d pandapay -v ON_ERROR_STOP=1 -q"
+
+        # A migration LEDGER, not a blind re-run. The individual migrations are
+        # not idempotent — 0001 does a bare `create type`, so replaying it
+        # against an existing database fails with "type card_network already
+        # exists" and takes the whole stack down. Without this table, `docker
+        # compose up` worked exactly once per volume and errored on every run
+        # after, which is not a usable dev loop.
+        $$PSQL -c "create table if not exists schema_migrations (
+                     filename text primary key,
+                     applied_at timestamptz not null default now())"
+
+        # Creates the role. The pandapay-schema grants inside are guarded and
+        # skip on a fresh database (the schema arrives with 0001); this runs
+        # first only because migration 0024 ends with a GRANT to app_user.
+        $$PSQL -f /db/setup_app_role.sql
+
+        for f in /db/supabase/migrations/*.sql; do
+          name=$$(basename "$$f")
+          case "$$name" in
+            0013_cron_jobs.sql)
+              # pg_cron isn't in the stock postgres image. Same known gap as
+              # CI and local dev — every other migration must still apply.
+              echo "skip    $$name (pg_cron unavailable)"; continue;;
+          esac
+          already=$$($$PSQL -tAc "select 1 from schema_migrations where filename = '$$name'")
+          if [ "$$already" = "1" ]; then
+            echo "skip    $$name (already applied)"
+            continue
+          fi
+          echo "apply   $$name"
+          $$PSQL -f "$$f"
+          $$PSQL -c "insert into schema_migrations (filename) values ('$$name')"
+        done
+
+        # Second pass: grants over everything the migrations just created,
+        # including the pandapay schema and its SECURITY DEFINER functions.
+        $$PSQL -f /db/setup_app_role.sql
+
+        # Demo catalogue. Without it `GET /catalogue` returns an empty list on
+        # a fresh stack, and the app's entire reason to exist — "which of my
+        # cards should I use here" — has nothing to rank. The seeds have been
+        # in db/seed/ all along and nothing ever applied them, so bringing the
+        # backend up produced a technically-working API that could not answer
+        # the product's core question.
+        #
+        # Opt-out via SEED_DEMO_DATA=false for anything resembling a real
+        # environment; tracked in the same ledger so it is applied once.
+        if [ "$${SEED_DEMO_DATA:-true}" = "true" ]; then
+          for f in /db/seed/*.sql; do
+            name="seed:$$(basename "$$f")"
+            already=$$($$PSQL -tAc "select 1 from schema_migrations where filename = '$$name'")
+            if [ "$$already" = "1" ]; then
+              echo "skip    $$name (already applied)"
+              continue
+            fi
+            echo "seed    $$name"
+            $$PSQL -f "$$f"
+            $$PSQL -c "insert into schema_migrations (filename) values ('$$name')"
+          done
+        else
+          echo "skip    demo seeds (SEED_DEMO_DATA=false)"
+        fi
+
+        echo "migrations complete"
+
+  api:
+    build:
+      context: ./api
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    environment:
+      # app_user, never postgres: a superuser BYPASSES row level security
+      # entirely, which silently turns every policy in 0011 into a no-op.
+      # db/setup_app_role.sql's header documents this being discovered the
+      # hard way.
+      DATABASE_URL: postgres://app_user:app_user_dev_pw@db:5432/pandapay
+      DB_SSL: "false"
+      PORT: "4000"
+      # Must match auth/'s signing secret exactly — api/src/auth.js verifies
+      # tokens auth/ issued.
+      JWT_ACCESS_SECRET: dev_access_secret_change_me
+      INBOUND_EMAIL_WEBHOOK_SECRET: dev_inbound_secret_change_me
+      PARTNER_WEBHOOK_SECRET: dev_partner_secret_change_me
+      IMAP_ENCRYPTION_KEY: dev_imap_key_change_me_32_bytes_ok
+    ports:
+      - "4000:4000"
+
+  auth:
+    build:
+      context: ./auth
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    environment:
+      # The auth service's OWN database — see the volumes note on `db`.
+      DATABASE_URL: postgres://postgres:postgres@db:5432/pandapay_auth
+      DB_SSL: "false"
+      PORT: "3210"
+      NODE_ENV: development
+      JWT_ACCESS_SECRET: dev_access_secret_change_me
+      JWT_REFRESH_SECRET: dev_refresh_secret_change_me
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 30d
+      # Dev only. Lets the OTP flow be exercised without an SMS/email provider
+      # configured; must be absent in every real environment.
+      ALLOW_TEST_OTP: "true"
+      ENCRYPTION_ENABLED: "false"
+    ports:
+      - "3210:3210"
+
+volumes:
+  pgdata:

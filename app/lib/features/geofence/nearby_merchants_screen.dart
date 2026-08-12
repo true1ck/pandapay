@@ -162,7 +162,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                   activeTrackColor: BambooInk.jade,
-                  activeColor: BambooInk.lime,
+                  activeThumbColor: BambooInk.lime,
                   value: backgroundEnabled,
                   onChanged: _backgroundToggleBusy ? null : _toggleBackgroundMonitoring,
                 ),
@@ -261,11 +261,12 @@ class _NearbyMerchantTile extends ConsumerWidget {
             error: (err, _) =>
                 Text('Could not rank cards: $err', style: BambooFonts.ui(12.5, color: BambooInk.clay)),
             data: (rec) {
-              if (rec == null)
+              if (rec == null) {
                 return Text(
                   'No usable card for this spot.',
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 );
+              }
               return Row(
                 children: [
                   const Icon(Icons.credit_card, size: 18, color: BambooInk.ink900),

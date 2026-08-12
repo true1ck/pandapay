@@ -4,6 +4,8 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../../data/acceptance_reports_repository.dart';
+import '../../data/analytics.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 
@@ -28,6 +30,18 @@ class PaymentSentScreen extends ConsumerStatefulWidget {
   final Money expectedValue;
   final Confidence confidence;
 
+  /// Plan Phase 2.1 — the payee VPA and the network of the card that was
+  /// actually used, both needed to file an acceptance report.
+  ///
+  /// This screen is the only place in the app where the acceptance question
+  /// can honestly be asked. It is the one moment where the user has just told
+  /// us they completed a payment with a specific card at a specific payee, so
+  /// "did it go through?" is a question they know the answer to and have a
+  /// reason to care about. Asking anywhere else would be asking them to
+  /// remember.
+  final String vpa;
+  final CardNetwork cardNetwork;
+
   const PaymentSentScreen({
     super.key,
     required this.merchantName,
@@ -37,6 +51,8 @@ class PaymentSentScreen extends ConsumerStatefulWidget {
     required this.categoryId,
     required this.expectedValue,
     required this.confidence,
+    required this.vpa,
+    required this.cardNetwork,
   });
 
   @override
@@ -47,6 +63,42 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
   bool _logging = false;
   bool _logged = false;
   String? _error;
+  bool _acceptanceAnswered = false;
+
+  /// Files an acceptance report (plan Phase 2.1). Every refusal path is
+  /// handled as information rather than an error, because none of them is a
+  /// failure of anything the user did: not opted in means they never agreed
+  /// to contribute, and a spent quota means they have already contributed
+  /// plenty today. The prompt closes either way — re-asking a question the
+  /// user has answered because the server declined to record it would be
+  /// worse than losing the datapoint.
+  Future<void> _reportAcceptance(AcceptanceResult result) async {
+    setState(() => _acceptanceAnswered = true);
+    final repo = ref.read(acceptanceReportsRepositoryProvider);
+    if (repo == null) return;
+    try {
+      await repo.submit(
+        vpa: widget.vpa,
+        displayName: widget.merchantName.isEmpty ? null : widget.merchantName,
+        network: widget.cardNetwork.name,
+        rail: 'upi_qr',
+        result: result,
+      );
+      ref.read(analyticsProvider).track(
+        AnalyticsEvent.acceptanceReportSubmitted,
+        props: {'result': result.wire},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Thanks — that helps other cardholders.')));
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.userMessage)));
+      }
+    }
+  }
 
   Future<void> _confirmAndLog() async {
     final repo = ref.read(userCardsRepositoryProvider);
@@ -67,6 +119,10 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
       );
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
+      ref.read(analyticsProvider).track(
+        AnalyticsEvent.transactionLogged,
+        props: const {'source': 'scan'},
+      );
       if (mounted) setState(() => _logged = true);
     } catch (e) {
       if (mounted) setState(() => _error = userFacingErrorMessage(e));
@@ -147,6 +203,14 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                   const SizedBox(height: AppSpace.md),
                   Text(_error!, style: BambooFonts.ui(13, color: BambooInk.clay)),
                 ],
+                if (_logged && !_acceptanceAnswered) ...[
+                  const SizedBox(height: AppSpace.lg),
+                  _AcceptancePrompt(
+                    cardName: widget.cardName,
+                    onAnswer: _reportAcceptance,
+                    onDismiss: () => setState(() => _acceptanceAnswered = true),
+                  ),
+                ],
                 const Spacer(),
                 if (!_logged)
                   SizedBox(
@@ -194,6 +258,84 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Plan Phase 2.1 — the acceptance question, asked once, at the only moment
+/// the user knows the answer.
+///
+/// Three options rather than two. "Didn't work" and "Card not accepted here"
+/// are genuinely different facts about a merchant — a declined transaction is
+/// about this attempt, whereas a terminal that doesn't take the network at
+/// all is a permanent property of the payee — and collapsing them would make
+/// the resulting dataset less useful than not collecting it. Dismiss is
+/// always available and costs nothing: a contribution prompt that can't be
+/// ignored trains people to answer it carelessly, which poisons the data.
+class _AcceptancePrompt extends StatelessWidget {
+  final String cardName;
+  final void Function(AcceptanceResult) onAnswer;
+  final VoidCallback onDismiss;
+
+  const _AcceptancePrompt({
+    required this.cardName,
+    required this.onAnswer,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Did $cardName work here?',
+                  style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                ),
+              ),
+              IconButton(
+                onPressed: onDismiss,
+                icon: const Icon(Icons.close_rounded, size: 18),
+                color: BambooInk.ink500,
+                tooltip: 'Dismiss',
+              ),
+            ],
+          ),
+          Text(
+            'Shared anonymously so other cardholders know before they queue up.',
+            style: BambooFonts.ui(12, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: AppSpace.md),
+          Wrap(
+            spacing: AppSpace.sm,
+            runSpacing: AppSpace.sm,
+            children: [
+              OutlinedButton(
+                onPressed: () => onAnswer(AcceptanceResult.accepted),
+                child: const Text('Worked'),
+              ),
+              OutlinedButton(
+                onPressed: () => onAnswer(AcceptanceResult.declined),
+                child: const Text('Declined'),
+              ),
+              OutlinedButton(
+                onPressed: () => onAnswer(AcceptanceResult.notSupported),
+                child: const Text('Not accepted here'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

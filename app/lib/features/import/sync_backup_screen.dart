@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -62,13 +64,28 @@ class SyncBackupScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
                   child: Text(
-                    'Multi-device sync (pending-change count, live conflict resolution) isn\'t built yet — this app '
-                    'talks directly to the server today, with no offline queue. This screen only shows real backup/'
-                    'restore status and any conflicts already on record.',
+                    // Corrected: this said "with no offline queue", which
+                    // stopped being true when the B6 outbox landed. There IS
+                    // a queue — it is shown below — what does not exist is a
+                    // multi-device sync engine with live conflict resolution.
+                    // Those are different claims and the screen was making
+                    // the wrong one.
+                    'Multi-device sync (live conflict resolution across devices) isn\'t built yet. Anything you '
+                    'save while offline is queued on this phone and sent when you reconnect — that queue is '
+                    'shown below. This screen also shows real backup/restore status and any conflicts on record.',
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 ),
                 const SizedBox(height: AppSpace.lg),
+                // Plan Phase 1.5. `pendingOutboxCountProvider` has existed
+                // since the B6 outbox landed and nothing ever displayed it,
+                // so a quick-add saved offline was invisible until it either
+                // synced or didn't. Worth saying plainly, because a queued
+                // entry is the one piece of a user's data that genuinely does
+                // NOT survive losing this device — it has never reached the
+                // server, so no amount of signing in elsewhere recovers it.
+                const _PendingOutboxCard(),
+                const SizedBox(height: AppSpace.md),
                 _StatusCard(
                   icon: Icons.backup_outlined,
                   title: 'Last backup',
@@ -85,38 +102,24 @@ class SyncBackupScreen extends ConsumerWidget {
                       : '${_fmt(backupStatus.latestRestoreDrillRanAt!)} · ${backupStatus.latestRestoreDrillOk == true ? 'OK' : 'failed'}',
                 ),
                 const SizedBox(height: AppSpace.lg),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: BambooInk.slate,
-                    foregroundColor: BambooInk.lime,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
-                  ),
-                  icon: const Icon(Icons.cloud_upload_outlined),
-                  label: const Text('Back up now'),
-                  onPressed: () async {
-                    try {
-                      // The POST this triggers genuinely inserts a real
-                      // backup_runs row (not a client-side fake) — what's
-                      // scoped out is the underlying backup JOB itself (no
-                      // pg_dump/WAL-archiving pipeline exists yet, that's ops
-                      // infrastructure, not an Express route or a Flutter
-                      // screen). See api/'s POST /backup-runs doc-comment.
-                      await repo.triggerBackupNow();
-                      ref.invalidate(backupStatusProvider);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(const SnackBar(content: Text('Backup requested and logged.')));
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
-                      }
-                    }
-                  },
+                // The "Back up now" button was removed rather than disabled.
+                //
+                // It called POST /backup-runs, which inserted a row claiming
+                // success while performing no backup, and then told the user
+                // "Backup requested and logged." In a personal-finance app
+                // that is the worst possible affordance: it manufactures
+                // confidence in a safety net that did not exist.
+                //
+                // Backups are real now, but they run on a schedule as ops
+                // infrastructure (db/scripts/backup.sh, verified by
+                // restore_drill.sh) — not something a phone can or should
+                // trigger. The status rows above already show when one last
+                // actually succeeded, which is the information the user
+                // wanted from the button in the first place.
+                Text(
+                  'Backups run automatically. The times above come from real backup and '
+                  'restore-test runs, not from this screen.',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.5),
                 ),
                 const SizedBox(height: AppSpace.xxl),
                 Text(
@@ -233,12 +236,48 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-class _ConflictTile extends StatelessWidget {
+/// Plan Phase 4 — F5's conflict log, rendered as something a person can read.
+///
+/// This previously showed `transactions.merchant_name — resolved via
+/// last_write_wins`: table name, column name, and an internal strategy
+/// identifier. That is a debug line, not a disclosure. `sync_conflicts` goes
+/// to the trouble of storing the LOSING value precisely so the user can be
+/// told what was discarded, and the tile is the only place that promise gets
+/// kept.
+class _ConflictTile extends ConsumerWidget {
   final SyncConflict conflict;
   const _ConflictTile({required this.conflict});
 
+  /// Column name -> what the user calls it. An unmapped field falls back to
+  /// the raw name rather than being hidden: showing `autopay_mode` is ugly,
+  /// showing nothing about a change to the user's data is worse.
+  static const _fieldLabels = <String, String>{
+    'note': 'note',
+    'merchant_name': 'merchant',
+    'category_id': 'category',
+    'amount_inr': 'amount',
+    'occurred_at': 'date',
+    'nickname': 'card nickname',
+    'credit_limit_inr': 'credit limit',
+    'statement_day': 'statement day',
+    'due_day': 'due date',
+    'autopay_mode': 'autopay setting',
+    'is_default': 'default card',
+    'reason_note': 'override note',
+  };
+
+  static String _display(Object? value) {
+    if (value == null) return 'empty';
+    final s = value is String ? value : jsonEncode(value);
+    final unquoted = s.startsWith('"') && s.endsWith('"') ? s.substring(1, s.length - 1) : s;
+    return unquoted.isEmpty ? 'empty' : unquoted;
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final label = _fieldLabels[conflict.field] ?? conflict.field;
+    final discarded = conflict.discardedValue;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.sm),
       child: Container(
@@ -247,12 +286,66 @@ class _ConflictTile extends StatelessWidget {
           color: BambooInk.warningBg,
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
-        child: Text(
-          '${conflict.entity}.${conflict.field} — resolved via ${conflict.strategy}'
-          '${conflict.userAcknowledged ? '' : ' (not yet acknowledged)'}',
-          style: BambooFonts.ui(12.5, color: BambooInk.ink900),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Two devices changed the $label',
+              style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink900),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              discarded == null
+                  ? 'Kept "${_display(conflict.chosenValue)}".'
+                  : 'Kept "${_display(conflict.chosenValue)}" and discarded '
+                        '"${_display(discarded)}" — the most recent edit won.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.45),
+            ),
+            if (!conflict.userAcknowledged)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () async {
+                    final api = ref.read(syncApiProvider);
+                    if (api == null) return;
+                    try {
+                      await api.acknowledgeConflict(conflict.id);
+                      ref.invalidate(backupStatusProvider);
+                    } catch (_) {
+                      // Acknowledging is a courtesy, not a transaction. If it
+                      // fails the row simply stays in the list.
+                    }
+                  },
+                  child: const Text('Got it'),
+                ),
+              ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// Plan Phase 1.5 — the offline write queue, made visible.
+class _PendingOutboxCard extends ConsumerWidget {
+  const _PendingOutboxCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Two separate queues, deliberately summed for display. The B6 outbox
+    // holds quick-adds that were never created server-side at all; the Phase 4
+    // sync queue holds edits to rows that already exist. The distinction
+    // matters to the code and not at all to the user, who just wants to know
+    // whether anything is still stuck on this phone.
+    final outbox = ref.watch(pendingOutboxCountProvider).valueOrNull ?? 0;
+    final edits = ref.watch(pendingSyncCountProvider).valueOrNull ?? 0;
+    final pending = outbox + edits;
+    return _StatusCard(
+      icon: pending > 0 ? Icons.cloud_off_outlined : Icons.cloud_done_outlined,
+      title: 'Waiting to sync',
+      value: pending == 0
+          ? 'Nothing queued — everything you\'ve saved has reached the server'
+          : '$pending ${pending == 1 ? 'change' : 'changes'} saved offline, still on this phone only',
     );
   }
 }

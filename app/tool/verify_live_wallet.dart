@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_print
+// This is a standalone CLI verification script (`dart run tool/verify_live_wallet.dart`);
+// stdout is its output, not stray debug logging.
 // Manual verification script (not part of the automated test suite):
 // hits the REAL api/ HTTP endpoints via UserCardsRepository + CatalogueRepository
 // (the exact classes the app uses), scopes the catalogue to the wallet, and
@@ -7,6 +10,7 @@
 // (see /tmp/user_token.txt from the verification session).
 import 'dart:io';
 
+import 'package:pandapay/app/env.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -17,7 +21,7 @@ Future<void> main(List<String> args) async {
     exit(1);
   }
   final token = args.first.trim();
-  const baseUrl = 'http://localhost:4000';
+  const baseUrl = Env.apiBaseUrl;
 
   final catalogueRepo = HttpCatalogueRepository(baseUrl: baseUrl);
   final categoryRepo = HttpCategoryRepository(baseUrl: baseUrl);

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../data/analytics.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 
@@ -44,6 +46,14 @@ class ComparisonViewScreen extends ConsumerStatefulWidget {
 class _ComparisonViewScreenState extends ConsumerState<ComparisonViewScreen> {
   _SortBy _sortBy = _SortBy.value;
   bool _ascending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // initState, not build: build re-runs on every sort toggle, which would
+    // count one visit as a dozen and inflate the metric.
+    ref.read(analyticsProvider).track(AnalyticsEvent.comparisonViewed);
+  }
 
   List<Recommendation> _sorted(List<Recommendation> input) {
     final list = [...input];
@@ -220,23 +230,76 @@ class _SortHeaderButton extends StatelessWidget {
 ///
 /// [behind] is how far this card trails the winner — design 09's "\u20b925
 /// behind". Null on the winner itself.
-class _ComparisonRow extends StatefulWidget {
+class _ComparisonRow extends ConsumerStatefulWidget {
   final Recommendation recommendation;
   final Money? behind;
   const _ComparisonRow(this.recommendation, {this.behind, super.key});
 
   @override
-  State<_ComparisonRow> createState() => _ComparisonRowState();
+  ConsumerState<_ComparisonRow> createState() => _ComparisonRowState();
 }
 
-class _ComparisonRowState extends State<_ComparisonRow> {
+class _ComparisonRowState extends ConsumerState<_ComparisonRow> {
   bool _expanded = false;
+  bool _applying = false;
+
+  /// Plan Phase 2.3. Asks the server for the destination at tap time rather
+  /// than opening a URL the app already had — that request is what records
+  /// the click, so an app-side link would mean unattributed applications and,
+  /// worse, a conversion figure the business believed was complete.
+  Future<void> _apply(CardProduct card) async {
+    final repo = ref.read(partnerApplyRepositoryProvider);
+    if (repo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to apply for a card.')),
+      );
+      return;
+    }
+    setState(() => _applying = true);
+    ref.read(analyticsProvider).track(
+      AnalyticsEvent.partnerApplyTapped,
+      props: const {'placement': 'comparison'},
+    );
+    try {
+      final url = await repo.beginApply(cardProductId: card.id, placement: 'comparison');
+      if (!mounted) return;
+      if (url == null) {
+        // Not an error: the catalogue simply has no application link for this
+        // card yet. Saying so is more useful than a generic failure.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No application link for this card yet.')),
+        );
+        return;
+      }
+      final uri = Uri.parse(url);
+      if (!await canLaunchUrl(uri) || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open your browser.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _applying = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final rec = widget.recommendation;
     final breakdown = rec.breakdown;
     final behind = widget.behind;
+    // Only offered for a card the user does NOT already hold. Suggesting
+    // someone apply for a card that's already in their wallet is the kind of
+    // detail that makes a recommendation feel automated rather than useful.
+    final wallet = ref.watch(userCardsProvider).valueOrNull ?? const [];
+    final alreadyOwned = wallet.any((c) => c.cardProductId == rec.card.id);
+    final canApply = rec.card.hasApplyUrl && !alreadyOwned && !rec.isExcluded;
 
     return Card(
       color: BambooInk.glassFillOnPaper,
@@ -295,6 +358,36 @@ class _ComparisonRowState extends State<_ComparisonRow> {
                       ],
                     )
                   : _BreakdownTable(breakdown: breakdown, total: rec.expectedValue),
+            ),
+          if (canApply)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.md),
+              child: Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _applying ? null : () => _apply(rec.card),
+                    icon: _applying
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.open_in_new_rounded, size: 16),
+                    label: const Text('Apply on issuer site'),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  // Disclosed, not buried. A user comparing cards is entitled
+                  // to know the link is commercial before they tap it, and
+                  // the ranking above it deliberately does not account for
+                  // it (see migration 0030's header).
+                  Expanded(
+                    child: Text(
+                      'We may earn a commission. It does not affect this ranking.',
+                      style: BambooFonts.ui(11, color: BambooInk.ink500),
+                    ),
+                  ),
+                ],
+              ),
             ),
         ],
       ),

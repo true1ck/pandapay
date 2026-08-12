@@ -40,7 +40,7 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
       _preview = null;
     });
     try {
-      final (body, _, __) = await repo.fetchExport(scope: _scope, format: _format);
+      final (body, _, _) = await repo.fetchExport(scope: _scope, format: _format);
       setState(() => _preview = body);
     } catch (e) {
       if (mounted) {

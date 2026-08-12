@@ -23,90 +23,113 @@ class WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppBackground(
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.xl, AppSpace.xl, AppSpace.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpace.xl),
-              Container(
-                width: 72,
-                height: 72,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: BambooInk.paper,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: BambooInk.hairlineOnPaper),
-                ),
-                child: const PandaMark(size: 56),
-              ),
-              const SizedBox(height: AppSpace.xl),
-              Text(
-                'Know which card to use — before you pay.',
-                style: BambooFonts.heading(26, color: BambooInk.ink900),
-              ),
-              const SizedBox(height: AppSpace.xxl),
-              for (final (icon, title, body) in _valuePoints)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.lg),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        // Scrolls only when it has to. The screen is designed around a
+        // `Spacer()` that pushes the buttons to the bottom, which requires a
+        // bounded height — but that same bounded height made the content
+        // overflow (and, in a widget test, throw) on any viewport shorter
+        // than about 570pt: a landscape phone, a split-screen window, or the
+        // 600pt default test surface, where it overflowed by 18px and failed
+        // two router tests outright.
+        //
+        // LayoutBuilder + minHeight + IntrinsicHeight keeps both behaviours:
+        // on a normal phone the column still fills the viewport and the
+        // Spacer still does its job, and on a short one it becomes
+        // scrollable instead of clipping the not-financial-advice disclaimer
+        // — which A2 requires be present, and which was the first thing to
+        // get cut off.
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.xl, AppSpace.xl, AppSpace.xl),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      const SizedBox(height: AppSpace.xl),
                       Container(
-                        width: 40,
-                        height: 40,
+                        width: 72,
+                        height: 72,
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: BambooInk.slate,
-                          borderRadius: BorderRadius.circular(12),
+                          color: BambooInk.paper,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: BambooInk.hairlineOnPaper),
                         ),
-                        child: Icon(icon, color: BambooInk.lime, size: 20),
+                        child: const PandaMark(size: 56),
                       ),
-                      const SizedBox(width: AppSpace.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(title, style: BambooFonts.heading(15, color: BambooInk.ink900)),
-                            const SizedBox(height: 2),
-                            Text(body, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                          ],
+                      const SizedBox(height: AppSpace.xl),
+                      Text(
+                        'Know which card to use — before you pay.',
+                        style: BambooFonts.heading(26, color: BambooInk.ink900),
+                      ),
+                      const SizedBox(height: AppSpace.xxl),
+                      for (final (icon, title, body) in _valuePoints)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpace.lg),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: BambooInk.slate,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(icon, color: BambooInk.lime, size: 20),
+                              ),
+                              const SizedBox(width: AppSpace.md),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(title, style: BambooFonts.heading(15, color: BambooInk.ink900)),
+                                    const SizedBox(height: 2),
+                                    Text(body, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                      const Spacer(),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BambooInk.slate,
+                          foregroundColor: BambooInk.lime,
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                        ),
+                        onPressed: () => context.go(AppRoute.accountChoice),
+                        child: const Text('Get started'),
+                      ),
+                      const SizedBox(height: AppSpace.sm),
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: BambooInk.ink900,
+                          minimumSize: const Size.fromHeight(48),
+                          side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          textStyle: BambooFonts.ui(14.5, weight: FontWeight.w600),
+                        ),
+                        onPressed: () => context.push(AppRoute.logIn),
+                        child: const Text('I already have an account'),
+                      ),
+                      const SizedBox(height: AppSpace.lg),
+                      Text(
+                        'PandaPay helps you compare card rewards. It is not financial '
+                        'advice and does not recommend taking on credit.',
+                        style: BambooFonts.ui(12, color: BambooInk.ink500),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
                 ),
-              const Spacer(),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: BambooInk.slate,
-                  foregroundColor: BambooInk.lime,
-                  minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
-                ),
-                onPressed: () => context.go(AppRoute.accountChoice),
-                child: const Text('Get started'),
               ),
-              const SizedBox(height: AppSpace.sm),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: BambooInk.ink900,
-                  minimumSize: const Size.fromHeight(48),
-                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  textStyle: BambooFonts.ui(14.5, weight: FontWeight.w600),
-                ),
-                onPressed: () => context.push(AppRoute.logIn),
-                child: const Text('I already have an account'),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              Text(
-                'PandaPay helps you compare card rewards. It is not financial '
-                'advice and does not recommend taking on credit.',
-                style: BambooFonts.ui(12, color: BambooInk.ink500),
-                textAlign: TextAlign.center,
-              ),
-            ],
+            ),
           ),
         ),
       ),

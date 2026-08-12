@@ -123,7 +123,7 @@ class _TravelModeToggle extends StatelessWidget {
             value: enabled,
             onChanged: onChanged,
             activeTrackColor: BambooInk.jade,
-            activeColor: BambooInk.lime,
+            activeThumbColor: BambooInk.lime,
           ),
         ],
       ),

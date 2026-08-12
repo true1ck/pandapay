@@ -73,6 +73,39 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       ref.invalidate(myCardsProvider);
       if (mounted) context.pop();
     } catch (e) {
+      // Plan Phase 4. Before this, an edit made offline simply failed and the
+      // user's typing was gone the moment they left the screen — only B6
+      // quick-add had an offline path, and this is an edit to a row that
+      // already exists, which that queue can't represent.
+      //
+      // Queued only when the device is actually offline. A 4xx means the
+      // server rejected the content and queueing it would just retry the same
+      // rejection five times before dropping it, while telling the user it
+      // was saved.
+      final offline = ref.read(isOnlineProvider).valueOrNull == false;
+      if (offline) {
+        final queue = await ref.read(syncQueueProvider.future);
+        queue.enqueueUpdate(
+          entity: 'transactions',
+          entityId: widget.transactionId,
+          fields: {
+            'amount_inr': amount,
+            'occurred_at': _occurredAt?.toIso8601String(),
+            'category_id': _categoryId,
+            'merchant_name':
+                _merchantController.text.trim().isEmpty ? null : _merchantController.text.trim(),
+            'user_card_id': _userCardId,
+          },
+        );
+        ref.invalidate(pendingSyncCountProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Saved offline — will sync when you reconnect.')),
+          );
+          context.pop();
+        }
+        return;
+      }
       setState(() => _error = userFacingErrorMessage(e));
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -85,7 +118,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
 
-    final inputDecoration = (String label) => InputDecoration(
+    InputDecoration inputDecoration(String label) => InputDecoration(
       labelText: label,
       labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       filled: true,

@@ -37,6 +37,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 0024_notification_inbox.sql ends with `grant ... to app_user`, and
+      # nothing in this workflow ever created that role — so every run since
+      # 0024 landed has failed at that migration, which means this
+      # deploy-blocking gate has not actually been gating anything. Creating
+      # the role here (the same script local dev uses) is the fix; the audit
+      # itself is unchanged.
+      - name: Create the app_user role
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d pandapay -v ON_ERROR_STOP=1 \
+            -f db/setup_app_role.sql
+
       - name: Apply migrations
         env:
           PGPASSWORD: postgres
@@ -55,6 +68,39 @@ jobs:
               exit 1
             }
           done
+
+      # Run again now that the schema exists. setup_app_role.sql grants USAGE
+      # on the `pandapay` schema and EXECUTE on its functions, neither of
+      # which exists on the first pass above — so without this second run the
+      # app role can create rows but cannot call any of the SECURITY DEFINER
+      # ingest functions. Verified by hitting exactly that locally:
+      # "permission denied for schema pandapay". The script is idempotent.
+      - name: Grant the app_user role (post-migration)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d pandapay -v ON_ERROR_STOP=1 \
+            -f db/setup_app_role.sql
+
+      # Applying a migration proves almost nothing about whether its
+      # functions work: plpgsql resolves function bodies at CALL time, so a
+      # `psql -f` that reports success can still be shipping a function that
+      # raises on its first invocation. Two such bugs were found exactly that
+      # way in 0029 — including one in `recompute_merchant_confidence()`, the
+      # merchant publication gate, which dated from 0010 and had never once
+      # executed because nothing called it. This step calls them.
+      - name: Exercise the ingest functions
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d pandapay -v ON_ERROR_STOP=1 \
+            -f db/tests/0029_crowdsource_ingest_test.sql
+          # The sync engine's failure modes are all silent by nature — a bug
+          # there does not raise, it quietly keeps the wrong value. Every
+          # assertion in this file is one that would otherwise only surface as
+          # a user reporting that the app changed their data.
+          psql -h localhost -U postgres -d pandapay -v ON_ERROR_STOP=1 \
+            -f db/tests/0034_sync_engine_test.sql
 
       - name: Run the anonymization audit
         env:

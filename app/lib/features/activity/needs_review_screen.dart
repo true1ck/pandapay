@@ -209,7 +209,7 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
 
-    final inputDecoration = (String label) => InputDecoration(
+    InputDecoration inputDecoration(String label) => InputDecoration(
       labelText: label,
       labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       filled: true,

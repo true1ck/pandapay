@@ -75,8 +75,8 @@ class ImportRepository {
       headers: _headers,
       body: jsonEncode({
         'userCardId': userCardId,
-        if (categoryId != null) 'categoryId': categoryId,
-        if (rail != null) 'rail': rail,
+        'categoryId': ?categoryId,
+        'rail': ?rail,
       }),
     );
     if (response.statusCode != 201) {
@@ -118,10 +118,10 @@ class ImportRepository {
         'statementFrom': _dateOnly(statementFrom),
         'statementTo': _dateOnly(statementTo),
         if (closingBalance != null) 'closingBalanceInr': closingBalance.rupees,
-        if (pointsPosted != null) 'pointsPosted': pointsPosted,
+        'pointsPosted': ?pointsPosted,
         'txnCount': txnCount,
         'reconciledCount': reconciledCount,
-        if (issuerFormatId != null) 'issuerFormatId': issuerFormatId,
+        'issuerFormatId': ?issuerFormatId,
       }),
     );
     if (response.statusCode != 201) {
@@ -176,11 +176,22 @@ class ImportRepository {
     return BackupStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Future<void> triggerBackupNow() async {
-    final response = await _client.post(Uri.parse('$apiBaseUrl/backup-runs'), headers: _headers);
-    if (response.statusCode != 201) {
-      throw ApiException('POST /backup-runs failed: ${response.statusCode} ${response.body}');
-    }
+  /// Removed, not renamed: there is no longer anything for it to trigger.
+  ///
+  /// `POST /backup-runs` used to insert a `backup_runs` row claiming success
+  /// while running no backup, and this method reported that as a success to
+  /// the user. Real backups now run on a schedule as ops infrastructure
+  /// (`db/scripts/backup.sh` + `restore_drill.sh`), and the route answers 409
+  /// rather than fabricating a run. The screen shows the real last-backup time
+  /// from [fetchBackupStatus] instead of offering a button that does nothing.
+  @Deprecated(
+    'Backups run on a schedule; there is nothing to trigger from the app. '
+    'Read the real state from fetchBackupStatus() instead.',
+  )
+  Future<void> triggerBackupNow() {
+    throw UnsupportedError(
+      'Manual backups are not supported — see db/scripts/backup.sh',
+    );
   }
 
   // ---- F6 Data Export --------------------------------------------------------
@@ -425,6 +436,15 @@ class SyncConflict {
   final bool userAcknowledged;
   final DateTime createdAt;
 
+  /// The values, added for plan Phase 4. The model previously dropped them,
+  /// so the conflict log could only ever say "transactions.merchant_name —
+  /// resolved via last_write_wins", which tells a user nothing they can act
+  /// on. The whole reason `sync_conflicts` records a losing value instead of
+  /// discarding it is so it can be shown; without these fields it couldn't be.
+  final Object? localValue;
+  final Object? serverValue;
+  final Object? chosenValue;
+
   const SyncConflict({
     required this.id,
     required this.entity,
@@ -432,6 +452,9 @@ class SyncConflict {
     required this.strategy,
     required this.userAcknowledged,
     required this.createdAt,
+    this.localValue,
+    this.serverValue,
+    this.chosenValue,
   });
 
   factory SyncConflict.fromJson(Map<String, dynamic> json) => SyncConflict(
@@ -441,7 +464,18 @@ class SyncConflict {
     strategy: json['strategy'] as String,
     userAcknowledged: json['user_acknowledged'] as bool? ?? false,
     createdAt: DateTime.parse(json['created_at'] as String),
+    localValue: json['local_value'],
+    serverValue: json['server_value'],
+    chosenValue: json['chosen_value'],
   );
+
+  /// The value that was discarded, or null when nothing was lost.
+  Object? get discardedValue {
+    final chosen = jsonEncode(chosenValue);
+    if (jsonEncode(localValue) != chosen) return localValue;
+    if (jsonEncode(serverValue) != chosen) return serverValue;
+    return null;
+  }
 }
 
 /// F7. Never carries the app password (server never returns it — see GET

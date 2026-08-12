@@ -42,11 +42,11 @@ class FeeWaiversScreen extends ConsumerWidget {
         rows.sort((a, b) {
           final scoreA = UrgencyScore(
             ratioConsumed: capRatio(a.$3.qualifiedSpend, a.$3.thresholdSpend),
-            daysRemaining: a.$3.periodEnd == null ? null : daysUntil(a.$3.periodEnd!, DateTime.now()),
+            daysRemaining: daysUntil(a.$3.periodEnd, DateTime.now()),
           );
           final scoreB = UrgencyScore(
             ratioConsumed: capRatio(b.$3.qualifiedSpend, b.$3.thresholdSpend),
-            daysRemaining: b.$3.periodEnd == null ? null : daysUntil(b.$3.periodEnd!, DateTime.now()),
+            daysRemaining: daysUntil(b.$3.periodEnd, DateTime.now()),
           );
           return scoreA.compareTo(scoreB);
         });

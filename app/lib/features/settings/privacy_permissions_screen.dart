@@ -9,6 +9,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/consents_api.dart';
+import '../../app/env.dart';
 
 /// H4 Privacy & Permissions (docs/superpowers/plans/2026-08-07-group-h-settings-and-group-a-completion.md).
 /// Reached via `Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
@@ -21,7 +22,7 @@ import '../../data/consents_api.dart';
 final _consentsApiProvider = Provider<ConsentsApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return ConsentsApi(apiBaseUrl: 'http://localhost:4000', accessToken: token);
+  return ConsentsApi(apiBaseUrl: Env.apiBaseUrl, accessToken: token);
 });
 
 final _consentHistoryProvider = FutureProvider.autoDispose<List<ConsentRecord>>((ref) async {
@@ -125,6 +126,16 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
               const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
             else
               const _ContributionToggle(),
+            const SizedBox(height: AppSpace.xl),
+            Text(
+              'How your data may be used',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            if (!signedIn)
+              const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
+            else
+              const _PurposeConsents(),
             const SizedBox(height: AppSpace.xl),
             Text(
               'Consent history',
@@ -305,7 +316,7 @@ class _ContributionToggle extends ConsumerWidget {
           style: BambooFonts.ui(12.5, color: BambooInk.ink500),
         ),
         activeTrackColor: BambooInk.jade,
-        activeColor: BambooInk.lime,
+        activeThumbColor: BambooInk.lime,
         value: optedIn,
         onChanged: (v) async {
           final repo = ref.read(userCardsRepositoryProvider);
@@ -319,6 +330,129 @@ class _ContributionToggle extends ConsumerWidget {
             }
           }
         },
+      ),
+    );
+  }
+}
+
+/// Plan Phase 3.2 — the two DPDP purpose-scoped consents added in migration
+/// 0031, each independently grantable and revocable, both off unless the user
+/// has said otherwise.
+///
+/// Separate from the "Share what you see" toggle above it, and that
+/// separation is the entire point. That one is `profiles.contributions_opt_in`
+/// and governs the crowdsourced merchant graph, which the app honestly
+/// describes as helping other cardholders. These two govern something
+/// materially different — aggregated statistics PandaPay may publish or
+/// license, and any sharing with a named commercial partner — and India's
+/// DPDP Act requires consent to be specific to a purpose. Rolling them into
+/// one switch, or into acceptance of the Terms, would be reading a permission
+/// into words that don't contain it.
+///
+/// Neither gates any live pipeline today, deliberately: there isn't one, and
+/// there can't lawfully be one while the Terms and Privacy Policy are still
+/// the draft placeholder text `legal_screen.dart` ships. The copy below
+/// therefore says "may" and describes what would happen, rather than implying
+/// something already does.
+final _latestConsentsProvider = FutureProvider.autoDispose<Map<String, bool>>((ref) async {
+  final api = ref.watch(_consentsApiProvider);
+  if (api == null) return const {};
+  final latest = await api.fetchLatest();
+  return {for (final c in latest) c.purpose: c.granted};
+});
+
+class _PurposeConsents extends ConsumerWidget {
+  const _PurposeConsents();
+
+  static const _policyVersion = 'draft-0';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final consents = ref.watch(_latestConsentsProvider);
+
+    Future<void> set(String purpose, bool granted) async {
+      final api = ref.read(_consentsApiProvider);
+      if (api == null) return;
+      try {
+        await api.submit(
+          purpose: purpose,
+          granted: granted,
+          // Every consent row records the policy version it was given
+          // against, which is what makes a later policy change detectable as
+          // "this person agreed to something older" rather than silently
+          // inheriting agreement. 'draft-0' is honest about what they'd be
+          // agreeing to right now — see the class doc comment.
+          policyVersion: _policyVersion,
+          sourceScreen: 'privacy_permissions',
+        );
+        ref.invalidate(_latestConsentsProvider);
+        ref.invalidate(_consentHistoryProvider);
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+        }
+      }
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: consents.when(
+        loading: () => const SkeletonRow(),
+        error: (e, _) => ErrorState(
+          message: userFacingErrorMessage(e),
+          onRetry: () => ref.invalidate(_latestConsentsProvider),
+        ),
+        data: (granted) => Column(
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                'Aggregated insights',
+                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+              ),
+              subtitle: Text(
+                'Allow your data to contribute to combined, non-identifying statistics we may '
+                'publish or license — things like average reward rates by category. Never your '
+                'individual transactions.',
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
+              activeTrackColor: BambooInk.jade,
+              value: granted['aggregate_insights'] ?? false,
+              onChanged: (v) => set('aggregate_insights', v),
+            ),
+            const Divider(height: AppSpace.lg, color: BambooInk.hairlineOnPaper),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                'Sharing with partners',
+                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+              ),
+              subtitle: Text(
+                'Allow your data to be shared with a named commercial partner. Off unless you '
+                'turn it on, and you can turn it off again at any time.',
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
+              activeTrackColor: BambooInk.jade,
+              value: granted['partner_sharing'] ?? false,
+              onChanged: (v) => set('partner_sharing', v),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Neither is used by anything today — we\'re asking first, not after.',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -370,6 +504,10 @@ class _ConsentHistoryList extends ConsumerWidget {
     switch (purpose) {
       case 'terms':
         return 'Terms';
+      case 'aggregate_insights':
+        return 'Aggregated insights';
+      case 'partner_sharing':
+        return 'Sharing with partners';
       case 'crowdsource':
         return 'Crowdsource';
       case 'marketing':

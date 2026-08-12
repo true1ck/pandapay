@@ -81,17 +81,19 @@ class InsightsHubScreen extends ConsumerWidget {
         ratioConsumed: capRatio(qualified, m.thresholdSpend),
         daysRemaining: end == null ? null : daysUntil(end, DateTime.now()),
       );
-      if (mostUrgentMilestone == null || score.compareTo(mostUrgentMilestone) < 0)
+      if (mostUrgentMilestone == null || score.compareTo(mostUrgentMilestone) < 0) {
         mostUrgentMilestone = score;
+      }
     }
     UrgencyScore? mostUrgentFeeWaiver;
     for (final fw in feeWaiverRows) {
       final score = UrgencyScore(
         ratioConsumed: capRatio(fw.qualifiedSpend, fw.thresholdSpend),
-        daysRemaining: fw.periodEnd == null ? null : daysUntil(fw.periodEnd!, DateTime.now()),
+        daysRemaining: daysUntil(fw.periodEnd, DateTime.now()),
       );
-      if (mostUrgentFeeWaiver == null || score.compareTo(mostUrgentFeeWaiver) < 0)
+      if (mostUrgentFeeWaiver == null || score.compareTo(mostUrgentFeeWaiver) < 0) {
         mostUrgentFeeWaiver = score;
+      }
     }
 
     // E1 is the single entry point to every E-screen (see class doc-comment)

@@ -113,7 +113,7 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
   }
 
   Widget _buildForm(BuildContext context) {
-    final inputDecoration = (String label) => InputDecoration(
+    InputDecoration inputDecoration(String label) => InputDecoration(
       labelText: label,
       labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       filled: true,

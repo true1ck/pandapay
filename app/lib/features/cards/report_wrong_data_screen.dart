@@ -128,7 +128,7 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
   }
 
   Widget _buildForm(BuildContext context, String? cardName) {
-    final inputDecoration = (String label, {String? hint}) => InputDecoration(
+    InputDecoration inputDecoration(String label, {String? hint}) => InputDecoration(
       labelText: label,
       hintText: hint,
       labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),

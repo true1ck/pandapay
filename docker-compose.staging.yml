@@ -1,0 +1,86 @@
+# Plan Phase 0.5 — staging environment. Same shape as docker-compose.prod.yml
+# (external Postgres, api/auth/backup services, secrets from an env file) so
+# that verifying a change here is actually representative of prod, not a
+# different topology that happens to also run the app. Meant to run on its
+# own VM/Postgres, entirely separate from prod's.
+#
+# Usage:
+#   cp .env.staging.example .env.staging
+#   docker compose -f docker-compose.staging.yml --env-file .env.staging run --rm db-migrate
+#   docker compose -f docker-compose.staging.yml --env-file .env.staging up -d
+
+name: pandapay-staging
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  db-migrate:
+    image: postgres:16-alpine
+    environment:
+      ADMIN_DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
+      APP_USER_PASSWORD: "${APP_USER_PASSWORD:?}"
+      # Unlike prod, staging genuinely benefits from the demo catalogue —
+      # it's what QA/Phase 1+ verification actually exercises against.
+      SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"
+    volumes:
+      - ./db:/db:ro
+    entrypoint: ["/bin/sh", "-c", "apk add --no-cache bash >/dev/null && bash /db/scripts/migrate.sh"]
+
+  api:
+    build:
+      context: ./api
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      NODE_ENV: "${API_NODE_ENV:-staging}"
+      DATABASE_URL: "${API_DATABASE_URL:?}"
+      DB_SSL: "${DB_SSL:-true}"
+      PORT: "4000"
+      JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?}"
+      INBOUND_EMAIL_WEBHOOK_SECRET: "${INBOUND_EMAIL_WEBHOOK_SECRET:?}"
+      PARTNER_WEBHOOK_SECRET: "${PARTNER_WEBHOOK_SECRET:?}"
+      IMAP_ENCRYPTION_KEY: "${IMAP_ENCRYPTION_KEY:?}"
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  auth:
+    build:
+      context: ./auth
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "${AUTH_DATABASE_URL:?}"
+      DB_SSL: "${DB_SSL:-true}"
+      PORT: "3210"
+      JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?}"
+      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:?}"
+      JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-15m}"
+      JWT_REFRESH_TTL: "${JWT_REFRESH_TTL:-30d}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:?}"
+      # False, same as prod — staging exists to catch what a real OTP
+      # provider does differently from the test path, not to skip it.
+      ALLOW_TEST_OTP: "false"
+      ENCRYPTION_ENABLED: "${ENCRYPTION_ENABLED:-true}"
+    ports:
+      - "127.0.0.1:3210:3210"
+
+  backup:
+    build:
+      context: ./db
+      dockerfile: backup/Dockerfile
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
+      BACKUP_DIR: /var/backups/pandapay-staging
+      RETENTION_DAYS: "${BACKUP_RETENTION_DAYS:-7}"
+    volumes:
+      - staging_backups:/var/backups/pandapay-staging
+
+volumes:
+  staging_backups:

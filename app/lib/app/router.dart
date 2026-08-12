@@ -50,6 +50,7 @@ import '../features/onboarding/welcome_screen.dart';
 import '../features/scan/scan_result_screen.dart';
 import '../features/scan/upi_qr_scanner_screen.dart';
 import '../features/settings/settings_sync.dart';
+import '../features/sync/sync_engine.dart';
 import '../features/system/forced_upgrade_screen.dart';
 import '../features/system/maintenance_screen.dart';
 import '../features/tools/emergency_card_info_screen.dart';
@@ -650,6 +651,26 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // sign-up to the server. Same "read once from the shell" reasoning.
     ref.watch(settingsSyncLifecycleProvider);
     ref.watch(guestMigrationLifecycleProvider);
+    // Plan Phase 2.2 — the top of the activation funnel. Fired from the
+    // shell's initState (see _appOpenedTracked) rather than build, which
+    // runs on every tab switch.
+    ref.watch(analyticsLifecycleProvider);
+    // Plan Phase 4 — pushes queued local edits and pulls other devices'
+    // changes on sign-in and on regaining connectivity.
+    ref.watch(syncLifecycleProvider);
+    // Tell the user their guest wallet moved. Quietly relocating someone's
+    // cards is nearly as disconcerting as losing them — and if any card
+    // couldn't be carried over (its product was unpublished in the
+    // meantime), that has to be said out loud rather than left for them to
+    // notice a gap later.
+    ref.listen<GuestMigrationResult?>(lastGuestMigrationProvider, (_, result) {
+      if (result == null || !result.didAnything) return;
+      final moved = result.imported == 1 ? '1 card' : '${result.imported} cards';
+      final message = result.skipped > 0
+          ? '$moved moved to your account · ${result.skipped} couldn\'t be matched'
+          : '$moved moved to your account';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    });
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     // Task 5: the coach-mark tour only makes sense over Home (that's where
     // every one of its four targets lives) — a user who backs out to

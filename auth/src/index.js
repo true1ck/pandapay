@@ -14,6 +14,7 @@ const adminRateLimit = require('./middleware/adminRateLimit');
 const securityHeaders = require('./middleware/securityHeaders');
 // === SECURITY HARDENING: CORS VALIDATION ===
 const { validateCorsConfig, checkCorsAtRuntime } = require('./utils/corsValidator');
+const { requestLogger, errorHandler } = require('./observability');
 
 const app = express();
 
@@ -86,6 +87,11 @@ if (allowAllOrigins) {
 }
 app.use(express.json());
 
+// Correlation id + structured request log for every route below, including
+// the admin dashboard and static test pages — assigned as early as possible
+// so the same requestId shows up in the CORS-error handler above too.
+app.use(requestLogger);
+
 // === SECURITY HARDENING: SECURITY HEADERS ===
 // Apply security headers to all routes (not just admin)
 app.use(securityHeaders);
@@ -151,6 +157,12 @@ if (ENABLE_ADMIN_DASHBOARD) {
 initRedis().catch((err) => {
   console.warn('Redis initialization warning:', err.message);
 });
+
+// Terminal error handler — must be registered after every route (and after
+// the CORS-error handler above, which re-throws anything that isn't a CORS
+// rejection via next(err)) so a rejected async route handler has somewhere
+// to land instead of becoming an unhandled rejection.
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

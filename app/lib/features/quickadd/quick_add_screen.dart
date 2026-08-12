@@ -329,7 +329,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   Widget build(BuildContext context) {
     final userCards = ref.watch(userCardsProvider);
     final categories = ref.watch(categoriesProvider);
-    final inputDecoration = (String label, {String? prefix, String? error, Widget? suffixIcon}) =>
+    InputDecoration inputDecoration(String label, {String? prefix, String? error, Widget? suffixIcon}) =>
         InputDecoration(
           labelText: label,
           prefixText: prefix,

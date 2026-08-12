@@ -1,7 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Release signing reads from android/key.properties, which is gitignored and
+// created locally by whoever cuts the release — see android/key.properties.example.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasKeystoreProperties = keystorePropertiesFile.exists()
+if (hasKeystoreProperties) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
 android {
@@ -15,6 +26,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
         // flutter_local_notifications requires core library desugaring.
         isCoreLibraryDesugaringEnabled = true
+    }
+
+    // resValue() in productFlavors below needs this explicitly on — recent
+    // AGP defaults it off to keep the resource table lean when unused.
+    buildFeatures {
+        resValues = true
     }
 
     defaultConfig {
@@ -33,11 +50,56 @@ android {
         versionName = flutter.versionName
     }
 
+    // Plan Phase 0.3's remaining gap: env.dart already differentiates
+    // dev/staging/prod at the Dart level via --dart-define, but nothing at
+    // the Android build level let dev/staging/prod builds coexist on one
+    // device or be identified in the launcher. applicationIdSuffix (not a
+    // separate signing config) is enough for that — release signing stays
+    // the single config above; --flavor only changes the app id and label.
+    flavorDimensions += "environment"
+    productFlavors {
+        create("dev") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            resValue("string", "app_name", "PandaPay Dev")
+        }
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            resValue("string", "app_name", "PandaPay Staging")
+        }
+        create("prod") {
+            dimension = "environment"
+            // No suffix — this is the applicationId Play Console releases
+            // ship under, must stay app.pandapay.pandapay.
+            resValue("string", "app_name", "PandaPay")
+        }
+    }
+
+    signingConfigs {
+        if (hasKeystoreProperties) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Falls back to the debug key when key.properties isn't present
+            // (e.g. `flutter run --release` on a machine without the release
+            // keystore) so local release-mode runs still work. Play Console
+            // uploads must come from a build made where key.properties exists.
+            signingConfig = if (hasKeystoreProperties) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

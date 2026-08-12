@@ -14,6 +14,7 @@ import 'email_phone_screen.dart';
 import 'feedback_support_screen.dart';
 import 'help_faq_screen.dart';
 import 'legal_screen.dart';
+import 'linked_devices_screen.dart';
 import 'notification_settings_screen.dart';
 import 'privacy_permissions_screen.dart';
 import 'whats_new_screen.dart';
@@ -35,12 +36,16 @@ import 'whats_new_screen.dart';
 /// controls or produce a screen far longer than anything in the deck.
 /// Grouping is the part of design 20 worth taking; collapsing is not.
 ///
-/// Two things design 20 lists that this cannot: **Linked devices** (auth/
-/// has no session-enumeration endpoint, so there is nothing to list) and
-/// **Face ID to pay** as a payment gate (PandaPay never moves money — the
-/// nearest real control is the app-open biometric lock, which lives on
-/// Account). Neither is stubbed here; both stay absent until the thing
-/// behind them exists.
+/// **Linked devices** was previously listed here as unbuildable, on the
+/// grounds that "auth/ has no session-enumeration endpoint". That was simply
+/// wrong — `GET /users/me/devices` and `DELETE /users/me/devices/:id` have
+/// existed in `auth/src/routes/userRoutes.js` the whole time — and the row is
+/// real as of plan Phase 1.4. See `linked_devices_screen.dart`.
+///
+/// One thing design 20 lists that this still cannot: **Face ID to pay** as a
+/// payment gate (PandaPay never moves money — the nearest real control is the
+/// app-open biometric lock, which lives on Account). Not stubbed here; it
+/// stays absent until the thing behind it exists.
 class SettingsHubScreen extends ConsumerWidget {
   const SettingsHubScreen({super.key});
 
@@ -74,6 +79,12 @@ class SettingsHubScreen extends ConsumerWidget {
               icon: Icons.privacy_tip_outlined,
               label: 'Privacy & permissions',
               onTap: () => open(const PrivacyPermissionsScreen()),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            AccountTile(
+              icon: Icons.devices_outlined,
+              label: 'Linked devices',
+              onTap: () => open(const LinkedDevicesScreen()),
             ),
             const SizedBox(height: AppSpace.xxl),
 

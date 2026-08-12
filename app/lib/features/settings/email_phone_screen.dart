@@ -12,16 +12,17 @@ import 'feedback_support_screen.dart';
 ///
 /// What's real and what isn't, stated plainly rather than implied:
 ///
-/// - The **email** is the account's real sign-in identifier
-///   (`profiles.email`), and it genuinely is verified — an account can only
-///   exist because an OTP sent to that address was entered correctly. The
-///   "Verified" pill is a fact, not decoration.
-/// - The **phone** is collected at sign-up and linked to the account, but
-///   auth/ has no verify-phone endpoint, so it has never been proven to
-///   belong to the user. It is shown as "Unverified" for exactly that
-///   reason. Marking it verified because it's present would be the kind of
-///   claim this codebase doesn't make. (See AuthMode's doc-comment in
-///   login_screen.dart for the same reasoning on the log-in path.)
+/// - Verification state for BOTH identifiers now comes from the auth
+///   service (`users.is_phone_verified` / `is_email_verified`) via
+///   `GET /users/me/recovery-status`, rather than from this screen's former
+///   assumption that email is always verified and phone never is. That
+///   assumption was wrong in both directions: `/auth/verify-otp` verifies a
+///   phone, and an account created through the Google path may have neither
+///   flag set the way this screen guessed.
+/// - The banner at the top is plan Phase 1.3. Auth here is OTP-only with no
+///   password, so the ability to sign in is the ability to receive a code.
+///   A user with one verified channel loses the whole account with that
+///   channel — and until now nothing in the product told them so.
 /// - Changing either one requires a confirmation code to the OLD address,
 ///   as the mockup's own footnote says. That flow needs an auth/ endpoint
 ///   that doesn't exist yet, so "Change email" explains precisely what's
@@ -58,6 +59,7 @@ class EmailPhoneScreen extends ConsumerWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, AppSpace.md, 20, 30),
               children: [
+                const _RecoveryBanner(),
                 const _SectionLabel('Phone'),
                 _IdentifierCard(
                   value: phone?.isNotEmpty == true ? phone! : 'Not on file',
@@ -91,6 +93,71 @@ class EmailPhoneScreen extends ConsumerWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// Plan Phase 1.3. Shown only when the account genuinely has no second way
+/// in — a permanent banner that every user sees becomes furniture, and this
+/// one needs to be read.
+class _RecoveryBanner extends ConsumerWidget {
+  const _RecoveryBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(recoveryStatusProvider).valueOrNull;
+    // Silent while loading and on error: a network hiccup must not flash an
+    // alarming "you could lose your account" message that then disappears.
+    if (status == null || status.hasBackupChannel) return const SizedBox.shrink();
+
+    final missing = status.missingChannel == 'email' ? 'email address' : 'phone number';
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpace.xl),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
+        color: BambooInk.clay.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: BambooInk.clay.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.shield_outlined, size: 18, color: BambooInk.clay),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Text(
+                  'No backup way to sign in',
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            // States the actual consequence. "Improve your account security"
+            // would be true and useless; this is what is actually at stake,
+            // and it is the reason someone will act on it.
+            'PandaPay signs you in with a one-time code — there is no password. Right now that '
+            'code can only reach one place, so if you lose it you lose access to your cards and '
+            'spending history. Add a verified $missing as a second way in.',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.5),
+          ),
+          const SizedBox(height: AppSpace.md),
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const FeedbackSupportScreen()),
+            ),
+            // Routes to support rather than opening an add-channel form,
+            // for the same reason "Change email" below does: auth/ has no
+            // add-and-verify-second-channel endpoint yet, and a form that
+            // silently fails is worse than one that says where to go. When
+            // that endpoint lands this becomes the natural place to hang it.
+            child: Text('Add a $missing'),
+          ),
+        ],
       ),
     );
   }

@@ -234,8 +234,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           controller: _amountController,
           onChanged: (v) {
             final parsedAmount = double.tryParse(v);
-            if (parsedAmount != null && parsedAmount >= 0)
+            if (parsedAmount != null && parsedAmount >= 0) {
               setState(() => _amount = Money.fromRupees(parsedAmount));
+            }
           },
         ),
         const SizedBox(height: AppSpace.lg),
@@ -313,6 +314,10 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           categoryId: _selectedCategoryId,
           expectedValue: rec.expectedValue,
           confidence: rec.confidence,
+          // Plan Phase 2.1: both needed for the acceptance report that
+          // screen asks for once the user confirms they finished paying.
+          vpa: widget.parsed.pa,
+          cardNetwork: rec.card.network,
         ),
       ),
     );
@@ -341,8 +346,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         ).showSnackBar(SnackBar(content: Text('${rec.card.name} will always be suggested here.')));
       }
     } catch (err) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
+      }
     }
   }
 }

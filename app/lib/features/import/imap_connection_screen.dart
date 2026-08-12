@@ -88,7 +88,7 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
   @override
   Widget build(BuildContext context) {
     final connection = ref.watch(imapConnectionProvider);
-    final inputDecoration = (String label, {String? hint, String? helper, Widget? suffixIcon}) =>
+    InputDecoration inputDecoration(String label, {String? hint, String? helper, Widget? suffixIcon}) =>
         InputDecoration(
           labelText: label,
           hintText: hint,

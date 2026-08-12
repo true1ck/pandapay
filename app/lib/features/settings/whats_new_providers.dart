@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/changelog_repository.dart';
 import 'settings_sync.dart';
+import '../../app/env.dart';
 
 /// Task H10 (What's New). Deliberately not imported from app/providers.dart
 /// — this file is self-contained so it can be built as a new file alongside
@@ -10,7 +11,7 @@ import 'settings_sync.dart';
 /// providers.dart (which several sibling tasks are also editing this same
 /// session). Matches api/'s default local dev port exactly as
 /// app/providers.dart's own `_apiBaseUrl` constant does.
-const _apiBaseUrl = 'http://localhost:4000';
+const _apiBaseUrl = Env.apiBaseUrl; // plan Phase 0.3 — see app/env.dart
 
 final changelogRepositoryProvider = Provider<ChangelogRepository>(
   (ref) => ChangelogRepository(apiBaseUrl: _apiBaseUrl),

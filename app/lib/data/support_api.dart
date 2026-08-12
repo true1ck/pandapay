@@ -43,8 +43,8 @@ class SupportApi {
       body: jsonEncode({
         'kind': kind,
         'message': message,
-        if (diagnostics != null) 'diagnostics': diagnostics,
-        if (appVersion != null) 'appVersion': appVersion,
+        'diagnostics': ?diagnostics,
+        'appVersion': ?appVersion,
       }),
     );
     if (response.statusCode != 201) {

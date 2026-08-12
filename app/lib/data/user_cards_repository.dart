@@ -689,11 +689,11 @@ class UserCardsRepository {
     AutopayMode? autopayMode,
   }) async {
     final body = <String, dynamic>{
-      if (nickname != null) 'nickname': nickname,
-      if (creditLimitInr != null) 'creditLimitInr': creditLimitInr,
-      if (statementDay != null) 'statementDay': statementDay,
-      if (dueDay != null) 'dueDay': dueDay,
-      if (pointsBalance != null) 'pointsBalance': pointsBalance,
+      'nickname': ?nickname,
+      'creditLimitInr': ?creditLimitInr,
+      'statementDay': ?statementDay,
+      'dueDay': ?dueDay,
+      'pointsBalance': ?pointsBalance,
       // Sent by wire value, not enum name — they happen to match today, but
       // the server's CHECK constraint is the contract, not Dart's naming.
       if (autopayMode != null) 'autopayMode': autopayMode.wireValue,
@@ -842,9 +842,9 @@ class UserCardsRepository {
     final params = <String, String>{
       if (from != null) 'from': _dateOnly(from),
       if (to != null) 'to': _dateOnly(to),
-      if (cardId != null) 'cardId': cardId,
-      if (categoryId != null) 'categoryId': categoryId,
-      if (source != null) 'source': source,
+      'cardId': ?cardId,
+      'categoryId': ?categoryId,
+      'source': ?source,
       // Server-side match over merchant name and note. Blank/whitespace is
       // dropped rather than sent, so an empty search box is "no filter"
       // rather than a query that matches everything with a wildcard.
@@ -887,12 +887,12 @@ class UserCardsRepository {
     String? userCardId,
   }) async {
     final body = <String, dynamic>{
-      if (amountInr != null) 'amountInr': amountInr,
+      'amountInr': ?amountInr,
       if (occurredAt != null) 'occurredAt': occurredAt.toIso8601String(),
-      if (categoryId != null) 'categoryId': categoryId,
-      if (merchantName != null) 'merchantName': merchantName,
+      'categoryId': ?categoryId,
+      'merchantName': ?merchantName,
       if (rail != null) 'rail': _railToJson(rail),
-      if (userCardId != null) 'userCardId': userCardId,
+      'userCardId': ?userCardId,
     };
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/transactions/$id'),
@@ -953,7 +953,7 @@ class UserCardsRepository {
       headers: _headers,
       body: jsonEncode({
         'resolution': resolution,
-        if (keepTransactionId != null) 'keepTransactionId': keepTransactionId,
+        'keepTransactionId': ?keepTransactionId,
       }),
     );
     if (response.statusCode != 200) {
