@@ -15,24 +15,34 @@
 # longer a set of independently-typeable flags that can disagree.
 #
 # Usage:
-#   scripts/build_app.sh dev [extra flutter build args...]
+#   scripts/build_app.sh dev [apk|appbundle] [extra flutter build args...]
 #   scripts/build_app.sh staging
-#   scripts/build_app.sh prod
+#   scripts/build_app.sh prod appbundle --release   # what Play Console needs
 #
 # staging/prod require PANDAPAY_API_BASE_URL and PANDAPAY_AUTH_BASE_URL to
 # already be set in the environment (deploy/DEPLOY.md documents where
 # those come from) — dev defaults to localhost, matching env.dart's own
 # defaults, since that's the only flavor a debug/local build should ever
 # use.
+#
+# Target defaults to `apk` (sideloading/testing) — pass `appbundle` as the
+# second argument for a Play Console upload; Play no longer accepts a bare
+# APK for new app submissions.
 
 set -Eeuo pipefail
 
 ENV_NAME="${1:-}"
 if [ -z "$ENV_NAME" ]; then
-  echo "Usage: scripts/build_app.sh <dev|staging|prod> [extra flutter build args...]" >&2
+  echo "Usage: scripts/build_app.sh <dev|staging|prod> [apk|appbundle] [extra flutter build args...]" >&2
   exit 1
 fi
 shift
+
+BUILD_TARGET="apk"
+if [ "${1:-}" = "apk" ] || [ "${1:-}" = "appbundle" ]; then
+  BUILD_TARGET="$1"
+  shift
+fi
 
 case "$ENV_NAME" in
   dev)
@@ -63,11 +73,11 @@ esac
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT/app"
 
-echo "==> Building $FLAVOR flavor against:"
+echo "==> Building $FLAVOR flavor ($BUILD_TARGET) against:"
 echo "    PANDAPAY_API_BASE_URL=$API_BASE_URL"
 echo "    PANDAPAY_AUTH_BASE_URL=$AUTH_BASE_URL"
 
-exec flutter build apk \
+exec flutter build "$BUILD_TARGET" \
   --flavor "$FLAVOR" \
   --dart-define=PANDAPAY_ENV="$ENV_NAME" \
   --dart-define=PANDAPAY_API_BASE_URL="$API_BASE_URL" \
