@@ -4,6 +4,9 @@
 #
 # api/ itself only listens on 127.0.0.1:4000 (docker-compose.prod.yml) — this
 # is the only thing meant to reach it from outside the host.
+#
+# Requires request-id-map.conf.example to also be installed (see that file
+# and deploy/DEPLOY.md) — it defines $req_id, used below.
 
 server {
     listen 80;
@@ -52,7 +55,9 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         # api/src/observability.js's requestLogger reuses an inbound
         # x-request-id when present, so a trace survives the nginx hop
-        # instead of restarting here.
-        proxy_set_header X-Request-Id $request_id;
+        # instead of restarting here. $req_id (from request-id-map.conf,
+        # not nginx's own $request_id) is the client's header when sent,
+        # or a fresh generated id when it wasn't.
+        proxy_set_header X-Request-Id $req_id;
     }
 }

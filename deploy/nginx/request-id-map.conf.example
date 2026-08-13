@@ -1,0 +1,19 @@
+# Shared by api.conf.example and auth.conf.example — copy to
+# /etc/nginx/conf.d/request-id-map.conf (Debian/Ubuntu's default nginx.conf
+# includes /etc/nginx/conf.d/*.conf inside the http{} block automatically).
+#
+# A code review of api.conf.example caught that `proxy_set_header
+# X-Request-Id $request_id` was wrong: $request_id is nginx's OWN built-in
+# random per-request variable, unrelated to any client-supplied header —
+# despite the comment there claiming it reused an inbound x-request-id. This
+# map is the actual "reuse inbound if present, else generate one" logic:
+# $http_x_request_id is empty when the header wasn't sent, and nginx's map
+# directive can only appear at the http{} level, not inside a server{}
+# block, which is why this needs its own file rather than living in
+# api.conf.example directly (and why it can't just be copy-pasted into both
+# site files — nginx would then see the same map variable defined twice in
+# the same http context and refuse to start).
+map $http_x_request_id $req_id {
+    default $http_x_request_id;
+    ''      $request_id;
+}

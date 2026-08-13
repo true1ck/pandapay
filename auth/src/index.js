@@ -18,6 +18,18 @@ const { requestLogger, errorHandler } = require('./observability');
 
 const app = express();
 
+// Correlation id + structured request log for every route below, including
+// requests CORS goes on to reject. Registered before the CORS setup below,
+// not after it — a code review caught that this used to run after the CORS
+// error-handling middleware, whose 4-arg handler returns res.status(403)
+// directly without calling next(). Express only reaches later middleware
+// when an earlier one calls next(), so a rejected-origin request never
+// reached requestLogger at all: exactly the security-relevant class of
+// event (a blocked cross-origin call) silently missing an x-request-id and
+// a log line. Registering first means every request gets both, including
+// the ones CORS goes on to block.
+app.use(requestLogger);
+
 // === ADDED FOR RATE LIMITING ===
 // Trust proxy to get correct client IP (important for rate limiting by IP)
 // Set this if your app is behind a reverse proxy (nginx, load balancer, etc.)
@@ -86,11 +98,6 @@ if (allowAllOrigins) {
   });
 }
 app.use(express.json());
-
-// Correlation id + structured request log for every route below, including
-// the admin dashboard and static test pages — assigned as early as possible
-// so the same requestId shows up in the CORS-error handler above too.
-app.use(requestLogger);
 
 // === SECURITY HARDENING: SECURITY HEADERS ===
 // Apply security headers to all routes (not just admin)

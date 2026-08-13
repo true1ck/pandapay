@@ -95,6 +95,14 @@ jobs:
   images:
     name: Container images
     runs-on: ubuntu-latest
+    # Without this, GitHub Actions runs `images` in parallel with `api`/
+    # `flutter`, independent of their outcome — a code review caught that a
+    # red test run could still publish `:latest` to GHCR, which is exactly
+    # the guarantee deploy/DEPLOY.md claims this workflow provides ("pulling
+    # :latest always gets exactly the image this workflow tested"). The build
+    # itself (push: false path, PR runs) still runs unconditionally — only
+    # the on-master push gate needed the dependency.
+    needs: [api, flutter]
     # Needed to push to GHCR under GITHUB_TOKEN — this repo's default token
     # permissions may be read-only, so this is explicit rather than assumed.
     permissions:

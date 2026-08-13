@@ -2581,19 +2581,25 @@ async function applyTransactionState(client, userId, userCard, {
   //
   // Applied on both signs so an edit or reversal recomputes rather than
   // leaving a stale figure: `sign < 0` runs during the reverse half of an
-  // edit, and the subsequent apply half writes the new value.
-  if (sign > 0) {
-    const expectedValue = amount * rewardRate;
-    const expectedPoints = matchingRule.rows[0]
-      ? amount * effectivePointsPerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate))
-      : 0;
-    await client.query(
-      `UPDATE transactions
-          SET expected_value_inr = $2, expected_points = $3, updated_at = now()
-        WHERE id = $1`,
-      [txnId, expectedValue, expectedPoints]
-    );
-  }
+  // edit (PATCH) AND on a bare reversal with no re-apply (POST .../ignore) —
+  // zeroing here, not skipping, is what keeps GET /transactions/:id honest
+  // for an ignored transaction. A code review caught that this used to only
+  // run `if (sign > 0)`, which was correct for PATCH's apply-after-reverse
+  // pair but left the ignore route's reversal with no re-apply half at all,
+  // so an ignored transaction kept showing its original nonzero expected
+  // value/points even though cap/milestone/points-ledger state had already
+  // been reversed — a real number on screen for a reward that no longer
+  // existed anywhere else.
+  const expectedValue = sign > 0 ? amount * rewardRate : 0;
+  const expectedPoints = sign > 0 && matchingRule.rows[0]
+    ? amount * effectivePointsPerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate))
+    : 0;
+  await client.query(
+    `UPDATE transactions
+        SET expected_value_inr = $2, expected_points = $3, updated_at = now()
+      WHERE id = $1`,
+    [txnId, expectedValue, expectedPoints]
+  );
 
   // Points ledger: one row per transaction (not bucketed) — apply inserts,
   // reverse deletes the row this exact transaction wrote. flat_points

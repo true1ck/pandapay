@@ -2,6 +2,12 @@
 # /etc/nginx/sites-available/auth.your-domain.example.
 #
 # auth/ only listens on 127.0.0.1:3210 (docker-compose.prod.yml).
+#
+# Requires request-id-map.conf.example to also be installed (see that file
+# and deploy/DEPLOY.md) — it defines $req_id, used below. A code review
+# caught that this file used to omit X-Request-Id entirely, even though
+# auth/src/observability.js's requestLogger reuses an inbound one exactly
+# like api/'s does — auth/ traffic through nginx got no forwarded id at all.
 
 server {
     listen 80;
@@ -38,5 +44,6 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-Id $req_id;
     }
 }

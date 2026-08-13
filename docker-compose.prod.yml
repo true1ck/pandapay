@@ -34,17 +34,15 @@ services:
   # reasoning as docker-compose.yml's db-migrate but pointed at a real DB by
   # URL instead of a compose-local service name.
   db-migrate:
-    image: postgres:16-alpine
+    build:
+      context: ./db
+      dockerfile: migrate/Dockerfile
     environment:
       ADMIN_DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
       APP_USER_PASSWORD: "${APP_USER_PASSWORD:?}"
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-false}"
     volumes:
       - ./db:/db:ro
-    # postgres:16-alpine's default shell is busybox ash, which doesn't support
-    # `set -o pipefail`/`-E` — migrate.sh needs real bash (same reason
-    # backup/Dockerfile explicitly `apk add`s it rather than relying on ash).
-    entrypoint: ["/bin/sh", "-c", "apk add --no-cache bash >/dev/null && bash /db/scripts/migrate.sh"]
 
   api:
     build:
@@ -82,6 +80,12 @@ services:
       # OTP verification succeed without sending a real code.
       ALLOW_TEST_OTP: "false"
       ENCRYPTION_ENABLED: "${ENCRYPTION_ENABLED:-true}"
+      # The actual AES-256 key fieldEncryption.js needs — ENCRYPTION_ENABLED
+      # alone does nothing without it. A code review of this file caught that
+      # the first version of this compose file set ENCRYPTION_ENABLED=true
+      # but never defined this, which makes encryption silently no-op (a
+      # warning to stderr, nothing else) rather than fail loudly.
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?}"
     ports:
       - "127.0.0.1:3210:3210"
 

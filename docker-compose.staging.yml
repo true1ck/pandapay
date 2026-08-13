@@ -19,7 +19,9 @@ x-logging: &default-logging
 
 services:
   db-migrate:
-    image: postgres:16-alpine
+    build:
+      context: ./db
+      dockerfile: migrate/Dockerfile
     environment:
       ADMIN_DATABASE_URL: "${ADMIN_DATABASE_URL:?}"
       APP_USER_PASSWORD: "${APP_USER_PASSWORD:?}"
@@ -28,7 +30,6 @@ services:
       SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"
     volumes:
       - ./db:/db:ro
-    entrypoint: ["/bin/sh", "-c", "apk add --no-cache bash >/dev/null && bash /db/scripts/migrate.sh"]
 
   api:
     build:
@@ -66,6 +67,7 @@ services:
       # provider does differently from the test path, not to skip it.
       ALLOW_TEST_OTP: "false"
       ENCRYPTION_ENABLED: "${ENCRYPTION_ENABLED:-true}"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?}"
     ports:
       - "127.0.0.1:3210:3210"
 

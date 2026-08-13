@@ -50,7 +50,14 @@ cp .env.prod.example .env
 
 Fill in every `CHANGE_ME` in `.env` — the file itself documents how to
 generate each value (JWT secrets, `APP_USER_PASSWORD`, webhook secrets,
-`IMAP_ENCRYPTION_KEY`). `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` **must** be
+`IMAP_ENCRYPTION_KEY`, `ENCRYPTION_KEY`). Don't confuse the last two:
+`IMAP_ENCRYPTION_KEY` is `api/`'s key for stored IMAP app passwords;
+`ENCRYPTION_KEY` is `auth/`'s separate key for field-level PII encryption —
+both are required, and leaving `ENCRYPTION_KEY` unset doesn't fail the
+deploy, it just makes auth/ silently store that PII unencrypted (a stderr
+warning, nothing else), which is why `docker-compose.prod.yml` requires it
+with `:?` rather than defaulting it. `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`
+**must** be
 the same values `api/` and `auth/` both read — the compose file already wires
 one value to both services, just don't hand-edit them differently later.
 
@@ -91,6 +98,11 @@ docker compose -f docker-compose.prod.yml exec backup crontab -l
 ## 6. nginx + TLS
 
 ```bash
+# Shared by both site configs below — defines $req_id (the client's
+# X-Request-Id when sent, a fresh one otherwise). Must be installed first:
+# both site configs reference $req_id and nginx -t fails on an undefined
+# variable.
+sudo cp deploy/nginx/request-id-map.conf.example /etc/nginx/conf.d/request-id-map.conf
 sudo cp deploy/nginx/api.conf.example /etc/nginx/sites-available/api.yourapp.com
 sudo cp deploy/nginx/auth.conf.example /etc/nginx/sites-available/auth.yourapp.com
 # edit both: replace api.your-domain.example / auth.your-domain.example
@@ -120,17 +132,20 @@ curl -i https://auth.yourapp.com/   # any response, not a connection failure
 ## 9. Point the app at it
 
 Build the Flutter app with the real hosts (see `app/lib/app/env.dart` —
-release builds refuse to start pointed at localhost):
+release builds refuse to start pointed at localhost) using
+`scripts/build_app.sh`, not a raw `flutter build` command — the script ties
+`--flavor` and the three `--dart-define`s to one argument so they can't
+independently drift (a code review flagged that four separately-typed flags
+made it possible to build a `dev`-flavored release pointed at the real prod
+API with no warning at build or runtime):
 
 ```bash
-flutter build apk --release \
-  --flavor prod \
-  --dart-define=PANDAPAY_ENV=prod \
-  --dart-define=PANDAPAY_API_BASE_URL=https://api.yourapp.com \
-  --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.yourapp.com
+PANDAPAY_API_BASE_URL=https://api.yourapp.com \
+PANDAPAY_AUTH_BASE_URL=https://auth.yourapp.com \
+scripts/build_app.sh prod --release
 ```
 
-(`--flavor prod` needs the Android product flavors — see
+(needs the Android product flavors — see
 `app/android/app/build.gradle.kts`. On iOS there's no equivalent flavor/scheme
 set up yet; that's a manual Xcode step — Product → Scheme → New Scheme, or
 duplicate the existing `Runner` scheme per environment — deliberately not
