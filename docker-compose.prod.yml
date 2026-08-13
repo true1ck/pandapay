@@ -109,6 +109,9 @@ services:
     build:
       context: ./db
       dockerfile: backup/Dockerfile
+    # Required for crond — see db/backup/Dockerfile's comment on the
+    # "setpgid: Operation not permitted" failure this avoids.
+    init: true
     restart: unless-stopped
     logging: *default-logging
     environment:

@@ -82,6 +82,7 @@ services:
     build:
       context: ./db
       dockerfile: backup/Dockerfile
+    init: true
     restart: unless-stopped
     logging: *default-logging
     environment:

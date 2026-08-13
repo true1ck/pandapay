@@ -27,7 +27,17 @@ COPY scripts/restore_drill.sh ./restore_drill.sh
 COPY backup/crontab /etc/crontabs/root
 RUN chmod +x ./backup.sh ./restore_drill.sh
 
-# -f: stay in the foreground so this is PID 1 and the container has a real
-# lifecycle Docker can supervise, instead of crond daemonizing and the
-# container exiting immediately.
+# Requires the container to be started with an init process (docker run
+# --init, or `init: true` in compose — both wire up Docker's built-in tini)
+# — NOT a Dockerfile-level dumb-init ENTRYPOINT. dcron's crond calls
+# setpgid() on itself at startup, which fails with "setpgid: Operation not
+# permitted" (EPERM: pid is a session leader) whenever crond is a direct
+# exec-form child of the container's own PID 1, dumb-init included — a
+# known dcron/Docker interaction, confirmed here by testing both a
+# dumb-init ENTRYPOINT (still failed) and `docker run --init` (works)
+# before picking this fix. See docker-compose.prod.yml/staging.yml's
+# `backup` service, which sets `init: true`.
+#
+# -f: stay in the foreground so tini can supervise crond as a real child,
+# instead of crond daemonizing and the container exiting immediately.
 CMD ["crond", "-f", "-l", "2"]
