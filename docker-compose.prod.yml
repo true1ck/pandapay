@@ -86,6 +86,22 @@ services:
       # but never defined this, which makes encryption silently no-op (a
       # warning to stderr, nothing else) rather than fail loudly.
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:?}"
+      # Generic SMTP — auth/src/services/emailService.js uses nodemailer
+      # against any host, Gmail included. Without these, emailService.js
+      # falls back to logging the OTP to the container's own stdout instead
+      # of sending it, which works for local dev and is silently useless in
+      # production (no user will ever see that log).
+      EMAIL_HOST: "${EMAIL_HOST:?}"
+      EMAIL_PORT: "${EMAIL_PORT:-587}"
+      EMAIL_USER: "${EMAIL_USER:?}"
+      EMAIL_PASS: "${EMAIL_PASS:?}"
+      EMAIL_FROM: "${EMAIL_FROM:?}"
+      # No SMS provider (Twilio) configured — see .env.prod.example's note.
+      # Phone OTP would otherwise accept a signup it can never actually
+      # deliver a code for; email-only is the honest default until/unless an
+      # SMS provider is added.
+      ENABLE_PHONE_OTP: "${ENABLE_PHONE_OTP:-false}"
+      ENABLE_EMAIL_OTP: "${ENABLE_EMAIL_OTP:-true}"
     ports:
       - "127.0.0.1:3210:3210"
 

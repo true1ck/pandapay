@@ -68,6 +68,13 @@ services:
       ALLOW_TEST_OTP: "false"
       ENCRYPTION_ENABLED: "${ENCRYPTION_ENABLED:-true}"
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:?}"
+      EMAIL_HOST: "${EMAIL_HOST:?}"
+      EMAIL_PORT: "${EMAIL_PORT:-587}"
+      EMAIL_USER: "${EMAIL_USER:?}"
+      EMAIL_PASS: "${EMAIL_PASS:?}"
+      EMAIL_FROM: "${EMAIL_FROM:?}"
+      ENABLE_PHONE_OTP: "${ENABLE_PHONE_OTP:-false}"
+      ENABLE_EMAIL_OTP: "${ENABLE_EMAIL_OTP:-true}"
     ports:
       - "127.0.0.1:3210:3210"
 
