@@ -91,6 +91,20 @@ android {
 
     buildTypes {
         release {
+            // R8 minification was silently on by default (Flutter's Gradle
+            // plugin default for release, with no proguard-rules.pro in this
+            // project to add keep exceptions) and was stripping something
+            // androidx.work's Room-generated WorkDatabase needs at runtime —
+            // found by actually installing a release build, which crashed
+            // immediately on launch with "Failed to create an instance of
+            // androidx.work.impl.WorkDatabase", while the identical debug
+            // build (no minification) ran fine. Disabling minification is
+            // the safe fix over hand-tuning keep rules blind; costs APK
+            // size, not correctness, and can be revisited with a real
+            // proguard-rules.pro later if size becomes a concern.
+            isMinifyEnabled = false
+            isShrinkResources = false
+
             // Falls back to the debug key when key.properties isn't present
             // (e.g. `flutter run --release` on a machine without the release
             // keystore) so local release-mode runs still work. Play Console
