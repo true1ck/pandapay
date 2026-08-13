@@ -14,12 +14,23 @@ together.
 
 - A Postgres instance reachable from the VM — either managed (has automated
   backups/PITR built in, which is the stronger guarantee) or self-hosted on
-  the same VM. Either way you need a **superuser connection string** to it.
-  `docker-compose.yml` (local dev) is not this — that's a disposable
-  container, not a target for real data.
+  the same VM. Either way you need a **superuser-equivalent connection
+  string** to it. `docker-compose.yml` (local dev) is not this — that's a
+  disposable container, not a target for real data.
 - A domain (or subdomain pair) you control, e.g. `api.yourapp.com` and
   `auth.yourapp.com`, with DNS you can edit.
 - This repo cloned onto the VM.
+
+### Using Supabase's free tier for Postgres
+
+Live-verified end to end (full migration chain, `app_user` creation, a real
+`api/` request, a real `auth/` OTP write) against a real Supabase free
+project — see `.env.prod.example`'s Database section for the exact gotchas
+(session pooler required for IPv4, `<role>.<project-ref>` username format,
+free tier's 2-active-project cap — solved here by putting both databases in
+ONE project via `CREATE DATABASE pandapay_auth;` rather than two projects).
+Free tier has no automated backups, so `docker-compose.prod.yml`'s `backup`
+service isn't optional in this setup — it's the only backup that exists.
 
 ## 1. Provision the VM
 
