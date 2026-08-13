@@ -46,6 +46,18 @@ server {
         access_log off;
     }
 
+    # Static privacy policy / terms — Play Console needs a public Privacy
+    # Policy URL, and app/lib/features/settings/legal_screen.dart's in-app
+    # copy links here (https://api.pandapath.site/legal/ on the real
+    # deploy). Files live at /var/www/pandapay-legal/ on the host, deployed
+    # from deploy/legal/*.html — not part of the api/ container, so they
+    # keep serving even if that container is down.
+    location /legal/ {
+        alias /var/www/pandapay-legal/;
+        index privacy.html;
+        try_files $uri $uri/ =404;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:4000;
         proxy_http_version 1.1;

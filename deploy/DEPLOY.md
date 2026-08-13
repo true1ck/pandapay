@@ -123,6 +123,12 @@ sudo ln -s /etc/nginx/sites-available/auth.yourapp.com /etc/nginx/sites-enabled/
 sudo nginx -t   # will complain about missing certs — expected before certbot
 sudo certbot --nginx -d api.yourapp.com -d auth.yourapp.com
 sudo systemctl reload nginx
+
+# Privacy policy / terms — served as static files, not through api/'s
+# container, so they're up even if the app is down. Needed for Play
+# Console's Privacy Policy URL field.
+sudo mkdir -p /var/www/pandapay-legal
+sudo cp deploy/legal/*.html /var/www/pandapay-legal/
 ```
 
 ## 7. Firewall
