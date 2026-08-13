@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/env.dart';
 import '../../app/providers.dart';
 import '../sms_import/sms_import_screen.dart';
 import 'data_export_screen.dart';
@@ -47,23 +48,30 @@ class ImportHubScreen extends ConsumerWidget {
               style: BambooFonts.ui(13.5, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.lg),
-            _ChannelCard(
-              icon: Icons.sms_outlined,
-              title: 'SMS import',
-              status: smsBatches.when(
-                data: (batches) => batches.isEmpty
-                    ? const _Status('Not set up', BambooInk.ink500)
-                    : _Status(
-                        'Active — ${batches.length} import${batches.length == 1 ? '' : 's'}',
-                        BambooInk.jade,
-                      ),
-                loading: () => const _Status('Checking…', BambooInk.ink500),
-                error: (_, _) => const _Status('Error', BambooInk.clay),
+            // prod flavor has no READ_SMS/RECEIVE_SMS (see
+            // app/android/app/src/prod/AndroidManifest.xml) — Google Play's
+            // SMS/Call Log policy doesn't allow it for this optional
+            // feature. Tapping through to a permission request that can
+            // only fail is worse than not showing the tile.
+            if (!Env.isProd) ...[
+              _ChannelCard(
+                icon: Icons.sms_outlined,
+                title: 'SMS import',
+                status: smsBatches.when(
+                  data: (batches) => batches.isEmpty
+                      ? const _Status('Not set up', BambooInk.ink500)
+                      : _Status(
+                          'Active — ${batches.length} import${batches.length == 1 ? '' : 's'}',
+                          BambooInk.jade,
+                        ),
+                  loading: () => const _Status('Checking…', BambooInk.ink500),
+                  error: (_, _) => const _Status('Error', BambooInk.clay),
+                ),
+                onTap: () =>
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
               ),
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
-            ),
-            const SizedBox(height: AppSpace.md),
+              const SizedBox(height: AppSpace.md),
+            ],
             _ChannelCard(
               icon: Icons.picture_as_pdf_outlined,
               title: 'Statement PDF import',
