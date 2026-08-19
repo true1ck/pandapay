@@ -80,4 +80,38 @@ void main() {
       }
     });
   });
+
+  group('redactDigitRuns', () {
+    // UA-4 (extended): the front of a physical card usually prints a full
+    // or partial card number. Anything from the OCR path that could ever
+    // reach the screen must have digit runs masked first.
+    test('masks a full 16-digit card number', () {
+      expect(redactDigitRuns('4111 1111 1111 1111'), '•••• •••• •••• ••••');
+    });
+
+    test('masks digits embedded in surrounding issuer text', () {
+      expect(
+        redactDigitRuns('HDFC BANK MILLENNIA 5241 8765 3412 9087 VALID THRU 04/29'),
+        'HDFC BANK MILLENNIA •••• •••• •••• •••• VALID THRU 04/29',
+      );
+    });
+
+    test('leaves a 1-2 digit run alone — below CVV length, not PAN-shaped', () {
+      expect(redactDigitRuns('exp 04/29'), 'exp 04/29');
+      expect(redactDigitRuns('branch 7'), 'branch 7');
+    });
+
+    test('masks a 3-digit run — the CVV length is exactly the line to hold', () {
+      expect(redactDigitRuns('123'), '•••');
+    });
+
+    test('leaves letters and punctuation untouched', () {
+      expect(redactDigitRuns('HDFC Bank — Millennia'), 'HDFC Bank — Millennia');
+    });
+
+    test('masks a single very long run once, not digit-by-digit oddly', () {
+      final redacted = redactDigitRuns('a1234567890123456b');
+      expect(redacted, 'a${'•' * 16}b');
+    });
+  });
 }

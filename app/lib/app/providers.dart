@@ -912,6 +912,16 @@ final forwardingAddressProvider = FutureProvider<ForwardingAddress?>((ref) async
   return repo.fetchForwardingAddress();
 });
 
+/// Task F-8: the forwarding confirmation code/link a provider sent to the
+/// issued address, if one has arrived. Null is the normal state — it only
+/// becomes non-null during the few minutes between the user starting setup
+/// in Gmail and finishing it.
+final forwardingVerificationProvider = FutureProvider<ForwardingVerification?>((ref) async {
+  final repo = ref.watch(importRepositoryProvider);
+  if (repo == null) return null;
+  return repo.fetchForwardingVerification();
+});
+
 /// F3: this profile's recently received forwarded emails, newest first.
 /// Real data once a mail provider is wired to POST /inbound-emails/webhook
 /// for a given deployment — empty (not fake) until then.

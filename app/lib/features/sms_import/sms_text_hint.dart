@@ -24,11 +24,30 @@ library;
 /// reference number sitting next to the real card suffix) means "not
 /// confident enough" — returns null rather than guessing which one.
 String? extractLast4Hint(String smsBody) {
+  // Task S-1a (D3) widened this. It previously matched `ending 4321` and
+  // `XX7788` but NOT `Card x1234` — which is one of the most common shapes
+  // in Indian bank SMS, and `****1234` / `...1234` / `a/c no. 1234` were
+  // missed too. That mattered little when the hint was a cosmetic label,
+  // but the backup importer now GROUPS messages by it to decide which card
+  // each one belongs to, so a missed shape means a whole card's worth of
+  // transactions falls into the anonymous bucket.
+  //
+  // The masking prefixes (`x`, `xx`, `*`, `.`) are matched as a repeated
+  // class rather than spelled out one alternative at a time, so `x1234`,
+  // `XX1234`, `****1234` and `...1234` are one rule.
   final matches = RegExp(
-    r'(?:ending|card(?:\s+no\.?)?|xx|XX)\s*[:\-]?\s*(\d{4})\b',
+    r'(?:'
+    r'(?:ending|ending\s+with|card(?:\s+no\.?)?|a\/c(?:\s+no\.?)?|acct?(?:\s+no\.?)?)'
+    r'\s*[:\-]?\s*[x*.\s]*'
+    r'|[x*]{1,2}|\*{2,}|\.{3,}'
+    r')(\d{4})\b',
     caseSensitive: false,
   ).allMatches(smsBody).map((m) => m.group(1)!).toSet();
 
+  // Still deliberately conservative: two distinct candidates (an OTP or a
+  // reference number sitting next to the real suffix) means "not confident
+  // enough" rather than a guess. A wrong card attribution is worse than an
+  // unattributed message the user can place themselves.
   if (matches.length != 1) return null;
   return matches.first;
 }

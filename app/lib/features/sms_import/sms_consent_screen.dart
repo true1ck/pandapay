@@ -33,20 +33,35 @@ class SmsConsentScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'SMS auto-import reads your bank SMS on-device',
+                'SMS auto-import reads your bank alerts for you',
                 style: BambooFonts.heading(17, color: BambooInk.ink900),
               ),
               const SizedBox(height: AppSpace.lg),
-              const _Point(
-                icon: Icons.phone_iphone_rounded,
-                text:
-                    'Parsing happens entirely on this device — message text is never uploaded, only the '
-                    'extracted amount/merchant/date needed to log a transaction.',
-              ),
+              // These three lines previously claimed on-device parsing and
+              // that message text was never uploaded. Neither was true —
+              // there is no Dart-side SMS parser; the regex match runs
+              // server-side against `parser_patterns`. See
+              // smsextractionimple.md §0.2. What IS true is the filtering
+              // (on-device, before any upload) and the non-storage (a
+              // parsed message becomes a transaction; an unparsed one
+              // becomes redactSmsShape() output, which cannot contain
+              // digits by CHECK constraint). Say that instead.
               const _Point(
                 icon: Icons.filter_alt_outlined,
                 text:
-                    'Only messages matching a known bank-alert pattern are used; everything else is ignored.',
+                    'Your phone checks each message first. Only ones that look like bank alerts are sent '
+                    '— everything else stays on your device.',
+              ),
+              const _Point(
+                icon: Icons.lock_outline_rounded,
+                text:
+                    'Bank alerts are sent to PandaPay over an encrypted connection to pull out the amount, '
+                    'merchant and date.',
+              ),
+              const _Point(
+                icon: Icons.delete_outline_rounded,
+                text:
+                    'The message text is never stored on our servers — only the transaction it produced.',
               ),
               const _Point(
                 icon: Icons.toggle_off_outlined,

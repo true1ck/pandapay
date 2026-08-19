@@ -20,13 +20,28 @@ class ForcedUpgradeScreen extends StatelessWidget {
   static const _storeSearchUrl = 'https://play.google.com/store/search?q=pandapay&c=apps';
 
   Future<void> _openStore(BuildContext context) async {
-    final launched = await launchUrl(Uri.parse(_storeSearchUrl), mode: LaunchMode.externalApplication);
-    if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Couldn't open the store — update PandaPay from your device's app store."),
-        ),
-      );
+    // This button is the ONLY thing on a blocking screen — there is no way
+    // past a forced upgrade except through here. `launchUrl` returning
+    // `false` was already handled; a thrown exception (platform-channel
+    // failure) was not, and would have left a trapped user with a button
+    // that does nothing and no way to know why.
+    try {
+      final launched = await launchUrl(Uri.parse(_storeSearchUrl), mode: LaunchMode.externalApplication);
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Couldn't open the store — update PandaPay from your device's app store."),
+          ),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Couldn't open the store — update PandaPay from your device's app store."),
+          ),
+        );
+      }
     }
   }
 

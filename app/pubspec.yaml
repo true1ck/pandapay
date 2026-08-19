@@ -51,12 +51,26 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_animate: ^4.5.2
 
-  # UA-4 (Chunk 30): camera/QR card scanning. mobile_scanner drives the
-  # QR/barcode path wired up in this chunk; google_mlkit_text_recognition is
-  # wired for the still-photo OCR path (isolated behind CardTextRecognizer)
-  # but, like mobile_scanner's camera preview, could not be exercised on
-  # real hardware in this sandbox — see PROGRESS.md Chunk 30.
+  # UA-4 (Chunk 30, extended): camera/QR card scanning. mobile_scanner drives
+  # the QR/barcode fallback path (a code printed on a card mailer or
+  # statement). google_mlkit_text_recognition (declared separately below,
+  # near the `camera` plugin it pairs with) is the OCR path that reads the
+  # issuer/product name off the FRONT of the physical card — the primary
+  # flow as of this pass. Neither ever reads a full PAN or a card's back:
+  # this app never stores a card number, not even the last 4 (see
+  # db/supabase/migrations/0004_user_domain.sql), so there is nothing an
+  # ownership-confirmation step could check that a front-of-card product
+  # match doesn't already establish.
   mobile_scanner: ^7.0.0
+  # `camera` is the plugin actually meant for the OCR path above: a live
+  # preview this screen draws its own card-shaped guide over, plus a manual
+  # capture button that hands one still frame to
+  # google_mlkit_text_recognition (was declared in a doc-comment, never
+  # actually added as a dependency, until this pass — see card_scanner.dart).
+  # `mobile_scanner` was deliberately NOT reused for this: it's purpose-built
+  # for continuous barcode/QR detection, not general still-photo capture.
+  camera: ^0.12.0+2
+  google_mlkit_text_recognition: ^0.17.1
 
   # UA-5.3 (Chunk 31): SMS-based transaction auto-import. `telephony` wraps
   # the RECEIVE_SMS BroadcastReceiver + READ_SMS query so an incoming bank
@@ -162,7 +176,11 @@ dependencies:
   # matters for this app's unused Windows desktop target, but pub's
   # resolver still enforces it). Verified resolving cleanly against this
   # exact dependency graph before landing it.
-  file_picker: ">=12.0.0-beta.1"
+  # Task S-2: PINNED, not a range. This was `">=12.0.0-beta.1"` with no
+  # upper bound — an unbounded range on a PRE-RELEASE, in the one dependency
+  # the whole SMS-backup import rests on, so any `pub upgrade` could pull a
+  # breaking beta into a release build. Move to stable 12.x when it lands.
+  file_picker: 12.0.0-beta.7
   # F4: parsing an "SMS Backup & Restore"-format XML export — already
   # resolved transitively via syncfusion_flutter_pdf, declared directly
   # here since app/lib/data/sms_backup_xml_parser.dart imports it directly.

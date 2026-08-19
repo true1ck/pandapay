@@ -814,17 +814,89 @@ class UserCardsRepository {
     required String userCardId,
     required String sender,
     required String body,
+    DateTime? occurredAt,
+    bool backfill = false,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/transactions/from-sms'),
       headers: _headers,
-      body: jsonEncode({'userCardId': userCardId, 'sender': sender, 'body': body}),
+      body: jsonEncode({
+        'userCardId': userCardId,
+        'sender': sender,
+        'body': body,
+        if (occurredAt != null) 'occurredAt': occurredAt.toUtc().toIso8601String(),
+        if (backfill) 'backfill': true,
+      }),
     );
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw ApiException('POST /transactions/from-sms failed: ${response.statusCode} ${response.body}');
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    return SmsImportResult(parsed: json['parsed'] == true, reason: json['reason'] as String?);
+    return SmsImportResult(
+      parsed: json['parsed'] == true,
+      reason: json['reason'] as String?,
+      duplicate: json['duplicate'] == true,
+    );
+  }
+
+  /// Task S-1a: the batched form of [logTransactionFromSms], for backup-file
+  /// import.
+  ///
+  /// The screen used to make one request per message in a sequential loop —
+  /// a five-thousand-message export was five thousand round trips, which is
+  /// slow enough that users background the app mid-import. The server caps a
+  /// batch at 200; callers are expected to chunk.
+  ///
+  /// [backfill] skips the cap/milestone/fee-waiver state machine. Historical
+  /// messages are real transactions but they are not progress the user made
+  /// this cycle, and running years of them through the current cycle's
+  /// counters is the D2 bug this exists to avoid.
+  Future<SmsBatchImportResult> logTransactionsFromSmsBatch({
+    required List<SmsBatchMessage> messages,
+    bool backfill = true,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/transactions/from-sms/batch'),
+      headers: _headers,
+      body: jsonEncode({
+        'backfill': backfill,
+        'messages': [
+          for (final m in messages)
+            {
+              'userCardId': m.userCardId,
+              'sender': m.sender,
+              'body': m.body,
+              'occurredAt': m.occurredAt.toUtc().toIso8601String(),
+            },
+        ],
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'POST /transactions/from-sms/batch failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final summary = json['summary'] as Map<String, dynamic>? ?? const {};
+    final results = (json['results'] as List? ?? const []).cast<Map<String, dynamic>>();
+    return SmsBatchImportResult(
+      imported: (summary['imported'] as num?)?.toInt() ?? 0,
+      duplicate: (summary['duplicate'] as num?)?.toInt() ?? 0,
+      unparsed: (summary['unparsed'] as num?)?.toInt() ?? 0,
+      invalid: (summary['invalid'] as num?)?.toInt() ?? 0,
+      errored: (summary['error'] as num?)?.toInt() ?? 0,
+      // Indices are batch-relative; the caller maps them back to its own
+      // list so an unparsed message can still reach the needs-review queue
+      // with its original text, exactly as the one-at-a-time path does.
+      unparsedIndices: [
+        for (final r in results)
+          if (r['outcome'] == 'unparsed') (r['index'] as num).toInt(),
+      ],
+      reasonByIndex: {
+        for (final r in results)
+          if (r['reason'] != null) (r['index'] as num).toInt(): r['reason'] as String,
+      },
+    );
   }
 
   /// UA-3+ (Chunk 18): the Activity tab's data source. [from]/[to] (E10/E11,
@@ -1265,7 +1337,54 @@ class TransactionEntry {
 class SmsImportResult {
   final bool parsed;
   final String? reason;
-  const SmsImportResult({required this.parsed, this.reason});
+
+  /// True when the server recognised this exact message as already imported
+  /// (migration 0036's `source_key`). Distinct from `parsed: false` — the
+  /// message DID parse, it just didn't need inserting again. Callers must
+  /// not count it as a new transaction, and must not add it to needs-review.
+  final bool duplicate;
+
+  const SmsImportResult({required this.parsed, this.reason, this.duplicate = false});
+}
+
+/// Task S-1a: one message in a batched backup import.
+class SmsBatchMessage {
+  final String userCardId;
+  final String sender;
+  final String body;
+
+  /// The message's ORIGINAL timestamp. Required, not optional: without it
+  /// the server can't build a stable `source_key`, so re-import protection
+  /// silently stops working for exactly the bulk case that needs it most.
+  final DateTime occurredAt;
+
+  const SmsBatchMessage({
+    required this.userCardId,
+    required this.sender,
+    required this.body,
+    required this.occurredAt,
+  });
+}
+
+/// Task S-1a: outcome counts for one batch.
+class SmsBatchImportResult {
+  final int imported;
+  final int duplicate;
+  final int unparsed;
+  final int invalid;
+  final int errored;
+  final List<int> unparsedIndices;
+  final Map<int, String> reasonByIndex;
+
+  const SmsBatchImportResult({
+    required this.imported,
+    required this.duplicate,
+    required this.unparsed,
+    required this.invalid,
+    required this.errored,
+    this.unparsedIndices = const [],
+    this.reasonByIndex = const {},
+  });
 }
 
 /// Task D-5 (ui-spec D5 Duplicate Review) — one side of a suspected-

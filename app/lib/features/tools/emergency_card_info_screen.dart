@@ -234,12 +234,26 @@ class _DialButton extends StatelessWidget {
   const _DialButton({required this.phone});
 
   Future<void> _dial(BuildContext context) async {
-    final uri = Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^0-9+]'), ''));
-    final launched = await launchUrl(uri);
-    if (!launched && context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Couldn\'t open the dialer for $phone.')));
+    // This is the emergency-help path — a user reaching for it has likely
+    // just lost a card. `launchUrl` returning `false` was already handled;
+    // it can also THROW (a platform-channel failure, a malformed scheme on
+    // some OEM builds), which wasn't caught and would silently strand the
+    // user on a screen that looks like it did nothing at the worst possible
+    // moment to be unclear.
+    try {
+      final uri = Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^0-9+]'), ''));
+      final launched = await launchUrl(uri);
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Couldn\'t open the dialer for $phone.')));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Couldn\'t open the dialer. Dial $phone directly.')));
+      }
     }
   }
 

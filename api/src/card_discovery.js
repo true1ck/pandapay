@@ -76,12 +76,24 @@ function discoverCardsInMessage(message, catalogue) {
   );
   if (!haystack) return [];
 
+  // Whole-word view of the same text. A product token has to appear as a
+  // WORD, not as a substring, or short card names manufacture matches out
+  // of ordinary prose: "Axis Ace" was being suggested at score 1.0 from
+  // routine Axis Bank emails because "ace" is inside "interface", "place"
+  // and "space". That is exactly the failure this module's header says it
+  // exists to prevent — a card the user doesn't own, then ranked against.
+  //
+  // Issuer tokens deliberately keep substring matching (below): they're
+  // long and distinctive, and matching them inside a sender domain like
+  // `alerts@hdfcbank.net` is genuinely useful rather than accidental.
+  const haystackWords = new Set(haystack.split(' '));
+
   const results = [];
   for (const card of catalogue || []) {
     const nameTokens = significantTokens(card.name);
     if (nameTokens.length === 0) continue;
 
-    const matchedNameTokens = nameTokens.filter((t) => haystack.includes(t));
+    const matchedNameTokens = nameTokens.filter((t) => haystackWords.has(t));
     // The full product name present verbatim is the strongest signal there
     // is; treat it as a complete match regardless of token accounting.
     const fullName = normalise(card.name);

@@ -11,16 +11,29 @@ class AppStatus {
   final bool maintenanceMode;
   final String? maintenanceMessage;
 
+  /// smsextractionimple.md Task S-1b — server-side kill switch for the SMS
+  /// backup-file import entry point. The blast radius of a bad import is the
+  /// user's whole transaction history and the input is a file format this
+  /// codebase doesn't control, so the tile needs to be withdrawable without
+  /// shipping a release.
+  ///
+  /// Defaults true so an old client, an unreachable server or a pre-0036
+  /// database all behave as "feature on" — the same fail-open stance the
+  /// rest of this model takes.
+  final bool smsBackupImportEnabled;
+
   const AppStatus({
     required this.minSupportedVersion,
     required this.maintenanceMode,
     this.maintenanceMessage,
+    this.smsBackupImportEnabled = true,
   });
 
   factory AppStatus.fromJson(Map<String, dynamic> json) => AppStatus(
     minSupportedVersion: json['minSupportedVersion'] as String? ?? '1.0.0',
     maintenanceMode: json['maintenanceMode'] as bool? ?? false,
     maintenanceMessage: json['maintenanceMessage'] as String?,
+    smsBackupImportEnabled: json['smsBackupImportEnabled'] as bool? ?? true,
   );
 }
 

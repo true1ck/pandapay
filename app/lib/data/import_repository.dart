@@ -49,6 +49,26 @@ class ImportRepository {
     return ForwardingAddress.fromJson(body['forwardingAddress'] as Map<String, dynamic>);
   }
 
+  /// Task F-8: the confirmation code Gmail (or the link Outlook/Yahoo) sends
+  /// to a new forwarding address before it will forward anything.
+  ///
+  /// Without this the setup flow dead-ends for most users: the mail arrives,
+  /// lands in `inbound_emails`, and nothing ever shows it to them.
+  Future<ForwardingVerification?> fetchForwardingVerification() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/forwarding-addresses/verification'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /forwarding-addresses/verification failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final row = body['verification'];
+    return row == null ? null : ForwardingVerification.fromJson(row as Map<String, dynamic>);
+  }
+
   /// GET /inbound-emails/me — real data as of the email-ingestion webhook
   /// (POST /inbound-emails/webhook, api/src/index.js): once a provider
   /// forwards a real email there, it shows up here. Empty until that's
@@ -298,6 +318,29 @@ class ForwardingAddress {
     verifiedAt: json['verified_at'] == null ? null : DateTime.parse(json['verified_at'] as String),
     firstEmailAt: json['first_email_at'] == null ? null : DateTime.parse(json['first_email_at'] as String),
     emailCount: (json['email_count'] as num?)?.toInt() ?? 0,
+  );
+}
+
+/// Task F-8. Either [code] (Gmail) or [link] (Outlook/Yahoo) is non-null —
+/// the server only returns a row when it found one of them.
+class ForwardingVerification {
+  final String provider;
+  final String? code;
+  final String? link;
+  final DateTime receivedAt;
+
+  const ForwardingVerification({
+    required this.provider,
+    this.code,
+    this.link,
+    required this.receivedAt,
+  });
+
+  factory ForwardingVerification.fromJson(Map<String, dynamic> json) => ForwardingVerification(
+    provider: json['provider'] as String? ?? 'gmail',
+    code: json['code'] as String?,
+    link: json['link'] as String?,
+    receivedAt: DateTime.parse(json['receivedAt'] as String),
   );
 }
 

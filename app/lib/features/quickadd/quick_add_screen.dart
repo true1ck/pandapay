@@ -290,30 +290,44 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       // just fail identically on retry.
       final isOnline = ref.read(isOnlineProvider).valueOrNull ?? true;
       if (!isOnline) {
-        await ref
-            .read(outboxRepositoryProvider.future)
-            .then(
-              (outbox) => outbox.enqueue(
-                userCardId: _selectedUserCardId!,
-                amount: Money.fromRupees(amount),
-                categoryId: _selectedCategoryId,
-                merchantName: merchantName,
-                occurredAt: occurredAt,
-                note: note,
+        // A second try/catch, deliberately nested here rather than left to
+        // propagate: this branch is ALREADY inside the outer catch, so an
+        // exception from the outbox write itself (a full local queue, a
+        // disk error) had nowhere left to go — it used to vanish silently
+        // (an unhandled Future rejection from an unawaited async callback),
+        // and would otherwise now surface only in the global CrashLog with
+        // nothing shown on screen. Either way the user just sees a button
+        // that appeared to do nothing. This makes that failure a normal,
+        // visible error instead.
+        try {
+          final outbox = await ref.read(outboxRepositoryProvider.future);
+          await outbox.enqueue(
+            userCardId: _selectedUserCardId!,
+            amount: Money.fromRupees(amount),
+            categoryId: _selectedCategoryId,
+            merchantName: merchantName,
+            occurredAt: occurredAt,
+            note: note,
+          );
+          ref.invalidate(pendingOutboxCountProvider);
+          if (mounted) {
+            // Same "capture before pop" reasoning as the success path above —
+            // ScaffoldMessenger.of(context) after pop() would attach to a
+            // deactivated context and silently fail to show anything.
+            final messenger = ScaffoldMessenger.of(context);
+            Navigator.of(context).pop();
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text("Saved offline — this'll sync automatically once you're back online."),
               ),
             );
-        ref.invalidate(pendingOutboxCountProvider);
-        if (mounted) {
-          // Same "capture before pop" reasoning as the success path above —
-          // ScaffoldMessenger.of(context) after pop() would attach to a
-          // deactivated context and silently fail to show anything.
-          final messenger = ScaffoldMessenger.of(context);
-          Navigator.of(context).pop();
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text("Saved offline — this'll sync automatically once you're back online."),
-            ),
-          );
+          }
+        } catch (outboxErr) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(outboxErr))));
+          }
         }
         return;
       }

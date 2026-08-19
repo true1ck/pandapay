@@ -8,6 +8,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../data/api_exception.dart';
 import '../data/app_status_repository.dart' show isVersionOlderThan;
 import 'design/app_theme.dart';
+import 'error_handling.dart';
 import '../features/account/account_screen.dart';
 import '../features/activity/activity_screen.dart';
 import '../features/activity/duplicate_review_screen.dart';
@@ -279,6 +280,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoute.splash,
     refreshListenable: refresh,
+    // Without this, an unmatched or failed route falls through to
+    // go_router's own bare default error page — functional, but off-brand
+    // and unhelpful ("Exception: ..." dumped as raw text). A stale deep
+    // link, a route built for a since-removed screen, or a redirect bug
+    // all land here; "go home" is always a safe recovery for any of them.
+    errorBuilder: (context, state) =>
+        AppRouteErrorScreen(error: state.error, onGoHome: () => context.go(AppRoute.home)),
     redirect: (context, state) {
       final path = state.uri.path;
 

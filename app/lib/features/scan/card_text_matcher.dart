@@ -72,6 +72,27 @@ String? extractLastFourDigits(String text) {
   return groups.last;
 }
 
+/// Masks any run of 3+ digits in [text], replacing each digit with `•`.
+///
+/// The physical-card OCR path (UA-4, extended) reads whatever text is
+/// printed on the front of the card — and on most Indian debit/credit
+/// cards, that includes the embossed or printed card number. The matcher
+/// only ever needs issuer/product NAME text; nothing about matching
+/// requires the digits, so nothing that displays extracted text to a user
+/// (or would ever log it) should show them unmasked. 3 digits, not 4, is
+/// the threshold deliberately — a 2-digit expiry month/year fragment is
+/// harmless, but a 3-digit CVV-length run is exactly the kind of thing that
+/// must never render on screen even partially.
+///
+/// Unlike `redactSmsShape` (api/src/sms_parser.js), which also collapses
+/// letters, this keeps letters as-is: the whole point of showing extracted
+/// text at all (when it exists to show) is letting a user see *why* a
+/// match failed, and an issuer name is exactly the part that's safe and
+/// useful to show.
+String redactDigitRuns(String text) {
+  return text.replaceAllMapped(RegExp(r'\d{3,}'), (m) => '•' * m.group(0)!.length);
+}
+
 /// Normalizes text for fuzzy comparison: lowercase, strip anything that
 /// isn't a letter/digit/space, collapse whitespace.
 String _normalize(String s) {

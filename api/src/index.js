@@ -642,7 +642,7 @@ app.get('/app-status', async (req, res) => {
   try {
     const result = await withUserClient(null, (client) =>
       client.query(
-        'SELECT min_supported_version, maintenance_mode, maintenance_message FROM app_status WHERE id = true'
+        'SELECT min_supported_version, maintenance_mode, maintenance_message, sms_backup_import_enabled FROM app_status WHERE id = true'
       )
     );
     const row = result.rows[0];
@@ -650,6 +650,11 @@ app.get('/app-status', async (req, res) => {
       minSupportedVersion: row?.min_supported_version ?? '1.0.0',
       maintenanceMode: row?.maintenance_mode ?? false,
       maintenanceMessage: row?.maintenance_message ?? null,
+      // Task S-1b's kill switch. Fails OPEN (true) on a missing row, matching
+      // this route's existing "a DB hiccup must not itself block the app"
+      // stance — the flag exists to withdraw a feature deliberately, not to
+      // have it disappear because a query came back empty.
+      smsBackupImportEnabled: row?.sms_backup_import_enabled ?? true,
     });
   } catch (err) {
     console.error('GET /app-status error', err);
@@ -2383,21 +2388,53 @@ app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
  */
 async function insertTransactionAndUpdateState(client, userId, {
   userCardId, amount, occurred, categoryId, rail, merchantName, note, source,
+  sourceKey, backfill,
 }) {
   const userCard = await loadUserCardForState(client, userId, userCardId);
   if (!userCard) return { status: 404, error: 'user_card not found' };
 
+  // Migration 0036: `source_key` is the identity of an imported message
+  // (hash of sender+body+timestamp, salted per profile). ON CONFLICT DO
+  // NOTHING against the partial unique index is what makes re-importing the
+  // same SMS backup file a no-op instead of a silent doubling of every
+  // number. Manual transactions pass no key, so they're unaffected — the
+  // index only covers non-null keys.
   const txn = await client.query(
     `INSERT INTO transactions
-       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, note, reward_state)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'estimated')
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, note, reward_state, source_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'estimated', $10)
+     ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
      RETURNING id, amount_inr, occurred_at`,
-    [userId, userCardId, amount, occurred, merchantName || null, categoryId || null, rail || 'unknown', source || 'manual', note || null]
+    [userId, userCardId, amount, occurred, merchantName || null, categoryId || null, rail || 'unknown', source || 'manual', note || null, sourceKey || null]
   );
 
-  const stateUpdates = await applyTransactionState(client, userId, userCard, {
-    txnId: txn.rows[0].id, userCardId, amount, occurred, categoryId, sign: 1,
-  });
+  // Zero rows back means the unique index rejected it: this exact message
+  // has already been imported. That's a success from the caller's point of
+  // view — the transaction they asked for exists — but it must NOT re-run
+  // the state machine, or a repeat import would still double cap and
+  // milestone progress even though it inserted no row.
+  if (txn.rowCount === 0) {
+    return { status: 200, duplicate: true, transaction: null };
+  }
+
+  // smsextractionimple.md §0.1 D2: a backfilled historical message inserts
+  // the transaction but must not touch cap/milestone/fee-waiver state.
+  // Those counters describe the CURRENT cycle; feeding two years of
+  // recovered history through them reports progress the user never actually
+  // made this month. The row is still recorded, still visible in Activity,
+  // and still counts for lifetime/analytics reads that derive from
+  // `transactions` directly.
+  //
+  // Duplicate detection below still runs for a backfill — deliberately.
+  // Importing an SMS backup and then a statement PDF covering the same
+  // months is a completely ordinary sequence, and it is exactly the
+  // cross-channel case D-5 exists to catch. Skipping it here would silence
+  // the check precisely where it earns its keep.
+  const stateUpdates = backfill
+    ? {}
+    : await applyTransactionState(client, userId, userCard, {
+        txnId: txn.rows[0].id, userCardId, amount, occurred, categoryId, sign: 1,
+      });
 
   // Task D-5 (ui-spec D5 Duplicate Review, §5.8): runs on every insert
   // through this one shared helper, so both POST /transactions (manual)
@@ -2409,7 +2446,34 @@ async function insertTransactionAndUpdateState(client, userId, {
     newTxnId: txn.rows[0].id, amount, occurred, merchantName, source: source || 'manual',
   });
 
-  return { status: 201, transaction: txn.rows[0], ...stateUpdates };
+  return { status: 201, transaction: txn.rows[0], backfilled: !!backfill, ...stateUpdates };
+}
+
+/**
+ * The stable identity of an imported message, for migration 0036's
+ * `transactions.source_key` unique index.
+ *
+ * Computed HERE rather than accepted from the client on purpose. A
+ * client-supplied key would let a malicious or buggy caller pick a value
+ * that collides with a row it shouldn't touch, turning an idempotency
+ * mechanism into a way to suppress inserts. The server has sender, body and
+ * timestamp in hand anyway, so there is nothing to gain by trusting.
+ *
+ * Salted with the profile id so the same bank template — and Indian bank
+ * alerts are extremely templated — never collides across two accounts.
+ * Hashed rather than stored raw because the input contains the full SMS
+ * body, and `transactions` must not hold message text.
+ *
+ * Uses the message's ORIGINAL timestamp, so it is stable across re-imports
+ * of the same file. Callers with no original timestamp pass none and get no
+ * key: a message we can't date can't be identified either, and a key based
+ * on `now()` would differ on every run, which is worse than no key at all.
+ */
+function importSourceKey(userId, sender, body, occurred) {
+  return crypto
+    .createHash('sha256')
+    .update(`${userId} ${sender || ''} ${body} ${occurred.toISOString()}`)
+    .digest('hex');
 }
 
 /**
@@ -2742,7 +2806,7 @@ app.post('/transactions', requireAuth, async (req, res) => {
  * outcome for this route, not a server error.
  */
 app.post('/transactions/from-sms', requireAuth, async (req, res) => {
-  const { sender, body, userCardId, occurredAt, categoryId, rail, appVersion } = req.body || {};
+  const { sender, body, userCardId, occurredAt, categoryId, rail, appVersion, backfill } = req.body || {};
   if (!body || typeof body !== 'string' || !body.trim()) {
     return res.status(400).json({ error: 'body is required' });
   }
@@ -2760,6 +2824,7 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      const sourceKey = occurredAt ? importSourceKey(req.userId, sender, body, occurred) : null;
       const patterns = await client.query(
         `SELECT id, issuer_id, sender_pattern, regex, field_map
            FROM parser_patterns
@@ -2806,8 +2871,16 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
         rail: rail || 'unknown',
         merchantName: parsed.fields.merchant || null,
         source: 'sms',
+        sourceKey,
+        backfill: backfill === true,
       });
 
+      if (inserted.status === 200 && inserted.duplicate) {
+        // Already imported. Reported as its own outcome rather than folded
+        // into `parsed: true`, so the client can tell the user "42 already
+        // imported, skipped" instead of counting them again.
+        return { status: 200, parsed: true, duplicate: true, patternId: parsed.patternId };
+      }
       if (inserted.status !== 201) return inserted;
       return { status: 201, parsed: true, patternId: parsed.patternId, ...inserted };
     });
@@ -2818,6 +2891,120 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
     res.status(result.status).json(result);
   } catch (err) {
     console.error('POST /transactions/from-sms error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** Largest batch accepted by POST /transactions/from-sms/batch. */
+const SMS_BATCH_LIMIT = 200;
+
+/**
+ * POST /transactions/from-sms/batch — smsextractionimple.md Task S-1a.
+ *
+ * The backup-file import used to make one HTTP round trip per message, in a
+ * sequential loop, behind a static "Importing…" label. A five-thousand
+ * message export was five thousand requests: slow enough that users kill
+ * the app mid-import, and enough redundant TLS/auth/pattern-load work to
+ * matter on the server too. Same per-message semantics as the single route
+ * — this is a transport change, not a behaviour change.
+ *
+ * Deliberately NOT one big database transaction. A partial import is a
+ * perfectly good outcome here (the messages that parsed are real
+ * transactions the user wants kept), and `source_key` makes resuming safe:
+ * re-sending a batch that half-succeeded skips what already landed. Rolling
+ * the whole thing back on one bad message would throw away good data to
+ * preserve a consistency property nobody needs.
+ *
+ * Patterns are loaded ONCE for the whole batch rather than per message,
+ * which is most of the speedup.
+ */
+app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
+  const { messages, backfill, appVersion } = req.body || {};
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages must be a non-empty array' });
+  }
+  if (messages.length > SMS_BATCH_LIMIT) {
+    return res.status(400).json({ error: `messages may not exceed ${SMS_BATCH_LIMIT} per request` });
+  }
+
+  try {
+    const payload = await withUserClient(req.userId, async (client) => {
+      const patterns = await client.query(
+        `SELECT id, issuer_id, sender_pattern, regex, field_map
+           FROM parser_patterns
+          WHERE channel = 'sms' AND is_active = true
+          ORDER BY version DESC`
+      );
+
+      const results = [];
+      for (let i = 0; i < messages.length; i += 1) {
+        const { sender, body, userCardId, occurredAt, categoryId, rail } = messages[i] || {};
+        if (!body || typeof body !== 'string' || !body.trim() || !userCardId) {
+          results.push({ index: i, outcome: 'invalid', reason: 'body and userCardId are required' });
+          continue;
+        }
+        const occurred = occurredAt ? new Date(occurredAt) : null;
+        if (!occurred || Number.isNaN(occurred.getTime())) {
+          // No usable original timestamp means no stable source_key, which
+          // means no re-import protection. Rejected rather than silently
+          // dated `now()` — that default is the D2 bug this task exists to
+          // remove, and reintroducing it in the batch path would undo the
+          // fix for exactly the high-volume case that matters most.
+          results.push({ index: i, outcome: 'invalid', reason: 'occurredAt is required for a batch import' });
+          continue;
+        }
+
+        const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
+        if (!parsed.ok) {
+          await client.query(
+            `SELECT pandapay.record_parser_failure('sms', $1, $2, $3) AS id`,
+            [sender || null, redactSmsShape(body), appVersion || null]
+          );
+          results.push({ index: i, outcome: 'unparsed', reason: parsed.reason });
+          continue;
+        }
+
+        await client.query(
+          `UPDATE parser_patterns SET success_count = success_count + 1, updated_at = now() WHERE id = $1`,
+          [parsed.patternId]
+        );
+
+        const inserted = await insertTransactionAndUpdateState(client, req.userId, {
+          userCardId,
+          amount: parsed.fields.amountInr,
+          occurred,
+          categoryId: categoryId || null,
+          rail: rail || 'unknown',
+          merchantName: parsed.fields.merchant || null,
+          source: 'sms',
+          sourceKey: importSourceKey(req.userId, sender, body, occurred),
+          backfill: backfill === true,
+        });
+
+        if (inserted.status === 200 && inserted.duplicate) {
+          results.push({ index: i, outcome: 'duplicate' });
+        } else if (inserted.status === 201) {
+          results.push({ index: i, outcome: 'imported', transactionId: inserted.transaction.id });
+        } else {
+          results.push({ index: i, outcome: 'error', reason: inserted.error });
+        }
+      }
+
+      return {
+        results,
+        summary: {
+          imported: results.filter((r) => r.outcome === 'imported').length,
+          duplicate: results.filter((r) => r.outcome === 'duplicate').length,
+          unparsed: results.filter((r) => r.outcome === 'unparsed').length,
+          invalid: results.filter((r) => r.outcome === 'invalid').length,
+          error: results.filter((r) => r.outcome === 'error').length,
+        },
+      };
+    });
+
+    res.status(200).json(payload);
+  } catch (err) {
+    console.error('POST /transactions/from-sms/batch error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -5340,6 +5527,73 @@ app.post('/inbound-emails/webhook', async (req, res) => {
     res.status(202).json({ accepted: true, parsed: parsed.ok });
   } catch (err) {
     console.error('POST /inbound-emails/webhook error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /forwarding-addresses/verification — smsextractionimple.md Task F-8's
+ * named blocker.
+ *
+ * Gmail will not start forwarding to a new address until you prove you own
+ * it: it mails a confirmation code there and waits for you to enter it back
+ * in Gmail's settings. That mail lands in `inbound_emails` like anything
+ * else — and then sits there, because no route ever surfaced it. The result
+ * was that a Gmail user (i.e. most users) could not finish setup at all,
+ * with nothing on screen explaining why.
+ *
+ * Outlook and Yahoo send a click-through confirmation LINK rather than a
+ * code, so this returns the link too when it finds one.
+ *
+ * Only mail from the providers' own confirmation senders is considered.
+ * That matters: without the sender gate this would happily read a code out
+ * of anything anyone sent to the address, which turns a setup helper into a
+ * way to get arbitrary attacker-chosen text rendered in the user's app.
+ */
+const FORWARDING_CONFIRMATION_SENDERS = [
+  { provider: 'gmail', pattern: /forwarding-noreply@google\.com/i },
+  { provider: 'outlook', pattern: /(microsoft|outlook|live)\.com$/i },
+  { provider: 'yahoo', pattern: /yahoo(-inc)?\.com$/i },
+];
+
+app.get('/forwarding-addresses/verification', requireAuth, async (req, res) => {
+  try {
+    const payload = await withUserClient(req.userId, async (client) => {
+      const recent = await client.query(
+        `SELECT id, sender, subject, body_text, received_at
+           FROM inbound_emails
+          WHERE profile_id = $1 AND received_at > now() - interval '7 days'
+          ORDER BY received_at DESC
+          LIMIT 50`,
+        [req.userId]
+      );
+
+      for (const row of recent.rows) {
+        const match = FORWARDING_CONFIRMATION_SENDERS.find((s) => s.pattern.test(row.sender || ''));
+        if (!match) continue;
+
+        const haystack = `${row.subject || ''}\n${row.body_text || ''}`;
+        // Gmail's code is a 9-digit number. Bounded by \b on both sides so
+        // a longer reference number isn't truncated into a false "code".
+        const code = (haystack.match(/\b(\d{9})\b/) || [])[1] || null;
+        const link = (haystack.match(/https:\/\/\S*(?:confirm|verify)\S*/i) || [])[0] || null;
+        if (!code && !link) continue;
+
+        return {
+          verification: {
+            provider: match.provider,
+            code,
+            link,
+            receivedAt: row.received_at,
+          },
+        };
+      }
+
+      return { verification: null };
+    });
+    res.json(payload);
+  } catch (err) {
+    console.error('GET /forwarding-addresses/verification error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });

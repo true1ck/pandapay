@@ -86,6 +86,24 @@ jobs:
           flutter analyze --fatal-infos
           flutter test
 
+      # smsextractionimple.md Task S-2. The prod flavor strips READ_SMS/
+      # RECEIVE_SMS, but nothing enforced that it stayed stripped — a plugin
+      # bump merges a library manifest in with no diff in this repo, and the
+      # result is a Play Store review problem no test would catch. Build the
+      # real prod artefact and read the permissions out of it.
+      #
+      # `--flavor prod` needs the dart-defines Env.assertReleaseConfigured
+      # demands; CI-only placeholder URLs satisfy it without pointing at
+      # anything real.
+      - name: Build prod bundle and check its merged manifest
+        working-directory: app
+        run: |
+          flutter build appbundle --release --flavor prod \
+            --dart-define=PANDAPAY_ENV=prod \
+            --dart-define=PANDAPAY_API_BASE_URL=https://api.invalid \
+            --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.invalid
+          ../scripts/check_prod_manifest.sh
+
       - name: Console analyze
         working-directory: console
         run: |

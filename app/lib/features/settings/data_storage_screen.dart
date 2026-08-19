@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../data/api_exception.dart';
 import 'storage_util.dart';
 
 /// H5 Data & Storage. Entirely local-device work — no new backend routes
@@ -102,15 +103,31 @@ class DataStorageScreen extends ConsumerWidget {
     );
   }
 
+  // None of the three handlers below had a try/catch until this pass — a
+  // disk I/O failure (permission issue, storage genuinely full) tapping any
+  // of "Clear cache" / "Re-download" / "Reset all data" left the user
+  // looking at a button that appeared to do nothing, with no way to tell
+  // whether it worked. Same userFacingErrorMessage()+SnackBar pattern as
+  // every other action in this app.
+
   Future<void> _clearCache(BuildContext context, WidgetRef ref) async {
-    final dir = await getApplicationCacheDirectory();
-    await clearDirectoryContents(dir);
-    ref.invalidate(_cacheSizeProvider);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cache cleared')));
+    try {
+      final dir = await getApplicationCacheDirectory();
+      await clearDirectoryContents(dir);
+      ref.invalidate(_cacheSizeProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cache cleared')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+    }
   }
 
   Future<void> _redownloadBundledData(BuildContext context, WidgetRef ref) async {
+    // Nothing here is actually awaited — invalidate() is synchronous, the
+    // providers refetch on their own — so there is no I/O to fail. Kept
+    // free of a try/catch on purpose rather than adding one that could
+    // never trigger.
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Refreshing bundled data...')));
     ref.invalidate(catalogueProvider);
     ref.invalidate(nearbyMerchantsRepositoryProvider);
@@ -136,18 +153,23 @@ class DataStorageScreen extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    // token_store.dart's own keys: 'pandapay_app.access_token' /
-    // 'pandapay_app.refresh_token' — both share this prefix, so excluding
-    // it preserves the signed-in session exactly, nothing more.
-    await clearPreferencesExceptPrefixes(prefs, const ['pandapay_app.']);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // token_store.dart's own keys: 'pandapay_app.access_token' /
+      // 'pandapay_app.refresh_token' — both share this prefix, so excluding
+      // it preserves the signed-in session exactly, nothing more.
+      await clearPreferencesExceptPrefixes(prefs, const ['pandapay_app.']);
 
-    final dir = await getApplicationCacheDirectory();
-    await clearDirectoryContents(dir);
-    ref.invalidate(_cacheSizeProvider);
+      final dir = await getApplicationCacheDirectory();
+      await clearDirectoryContents(dir);
+      ref.invalidate(_cacheSizeProvider);
 
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Local data reset')));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Local data reset')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+    }
   }
 }
 

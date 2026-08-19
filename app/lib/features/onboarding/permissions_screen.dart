@@ -37,19 +37,45 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
   bool? _notificationsGranted;
   bool? _locationGranted;
 
+  // All three requests below are wrapped in try/catch for the same reason:
+  // `permission_handler`'s `.request()` can throw on some OEM builds
+  // (a malformed manifest declaration, a request made while another is
+  // still in flight), and none of that was caught. Without it, a thrown
+  // exception left the toggle at its initial `null` — "checking…" —
+  // forever, with no error and no way to tell it hadn't just not finished
+  // yet. Resolving to "not granted" on failure is the same non-alarming
+  // outcome the UI already shows for an ordinary user-denied grant — these
+  // are explicitly optional permissions (this file's own doc-comment),
+  // so treating a request failure as gently as a request decline is
+  // consistent, not a downgrade.
   Future<void> _requestSms() async {
-    final granted = await SmsListenerService().requestPermissions();
+    bool granted = false;
+    try {
+      granted = await SmsListenerService().requestPermissions();
+    } catch (_) {
+      // fall through to "not granted"
+    }
     if (mounted) setState(() => _smsGranted = granted);
   }
 
   Future<void> _requestNotifications() async {
-    final status = await Permission.notification.request();
-    if (mounted) setState(() => _notificationsGranted = status.isGranted);
+    bool granted = false;
+    try {
+      granted = (await Permission.notification.request()).isGranted;
+    } catch (_) {
+      // fall through to "not granted"
+    }
+    if (mounted) setState(() => _notificationsGranted = granted);
   }
 
   Future<void> _requestLocation() async {
-    final status = await Permission.locationWhenInUse.request();
-    if (mounted) setState(() => _locationGranted = status.isGranted);
+    bool granted = false;
+    try {
+      granted = (await Permission.locationWhenInUse.request()).isGranted;
+    } catch (_) {
+      // fall through to "not granted"
+    }
+    if (mounted) setState(() => _locationGranted = granted);
   }
 
   @override

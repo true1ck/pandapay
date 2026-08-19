@@ -1,10 +1,25 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- UA-4 (Chunk 30): camera/QR card scanning (mobile_scanner +
-         google_mlkit_text_recognition). Permission plumbing only — could
-         not be verified to actually grant on a real device/emulator in
-         this sandbox (no Android SDK/emulator here). See PROGRESS.md. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- UA-4 (Chunk 30, extended): camera/QR card scanning (mobile_scanner,
+         camera + google_mlkit_text_recognition). -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- The `camera` plugin (specifically camera_android_camerax) declares
+         three permissions this screen has no use for: RECORD_AUDIO and
+         WRITE_EXTERNAL_STORAGE (its own manifest scopes this one to
+         maxSdkVersion 28) for its video-recording mode, and — confirmed by
+         building a real prod-release APK and reading
+         manifest-merger-prod-release-report.txt, not assumed —
+         READ_EXTERNAL_STORAGE as well. This screen only ever calls
+         takePicture() with CameraController(enableAudio: false): no video,
+         no microphone, no gallery read. Stripped rather than carried: an
+         unused microphone/storage permission on a card-scanning screen is
+         exactly what Play Store review flags, and it's what
+         scripts/check_prod_manifest.sh's denylist exists to catch — it did,
+         on the first build after this pass added the plugin. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
     <!-- UA-5.3 (Chunk 31): SMS-based transaction auto-import. Permission
          plumbing + BroadcastReceiver declaration only — same "could not be
          verified on a real device in this sandbox" caveat as UA-4's camera

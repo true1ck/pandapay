@@ -6,34 +6,59 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'app/design/app_theme.dart';
 import 'app/env.dart';
+import 'app/error_handling.dart';
 import 'app/router.dart';
 import 'features/settings/appearance_providers.dart';
 
 void main() {
+  // error_handling.dart: catches the class of error that isn't caught by
+  // Flutter's own build-error recovery (a stray unawaited Future, a
+  // platform-channel callback) and would otherwise silently kill the whole
+  // app on a real device — "unexpectedly shuts down" from the user's side.
+  // Installed before anything else runs, so no early failure slips past it.
+  installGlobalErrorHandlers();
+
+  // Replaces the widget shown in place of one whose build() threw. Debug
+  // builds keep Flutter's own red screen (a developer tool no real user
+  // ever sees); every other build gets a widget that can't itself crash
+  // from being handed unexpected constraints — see AppErrorWidget's doc.
+  if (!kDebugMode) {
+    ErrorWidget.builder = (details) => AppErrorWidget(details: details);
+  }
+
   // Plan Phase 0.3: refuse to start a release build that was compiled
   // without the backend --dart-defines, rather than shipping one that can
   // only ever show users a network error. No-op in debug/profile and in any
   // correctly-configured release. See app/env.dart.
+  //
+  // Deliberately OUTSIDE runGuarded below: this throw is meant to be loud
+  // and fatal — "a crash on the first frame with an actionable message is
+  // strictly better than shipping a build that can only ever show users a
+  // network error" (env.dart's own words). Inside the zone guard, that
+  // exception would just become a silent CrashLog entry behind a blank
+  // screen, which is the opposite of what this check exists for.
   Env.assertReleaseConfigured();
 
-  // Debug-only: materialise the semantics tree even when no assistive
-  // technology is attached.
-  //
-  // Two reasons. It is what lets `uiautomator` (and so the emulator
-  // tooling this project drives QA with) see the app as labelled nodes
-  // rather than one opaque rectangle. And it means the semantics added
-  // this pass — MoneyText announcing "estimated", Pressable's button
-  // roles, the tile labels — are exercised on every debug run instead of
-  // only when someone turns TalkBack on.
-  //
-  // Release builds are untouched: Flutter already builds the tree on
-  // demand there when a real accessibility service asks for it, and
-  // forcing it on unconditionally would be a permanent cost for no gain.
-  if (kDebugMode) {
-    WidgetsFlutterBinding.ensureInitialized();
-    SemanticsBinding.instance.ensureSemantics();
-  }
-  runApp(const ProviderScope(child: PandaPayApp()));
+  runGuarded(() {
+    // Debug-only: materialise the semantics tree even when no assistive
+    // technology is attached.
+    //
+    // Two reasons. It is what lets `uiautomator` (and so the emulator
+    // tooling this project drives QA with) see the app as labelled nodes
+    // rather than one opaque rectangle. And it means the semantics added
+    // this pass — MoneyText announcing "estimated", Pressable's button
+    // roles, the tile labels — are exercised on every debug run instead of
+    // only when someone turns TalkBack on.
+    //
+    // Release builds are untouched: Flutter already builds the tree on
+    // demand there when a real accessibility service asks for it, and
+    // forcing it on unconditionally would be a permanent cost for no gain.
+    if (kDebugMode) {
+      WidgetsFlutterBinding.ensureInitialized();
+      SemanticsBinding.instance.ensureSemantics();
+    }
+    runApp(const ProviderScope(child: PandaPayApp()));
+  });
 }
 
 /// UA-0.4.2 bottom nav: Home · Cards · raised SCAN FAB · Activity · Account.
