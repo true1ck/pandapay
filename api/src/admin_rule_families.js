@@ -53,6 +53,11 @@ function validateField(spec, value) {
     case 'jsonb':
       if (typeof value !== 'object' || Array.isArray(value)) return `${spec.name} must be an object`;
       return null;
+    case 'stringArray':
+      if (!Array.isArray(value) || value.some((v) => typeof v !== 'string' || !v.trim())) {
+        return `${spec.name} must be an array of non-empty strings`;
+      }
+      return null;
     default:
       return null;
   }

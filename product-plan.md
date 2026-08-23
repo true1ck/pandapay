@@ -85,6 +85,9 @@ The central mechanic. Every scan by one user makes the app *more automatic* for 
 - Full lifecycle: add, edit, archive (not delete — preserves history), reorder, set default.
 - Category → ranked cards with expected ₹ value.
 - **40–50 India cards at launch** (raised from 15–20; 500 users will hold a long tail, and "your card isn't supported" is a churn event).
+- The app only needs the user's owned card list at the issuer/product level.
+- It should not ask for or store PAN, CVV, expiry, PIN, or last 4 digits for the ranking flow.
+- When location resolves to a known merchant or merchant category, the engine ranks only the cards already in that wallet and surfaces the best one.
 
 ### 4.3 Offline-First ⭐
 Everything ships in local SQLite. QR scan → recommendation **never touches the network**. Every network-dependent feature has a defined offline behaviour and a visible sync state.
@@ -344,6 +347,7 @@ Amount + category → side-by-side ₹ value across all cards, factoring caps an
 
 ### 11.3 Home Screen = One Answer
 *"Your best card right now: X"* plus a prominent **Scan** button. Not a dashboard. Plus home-screen widget and Android Quick Settings tile.
+- If the app recognizes the current place, this becomes a place-aware answer like *"You're at a petrol pump - use Card X."*
 
 ---
 
@@ -525,3 +529,11 @@ Hindi and regional languages. Architect strings for it in v1.0; translate later.
 - **Anonymized aggregate insights** — approach cautiously; inconsistent with the trust positioning if handled carelessly.
 
 **Nothing in v1.0 should be paywalled.** Prove value with the savings report first; monetize once retention is real.
+## Current place-aware recommendation behavior
+
+- Card recommendations are location-context aware across any merchant/place, not tied to a "home" location.
+- The app resolves the best card using the nearest merchant candidate's category first, then merchant display name when available.
+- Merchant-name overrides take precedence over broader category overrides when both match the same place.
+- Background geofence alerts and foreground merchant screens use the same shared recommendation path, so they cannot drift apart.
+- Merchant/category overrides are resolved against the user's owned cards before ranking, which keeps the suggestion aligned with the place the user is actually in.
+- The app still does not ingest or require PAN, CVV, expiry, PIN, or other sensitive card numbers for this flow.

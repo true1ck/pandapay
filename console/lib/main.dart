@@ -13,6 +13,7 @@ import 'features/dashboard/data_quality_dashboard_screen.dart';
 import 'features/parser_patterns/parser_patterns_screen.dart';
 import 'features/queues/card_requests_screen.dart';
 import 'features/queues/error_reports_screen.dart';
+import 'features/scraper/crawler_queue_screen.dart';
 import 'features/scraper/scrape_diff_review_screen.dart';
 import 'features/scraper/sources_screen.dart';
 
@@ -102,6 +103,7 @@ class _ConsoleHomeState extends State<_ConsoleHome> {
     (label: 'Parser Patterns', screen: ParserPatternsScreen()),
     (label: 'Sources', screen: SourcesScreen()),
     (label: 'Scrape Diff Review', screen: ScrapeDiffReviewScreen()),
+    (label: 'Crawler Queue', screen: CrawlerQueueScreen()),
   ];
 
   @override

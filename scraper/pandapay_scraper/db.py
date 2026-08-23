@@ -41,6 +41,18 @@ def enabled_sources(conn: psycopg.Connection) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
+def source_by_base_url(conn: psycopg.Connection, base_url: str) -> dict[str, Any] | None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM sources WHERE base_url = %s LIMIT 1", (base_url,))
+        return cur.fetchone()
+
+
+def source_by_name(conn: psycopg.Connection, name: str) -> dict[str, Any] | None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM sources WHERE name = %s LIMIT 1", (name,))
+        return cur.fetchone()
+
+
 def pages_for_source(conn: psycopg.Connection, source_id: str) -> list[dict[str, Any]]:
     with conn.cursor() as cur:
         cur.execute(
@@ -258,6 +270,81 @@ def insert_extraction_proposal(
         proposal_id = cur.fetchone()["id"]
     conn.commit()
     return str(proposal_id)
+
+
+def insert_card_source_draft(
+    conn: psycopg.Connection,
+    *,
+    source_id: str,
+    source_page_id: str | None,
+    source_url: str,
+    source_class: str,
+    source_license: str | None,
+    card_key: str,
+    card_name: str,
+    issuer_name: str,
+    network: str | None,
+    tier: str | None,
+    as_of,
+    source_payload: dict,
+    normalized_fields: dict,
+    field_confidence: dict,
+    evidence: list,
+    confidence: float | None,
+    status: str = "draft",
+) -> str:
+    """Persist one structured card draft row for later review/promotion."""
+    import json
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO card_source_drafts
+                 (source_id, source_page_id, source_url, source_class, source_license,
+                  card_key, card_name, issuer_name, network, tier, as_of,
+                  source_payload, normalized_fields, field_confidence, evidence,
+                  confidence, status)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               ON CONFLICT (source_id, card_key) DO UPDATE SET
+                 source_page_id = EXCLUDED.source_page_id,
+                 source_url = EXCLUDED.source_url,
+                 source_class = EXCLUDED.source_class,
+                 source_license = EXCLUDED.source_license,
+                 card_name = EXCLUDED.card_name,
+                 issuer_name = EXCLUDED.issuer_name,
+                 network = EXCLUDED.network,
+                 tier = EXCLUDED.tier,
+                 as_of = EXCLUDED.as_of,
+                 source_payload = EXCLUDED.source_payload,
+                 normalized_fields = EXCLUDED.normalized_fields,
+                 field_confidence = EXCLUDED.field_confidence,
+                 evidence = EXCLUDED.evidence,
+                 confidence = EXCLUDED.confidence,
+                 status = EXCLUDED.status,
+                 updated_at = now()
+               RETURNING id""",
+            (
+                source_id,
+                source_page_id,
+                source_url,
+                source_class,
+                source_license,
+                card_key,
+                card_name,
+                issuer_name,
+                network,
+                tier,
+                as_of,
+                json.dumps(source_payload),
+                json.dumps(normalized_fields),
+                json.dumps(field_confidence),
+                json.dumps(evidence),
+                confidence,
+                status,
+            ),
+        )
+        draft_id = cur.fetchone()["id"]
+    conn.commit()
+    return str(draft_id)
 
 
 def mark_page_failed(conn: psycopg.Connection, source_page_id: str) -> int:

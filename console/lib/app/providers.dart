@@ -113,6 +113,20 @@ final scrapeRunsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
   return api.fetchScrapeRuns();
 });
 
+/// Crawler queue job state — card_crawl_jobs rows (jobs tab of Crawler screen).
+final crawlerJobsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchCrawlerJobs();
+});
+
+/// Crawler draft visibility — card_source_drafts pending promotion (drafts tab of Crawler screen).
+final crawlerDraftsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const [];
+  return api.fetchCrawlerDrafts();
+});
+
 /// AD-6.1: merchant table filter state — plain fields, not a class, so
 /// merchantsProvider (below) can .watch() each one independently and only
 /// the filters that actually changed trigger a refetch.

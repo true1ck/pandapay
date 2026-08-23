@@ -20,10 +20,15 @@ do $$ begin
 end $$;
 
 grant usage on schema public to scraper_role;
+grant select on issuers to scraper_role;
 grant select, update on sources to scraper_role;
 grant select, update on source_pages to scraper_role;
 grant select, insert, update on scrape_runs to scraper_role;
 grant select, insert on page_snapshots to scraper_role;
+grant select, insert, update on card_source_drafts to scraper_role;
+grant select, insert, update on card_targets to scraper_role;
+grant select, insert, update on card_crawl_jobs to scraper_role;
+grant select, insert, update on card_products to scraper_role;
 grant select, insert, update on policy_change_alerts to scraper_role;
 grant select, insert on policy_alert_evidence to scraper_role;
 grant select, insert on extraction_proposals to scraper_role;

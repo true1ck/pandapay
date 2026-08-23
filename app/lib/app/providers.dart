@@ -26,6 +26,7 @@ import '../data/local/sync_queue.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local_user_cards_repository.dart';
 import '../data/merchant_search_repository.dart';
+import '../data/place_recommendation.dart';
 import '../data/needs_review_repository.dart';
 import '../data/override_resolver.dart';
 import '../data/partner_apply_repository.dart';
@@ -1243,7 +1244,23 @@ final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((r
 /// user action (a settings toggle), not something that should reset on
 /// every rebuild of whatever screen happens to read it.
 final geofenceMonitorServiceProvider = Provider<GeofenceMonitorService>((ref) {
-  final service = GeofenceMonitorService(repo: ref.watch(nearbyMerchantsRepositoryProvider));
+  final service = GeofenceMonitorService(
+    repo: ref.watch(nearbyMerchantsRepositoryProvider),
+    bestCardResolver: (candidate) async {
+      final catalogue = await ref.read(catalogueProvider.future);
+      final wallet = await ref.read(userCardsProvider.future);
+      final overrides = await ref.read(cardOverridesProvider.future);
+      final engine = ref.read(recommendationEngineProvider);
+      return bestCardForPlace(
+        engine: engine,
+        catalogue: catalogue,
+        wallet: wallet,
+        overrides: overrides,
+        categoryId: candidate.categoryId,
+        merchantName: candidate.displayName,
+      );
+    },
+  );
   ref.onDispose(() => service.stop());
   return service;
 });
@@ -1258,28 +1275,9 @@ final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {
   return BestCardForWidget(engine: ref.watch(recommendationEngineProvider));
 });
 
-/// UA-8.1/8.3: "which card should I use at *this* merchant" — the
-/// geofence screen's per-tile ranking. Deliberately reuses the same
-/// catalogue/userCards state rankedRecommendationsProvider already
-/// fetches, and the same BestCardForWidget.pickBestCard the home-screen
-/// widget uses (packages/pandapay_domain/lib/src/geo/best_card_for_widget.dart)
-/// — one "pick the best card" implementation, called from two different
-/// UI entry points (a nearby-merchant tile here, a home-screen widget
-/// there), not two competing ranking paths.
-// Note: deliberately NOT wired to card_overrides (unlike
-// rankedRecommendationsProvider above) — B8's spec scopes override
-// wiring to Home's ranking; extending it to the geofence tile's
-// per-merchant ranking is a natural follow-up, not done here.
-/// B8 manual overrides now feed this too, not just Home's
-/// rankedRecommendationsProvider — this is what Nearby Merchants'
-/// per-tile "Use X" recommendation actually calls
-/// ([bestCardForMerchantProvider] usage in nearby_merchants_screen.dart),
-/// so an override the user set for a category previously had no effect
-/// there even though it visibly changed the exact same category's
-/// recommendation on Home. Same resolveActiveOverrideCardProductId call
-/// rankedRecommendationsProvider makes, so the two never disagree about
-/// which override is active for a given category.
-final bestCardForMerchantProvider = Provider.family<AsyncValue<Recommendation?>, String?>((ref, categoryId) {
+/// Place-aware recommendation for a merchant/category pair.
+final bestCardForPlaceProvider =
+    Provider.family<AsyncValue<Recommendation?>, ({String? categoryId, String? merchantName})>((ref, context) {
   final catalogue = ref.watch(catalogueProvider);
   final userCards = ref.watch(userCardsProvider);
   final overrides = ref.watch(cardOverridesProvider);
@@ -1305,12 +1303,43 @@ final bestCardForMerchantProvider = Provider.family<AsyncValue<Recommendation?>,
   final overrideProductId = resolveActiveOverrideCardProductId(
     overrides: overrides.requireValue,
     wallet: wallet,
-    categoryId: categoryId,
+    categoryId: context.categoryId,
+    merchantName: context.merchantName,
   );
 
   final snapshots = _userCardSnapshots(cards, wallet, forcedOverrideCardId: overrideProductId);
 
-  return AsyncValue.data(picker.pickBestCard(cards: snapshots, categoryId: categoryId));
+  return AsyncValue.data(
+    picker.pickBestCard(
+      cards: snapshots,
+      categoryId: context.categoryId,
+    ),
+  );
+});
+
+/// UA-8.1/8.3: "which card should I use at *this* merchant" — the
+/// geofence screen's per-tile ranking. Deliberately reuses the same
+/// catalogue/userCards state rankedRecommendationsProvider already
+/// fetches, and the same BestCardForWidget.pickBestCard the home-screen
+/// widget uses (packages/pandapay_domain/lib/src/geo/best_card_for_widget.dart)
+/// — one "pick the best card" implementation, called from two different
+/// UI entry points (a nearby-merchant tile here, a home-screen widget
+/// there), not two competing ranking paths.
+// Note: deliberately NOT wired to card_overrides (unlike
+// rankedRecommendationsProvider above) — B8's spec scopes override
+// wiring to Home's ranking; extending it to the geofence tile's
+// per-merchant ranking is a natural follow-up, not done here.
+/// B8 manual overrides now feed this too, not just Home's
+/// rankedRecommendationsProvider — this is what Nearby Merchants'
+/// per-tile "Use X" recommendation actually calls
+/// ([bestCardForMerchantProvider] usage in nearby_merchants_screen.dart),
+/// so an override the user set for a category previously had no effect
+/// there even though it visibly changed the exact same category's
+/// recommendation on Home. Same resolveActiveOverrideCardProductId call
+/// rankedRecommendationsProvider makes, so the two never disagree about
+/// which override is active for a given category.
+final bestCardForMerchantProvider = Provider.family<AsyncValue<Recommendation?>, String?>((ref, categoryId) {
+  return ref.watch(bestCardForPlaceProvider((categoryId: categoryId, merchantName: null)));
 });
 
 final homeWidgetServiceProvider = Provider<HomeWidgetService>((ref) => HomeWidgetService());
@@ -1320,7 +1349,7 @@ final homeWidgetServiceProvider = Provider<HomeWidgetService>((ref) => HomeWidge
 /// which already collapses to "no category filter" when its family
 /// argument is null.
 final bestOverallCardProvider = Provider<AsyncValue<Recommendation?>>((ref) {
-  return ref.watch(bestCardForMerchantProvider(null));
+  return ref.watch(bestCardForPlaceProvider((categoryId: null, merchantName: null)));
 });
 
 extension _FirstWhereOrNull<T> on List<T> {

@@ -116,21 +116,33 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
 
   @override
   Widget build(BuildContext context) {
-    final (icon, text) = switch (_state) {
-      _ContextState.locating => (Icons.my_location_rounded, 'Finding where you are…'),
-      _ContextState.found => (
-        Icons.place_rounded,
-        "You're near ${_closest!.candidate.displayName ?? 'a known merchant'}",
-      ),
-      _ContextState.noMatch => (
-        Icons.explore_off_rounded,
-        'Not sure where you are — scan or pick a category.',
-      ),
+    final best = _closest == null
+        ? const AsyncValue<Recommendation?>.data(null)
+        : ref.watch(
+            bestCardForPlaceProvider((
+              categoryId: _closest!.candidate.categoryId,
+              merchantName: _closest!.candidate.displayName,
+            )),
+          );
+    final bestCard = best.valueOrNull;
+    final text = switch (_state) {
+      _ContextState.locating => 'Finding where you are…',
+      _ContextState.found when _closest != null && bestCard != null =>
+        "You're near ${_closest!.candidate.displayName ?? 'a known merchant'} · use ${bestCard.card.name}",
+      _ContextState.found => "You're near ${_closest!.candidate.displayName ?? 'a known merchant'}",
+      _ContextState.noMatch => 'Not sure where you are — scan or pick a category.',
       // ui-spec B1 States: "No location permission -> chips primary, no
       // nag" — this line stays factual and unobtrusive, never a permission
       // prompt/nag of its own.
-      _ContextState.noPermission => (Icons.explore_off_rounded, 'Pick a category below.'),
-      _ContextState.offlineOrError => (Icons.wifi_off_rounded, 'Offline — pick a category below.'),
+      _ContextState.noPermission => 'Pick a category below.',
+      _ContextState.offlineOrError => 'Offline — pick a category below.',
+    };
+    final icon = switch (_state) {
+      _ContextState.locating => Icons.my_location_rounded,
+      _ContextState.found => Icons.place_rounded,
+      _ContextState.noMatch => Icons.explore_off_rounded,
+      _ContextState.noPermission => Icons.explore_off_rounded,
+      _ContextState.offlineOrError => Icons.wifi_off_rounded,
     };
 
     return Padding(

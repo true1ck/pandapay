@@ -27,7 +27,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: pandapay
     ports:
-      - "5433:5432" # 5433 on the host so it doesn't collide with a local Postgres
+      - "55433:5432" # TEMP local override to avoid a port clash with another project's container — revert before commit
     volumes:
       - pgdata:/var/lib/postgresql/data
       # TWO databases in one instance, not one shared database. `auth/` and

@@ -234,7 +234,12 @@ class _NearbyMerchantTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final best = ref.watch(bestCardForMerchantProvider(match.candidate.categoryId));
+    final best = ref.watch(
+      bestCardForPlaceProvider((
+        categoryId: match.candidate.categoryId,
+        merchantName: match.candidate.displayName,
+      )),
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

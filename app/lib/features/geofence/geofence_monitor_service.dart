@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../../data/place_recommendation.dart';
 import 'nearby_merchants_repository.dart';
 
 /// UA-8, extended: real background geofence monitoring, closing the gap the
@@ -34,6 +35,7 @@ import 'nearby_merchants_repository.dart';
 /// the user," same separation as the foreground screen already had.
 class GeofenceMonitorService {
   final NearbyMerchantsRepository repo;
+  final Future<Recommendation?> Function(NearbyMerchantCandidate candidate)? bestCardResolver;
   final FlutterLocalNotificationsPlugin notifications;
   final double radiusMeters;
   final Duration notifyCooldown;
@@ -44,6 +46,7 @@ class GeofenceMonitorService {
 
   GeofenceMonitorService({
     required this.repo,
+    this.bestCardResolver,
     FlutterLocalNotificationsPlugin? notifications,
     this.radiusMeters = 300,
     this.notifyCooldown = const Duration(minutes: 30),
@@ -165,7 +168,8 @@ class GeofenceMonitorService {
           continue;
         }
         _lastNotifiedAt[match.candidate.merchantId] = now;
-        await _notify(match);
+        final best = await bestCardResolver?.call(match.candidate);
+        await _notify(match, best: best);
       }
     } catch (_) {
       // A single failed poll (network blip, transient GPS glitch) isn't
@@ -174,7 +178,7 @@ class GeofenceMonitorService {
     }
   }
 
-  Future<void> _notify(NearbyMerchantMatch match) async {
+  Future<void> _notify(NearbyMerchantMatch match, {Recommendation? best}) async {
     const androidDetails = AndroidNotificationDetails(
       'geofence_nearby_merchant',
       'Nearby merchants',
@@ -184,11 +188,18 @@ class GeofenceMonitorService {
     );
     const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
     final name = match.candidate.displayName ?? 'a merchant you\'ve used before';
+    final body = nearbyMerchantNotificationBody(best);
     await notifications.show(
       match.candidate.merchantId.hashCode,
       'You\'re near $name',
-      'Open PandaPay to see which card to use here.',
+      body,
       details,
     );
   }
+}
+
+String nearbyMerchantNotificationBody(Recommendation? best) {
+  return best == null
+      ? 'Open PandaPay to see which card to use here.'
+      : 'Use ${best.card.name} · ${best.expectedValue.format()} expected back.';
 }

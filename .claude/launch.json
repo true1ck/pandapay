@@ -3,29 +3,17 @@
   "configurations": [
     {
       "name": "console",
-      "runtimeExecutable": "/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/console/run_web.sh",
-      "runtimeArgs": [],
+      "cwd": "C:\\Users\\sujay\\CKProjects\\PandaPay\\console",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": ["run", "-d", "chrome", "--web-port", "5173"],
       "port": 5173
     },
     {
-      "name": "design-preview",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8901", "--directory", "/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/.design_preview"],
-      "port": 8901
-    },
-    {
       "name": "api",
-      "cwd": "/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api",
+      "cwd": "C:\\Users\\sujay\\CKProjects\\PandaPay\\api",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 4000
-    },
-    {
-      "name": "auth",
-      "cwd": "/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/auth",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start"],
-      "port": 3210
     }
   ]
 }

@@ -96,17 +96,24 @@ class AdminApi {
     return (body['cards'] as List).cast<Map<String, dynamic>>();
   }
 
-  /// AD-1.1.3 typed writer, client side: only ever sends `rate` (+ optional
-  /// audit reason), never a raw JSON blob of the whole rule.
-  Future<void> updateRewardRuleRate(String ruleId, double rate, {String? reason}) async {
+  /// Card Info tab: edits card_products' own columns (fees, GST flag, art
+  /// asset/color, base reward unit/rate, point value + basis, positioning
+  /// notes, source URL) — the fields with no rule-family table of their own,
+  /// via the dedicated PUT /admin/card-products/:id typed writer.
+  Future<Map<String, dynamic>> updateCardFields(
+    String cardId, {
+    required Map<String, dynamic> fields,
+    String? reason,
+  }) async {
     final response = await _client.put(
-      Uri.parse('$apiBaseUrl/admin/reward-rules/$ruleId'),
+      Uri.parse('$apiBaseUrl/admin/card-products/$cardId'),
       headers: _headers,
-      body: jsonEncode({'rate': rate, 'reason': ?reason}),
+      body: jsonEncode({...fields, 'reason': ?reason}),
     );
     if (response.statusCode != 200) {
-      throw AdminApiException('PUT /admin/reward-rules/$ruleId failed: ${response.statusCode} ${response.body}');
+      throw AdminApiException('PUT /admin/card-products/$cardId failed: ${response.statusCode} ${response.body}');
     }
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   /// AD-1.1.4 state machine transition: draft->in_review->published->archived
@@ -127,7 +134,7 @@ class AdminApi {
 
   /// AD-1.1.2 tabbed rule-family editor, client side. Mirrors the backend's
   /// declarative factory (admin_rule_families.js) one-for-one: same shape
-  /// for all 8 non-reward-rules families (cap-rules, milestone-rules,
+  /// for all 8 rule-table families (reward-rules, cap-rules, milestone-rules,
   /// fee-waiver-rules, card-benefits, redemption-options as "list"
   /// families; forex-rules, fuel-surcharge-rules, billing-cycle-rules as
   /// "single row per card" families), so the tab widgets don't need 8
@@ -694,6 +701,26 @@ class AdminApi {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['snapshots'] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Crawler queue visibility — jobs currently in the card_crawl_jobs table.
+  Future<List<Map<String, dynamic>>> fetchCrawlerJobs() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/crawler/jobs'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/crawler/jobs failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['jobs'] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Crawler draft visibility — drafts pending promotion.
+  Future<List<Map<String, dynamic>>> fetchCrawlerDrafts() async {
+    final response = await _client.get(Uri.parse('$apiBaseUrl/admin/crawler/drafts'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw AdminApiException('GET /admin/crawler/drafts failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['drafts'] as List).cast<Map<String, dynamic>>();
   }
 }
 

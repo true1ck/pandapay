@@ -10,7 +10,7 @@ const { parseSmsAgainstPatterns, redactSmsShape, senderMatches } = require('./sm
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
-const { registerRuleFamilyRoutes } = require('./admin_rule_families');
+const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const { requestLogger, errorHandler } = require('./observability');
 
 const app = express();
@@ -159,62 +159,15 @@ app.get('/admin/cards', requireAdmin, async (req, res) => {
   }
 });
 
-/**
- * PUT /admin/reward-rules/:id — AD-1.1.3 typed writer: the only field this
- * route can change is `rate`, validated as a positive number, never raw
- * JSON passthrough. AD-0.3.4: every mutating action writes admin_audit_log
- * — done in the same transaction as the update, so a write that reaches the
- * table but fails to audit is impossible (whole transaction rolls back).
- * The bump_card_data_version trigger (0003) fires automatically on the
- * reward_rules UPDATE, so this also correctly propagates a device-sync
- * version bump — verified, not assumed (see PROGRESS.md).
- */
-app.put('/admin/reward-rules/:id', requireAdmin, async (req, res) => {
-  const { rate } = req.body || {};
-  if (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 0) {
-    return res.status(400).json({ error: 'rate must be a non-negative number' });
-  }
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const before = await client.query(
-        'SELECT id, card_product_id, rate FROM reward_rules WHERE id = $1',
-        [req.params.id]
-      );
-      if (before.rows.length === 0) return null;
-
-      const updated = await client.query(
-        'UPDATE reward_rules SET rate = $1 WHERE id = $2 RETURNING id, card_product_id, rate',
-        [rate, req.params.id]
-      );
-
-      await client.query(
-        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
-         VALUES ($1, 'update_reward_rule_rate', 'reward_rules', $2, $3, $4, $5)`,
-        [
-          req.userId,
-          req.params.id,
-          JSON.stringify({ rate: before.rows[0].rate }),
-          JSON.stringify({ rate: updated.rows[0].rate }),
-          req.body.reason || null,
-        ]
-      );
-
-      return updated.rows[0];
-    });
-
-    if (!result) return res.status(404).json({ error: 'reward_rule not found' });
-    res.json({ rewardRule: result });
-  } catch (err) {
-    console.error('PUT /admin/reward-rules/:id error', err);
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-// AD-1.1.2 tabbed rule-family editor — the other 8 rule tables
-// v_admin_card_catalogue_export already reads (0022's migration comment).
-// Only reward_rules (above) had a typed writer before this; every other
-// family was read-only in the console until now. See
-// admin_rule_families.js's header comment for the shared route shape.
+// AD-1.1.2 tabbed rule-family editor — all 8 rule tables
+// v_admin_card_catalogue_export already reads (0022's migration comment),
+// now including reward_rules: it used to have a narrow rate-only typed
+// writer (PUT /admin/reward-rules/:id) predating admin_rule_families.js;
+// that's replaced below by the same generic factory every other family
+// uses, so category/merchant_pattern/rail/min-max txn/priority/notes/
+// effective dates are all editable, not just rate. The scrape-diff-review
+// handler further down (`UPDATE reward_rules SET rate = ...`) is separate
+// raw SQL against the table, not this route, and is unaffected.
 const REWARD_UNITS = [
   'cashback_percent', 'points_per_100', 'points_per_150', 'points_per_200',
   'miles_per_100', 'flat_points', 'discount_percent',
@@ -227,8 +180,53 @@ const BENEFIT_KINDS = [
   'roadside_assistance', 'other',
 ];
 const MILESTONE_ANCHORS = ['card_anniversary', 'calendar_year', 'fiscal_year', 'statement_cycle'];
+// The four source_class values 0036's doc-comment and structured_cards.py's
+// DEFAULT_SOURCE_CLASS already use — not a DB CHECK constraint (card_products
+// and its child tables leave source_class as plain text, per 0037), but kept
+// as an app-level enum here so the Provenance tab's dropdown can't drift
+// from the values the scraper pipeline actually writes.
+const SOURCE_CLASSES = ['issuer_official', 'third_party_structured', 'third_party_page', 'community_open_source'];
+// Shared by every rule family's provenance sub-fields (0037's Provenance tab
+// support) — same 5 columns added to cap_rules/milestone_rules/
+// fee_waiver_rules/card_benefits/forex_rules/fuel_surcharge_rules/
+// billing_cycle_rules/redemption_options, so this is spread into each
+// family's field list below rather than repeated 8 times.
+const PROVENANCE_FIELDS = [
+  { name: 'sourceUrl', column: 'source_url', type: 'string' },
+  { name: 'sourceClass', column: 'source_class', type: 'enum', values: SOURCE_CLASSES },
+  { name: 'sourceLicense', column: 'source_license', type: 'string' },
+  { name: 'sourceExcerpt', column: 'source_excerpt', type: 'string' },
+  { name: 'verifiedAt', column: 'verified_at', type: 'string' },
+];
 
 const adminRouteDeps = { withUserClient, requireAdmin };
+
+registerRuleFamilyRoutes(app, adminRouteDeps, {
+  urlSegment: 'reward-rules',
+  tableName: 'reward_rules',
+  auditEntity: 'reward_rule',
+  fields: [
+    { name: 'categoryId', column: 'category_id', type: 'string' },
+    { name: 'merchantPattern', column: 'merchant_pattern', type: 'string' },
+    // txn_rail enum values inlined here — the module-level TXN_RAILS
+    // constant further down (used by the acceptance/rail route) is declared
+    // after this runs, so referencing it here would hit the const TDZ.
+    { name: 'rail', column: 'rail', type: 'enum', values: ['upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown'] },
+    { name: 'unit', column: 'unit', type: 'enum', values: REWARD_UNITS, required: true },
+    { name: 'rate', column: 'rate', type: 'number', min: 0, required: true },
+    { name: 'minTxnInr', column: 'min_txn_inr', type: 'number', min: 0 },
+    { name: 'maxTxnInr', column: 'max_txn_inr', type: 'number', min: 0 },
+    { name: 'priority', column: 'priority', type: 'integer' },
+    { name: 'notes', column: 'notes', type: 'string' },
+    { name: 'effectiveFrom', column: 'effective_from', type: 'string' },
+    { name: 'effectiveTo', column: 'effective_to', type: 'string' },
+    // reward_rules has no source_url/source_class/etc (0037 added those to
+    // the other 8 families, not this one — reward_rules already carries
+    // effective_from/to as its own provenance-adjacent fields), so only
+    // `conditions` joins here, not the shared PROVENANCE_FIELDS block.
+    { name: 'conditions', column: 'conditions', type: 'jsonb' },
+  ],
+});
 
 registerRuleFamilyRoutes(app, adminRouteDeps, {
   urlSegment: 'cap-rules',
@@ -244,6 +242,7 @@ registerRuleFamilyRoutes(app, adminRouteDeps, {
     { name: 'postCapUnit', column: 'post_cap_unit', type: 'enum', values: REWARD_UNITS },
     { name: 'postCapRate', column: 'post_cap_rate', type: 'number', min: 0 },
     { name: 'resetsOnDay', column: 'resets_on_day', type: 'integer', min: 1, max: 31 },
+    ...PROVENANCE_FIELDS,
   ],
 });
 
@@ -260,6 +259,7 @@ registerRuleFamilyRoutes(app, adminRouteDeps, {
     { name: 'isRepeatable', column: 'is_repeatable', type: 'boolean' },
     { name: 'maxRepeats', column: 'max_repeats', type: 'integer', min: 0 },
     { name: 'anchor', column: 'anchor', type: 'enum', values: MILESTONE_ANCHORS },
+    ...PROVENANCE_FIELDS,
   ],
 });
 
@@ -272,6 +272,8 @@ registerRuleFamilyRoutes(app, adminRouteDeps, {
     { name: 'period', column: 'period', type: 'enum', values: CAP_PERIODS },
     { name: 'waivesFeeInr', column: 'waives_fee_inr', type: 'number', min: 0, required: true },
     { name: 'notes', column: 'notes', type: 'string' },
+    { name: 'excludedCategories', column: 'excluded_categories', type: 'stringArray' },
+    ...PROVENANCE_FIELDS,
   ],
 });
 
@@ -287,6 +289,8 @@ registerRuleFamilyRoutes(app, adminRouteDeps, {
     { name: 'quotaPeriod', column: 'quota_period', type: 'enum', values: CAP_PERIODS },
     { name: 'networkProgram', column: 'network_program', type: 'string' },
     { name: 'valueEstimateInr', column: 'value_estimate_inr', type: 'number', min: 0 },
+    { name: 'conditions', column: 'conditions', type: 'jsonb' },
+    ...PROVENANCE_FIELDS,
   ],
 });
 
@@ -300,6 +304,8 @@ registerRuleFamilyRoutes(app, adminRouteDeps, {
     { name: 'valuePerPointInr', column: 'value_per_point_inr', type: 'number', min: 0, required: true },
     { name: 'minPoints', column: 'min_points', type: 'integer', min: 0 },
     { name: 'notes', column: 'notes', type: 'string' },
+    { name: 'lastCheckedAt', column: 'last_checked_at', type: 'string' },
+    ...PROVENANCE_FIELDS,
   ],
 });
 
@@ -312,6 +318,7 @@ registerRuleFamilyRoutes(app, adminRouteDeps, {
     { name: 'markupPercent', column: 'markup_percent', type: 'number', min: 0, required: true },
     { name: 'gstOnMarkup', column: 'gst_on_markup', type: 'boolean' },
     { name: 'waiverNotes', column: 'waiver_notes', type: 'string' },
+    ...PROVENANCE_FIELDS,
   ],
 });
 
@@ -326,6 +333,7 @@ registerRuleFamilyRoutes(app, adminRouteDeps, {
     { name: 'minTxnInr', column: 'min_txn_inr', type: 'number', min: 0 },
     { name: 'maxTxnInr', column: 'max_txn_inr', type: 'number', min: 0 },
     { name: 'monthlyWaiverCap', column: 'monthly_waiver_cap', type: 'number', min: 0 },
+    ...PROVENANCE_FIELDS,
   ],
 });
 
@@ -337,7 +345,82 @@ registerRuleFamilyRoutes(app, adminRouteDeps, {
   fields: [
     { name: 'gracePeriodDays', column: 'grace_period_days', type: 'integer', min: 0 },
     { name: 'cycleNotes', column: 'cycle_notes', type: 'string' },
+    ...PROVENANCE_FIELDS,
   ],
+});
+
+// PUT /admin/card-products/:id — the console's "Card Info" tab. card_products
+// itself isn't a child table keyed by card_product_id, so it doesn't fit
+// registerRuleFamilyRoutes' two shapes; this is a small dedicated typed
+// writer that reuses the same validateField() every rule family uses, same
+// before/after admin_audit_log shape as every other mutating route here.
+// Deliberately excludes name/slug/network/card_type/issuer_id/status —
+// identity/structural fields with their own flow (status via
+// POST /admin/cards/:id/status) or requiring a bigger migration-safety
+// conversation than a field-level edit.
+const CARD_OWN_FIELDS = [
+  { name: 'annualFeeInr', column: 'annual_fee_inr', type: 'number', min: 0 },
+  { name: 'joiningFeeInr', column: 'joining_fee_inr', type: 'number', min: 0 },
+  { name: 'feeGstApplicable', column: 'fee_gst_applicable', type: 'boolean' },
+  { name: 'isUpiLinkable', column: 'is_upi_linkable', type: 'boolean' },
+  { name: 'artAsset', column: 'art_asset', type: 'string' },
+  { name: 'artPrimaryColor', column: 'art_primary_color', type: 'string' },
+  { name: 'baseRewardUnit', column: 'base_reward_unit', type: 'enum', values: REWARD_UNITS },
+  { name: 'baseRewardRate', column: 'base_reward_rate', type: 'number', min: 0 },
+  { name: 'pointValueInr', column: 'point_value_inr', type: 'number', min: 0 },
+  { name: 'pointValueBasis', column: 'point_value_basis', type: 'string' },
+  { name: 'positioningNotes', column: 'positioning_notes', type: 'string' },
+  { name: 'sourceUrl', column: 'source_url', type: 'string' },
+  // Card-level provenance (0037) — Provenance tab, not Card Info.
+  { name: 'sourceClass', column: 'source_class', type: 'enum', values: SOURCE_CLASSES },
+  { name: 'sourceLicense', column: 'source_license', type: 'string' },
+  { name: 'sourceExcerpt', column: 'source_excerpt', type: 'string' },
+  { name: 'sourceLinks', column: 'source_links', type: 'jsonb' },
+];
+
+app.put('/admin/card-products/:id', requireAdmin, async (req, res) => {
+  const body = req.body || {};
+  const errors = [];
+  const values = {};
+  for (const field of CARD_OWN_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(body, field.name)) continue;
+    const err = validateField(field, body[field.name]);
+    if (err) errors.push(err);
+    else values[field.column] = field.type === 'jsonb' ? JSON.stringify(body[field.name]) : body[field.name];
+  }
+  if (errors.length) return res.status(400).json({ error: errors.join('; ') });
+  if (Object.keys(values).length === 0) return res.status(400).json({ error: 'no fields to update' });
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const before = await client.query('SELECT * FROM card_products WHERE id = $1', [req.params.id]);
+      if (before.rows.length === 0) return null;
+
+      // These columns feed device sync (0023: base_reward_unit/rate are read
+      // directly by the app's recommendation engine), so this bumps
+      // data_version itself the same way bump_card_data_version() does for
+      // every child-table write — a card_products own-field edit is no less
+      // sync-relevant than a reward_rules edit.
+      const setCols = Object.keys(values);
+      const setClause = setCols.map((c, i) => `${c} = $${i + 2}`).join(', ');
+      const updated = await client.query(
+        `UPDATE card_products SET ${setClause}, data_version = data_version + 1 WHERE id = $1 RETURNING *`,
+        [req.params.id, ...setCols.map((c) => values[c])]
+      );
+
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+         VALUES ($1, 'update_card_product_fields', 'card_products', $2, $3, $4, $5)`,
+        [req.userId, req.params.id, JSON.stringify(before.rows[0]), JSON.stringify(updated.rows[0]), body.reason || null]
+      );
+
+      return updated.rows[0];
+    });
+    if (!result) return res.status(404).json({ error: 'card_product not found' });
+    res.json({ cardProduct: result });
+  } catch (err) {
+    console.error('PUT /admin/card-products/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
 });
 
 /**
@@ -1627,42 +1710,123 @@ app.get('/admin/alerts/:id', requireAdmin, async (req, res) => {
 });
 
 /**
- * POST /admin/alerts/:id/decide — AD-4.4's "operator corrects rather than
- * retypes": this route only ever changes the ALERT's state
- * (open/approved/rejected/needs_more_evidence), never card data directly.
- * Applying a correction to reward_rules/etc still goes through the
- * existing typed writers (PUT /admin/reward-rules/:id, Chunk 6, or the C7
- * error-queue's approve route, Chunk 8) — this route can't, by
- * construction, silently write a heuristic guess into live card data.
+ * POST /admin/alerts/:id/decide — AD-5.3.1: "Approval calls
+ * pandapay.approve_policy_alert() ... There is no other code path to
+ * publish." A `rejected`/`needs_more_evidence` decision only ever changes
+ * the alert's state. An `approved` decision, when the operator supplies
+ * `applyField`, ALSO writes the correction to the live rule row — in the
+ * same transaction as the alert-state update and the DB function's
+ * data_version bump / card_catalogue_changes / admin_audit_log rows — so a
+ * write that reaches the rule table but fails to publish (or vice versa)
+ * is impossible.
+ *
+ * `applyField` is intentionally narrow, not a raw-JSON passthrough: only
+ * {table, id, column, value} for the two families the AD-5 signal sources
+ * (empirical divergence, scrape diff) actually propose corrections for —
+ * `reward_rules.rate` and `cap_rules.cap_value` — the same "typed writer,
+ * never raw JSON" rule PUT /admin/reward-rules/:id and
+ * admin_rule_families.js already follow.
+ *
+ * Approving WITHOUT `applyField` (e.g. a page-level scrape_diff alert with
+ * no structured value yet — AD-3.3's stated scope limit until AD-4.3
+ * exists) still calls approve_policy_alert() so the alert leaves the
+ * queue and is audited, but with a null p_apply — the response says
+ * `published: false` so the console can't mistake "decided" for "live".
  */
+const ALERT_APPLY_FIELDS = {
+  reward_rules: { column: 'rate', label: 'rate' },
+  cap_rules: { column: 'cap_value', label: 'cap_value' },
+};
+
 app.post('/admin/alerts/:id/decide', requireAdmin, async (req, res) => {
-  const { decision, note } = req.body || {};
+  const { decision, note, applyField, forceSync } = req.body || {};
   const validDecisions = ['approved', 'rejected', 'needs_more_evidence'];
   if (!validDecisions.includes(decision)) {
     return res.status(400).json({ error: `decision must be one of: ${validDecisions.join(', ')}` });
   }
+
+  let applySpec = null;
+  if (decision === 'approved' && applyField) {
+    const { table, id, value } = applyField;
+    const fieldDef = ALERT_APPLY_FIELDS[table];
+    if (!fieldDef) {
+      return res.status(400).json({ error: `applyField.table must be one of: ${Object.keys(ALERT_APPLY_FIELDS).join(', ')}` });
+    }
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ error: 'applyField.id is required' });
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      return res.status(400).json({ error: 'applyField.value must be a non-negative number' });
+    }
+    applySpec = { table, id, column: fieldDef.column, value };
+  }
+
   try {
     const result = await withUserClient(req.userId, async (client) => {
-      const updated = await client.query(
-        `UPDATE policy_change_alerts
-            SET state = $1, decided_by = $2, decided_at = now(), decision_note = $3
-          WHERE id = $4 AND state = 'open'
-          RETURNING id`,
-        [decision, req.userId, note || null, req.params.id]
+      const alertRow = await client.query(
+        `SELECT id, card_product_id FROM policy_change_alerts
+          WHERE id = $1 AND state IN ('open', 'needs_more_evidence')`,
+        [req.params.id]
       );
-      if (updated.rows.length === 0) return null;
+      if (alertRow.rows.length === 0) return null;
 
-      await client.query(
-        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
-         VALUES ($1, 'decide_policy_alert', 'policy_change_alerts', $2, $3, $4)`,
-        [req.userId, req.params.id, JSON.stringify({ decision }), note || null]
-      );
+      let appliedValue = null;
+      if (applySpec) {
+        const before = await client.query(
+          `SELECT id FROM ${applySpec.table} WHERE id = $1 AND card_product_id = $2`,
+          [applySpec.id, alertRow.rows[0].card_product_id]
+        );
+        if (before.rows.length === 0) {
+          return { error: `applyField.id does not identify a ${applySpec.table} row on this alert's card` };
+        }
+        await client.query(
+          `UPDATE ${applySpec.table} SET ${applySpec.column} = $1 WHERE id = $2`,
+          [applySpec.value, applySpec.id]
+        );
+        appliedValue = { table: applySpec.table, id: applySpec.id, column: applySpec.column, value: applySpec.value };
+      }
 
-      return updated.rows[0];
+      if (decision === 'approved') {
+        // approve_policy_alert() does its own row lock + state transition
+        // (open/needs_more_evidence -> approved) — it must be the only
+        // writer of `state` on this path, or its own guard against
+        // deciding an already-decided alert trips on our own prior write.
+        await client.query(
+          `SELECT pandapay.approve_policy_alert($1, $2, $3::jsonb, $4, $5)`,
+          [
+            req.params.id,
+            req.userId,
+            appliedValue ? JSON.stringify(appliedValue) : null,
+            note || 'Approved via console',
+            forceSync === true,
+          ]
+        );
+        if (note) {
+          await client.query(`UPDATE policy_change_alerts SET decision_note = $1 WHERE id = $2`, [note, req.params.id]);
+        }
+      } else {
+        const decided = await client.query(
+          `UPDATE policy_change_alerts
+              SET state = $1, decided_by = $2, decided_at = now(), decision_note = $3
+            WHERE id = $4 AND state IN ('open', 'needs_more_evidence')
+            RETURNING id`,
+          [decision, req.userId, note || null, req.params.id]
+        );
+        if (decided.rows.length === 0) return null;
+
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+           VALUES ($1, 'decide_policy_alert', 'policy_change_alerts', $2, $3, $4)`,
+          [req.userId, req.params.id, JSON.stringify({ decision }), note || null]
+        );
+      }
+
+      return { id: req.params.id, published: appliedValue !== null };
     });
 
     if (!result) return res.status(404).json({ error: 'alert not found or not open' });
-    res.json({ ok: true });
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ ok: true, published: result.published });
   } catch (err) {
     console.error('POST /admin/alerts/:id/decide error', err);
     res.status(500).json({ error: 'internal_error' });
@@ -5105,9 +5269,9 @@ app.get('/admin/sources', requireAdmin, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `SELECT s.id, s.kind, s.issuer_id, i.name AS issuer_name, s.name, s.base_url,
+        `SELECT s.id, s.kind, s.source_class, s.source_priority, s.issuer_id, i.name AS issuer_name, s.name, s.base_url,
                 s.robots_allows, s.robots_checked_at, s.tos_reviewed, s.tos_note,
-                s.crawl_frequency, s.is_enabled, s.created_at,
+                s.crawl_frequency, s.is_enabled, s.license_note, s.last_verified_at, s.created_at,
                 (SELECT count(*) FROM source_pages sp WHERE sp.source_id = s.id) AS page_count
            FROM sources s
            LEFT JOIN issuers i ON i.id = s.issuer_id
@@ -5131,10 +5295,17 @@ app.get('/admin/sources', requireAdmin, async (req, res) => {
  * research-only rows.
  */
 app.post('/admin/sources', requireAdmin, async (req, res) => {
-  const { kind, issuerId, name, baseUrl, tosNote, reason } = req.body || {};
+  const { kind, sourceClass, sourcePriority, issuerId, name, baseUrl, tosNote, licenseNote, lastVerifiedAt, reason } = req.body || {};
   const VALID_KINDS = ['bank_official', 'news_review', 'regulator', 'other'];
   if (!VALID_KINDS.includes(kind)) {
     return res.status(400).json({ error: `kind must be one of ${VALID_KINDS.join('/')}` });
+  }
+  const VALID_SOURCE_CLASSES = ['issuer_official', 'third_party_structured', 'third_party_page', 'community_open_source'];
+  if (sourceClass !== undefined && !VALID_SOURCE_CLASSES.includes(sourceClass)) {
+    return res.status(400).json({ error: `sourceClass must be one of ${VALID_SOURCE_CLASSES.join('/')}` });
+  }
+  if (sourcePriority !== undefined && (!Number.isInteger(sourcePriority) || sourcePriority < 0)) {
+    return res.status(400).json({ error: 'sourcePriority must be a non-negative integer' });
   }
   if (typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'name is required' });
@@ -5145,10 +5316,20 @@ app.post('/admin/sources', requireAdmin, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const inserted = await client.query(
-        `INSERT INTO sources (kind, issuer_id, name, base_url, tos_note, tos_reviewed, is_enabled)
-         VALUES ($1, $2, $3, $4, $5, false, false)
+        `INSERT INTO sources (kind, source_class, source_priority, issuer_id, name, base_url, tos_note, license_note, last_verified_at, tos_reviewed, is_enabled)
+         VALUES ($1, COALESCE($2, 'issuer_official'), COALESCE($3, 100), $4, $5, $6, $7, $8, $9, false, false)
          RETURNING *`,
-        [kind, issuerId || null, name.trim(), baseUrl, tosNote || null]
+        [
+          kind,
+          sourceClass || null,
+          sourcePriority ?? null,
+          issuerId || null,
+          name.trim(),
+          baseUrl,
+          tosNote || null,
+          licenseNote || null,
+          lastVerifiedAt || null,
+        ]
       );
       await client.query(
         `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
@@ -5175,7 +5356,14 @@ app.post('/admin/sources', requireAdmin, async (req, res) => {
  * than a raw constraint-violation from Postgres.
  */
 app.patch('/admin/sources/:id', requireAdmin, async (req, res) => {
-  const { tosReviewed, tosNote, isEnabled, crawlFrequencyDays, reason } = req.body || {};
+  const { sourceClass, sourcePriority, tosReviewed, tosNote, isEnabled, crawlFrequencyDays, licenseNote, lastVerifiedAt, reason } = req.body || {};
+  const VALID_SOURCE_CLASSES = ['issuer_official', 'third_party_structured', 'third_party_page', 'community_open_source'];
+  if (sourceClass !== undefined && !VALID_SOURCE_CLASSES.includes(sourceClass)) {
+    return res.status(400).json({ error: `sourceClass must be one of ${VALID_SOURCE_CLASSES.join('/')}` });
+  }
+  if (sourcePriority !== undefined && (!Number.isInteger(sourcePriority) || sourcePriority < 0)) {
+    return res.status(400).json({ error: 'sourcePriority must be a non-negative integer' });
+  }
   if (tosReviewed !== undefined && typeof tosReviewed !== 'boolean') {
     return res.status(400).json({ error: 'tosReviewed must be a boolean' });
   }
@@ -5198,13 +5386,27 @@ app.patch('/admin/sources/:id', requireAdmin, async (req, res) => {
 
       const updated = await client.query(
         `UPDATE sources SET
-           tos_reviewed = COALESCE($1, tos_reviewed),
-           tos_note = COALESCE($2, tos_note),
-           is_enabled = COALESCE($3, is_enabled),
-           crawl_frequency = COALESCE($4::int * interval '1 day', crawl_frequency)
-         WHERE id = $5
+           source_class = COALESCE($1, source_class),
+           source_priority = COALESCE($2, source_priority),
+           license_note = COALESCE($3, license_note),
+           last_verified_at = COALESCE($4, last_verified_at),
+           tos_reviewed = COALESCE($5, tos_reviewed),
+           tos_note = COALESCE($6, tos_note),
+           is_enabled = COALESCE($7, is_enabled),
+           crawl_frequency = COALESCE($8::int * interval '1 day', crawl_frequency)
+         WHERE id = $9
          RETURNING *`,
-        [tosReviewed ?? null, tosNote ?? null, isEnabled ?? null, crawlFrequencyDays ?? null, req.params.id]
+        [
+          sourceClass ?? null,
+          sourcePriority ?? null,
+          licenseNote ?? null,
+          lastVerifiedAt ?? null,
+          tosReviewed ?? null,
+          tosNote ?? null,
+          isEnabled ?? null,
+          crawlFrequencyDays ?? null,
+          req.params.id,
+        ]
       );
 
       await client.query(
@@ -5219,6 +5421,35 @@ app.patch('/admin/sources/:id', requireAdmin, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('PATCH /admin/sources/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /admin/card-source-drafts — view the structured card ingestion queue.
+ * This is the read-side companion to the new structured import path. It lets
+ * operators inspect normalized rows before they are promoted into the live
+ * card catalogue.
+ */
+app.get('/admin/card-source-drafts', requireAdmin, async (req, res) => {
+  const { sourceId, status, limit } = req.query || {};
+  const maxRows = Number.isInteger(Number(limit)) ? Math.min(Math.max(Number(limit), 1), 200) : 100;
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT d.*, s.name AS source_name, s.base_url AS source_base_url
+           FROM card_source_drafts d
+           JOIN sources s ON s.id = d.source_id
+          WHERE ($1::uuid IS NULL OR d.source_id = $1::uuid)
+            AND ($2::text IS NULL OR d.status = $2::text)
+          ORDER BY d.created_at DESC
+          LIMIT $3`,
+        [sourceId || null, status || null, maxRows]
+      )
+    );
+    res.json({ drafts: result.rows });
+  } catch (err) {
+    console.error('GET /admin/card-source-drafts error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6097,6 +6328,47 @@ app.get('/issuer-emergency-contacts', async (req, res) => {
     res.json({ contacts: result.rows });
   } catch (err) {
     console.error('GET /issuer-emergency-contacts error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /admin/crawler/jobs — Admin visibility for crawler job queue state.
+ */
+app.get('/admin/crawler/jobs', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(`
+        SELECT id, card_target_id, job_type, state, attempts, next_run_at, last_error
+        FROM card_crawl_jobs
+        ORDER BY created_at DESC
+        LIMIT 100
+      `)
+    );
+    res.json({ jobs: result.rows });
+  } catch (err) {
+    console.error('GET /admin/crawler/jobs error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /admin/crawler/drafts — Admin visibility for crawler drafts awaiting promotion.
+ */
+app.get('/admin/crawler/drafts', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(`
+        SELECT id, card_name, issuer_name, status, confidence, created_at
+        FROM card_source_drafts
+        WHERE status IN ('draft', 'ready')
+        ORDER BY created_at DESC
+        LIMIT 100
+      `)
+    );
+    res.json({ drafts: result.rows });
+  } catch (err) {
+    console.error('GET /admin/crawler/drafts error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });

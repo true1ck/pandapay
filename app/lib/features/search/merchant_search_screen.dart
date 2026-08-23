@@ -162,7 +162,12 @@ class _MerchantResultTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final best = ref.watch(bestCardForMerchantProvider(candidate.categoryId));
+    final best = ref.watch(
+      bestCardForPlaceProvider((
+        categoryId: candidate.categoryId,
+        merchantName: candidate.displayName,
+      )),
+    );
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
       decoration: BoxDecoration(

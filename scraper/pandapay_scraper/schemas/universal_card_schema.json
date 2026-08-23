@@ -1,0 +1,325 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "5.0.0",
+  "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+
+  "card_product": {
+    "slug": "string — unique, e.g. hdfc-infinia-metal",
+    "name": "string",
+    "issuer_slug": "string, e.g. hdfc",
+    "network": "visa | mastercard | rupay | amex | diners | N/A",
+    "network_tier": "string, e.g. visa_infinite | N/A",
+    "card_tier": "entry | mid | premium | super_premium | N/A",
+    "card_type": "credit | debit | prepaid",
+    "bin_ranges": ["string array of BINs, [] if unknown"],
+    "joining_fee_inr": "number | 0 if free | N/A if fee model doesn't apply (e.g. prepaid)",
+    "annual_fee_inr": "number | 0 | N/A",
+    "fee_gst_applicable": "boolean | N/A",
+    "gst_rate_percent": "number | N/A",
+    "is_upi_linkable": "boolean",
+    "application_mode": "open | invite_only | upgrade_only | N/A",
+    "form_factors": ["physical_plastic | physical_metal | virtual_card | nfc_contactless", "... []"],
+    "tokenization_support": ["google_pay | samsung_wallet | apple_pay_overseas | cred_pay", "... [] if none"],
+    "contactless_pin_free_limit_inr": "number | N/A",
+    "point_value_inr_baseline": "number — ₹ per reward point/mile, used to normalize accrual to a %; N/A for pure-cashback cards (no points unit)",
+    "point_value_baseline_basis": "string explaining how the baseline was derived | N/A",
+    "point_expiry_months": "number | null (never expires => 0, unknown => null) | N/A for cashback cards",
+    "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": "boolean — true only if verified the card has no other category accelerators beyond what's listed | N/A if the card has no portal-style accelerator program at all",
+    "display_assets": {
+      "art_asset_key": "string | null",
+      "card_image_url": "string | null",
+      "logo_url": "string | null",
+      "primary_color_hex": "string | null",
+      "secondary_color_hex": "string | null"
+    },
+    "status": "draft | partially_verified | verified",
+    "data_source_tier": "issuer_mitc_plus_manual_audit | issuer_page | third_party_structured | community | N/A",
+    "source_url": "string",
+    "verified_at": "ISO8601 timestamp | null"
+  },
+
+  "eligibility_engine": {
+    "evaluation_mode": "guideline_only | all_pass | any_pass | N/A (open-application cards with no underwriting gate published)",
+    "notes": "string | N/A",
+    "rules": [
+      {
+        "parameter": "string, e.g. cibil_score | net_monthly_salary_inr | age_years | employment_type",
+        "operator": ">= | <= | == | in",
+        "threshold_value": "number | null",
+        "allowed_values": ["array | N/A if operator isn't 'in'"]
+      }
+    ],
+    "community_benchmarks": {
+      "min_net_monthly_salary_inr": "number | N/A",
+      "min_annual_itr_inr": "number | N/A",
+      "min_existing_issuer_credit_limit_inr": "number | N/A",
+      "min_cibil_score": "number | N/A",
+      "is_contractually_enforceable": "boolean — false when these are observed heuristics, not published rules"
+    },
+    "required_documents": ["string array", "[] if none published"],
+    "processing_time_days": "number | null"
+  },
+
+  "accrual_engine": {
+    "base_block_inr": "number — the ₹ block one accrual unit is computed against, e.g. 150 | N/A for flat-cashback cards with no block model",
+    "rounding_mode": "floor | round | ceil | N/A",
+    "base_points_per_block": "number | N/A (cashback cards use base_cashback_percent instead)",
+    "base_cashback_percent": "number | N/A (points cards use base_points_per_block instead)",
+    "effective_base_return_percent": "number — the resolved %, always fill this even if one of the two above is N/A",
+    "cycle_accrual_ceiling_points": "number | null (no ceiling) | N/A",
+    "capping_period_basis": "statement_cycle | calendar_month | quarter | N/A",
+    "reversal_policy": {
+      "mode": "proportional_deduction | full_reversal | N/A",
+      "negative_balance_allowed": "boolean | N/A",
+      "negative_balance_settlement": "string | N/A"
+    }
+  },
+
+  "reward_rules": [
+    {
+      "id": "string, unique within card",
+      "category_id": "string — PandaPay internal category taxonomy key, e.g. fuel | grocery | dining | travel_flights | travel_hotels | gift_vouchers | education | utility | excluded_spend | all_retail",
+      "priority": "number, lower wins",
+      "evaluation_type": "exclusion | accelerator | standard_accrual | fallback",
+      "rail": "any | upi_qr | swipe | online | contactless | atm | emi | smartbuy_or_equivalent_portal | pos_terminal",
+      "channel_type": "string | all | N/A",
+      "conditions": "condition-tree object — kept for source fidelity even though the engine ingest step flattens this to category_id/rail/merchant_pattern",
+      "action": {
+        "multiplier": "number",
+        "points_per_block": "number | N/A for cashback",
+        "cashback_percent": "number | N/A for points cards",
+        "cap_reference": "string cap_rules.id | null",
+        "reason": "string | N/A"
+      },
+      "effective_from": "date",
+      "effective_to": "date | null"
+    }
+  ],
+
+  "cap_rules": [
+    {
+      "id": "string",
+      "category_id": "string",
+      "metric": "bonus_reward_points | total_reward_points | eligible_spend_amount | txn_count",
+      "mcc_target_list": ["number array | N/A if the cap isn't MCC-scoped"],
+      "period": "day | statement_cycle | calendar_month | quarter | half_year | annual | lifetime",
+      "limit_value": "number | N/A if limit_value_inr is used instead",
+      "limit_value_inr": "number | N/A if limit_value (points/count) is used instead",
+      "post_limit_behavior": {
+        "action": "downgrade_to_base_rate | zero_accrual",
+        "points_per_block": "number | N/A"
+      },
+      "parent_cap_id": "string | null — for sub-caps nested under a parent cap",
+      "reset_day": "number 1-31 | null",
+      "effective_from": "date",
+      "effective_to": "date | null"
+    }
+  ],
+
+  "brand_specific_voucher_caps": [
+    {
+      "brand_slug": "string",
+      "category_id": "string",
+      "platform": "string",
+      "monthly_buy_cap_inr": "number",
+      "convenience_fee_percent": "number",
+      "convenience_fee_gst": "boolean",
+      "effective_from": "date",
+      "effective_to": "date | null"
+    }
+  ],
+
+  "fees_and_surcharges": {
+    "apr": {
+      "monthly_interest_rate_percent": "number | N/A for charge cards with no revolving credit",
+      "annual_interest_rate_percent": "number | N/A"
+    },
+    "forex_markup": {
+      "markup_percent": "number | N/A for cards with no forex use case",
+      "gst_applicable": "boolean | N/A"
+    },
+    "dynamic_currency_conversion_dcc": {
+      "fee_percent": "number | N/A",
+      "gst_applicable": "boolean | N/A",
+      "trigger_condition": "string | N/A"
+    },
+    "fuel_surcharge": {
+      "category_id": "fuel",
+      "surcharge_percent": "number | N/A",
+      "waiver_percent": "number | N/A — 0 if card has surcharge but no waiver",
+      "min_txn_inr": "number | N/A",
+      "max_txn_inr": "number | N/A",
+      "monthly_waiver_cap_inr": "number | N/A"
+    },
+    "cash_advance": {
+      "atm_transaction_fee_inr": "number | N/A for debit/prepaid cards (no cash-advance concept)",
+      "interest_applicable_from_day_one": "boolean | N/A",
+      "daily_interest_percent": "number | N/A",
+      "max_limit_percent": "number | N/A"
+    },
+    "category_surcharges": [
+      {
+        "category_id": "string",
+        "mcc_list": ["number array"],
+        "fee_percent": "number",
+        "gst_applicable": "boolean",
+        "trigger_condition": "string | N/A",
+        "threshold_spend_inr": "number | N/A",
+        "effective_from": "date",
+        "effective_to": "date | null"
+      }
+    ],
+    "emi_charges": {
+      "merchant_instant_emi_processing_fee_inr": "number | N/A",
+      "post_purchase_emi_processing_fee_inr": "number | N/A",
+      "foreclosure_charge_percent": "number | N/A",
+      "gst_applicable": "boolean | N/A"
+    },
+    "banking_penalties": {
+      "overlimit_charge": {
+        "fee_percent": "number | N/A",
+        "min_fee_inr": "number | N/A",
+        "gst_applicable": "boolean | N/A"
+      },
+      "auto_debit_bounce_charge_inr": "number | N/A",
+      "cheque_bounce_charge_inr": "number | N/A"
+    },
+    "reward_redemption_fee": {
+      "fee_inr": "number",
+      "gst_applicable": "boolean",
+      "exempted_channels": ["string array", "[] if the fee is charged on every channel"],
+      "notes": "string | N/A"
+    }
+  },
+
+  "statement_and_late_fees": {
+    "grace_period_days": "number | N/A for charge/prepaid cards",
+    "grace_period_void_on_revolving_balance": "boolean | N/A",
+    "minimum_amount_due_mad": {
+      "calculation_mode": "max | fixed_percent | N/A",
+      "components": ["array of formula strings or numeric floors", "N/A"]
+    },
+    "late_payment_slabs": [
+      { "min_balance_inr": "number", "max_balance_inr": "number | null", "fee_inr": "number" }
+    ]
+  },
+
+  "fee_waiver_and_milestones": {
+    "annual_fee_waiver": {
+      "threshold_spend_inr": "number | N/A for lifetime-free cards with no fee to waive",
+      "period": "card_anniversary_year | calendar_year | N/A",
+      "evaluation_condition": "string | N/A",
+      "excluded_category_ids": ["string array"],
+      "excluded_mcc_list": ["number array"],
+      "waives_fee_inr": "number | N/A"
+    },
+    "welcome_and_renewal_gift": {
+      "trigger": "string | N/A",
+      "benefit_points": "number | N/A",
+      "effective_value_inr": "number | N/A",
+      "condition": "string | N/A"
+    },
+    "spend_milestones": [
+      {
+        "id": "string",
+        "label": "string",
+        "threshold_spend_inr": "number",
+        "reward_value_inr": "number",
+        "period": "quarter | half_year | annual | card_anniversary_year",
+        "is_repeatable": "boolean",
+        "effective_from": "date",
+        "effective_to": "date | null"
+      }
+    ]
+  },
+
+  "lifestyle_and_network_benefits": [
+    {
+      "benefit_id": "string",
+      "category_id": "lounge | golf | dining | concierge | insurance_related_perk | movie | other",
+      "network_program": "string — controlled vocabulary shared across issuers, e.g. priority_pass, visa_infinite, mastercard_world_elite",
+      "sponsor": "string",
+      "label": "string",
+      "evaluation_engine": {
+        "conditions": "object | N/A",
+        "benefit_calculation": "object | N/A",
+        "perks": ["array | N/A"]
+      },
+      "quota_count": "number | null (unlimited) | N/A",
+      "quota_period": "day | calendar_month | quarter | annual | N/A",
+      "value_estimate_inr": "number | N/A",
+      "effective_from": "date",
+      "effective_to": "date | null"
+    }
+  ],
+
+  "insurance_and_protection": [
+    {
+      "cover_type": "air_accidental_death | medical_emergency_overseas | credit_shield | baggage_loss_delay | purchase_protection | extended_warranty | other",
+      "coverage_inr": "number | N/A if quoted in a foreign currency instead",
+      "coverage_usd": "number | N/A if quoted in INR instead",
+      "claim_condition": "string",
+      "effective_from": "date",
+      "effective_to": "date | null"
+    }
+  ],
+
+  "addon_card_rules": {
+    "max_addon_cards": "number | 0 if not offered",
+    "fee_per_card_inr": "number | N/A",
+    "separate_priority_pass": "boolean | N/A",
+    "lounge_quota_shared": "boolean | N/A",
+    "reward_points_pooled": "boolean | N/A",
+    "min_age_years": "number | N/A"
+  },
+
+  "redemption_matrix": {
+    "direct_options": [
+      {
+        "channel": "string",
+        "redemption_type": "flight_hotel_booking | partner_catalogue | cashback | statement_credit | other",
+        "inr_value_per_point": "number | N/A for cashback cards (no points to redeem)",
+        "max_bill_percentage_payable_via_points": "number | N/A",
+        "min_points_per_txn": "number | N/A",
+        "cycle_points_burn_cap": "number | N/A",
+        "redemption_fee_inr": "number | N/A",
+        "effective_from": "date",
+        "effective_to": "date | null"
+      }
+    ],
+    "partner_transfers": [
+      {
+        "partner_code": "string",
+        "program_name": "string",
+        "network_program": "string",
+        "type": "airline | hotel | other",
+        "conversion_ratio": { "card_points": "number", "partner_miles": "number" },
+        "min_transfer_points": "number",
+        "transfer_multiple": "number",
+        "yearly_cap_points": "number | null",
+        "turnaround_days": "number",
+        "effective_from": "date",
+        "effective_to": "date | null"
+      }
+    ]
+  },
+
+  "dynamic_promotions_registry": [
+    {
+      "promo_id": "string",
+      "category_id": "string",
+      "network_program": "string | N/A",
+      "sponsor": "string",
+      "platform": "string",
+      "offer_type": "string",
+      "discount_percent": "number | N/A",
+      "max_discount_inr": "number | N/A",
+      "fnb_discount_inr": "number | N/A",
+      "min_tickets": "number | N/A",
+      "quota_controlled": "boolean",
+      "is_permanent_card_feature": "boolean",
+      "valid_from": "date",
+      "valid_to": "date"
+    }
+  ]
+}

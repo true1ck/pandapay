@@ -89,3 +89,34 @@ class _FakeNearbyMerchantsRepository implements NearbyMerchantsRepository {
   }) async =>
       const [];
 }
+
+group('nearbyMerchantNotificationBody', () {
+  test('shows the generic fallback when no recommendation is available', () {
+    expect(
+      nearbyMerchantNotificationBody(null),
+      'Open PandaPay to see which card to use here.',
+    );
+  });
+
+  test('shows the card name and expected value when recommendation exists', () {
+    final card = CardProduct(
+      id: 'p1',
+      name: 'HDFC Millennia',
+      network: CardNetwork.visa,
+      rewardRules: [
+        RewardRule(id: 'r1', unit: RewardUnit.cashbackPercent, rate: 12.345),
+      ],
+    );
+    final recommendation = const RecommendationEngine()
+        .rank(
+          RecommendationContext(amount: Money.fromRupees(1000), rail: TxnRail.swipe),
+          [CardSnapshot(product: card)],
+        )
+        .first;
+
+    expect(
+      nearbyMerchantNotificationBody(recommendation),
+      'Use HDFC Millennia · ₹123.45 expected back.',
+    );
+  });
+});
