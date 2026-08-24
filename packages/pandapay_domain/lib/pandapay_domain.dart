@@ -9,6 +9,7 @@ export 'src/clock/clock.dart';
 export 'src/card_rules/card_rules.dart';
 export 'src/card_rules/card_rules_json.dart';
 export 'src/engine/engine.dart';
+export 'src/engine/acquisition_engine.dart';
 export 'src/engine/calculators.dart';
 export 'src/engine/historical_comparison.dart';
 export 'src/engine/urgency.dart';

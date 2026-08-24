@@ -30,6 +30,7 @@ import '../data/needs_review_repository.dart';
 import '../data/override_resolver.dart';
 import '../data/partner_apply_repository.dart';
 import '../data/recovery_api.dart';
+import '../data/spend_by_category_repository.dart';
 import '../data/sync_api.dart';
 import '../data/token_store.dart';
 import '../data/user_cards_repository.dart';
@@ -85,6 +86,65 @@ final partnerApplyRepositoryProvider = Provider<PartnerApplyRepository?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
   return PartnerApplyRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// New-card-acquisition recommender's data input. Null when signed out: a
+/// guest has no server-side transaction history to project a spend pattern
+/// from, same reasoning as every other repository provider in this file.
+final spendByCategoryRepositoryProvider = Provider<SpendByCategoryRepository?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return SpendByCategoryRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// Trailing-12-month category totals — empty (not an error) when signed
+/// out, same convention as userCardsProvider: a guest simply has no
+/// history to project from, so "nothing worth recommending yet" is the
+/// correct, unsurprising result rather than a screen-blocking error.
+final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
+  final repo = ref.watch(spendByCategoryRepositoryProvider);
+  if (repo == null) return const [];
+  return repo.fetchSpendByCategory();
+});
+
+final acquisitionRecommenderProvider = Provider<CardAcquisitionRecommender>((ref) {
+  return const CardAcquisitionRecommender();
+});
+
+/// Which cards NOT already in the wallet would be worth acquiring, given
+/// the signed-in user's real trailing-12-month spend —
+/// packages/pandapay_domain's CardAcquisitionRecommender applied to live
+/// catalogue + spend data, mirroring rankedRecommendationsProvider's own
+/// combine-multiple-providers shape below. Candidates are the WHOLE
+/// catalogue, not pre-filtered to non-owned here — the recommender itself
+/// already excludes owned cards (see its own rank()), so this stays
+/// consistent with the one place that filtering logic is meant to live.
+final acquisitionCandidatesProvider = Provider<AsyncValue<List<AcquisitionCandidate>>>((ref) {
+  final catalogue = ref.watch(catalogueProvider);
+  final userCards = ref.watch(userCardsProvider);
+  final categorySpend = ref.watch(categorySpendProvider);
+  final recommender = ref.watch(acquisitionRecommenderProvider);
+
+  if (catalogue.isLoading || userCards.isLoading || categorySpend.isLoading) {
+    return const AsyncValue.loading();
+  }
+  final combinedError = catalogue.error ?? userCards.error ?? categorySpend.error;
+  if (combinedError != null) {
+    return AsyncValue.error(
+      combinedError,
+      catalogue.stackTrace ?? userCards.stackTrace ?? categorySpend.stackTrace!,
+    );
+  }
+
+  final allCards = catalogue.requireValue;
+  final wallet = userCards.requireValue;
+  final spend = categorySpend.requireValue;
+
+  final ownedProducts = allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
+  final profile = SpendProfile(annualSpendByCategory: {for (final s in spend) s.categoryId: s.totalSpend});
+
+  final results = recommender.rank(candidates: allCards, ownedCards: ownedProducts, spendProfile: profile);
+  return AsyncValue.data(results);
 });
 
 /// Plan Phase 2.1 — acceptance reports ("did this card work here?"). Null

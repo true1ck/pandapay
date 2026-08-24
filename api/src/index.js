@@ -10,7 +10,7 @@ const { parseSmsAgainstPatterns, redactSmsShape, senderMatches } = require('./sm
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
-const { registerRuleFamilyRoutes } = require('./admin_rule_families');
+const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const { requestLogger, errorHandler } = require('./observability');
 
 const app = express();
@@ -155,6 +155,142 @@ app.get('/admin/cards', requireAdmin, async (req, res) => {
     res.json({ cards: result.rows });
   } catch (err) {
     console.error('GET /admin/cards error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /admin/issuers — get-or-create by slug. Needed so the bulk card
+ * importer (api/scripts/import_card_pipeline.js) and any future console
+ * "add a new card" flow can resolve an issuer without a human having
+ * pre-seeded every possible slug first. Unlike a card slug (see
+ * POST /admin/cards below), an issuer slug collision is expected and
+ * harmless — CardPipeline's source data uses slugs like `sbi-card` where
+ * this catalogue already has the same real-world issuer seeded as `sbi` —
+ * so a conflict returns the EXISTING row rather than erroring.
+ * admin_audit_log only gets an entry when a row was actually inserted.
+ */
+app.post('/admin/issuers', requireAdmin, async (req, res) => {
+  const { slug, name, shortName, logoUrl, websiteUrl, reason } = req.body || {};
+  if (typeof slug !== 'string' || !slug.trim()) {
+    return res.status(400).json({ error: 'slug is required' });
+  }
+  if (typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'name is required' });
+  }
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO issuers (slug, name, short_name, logo_url, website_url)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (slug) DO NOTHING
+         RETURNING *`,
+        [slug, name, shortName || null, logoUrl || null, websiteUrl || null]
+      );
+      if (inserted.rows.length > 0) {
+        await client.query(
+          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+           VALUES ($1, 'create_issuer', 'issuers', $2, $3, $4)`,
+          [req.userId, inserted.rows[0].id, JSON.stringify(inserted.rows[0]), reason || null]
+        );
+        return { issuer: inserted.rows[0], created: true };
+      }
+      const existing = await client.query('SELECT * FROM issuers WHERE slug = $1', [slug]);
+      return { issuer: existing.rows[0], created: false };
+    });
+    res.status(result.created ? 201 : 200).json({ issuer: result.issuer });
+  } catch (err) {
+    console.error('POST /admin/issuers error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+const CARD_TYPES = ['credit', 'debit', 'prepaid', 'forex'];
+
+/**
+ * POST /admin/cards — create a new card_products row. Before this route,
+ * the only card_products writes reachable through the admin API were
+ * GET /admin/cards (browse) and POST /admin/cards/:id/status (change
+ * status of a card that already exists) — every rule-family write in
+ * admin_rule_families.js requires a card_product_id that already exists.
+ * This closes that gap, for both the bulk importer
+ * (api/scripts/import_card_pipeline.js) and a future console "add card"
+ * button.
+ *
+ * `status` is deliberately NOT an accepted body field — every card created
+ * here is hardcoded 'draft', and verified_at/verified_by are never touched
+ * by this route. Reaching 'published' is only ever possible through
+ * POST /admin/cards/:id/status's transition below, which is also where the
+ * card_published_needs_verification CHECK constraint gets satisfied — so a
+ * card created here has no path to 'published' without a human going
+ * through that gate, matching this codebase's "AI extracts, human
+ * verifies, never auto-published" rule everywhere else card data is
+ * written (see extraction_proposals' table comment).
+ *
+ * A slug conflict is a 409, not a silent merge (unlike issuers above) —
+ * two different card_products rows colliding on slug is worth a human's
+ * attention, not an auto-resolution.
+ *
+ * Field-by-field validation reuses `validateField` from
+ * admin_rule_families.js — the same typed-writer discipline as every other
+ * admin route, never a raw JSON passthrough.
+ */
+app.post('/admin/cards', requireAdmin, async (req, res) => {
+  const fields = [
+    { name: 'issuerId', column: 'issuer_id', type: 'string', required: true },
+    { name: 'slug', column: 'slug', type: 'string', required: true },
+    { name: 'name', column: 'name', type: 'string', required: true },
+    { name: 'network', column: 'network', type: 'enum', values: CARD_NETWORKS, required: true },
+    { name: 'cardType', column: 'card_type', type: 'enum', values: CARD_TYPES },
+    { name: 'joiningFeeInr', column: 'joining_fee_inr', type: 'number', min: 0 },
+    { name: 'annualFeeInr', column: 'annual_fee_inr', type: 'number', min: 0 },
+    { name: 'isUpiLinkable', column: 'is_upi_linkable', type: 'boolean' },
+    { name: 'baseRewardUnit', column: 'base_reward_unit', type: 'enum', values: REWARD_UNITS },
+    { name: 'baseRewardRate', column: 'base_reward_rate', type: 'number', min: 0 },
+    { name: 'pointValueInr', column: 'point_value_inr', type: 'number', min: 0 },
+    { name: 'sourceUrl', column: 'source_url', type: 'string' },
+    { name: 'extendedData', column: 'extended_data', type: 'jsonb' },
+  ];
+  const body = req.body || {};
+  const errors = [];
+  const values = {};
+  for (const field of fields) {
+    const present = Object.prototype.hasOwnProperty.call(body, field.name);
+    if (!present) {
+      if (field.required) errors.push(`${field.name} is required`);
+      continue;
+    }
+    const err = validateField(field, body[field.name]);
+    if (err) errors.push(err);
+    else values[field.column] = field.type === 'jsonb' ? JSON.stringify(body[field.name]) : body[field.name];
+  }
+  if (errors.length) return res.status(400).json({ error: errors.join('; ') });
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const existing = await client.query('SELECT id FROM card_products WHERE slug = $1', [values.slug]);
+      if (existing.rows.length > 0) return { conflict: true };
+
+      const columns = ['status', ...Object.keys(values)];
+      const vals = ['draft', ...Object.values(values)];
+      const placeholders = vals.map((_, i) => `$${i + 1}`);
+      const inserted = await client.query(
+        `INSERT INTO card_products (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`,
+        vals
+      );
+      await client.query(
+        `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, after_value, reason)
+         VALUES ($1, 'create_card_product', 'card_products', $2, $3, $4)`,
+        [req.userId, inserted.rows[0].id, JSON.stringify(inserted.rows[0]), body.reason || null]
+      );
+      return { card: inserted.rows[0] };
+    });
+    if (result.conflict) {
+      return res.status(409).json({ error: `card_products.slug '${values.slug}' already exists` });
+    }
+    res.status(201).json({ card: result.card });
+  } catch (err) {
+    console.error('POST /admin/cards error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -3664,6 +3800,65 @@ app.get('/monthly-reports', requireAuth, async (req, res) => {
     res.json({ monthlyReport: result });
   } catch (err) {
     console.error('GET /monthly-reports error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /spend-by-category — trailing-window category totals, the one input
+ * packages/pandapay_domain's CardAcquisitionRecommender needs that nothing
+ * else already exposes (checked: /monthly-reports only sums a flat total,
+ * no per-category breakdown).
+ *
+ * `months` defaults to 12 (the recommender's own annual-projection design)
+ * but is accepted as a query param so a thin/new-user profile can be asked
+ * for with a shorter window rather than the client special-casing "not
+ * enough history" itself. `category_id` is returned as-is (the same
+ * spend_categories UUID reward_rules.category_id and
+ * RecommendationContext.categoryId already use everywhere else) — never a
+ * slug — so the response plugs directly into SpendProfile without a
+ * client-side lookup table. category_slug/category_name ride along purely
+ * for display; the recommender itself never reads them. Excludes rows with
+ * no category_id from the categorized breakdown into a single `uncategorized`
+ * bucket (SpendProfile's own `null`-key "all other spends" convention) —
+ * a transaction the parser couldn't categorize is still real spend a
+ * candidate card's base rate should be projected against, not silently
+ * dropped from the total.
+ *
+ * Same status='active' filter as /monthly-reports, for the same reason:
+ * ignored/reversed/deleted transactions were never real spend.
+ */
+app.get('/spend-by-category', requireAuth, async (req, res) => {
+  const monthsParam = req.query.months;
+  const months = monthsParam ? Number(monthsParam) : 12;
+  if (!Number.isInteger(months) || months < 1 || months > 60) {
+    return res.status(400).json({ error: 'months must be an integer between 1 and 60' });
+  }
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const rows = await client.query(
+        `SELECT sc.id AS category_id, sc.slug AS category_slug, sc.name AS category_name,
+                COALESCE(SUM(t.amount_inr), 0) AS total_spend_inr, COUNT(*) AS txn_count
+           FROM transactions t
+           LEFT JOIN spend_categories sc ON sc.id = t.category_id
+          WHERE t.profile_id = $1 AND t.status = 'active'
+            AND t.occurred_at >= now() - ($2 || ' months')::interval
+          GROUP BY sc.id, sc.slug, sc.name
+          ORDER BY total_spend_inr DESC`,
+        [req.userId, months]
+      );
+      return rows.rows.map((r) => ({
+        categoryId: r.category_id, // null -> uncategorized/"all other spends"
+        categorySlug: r.category_slug,
+        categoryName: r.category_name,
+        totalSpendInr: Number(r.total_spend_inr),
+        txnCount: Number(r.txn_count),
+      }));
+    });
+    res.json({ months, categories: result });
+  } catch (err) {
+    console.error('GET /spend-by-category error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });

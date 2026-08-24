@@ -1,0 +1,908 @@
+{
+  "id": "22d383fa-36f8-4079-ad00-93fc3474493e",
+  "slug": "cashback-sbi-card",
+  "name": "CASHBACK SBI Card",
+  "network": "visa",
+  "card_type": "credit",
+  "status": "draft",
+  "data_version": 25,
+  "verified_at": null,
+  "annual_fee_inr": 999.0,
+  "joining_fee_inr": 999.0,
+  "is_upi_linkable": false,
+  "art_asset": null,
+  "art_primary_color": null,
+  "point_value_inr": null,
+  "issuer_slug": "sbi-card",
+  "issuer_name": "Sbi Card",
+  "reward_rules": [
+    {
+      "id": "6e5a14a8-d366-4879-8d7c-dec6eb5b486f",
+      "rail": "swipe",
+      "rate": 1.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 100,
+      "conditions": {
+        "channel_type": "offline",
+        "cap_reference": "cap_offline_cashback_cycle",
+        "evaluation_type": "standard_accrual",
+        "source_local_id": "standard_offline_cashback",
+        "source_conditions": {
+          "eligibility": "eligible_spend not covered by an exclusion",
+          "transaction_channel": "offline"
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": null,
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "368babd1-6f00-4839-9fb1-1c71ac1fc5c6",
+      "rail": "online",
+      "rate": 5.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 90,
+      "conditions": {
+        "channel_type": "online",
+        "cap_reference": "cap_online_cashback_cycle",
+        "evaluation_type": "accelerator",
+        "source_local_id": "online_cashback",
+        "source_conditions": {
+          "eligibility": "eligible spend not covered by an exclusion",
+          "transaction_channel": "online"
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": null,
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "b1733cd9-3382-4f45-aa4c-34d5cd96bef0",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 1,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_utilities",
+        "source_conditions": {
+          "category": "utility",
+          "mcc_list": [
+            4900
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "050f3e1b-24e5-4217-b2a9-6b1c306d00d8",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "2113d92c-85b9-4d90-a1d2-0d569b47dbeb",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 2,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_insurance",
+        "source_conditions": {
+          "category": "insurance",
+          "mcc_list": [
+            5960,
+            6300,
+            6381
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "36555296-6c93-438a-a65e-a83b4ccb51fb",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "ba78ebad-a90e-4635-a667-0825345fb784",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 3,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_fuel",
+        "source_conditions": {
+          "category": "fuel",
+          "mcc_list": [
+            5172,
+            5541,
+            5542,
+            5983
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "b172713b-15ce-4074-8a08-521a2d8ac406",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "12c479ce-5122-4dd7-bd9d-62d0b3bbc19f",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 4,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_rent",
+        "source_conditions": {
+          "category": "rent",
+          "mcc_list": [
+            6513
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "a63876e0-ab83-4efc-a61b-d83875e2d6f4",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "d52c471a-63f4-426b-83b7-c2b11cd8c965",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 5,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_wallet",
+        "source_conditions": {
+          "category": "wallet",
+          "mcc_list": [
+            6540,
+            6541
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "34cc38a2-e903-41bb-9c7a-5df0b00cff5a",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "f0a854bf-7d06-4de7-bbde-33406144fa03",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 6,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_education",
+        "source_conditions": {
+          "category": "school_and_educational_services",
+          "mcc_list": [
+            8211,
+            8220,
+            8241,
+            8244,
+            8249,
+            8299
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "b5950f92-22a0-4bac-a784-968a0344c60d",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "842fef4d-acb3-4fea-b397-91cbd656a901",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 7,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_jewellery",
+        "source_conditions": {
+          "category": "jewellery",
+          "mcc_list": [
+            5094,
+            5944
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "f706264c-9e77-4550-8e0f-e288d5a1e0e1",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "ae6cd664-7f68-430d-aa9c-4780b1b87611",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 8,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_railways",
+        "source_conditions": {
+          "category": "railways",
+          "mcc_list": [
+            4011,
+            4112
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "f706264c-9e77-4550-8e0f-e288d5a1e0e1",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "b15a0e93-a614-4bf6-9f3e-d45988327ea8",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 11,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_digital_gaming",
+        "source_conditions": {
+          "mcc_list": [
+            5816,
+            7993,
+            7994
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "f706264c-9e77-4550-8e0f-e288d5a1e0e1",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "f6edfc8d-fe60-4240-ad57-5e4b17825a38",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 12,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_tolls",
+        "source_conditions": {
+          "mcc_list": [
+            4784
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "f706264c-9e77-4550-8e0f-e288d5a1e0e1",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "f0669e86-0b1f-4c02-b170-4c0904de28c8",
+      "rail": null,
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 13,
+      "conditions": {
+        "channel_type": "all",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "exclude_government",
+        "source_conditions": {
+          "mcc_list": [
+            9222,
+            9311,
+            9402
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "47e67220-d907-415c-b162-2fcb35de1c77",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2026-04-01",
+      "merchant_pattern": null
+    },
+    {
+      "id": "165c1771-29bb-4fd4-bb7d-79d6a655e286",
+      "rail": "online",
+      "rate": 0.0,
+      "unit": "cashback_percent",
+      "notes": null,
+      "priority": 14,
+      "conditions": {
+        "channel_type": "third_party_education_payment",
+        "cap_reference": null,
+        "evaluation_type": "exclusion",
+        "source_local_id": "education_direct_payment",
+        "source_conditions": {
+          "channel": "third_party_apps",
+          "mcc_list": [
+            8211,
+            8220,
+            8241,
+            8244,
+            8249,
+            8299
+          ]
+        }
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": "b5950f92-22a0-4bac-a784-968a0344c60d",
+      "max_txn_inr": null,
+      "min_txn_inr": null,
+      "effective_to": null,
+      "effective_from": "2025-11-01",
+      "merchant_pattern": null
+    }
+  ],
+  "cap_rules": [
+    {
+      "id": "965f404a-d776-4841-9314-2860f19c492c",
+      "label": "Effective 1 April 2026, online 5% cashback is capped at \u20b92,000 per statement cycle.",
+      "period": "statement_cycle",
+      "measure": "reward_value",
+      "cap_value": 2000.0,
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": null,
+      "benefit_kind": null,
+      "post_cap_rate": 0.0,
+      "post_cap_unit": null,
+      "resets_on_day": null,
+      "reward_rule_id": "368babd1-6f00-4839-9fb1-1c71ac1fc5c6"
+    },
+    {
+      "id": "2687fb1a-6a73-46bd-9db4-d342ffe66a20",
+      "label": "Effective 1 April 2026, offline 1% cashback is capped at \u20b92,000 per statement cycle.",
+      "period": "statement_cycle",
+      "measure": "reward_value",
+      "cap_value": 2000.0,
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": null,
+      "benefit_kind": null,
+      "post_cap_rate": 0.0,
+      "post_cap_unit": null,
+      "resets_on_day": null,
+      "reward_rule_id": "6e5a14a8-d366-4879-8d7c-dec6eb5b486f"
+    },
+    {
+      "id": "1579db8f-5752-45a6-8a86-640340109ed9",
+      "label": "Effective 1 April 2026, maximum total combined cashback earned per statement cycle is capped at \u20b94,000.",
+      "period": "statement_cycle",
+      "measure": "reward_value",
+      "cap_value": 4000.0,
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "category_id": null,
+      "benefit_kind": null,
+      "post_cap_rate": 0.0,
+      "post_cap_unit": null,
+      "resets_on_day": null,
+      "reward_rule_id": null
+    }
+  ],
+  "milestone_rules": [],
+  "fee_waiver_rules": [
+    {
+      "id": "6474e724-a0f5-46ef-b2ca-43eecfc48116",
+      "notes": "Renewal fee is reversed when annual spends in the preceding card anniversary year reach \u20b92,00,000 or more.",
+      "period": "annual",
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "waives_fee_inr": 999.0,
+      "excluded_categories": [
+        "a63876e0-ab83-4efc-a61b-d83875e2d6f4",
+        "34cc38a2-e903-41bb-9c7a-5df0b00cff5a"
+      ],
+      "threshold_spend_inr": 200000.0
+    }
+  ],
+  "benefits": [
+    {
+      "id": "8f7c741f-8031-4160-af14-b6b4a95b8eb0",
+      "kind": "fuel_surcharge",
+      "label": "1% fuel surcharge waiver",
+      "conditions": {
+        "evaluation_engine": {
+          "perks": [
+            "1% fuel surcharge waiver on transactions between \u20b9500 and \u20b93,000"
+          ],
+          "conditions": {
+            "merchant_scope": "all petrol pumps in India",
+            "statement_cycle_cap_inr": 100,
+            "transaction_amount_max_inr": 3000,
+            "transaction_amount_min_inr": 500
+          },
+          "benefit_calculation": {
+            "waiver_percent": 1,
+            "maximum_waiver_inr_per_statement_cycle": 100
+          }
+        },
+        "source_category_id": "fuel"
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "description": "Sponsor: SBI Card",
+      "quota_count": null,
+      "quota_period": "statement_cycle",
+      "network_program": null,
+      "value_estimate_inr": 100.0
+    },
+    {
+      "id": "26679581-76f2-43b1-b4eb-808b162ad78f",
+      "kind": "other",
+      "label": "Automatic cashback statement credit",
+      "conditions": {
+        "evaluation_engine": {
+          "perks": [
+            "Cashback is automatically credited to the SBI Card account",
+            "Cashback does not expire while the account remains active and in good standing"
+          ],
+          "conditions": {
+            "eligible_card_account": "valid and in good standing"
+          },
+          "benefit_calculation": {
+            "credit_timing": "within two working days of statement generation"
+          }
+        },
+        "source_category_id": "rewards"
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "description": "Sponsor: SBI Card",
+      "quota_count": null,
+      "quota_period": null,
+      "network_program": null,
+      "value_estimate_inr": null
+    },
+    {
+      "id": "c06acadb-26f8-4b36-bd56-a2638690aef4",
+      "kind": "other",
+      "label": "Visa Global Customer Assistance Services (GCAS)",
+      "conditions": {
+        "evaluation_engine": {
+          "perks": [
+            "24x7 emergency card replacement and emergency cash disbursement assistance abroad"
+          ],
+          "conditions": {
+            "scope": "emergency assistance for lost or stolen card while travelling internationally"
+          },
+          "benefit_calculation": "N/A"
+        },
+        "source_category_id": "travel_assistance"
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "description": "Sponsor: Visa",
+      "quota_count": null,
+      "quota_period": null,
+      "network_program": "visa_signature",
+      "value_estimate_inr": null
+    },
+    {
+      "id": "db890885-fdc3-4088-855a-e6b25e6bdb4b",
+      "kind": "other",
+      "label": "Fraud Liability",
+      "conditions": {
+        "coverage_usd": null
+      },
+      "created_at": "2026-08-25T02:47:19.755513+05:30",
+      "description": null,
+      "quota_count": null,
+      "quota_period": null,
+      "network_program": null,
+      "value_estimate_inr": null
+    }
+  ],
+  "forex": {
+    "id": "14e0fd70-e733-44e6-a353-b7d87e4fb3b0",
+    "created_at": "2026-08-25T02:47:19.755513+05:30",
+    "waiver_notes": null,
+    "gst_on_markup": true,
+    "markup_percent": 3.5
+  },
+  "fuel": {
+    "id": "5ab10629-c833-4c32-8b30-4bd69f4b6dc3",
+    "created_at": "2026-08-25T02:47:19.755513+05:30",
+    "max_txn_inr": 3000.0,
+    "min_txn_inr": 500.0,
+    "waiver_percent": 1.0,
+    "surcharge_percent": 1.0,
+    "monthly_waiver_cap": 100.0
+  },
+  "billing_cycle": {
+    "id": "65c0356d-b343-4aec-9f2a-4b3ba9b61c0a",
+    "cycle_notes": null,
+    "grace_period_days": 3
+  },
+  "redemption_options": [
+    {
+      "id": "c0f17350-93a8-4013-b2ae-2a1156d20e27",
+      "notes": "Redemption fee: \u20b90",
+      "method": "statement_credit",
+      "min_points": null,
+      "program_name": "automatic_statement_credit",
+      "last_checked_at": null,
+      "value_per_point_inr": 1.0
+    }
+  ],
+  "base_reward_unit": null,
+  "base_reward_rate": null,
+  "extended_data": {
+    "schema_version": "5.0.0",
+    "additional_data": {
+      "items": [
+        {
+          "key": "cashback_caps_effective_2026_04_01",
+          "source": "https://www.sbicard.com/cashback-revised\n",
+          "description": "From 1 April 2026, online cashback is capped at \u20b92,000 per statement cycle, offline/POS cashback is capped at \u20b92,000 per statement cycle, and aggregate cashback is capped at \u20b94,000 per statement cycle."
+        },
+        {
+          "key": "cashback_posting_basis",
+          "source": "https://www.sbicard.com/en/faq/cashback-sbi-card-faq.page\n",
+          "description": "Cashback accrues on the transaction posting/settlement date rather than the effective transaction date, using the cashback structure applicable when the transaction posts."
+        },
+        {
+          "key": "cashback_forfeiture_and_closure",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-tnc-booklet.pdf\n",
+          "description": "If the card is voluntarily closed, earned cashback may be redeemed within 30 days of closure; otherwise it lapses. On cancellation for another reason, earned cashback is forfeited. Cashback is also forfeited following more than 90 days of payment delinquency, settlement of outstanding dues, fraud determined by SBICPSL, or specified regulatory events."
+        },
+        {
+          "key": "cashback_network_identification",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-tnc-booklet.pdf\n",
+          "description": "Online transactions are identified using online indicators sent by card networks and the acquirer; transactions not categorized as online are treated as offline. Network MCC definitions may change."
+        },
+        {
+          "key": "education_payment_fee_detail",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "From 1 November 2025, education payments through third-party apps such as CRED, Cheq and MobiKwik attract a 1% fee. Direct payments to colleges or schools through their websites or POS machines do not attract this fee. Education MCCs identified on a best-effort basis are 8211, 8220, 8241, 8244, 8249 and 8299."
+        },
+        {
+          "key": "wallet_load_fee_detail",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "From 1 November 2025, a 1% fee applies to every wallet load transaction exceeding \u20b91,000. Wallet transactions are identified under MCCs 6540 and 6541 on a best-effort basis."
+        },
+        {
+          "key": "rent_payment_fee_detail",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "All transactions towards payment of rent through a merchant attract a \u20b9199 processing fee plus applicable taxes. MCC 6513 is used to identify rent transactions on a best-effort basis."
+        },
+        {
+          "key": "utility_payment_fee_detail",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "If aggregate utility payments in a billing cycle exceed \u20b950,000, a 1% fee applies to the total utility payments in that billing cycle. Utility payments are identified under MCC 4900 on a best-effort basis."
+        },
+        {
+          "key": "cash_advance_limit_detail",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "Cash advance is part of the overall credit limit. The MITC states a maximum cash withdrawal of \u20b915,000 per day on MCC 6011 (ATM withdrawals), subject to cash advance limit availability; cash advance is unavailable for MCC 6010 over-the-counter cash disbursement. The general schedule also specifies cash advance up to 80% of the credit limit."
+        },
+        {
+          "key": "cash_payment_fee",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "Cash payment of SBI credit card dues at select SBI branches carries a \u20b9250 service fee plus applicable taxes."
+        },
+        {
+          "key": "balance_transfer",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-tnc-booklet.pdf\n",
+          "description": "Balance Transfer facility can transfer another bank's credit-card outstanding. The Cashback SBI Card terms state a minimum transfer amount of \u20b95,000 and maximum of up to 75% of available credit limit, with processing fee as applicable. A 60-day balance transfer option is shown at 0% interest and a 180-day option at 1.7% per month, with applicable processing fee and restrictions."
+        },
+        {
+          "key": "minimum_finance_charge",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "Minimum finance charge is \u20b925 per applicable transaction/cash advance when revolving finance charges apply, exclusive of applicable taxes."
+        },
+        {
+          "key": "payment_dishonor_fee",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "Payment dishonor fee is 2% of the payment amount subject to a minimum of \u20b9500."
+        },
+        {
+          "key": "late_payment_additional_charge",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "An additional \u20b9100 late-payment charge is levied when Minimum Amount Due is missed by the due date for two consecutive cycles, continuing each payment cycle until MAD is cleared."
+        },
+        {
+          "key": "cashback_customer_service",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "SBI Card helpline numbers published in the MITC are 39 02 02 02 with the local STD prefix and 1860 180 1290."
+        },
+        {
+          "key": "contactless_operation",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-tnc-booklet.pdf\n",
+          "description": "The Cashback SBI Card is issued on the Visa network. Contactless transactions do not require a PIN up to \u20b95,000 per transaction; transactions above \u20b95,000 require chip insert/swipe and PIN."
+        },
+        {
+          "key": "interest_free_credit_period",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n",
+          "description": "The general SBI Card MITC states an interest-free credit period of 20\u201350 days for retail purchases when the previous month's outstanding balance is paid in full. This is distinct from the separate 3-day payment grace period."
+        },
+        {
+          "key": "payment_grace_period",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf\n",
+          "description": "A 3-day grace period is allowed after the payment due date where payments are not overdue from previous billing cycles; this accommodates payment-processing time."
+        },
+        {
+          "key": "lounge_usage_charges",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf\n",
+          "description": "The general SBI Card MITC states that airport lounge visits in India through international lounge access programs such as Priority Pass are chargeable up to USD 27 per visit plus applicable taxes; outside India, the same charge applies after exhaustion of any complimentary visits. No current complimentary lounge entitlement is included for CASHBACK SBI Card in the current product-page benefits."
+        }
+      ],
+      "_notes": "Official source-supported data that cannot be represented faithfully by the universal schema without conflation or loss of detail."
+    },
+    "addon_card_rules": {
+      "min_age_years": 18,
+      "max_addon_cards": 2,
+      "fee_per_card_inr": 0,
+      "lounge_quota_shared": "N/A",
+      "reward_points_pooled": "N/A",
+      "separate_priority_pass": "N/A"
+    },
+    "eligibility_engine": {
+      "notes": "SBI Card does not publish exact salary, ITR or CIBIL thresholds for this card in official product/MITC material. Primary cardholders must be aged 21 to 65 years. Credit limits and underwriting are determined using internal SBICPSL criteria.",
+      "rules": [
+        {
+          "field": "primary_applicant_age_years",
+          "value": 21,
+          "operator": "gte"
+        },
+        {
+          "field": "primary_applicant_age_years",
+          "value": 65,
+          "operator": "lte"
+        }
+      ],
+      "evaluation_mode": "guideline_only",
+      "required_documents": [
+        "identity_proof_pan",
+        "address_proof",
+        "income_proof_salary_slip_or_itr"
+      ],
+      "community_benchmarks": {
+        "min_cibil_score": 750,
+        "min_annual_itr_inr": 360000,
+        "min_net_monthly_salary_inr": 30000,
+        "is_contractually_enforceable": false,
+        "min_existing_issuer_credit_limit_inr": null
+      },
+      "processing_time_days": 14
+    },
+    "card_product_extras": {
+      "card_tier": "mid",
+      "bin_ranges": [],
+      "form_factors": [
+        "physical_plastic",
+        "nfc_contactless"
+      ],
+      "network_tier": "Signature",
+      "application_mode": "open",
+      "data_source_tier": "issuer_mitc_plus_manual_audit",
+      "tokenization_support": [
+        "google_pay",
+        "sbi_card_pay",
+        "samsung_pay"
+      ]
+    },
+    "statement_and_late_fees": {
+      "grace_period_days": 3,
+      "late_payment_slabs": [
+        {
+          "fee_inr": 0,
+          "max_balance_inr": 100,
+          "min_balance_inr": 0
+        },
+        {
+          "fee_inr": 100,
+          "max_balance_inr": 500,
+          "min_balance_inr": 100.01
+        },
+        {
+          "fee_inr": 500,
+          "max_balance_inr": 1000,
+          "min_balance_inr": 500.01
+        },
+        {
+          "fee_inr": 750,
+          "max_balance_inr": 10000,
+          "min_balance_inr": 1000.01
+        },
+        {
+          "fee_inr": 950,
+          "max_balance_inr": 25000,
+          "min_balance_inr": 10000.01
+        },
+        {
+          "fee_inr": 1100,
+          "max_balance_inr": 50000,
+          "min_balance_inr": 25000.01
+        },
+        {
+          "fee_inr": 1300,
+          "max_balance_inr": null,
+          "min_balance_inr": 50000.01
+        }
+      ],
+      "minimum_amount_due_mad": {
+        "components": [
+          "100% of GST",
+          "100% of EMI amount",
+          "100% of Fees/Charges",
+          "100% of Finance Charges",
+          "Overlimit Amount, if any",
+          "2% of Remaining Balance Outstanding",
+          "\u20b9200 minimum floor where applicable"
+        ],
+        "calculation_mode": "max"
+      },
+      "grace_period_void_on_revolving_balance": true
+    },
+    "fees_and_surcharges_extra": {
+      "apr": {
+        "annual_interest_rate_percent": 45,
+        "monthly_interest_rate_percent": 3.75
+      },
+      "emi_charges": {
+        "gst_applicable": true,
+        "foreclosure_charge_percent": 3,
+        "post_purchase_emi_processing_fee_inr": 199,
+        "merchant_instant_emi_processing_fee_inr": 199
+      },
+      "cash_advance": {
+        "max_limit_percent": 80,
+        "daily_interest_percent": 0.1233,
+        "atm_transaction_fee_min_inr": 500,
+        "atm_transaction_fee_percent": 2.5,
+        "interest_applicable_from_day_one": true
+      },
+      "banking_penalties": {
+        "overlimit_charge": {
+          "fee_percent": 2.5,
+          "min_fee_inr": 600,
+          "gst_applicable": true
+        },
+        "cheque_bounce_charge_inr": 500,
+        "auto_debit_bounce_charge_inr": 500
+      },
+      "category_surcharges": [
+        {
+          "mcc_list": [
+            6513
+          ],
+          "category_id": "rent",
+          "fee_percent": 0,
+          "effective_to": null,
+          "effective_from": "2024-12-01",
+          "gst_applicable": true,
+          "trigger_condition": "Flat processing fee of \u20b9199 plus applicable taxes applies to all rent payment transactions identified under MCC 6513.",
+          "threshold_spend_inr": null
+        },
+        {
+          "mcc_list": [
+            4900
+          ],
+          "category_id": "utility",
+          "fee_percent": 1,
+          "effective_to": null,
+          "effective_from": "2024-12-01",
+          "gst_applicable": true,
+          "trigger_condition": "If aggregate utility payments in a billing cycle exceed \u20b950,000, 1% is charged on the total utility payments in that billing cycle.",
+          "threshold_spend_inr": 50000
+        },
+        {
+          "mcc_list": [
+            8211,
+            8220,
+            8241,
+            8244,
+            8249,
+            8299
+          ],
+          "category_id": "education",
+          "fee_percent": 1,
+          "effective_to": null,
+          "effective_from": "2025-11-01",
+          "gst_applicable": true,
+          "trigger_condition": "From 1 November 2025, 1% fee applies to education payments made through third-party apps such as CRED, Cheq and MobiKwik. Direct payments to colleges or schools through their websites or POS machines do not attract this fee.",
+          "threshold_spend_inr": null
+        },
+        {
+          "mcc_list": [
+            6540,
+            6541
+          ],
+          "category_id": "wallet",
+          "fee_percent": 1,
+          "effective_to": null,
+          "effective_from": "2025-11-01",
+          "gst_applicable": true,
+          "trigger_condition": "From 1 November 2025, a 1% fee applies to every wallet load transaction exceeding \u20b91,000.",
+          "threshold_spend_inr": 1000
+        }
+      ],
+      "reward_redemption_fee": {
+        "notes": "CASHBACK SBI Card cashback is automatically credited to the SBI Card account within two working days of statement generation and is adjusted automatically in the next statement; there is no manual points redemption fee for the automatic cashback mechanism.",
+        "fee_inr": 0,
+        "gst_applicable": false,
+        "exempted_channels": [
+          "automatic_card_cashback_statement_credit"
+        ]
+      },
+      "dynamic_currency_conversion_dcc": {
+        "fee_percent": 3.5,
+        "gst_applicable": true,
+        "trigger_condition": "Charged on transactions of INR 1,000 or more carried out in Indian currency at an international location or at merchants located in India but registered overseas."
+      }
+    },
+    "brand_specific_voucher_caps": [],
+    "dynamic_promotions_registry": []
+  }
+}

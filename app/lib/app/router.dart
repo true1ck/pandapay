@@ -19,6 +19,7 @@ import '../features/auth/guest_migration.dart';
 import '../features/auth/login_screen.dart';
 import '../features/cards/benefits_cheat_sheet_screen.dart';
 import '../features/cards/card_detail_screen.dart';
+import '../features/cards/discover_new_cards_screen.dart';
 import '../features/cards/edit_card_screen.dart';
 import '../features/cards/my_cards_screen.dart';
 import '../features/cards/points_expiry_screen.dart';
@@ -83,6 +84,7 @@ abstract final class AppRoute {
   static const pointsExpiry = '/cards/points-expiry';
   static const reportWrongData = '/cards/report-wrong-data';
   static const requestNewCard = '/cards/request-new-card';
+  static const discoverNewCards = '/cards/discover';
 
   /// Group D (Transactions) net-new screens. transactionDetail is
   /// deep-linkable per ui-spec §1 ("transaction detail" explicitly named).
@@ -529,6 +531,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             ReportWrongDataScreen(cardProductId: state.uri.queryParameters['cardProductId']!),
       ),
       GoRoute(path: AppRoute.requestNewCard, builder: (context, state) => const RequestNewCardScreen()),
+      // Same static-before-dynamic ordering requirement as pointsExpiry etc.
+      // above — must stay before cardDetail ('/cards/:id').
+      GoRoute(
+        path: AppRoute.discoverNewCards,
+        builder: (context, state) => const DiscoverNewCardsScreen(),
+      ),
       GoRoute(
         path: AppRoute.cardDetail,
         builder: (context, state) => CardDetailScreen(userCardId: state.pathParameters['id']!),

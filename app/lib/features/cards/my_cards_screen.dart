@@ -118,6 +118,11 @@ class MyCardsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(width: AppSpace.sm),
                     IconButton(
+                      tooltip: 'Cards worth getting',
+                      icon: const Icon(Icons.auto_awesome_outlined, color: BambooInk.ink500),
+                      onPressed: () => context.push(AppRoute.discoverNewCards),
+                    ),
+                    IconButton(
                       tooltip: 'Benefits cheat sheet',
                       icon: const Icon(Icons.workspace_premium_outlined, color: BambooInk.ink500),
                       onPressed: () => context.push(AppRoute.benefitsCheatSheet),
