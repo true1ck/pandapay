@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -17,6 +18,7 @@ import '../data/card_overrides_repository.dart';
 import '../data/card_requests_api.dart';
 import '../data/catalogue_repository.dart';
 import '../data/consents_api.dart';
+import '../data/device_identity.dart';
 import '../data/devices_api.dart';
 import '../data/emergency_contacts_repository.dart';
 import '../data/import_repository.dart';
@@ -27,6 +29,7 @@ import '../data/local/transaction_outbox_repository.dart';
 import '../data/local_user_cards_repository.dart';
 import '../data/merchant_search_repository.dart';
 import '../data/needs_review_repository.dart';
+import '../data/notification_preferences_repository.dart';
 import '../data/override_resolver.dart';
 import '../data/partner_apply_repository.dart';
 import '../data/recovery_api.dart';
@@ -38,6 +41,8 @@ import '../data/user_settings_api.dart';
 import '../features/geofence/geofence_monitor_service.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
+import '../features/notifications/notification_gate.dart';
+import '../features/notifications/notification_triggers.dart';
 import '../features/settings/settings_sync.dart';
 import 'env.dart';
 
@@ -53,10 +58,24 @@ final authApiProvider = Provider<AuthApi>((ref) => AuthApi(authBaseUrl: _authBas
 
 final tokenStoreProvider = FutureProvider<TokenStore>((ref) => TokenStore.load());
 
+/// This install's stable device identifier — see device_identity.dart's
+/// own doc-comment for why this exists (every install used to send the
+/// same literal `'app-mobile'` string, so there was nothing real to
+/// generate/persist/compare here before).
+final localDeviceIdProvider = FutureProvider<String>((ref) => DeviceIdentity().localDeviceId());
+
 /// The signed-in access token, or null when signed out. Seeded on startup
 /// by sessionInitProvider from a stored refresh token; login_screen.dart
 /// persists both tokens on a fresh OTP sign-in.
 final accessTokenProvider = StateProvider<String?>((ref) => null);
+
+/// Whether this app PROCESS has already passed biometric_lock_screen.dart's
+/// challenge. Deliberately plain in-memory state, never persisted — a
+/// fresh cold start must always re-lock when the toggle
+/// (account_settings_screen.dart's biometricLockProvider) is on, matching
+/// its own copy: "Require Face/Touch ID to open the app," not "...once per
+/// install."
+final biometricUnlockedProvider = StateProvider<bool>((ref) => false);
 
 final profileApiProvider = Provider<ProfileApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
@@ -926,6 +945,23 @@ final unreadNotificationCountProvider = Provider<int>((ref) {
   return ref.watch(notificationsProvider).valueOrNull?.unreadCount ?? 0;
 });
 
+/// Task H3 (moved from notification_settings_screen.dart, which owns the
+/// write side): same null-when-signed-out pattern as
+/// userCardsRepositoryProvider above. notification_gate.dart (Part B) reads
+/// these directly — it needs the exact preferences this screen shows, not a
+/// second copy of them.
+final notificationPreferencesRepositoryProvider = Provider<NotificationPreferencesRepository?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return NotificationPreferencesRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+final notificationPreferencesProvider = FutureProvider<NotificationPreferences?>((ref) async {
+  final repo = ref.watch(notificationPreferencesRepositoryProvider);
+  if (repo == null) return null;
+  return repo.fetch();
+});
+
 /// Design 25's Invite friends payload. Null when signed out — an invite
 /// code belongs to an account.
 final referralsProvider = FutureProvider<ReferralInfo?>((ref) async {
@@ -1298,12 +1334,36 @@ final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((r
   return HttpNearbyMerchantsRepository(baseUrl: _apiBaseUrl);
 });
 
+/// UA-8.3 (B1): one FlutterLocalNotificationsPlugin instance for the whole
+/// app. Previously GeofenceMonitorService was the only caller and
+/// constructed its own — fine when it was the only notification path, but
+/// NotificationGate (B2) needs to show OS notifications too, and two
+/// independent plugin instances means two independent (and possibly
+/// racing) `initialize()` calls registering the same Android channel.
+final localNotificationsPluginProvider = Provider<FlutterLocalNotificationsPlugin>((ref) {
+  return FlutterLocalNotificationsPlugin();
+});
+
+/// UA-8.3 (B2): the single choke point every real (OS-level) notification
+/// must pass through — see notification_gate.dart's own doc-comment for
+/// what it enforces and why POST /notifications alone isn't enough.
+final notificationGateProvider = Provider<NotificationGate>((ref) {
+  return NotificationGate(ref: ref, notifications: ref.watch(localNotificationsPluginProvider));
+});
+
 /// Background geofence monitor — one instance for the app's lifetime, kept
 /// alive by `ref.keepAlive()` since starting/stopping it is a deliberate
 /// user action (a settings toggle), not something that should reset on
 /// every rebuild of whatever screen happens to read it.
 final geofenceMonitorServiceProvider = Provider<GeofenceMonitorService>((ref) {
-  final service = GeofenceMonitorService(repo: ref.watch(nearbyMerchantsRepositoryProvider));
+  final service = GeofenceMonitorService(
+    repo: ref.watch(nearbyMerchantsRepositoryProvider),
+    notifications: ref.watch(localNotificationsPluginProvider),
+    // UA-8.3 (B2): closes the one real spec violation this pass found —
+    // _notify() used to call flutter_local_notifications directly, bypassing
+    // category_location, quiet hours, and the daily cap entirely.
+    gate: ref.watch(notificationGateProvider),
+  );
   ref.onDispose(() => service.stop());
   return service;
 });
@@ -1313,6 +1373,32 @@ final geofenceMonitorServiceProvider = Provider<GeofenceMonitorService>((ref) {
 /// call happens in the widget (needs a BuildContext for permission-denied
 /// messaging), this just tracks the resulting on/off state for display.
 final geofenceMonitoringEnabledProvider = StateProvider<bool>((ref) => false);
+
+/// UA-8.3 (B3): the trigger side — see notification_triggers.dart's own
+/// doc-comment for what it checks and why this is the realistic ceiling
+/// for a client-only (no push/cron backend) notification system.
+final notificationTriggerRunnerProvider = Provider<NotificationTriggerRunner>((ref) {
+  return NotificationTriggerRunner(ref);
+});
+
+/// Runs the B3 trigger sweep on app foreground/resume, and whenever
+/// userCardsProvider changes — the one invalidation point every
+/// transaction-affecting write in this app already calls through (29 call
+/// sites as of this pass), which is the closest thing to "after a
+/// transaction syncs" this app can observe without a dedicated hook at
+/// every entry point. Read once from _AppShell, same pattern as
+/// analyticsLifecycleProvider just above sessionKeepAliveProvider's own
+/// wiring in router.dart.
+final notificationTriggerLifecycleProvider = Provider<void>((ref) {
+  final runner = ref.read(notificationTriggerRunnerProvider);
+
+  final listener = AppLifecycleListener(onResume: () => runner.runAll());
+  ref.onDispose(listener.dispose);
+
+  ref.listen<AsyncValue<List<UserCard>>>(userCardsProvider, (previous, next) {
+    if (next.hasValue) runner.runAll();
+  });
+});
 
 final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {
   return BestCardForWidget(engine: ref.watch(recommendationEngineProvider));

@@ -8,6 +8,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/import_repository.dart';
+import '../settings/feedback_support_screen.dart';
 
 /// ui-spec.md F5 Sync & Backup.
 ///
@@ -159,9 +160,18 @@ class SyncBackupScreen extends ConsumerWidget {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<void> _confirmRestore(BuildContext context) async {
-    // Destructive action — double-confirmed, no shortcut, per spec. No real
-    // restore engine is wired up this pass (matches the rest of this
-    // screen's scope-down); this only demonstrates the confirmation UX.
+    // Destructive action — double-confirmed, no shortcut, per spec. There
+    // is deliberately no SELF-SERVICE restore here, matching this screen's
+    // own "Back up now" precedent above: a real per-user restore reads
+    // from the full ops-level pg_dump backup (db/scripts/restore_drill.sh)
+    // and would overwrite the ENTIRE backing store, not just this user's
+    // rows — genuinely ops-mediated, not something a phone should trigger
+    // itself, the same reasoning "Back up now" was removed for rather than
+    // left faking success. What this WAS missing was any path forward at
+    // all after confirming — routing to Feedback & Support (same screen
+    // A6's "trouble receiving my code?" link already prefills) is the
+    // honest version: still no fake restore, but a real person now
+    // receives the request instead of it dead-ending in a snackbar.
     final firstConfirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -195,8 +205,13 @@ class SyncBackupScreen extends ConsumerWidget {
       ),
     );
     if (secondConfirm == true && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No restore engine is wired up this pass — nothing was changed.')),
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const FeedbackSupportScreen(
+            prefilledKind: 'bug',
+            prefilledMessage: 'I need help restoring my data from a backup.',
+          ),
+        ),
       );
     }
   }

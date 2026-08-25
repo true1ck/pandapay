@@ -62,9 +62,10 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
       _error = null;
     });
     try {
+      final deviceId = await ref.read(localDeviceIdProvider.future);
       final tokens = await ref
           .read(authApiProvider)
-          .verifyEmailOtp(_emailController.text.trim(), _codeController.text.trim(), 'app-mobile');
+          .verifyEmailOtp(_emailController.text.trim(), _codeController.text.trim(), deviceId);
       final store = await ref.read(tokenStoreProvider.future);
       await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;

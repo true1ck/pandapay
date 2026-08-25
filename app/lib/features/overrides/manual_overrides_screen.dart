@@ -12,12 +12,14 @@ import '../../data/user_cards_repository.dart' show UserCard;
 /// B8 ("was missing" per ui-spec.md): view and manage every "always use X
 /// here" rule.
 ///
-/// Offline behavior: NOT supported. Listing, creating, editing/toggling,
-/// and deleting an override all require a live API call — there is no
-/// local persistence layer for owner-scoped data anywhere in this app yet
-/// (same as every other user_cards/transactions screen today), so this
-/// screen simply surfaces [ErrorState]/a snackbar on failure rather than
-/// silently hanging or pretending to work offline.
+/// Offline behavior: PARTIAL. Listing and creating still require a live API
+/// call (creating is a new row — pandapay.sync_fields_for('card_overrides'),
+/// migration 0034, deliberately refuses inserts over sync, same reasoning
+/// as everywhere else in this app a "create" can't be queued). Toggling
+/// enabled/disabled and editing the card/note of an *existing* override
+/// now queue via SyncQueue when offline (same pattern
+/// edit_transaction_screen.dart established) — both are plain field updates
+/// on a row that already exists. Deleting stays online-only.
 class ManualOverridesScreen extends ConsumerWidget {
   const ManualOverridesScreen({super.key});
 
@@ -179,6 +181,25 @@ class _OverrideTile extends ConsumerWidget {
       ref.invalidate(cardOverridesProvider);
       ref.invalidate(rankedRecommendationsProvider);
     } catch (err) {
+      // is_enabled is a plain field update on a row that already exists —
+      // pandapay.sync_fields_for('card_overrides') allows it, so this
+      // queues the same way edit_transaction_screen.dart's _save does.
+      final offline = ref.read(isOnlineProvider).valueOrNull == false;
+      if (offline) {
+        final queue = await ref.read(syncQueueProvider.future);
+        queue.enqueueUpdate(
+          entity: 'card_overrides',
+          entityId: rule.id,
+          fields: {'is_enabled': !rule.isEnabled},
+        );
+        ref.invalidate(pendingSyncCountProvider);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Saved offline — will sync when you reconnect.')),
+          );
+        }
+        return;
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
       }
@@ -470,6 +491,29 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
       ref.invalidate(rankedRecommendationsProvider);
       if (mounted) Navigator.of(context).pop();
     } catch (err) {
+      // user_card_id and reason_note are both plain field updates on a row
+      // that already exists — pandapay.sync_fields_for('card_overrides')
+      // allows both — so this queues the same way _toggle above does.
+      final offline = ref.read(isOnlineProvider).valueOrNull == false;
+      if (offline) {
+        final queue = await ref.read(syncQueueProvider.future);
+        queue.enqueueUpdate(
+          entity: 'card_overrides',
+          entityId: widget.rule.id,
+          fields: {
+            'user_card_id': _selectedUserCardId,
+            'reason_note': _noteController.text.trim(),
+          },
+        );
+        ref.invalidate(pendingSyncCountProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Saved offline — will sync when you reconnect.')),
+          );
+          Navigator.of(context).pop();
+        }
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
       }

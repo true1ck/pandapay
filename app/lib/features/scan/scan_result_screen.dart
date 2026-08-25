@@ -42,10 +42,16 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   late Money _amount;
   String? _selectedCategoryId;
   // "Wasn't accepted" — session-local only re-rank, see scope note above.
-  // No acceptance-data write endpoint exists in api/src/index.js today
-  // (same gap noted for Home's backup-card row), so tapping this only
-  // excludes the card from the in-memory ranked list for the rest of this
-  // scan session, never persisted.
+  // This is deliberate, not a missing wire-up: POST /acceptance-reports and
+  // AcceptanceReportsRepository DO exist and ARE used (payment_sent_screen.dart),
+  // but that screen's own doc-comment explains why it's the only honest place
+  // to ask — it fires right after the user confirms a payment actually went
+  // through, a fresh, high-confidence, first-hand signal. This button fires
+  // BEFORE any payment attempt, as a lower-confidence "skip this card, I
+  // don't want to try it here" action; writing it to the same shared
+  // crowdsourced acceptance dataset would mix pre-attempt guesses in with
+  // real post-payment confirmations. So it only excludes the card from the
+  // in-memory ranked list for the rest of this scan session, never persisted.
   final Set<String> _locallyRejectedCardIds = {};
 
   @override

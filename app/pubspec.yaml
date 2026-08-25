@@ -205,6 +205,23 @@ dependencies:
   pandapay_lints:
     path: ../packages/pandapay_lints
   alchemist: ^0.14.0
+  # account_settings_screen.dart's "Biometric lock" toggle previously only
+  # persisted a SharedPreferences bool with nothing reading it — this is
+  # what actually gates app-open (biometric_lock_screen.dart), same
+  # verification-in-a-sandbox caveat as mobile_scanner/geolocator above.
+  local_auth: ^3.0.2
+  local_auth_platform_interface: ^1.1.0
+  # device_identity.dart: login_screen.dart/account_recovery_screen.dart both
+  # sent the literal string 'app-mobile' as this account's device_id at
+  # OTP-verify — every install of the app was therefore the SAME
+  # "device" server-side (user_devices' UNIQUE(user_id, device_identifier)
+  # means a second phone signing in overwrote the first's row instead of
+  # registering separately), and it's exactly why
+  # linked_devices_screen.dart could never highlight "this device" — there
+  # was no real per-install identifier to compare against. Was already a
+  # transitive dependency; promoted to direct since device_identity.dart
+  # now uses it on purpose.
+  uuid: ^4.6.0
 flutter:
 
   # The following line ensures that the Material Icons font is

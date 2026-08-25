@@ -53,6 +53,8 @@ import '../features/scan/scan_result_screen.dart';
 import '../features/scan/upi_qr_scanner_screen.dart';
 import '../features/settings/settings_sync.dart';
 import '../features/sync/sync_engine.dart';
+import '../features/settings/account_settings_screen.dart' show biometricLockProvider;
+import '../features/system/biometric_lock_screen.dart';
 import '../features/system/forced_upgrade_screen.dart';
 import '../features/system/maintenance_screen.dart';
 import '../features/tools/emergency_card_info_screen.dart';
@@ -147,6 +149,13 @@ abstract final class AppRoute {
   static const maintenance = '/maintenance';
   static const forceUpgrade = '/force-upgrade';
 
+  /// Enforcement side of account_settings_screen.dart's "Biometric lock"
+  /// toggle (biometric_lock_screen.dart) — same unbypassable-block shape as
+  /// maintenance/forceUpgrade above, checked just after the onboarding
+  /// guard (the toggle is unreachable, so never legitimately on, before
+  /// onboarding completes) and likewise NOT a member of [preOnboarding].
+  static const biometricLock = '/biometric-lock';
+
   /// A7/A9/A10 (implementation-plan's Group A completion): the rest of the
   /// onboarding chain after Account Choice, per ui-spec's real screen order
   /// A3 -> A7 -> A9 -> A10 -> A11 -> Home. A8 (Request Unsupported Card) is
@@ -194,6 +203,24 @@ class _RouterRefreshNotifier extends ChangeNotifier {
     // MaintenanceScreen's "Try again" button).
     ref.listen(appStatusProvider, (_, _) => notifyListeners());
     ref.listen(appVersionProvider, (_, _) => notifyListeners());
+    // Biometric lock — same reasoning as appStatusProvider above: once
+    // biometric_lock_screen.dart flips biometricUnlockedProvider to true,
+    // the redirect needs to re-run to actually navigate away from it. This
+    // is what lets that screen just update state rather than importing
+    // router.dart itself to call context.go (same pattern as
+    // MaintenanceScreen, which doesn't navigate on recovery either).
+    ref.listen(biometricUnlockedProvider, (_, _) => notifyListeners());
+    // biometricLockProvider itself must ALSO be listened to, not just
+    // biometricUnlockedProvider above: BiometricLockController starts at
+    // AsyncValue.loading() and only resolves once its SharedPreferences
+    // read completes. Without this, the redirect's very first evaluation
+    // on a cold start can run before that read finishes, read
+    // `.valueOrNull ?? false` as "off", and let the app straight through —
+    // and since nothing would ever re-trigger the redirect afterward, the
+    // lock stayed silently bypassed for that entire session. Confirmed on
+    // a real device: with the toggle already on from a previous session,
+    // a cold relaunch landed on Home, never on BiometricLockScreen.
+    ref.listen(biometricLockProvider, (_, _) => notifyListeners());
   }
 }
 
@@ -342,6 +369,20 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       if (!complete) {
         return AppRoute.preOnboarding.contains(path) ? null : AppRoute.welcome;
       }
+
+      // Biometric lock — checked only once onboarding is complete (the
+      // toggle lives in Account Settings, unreachable before then, so it
+      // can never legitimately be on for a pre-onboarding user). Same
+      // "process-lifetime, not persisted" note as biometricUnlockedProvider
+      // itself: a fresh cold start always re-locks; this redirect just
+      // enforces that by intercepting every route until it flips true.
+      final biometricLockOn = ref.read(biometricLockProvider).valueOrNull ?? false;
+      final biometricUnlocked = ref.read(biometricUnlockedProvider);
+      if (biometricLockOn && !biometricUnlocked) {
+        return path == AppRoute.biometricLock ? null : AppRoute.biometricLock;
+      }
+      if (path == AppRoute.biometricLock) return AppRoute.home; // already unlocked
+
       return AppRoute.preOnboarding.contains(path) ? AppRoute.home : null;
     },
     routes: [
@@ -566,6 +607,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoute.forceUpgrade,
         pageBuilder: (context, state) => const NoTransitionPage(child: ForcedUpgradeScreen()),
       ),
+      GoRoute(
+        path: AppRoute.biometricLock,
+        pageBuilder: (context, state) => const NoTransitionPage(child: BiometricLockScreen()),
+      ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         observers: [_ShellStackObserver()],
@@ -674,6 +719,10 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // Plan Phase 4 — pushes queued local edits and pulls other devices'
     // changes on sign-in and on regaining connectivity.
     ref.watch(syncLifecycleProvider);
+    // UA-8.3 (B3) — the trigger sweep for caps/milestones/fee-waivers/bills/
+    // points-expiry/monthly-report/needs-review notifications. Same "read
+    // once from the shell" reasoning as everything else on this list.
+    ref.watch(notificationTriggerLifecycleProvider);
     // Tell the user their guest wallet moved. Quietly relocating someone's
     // cards is nearly as disconcerting as losing them — and if any card
     // couldn't be carried over (its product was unpublished in the

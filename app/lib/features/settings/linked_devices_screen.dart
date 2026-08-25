@@ -91,6 +91,7 @@ class _LinkedDevicesScreenState extends ConsumerState<LinkedDevicesScreen> {
   @override
   Widget build(BuildContext context) {
     final devices = ref.watch(linkedDevicesProvider);
+    final localDeviceId = ref.watch(localDeviceIdProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -129,6 +130,7 @@ class _LinkedDevicesScreenState extends ConsumerState<LinkedDevicesScreen> {
                 return _DeviceTile(
                   device: device,
                   busy: _revoking == device.deviceIdentifier,
+                  isThisDevice: localDeviceId != null && device.deviceIdentifier == localDeviceId,
                   onRevoke: () => _confirmAndRevoke(device),
                 );
               },
@@ -143,9 +145,15 @@ class _LinkedDevicesScreenState extends ConsumerState<LinkedDevicesScreen> {
 class _DeviceTile extends StatelessWidget {
   final LinkedDevice device;
   final bool busy;
+  final bool isThisDevice;
   final VoidCallback onRevoke;
 
-  const _DeviceTile({required this.device, required this.busy, required this.onRevoke});
+  const _DeviceTile({
+    required this.device,
+    required this.busy,
+    required this.isThisDevice,
+    required this.onRevoke,
+  });
 
   /// Coarse on purpose. `last_seen_at` updates on every token refresh, so
   /// minute-level precision would imply a tracking fidelity the row does not
@@ -188,9 +196,24 @@ class _DeviceTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  device.displayName,
-                  style: BambooFonts.ui(14.5, weight: FontWeight.w500, color: BambooInk.ink900),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        device.displayName,
+                        style: BambooFonts.ui(14.5, weight: FontWeight.w500, color: BambooInk.ink900),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isThisDevice) ...[
+                      const SizedBox(width: AppSpace.xs),
+                      StatusPill(
+                        label: 'This device',
+                        foreground: BambooInk.onSlate,
+                        background: BambooInk.slate,
+                      ),
+                    ],
+                  ],
                 ),
                 if (subtitle.isNotEmpty)
                   Text(subtitle, style: BambooFonts.ui(12, color: BambooInk.ink500)),
@@ -203,7 +226,13 @@ class _DeviceTile extends StatelessWidget {
           ),
           if (busy)
             const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-          else
+          else if (!isThisDevice)
+            // Signing out THIS device isn't offered here — it would revoke
+            // the refresh token behind the very session doing the
+            // revoking, a confusing half-broken state (current access
+            // token still valid until it naturally expires, but no way to
+            // refresh it). Signing this device out has its own dedicated,
+            // unambiguous "Sign out" action elsewhere in the app.
             TextButton(onPressed: onRevoke, child: const Text('Sign out')),
         ],
       ),
@@ -219,11 +248,14 @@ class _DevicesFootnote extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: AppSpace.lg),
       child: Text(
-        // Says which device is which is NOT marked, because the app cannot
-        // currently tell: the client does not send a stable device identifier
-        // it can compare against, so highlighting "this device" would be a
-        // guess. Better to say nothing than to point at the wrong row in a
-        // security screen.
+        // "This device" is now marked for real (device_identity.dart) —
+        // was previously impossible because every install sent the same
+        // literal device_id, so there was nothing genuine to compare
+        // against; a guess would have been worse than nothing on a
+        // security screen. Existing installs only get the badge once
+        // they've signed in again after this fix, since the real
+        // identifier is generated (and only then sent) the next time they
+        // verify an OTP.
         'Signing a device out revokes its access immediately. If you see a device you don\'t '
         'recognise, sign it out and change your sign-in number.',
         style: BambooFonts.ui(12, color: BambooInk.ink500),

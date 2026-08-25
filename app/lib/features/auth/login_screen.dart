@@ -134,11 +134,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final identifier = _identifierController.text.trim();
       final code = _codeController.text.trim();
       final authApi = ref.read(authApiProvider);
+      final deviceId = await ref.read(localDeviceIdProvider.future);
 
       final tokens = await authApi.verifyEmailOtp(
         identifier,
         code,
-        'app-mobile',
+        deviceId,
         // Only sign-up has a phone to link; log-in leaves the account's
         // existing linkage untouched — see AuthMode's doc comment.
         phoneNumber: _isSignUp ? _phoneController.text.trim() : null,

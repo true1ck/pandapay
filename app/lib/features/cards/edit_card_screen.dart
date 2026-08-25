@@ -43,6 +43,8 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
     super.dispose();
   }
 
+  double? _originalPointsBalance;
+
   void _initFrom(UserCard card) {
     if (_initialized) return;
     _initialized = true;
@@ -51,6 +53,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
     _pointsBalanceController.text = card.totalPointsEarned > 0
         ? card.totalPointsEarned.toStringAsFixed(0)
         : '';
+    _originalPointsBalance = card.totalPointsEarned;
     _statementDay = card.statementDay;
     _dueDay = card.dueDay;
   }
@@ -86,6 +89,53 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       ref.invalidate(userCardsProvider);
       if (mounted) context.pop();
     } catch (e) {
+      // Same offline-queue pattern as edit_transaction_screen.dart's _save —
+      // this is an edit to a row that already exists, which the sync queue
+      // can represent. Only nickname/credit-limit/statement-day/due-day are
+      // queued: pandapay.sync_fields_for('user_cards') (migration 0034) does
+      // NOT include points balance — that field is corrected through
+      // points_ledger/adjustPointsBalance's own reconciliation path, not a
+      // blind field overwrite, so queuing it here would be silently dropped
+      // by the server rather than applied. A changed points balance is
+      // called out explicitly instead of being queued-and-forgotten.
+      final offline = ref.read(isOnlineProvider).valueOrNull == false;
+      final repo = ref.read(userCardsRepositoryProvider);
+      if (offline && repo != null) {
+        final newPointsBalance = _pointsBalanceController.text.trim().isEmpty
+            ? null
+            : double.tryParse(_pointsBalanceController.text.trim());
+        final pointsBalanceChanged =
+            newPointsBalance != null && newPointsBalance != _originalPointsBalance;
+
+        final queue = await ref.read(syncQueueProvider.future);
+        queue.enqueueUpdate(
+          entity: 'user_cards',
+          entityId: widget.userCardId,
+          fields: {
+            'nickname': _nicknameController.text.trim().isEmpty ? null : _nicknameController.text.trim(),
+            'credit_limit_inr': _creditLimitController.text.trim().isEmpty
+                ? null
+                : double.tryParse(_creditLimitController.text.trim()),
+            'statement_day': _statementDay,
+            'due_day': _dueDay,
+          },
+        );
+        ref.invalidate(pendingSyncCountProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                pointsBalanceChanged
+                    ? 'Saved offline — will sync when you reconnect. Points balance needs a live '
+                          'connection though, so that change wasn\'t saved; correct it again once you\'re online.'
+                    : 'Saved offline — will sync when you reconnect.',
+              ),
+            ),
+          );
+          context.pop();
+        }
+        return;
+      }
       setState(() => _error = userFacingErrorMessage(e));
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -156,6 +206,28 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       ref.invalidate(userCardsProvider);
       if (mounted) context.pop();
     } catch (e) {
+      // Archiving is just `is_archived = true` on a row that already exists
+      // (R4 "archive, never delete" — see this method's own doc comment),
+      // and `is_archived` is one of the fields pandapay.sync_fields_for
+      // ('user_cards') allows, so this queues the same way _save does above.
+      final offline = ref.read(isOnlineProvider).valueOrNull == false;
+      final repo = ref.read(userCardsRepositoryProvider);
+      if (offline && repo != null) {
+        final queue = await ref.read(syncQueueProvider.future);
+        queue.enqueueUpdate(
+          entity: 'user_cards',
+          entityId: widget.userCardId,
+          fields: {'is_archived': true},
+        );
+        ref.invalidate(pendingSyncCountProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Removed offline — will sync when you reconnect.')),
+          );
+          context.pop();
+        }
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
@@ -185,8 +257,27 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
         ).showSnackBar(const SnackBar(content: Text('Set as your default card.')));
       }
     } catch (e) {
+      // Deliberately NOT queued offline, unlike _save/_archive above. "Only
+      // one default card" isn't a database constraint (no unique index on
+      // is_default) — it's enforced by setDefaultCard's own endpoint
+      // atomically clearing every other card's flag before setting this
+      // one. The generic sync_apply_change (migration 0034) only ever
+      // touches the single row named in the queued change, so queuing just
+      // {'is_default': true} for this card would leave whichever card is
+      // CURRENTLY default also still flagged default once both changes
+      // eventually applied — two "default" cards at once. Safer to ask for
+      // connectivity than to risk that.
+      final offline = ref.read(isOnlineProvider).valueOrNull == false;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              offline
+                  ? 'Setting a default card needs an internet connection — try again once you\'re back online.'
+                  : userFacingErrorMessage(e),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _settingDefault = false);

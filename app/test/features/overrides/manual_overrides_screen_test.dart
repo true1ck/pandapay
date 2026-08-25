@@ -5,8 +5,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/card_overrides_repository.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/sync_queue.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/overrides/manual_overrides_screen.dart';
+
+/// Fails every call the way a real HTTP client would offline, so the
+/// screen's offline-queue fallback path actually runs instead of the
+/// happy path `_FakeCardOverridesRepository` below exercises.
+class _OfflineCardOverridesRepository extends CardOverridesRepository {
+  final List<CardOverride> overrides;
+  _OfflineCardOverridesRepository(this.overrides) : super(apiBaseUrl: 'http://localhost', accessToken: 't');
+
+  @override
+  Future<List<CardOverride>> fetchOverrides() async => overrides;
+
+  @override
+  Future<void> updateOverride(String id, {bool? isEnabled, String? reasonNote, String? userCardId}) {
+    throw Exception('simulated offline failure');
+  }
+}
 
 /// In-memory stand-in for CardOverridesRepository so the edit/delete flows
 /// can be exercised end-to-end (widget tap -> repository call -> provider
@@ -284,5 +302,109 @@ void main() {
     // No card selected (fell back to null) -> Save changes stays disabled.
     final saveButton = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save changes'));
     expect(saveButton.onPressed, isNull);
+  });
+
+  testWidgets('toggling enabled while offline queues the change instead of failing outright', (tester) async {
+    final override = CardOverride(
+      id: 'o7',
+      userCardId: 'uc1',
+      scope: OverrideScope.vpa,
+      vpa: 'shop@upi',
+      isEnabled: true,
+      createdAt: DateTime(2026, 1, 1),
+      cardName: 'HDFC Millennia',
+    );
+    final offlineRepo = _OfflineCardOverridesRepository([override]);
+    final queue = SyncQueue(openInMemoryForTesting());
+    final container = ProviderContainer(
+      overrides: [
+        cardOverridesRepositoryProvider.overrideWithValue(offlineRepo),
+        isOnlineProvider.overrideWith((ref) => Stream.value(false)),
+        syncQueueProvider.overrideWith((ref) async => queue),
+      ],
+    );
+    addTearDown(container.dispose);
+    // isOnlineProvider is only ever ref.read() on demand (inside _toggle's
+    // catch block), never ref.watch()'d by anything in the widget tree — so
+    // nothing forces Riverpod to start listening to the overridden stream
+    // until then. Reading it here first, and awaiting its first value,
+    // ensures it has already settled to AsyncData(false) before the tap
+    // below, instead of still being AsyncLoading() at the moment _toggle
+    // reads it (which would make `offline` false and this test flaky/wrong
+    // for a timing reason that has nothing to do with the code under test).
+    container.read(isOnlineProvider);
+    await container.read(isOnlineProvider.future);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ManualOverridesScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Disable')); // currently enabled, so the action label is "Disable"
+    await tester.pumpAndSettle();
+
+    expect(find.text('Saved offline — will sync when you reconnect.'), findsOneWidget);
+    final pending = queue.pending();
+    expect(pending, hasLength(1));
+    expect(pending.single.entity, 'card_overrides');
+    expect(pending.single.entityId, 'o7');
+    expect(pending.single.payload, {'is_enabled': false});
+  });
+
+  testWidgets('editing an override while offline queues the change instead of failing outright', (tester) async {
+    final override = CardOverride(
+      id: 'o8',
+      userCardId: 'uc1',
+      scope: OverrideScope.category,
+      categoryId: 'cat1',
+      categoryName: 'Fuel',
+      reasonNote: 'old note',
+      isEnabled: true,
+      createdAt: DateTime(2026, 1, 1),
+      cardName: 'HDFC Millennia',
+    );
+    final offlineRepo = _OfflineCardOverridesRepository([override]);
+    final queue = SyncQueue(openInMemoryForTesting());
+    const userCards = [
+      UserCard(id: 'uc1', cardProductId: 'cp1', cardName: 'HDFC Millennia', isDefault: true),
+    ];
+    final container = ProviderContainer(
+      overrides: [
+        cardOverridesRepositoryProvider.overrideWithValue(offlineRepo),
+        userCardsProvider.overrideWith((ref) async => userCards),
+        isOnlineProvider.overrideWith((ref) => Stream.value(false)),
+        syncQueueProvider.overrideWith((ref) async => queue),
+      ],
+    );
+    addTearDown(container.dispose);
+    // See the toggle test above for why isOnlineProvider needs to be forced
+    // to settle before anything reads it on demand.
+    container.read(isOnlineProvider);
+    await container.read(isOnlineProvider.future);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: ManualOverridesScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Note (optional)'), 'new note');
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Saved offline — will sync when you reconnect.'), findsOneWidget);
+    expect(find.text('Edit override'), findsNothing); // sheet closed, same as the online-success case
+    final pending = queue.pending();
+    expect(pending, hasLength(1));
+    expect(pending.single.entity, 'card_overrides');
+    expect(pending.single.entityId, 'o8');
+    expect(pending.single.payload, {'user_card_id': 'uc1', 'reason_note': 'new note'});
   });
 }

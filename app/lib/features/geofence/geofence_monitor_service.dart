@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../notifications/notification_gate.dart';
 import 'nearby_merchants_repository.dart';
 
 /// UA-8, extended: real background geofence monitoring, closing the gap the
@@ -35,6 +36,7 @@ import 'nearby_merchants_repository.dart';
 class GeofenceMonitorService {
   final NearbyMerchantsRepository repo;
   final FlutterLocalNotificationsPlugin notifications;
+  final NotificationGate? gate;
   final double radiusMeters;
   final Duration notifyCooldown;
 
@@ -45,6 +47,7 @@ class GeofenceMonitorService {
   GeofenceMonitorService({
     required this.repo,
     FlutterLocalNotificationsPlugin? notifications,
+    this.gate,
     this.radiusMeters = 300,
     this.notifyCooldown = const Duration(minutes: 30),
   }) : notifications = notifications ?? FlutterLocalNotificationsPlugin();
@@ -175,6 +178,40 @@ class GeofenceMonitorService {
   }
 
   Future<void> _notify(NearbyMerchantMatch match) async {
+    final name = match.candidate.displayName ?? 'a merchant you\'ve used before';
+    final merchantId = match.candidate.merchantId;
+    final title = 'You\'re near $name';
+    const body = 'Open PandaPay to see which card to use here.';
+
+    if (gate != null) {
+      // UA-8.3 (B2): routed through the gate so category_location, quiet
+      // hours, and the daily cap are actually honoured — this used to call
+      // the plugin directly, bypassing all three despite category_location
+      // existing as a setting for exactly this notification.
+      //
+      // The dedupe key is unique per attempt (timestamp-keyed), not
+      // per-merchant: this._lastNotifiedAt above is what already
+      // deduplicates repeat visits to the same merchant on a 30-minute
+      // cooldown, and the gate's own dedupe store is meant for a different
+      // job (suppressing re-checks of an unresolved state, e.g. a cap
+      // that's still over threshold next time the app foregrounds) — using
+      // a per-merchant key here would let the FIRST visit of the day
+      // permanently block every later one.
+      await gate!.fire(
+        category: 'location',
+        title: title,
+        body: body,
+        dedupeKey: 'geofence:$merchantId:${DateTime.now().millisecondsSinceEpoch}',
+        merchantId: merchantId,
+      );
+      return;
+    }
+
+    // Fallback for direct construction without a gate (e.g. unit tests that
+    // build this service on its own, or any future caller that hasn't been
+    // wired to a NotificationGate yet) — same content, just without the
+    // preference/quiet-hours/cap checks geofenceMonitorServiceProvider
+    // always supplies in the real app.
     const androidDetails = AndroidNotificationDetails(
       'geofence_nearby_merchant',
       'Nearby merchants',
@@ -183,12 +220,6 @@ class GeofenceMonitorService {
       priority: Priority.defaultPriority,
     );
     const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
-    final name = match.candidate.displayName ?? 'a merchant you\'ve used before';
-    await notifications.show(
-      match.candidate.merchantId.hashCode,
-      'You\'re near $name',
-      'Open PandaPay to see which card to use here.',
-      details,
-    );
+    await notifications.show(merchantId.hashCode, title, body, details);
   }
 }

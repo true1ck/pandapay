@@ -3,32 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../../app/providers.dart' show accessTokenProvider;
+import '../../app/providers.dart'
+    show accessTokenProvider, notificationPreferencesProvider, notificationPreferencesRepositoryProvider;
 import '../../data/api_exception.dart';
 import '../../data/notification_preferences_repository.dart';
-import '../../app/env.dart';
 
-const _apiBaseUrl = Env.apiBaseUrl; // plan Phase 0.3 — see app/env.dart
-
-/// Task H3 Notification Settings. Local providers only (per this pass's
-/// "create only new files, don't touch providers.dart" constraint) — same
-/// null-when-signed-out pattern as userCardsRepositoryProvider in
-/// app/lib/app/providers.dart, just replicated in this file rather than
-/// imported from it.
-final _notificationPreferencesRepositoryProvider = Provider<NotificationPreferencesRepository?>((ref) {
-  final token = ref.watch(accessTokenProvider);
-  if (token == null) return null;
-  return NotificationPreferencesRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
-});
-
-final _notificationPreferencesProvider = FutureProvider<NotificationPreferences?>((ref) async {
-  final repo = ref.watch(_notificationPreferencesRepositoryProvider);
-  if (repo == null) return null;
-  return repo.fetch();
-});
-
+/// Task H3 Notification Settings. notificationPreferencesProvider/
+/// notificationPreferencesRepositoryProvider now live in app/providers.dart
+/// (not here) — notification_gate.dart (Part B) needs the exact same
+/// preferences this screen reads/writes, and providers.dart is where every
+/// other cross-cutting repository provider in this app already lives.
 final _mutedMerchantsProvider = FutureProvider<List<MutedMerchant>>((ref) async {
-  final repo = ref.watch(_notificationPreferencesRepositoryProvider);
+  final repo = ref.watch(notificationPreferencesRepositoryProvider);
   if (repo == null) return const [];
   return repo.fetchMutedMerchants();
 });
@@ -88,11 +74,11 @@ class _NotificationSettingsBody extends ConsumerWidget {
   const _NotificationSettingsBody();
 
   Future<void> _update(BuildContext context, WidgetRef ref, Map<String, dynamic> changes) async {
-    final repo = ref.read(_notificationPreferencesRepositoryProvider);
+    final repo = ref.read(notificationPreferencesRepositoryProvider);
     if (repo == null) return;
     try {
       await repo.update(changes);
-      ref.invalidate(_notificationPreferencesProvider);
+      ref.invalidate(notificationPreferencesProvider);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
@@ -102,13 +88,13 @@ class _NotificationSettingsBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final prefsAsync = ref.watch(_notificationPreferencesProvider);
+    final prefsAsync = ref.watch(notificationPreferencesProvider);
 
     return prefsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),
-        onRetry: () => ref.invalidate(_notificationPreferencesProvider),
+        onRetry: () => ref.invalidate(notificationPreferencesProvider),
       ),
       data: (prefs) {
         if (prefs == null) {
@@ -373,7 +359,7 @@ class _MutedMerchantsList extends ConsumerWidget {
                 trailing: TextButton(
                   style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
                   onPressed: () async {
-                    final repo = ref.read(_notificationPreferencesRepositoryProvider);
+                    final repo = ref.read(notificationPreferencesRepositoryProvider);
                     if (repo == null) return;
                     try {
                       await repo.unmuteMerchant(m.merchantId);
