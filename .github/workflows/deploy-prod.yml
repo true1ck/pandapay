@@ -9,6 +9,17 @@
 # pushed commit, run migrations, rebuild, restart, health-check. Running it
 # twice on the same commit changes nothing.
 #
+# TRIGGER: `workflow_run`, not `push`.
+# A `push`-triggered job that polls for the test checks races them — the
+# deploy starts before the test jobs have registered their checks, and a
+# poller then reports "the requested check was never run against this ref"
+# and fails. `workflow_run` fires only once "Build and test" has actually
+# finished, and carries its conclusion, so the ordering is guaranteed by
+# GitHub rather than by waiting and hoping.
+#
+# Note `workflow_run` always runs the workflow file from the DEFAULT branch,
+# so edits to this file only take effect once merged to master.
+#
 # WHAT IT WILL NOT DO
 # -------------------
 # It never publishes catalogue cards. Publishing sets `verified_at`, which is
@@ -19,7 +30,9 @@
 name: Deploy to production
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Build and test"]
+    types: [completed]
     branches: [master]
   # Manual re-run, e.g. to redeploy the current commit after a server change.
   workflow_dispatch:
@@ -35,27 +48,24 @@ jobs:
   deploy:
     name: Migrate and restart backend
     runs-on: ubuntu-latest
-    # Gated on the existing test workflow. Deploying a red build to the only
-    # production environment is the failure mode this ordering exists to stop.
-    needs: []
+    # Deploy only a green build. On workflow_dispatch there is no upstream
+    # run to inspect, so that path is allowed through explicitly.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     environment: production
     steps:
-      - name: Wait for tests to pass on this commit
-        uses: lewagon/wait-on-check-action@v1.3.4
-        with:
-          ref: ${{ github.sha }}
-          # Names come from build-and-test.yml's job `name:` fields.
-          check-name: 'API and auth (Node)'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 15
+      - name: Resolve the commit to deploy
+        id: sha
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          # workflow_dispatch has no upstream run; deploy the current master.
+          echo "sha=${SHA:-${{ github.sha }}}" >> "$GITHUB_OUTPUT"
 
-      - name: Wait for app tests
-        uses: lewagon/wait-on-check-action@v1.3.4
+      - name: Check out the deploy script at that commit
+        uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
-          check-name: 'App, console and domain (Flutter)'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 15
+          ref: ${{ steps.sha.outputs.sha }}
 
       - name: Set up SSH
         run: |
@@ -71,16 +81,16 @@ jobs:
       - name: Deploy
         env:
           HOST: ${{ secrets.PROD_HOST }}
-          USER: ${{ secrets.PROD_USER }}
-          SHA: ${{ github.sha }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+          SHA: ${{ steps.sha.outputs.sha }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$USER@$HOST" \
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
             "bash -s -- $SHA" < deploy/deploy.sh
 
       - name: Verify production is healthy
         env:
           HOST: ${{ secrets.PROD_HOST }}
-          USER: ${{ secrets.PROD_USER }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$USER@$HOST" \
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
             'curl -fsS -m 10 http://127.0.0.1:4000/health && echo && curl -fsS -m 10 http://127.0.0.1:3210/health'
