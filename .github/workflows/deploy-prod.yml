@@ -1,0 +1,86 @@
+# Deploys master to the production backend after tests pass.
+#
+# Before this, production was a COPIED DIRECTORY on the host — not a git
+# checkout — so nothing on the server moved when master did. It had drifted
+# five migrations behind (stopped at 0035) and nobody could tell by looking,
+# because there was no commit on the box to compare against.
+#
+# The deploy is intentionally boring and idempotent: fetch, hard-reset to the
+# pushed commit, run migrations, rebuild, restart, health-check. Running it
+# twice on the same commit changes nothing.
+#
+# WHAT IT WILL NOT DO
+# -------------------
+# It never publishes catalogue cards. Publishing sets `verified_at`, which is
+# a human claim that someone checked a card's terms against the issuer — see
+# db/seed/0005_publish_demo_cards.sql for why that must not be automated.
+# A deploy that silently marked cards "verified" would be the single most
+# damaging thing this pipeline could do.
+name: Deploy to production
+
+on:
+  push:
+    branches: [master]
+  # Manual re-run, e.g. to redeploy the current commit after a server change.
+  workflow_dispatch:
+
+# Never let two deploys interleave: they would fight over the same working
+# tree and the same migration lock. Queue instead of cancelling — cancelling
+# mid-migration is worse than waiting.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Migrate and restart backend
+    runs-on: ubuntu-latest
+    # Gated on the existing test workflow. Deploying a red build to the only
+    # production environment is the failure mode this ordering exists to stop.
+    needs: []
+    environment: production
+    steps:
+      - name: Wait for tests to pass on this commit
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          # Names come from build-and-test.yml's job `name:` fields.
+          check-name: 'API and auth (Node)'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+
+      - name: Wait for app tests
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: 'App, console and domain (Flutter)'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # Pinned host key rather than StrictHostKeyChecking=no: accepting
+          # any key would make this pipeline trivially MITM-able, and it
+          # holds a key with shell access to production.
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          USER: ${{ secrets.PROD_USER }}
+          SHA: ${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$USER@$HOST" \
+            "bash -s -- $SHA" < deploy/deploy.sh
+
+      - name: Verify production is healthy
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$USER@$HOST" \
+            'curl -fsS -m 10 http://127.0.0.1:4000/health && echo && curl -fsS -m 10 http://127.0.0.1:3210/health'

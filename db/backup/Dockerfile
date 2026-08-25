@@ -8,16 +8,31 @@
 # stock postgres image doesn't ship the extension. There's also no Node-side
 # scheduler anywhere in api/ or auth/. A tiny cron container is the whole gap.
 #
-# Base is postgres:16-alpine, not a bare alpine + apk-installed client — that
-# guarantees pg_dump/pg_restore are the same major version as the database
-# they're backing up, which a separately-installed postgresql-client package
-# would not guarantee.
+# Base is a postgres image, not a bare alpine + apk-installed client, so
+# pg_dump/pg_restore are a known major version rather than whatever the
+# package index happens to serve.
+#
+# MUST BE >= THE SERVER'S MAJOR VERSION. pg_dump refuses outright when the
+# server is newer:
+#
+#   pg_dump: error: aborting because of server version mismatch
+#   pg_dump: detail: server version: 17.6; pg_dump version: 16.14
+#
+# and the wrapper script only checks the exit code AFTER the file is
+# created, so a failed run still leaves a 0-byte .dump behind that looks
+# like a backup in a directory listing. That is exactly what happened: this
+# was pinned to 16 while the database moved to Supabase Postgres 17.6, and
+# TWELVE CONSECUTIVE DAILY BACKUPS were empty files before anyone looked.
+# The nightly restore drill did catch it ("input file is too short"), but
+# nothing surfaced that failure anywhere a human would see it.
+#
+# If the server is upgraded again, this pin has to move with it.
 #
 # Build context must be `db/` (not `db/backup/`), so this can COPY the
 # existing scripts/ directory — Docker COPY can't reach outside its context
 # with `../`. See docker-compose.prod.yml's `backup` service for the
 # `context: ./db, dockerfile: backup/Dockerfile` pairing that makes this work.
-FROM postgres:16-alpine
+FROM postgres:17-alpine
 
 RUN apk add --no-cache dcron bash
 
