@@ -29,6 +29,14 @@ subprojects {
 subprojects {
     plugins.withId("com.android.library") {
         extensions.configure<com.android.build.gradle.LibraryExtension> {
+            // telephony 0.2.0 hardcodes compileSdkVersion 31. Its resolved
+            // AndroidX dependencies now require API 34+, so compile it with
+            // the same SDK as the app without changing minSdk/targetSdk or
+            // runtime behaviour.
+            if (project.name == "telephony") {
+                compileSdk = 37
+            }
+
             if (namespace == null) {
                 val manifestFile = file("src/main/AndroidManifest.xml")
                 if (manifestFile.exists()) {
