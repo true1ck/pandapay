@@ -51,16 +51,6 @@ subprojects {
 val jvmTargetMismatchedPlugins = setOf("telephony", "home_widget")
 gradle.projectsEvaluated {
     subprojects.filter { it.name in jvmTargetMismatchedPlugins }.forEach { sub ->
-        // telephony 0.2.0 hardcodes compileSdkVersion 31 in its own build
-        // script. Override it only after every project has been evaluated;
-        // doing this in plugins.withId runs too early and telephony silently
-        // assigns 31 again afterwards. Its AndroidX dependencies require 34+.
-        if (sub.name == "telephony") {
-            sub.extensions.configure<com.android.build.gradle.LibraryExtension> {
-                compileSdk = 37
-            }
-        }
-
         sub.tasks.withType<JavaCompile>().configureEach {
             sourceCompatibility = JavaVersion.VERSION_17.toString()
             targetCompatibility = JavaVersion.VERSION_17.toString()

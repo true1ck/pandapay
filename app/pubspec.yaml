@@ -80,7 +80,8 @@ dependencies:
   # not just declared in the manifest). Both are structurally wired
   # (SmsListenerService, PermissionGate) but NOT exercised against a real
   # device/real SMS in this sandbox — see PROGRESS.md Chunk 31.
-  telephony: ^0.2.0
+  telephony:
+    path: third_party/telephony
   permission_handler: ^11.3.1
 
   # UA-8 (Chunk 32, extended): geofencing + home-screen widget. `geolocator`

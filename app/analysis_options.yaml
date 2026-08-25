@@ -19,6 +19,11 @@ linter:
 # `dart run custom_lint` (or `flutter analyze` does not include custom_lint
 # results — it's a separate check) to see them.
 analyzer:
+  # Vendored upstream code keeps its public API and naming intact. Analyze
+  # PandaPay's integration against it, but don't apply this app's modern lint
+  # policy to the discontinued package's 0.2.0 implementation.
+  exclude:
+    - third_party/**
   plugins:
     - custom_lint
 
