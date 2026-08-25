@@ -197,7 +197,12 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
     }
     final owned = allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
 
-    final context = RecommendationContext(amount: _amount, categoryId: _categoryId, rail: TxnRail.swipe);
+    final context = RecommendationContext(
+      amount: _amount,
+      categoryId: _categoryId,
+      rail: TxnRail.swipe,
+      now: DateTime.now(),
+    );
     // Same B8 wiring as rankedRecommendationsProvider (app/providers.dart):
     // this screen only carries category context (no merchant/vpa), so an
     // active category override must be honored here too — otherwise Home

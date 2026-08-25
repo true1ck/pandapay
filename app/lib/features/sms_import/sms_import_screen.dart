@@ -14,13 +14,18 @@ import 'sms_listener_service.dart';
 /// (unverified — see sms_listener_service.dart) live SMS listener to
 /// (verified — curl'd against live Postgres) POST /transactions/from-sms.
 ///
-/// A parsed SMS still needs a `userCardId` (the parser extracts amount/
-/// merchant/last4/date, not which owned card it belongs to — see
-/// UserCardsRepository.logTransactionFromSms's doc comment), so this
-/// screen asks the user to pick a card once permission is granted and
-/// keeps using that choice for `_selectedCardId` until changed; it does
-/// NOT attempt to auto-resolve by last4 since `user_cards` carries no
-/// last4 column in this schema.
+/// Card selection is now OPTIONAL. This screen used to refuse to start
+/// listening until the user picked a card, and then logged every incoming
+/// SMS against that one card regardless of which card the message was
+/// actually about — correct only for someone with a single card, and
+/// quietly wrong for everyone else.
+///
+/// The server resolves the card per message now, from `user_cards.last4`
+/// (migration 0039) or from the issuer behind the matched parser pattern,
+/// and files anything it can't identify in the needs-review queue rather
+/// than guessing. The dropdown remains as an override for the
+/// single-card case and for anyone who hasn't entered their last-4 digits
+/// yet.
 class SmsImportScreen extends ConsumerStatefulWidget {
   const SmsImportScreen({super.key});
 
@@ -62,20 +67,12 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
   }
 
   void _startListening() {
-    if (_selectedCardId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pick a card first — a parsed SMS needs to know which card to log it against.'),
-        ),
-      );
-      return;
-    }
     _service.listenForeground((sender, body) async {
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo == null) return;
       try {
         final result = await repo.logTransactionFromSms(
-          userCardId: _selectedCardId!,
+          userCardId: _selectedCardId,
           sender: sender,
           body: body,
         );
@@ -83,13 +80,21 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
           setState(() {
             _recentLog.insert(
               0,
-              result.parsed
-                  ? 'Logged a transaction from SMS ($sender)'
-                  : 'Could not parse SMS from $sender — added to Needs Review',
+              switch ((result.parsed, result.needsReview, result.duplicate)) {
+                (true, true, _) => 'Read an SMS from $sender but couldn\'t tell which card — '
+                    'added to Needs Review',
+                (true, _, true) => 'Already imported this SMS from $sender — skipped',
+                (true, _, _) => 'Logged a transaction from SMS ($sender)',
+                _ => 'Could not parse SMS from $sender — added to Needs Review',
+              },
             );
           });
           if (result.parsed) {
+            // Both the imported and the needs-review outcomes changed
+            // server-side state worth re-reading: one moved cap/reward
+            // totals, the other added a queue item Home badges.
             ref.invalidate(userCardsProvider);
+            if (result.needsReview) ref.invalidate(needsReviewCountProvider);
           } else {
             // Task D-4: never silently drop an unparsed message — the raw
             // text is right here, on-device, and would otherwise vanish
@@ -184,7 +189,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                     Text('Failed to load cards: $err', style: BambooFonts.ui(13.5, color: BambooInk.clay)),
                 data: (cards) => DropdownButton<String>(
                   hint: Text(
-                    'Log parsed SMS against which card?',
+                    'Always use one card? (optional)',
                     style: BambooFonts.ui(13.5, color: BambooInk.ink500),
                   ),
                   value: _selectedCardId,
@@ -198,6 +203,13 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                   ],
                   onChanged: (v) => setState(() => _selectedCardId = v),
                 ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Leave this empty and PandaPay works out the card from the last 4 digits in each '
+                'message. Add those digits to each card (Cards → Edit) so it can. Anything it '
+                'can\'t identify goes to Needs Review rather than being logged against the wrong card.',
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),
               const SizedBox(height: 16),
               if (_permissionGranted && !_listening)

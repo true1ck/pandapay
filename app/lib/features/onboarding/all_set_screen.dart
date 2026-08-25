@@ -157,6 +157,7 @@ class _TryItNowPreview extends ConsumerWidget {
       amount: Money.fromRupees(2500),
       categoryId: groceriesId,
       rail: TxnRail.swipe,
+      now: DateTime.now(),
     );
     final ranked = engine.rank(recContext, snapshots).where((r) => !r.isExcluded).toList();
     if (ranked.isEmpty) return const SizedBox.shrink();

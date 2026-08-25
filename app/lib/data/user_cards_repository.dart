@@ -55,6 +55,16 @@ class UserCard {
   /// must be phrased as their own answer, never as a fact about their bank.
   final AutopayMode autopayMode;
 
+  /// Migration 0039 — the last four digits of the card number.
+  ///
+  /// A MATCHING KEY, never card data: it is what lets an incoming bank
+  /// SMS or forwarded email be attached to this card automatically. Before
+  /// it existed, every import route required the user to pick a card for
+  /// every single message, which is why nothing was ever captured
+  /// automatically. Null means the user hasn't entered it, and imports
+  /// fall back to asking — the old behaviour, not a broken one.
+  final String? last4;
+
   const UserCard({
     required this.id,
     required this.cardProductId,
@@ -73,6 +83,7 @@ class UserCard {
     this.anniversaryOn,
     this.isArchived = false,
     this.autopayMode = AutopayMode.off,
+    this.last4,
   });
 
   factory UserCard.fromJson(Map<String, dynamic> json) {
@@ -106,6 +117,7 @@ class UserCard {
       anniversaryOn: json['anniversary_on'] == null ? null : DateTime.parse(json['anniversary_on'] as String),
       isArchived: json['is_archived'] as bool? ?? false,
       autopayMode: AutopayMode.fromJson(json['autopay_mode'] as String?),
+      last4: json['last4'] as String?,
     );
   }
 
@@ -139,7 +151,54 @@ class UserCard {
     'anniversary_on': anniversaryOn?.toIso8601String(),
     'is_archived': isArchived,
     'autopay_mode': autopayMode.wireValue,
+    'last4': last4,
   };
+}
+
+/// What paid for a transaction — migration 0040's `transactions.instrument`.
+///
+/// Only [creditCard] moves cap, milestone, points and fee-waiver state:
+/// those counters describe one card's billing cycle, and a cash purchase or
+/// a bank-to-bank UPI payment moves none of them.
+enum TxnInstrument {
+  creditCard('credit_card', 'Credit card'),
+  debitCard('debit_card', 'Debit card'),
+  cash('cash', 'Cash'),
+  upiBank('upi_bank', 'UPI from bank'),
+  wallet('wallet', 'Wallet'),
+  other('other', 'Other');
+
+  final String wireValue;
+  final String label;
+  const TxnInstrument(this.wireValue, this.label);
+
+  static TxnInstrument fromJson(String? value) => TxnInstrument.values.firstWhere(
+    (i) => i.wireValue == value,
+    orElse: () => TxnInstrument.creditCard,
+  );
+}
+
+/// Whether an entry is spending at all — migration 0040's
+/// `transactions.entry_kind`.
+///
+/// Income and investments are reported on their own lines and NEVER added
+/// into a spend total; a transfer between the user's own accounts is not
+/// spend in either direction. Folding them together is the fastest way to
+/// make every budget figure meaningless.
+enum TxnEntryKind {
+  spend('spend', 'Spending'),
+  income('income', 'Money in'),
+  investment('investment', 'Investment'),
+  transfer('transfer', 'Transfer');
+
+  final String wireValue;
+  final String label;
+  const TxnEntryKind(this.wireValue, this.label);
+
+  static TxnEntryKind fromJson(String? value) => TxnEntryKind.values.firstWhere(
+    (k) => k.wireValue == value,
+    orElse: () => TxnEntryKind.spend,
+  );
 }
 
 /// What the user has told PandaPay about autopay on a card — migration
@@ -614,11 +673,11 @@ class UserCardsRepository {
   /// used to return void because nothing needed the id back until A7/A9
   /// existed; POST /user-cards already returns it (`{userCard: {id, ...}}`),
   /// this just stops discarding it.
-  Future<String> addCard(String cardProductId, {String? nickname}) async {
+  Future<String> addCard(String cardProductId, {String? nickname, String? last4}) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/user-cards'),
       headers: _headers,
-      body: jsonEncode({'cardProductId': cardProductId, 'nickname': ?nickname}),
+      body: jsonEncode({'cardProductId': cardProductId, 'nickname': ?nickname, 'last4': ?last4}),
     );
     if (response.statusCode != 201) {
       throw ApiException('POST /user-cards failed: ${response.statusCode} ${response.body}');
@@ -687,6 +746,12 @@ class UserCardsRepository {
     int? dueDay,
     double? pointsBalance,
     AutopayMode? autopayMode,
+    // Three-state, unlike the other optional fields: null means "don't
+    // touch it", '' means "clear the stored digits", and four digits set
+    // them. The null-aware `?` below skips only null, so an empty string
+    // really does reach the server as a clear — which is what Edit Card
+    // relies on when the user empties the field.
+    String? last4,
   }) async {
     final body = <String, dynamic>{
       'nickname': ?nickname,
@@ -694,6 +759,7 @@ class UserCardsRepository {
       'statementDay': ?statementDay,
       'dueDay': ?dueDay,
       'pointsBalance': ?pointsBalance,
+      'last4': ?last4,
       // Sent by wire value, not enum name — they happen to match today, but
       // the server's CHECK constraint is the contract, not Dart's naming.
       if (autopayMode != null) 'autopayMode': autopayMode.wireValue,
@@ -722,24 +788,36 @@ class UserCardsRepository {
   /// which already exists server-side and does exactly what an undo needs
   /// (reverses cap/milestone/points/fee-waiver state, marks the row
   /// non-active) despite there being no DELETE /transactions/:id route.
+  ///
+  /// [userCardId] is required only for a credit-card entry. Migration 0040
+  /// opened this route to cash, debit, UPI-from-bank, income and
+  /// investments; those have no card by definition, and requiring one is
+  /// what previously made them impossible to record at all. A non-card
+  /// entry counts toward spend totals and budgets but moves NO card state —
+  /// caps, milestones, points and fee waivers describe one card's billing
+  /// cycle, and a cash purchase moves none of them.
   Future<String> logTransaction({
-    required String userCardId,
+    String? userCardId,
     required Money amount,
     String? categoryId,
     String? merchantName,
     DateTime? occurredAt,
     String? note,
+    TxnInstrument instrument = TxnInstrument.creditCard,
+    TxnEntryKind entryKind = TxnEntryKind.spend,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/transactions'),
       headers: _headers,
       body: jsonEncode({
-        'userCardId': userCardId,
+        'userCardId': ?userCardId,
         'amountInr': amount.rupees,
         'categoryId': ?categoryId,
         'merchantName': ?merchantName,
         'occurredAt': occurredAt?.toIso8601String(),
         'note': ?note,
+        'instrument': instrument.wireValue,
+        'entryKind': entryKind.wireValue,
       }),
     );
     if (response.statusCode != 201) {
@@ -800,18 +878,22 @@ class UserCardsRepository {
   /// UA-5.3 (Chunk 31): SMS auto-import. Sends the raw SMS sender+body to
   /// POST /transactions/from-sms, which does the server-side regex parse
   /// (parser_patterns) and, on a match, the exact same cap/milestone/
-  /// points/fee-waiver update as [logTransaction] above. `userCardId` still
-  /// has to be supplied by the caller — the parser extracts amount/
-  /// merchant/last4/date from the SMS text, not which of the user's owned
-  /// cards it belongs to (last4 alone isn't a safe/unique match key across
-  /// issuers), so the on-device listener is expected to resolve that (e.g.
-  /// by asking the user, or matching last4 against owned cards as a hint)
-  /// before calling this. A 200 with `parsed: false` is not an error — it's
+  /// points/fee-waiver update as [logTransaction] above.
+  ///
+  /// [userCardId] is now OPTIONAL. It used to be required, because the
+  /// parser extracts amount/merchant/last4/date but not which owned card a
+  /// message belongs to — so the listener had to ask the user, once per
+  /// message. The server now resolves it from `user_cards.last4` or from
+  /// the issuer behind the matched pattern (api/src/import_resolvers.js),
+  /// and when it can't be sure it files the message in the needs-review
+  /// queue instead of guessing. Passing an explicit id still wins.
+  ///
+  /// A 200 with `parsed: false` is not an error — it's
   /// the server telling us the SMS didn't match any active pattern and was
   /// logged to parser_failures for admin triage instead of silently
   /// dropped; the caller decides whether to surface that as "log manually?"
   Future<SmsImportResult> logTransactionFromSms({
-    required String userCardId,
+    String? userCardId,
     required String sender,
     required String body,
     DateTime? occurredAt,
@@ -821,7 +903,7 @@ class UserCardsRepository {
       Uri.parse('$apiBaseUrl/transactions/from-sms'),
       headers: _headers,
       body: jsonEncode({
-        'userCardId': userCardId,
+        'userCardId': ?userCardId,
         'sender': sender,
         'body': body,
         if (occurredAt != null) 'occurredAt': occurredAt.toUtc().toIso8601String(),
@@ -836,6 +918,7 @@ class UserCardsRepository {
       parsed: json['parsed'] == true,
       reason: json['reason'] as String?,
       duplicate: json['duplicate'] == true,
+      needsReview: json['needsReview'] == true,
     );
   }
 
@@ -863,7 +946,7 @@ class UserCardsRepository {
         'messages': [
           for (final m in messages)
             {
-              'userCardId': m.userCardId,
+              'userCardId': ?m.userCardId,
               'sender': m.sender,
               'body': m.body,
               'occurredAt': m.occurredAt.toUtc().toIso8601String(),
@@ -884,6 +967,7 @@ class UserCardsRepository {
       duplicate: (summary['duplicate'] as num?)?.toInt() ?? 0,
       unparsed: (summary['unparsed'] as num?)?.toInt() ?? 0,
       invalid: (summary['invalid'] as num?)?.toInt() ?? 0,
+      needsReview: (summary['needsReview'] as num?)?.toInt() ?? 0,
       errored: (summary['error'] as num?)?.toInt() ?? 0,
       // Indices are batch-relative; the caller maps them back to its own
       // list so an unparsed message can still reach the needs-review queue
@@ -1344,12 +1428,29 @@ class SmsImportResult {
   /// not count it as a new transaction, and must not add it to needs-review.
   final bool duplicate;
 
-  const SmsImportResult({required this.parsed, this.reason, this.duplicate = false});
+  /// True when the message parsed cleanly but the server could not say
+  /// which card it belongs to, so it was filed in the needs-review queue
+  /// for the user to confirm. A third outcome alongside parsed/duplicate,
+  /// not a failure: the transaction data is safely captured, only its card
+  /// is unknown. Callers must not count it as imported and must not report
+  /// it as a parse failure.
+  final bool needsReview;
+
+  const SmsImportResult({
+    required this.parsed,
+    this.reason,
+    this.duplicate = false,
+    this.needsReview = false,
+  });
 }
 
 /// Task S-1a: one message in a batched backup import.
 class SmsBatchMessage {
-  final String userCardId;
+  /// Optional since the server resolves it — see [logTransactionFromSms].
+  /// A backup-file import that maps a last4 group to a card still passes it
+  /// explicitly; one that can't leaves it null and lets the server decide
+  /// or file for review.
+  final String? userCardId;
   final String sender;
   final String body;
 
@@ -1359,7 +1460,7 @@ class SmsBatchMessage {
   final DateTime occurredAt;
 
   const SmsBatchMessage({
-    required this.userCardId,
+    this.userCardId,
     required this.sender,
     required this.body,
     required this.occurredAt,
@@ -1372,6 +1473,10 @@ class SmsBatchImportResult {
   final int duplicate;
   final int unparsed;
   final int invalid;
+
+  /// Parsed fine, but the server couldn't identify the card — filed in the
+  /// needs-review queue rather than dropped. See [SmsImportResult.needsReview].
+  final int needsReview;
   final int errored;
   final List<int> unparsedIndices;
   final Map<int, String> reasonByIndex;
@@ -1381,6 +1486,7 @@ class SmsBatchImportResult {
     required this.duplicate,
     required this.unparsed,
     required this.invalid,
+    this.needsReview = 0,
     required this.errored,
     this.unparsedIndices = const [],
     this.reasonByIndex = const {},

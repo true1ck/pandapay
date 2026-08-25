@@ -155,6 +155,21 @@ class _NotificationSettingsBody extends ConsumerWidget {
               value: prefs.categoryNeedsReview,
               onChanged: (v) => _update(context, ref, {'category_needs_review': v}),
             ),
+            // Two budget toggles rather than one: the early warning is the
+            // useful half, and someone who wants it shouldn't have to
+            // accept the after-the-fact one too.
+            SwitchListTile(
+              title: const Text('Budget running ahead'),
+              subtitle: const Text('When you\'re spending faster than the period is passing'),
+              value: prefs.categoryBudgetWarning,
+              onChanged: (v) => _update(context, ref, {'category_budget_warning': v}),
+            ),
+            SwitchListTile(
+              title: const Text('Budget exceeded'),
+              subtitle: const Text('When a budget you set has been passed'),
+              value: prefs.categoryBudgetExceeded,
+              onChanged: (v) => _update(context, ref, {'category_budget_exceeded': v}),
+            ),
             const Divider(height: AppSpace.xl),
             _SectionHeader('Quiet hours'),
             _QuietHoursTile(prefs: prefs, onUpdate: (changes) => _update(context, ref, changes)),

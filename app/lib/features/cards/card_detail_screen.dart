@@ -10,6 +10,7 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import 'card_actions_screen.dart';
 import '../../data/api_exception.dart';
+import '../../data/spend_reports_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 
@@ -27,7 +28,7 @@ class CardDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final pairs = ref.watch(myCardsWithProductProvider);
     return DefaultTabController(
-      length: 6,
+      length: 7,
       child: Scaffold(
         backgroundColor: BambooInk.paper,
         appBar: AppBar(
@@ -83,6 +84,11 @@ class CardDetailScreen extends ConsumerWidget {
             unselectedLabelStyle: BambooFonts.ui(13.5, weight: FontWeight.w500),
             tabs: const [
               Tab(text: 'Rewards'),
+              // First after Rewards: "what has this card actually done for
+              // me" is the question the other five tabs only answer
+              // indirectly, and it's the one that decides whether the
+              // annual fee is worth paying.
+              Tab(text: 'Spend'),
               Tab(text: 'Caps'),
               Tab(text: 'Milestones'),
               Tab(text: 'Fees'),
@@ -116,6 +122,7 @@ class CardDetailScreen extends ConsumerWidget {
                     return TabBarView(
                       children: [
                         _RewardsTab(product: product),
+                        _SpendTab(userCard: userCard, product: product),
                         _CapsTab(userCard: userCard, product: product),
                         _MilestonesTab(userCard: userCard, product: product),
                         _FeesTab(userCard: userCard, product: product),
@@ -129,6 +136,136 @@ class CardDetailScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// What this card actually did this month, and what it really paid.
+///
+/// Card Detail had six tabs describing the card's TERMS — its rates, caps,
+/// milestones, fees, benefits and statement dates — and none describing the
+/// card's PERFORMANCE. So the one question a cardholder most wants
+/// answered, "is this card earning its keep?", had no home, even though
+/// every figure needed to answer it was already being recorded.
+///
+/// Reuses the shared spend report rather than adding a per-card endpoint:
+/// `GET /spend-report` already returns a per-card breakdown, so filtering
+/// it here keeps one definition of "spend on this card" instead of two that
+/// can drift.
+class _SpendTab extends ConsumerWidget {
+  final UserCard userCard;
+  final CardProduct product;
+  const _SpendTab({required this.userCard, required this.product});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final report = ref.watch(spendReportProvider(SpendPeriod.month));
+
+    return report.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
+        child: SkeletonList(count: 3),
+      ),
+      error: (err, _) => ErrorState(
+        message: userFacingErrorMessage(err),
+        onRetry: () => ref.invalidate(spendReportProvider(SpendPeriod.month)),
+      ),
+      data: (data) {
+        if (data == null) {
+          return const EmptyState(
+            icon: Icons.lock_outline_rounded,
+            title: 'Sign in to see this card\'s spending',
+            message: 'Per-card reports are built from your transaction history, which lives with '
+                'your account.',
+          );
+        }
+        final row = data.byCard.where((c) => c.cardId == userCard.id).firstOrNull;
+        if (row == null || row.total.isZero) {
+          return const EmptyState(
+            icon: Icons.show_chart_rounded,
+            title: 'Nothing on this card this month',
+            message: 'Once spend is logged against this card, you\'ll see what it earned and the '
+                'rate it really paid.',
+          );
+        }
+
+        final rate = row.effectiveRatePerRupee;
+        final fee = product.annualFeeInr;
+        // Annualised from ONE month, and labelled as such. A month is a
+        // small sample and a bad one to extrapolate from blindly, but the
+        // alternative — comparing a month of rewards against a year of fee
+        // — is the comparison people make in their heads anyway, and it is
+        // wrong by a factor of twelve.
+        final annualisedRewards = row.rewards * 12;
+
+        return ListView(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          children: [
+            _SpendStatCard(
+              label: 'Spent this month',
+              value: row.total,
+              sub: '${row.txnCount} transaction${row.txnCount == 1 ? '' : 's'}',
+            ),
+            const SizedBox(height: AppSpace.md),
+            _SpendStatCard(
+              label: 'Earned this month',
+              value: row.rewards,
+              sub: rate == null
+                  ? null
+                  : 'An effective ${(rate * 100).toStringAsFixed(2)}% on what you spent here — '
+                        'this is what the card actually paid, not its headline rate.',
+            ),
+            if (fee != null && !fee.isZero) ...[
+              const SizedBox(height: AppSpace.md),
+              _SpendStatCard(
+                label: 'Annual fee',
+                value: fee,
+                sub: annualisedRewards >= fee
+                    ? 'At this month\'s pace you\'d earn about '
+                          '${annualisedRewards.format(compact: true)} a year — more than the fee.'
+                    : 'At this month\'s pace you\'d earn about '
+                          '${annualisedRewards.format(compact: true)} a year, which is less than '
+                          'the fee. One month is a small sample — check the Savings Report before '
+                          'deciding.',
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SpendStatCard extends StatelessWidget {
+  final String label;
+  final Money value;
+  final String? sub;
+  const _SpendStatCard({required this.label, required this.value, this.sub});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
+        color: BambooInk.paperMuted,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+          const SizedBox(height: 2),
+          MoneyText(
+            value,
+            confidence: Confidence.estimated,
+            style: BambooFonts.money(24, color: BambooInk.ink900),
+          ),
+          if (sub != null) ...[
+            const SizedBox(height: 6),
+            Text(sub!, style: BambooFonts.ui(12, color: BambooInk.ink500)),
+          ],
+        ],
       ),
     );
   }

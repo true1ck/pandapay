@@ -6,11 +6,18 @@ const config = require('./config');
 const { withUserClient, pool } = require('./db');
 const { optionalAuth, requireAuth } = require('./auth');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
-const { parseSmsAgainstPatterns, redactSmsShape, senderMatches } = require('./sms_parser');
+const { parseSmsAgainstPatterns, redactSmsShape, senderMatches, parseTransactionDate } = require('./sms_parser');
+const importResolvers = require('./import_resolvers');
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
+const rewardMath = require('./reward_math');
+const spendReports = require('./spend_reports');
+const { detectRecurringSeries, annualCost } = require('./recurring');
+const { buildMonthlyReport } = require('./monthly_report');
+const { csvDocument } = require('./csv');
+const { startImapPoller, fetchRecentMessages } = require('./imap_poller');
 const { requestLogger, errorHandler } = require('./observability');
 
 const app = express();
@@ -1832,7 +1839,7 @@ app.get('/user-cards', requireAuth, async (req, res) => {
       const cards = await client.query(
         `SELECT uc.id, uc.card_product_id, uc.nickname, uc.is_default, uc.sort_order,
                 uc.created_at, uc.statement_day, uc.due_day, uc.opened_on,
-                uc.credit_limit_inr, uc.anniversary_on, uc.is_archived,
+                uc.credit_limit_inr, uc.anniversary_on, uc.is_archived, uc.last4,
                 uc.points_balance, uc.points_balance_state, uc.autopay_mode,
                 cp.name AS card_name, cp.network, cp.is_upi_linkable
            FROM user_cards uc
@@ -1908,9 +1915,16 @@ app.get('/user-cards', requireAuth, async (req, res) => {
  * else's wallet even if they tampered with the request.
  */
 app.post('/user-cards', requireAuth, async (req, res) => {
-  const { cardProductId, nickname } = req.body || {};
+  const { cardProductId, nickname, last4 } = req.body || {};
   if (!cardProductId || typeof cardProductId !== 'string') {
     return res.status(400).json({ error: 'cardProductId is required' });
+  }
+  // Four digits or nothing. Validated here as well as by the column CHECK so
+  // the caller gets a clear 400 rather than a 500 from a constraint
+  // violation — and so this route can never be the way a longer number
+  // reaches a column that must only ever hold a matching key.
+  if (last4 !== undefined && last4 !== null && last4 !== '' && !/^[0-9]{4}$/.test(String(last4))) {
+    return res.status(400).json({ error: 'last4 must be exactly 4 digits' });
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
@@ -1921,10 +1935,10 @@ app.post('/user-cards', requireAuth, async (req, res) => {
       if (card.rows.length === 0) return null;
 
       const inserted = await client.query(
-        `INSERT INTO user_cards (profile_id, card_product_id, nickname)
-         VALUES ($1, $2, $3)
-         RETURNING id, card_product_id, nickname, is_default, sort_order, created_at`,
-        [req.userId, cardProductId, nickname || null]
+        `INSERT INTO user_cards (profile_id, card_product_id, nickname, last4)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, card_product_id, nickname, last4, is_default, sort_order, created_at`,
+        [req.userId, cardProductId, nickname || null, last4 || null]
       );
       return inserted.rows[0];
     });
@@ -2345,6 +2359,9 @@ const USER_CARD_PATCH_FIELDS = {
   dueDay: 'due_day',
   pointsBalance: 'points_balance',
   autopayMode: 'autopay_mode',
+  // Migration 0039: the matching key that lets an incoming bank SMS/email
+  // be attached to this card without asking the user which one it was.
+  last4: 'last4',
 };
 
 /** Mirrors the CHECK constraint in migration 0027. */
@@ -2366,6 +2383,16 @@ const AUTOPAY_MODES = ['off', 'minimum', 'full'];
  */
 app.patch('/user-cards/:id', requireAuth, async (req, res) => {
   const body = req.body || {};
+  // Validated and normalized BEFORE the value list is built, since the loop
+  // below copies straight out of `body` — a check placed after it would
+  // have already let the raw value through.
+  if ('last4' in body && body.last4 !== null && body.last4 !== '' && !/^[0-9]{4}$/.test(String(body.last4))) {
+    return res.status(400).json({ error: 'last4 must be exactly 4 digits' });
+  }
+  // An empty string is how a cleared text field arrives; store it as NULL so
+  // "no last4" is one value, not two.
+  if (body.last4 === '') body.last4 = null;
+
   const sets = [];
   const values = [];
   for (const [bodyKey, column] of Object.entries(USER_CARD_PATCH_FIELDS)) {
@@ -2408,7 +2435,7 @@ app.patch('/user-cards/:id', requireAuth, async (req, res) => {
         `UPDATE user_cards SET ${sets.join(', ')}
           WHERE id = $${idParam} AND profile_id = $${profileParam} AND is_archived = false
           RETURNING id, nickname, credit_limit_inr, statement_day, due_day, points_balance,
-                    points_balance_state, autopay_mode`,
+                    points_balance_state, autopay_mode, last4`,
         values
       )
     );
@@ -2524,10 +2551,24 @@ app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
  */
 async function insertTransactionAndUpdateState(client, userId, {
   userCardId, amount, occurred, categoryId, rail, merchantName, note, source,
-  sourceKey, backfill,
+  sourceKey, backfill, instrument, entryKind,
 }) {
-  const userCard = await loadUserCardForState(client, userId, userCardId);
-  if (!userCard) return { status: 404, error: 'user_card not found' };
+  const resolvedInstrument = instrument || 'credit_card';
+  const resolvedEntryKind = entryKind || 'spend';
+
+  // Only a credit-card SPEND moves card state.
+  //
+  // Migration 0040 opened this route to cash, debit, UPI-from-bank, income
+  // and investments. None of those touch a card's cap, milestone, points or
+  // fee-waiver counters — those describe one card's billing cycle, and a
+  // cash purchase or a salary credit moves none of them. Income and
+  // investments in particular must never accrue cap progress: they aren't
+  // spend at all, and counting them would inflate every reward figure on
+  // the card they happened to be filed against.
+  const movesCardState = resolvedInstrument === 'credit_card' && resolvedEntryKind === 'spend';
+
+  const userCard = movesCardState ? await loadUserCardForState(client, userId, userCardId) : null;
+  if (movesCardState && !userCard) return { status: 404, error: 'user_card not found' };
 
   // Migration 0036: `source_key` is the identity of an imported message
   // (hash of sender+body+timestamp, salted per profile). ON CONFLICT DO
@@ -2537,11 +2578,11 @@ async function insertTransactionAndUpdateState(client, userId, {
   // index only covers non-null keys.
   const txn = await client.query(
     `INSERT INTO transactions
-       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, note, reward_state, source_key)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'estimated', $10)
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, note, reward_state, source_key, instrument, entry_kind)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'estimated', $10, $11, $12)
      ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
-     RETURNING id, amount_inr, occurred_at`,
-    [userId, userCardId, amount, occurred, merchantName || null, categoryId || null, rail || 'unknown', source || 'manual', note || null, sourceKey || null]
+     RETURNING id, amount_inr, occurred_at, instrument, entry_kind`,
+    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, categoryId || null, rail || 'unknown', source || 'manual', note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind]
   );
 
   // Zero rows back means the unique index rejected it: this exact message
@@ -2566,10 +2607,14 @@ async function insertTransactionAndUpdateState(client, userId, {
   // months is a completely ordinary sequence, and it is exactly the
   // cross-channel case D-5 exists to catch. Skipping it here would silence
   // the check precisely where it earns its keep.
-  const stateUpdates = backfill
+  const stateUpdates = (backfill || !movesCardState)
     ? {}
     : await applyTransactionState(client, userId, userCard, {
         txnId: txn.rows[0].id, userCardId, amount, occurred, categoryId, sign: 1,
+        // merchantName/rail are now part of rule matching (merchant-restricted
+        // and rail-restricted rules), so they have to reach the state
+        // machine rather than stopping at the INSERT above.
+        merchantName, rail,
       });
 
   // Task D-5 (ui-spec D5 Duplicate Review, §5.8): runs on every insert
@@ -2578,11 +2623,146 @@ async function insertTransactionAndUpdateState(client, userId, {
   // exactly the "same amount+merchant+date across channels" case the spec
   // describes (a bank SMS and a later statement import both recording the
   // same swipe is the canonical example).
-  await detectDuplicates(client, userId, {
-    newTxnId: txn.rows[0].id, amount, occurred, merchantName, source: source || 'manual',
+  // Only spend rows are deduped. Two salary credits of the same amount on
+  // the same day are not a double-import, and flagging them as one would
+  // teach the user to ignore the review queue.
+  const duplicates = resolvedEntryKind === 'spend'
+    ? await detectDuplicates(client, userId, {
+        newTxnId: txn.rows[0].id, amount, occurred, merchantName, source: source || 'manual',
+      })
+    : { autoMergeAgainst: null };
+
+  // Auto-merge on a high-confidence match.
+  //
+  // Flagging alone was not enough. Until a human worked the review queue,
+  // BOTH copies of the same swipe stayed `active` — and active means
+  // counted: in spend totals, in cap consumption, in rewards earned, in
+  // every Insights figure. So the exact failure the queue exists to prevent
+  // (one purchase counted twice because it arrived by SMS and by email)
+  // happened anyway for as long as the queue went unread, which for most
+  // people is forever.
+  //
+  // 0.9 means amount, day and merchant name all agree across two different
+  // channels. That is not a coincidence, and treating it as one is the
+  // safer error: the drop is fully reversible from the Duplicate Review
+  // screen, the pairing is recorded rather than hidden, and the surviving
+  // transaction is the one already visible everywhere else in the app.
+  // 0.6 matches (no merchant name on one side) still go to the queue — that
+  // genuinely can be two real purchases of the same amount on the same day.
+  let autoMerged = null;
+  if (duplicates.autoMergeAgainst) {
+    if (!backfill && movesCardState) {
+      await reverseTransactionState(client, userId, userCard, {
+        id: txn.rows[0].id,
+        user_card_id: userCardId,
+        amount_inr: amount,
+        occurred_at: occurred,
+        category_id: categoryId || null,
+        merchant_name: merchantName || null,
+        rail: rail || 'unknown',
+      });
+    }
+    const noteTag = `[merged: duplicate of ${duplicates.autoMergeAgainst}]`;
+    await client.query(
+      `UPDATE transactions SET status = 'ignored', note = $1 WHERE id = $2`,
+      [note ? `${noteTag} ${note}` : noteTag, txn.rows[0].id]
+    );
+    await client.query(
+      `UPDATE duplicate_candidates
+          SET state = 'resolved', resolution = 'merged', resolved_at = now()
+        WHERE profile_id = $1 AND (txn_a_id = $2 OR txn_b_id = $2)`,
+      [userId, txn.rows[0].id]
+    );
+    autoMerged = duplicates.autoMergeAgainst;
+  }
+
+  return {
+    status: 201,
+    transaction: txn.rows[0],
+    backfilled: !!backfill,
+    autoMergedInto: autoMerged,
+    ...stateUpdates,
+  };
+}
+
+/**
+ * The one path a successfully-parsed bank message takes to become a
+ * transaction, shared by POST /transactions/from-sms, its /batch sibling,
+ * the forwarded-email webhook and POST /inbound-emails/:id/create-transaction.
+ *
+ * Everything those four used to duplicate — or, worse, not do at all — lives
+ * here: resolving which card the message belongs to, resolving what kind of
+ * spend it was, and choosing between inserting a transaction and filing the
+ * message for human review.
+ *
+ * The behaviour change this represents is the important one. Every import
+ * route previously REQUIRED the caller to supply `userCardId`, so no
+ * transaction was ever recorded without a person tapping a card for that
+ * specific message. Now an unresolvable message goes to
+ * `needs_review_items` (which has existed for this since 0004) instead of
+ * being rejected with a 400, and a resolvable one lands on its own.
+ *
+ * Nothing is guessed: `resolveUserCardForImport` returns a card only when
+ * the evidence is unambiguous. Attaching spend to the WRONG card is far
+ * worse than attaching it to none — it corrupts that card's cap state, its
+ * reward totals, and every recommendation made against it afterwards.
+ */
+async function importParsedMessage(client, userId, {
+  parsed, patternIssuerId, sender, rawText, source, occurred, sourceKey, backfill,
+  explicitUserCardId, explicitCategoryId, rail, vpa, mcc,
+}) {
+  let userCardId = explicitUserCardId || null;
+  let matchBasis = userCardId ? 'caller-supplied' : null;
+
+  if (!userCardId) {
+    const resolved = await importResolvers.resolveUserCardForImport(client, userId, {
+      last4: parsed.fields.last4,
+      patternIssuerId,
+    });
+    if (resolved) {
+      userCardId = resolved.userCardId;
+      matchBasis = resolved.basis;
+    }
+  }
+
+  if (!userCardId) {
+    const reviewItemId = await importResolvers.fileForReview(client, userId, {
+      source,
+      rawText,
+      sender,
+      parseError: 'could_not_match_a_card',
+      amount: parsed.fields.amountInr,
+      merchant: parsed.fields.merchant || null,
+      receivedAt: occurred,
+    });
+    return { status: 200, parsed: true, needsReview: true, needsReviewItemId: reviewItemId };
+  }
+
+  // An explicitly-supplied category always wins; otherwise resolve it.
+  // Imported transactions used to land uncategorized ALWAYS, which both
+  // emptied Insights ("Uncategorized" for the entire history) and priced
+  // every import at the card's base rate, because reward matching is by
+  // category and a null category can only ever match the base rule.
+  const categoryId = explicitCategoryId
+    || (await importResolvers.resolveCategoryForImport(client, userId, {
+      merchantName: parsed.fields.merchant,
+      vpa,
+      mcc,
+    }));
+
+  const inserted = await insertTransactionAndUpdateState(client, userId, {
+    userCardId,
+    amount: parsed.fields.amountInr,
+    occurred,
+    categoryId,
+    rail: rail || 'unknown',
+    merchantName: parsed.fields.merchant || null,
+    source,
+    sourceKey,
+    backfill,
   });
 
-  return { status: 201, transaction: txn.rows[0], backfilled: !!backfill, ...stateUpdates };
+  return { ...inserted, matchBasis, resolvedCategoryId: categoryId, userCardId };
 }
 
 /**
@@ -2628,18 +2808,35 @@ function importSourceKey(userId, sender, body, occurred) {
  * once — but is possible if this were ever called twice) is a no-op, not
  * a duplicate duplicate-flag.
  */
+/** Rupee tolerance when comparing two channels' record of one swipe. */
+const DUPLICATE_AMOUNT_TOLERANCE_INR = 1;
+
+/** At or above this score, the pair is merged rather than queued. */
+const DUPLICATE_AUTO_MERGE_SCORE = 0.9;
+
 async function detectDuplicates(client, userId, { newTxnId, amount, occurred, merchantName, source }) {
+  // The amount comparison is a small RANGE, not equality. An SMS reading
+  // "Rs.1,234" and a statement line reading "1234.50" are the same swipe,
+  // and requiring an exact match let that pair through as two transactions.
   const candidates = await client.query(
     `SELECT id, merchant_name FROM transactions
       WHERE profile_id = $1 AND status = 'active' AND id != $2
-        AND amount_inr = $3 AND source != $4
+        AND amount_inr BETWEEN $3::numeric - $6::numeric AND $3::numeric + $6::numeric
+        AND source != $4
         AND occurred_at BETWEEN $5::timestamptz - interval '1 day' AND $5::timestamptz + interval '1 day'`,
-    [userId, newTxnId, amount, source, occurred]
+    [userId, newTxnId, amount, source, occurred, DUPLICATE_AMOUNT_TOLERANCE_INR]
   );
+
+  let autoMergeAgainst = null;
 
   for (const candidate of candidates.rows) {
     const bothNamed = merchantName && candidate.merchant_name;
-    const namesMatch = bothNamed && merchantName.toLowerCase() === candidate.merchant_name.toLowerCase();
+    // Normalized, not a raw lowercase compare: the same merchant reaches us
+    // as 'SWIGGY*ORDER' from one channel and 'Swiggy' from another, and a
+    // case-only comparison called those different and kept both.
+    const namesMatch =
+      bothNamed &&
+      rewardMath.normalizeMerchant(merchantName) === rewardMath.normalizeMerchant(candidate.merchant_name);
     if (bothNamed && !namesMatch) continue; // both have a name and they disagree — not a match
     const matchScore = namesMatch ? 0.9 : 0.6;
     const matchReason = namesMatch
@@ -2653,7 +2850,17 @@ async function detectDuplicates(client, userId, { newTxnId, amount, occurred, me
        ON CONFLICT (txn_a_id, txn_b_id) DO NOTHING`,
       [userId, txnA, txnB, matchScore, matchReason]
     );
+
+    // The caller drops the NEW row against the first high-confidence match:
+    // the older transaction is already visible in Activity, may already be
+    // referenced by an edit or a split, and keeping it makes the outcome
+    // predictable rather than dependent on arrival order.
+    if (matchScore >= DUPLICATE_AUTO_MERGE_SCORE && !autoMergeAgainst) {
+      autoMergeAgainst = candidate.id;
+    }
   }
+
+  return { autoMergeAgainst };
 }
 
 /**
@@ -2666,9 +2873,15 @@ async function detectDuplicates(client, userId, { newTxnId, amount, occurred, me
  * frozen once a card is archived rather than being editable afterward).
  */
 async function loadUserCardForState(client, userId, userCardId) {
+  // base_reward_unit/base_reward_rate/excluded_categories added alongside
+  // point_value_inr: reward_math.js resolves a null post-cap rate against
+  // the card's base rate, and refuses to earn at all on an excluded
+  // category, so both are now inputs to the state machine rather than
+  // catalogue-display data the server never looked at.
   const result = await client.query(
     `SELECT uc.id, uc.card_product_id, uc.statement_day, uc.opened_on, uc.created_at,
-            cp.point_value_inr
+            cp.point_value_inr, cp.base_reward_unit, cp.base_reward_rate,
+            cp.excluded_categories
        FROM user_cards uc
        JOIN card_products cp ON cp.id = uc.card_product_id
       WHERE uc.id = $1 AND uc.profile_id = $2 AND uc.is_archived = false`,
@@ -2703,51 +2916,112 @@ async function loadUserCardForState(client, userId, userCardId) {
  * sign=-1 deletes the row keyed by `transaction_id`.
  */
 async function applyTransactionState(client, userId, userCard, {
-  txnId, userCardId, amount, occurred, categoryId, sign,
+  txnId, userCardId, amount, occurred, categoryId, sign, merchantName, rail,
 }) {
-  const matchingRule = await client.query(
-    `SELECT unit, rate FROM reward_rules
-      WHERE card_product_id = $1 AND (category_id IS NULL OR category_id = $2)
-      ORDER BY priority ASC LIMIT 1`,
-    [userCard.card_product_id, categoryId || null]
+  // The full rule rows, not just (unit, rate): every constraint column here
+  // is now enforced by src/reward_math.js's `ruleApplies`, which is the
+  // same predicate the Dart engine runs. The old query selected two columns
+  // and matched on `category_id IS NULL OR category_id = $2`, ignoring the
+  // merchant/rail/min-txn/validity constraints the rule carried.
+  const rewardRules = await client.query(
+    `SELECT id, category_id, merchant_pattern, rail, unit, rate,
+            min_txn_inr, max_txn_inr, excluded_categories,
+            effective_from, effective_to, priority
+       FROM reward_rules WHERE card_product_id = $1`,
+    [userCard.card_product_id]
   );
-  const rewardRate = matchingRule.rows[0]
-    ? effectiveRatePerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate), Number(userCard.point_value_inr) || 0)
-    : 0;
 
+  // Every cap on the card. Which one (if any) governs this transaction is
+  // decided by `pickCapRule`, against the MATCHED rule or the transaction's
+  // category — not by a SQL predicate in which `category_id IS NULL` acted
+  // as a wildcard and let a rent payment consume a grocery cap.
   const capRules = await client.query(
-    `SELECT id, period, cap_value, measure FROM cap_rules
-      WHERE card_product_id = $1 AND (category_id IS NULL OR category_id = $2)`,
-    [userCard.card_product_id, categoryId || null]
+    `SELECT id, reward_rule_id, category_id, period, cap_value, measure,
+            post_cap_unit, post_cap_rate
+       FROM cap_rules WHERE card_product_id = $1`,
+    [userCard.card_product_id]
   );
-  const capStateUpdates = [];
-  for (const cap of capRules.rows) {
-    let consumedDelta;
-    if (cap.measure === 'reward_value') {
-      consumedDelta = amount * rewardRate;
-    } else if (cap.measure === 'txn_count') {
-      consumedDelta = 1;
-    } else {
-      consumedDelta = amount;
-    }
-    consumedDelta *= sign;
 
-    const { start, end } = periodBounds(cap.period, occurred, { statementDay: userCard.statement_day });
+  const card = {
+    point_value_inr: userCard.point_value_inr,
+    base_reward_unit: userCard.base_reward_unit,
+    base_reward_rate: userCard.base_reward_rate,
+    excluded_categories: userCard.excluded_categories || [],
+  };
+  const ctx = { amount, categoryId: categoryId || null, merchantName: merchantName || null, rail: rail || 'unknown', occurred };
+
+  // Which cap this transaction would touch, and its state BEFORE this
+  // transaction — cap blending needs the prior consumption, so the read has
+  // to happen before the upsert below.
+  const provisionalRule = rewardMath.pickRule(rewardRules.rows, ctx);
+  const cardExcluded = !!categoryId && card.excluded_categories.includes(categoryId);
+  const governingCap = provisionalRule && !cardExcluded
+    ? rewardMath.pickCapRule(capRules.rows, provisionalRule, ctx)
+    : null;
+
+  const capStateUpdates = [];
+  let capConsumedBefore = 0;
+  let capPeriod = null;
+  if (governingCap) {
+    capPeriod = periodBounds(governingCap.period, occurred, { statementDay: userCard.statement_day });
+    const existing = await client.query(
+      `SELECT consumed FROM cap_states
+        WHERE user_card_id = $1 AND cap_rule_id = $2 AND period_start = $3`,
+      [userCardId, governingCap.id, capPeriod.start]
+    );
+    capConsumedBefore = existing.rows[0] ? Number(existing.rows[0].consumed) : 0;
+  }
+
+  // On a reversal the stored consumption already INCLUDES this
+  // transaction, so blending against it would price the reversal as if the
+  // cap were more used up than it was when the transaction landed. Backing
+  // the transaction's own contribution out first is exact for spend and
+  // transaction-count caps (their delta doesn't depend on cap state) and
+  // approximate for reward-value caps, which is the same known,
+  // already-documented limitation as a mid-cycle rule change: a reversal
+  // cancels its original apply exactly only if the rules haven't moved.
+  if (sign < 0 && governingCap) {
+    const provisional = rewardMath.rewardPortions({
+      card,
+      rule: provisionalRule,
+      capRule: governingCap,
+      capConsumedBefore,
+      amount,
+    });
+    capConsumedBefore = Math.max(0, capConsumedBefore - provisional.capConsumedDelta);
+  }
+
+  const reward = rewardMath.computeTransactionReward({
+    card,
+    rewardRules: rewardRules.rows,
+    capRules: capRules.rows,
+    capConsumedBefore,
+    ctx,
+  });
+
+  if (governingCap && reward.capConsumedDelta !== 0) {
+    const consumedDelta = reward.capConsumedDelta * sign;
     const upserted = await client.query(
       `INSERT INTO cap_states (profile_id, user_card_id, cap_rule_id, period_start, period_end, consumed, cap_value_snapshot)
        VALUES ($1, $2, $3, $4, $5, GREATEST(0, $6), $7)
        ON CONFLICT (user_card_id, cap_rule_id, period_start)
        DO UPDATE SET consumed = GREATEST(0, cap_states.consumed + $6), updated_at = now()
        RETURNING cap_rule_id, period_start, period_end, consumed, cap_value_snapshot`,
-      [userId, userCardId, cap.id, start, end, consumedDelta, cap.cap_value]
+      [userId, userCardId, governingCap.id, capPeriod.start, capPeriod.end, consumedDelta, governingCap.cap_value]
     );
     capStateUpdates.push(upserted.rows[0]);
   }
 
-  const milestoneRules = await client.query(
-    `SELECT id, period, anchor FROM milestone_rules WHERE card_product_id = $1`,
-    [userCard.card_product_id]
-  );
+  // A category the card excludes from earning is excluded from milestone
+  // qualification too — issuers apply the same list to both, and counting
+  // a rent payment toward a spend milestone on a card that pays nothing on
+  // rent would show the user progress they haven't actually made.
+  const milestoneRules = cardExcluded
+    ? { rows: [] }
+    : await client.query(
+        `SELECT id, period, anchor FROM milestone_rules WHERE card_product_id = $1`,
+        [userCard.card_product_id]
+      );
   const milestoneStateUpdates = [];
   for (const milestone of milestoneRules.rows) {
     const anchorDate = userCard.opened_on || userCard.created_at;
@@ -2790,10 +3064,15 @@ async function applyTransactionState(client, userId, userCard, {
   // value/points even though cap/milestone/points-ledger state had already
   // been reversed — a real number on screen for a reward that no longer
   // existed anywhere else.
-  const expectedValue = sign > 0 ? amount * rewardRate : 0;
-  const expectedPoints = sign > 0 && matchingRule.rows[0]
-    ? amount * effectivePointsPerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate))
-    : 0;
+  //
+  // CAP-AWARE as of the reward_math.js extraction. It used to be
+  // `amount × nominal rate` with no cap blending at all, so once a cap was
+  // exhausted the app went on recording 5% against spend that earned 1% —
+  // "rewards earned this month" over-reported permanently and invisibly,
+  // and Insights disagreed with the recommender that had been honest about
+  // the same cap ten seconds earlier.
+  const expectedValue = sign > 0 ? reward.valueInr : 0;
+  const expectedPoints = sign > 0 ? reward.points : 0;
   await client.query(
     `UPDATE transactions
         SET expected_value_inr = $2, expected_points = $3, updated_at = now()
@@ -2805,22 +3084,23 @@ async function applyTransactionState(client, userId, userCard, {
   // reverse deletes the row this exact transaction wrote. flat_points
   // rules earn 0 per this helper (a fixed bonus isn't a per-transaction
   // rate) so no ledger noise is written or needs deleting for them.
+  //
+  // The delta is the SAME cap-blended `reward.points` written above rather
+  // than a second, independently-derived figure: the ledger and the
+  // transaction row disagreeing about how many points one swipe earned is
+  // exactly the kind of drift this whole module exists to remove.
   let pointsLedgerEntry = null;
-  if (matchingRule.rows[0]) {
-    const pointsPerRupee = effectivePointsPerRupee(matchingRule.rows[0].unit, Number(matchingRule.rows[0].rate));
-    if (pointsPerRupee > 0) {
-      if (sign > 0) {
-        const deltaPoints = amount * pointsPerRupee;
-        const inserted = await client.query(
-          `INSERT INTO points_ledger (profile_id, user_card_id, transaction_id, delta_points, reason, state, occurred_at)
-           VALUES ($1, $2, $3, $4, $5, 'estimated', $6)
-           RETURNING id, delta_points, reason, occurred_at`,
-          [userId, userCardId, txnId, deltaPoints, `${matchingRule.rows[0].unit} earned on transaction`, occurred]
-        );
-        pointsLedgerEntry = inserted.rows[0];
-      } else {
-        await client.query(`DELETE FROM points_ledger WHERE transaction_id = $1`, [txnId]);
-      }
+  if (reward.points > 0 || sign < 0) {
+    if (sign > 0) {
+      const inserted = await client.query(
+        `INSERT INTO points_ledger (profile_id, user_card_id, transaction_id, delta_points, reason, state, occurred_at)
+         VALUES ($1, $2, $3, $4, $5, 'estimated', $6)
+         RETURNING id, delta_points, reason, occurred_at`,
+        [userId, userCardId, txnId, reward.points, 'points earned on transaction', occurred]
+      );
+      pointsLedgerEntry = inserted.rows[0];
+    } else {
+      await client.query(`DELETE FROM points_ledger WHERE transaction_id = $1`, [txnId]);
     }
   }
 
@@ -2894,15 +3174,39 @@ async function reverseTransactionState(client, userId, userCard, txnRow) {
     amount: Number(txnRow.amount_inr),
     occurred: txnRow.occurred_at,
     categoryId: txnRow.category_id,
+    // The stored merchant/rail, for the same reason the amount and category
+    // come from the row rather than the caller: a merchant- or
+    // rail-restricted rule must reverse against the rule that actually
+    // applied. Omitting these would match a different rule on the way out
+    // than on the way in and leave cap state permanently skewed.
+    merchantName: txnRow.merchant_name,
+    rail: txnRow.rail,
     sign: -1,
   });
 }
 
+/** Mirrors the txn_instrument / txn_entry_kind enums in migration 0040. */
+const TXN_INSTRUMENTS = ['credit_card', 'debit_card', 'cash', 'upi_bank', 'wallet', 'other'];
+const TXN_ENTRY_KINDS = ['spend', 'income', 'investment', 'transfer'];
+
 app.post('/transactions', requireAuth, async (req, res) => {
   const { userCardId, amountInr, occurredAt, categoryId, rail, merchantName, note } = req.body || {};
+  const instrument = (req.body || {}).instrument || 'credit_card';
+  const entryKind = (req.body || {}).entryKind || 'spend';
   const amount = Number(amountInr);
-  if (!userCardId || typeof userCardId !== 'string') {
-    return res.status(400).json({ error: 'userCardId is required' });
+
+  if (!TXN_INSTRUMENTS.includes(instrument)) {
+    return res.status(400).json({ error: `instrument must be one of ${TXN_INSTRUMENTS.join(', ')}` });
+  }
+  if (!TXN_ENTRY_KINDS.includes(entryKind)) {
+    return res.status(400).json({ error: `entryKind must be one of ${TXN_ENTRY_KINDS.join(', ')}` });
+  }
+  // userCardId is required only for a credit-card entry, which is the same
+  // rule the `transactions_card_matches_instrument` CHECK enforces. Cash,
+  // debit, income and investments have no card by definition, and demanding
+  // one is what previously made them impossible to record at all.
+  if (instrument === 'credit_card' && (!userCardId || typeof userCardId !== 'string')) {
+    return res.status(400).json({ error: 'userCardId is required for a credit-card transaction' });
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     return res.status(400).json({ error: 'amountInr must be a positive number' });
@@ -2915,7 +3219,9 @@ app.post('/transactions', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       insertTransactionAndUpdateState(client, req.userId, {
-        userCardId, amount, occurred, categoryId, rail, merchantName, note, source: 'manual',
+        userCardId: instrument === 'credit_card' ? userCardId : null,
+        amount, occurred, categoryId, rail, merchantName, note, source: 'manual',
+        instrument, entryKind,
       })
     );
 
@@ -2946,12 +3252,16 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
   if (!body || typeof body !== 'string' || !body.trim()) {
     return res.status(400).json({ error: 'body is required' });
   }
-  if (!userCardId || typeof userCardId !== 'string') {
-    // The parser extracts amount/merchant/last4/date, not which of the
-    // user's cards the SMS belongs to (last4 alone is not a safe/unique
-    // match key across issuers) — same "caller supplies userCardId"
-    // contract as POST /transactions, not a guess this route makes itself.
-    return res.status(400).json({ error: 'userCardId is required' });
+  // `userCardId` is now OPTIONAL. It used to be required, with the honest
+  // explanation that the parser extracts amount/merchant/last4/date but not
+  // which card the SMS is about — true, but the consequence was that no
+  // transaction was ever captured without a human tapping a card for it,
+  // one message at a time. src/import_resolvers.js now resolves it from
+  // last4 or from the issuer behind the matched pattern, and files the
+  // message for review when it can't be sure. A caller that DOES know the
+  // card still wins: an explicit id is never second-guessed.
+  if (userCardId !== undefined && userCardId !== null && typeof userCardId !== 'string') {
+    return res.status(400).json({ error: 'userCardId must be a string when given' });
   }
   const occurred = occurredAt ? new Date(occurredAt) : new Date();
   if (Number.isNaN(occurred.getTime())) {
@@ -2999,17 +3309,35 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
         [parsed.patternId]
       );
 
-      const inserted = await insertTransactionAndUpdateState(client, req.userId, {
-        userCardId,
-        amount: parsed.fields.amountInr,
-        occurred,
-        categoryId: categoryId || null,
-        rail: rail || 'unknown',
-        merchantName: parsed.fields.merchant || null,
+      // The SMS's own date beats the request's, which beats now(). Banks
+      // text about a swipe that already happened, sometimes hours later and
+      // occasionally the next morning; filing it under the moment the
+      // device happened to forward it puts spend in the wrong week and, at
+      // a month boundary, the wrong month.
+      const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
+      const parsedDate = parseTransactionDate(parsed.fields.date, occurred);
+      const effectiveOccurred = occurredAt ? occurred : (parsedDate || occurred);
+
+      const inserted = await importParsedMessage(client, req.userId, {
+        parsed,
+        patternIssuerId: patternRow ? patternRow.issuer_id : null,
+        sender,
+        rawText: body,
         source: 'sms',
+        occurred: effectiveOccurred,
         sourceKey,
         backfill: backfill === true,
+        explicitUserCardId: userCardId,
+        explicitCategoryId: categoryId || null,
+        rail,
       });
+
+      if (inserted.needsReview) {
+        // Parsed fine, but we can't say which card it belongs to. Filed for
+        // the user to confirm rather than rejected — the old 400 threw away
+        // a perfectly good transaction because one field was unknown.
+        return { status: 200, ...inserted, patternId: parsed.patternId };
+      }
 
       if (inserted.status === 200 && inserted.duplicate) {
         // Already imported. Reported as its own outcome rather than folded
@@ -3075,8 +3403,13 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
       const results = [];
       for (let i = 0; i < messages.length; i += 1) {
         const { sender, body, userCardId, occurredAt, categoryId, rail } = messages[i] || {};
-        if (!body || typeof body !== 'string' || !body.trim() || !userCardId) {
-          results.push({ index: i, outcome: 'invalid', reason: 'body and userCardId are required' });
+        // userCardId is no longer required per message — see
+        // [importParsedMessage]. A message whose card can't be resolved is
+        // filed for review rather than rejected, which is what makes a
+        // multi-thousand-message backfill possible without a tap per
+        // message.
+        if (!body || typeof body !== 'string' || !body.trim()) {
+          results.push({ index: i, outcome: 'invalid', reason: 'body is required' });
           continue;
         }
         const occurred = occurredAt ? new Date(occurredAt) : null;
@@ -3105,19 +3438,27 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           [parsed.patternId]
         );
 
-        const inserted = await insertTransactionAndUpdateState(client, req.userId, {
-          userCardId,
-          amount: parsed.fields.amountInr,
-          occurred,
-          categoryId: categoryId || null,
-          rail: rail || 'unknown',
-          merchantName: parsed.fields.merchant || null,
+        const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
+        const inserted = await importParsedMessage(client, req.userId, {
+          parsed,
+          patternIssuerId: patternRow ? patternRow.issuer_id : null,
+          sender,
+          rawText: body,
           source: 'sms',
+          // The batch path always has a real message timestamp (it's
+          // required above, for source_key), so it stays authoritative
+          // here rather than deferring to the body's own date text.
+          occurred,
           sourceKey: importSourceKey(req.userId, sender, body, occurred),
           backfill: backfill === true,
+          explicitUserCardId: userCardId,
+          explicitCategoryId: categoryId || null,
+          rail,
         });
 
-        if (inserted.status === 200 && inserted.duplicate) {
+        if (inserted.needsReview) {
+          results.push({ index: i, outcome: 'needs_review', needsReviewItemId: inserted.needsReviewItemId });
+        } else if (inserted.status === 200 && inserted.duplicate) {
           results.push({ index: i, outcome: 'duplicate' });
         } else if (inserted.status === 201) {
           results.push({ index: i, outcome: 'imported', transactionId: inserted.transaction.id });
@@ -3131,6 +3472,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         summary: {
           imported: results.filter((r) => r.outcome === 'imported').length,
           duplicate: results.filter((r) => r.outcome === 'duplicate').length,
+          needsReview: results.filter((r) => r.outcome === 'needs_review').length,
           unparsed: results.filter((r) => r.outcome === 'unparsed').length,
           invalid: results.filter((r) => r.outcome === 'invalid').length,
           error: results.filter((r) => r.outcome === 'error').length,
@@ -3337,8 +3679,11 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
           return { status: 400, error: 'keepTransactionId must be one of the pair' };
         }
         const dropId = keepTransactionId === txnA ? txnB : txnA;
+        // rail/merchant_name selected because reverseTransactionState now
+        // matches rules on both — reversing without them would pick a
+        // different rule than the insert did and skew cap state.
         const dropTxn = await client.query(
-          `SELECT id, user_card_id, amount_inr, occurred_at, category_id, status, note
+          `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name, status, note
              FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
           [dropId, req.userId]
         );
@@ -3442,6 +3787,10 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
       const stateUpdates = await applyTransactionState(client, req.userId, newCard, {
         txnId: old.id, userCardId: newValues.userCardId, amount: newValues.amount,
         occurred: newValues.occurred, categoryId: newValues.categoryId, sign: 1,
+        // The edited merchant/rail, not the old ones: rule matching reads
+        // both now, so an edit that moves a transaction to a different
+        // merchant has to re-apply against the rule that merchant earns at.
+        merchantName: newValues.merchantName, rail: newValues.rail,
       });
 
       return { status: 200, transaction: updated.rows[0], ...stateUpdates };
@@ -3761,29 +4110,80 @@ app.get('/monthly-reports', requireAuth, async (req, res) => {
       }
 
       // On-demand recompute for the current, still-in-progress month.
-      const spend = await client.query(
-        `SELECT COALESCE(SUM(amount_inr), 0) AS total_spend
+      //
+      // `baseline_single_card_inr`, `extra_earned_inr` and
+      // `value_missed_inr` have existed as columns since migration 0004 and
+      // were always zero — this route used to write a literal apology into
+      // `breakdown` instead of computing them. So the Savings Report could
+      // only ever show spend and rewards: the two figures that need no
+      // comparison to produce, and the two that say least. src/monthly_report.js
+      // computes the counterfactuals properly, simulating each hypothetical
+      // card's cap consumption across the month rather than treating every
+      // alternative card as freshly-uncapped.
+      const txnRows = await client.query(
+        `SELECT id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail,
+                expected_value_inr
            FROM transactions
-          WHERE profile_id = $1 AND status = 'active' AND occurred_at >= $2::date
-            AND occurred_at < ($2::date + interval '1 month')`,
+          WHERE profile_id = $1 AND status = 'active' AND entry_kind = 'spend'
+            AND occurred_at >= $2::date AND occurred_at < ($2::date + interval '1 month')
+          ORDER BY occurred_at ASC`,
         [req.userId, periodMonth]
       );
-      const rewards = await client.query(
-        `SELECT COALESCE(SUM(expected_value_inr), 0) AS rewards_earned
-           FROM transactions
-          WHERE profile_id = $1 AND status = 'active' AND occurred_at >= $2::date
-            AND occurred_at < ($2::date + interval '1 month')`,
-        [req.userId, periodMonth]
+
+      const totalSpend = txnRows.rows.reduce((sum, t) => sum + Number(t.amount_inr), 0);
+      const rewardsEarned = txnRows.rows.reduce((sum, t) => sum + Number(t.expected_value_inr || 0), 0);
+
+      // The wallet as it stands, with each card's full rule set. Archived
+      // cards are excluded, matching every other ranking path.
+      const walletRows = await client.query(
+        `SELECT uc.id AS user_card_id, cp.id AS card_product_id, cp.name AS card_name,
+                uc.nickname, cp.point_value_inr, cp.base_reward_unit, cp.base_reward_rate,
+                cp.excluded_categories
+           FROM user_cards uc
+           JOIN card_products cp ON cp.id = uc.card_product_id
+          WHERE uc.profile_id = $1 AND uc.is_archived = false`,
+        [req.userId]
       );
-      const totalSpend = Number(spend.rows[0].total_spend);
-      const rewardsEarned = Number(rewards.rows[0].rewards_earned);
+
+      const cards = [];
+      for (const row of walletRows.rows) {
+        const rules = await client.query(
+          `SELECT id, category_id, merchant_pattern, rail, unit, rate, min_txn_inr, max_txn_inr,
+                  excluded_categories, effective_from, effective_to, priority
+             FROM reward_rules WHERE card_product_id = $1`,
+          [row.card_product_id]
+        );
+        const caps = await client.query(
+          `SELECT id, reward_rule_id, category_id, period, cap_value, measure,
+                  post_cap_unit, post_cap_rate
+             FROM cap_rules WHERE card_product_id = $1`,
+          [row.card_product_id]
+        );
+        cards.push({ card: row, rewardRules: rules.rows, capRules: caps.rows });
+      }
+
+      const report = buildMonthlyReport({
+        cards,
+        txns: txnRows.rows,
+        actualTotal: rewardsEarned,
+        totalSpend,
+      });
+
+      const cardNameById = Object.fromEntries(
+        walletRows.rows.map((r) => [r.user_card_id, r.nickname || r.card_name])
+      );
 
       const upserted = await client.query(
-        `INSERT INTO monthly_reports (profile_id, period_month, total_spend_inr, rewards_earned_inr, breakdown)
-         VALUES ($1, $2, $3, $4, $5::jsonb)
+        `INSERT INTO monthly_reports
+           (profile_id, period_month, total_spend_inr, rewards_earned_inr,
+            baseline_single_card_inr, extra_earned_inr, value_missed_inr, breakdown)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
          ON CONFLICT (profile_id, period_month) DO UPDATE
            SET total_spend_inr = EXCLUDED.total_spend_inr,
                rewards_earned_inr = EXCLUDED.rewards_earned_inr,
+               baseline_single_card_inr = EXCLUDED.baseline_single_card_inr,
+               extra_earned_inr = EXCLUDED.extra_earned_inr,
+               value_missed_inr = EXCLUDED.value_missed_inr,
                breakdown = EXCLUDED.breakdown,
                generated_at = now()
          RETURNING *`,
@@ -3792,7 +4192,20 @@ app.get('/monthly-reports', requireAuth, async (req, res) => {
           periodMonth,
           totalSpend,
           rewardsEarned,
-          JSON.stringify({ note: 'baseline/value-missed not computed this pass — needs the shared historical-recompute calculator (see D6/E9 in the plan)' }),
+          report.baselineSingleCardInr,
+          report.extraEarnedInr,
+          report.valueMissedInr,
+          JSON.stringify({
+            optimalInr: report.optimalInr,
+            baselineCardId: report.baselineCardId,
+            baselineCardName: cardNameById[report.baselineCardId] || null,
+            txnCount: txnRows.rows.length,
+            topMissed: report.topMissed.map((m) => ({
+              ...m,
+              usedCardName: cardNameById[m.usedCardId] || null,
+              betterCardName: cardNameById[m.betterCardId] || null,
+            })),
+          }),
         ]
       );
       return upserted.rows[0];
@@ -3859,6 +4272,435 @@ app.get('/spend-by-category', requireAuth, async (req, res) => {
     res.json({ months, categories: result });
   } catch (err) {
     console.error('GET /spend-by-category error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /spend-report — everything the Trends screen shows, in one round trip.
+ *
+ * `?period=week|month|quarter|year` (default month), `?anchor=<ISO date>`
+ * to look at a period other than the current one, `?buckets=N` for how many
+ * points the chart series carries (default 12).
+ *
+ * One endpoint rather than five because every figure on that screen has to
+ * agree with every other one — a category breakdown fetched a second after
+ * the headline total, with a transaction landing in between, produces a
+ * screen whose parts visibly contradict each other. All of these run inside
+ * one `withUserClient` transaction, so they see one consistent snapshot.
+ *
+ * The previous period comes back alongside the current one because a spend
+ * figure on its own says almost nothing: "₹42,000 this month" is only
+ * meaningful next to what last month was.
+ */
+app.get('/spend-report', requireAuth, async (req, res) => {
+  const period = req.query.period || 'month';
+  if (!spendReports.PERIODS.includes(period)) {
+    return res.status(400).json({ error: `period must be one of ${spendReports.PERIODS.join(', ')}` });
+  }
+  const anchor = req.query.anchor ? new Date(req.query.anchor) : new Date();
+  if (Number.isNaN(anchor.getTime())) {
+    return res.status(400).json({ error: 'anchor is not a valid date' });
+  }
+  const buckets = req.query.buckets ? Number(req.query.buckets) : 12;
+  if (!Number.isInteger(buckets) || buckets < 1 || buckets > 60) {
+    return res.status(400).json({ error: 'buckets must be an integer between 1 and 60' });
+  }
+
+  try {
+    const payload = await withUserClient(req.userId, async (client) => {
+      const current = spendReports.periodBounds(period, anchor);
+      const previous = spendReports.previousPeriodBounds(period, anchor);
+
+      const [totals, previousTotals, byCategory, byMerchant, byCard, series] = await Promise.all([
+        spendReports.periodTotals(client, req.userId, current),
+        spendReports.periodTotals(client, req.userId, previous),
+        spendReports.spendByCategory(client, req.userId, current),
+        spendReports.spendByMerchant(client, req.userId, current),
+        spendReports.spendByCard(client, req.userId, current),
+        spendReports.spendSeries(client, req.userId, period, buckets, anchor),
+      ]);
+
+      return {
+        period,
+        periodStart: current.start,
+        periodEnd: current.end,
+        previousPeriodStart: previous.start,
+        previousPeriodEnd: previous.end,
+        elapsedFraction: spendReports.periodElapsedFraction(current, new Date()),
+        totals,
+        previousTotals,
+        byCategory,
+        byMerchant,
+        byCard,
+        series,
+      };
+    });
+    res.json(payload);
+  } catch (err) {
+    console.error('GET /spend-report error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /export/transactions.csv — a spend report someone can open in a
+ * spreadsheet or hand to their accountant.
+ *
+ * `GET /export` already existed and returns the whole account as JSON —
+ * right for a data-portability request, useless for "what did I spend last
+ * quarter". This is the reporting counterpart: one row per transaction,
+ * date-ranged, with the columns a person actually reconciles against.
+ *
+ * Deliberately NOT mounted at `/transactions/export.csv`: `GET
+ * /transactions/:id` is registered earlier in this file and would match
+ * `export.csv` as an id, so that path would 404 with a confusing
+ * "transaction not found" rather than exporting anything.
+ */
+app.get('/export/transactions.csv', requireAuth, async (req, res) => {
+  const { from, to } = req.query;
+  try {
+    const rows = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT t.occurred_at, t.amount_inr, t.merchant_name, sc.name AS category_name,
+                cp.name AS card_name, uc.nickname AS card_nickname,
+                t.instrument, t.entry_kind, t.rail, t.source, t.expected_value_inr, t.note
+           FROM transactions t
+           LEFT JOIN user_cards uc ON uc.id = t.user_card_id
+           LEFT JOIN card_products cp ON cp.id = uc.card_product_id
+           LEFT JOIN spend_categories sc ON sc.id = t.category_id
+          WHERE t.profile_id = $1 AND t.status = 'active'
+            AND ($2::date IS NULL OR t.occurred_at >= $2::date)
+            AND ($3::date IS NULL OR t.occurred_at < ($3::date + interval '1 day'))
+          ORDER BY t.occurred_at DESC`,
+        [req.userId, from || null, to || null]
+      )
+    );
+
+    const header = [
+      'Date', 'Amount (INR)', 'Merchant', 'Category', 'Card',
+      'Paid with', 'Kind', 'Rail', 'Source', 'Rewards (INR)', 'Note',
+    ];
+    const body = rows.rows.map((r) => [
+      new Date(r.occurred_at).toISOString().slice(0, 10),
+      Number(r.amount_inr).toFixed(2),
+      r.merchant_name,
+      r.category_name,
+      r.card_nickname || r.card_name,
+      r.instrument,
+      r.entry_kind,
+      r.rail,
+      r.source,
+      Number(r.expected_value_inr || 0).toFixed(2),
+      r.note,
+    ]);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="pandapay-transactions.csv"');
+    res.send(csvDocument(header, body));
+  } catch (err) {
+    console.error('GET /export/transactions.csv error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+const BUDGET_SCOPES = ['overall', 'category', 'card'];
+const BUDGET_PERIODS = ['weekly', 'monthly', 'quarterly', 'yearly'];
+
+/**
+ * GET /budgets — every active budget with its CURRENT-period progress.
+ *
+ * Progress is computed here rather than returned as a bare limit for the
+ * client to fill in, because "am I over?" depends on the period boundary,
+ * and the period boundary depends on the budget's own `starts_on` anchor
+ * (a weekly budget starting Thursday runs Thursday to Wednesday). Deriving
+ * that on two clients independently is how they end up disagreeing.
+ *
+ * `projectedInr` extrapolates the current pace across the whole period.
+ * It is explicitly a projection and is only meaningful alongside
+ * `elapsedFraction`: 60% of a budget spent is alarming on day 3 and fine on
+ * day 25, and a percentage without that context just makes people anxious.
+ */
+app.get('/budgets', requireAuth, async (req, res) => {
+  try {
+    const payload = await withUserClient(req.userId, async (client) => {
+      const budgets = await client.query(
+        `SELECT b.id, b.scope, b.scope_ref_id, b.period, b.amount_inr, b.starts_on,
+                b.rollover, b.is_active,
+                sc.name AS category_name, cp.name AS card_name, uc.nickname AS card_nickname
+           FROM budgets b
+           LEFT JOIN spend_categories sc ON b.scope = 'category' AND sc.id = b.scope_ref_id
+           LEFT JOIN user_cards uc ON b.scope = 'card' AND uc.id = b.scope_ref_id
+           LEFT JOIN card_products cp ON cp.id = uc.card_product_id
+          WHERE b.profile_id = $1 AND b.is_active
+          ORDER BY b.scope, b.period`,
+        [req.userId]
+      );
+
+      const now = new Date();
+      const rows = [];
+      for (const b of budgets.rows) {
+        const bounds = spendReports.budgetPeriodBounds(b, now);
+        const { spentInr, txnCount } = await spendReports.budgetSpend(client, req.userId, b, bounds);
+        const amountInr = Number(b.amount_inr);
+        const elapsed = spendReports.periodElapsedFraction(bounds, now);
+        rows.push({
+          id: b.id,
+          scope: b.scope,
+          scopeRefId: b.scope_ref_id,
+          label: b.scope === 'overall'
+            ? 'All spending'
+            : b.scope === 'category'
+              ? (b.category_name || 'Category')
+              : (b.card_nickname || b.card_name || 'Card'),
+          period: b.period,
+          amountInr,
+          startsOn: b.starts_on,
+          rollover: b.rollover,
+          periodStart: bounds.start,
+          periodEnd: bounds.end,
+          spentInr,
+          txnCount,
+          remainingInr: amountInr - spentInr,
+          consumedFraction: amountInr > 0 ? spentInr / amountInr : 0,
+          elapsedFraction: elapsed,
+          // Straight-line extrapolation of the pace so far. Null in the
+          // first moments of a period, where dividing by a near-zero
+          // elapsed fraction produces an enormous, meaningless number.
+          projectedInr: elapsed > 0.05 ? spentInr / elapsed : null,
+        });
+      }
+      return rows;
+    });
+    res.json({ budgets: payload });
+  } catch (err) {
+    console.error('GET /budgets error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /budgets — create or replace the budget for one target.
+ *
+ * Replacing rather than erroring on a duplicate: the partial unique index
+ * allows only one ACTIVE budget per (scope, target, period), and a user
+ * setting a monthly groceries budget when one already exists means "change
+ * it", not "fail". The old row is DEACTIVATED, not deleted, so the
+ * `budget_periods` history that references it survives.
+ */
+app.post('/budgets', requireAuth, async (req, res) => {
+  const { scope, scopeRefId, period, amountInr, startsOn, rollover } = req.body || {};
+  if (!BUDGET_SCOPES.includes(scope)) {
+    return res.status(400).json({ error: `scope must be one of ${BUDGET_SCOPES.join(', ')}` });
+  }
+  if (!BUDGET_PERIODS.includes(period)) {
+    return res.status(400).json({ error: `period must be one of ${BUDGET_PERIODS.join(', ')}` });
+  }
+  const amount = Number(amountInr);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'amountInr must be a positive number' });
+  }
+  if (scope === 'overall' && scopeRefId) {
+    return res.status(400).json({ error: 'an overall budget takes no scopeRefId' });
+  }
+  if (scope !== 'overall' && (!scopeRefId || typeof scopeRefId !== 'string')) {
+    return res.status(400).json({ error: 'scopeRefId is required for a category or card budget' });
+  }
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      // Validate the referent exists and, for a card, belongs to this user.
+      // The column is deliberately not a foreign key (it points at two
+      // different tables depending on scope), so this check is the only
+      // thing standing between a typo and a budget that can never match
+      // any spend.
+      if (scope === 'category') {
+        const found = await client.query(`SELECT id FROM spend_categories WHERE id = $1`, [scopeRefId]);
+        if (found.rows.length === 0) return { status: 404, error: 'category not found' };
+      } else if (scope === 'card') {
+        const found = await client.query(
+          `SELECT id FROM user_cards WHERE id = $1 AND profile_id = $2 AND is_archived = false`,
+          [scopeRefId, req.userId]
+        );
+        if (found.rows.length === 0) return { status: 404, error: 'card not found' };
+      }
+
+      await client.query(
+        `UPDATE budgets SET is_active = false
+          WHERE profile_id = $1 AND is_active AND scope = $2 AND period = $3
+            AND scope_ref_id IS NOT DISTINCT FROM $4`,
+        [req.userId, scope, period, scopeRefId || null]
+      );
+
+      const inserted = await client.query(
+        `INSERT INTO budgets (profile_id, scope, scope_ref_id, period, amount_inr, starts_on, rollover)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), COALESCE($7, false))
+         RETURNING id, scope, scope_ref_id, period, amount_inr, starts_on, rollover, is_active`,
+        [req.userId, scope, scopeRefId || null, period, amount, startsOn || null, rollover]
+      );
+      return { status: 201, budget: inserted.rows[0] };
+    });
+
+    if (result.status !== 201) return res.status(result.status).json({ error: result.error });
+    res.status(201).json({ budget: result.budget });
+  } catch (err) {
+    console.error('POST /budgets error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * DELETE /budgets/:id — deactivates rather than deletes, so any
+ * `budget_periods` history pointing at it stays readable. "Did I stay in
+ * budget last March?" must not become unanswerable because the budget was
+ * removed in April.
+ */
+app.delete('/budgets/:id', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `UPDATE budgets SET is_active = false
+          WHERE id = $1 AND profile_id = $2 AND is_active
+          RETURNING id`,
+        [req.params.id, req.userId]
+      )
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'budget not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /budgets/:id error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /recurring — the user's subscriptions, detected from their own
+ * history and refreshed on read.
+ *
+ * Detection runs here rather than on a schedule because there is no cron
+ * infrastructure in this product and inventing one for this would be a
+ * larger commitment than the feature warrants. The read is bounded (24
+ * months of spend for one profile, grouped in memory) and the result is
+ * persisted, so a series survives between reads and can carry a user's
+ * "I cancelled this" dismissal.
+ *
+ * Dismissed series are never resurrected. Re-detecting something the user
+ * explicitly told us they cancelled — every single time they open the
+ * screen — is the fastest way to make a feature feel broken.
+ */
+app.get('/recurring', requireAuth, async (req, res) => {
+  try {
+    const payload = await withUserClient(req.userId, async (client) => {
+      const history = await client.query(
+        `SELECT merchant_name, amount_inr, occurred_at, category_id, user_card_id
+           FROM transactions
+          WHERE profile_id = $1 AND status = 'active' AND entry_kind = 'spend'
+            AND occurred_at >= now() - interval '24 months'
+          ORDER BY occurred_at ASC`,
+        [req.userId]
+      );
+
+      const detected = detectRecurringSeries(history.rows);
+
+      const dismissed = await client.query(
+        `SELECT merchant_key FROM recurring_series WHERE profile_id = $1 AND dismissed_at IS NOT NULL`,
+        [req.userId]
+      );
+      const dismissedKeys = new Set(dismissed.rows.map((r) => r.merchant_key));
+
+      for (const s of detected) {
+        if (dismissedKeys.has(s.merchantKey)) continue;
+        await client.query(
+          `INSERT INTO recurring_series
+             (profile_id, merchant_key, display_name, category_id, user_card_id,
+              typical_amount_inr, cadence_days, occurrence_count,
+              first_seen_on, last_seen_on, next_expected_on)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
+             display_name = EXCLUDED.display_name,
+             category_id = EXCLUDED.category_id,
+             user_card_id = EXCLUDED.user_card_id,
+             typical_amount_inr = EXCLUDED.typical_amount_inr,
+             cadence_days = EXCLUDED.cadence_days,
+             occurrence_count = EXCLUDED.occurrence_count,
+             last_seen_on = EXCLUDED.last_seen_on,
+             next_expected_on = EXCLUDED.next_expected_on,
+             is_active = true,
+             updated_at = now()`,
+          [
+            req.userId, s.merchantKey, s.displayName, s.categoryId, s.userCardId,
+            s.typicalAmountInr, s.cadenceDays, s.occurrenceCount,
+            s.firstSeenOn, s.lastSeenOn, s.nextExpectedOn,
+          ]
+        );
+      }
+
+      const stored = await client.query(
+        `SELECT rs.id, rs.merchant_key, rs.display_name, rs.typical_amount_inr,
+                rs.cadence_days, rs.occurrence_count, rs.first_seen_on, rs.last_seen_on,
+                rs.next_expected_on, rs.category_id, rs.user_card_id,
+                sc.name AS category_name, cp.name AS card_name, uc.nickname AS card_nickname
+           FROM recurring_series rs
+           LEFT JOIN spend_categories sc ON sc.id = rs.category_id
+           LEFT JOIN user_cards uc ON uc.id = rs.user_card_id
+           LEFT JOIN card_products cp ON cp.id = uc.card_product_id
+          WHERE rs.profile_id = $1 AND rs.is_active AND rs.dismissed_at IS NULL
+          ORDER BY (rs.typical_amount_inr * 365 / rs.cadence_days) DESC`,
+        [req.userId]
+      );
+
+      const series = stored.rows.map((r) => ({
+        id: r.id,
+        displayName: r.display_name,
+        typicalAmountInr: Number(r.typical_amount_inr),
+        cadenceDays: r.cadence_days,
+        occurrenceCount: r.occurrence_count,
+        firstSeenOn: r.first_seen_on,
+        lastSeenOn: r.last_seen_on,
+        nextExpectedOn: r.next_expected_on,
+        categoryId: r.category_id,
+        categoryName: r.category_name,
+        cardId: r.user_card_id,
+        cardName: r.card_nickname || r.card_name,
+        annualCostInr: annualCost({
+          typicalAmountInr: Number(r.typical_amount_inr),
+          cadenceDays: r.cadence_days,
+        }),
+      }));
+
+      return {
+        series,
+        totalAnnualInr: series.reduce((sum, s) => sum + s.annualCostInr, 0),
+      };
+    });
+    res.json(payload);
+  } catch (err) {
+    console.error('GET /recurring error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /recurring/:id/dismiss — "I cancelled this."
+ *
+ * Sets `dismissed_at` rather than deleting the row, which is what stops the
+ * next detection run re-adding it. Deleting would make the dismissal last
+ * exactly until the user next opened the screen.
+ */
+app.post('/recurring/:id/dismiss', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `UPDATE recurring_series SET dismissed_at = now(), is_active = false
+          WHERE id = $1 AND profile_id = $2
+          RETURNING id`,
+        [req.params.id, req.userId]
+      )
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'not_found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /recurring/:id/dismiss error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -4112,6 +4954,11 @@ app.post('/notifications', requireAuth, async (req, res) => {
     expiry: 'category_expiry',
     monthly_report: 'category_monthly_report',
     needs_review: 'category_needs_review',
+    // Two categories, not one: "over budget" is a post-mortem and
+    // "running ahead of pace" is still actionable, so someone who wants
+    // the early warning shouldn't be forced to take the late one too.
+    budget_warning: 'category_budget_warning',
+    budget_exceeded: 'category_budget_exceeded',
   };
   try {
     const inserted = await withUserClient(req.userId, async (client) => {
@@ -4409,6 +5256,11 @@ const NOTIFICATION_PREF_DEFAULTS = {
   category_expiry: true,
   category_monthly_report: false,
   category_needs_review: true,
+  // Both default ON: unlike location and the monthly report (opt-in by
+  // design), a budget is something the user explicitly set up, and having
+  // set one then not hearing about it would be the surprising outcome.
+  category_budget_warning: true,
+  category_budget_exceeded: true,
   quiet_hours_start: null,
   quiet_hours_end: null,
   daily_cap: 3,
@@ -5719,6 +6571,57 @@ app.post('/inbound-emails/webhook', async (req, res) => {
       // address-enumeration oracle for an attacker probing local_parts.
       return res.status(202).json({ accepted: true });
     }
+
+    // Turn the parsed mail into an actual transaction.
+    //
+    // This route used to stop at "stored, parsed_ok = true" and go no
+    // further, so a forwarded bank email became a row in `inbound_emails`
+    // and nothing else — the user then had to open the app and tap
+    // "create transaction" on each one individually. Email was, in effect,
+    // a manual import channel dressed as an automatic one.
+    //
+    // Runs through withUserClient so RLS sees the owning profile: the RPC
+    // above is SECURITY DEFINER precisely because this request carries no
+    // user JWT, and the profile id it returns is the only thing that makes
+    // an owner-scoped write possible here.
+    //
+    // Failures are swallowed on purpose. The mail is already safely stored
+    // and the provider must get its 202 — returning 500 would make a mail
+    // provider retry a message we already have, and the in-app
+    // "create transaction" path still works as the fallback it always was.
+    if (parsed.ok) {
+      try {
+        await withUserClient(row.profile_id, async (client) => {
+          const patternRow = patternsResult.rows.find((p) => p.id === parsed.patternId);
+          const occurred = parseTransactionDate(parsed.fields.date) || new Date();
+          const imported = await importParsedMessage(client, row.profile_id, {
+            parsed,
+            patternIssuerId: patternRow ? patternRow.issuer_id : null,
+            sender: from,
+            rawText: body,
+            source: 'email',
+            occurred,
+            // Same identity a re-forwarded copy of this mail would produce,
+            // so a provider retry or a user forwarding twice can't double-count.
+            sourceKey: importSourceKey(row.profile_id, from, body, occurred),
+            backfill: false,
+          });
+          if (imported.status === 201 && imported.transaction) {
+            await client.query(`UPDATE inbound_emails SET produced_txn_id = $1 WHERE id = $2`, [
+              imported.transaction.id,
+              row.inbound_email_id,
+            ]);
+            await client.query(`UPDATE transactions SET raw_source_ref = $1 WHERE id = $2`, [
+              row.inbound_email_id,
+              imported.transaction.id,
+            ]);
+          }
+        });
+      } catch (err) {
+        console.error('POST /inbound-emails/webhook: auto-create transaction failed', err);
+      }
+    }
+
     res.status(202).json({ accepted: true, parsed: parsed.ok });
   } catch (err) {
     console.error('POST /inbound-emails/webhook error', err);
@@ -5822,13 +6725,13 @@ app.get('/inbound-emails/me', requireAuth, async (req, res) => {
  */
 app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res) => {
   const { userCardId, categoryId, rail } = req.body || {};
-  if (!userCardId || typeof userCardId !== 'string') {
-    return res.status(400).json({ error: 'userCardId is required' });
+  if (userCardId !== undefined && userCardId !== null && typeof userCardId !== 'string') {
+    return res.status(400).json({ error: 'userCardId must be a string when given' });
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const emailRow = await client.query(
-        `SELECT id, sender, subject, body_text, produced_txn_id, parsed_ok
+        `SELECT id, sender, subject, body_text, produced_txn_id, parsed_ok, received_at
            FROM inbound_emails WHERE id = $1 AND profile_id = $2`,
         [req.params.id, req.userId]
       );
@@ -5837,7 +6740,7 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
       if (email.produced_txn_id) return { status: 409, error: 'already_converted_to_a_transaction' };
 
       const patterns = await client.query(
-        `SELECT id, sender_pattern, regex, field_map
+        `SELECT id, issuer_id, sender_pattern, regex, field_map
            FROM parser_patterns WHERE channel = 'email' AND is_active = true ORDER BY version DESC`
       );
       const parsed = parseSmsAgainstPatterns(patterns.rows, { sender: email.sender, body: email.body_text || '' });
@@ -5845,15 +6748,30 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
         return { status: 422, error: 'could_not_parse_this_email', reason: parsed.reason };
       }
 
-      const inserted = await insertTransactionAndUpdateState(client, req.userId, {
-        userCardId,
-        amount: parsed.fields.amountInr,
-        occurred: new Date(),
-        categoryId: categoryId || null,
-        rail: rail || 'unknown',
-        merchantName: parsed.fields.merchant || null,
+      // The transaction's own date, then the mail's arrival time, and only
+      // then now(). This route used to pass a bare `new Date()` — the
+      // moment the user happened to tap "create transaction", which could
+      // be days after the purchase. That filed spend in the wrong week and,
+      // worse, moved it outside the ±1-day window cross-channel duplicate
+      // detection uses, so the matching bank SMS was never recognised as
+      // the same swipe and the transaction got counted twice.
+      const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
+      const occurred = parseTransactionDate(parsed.fields.date) || email.received_at || new Date();
+
+      const inserted = await importParsedMessage(client, req.userId, {
+        parsed,
+        patternIssuerId: patternRow ? patternRow.issuer_id : null,
+        sender: email.sender,
+        rawText: email.body_text || '',
         source: 'email',
+        occurred,
+        explicitUserCardId: userCardId,
+        explicitCategoryId: categoryId || null,
+        rail,
       });
+      if (inserted.needsReview) {
+        return { status: 200, ...inserted };
+      }
       if (inserted.status !== 201) return inserted;
 
       await client.query(
@@ -6303,3 +7221,28 @@ const PORT = config.port;
 app.use(errorHandler);
 
 app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));
+
+// The background IMAP poller (F7). Off unless IMAP_POLL_INTERVAL_MINUTES is
+// set, so a development or test process never opens TLS connections to real
+// mailboxes. See src/imap_poller.js for why it runs in-process rather than
+// as a pg_cron job (pg_cron runs SQL and cannot open a socket) or a separate
+// worker (new infrastructure to deploy, monitor and secure for one job), and
+// how the advisory lock keeps exactly one instance polling when scaled out.
+//
+// Everything downstream of "a (sender, body) pair arrived" is the same
+// importParsedMessage path SMS and forwarded email already take, so an IMAP
+// discovery gets identical card resolution, categorisation, deduplication
+// and reward treatment — there is no second implementation to keep in sync.
+startImapPoller(
+  {
+    pool,
+    withUserClient,
+    encryptionKey: config.imapEncryptionKey,
+    parseSmsAgainstPatterns,
+    importParsedMessage,
+    importSourceKey,
+    parseTransactionDate,
+    fetchMessages: fetchRecentMessages,
+  },
+  { intervalMinutes: Number(process.env.IMAP_POLL_INTERVAL_MINUTES) || 0 }
+);

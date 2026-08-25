@@ -141,4 +141,114 @@ function redactSmsShape(body) {
     .replace(/[A-Za-z]{2,}/g, 'X');
 }
 
-module.exports = { parseSms, parseSmsAgainstPatterns, senderMatches, redactSmsShape, KNOWN_FIELDS };
+const MONTHS = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
+
+/**
+ * Turns the raw date string a pattern captured into a real Date.
+ *
+ * `parseSms` deliberately leaves `fields.date` as the bank's own text —
+ * there is no single format across Indian issuers, and the parser's job is
+ * extraction, not interpretation. This is the interpretation half, kept
+ * separate so it stays unit-testable against real strings.
+ *
+ * DAY-FIRST throughout. Every pattern this feeds is an Indian bank message,
+ * where 03/04/26 is 3 April, never 4 March. Guessing month-first would put
+ * spend in the wrong month for two-thirds of the year while looking
+ * perfectly plausible.
+ *
+ * Returns null — never a fallback to "today" — on anything it cannot read
+ * with confidence, including impossible dates (31 February) and dates in
+ * the future, which are always a misparse rather than a real transaction.
+ * A wrong date is worse than no date: it files spend in the wrong week and
+ * month, and it moves the transaction outside the ±1-day window that
+ * cross-channel duplicate detection relies on, so the same swipe gets
+ * counted twice.
+ *
+ * [reference] is the message's own timestamp, used only to resolve a
+ * two-digit year and to reject the future. Defaults to now.
+ */
+function parseTransactionDate(raw, reference = new Date()) {
+  if (!raw || typeof raw !== 'string') return null;
+  const text = raw.trim();
+  if (!text) return null;
+
+  let year = null;
+  let month = null;
+  let day = null;
+
+  // ISO first: 2026-04-03. Unambiguous, so it never reaches the day-first
+  // branches below.
+  let m = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (m) {
+    [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  }
+
+  // 03-04-26, 3/4/2026, 03.04.26
+  if (year === null) {
+    m = text.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})$/);
+    if (m) {
+      day = Number(m[1]);
+      month = Number(m[2]);
+      year = Number(m[3]);
+    }
+  }
+
+  // 03-Apr-26, 3 Apr 2026, 03Apr26
+  if (year === null) {
+    m = text.match(/^(\d{1,2})[-\s]?([A-Za-z]{3,})[-\s]?(\d{2}|\d{4})$/);
+    if (m) {
+      day = Number(m[1]);
+      month = MONTHS[m[2].slice(0, 3).toLowerCase()] ?? null;
+      year = Number(m[3]);
+    }
+  }
+
+  // Apr 03, 2026 / Apr 3 2026
+  if (year === null) {
+    m = text.match(/^([A-Za-z]{3,})[-\s]+(\d{1,2}),?[-\s]+(\d{2}|\d{4})$/);
+    if (m) {
+      month = MONTHS[m[1].slice(0, 3).toLowerCase()] ?? null;
+      day = Number(m[2]);
+      year = Number(m[3]);
+    }
+  }
+
+  if (year === null || month === null || day === null) return null;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+
+  // A two-digit year is this century. Banks do not text about 1926.
+  if (year < 100) year += 2000;
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  const parsed = new Date(year, month - 1, day);
+  // Round-trip check: JS rolls 31 February forward into March rather than
+  // rejecting it, so an impossible date would otherwise parse "successfully"
+  // into the wrong day.
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  // A future date is a misparse, not a transaction. One day of slack covers
+  // timezone skew between the device, the bank and this server.
+  const limit = new Date(reference.getTime() + 24 * 60 * 60 * 1000);
+  if (parsed > limit) return null;
+
+  return parsed;
+}
+
+module.exports = {
+  parseSms,
+  parseSmsAgainstPatterns,
+  senderMatches,
+  redactSmsShape,
+  parseTransactionDate,
+  KNOWN_FIELDS,
+};

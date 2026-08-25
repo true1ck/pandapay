@@ -31,10 +31,12 @@ class _RecordingUserCardsRepository implements UserCardsRepository {
     int? dueDay,
     double? pointsBalance,
     AutopayMode? autopayMode,
+    String? last4,
   }) async {
     lastUpdateArgs = {
       'userCardId': userCardId,
       'nickname': nickname,
+      'last4': last4,
       'creditLimitInr': creditLimitInr,
       'statementDay': statementDay,
       'dueDay': dueDay,
@@ -69,6 +71,7 @@ class _OfflineUserCardsRepository implements UserCardsRepository {
     int? dueDay,
     double? pointsBalance,
     AutopayMode? autopayMode,
+    String? last4,
   }) async {
     throw Exception('simulated offline failure');
   }

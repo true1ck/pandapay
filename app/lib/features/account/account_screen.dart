@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/router.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -187,6 +189,19 @@ class AccountScreen extends ConsumerWidget {
               label: 'Split planner',
               onTap: () =>
                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SplitPlannerScreen())),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            // Moved off the Insights grid: this is community/account
+            // standing, not an insight about the user's own money, and it
+            // was one of eighteen tiles competing for attention there.
+            AccountTile(
+              icon: Icons.diversity_3_outlined,
+              label: 'My contributions',
+              // Through the router, not a bare MaterialPageRoute: this
+              // screen is a plain body and relies on the route's Scaffold
+              // for its app bar, so pushing the widget directly would leave
+              // it with no title and no way back.
+              onTap: () => context.push(AppRoute.myContributions),
             ),
             const SizedBox(height: AppSpace.sm),
             AccountTile(

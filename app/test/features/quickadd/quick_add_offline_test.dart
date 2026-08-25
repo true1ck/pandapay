@@ -19,15 +19,29 @@ class _OfflineUserCardsRepository extends UserCardsRepository {
 
   @override
   Future<String> logTransaction({
-    required String userCardId,
+    String? userCardId,
     required Money amount,
     String? categoryId,
     String? merchantName,
     DateTime? occurredAt,
     String? note,
+    TxnInstrument instrument = TxnInstrument.creditCard,
+    TxnEntryKind entryKind = TxnEntryKind.spend,
   }) async {
     throw ApiException('no connectivity');
   }
+}
+
+/// The Quick Add form is a ListView and, since the "Kind" and "Paid with"
+/// selectors were added for non-card entries (cash, income, investments),
+/// the Save button sits below the fold of the 600px test viewport. A
+/// ListView doesn't build off-screen children, so Save has to be scrolled
+/// into existence before any finder can reach it.
+Future<Finder> _saveButton(WidgetTester tester) async {
+  final finder = find.widgetWithText(FilledButton, 'Save');
+  await tester.dragUntilVisible(finder, find.byType(ListView), const Offset(0, -120));
+  await tester.pumpAndSettle();
+  return finder;
 }
 
 void main() {
@@ -84,7 +98,7 @@ void main() {
     await tester.tap(find.text('Test Card').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.tap(await _saveButton(tester));
     await tester.pumpAndSettle();
 
     expect(find.textContaining("Saved offline"), findsOneWidget);

@@ -69,21 +69,52 @@ Future<void> _openInsights(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('shows the Credit Utilization tile alongside the other insight tiles', (tester) async {
+  testWidgets('the grid offers six grouped insights, not eighteen', (tester) async {
+    // The grid had grown one tile per shipped screen and most of them
+    // answered slices of the same few questions. These six are the whole
+    // list now; anything that used to be its own tile is a tab behind one
+    // of them (see GroupedInsightScreen).
     await _openInsights(tester);
 
-    // Every tile now needs a scroll, not just the later ones: design 04's
+    // Every tile needs a scroll, not just the later ones: design 04's
     // content (earned hero, category bars, missed/best pair) sits above the
     // grid, so no tile is in the initial viewport any more.
     for (final label in const [
-      'Caps & Limits',
-      'Milestones',
-      'Billing Float',
-      'Credit Utilization',
-      'All Activity',
+      'Limits & perks',
+      'Spending',
+      'Budgets',
+      'Rewards',
+      'Payments',
+      'Subscriptions',
     ]) {
       await _reveal(tester, label);
       expect(find.text(label), findsOneWidget, reason: '$label tile should be reachable by scrolling');
+    }
+  });
+
+  testWidgets('the tiles that were merged away are gone from the grid', (tester) async {
+    // Guards the consolidation itself: if one of these reappears as its own
+    // tile, the grid has started regrowing and the merge has been undone.
+    await _openInsights(tester);
+    await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
+    await tester.pumpAndSettle();
+
+    for (final gone in const [
+      'Caps & Limits',
+      'Milestones',
+      'Fee Waivers',
+      'Credit Utilization',
+      'Billing Float',
+      'Due Dates',
+      'Lounge Access',
+      'Savings Report',
+      'Portfolio Audit',
+      'Missed Opportunities',
+      'Spending Overview',
+      'All Activity',
+      'My Contributions',
+    ]) {
+      expect(find.text(gone), findsNothing, reason: '$gone should live behind a grouped tile now');
     }
   });
 
@@ -98,14 +129,20 @@ void main() {
     expect(find.text('Nothing to report yet'), findsOneWidget);
   });
 
-  testWidgets('tapping Caps & Limits pushes CapsScreen with a back button', (tester) async {
+  testWidgets('Limits & perks opens the grouped screen, landing on Caps', (tester) async {
+    // Caps is still one tap away — it is the first tab of the group, so the
+    // merge cost no depth for the most-used view while putting milestones,
+    // fee waivers and lounge quotas one tap from it instead of three.
     await _openInsights(tester);
 
-    await _reveal(tester, 'Caps & Limits');
-    await tester.tap(find.text('Caps & Limits'));
+    await _reveal(tester, 'Limits & perks');
+    await tester.tap(find.text('Limits & perks'));
     await tester.pumpAndSettle();
 
     expect(find.byType(CapsScreen), findsOneWidget);
     expect(find.byType(BackButton), findsOneWidget);
+    for (final tab in const ['Caps', 'Milestones', 'Fee waivers', 'Lounge']) {
+      expect(find.text(tab), findsWidgets, reason: 'the group must expose its siblings as tabs');
+    }
   });
 }

@@ -32,16 +32,24 @@ class BestCardForWidget {
   /// "top card for what I usually buy," or leave null for a simple
   /// "top overall card" default (matches this chunk's two stated widget
   /// modes: last-used-category top pick, or overall-top-pick fallback).
+  ///
+  /// [now], when given, is passed through so rules whose catalogue validity
+  /// window has closed stop being picked. Left null it preserves the
+  /// previous behaviour of ignoring those windows — see
+  /// [RecommendationContext.now] for why this package won't reach for a
+  /// clock of its own.
   Recommendation? pickBestCard({
     required List<CardSnapshot> cards,
     String? categoryId,
     Money? amount,
+    DateTime? now,
   }) {
     if (cards.isEmpty) return null;
     final context = RecommendationContext(
       amount: amount ?? defaultNominalAmount,
       categoryId: categoryId,
       rail: TxnRail.swipe,
+      now: now,
     );
     final ranked = engine.rank(context, cards);
     for (final rec in ranked) {

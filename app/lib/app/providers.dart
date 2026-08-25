@@ -34,6 +34,7 @@ import '../data/override_resolver.dart';
 import '../data/partner_apply_repository.dart';
 import '../data/recovery_api.dart';
 import '../data/spend_by_category_repository.dart';
+import '../data/spend_reports_repository.dart';
 import '../data/sync_api.dart';
 import '../data/token_store.dart';
 import '../data/user_cards_repository.dart';
@@ -43,6 +44,7 @@ import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
 import '../features/notifications/notification_gate.dart';
 import '../features/notifications/notification_triggers.dart';
+import '../features/sms_import/sms_listener_service.dart';
 import '../features/settings/settings_sync.dart';
 import 'env.dart';
 
@@ -162,7 +164,14 @@ final acquisitionCandidatesProvider = Provider<AsyncValue<List<AcquisitionCandid
   final ownedProducts = allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
   final profile = SpendProfile(annualSpendByCategory: {for (final s in spend) s.categoryId: s.totalSpend});
 
-  final results = recommender.rank(candidates: allCards, ownedCards: ownedProducts, spendProfile: profile);
+  final results = recommender.rank(
+    candidates: allCards,
+    ownedCards: ownedProducts,
+    spendProfile: profile,
+    // Never suggest applying for a card on the strength of a promo rate
+    // that has already expired — the user would apply and never see it.
+    now: ref.watch(clockProvider).now(),
+  );
   return AsyncValue.data(results);
 });
 
@@ -511,6 +520,59 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
   return UserCardsRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
 });
 
+/// Spend trends and budgets. Null in guest mode, like every other
+/// server-backed repository here: both read `transactions`, which is
+/// owner-scoped and has no local-only counterpart.
+final spendReportsRepositoryProvider = Provider<SpendReportsRepository?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return SpendReportsRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// The Trends screen's data, for the selected period.
+///
+/// A family over [SpendPeriod] rather than a provider plus a separate
+/// "selected period" StateProvider: switching period is a different fetch,
+/// and keying the cache by period means flipping back to a period already
+/// looked at is instant instead of re-fetching.
+final spendReportProvider = FutureProvider.family<SpendReport?, SpendPeriod>((ref, period) async {
+  final repo = ref.watch(spendReportsRepositoryProvider);
+  if (repo == null) return null;
+  return repo.fetchReport(period: period);
+});
+
+/// The period the Trends screen is currently showing.
+final selectedSpendPeriodProvider = StateProvider<SpendPeriod>((ref) => SpendPeriod.month);
+
+/// Every active budget with its current-period progress.
+final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
+  final repo = ref.watch(spendReportsRepositoryProvider);
+  if (repo == null) return const [];
+  return repo.fetchBudgets();
+});
+
+/// Detected subscriptions, biggest annual cost first.
+final recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
+  final repo = ref.watch(spendReportsRepositoryProvider);
+  if (repo == null) return null;
+  return repo.fetchRecurring();
+});
+
+/// Budgets that need saying something about, worst first.
+///
+/// Over-budget outranks off-pace, and within each the more extreme comes
+/// first — Home and the notification trigger both want "the one thing worth
+/// mentioning", not a list to re-sort themselves.
+final budgetsNeedingAttentionProvider = Provider<List<BudgetStatus>>((ref) {
+  final budgets = ref.watch(budgetsProvider).valueOrNull ?? const [];
+  final flagged = budgets.where((b) => b.isOver || b.isOffPace).toList()
+    ..sort((a, b) {
+      if (a.isOver != b.isOver) return a.isOver ? -1 : 1;
+      return b.consumedFraction.compareTo(a.consumedFraction);
+    });
+  return flagged;
+});
+
 /// Guest/no-account counterpart to [userCardsRepositoryProvider] (ui-spec.md
 /// A3) — always available, even signed in, but only actually read by
 /// [userCardsProvider]/[myCardsProvider] when [userCardsRepositoryProvider]
@@ -790,6 +852,7 @@ final splitPlanProvider = Provider<List<SplitAllocation>>((ref) {
     amount: amount,
     rail: TxnRail.swipe,
     travelMode: ref.watch(travelModeProvider),
+    now: ref.watch(clockProvider).now(),
   );
   return optimizer.optimize(amount, baseContext, snapshots, utilizationCeiling: utilizationCeiling);
 });
@@ -822,7 +885,12 @@ final emiAdviceProvider = Provider.family<EmiAdvice?, EmiAdviceParams>((ref, par
   final engine = ref.watch(recommendationEngineProvider);
   final principal = Money.fromRupees(params.principalRupees);
   final snapshot = _userCardSnapshots([product], [userCard]).first;
-  final rec = engine.rank(RecommendationContext(amount: principal, rail: TxnRail.swipe), [snapshot]).first;
+  final rec = engine
+      .rank(
+        RecommendationContext(amount: principal, rail: TxnRail.swipe, now: ref.watch(clockProvider).now()),
+        [snapshot],
+      )
+      .first;
   final forgoneRewardValue = rec.isExcluded ? const Money.zero() : rec.expectedValue;
 
   return adviseEmi(
@@ -1284,6 +1352,10 @@ final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>
     // G1: the toggle. Everything else about ranking is unchanged — this is
     // the entire wiring the plan called "the cheapest part of G1."
     travelMode: ref.watch(travelModeProvider),
+    // Rules carry a catalogue validity window and the engine only checks it
+    // when given a date. Without this, a promo rate that ended last quarter
+    // would keep winning Home's verdict indefinitely.
+    now: ref.watch(clockProvider).now(),
   );
   // Chunk 17: real capRemaining/milestoneProgress for owned cards, derived
   // from cap_states.consumed / milestone_states.qualified_spend — a card
@@ -1400,6 +1472,44 @@ final notificationTriggerLifecycleProvider = Provider<void>((ref) {
   });
 });
 
+/// Uploads any bank SMS the background isolate queued while the app was
+/// away, on every resume and once at startup.
+///
+/// The background handler can only write messages down — it has no access
+/// to the auth token or the HTTP client (see [SmsBackgroundQueue]) — so
+/// this is the other half of background capture. Without it, background
+/// delivery would collect messages on disk that nothing ever sent.
+///
+/// A message stays queued unless the upload actually dealt with it, so a
+/// resume while offline loses nothing.
+final smsBackgroundFlushProvider = Provider<void>((ref) {
+  Future<void> flush() async {
+    final repo = ref.read(userCardsRepositoryProvider);
+    // Guest mode has no server to send to; the queue simply waits until
+    // there is one rather than being discarded.
+    if (repo == null) return;
+    try {
+      await SmsListenerService().flushBackgroundQueue((sender, body, receivedAt) async {
+        await repo.logTransactionFromSms(sender: sender, body: body, occurredAt: receivedAt);
+        // Every one of these is "dealt with": imported, recognised as
+        // already imported, filed for review because the card is unknown,
+        // or logged as an unparseable shape server-side. Only a network or
+        // server failure (which throws) leaves it queued.
+        return true;
+      });
+      ref.invalidate(userCardsProvider);
+    } catch (_) {
+      // Offline or server down — the queue keeps what it couldn't send.
+    }
+  }
+
+  final listener = AppLifecycleListener(onResume: flush);
+  ref.onDispose(listener.dispose);
+  // Once at startup too: the most common case is the app being opened
+  // fresh after messages arrived, which fires no resume event.
+  flush();
+});
+
 final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {
   return BestCardForWidget(engine: ref.watch(recommendationEngineProvider));
 });
@@ -1456,7 +1566,13 @@ final bestCardForMerchantProvider = Provider.family<AsyncValue<Recommendation?>,
 
   final snapshots = _userCardSnapshots(cards, wallet, forcedOverrideCardId: overrideProductId);
 
-  return AsyncValue.data(picker.pickBestCard(cards: snapshots, categoryId: categoryId));
+  return AsyncValue.data(
+    picker.pickBestCard(
+      cards: snapshots,
+      categoryId: categoryId,
+      now: ref.watch(clockProvider).now(),
+    ),
+  );
 });
 
 final homeWidgetServiceProvider = Provider<HomeWidgetService>((ref) => HomeWidgetService());

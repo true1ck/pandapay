@@ -890,6 +890,8 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                             style: BambooFonts.heading(20, color: BambooInk.onSlate),
                             overflow: TextOverflow.ellipsis,
                           ),
+                          if (recommendation.breakdown != null)
+                            _CapBadge(breakdown: recommendation.breakdown!, onDarkSurface: true),
                         ],
                       )
                     : Text(
@@ -1180,9 +1182,21 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
   /// Design 01's rate line beside the BEST PICK badge — "5% on Online".
   /// Null when the engine couldn't attribute a per-rupee rate, so the badge
   /// stands alone rather than claiming a rate that wasn't computed.
+  ///
+  /// Shows the rate this spend WOULD ACTUALLY EARN, not the rate the card
+  /// advertises. The two are the same until a cap runs out, at which point
+  /// the headline becomes a promise the card won't keep: a "10% on Online"
+  /// card whose ₹3,000 monthly cap is spent pays its 1% base rate, and
+  /// printing "10% on Online" beside it is the exact over-promise the cap
+  /// work exists to stop. [_CapBadge] explains why the number dropped.
   String? _rateLabel(Recommendation recommendation) {
-    final rate = recommendation.effectiveRatePerRupee;
-    if (rate == null || rate <= 0) return null;
+    final headline = recommendation.effectiveRatePerRupee;
+    if (headline == null || headline <= 0) return null;
+    final breakdown = recommendation.breakdown;
+    final rate = breakdown != null && breakdown.capStatus != CapStatus.none
+        ? breakdown.effectiveRatePerRupee
+        : headline;
+    if (rate <= 0) return null;
     final pct = rate * 100;
     final formatted = pct >= 10 || pct == pct.roundToDouble()
         ? pct.toStringAsFixed(0)
@@ -1190,6 +1204,54 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
     final slug = ref.read(selectedCategoryProvider);
     final label = HomeScreen.categoryLabelFor(slug);
     return label == null ? '$formatted% back' : '$formatted% on $label';
+  }
+}
+
+/// The one-line explanation for why a card's rate isn't its headline rate.
+///
+/// Home is where the app makes its promise, so it's where a spent cap has
+/// to be visible — the information already existed in the breakdown and
+/// simply wasn't shown, which meant a user could follow a "BEST PICK" and
+/// earn a fifth of what the badge implied with nothing on screen having
+/// warned them.
+class _CapBadge extends StatelessWidget {
+  final RecommendationBreakdown breakdown;
+  final bool onDarkSurface;
+
+  const _CapBadge({required this.breakdown, required this.onDarkSurface});
+
+  /// BambooInk.amber is tuned for the light paper surfaces the Insights
+  /// screens use; on the hero card's dark slate it falls below a
+  /// comfortable contrast ratio, so the dark variant is one step brighter.
+  static const _amberOnDark = Color(0xFFF6B23C);
+
+  @override
+  Widget build(BuildContext context) {
+    final amber = onDarkSurface ? _amberOnDark : BambooInk.amber;
+    final (label, tone) = switch (breakdown.capStatus) {
+      CapStatus.reached => ('Cap spent — earning base rate', amber),
+      CapStatus.partiallyConsumed => (breakdown.capNote ?? 'Cap nearly spent', amber),
+      _ => (null, BambooInk.jade),
+    };
+    if (label == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 13, color: tone),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              style: BambooFonts.ui(11.5, weight: FontWeight.w600, color: tone),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

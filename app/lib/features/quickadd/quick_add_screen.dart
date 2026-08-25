@@ -10,6 +10,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/user_cards_repository.dart' show TxnEntryKind, TxnInstrument;
 
 const _lastUsedCardKey = 'pandapay_app.quick_add_last_used_card_v1';
 const _recentMerchantsKey = 'pandapay_app.quick_add_recent_merchants_v1';
@@ -57,6 +58,17 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   String? _selectedUserCardId;
   String? _selectedCategoryId;
   DateTime? _date;
+
+  /// What paid for it, and whether it is spending at all.
+  ///
+  /// Both default to the overwhelmingly common case (a credit-card spend),
+  /// so the form is unchanged for anyone who never touches them. They exist
+  /// because the app previously could not record cash, a debit swipe, a
+  /// salary credit or an SIP at all — every transaction had to belong to a
+  /// credit card — which capped a spend tracker at "what my credit cards
+  /// did".
+  TxnInstrument _instrument = TxnInstrument.creditCard;
+  TxnEntryKind _entryKind = TxnEntryKind.spend;
   bool _saving = false;
   String? _amountError;
 
@@ -184,7 +196,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   bool get _canSave {
     final amount = double.tryParse(_amountController.text);
-    return _selectedUserCardId != null && amount != null && amount > 0;
+    if (amount == null || amount <= 0) return false;
+    // A card is required only for a credit-card entry. Cash, a debit swipe,
+    // a salary credit and an SIP have no card by definition, and requiring
+    // one here would leave Save permanently disabled for every one of them.
+    if (_instrument == TxnInstrument.creditCard) return _selectedUserCardId != null;
+    return true;
   }
 
   Future<void> _save() async {
@@ -215,20 +232,27 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     }
 
     final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null || _selectedUserCardId == null) return;
+    // A card is required only for a credit-card entry; cash, income and
+    // investments have none by definition.
+    if (repo == null) return;
+    if (_instrument == TxnInstrument.creditCard && _selectedUserCardId == null) return;
     setState(() => _saving = true);
     final merchantName = _merchantController.text.trim().isEmpty ? null : _merchantController.text.trim();
     final note = _noteController.text.trim().isEmpty ? null : _noteController.text.trim();
     try {
       final transactionId = await repo.logTransaction(
-        userCardId: _selectedUserCardId!,
+        userCardId: _instrument == TxnInstrument.creditCard ? _selectedUserCardId : null,
         amount: Money.fromRupees(amount),
         categoryId: _selectedCategoryId,
         merchantName: merchantName,
         occurredAt: occurredAt,
         note: note,
+        instrument: _instrument,
+        entryKind: _entryKind,
       );
-      await _rememberLastUsedCard(_selectedUserCardId!);
+      if (_selectedUserCardId != null && _instrument == TxnInstrument.creditCard) {
+        await _rememberLastUsedCard(_selectedUserCardId!);
+      }
       // Remembers whatever merchant name was actually used this save, even
       // if typed freehand rather than picked from a suggestion — "remembers"
       // per ui-spec B6 means next time's quick-add, not just this session's
@@ -414,25 +438,83 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                   onPick: _pickMerchant,
                 ),
               const SizedBox(height: AppSpace.md),
-              userCards.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (err, _) =>
-                    Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
-                data: (cards) => DropdownButtonFormField<String>(
-                  initialValue: _selectedUserCardId,
-                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                  decoration: inputDecoration('Card'),
-                  items: cards
-                      .map(
-                        (c) => DropdownMenuItem(
-                          value: c.id,
-                          child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() => _selectedUserCardId = v),
-                ),
+              // Kind first, then instrument, then card — each one narrows
+              // what the next needs to ask. Both default to a credit-card
+              // spend, so the form is unchanged for anyone who never opens
+              // them.
+              DropdownButtonFormField<TxnEntryKind>(
+                initialValue: _entryKind,
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: inputDecoration('Kind'),
+                items: [
+                  for (final k in TxnEntryKind.values)
+                    DropdownMenuItem(value: k, child: Text(k.label)),
+                ],
+                onChanged: (v) => setState(() {
+                  _entryKind = v ?? TxnEntryKind.spend;
+                  // Steered away from, not forbidden. The overwhelmingly
+                  // common "money in" is a salary or a transfer, which
+                  // never arrives on a credit card — so defaulting there
+                  // would make the usual case wrong.
+                  //
+                  // The server DOES accept income on a credit card, and
+                  // deliberately: a refund or a cashback credit is exactly
+                  // that, and rejecting it would make refunds unrecordable.
+                  // Such a row earns nothing and moves no cap, milestone or
+                  // points state (see insertTransactionAndUpdateState's
+                  // `movesCardState`), so it is safe either way — the user
+                  // can still pick the card back if that is what they meant.
+                  if (_entryKind != TxnEntryKind.spend &&
+                      _instrument == TxnInstrument.creditCard) {
+                    _instrument = TxnInstrument.upiBank;
+                  }
+                }),
               ),
+              const SizedBox(height: AppSpace.md),
+              DropdownButtonFormField<TxnInstrument>(
+                initialValue: _instrument,
+                style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                decoration: inputDecoration('Paid with'),
+                items: [
+                  for (final i in TxnInstrument.values)
+                    // A credit card is only offered for spending — you
+                    // can't receive a salary on one.
+                    if (i != TxnInstrument.creditCard || _entryKind == TxnEntryKind.spend)
+                      DropdownMenuItem(value: i, child: Text(i.label)),
+                ],
+                onChanged: (v) => setState(() => _instrument = v ?? TxnInstrument.creditCard),
+              ),
+              if (_instrument == TxnInstrument.creditCard) ...[
+                const SizedBox(height: AppSpace.md),
+                userCards.when(
+                  loading: () => const LinearProgressIndicator(),
+                  error: (err, _) =>
+                      Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                  data: (cards) => DropdownButtonFormField<String>(
+                    initialValue: _selectedUserCardId,
+                    style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                    decoration: inputDecoration('Card'),
+                    items: cards
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c.id,
+                            child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedUserCardId = v),
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: AppSpace.sm),
+                Text(
+                  _entryKind == TxnEntryKind.spend
+                      ? 'Counts toward your spending and budgets. It won\'t move any card\'s '
+                            'cap, milestone or points — those only track credit-card spend.'
+                      : 'Recorded on its own line in Spending. Never added into your spend total.',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+              ],
               const SizedBox(height: AppSpace.md),
               categories.when(
                 loading: () => const LinearProgressIndicator(),

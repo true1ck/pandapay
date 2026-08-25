@@ -1,0 +1,821 @@
+{
+  "_readme": [
+    "Cross-implementation parity fixture for reward arithmetic.",
+    "",
+    "Two implementations answer 'what does this card pay on this spend':",
+    "  - packages/pandapay_domain  (Dart) ranks cards BEFORE a purchase.",
+    "  - api/src/reward_math.js    (JS)   records what was earned AFTER one.",
+    "",
+    "They drifted, and both drifts showed up as wrong money on screen: the",
+    "server attached caps to categories with NULL acting as a wildcard (so a",
+    "rent payment consumed a grocery cap), and recorded value at the nominal",
+    "rate with no cap blending at all (so 'earned this month' over-reported",
+    "forever once a cap was spent).",
+    "",
+    "This file is the shared contract. Both test suites read it and assert",
+    "the SAME expected numbers:",
+    "  - packages/pandapay_domain/test/reward_parity_test.dart",
+    "  - api/test/reward_math.test.js",
+    "",
+    "A change to reward arithmetic that only lands on one side fails here.",
+    "Amounts are rupees. Rates are in the unit each rule names.",
+    "",
+    "Card fields use the snake_case wire shape (v_card_catalogue_export), so",
+    "the Dart side decodes them through the same unmodified CardProductJson",
+    "parsers a live GET /catalogue response goes through."
+  ],
+  "scenarios": [
+    {
+      "name": "plain base rate, no rules",
+      "why": "A 1% cashback card pays 1% at a pharmacy the catalogue never enumerated.",
+      "card": {
+        "id": "base-only",
+        "name": "Base Only",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "categoryId": "pharmacy",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 10,
+        "points": 10,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "category rule beats base rate",
+      "card": {
+        "id": "groceries",
+        "name": "Groceries",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r-groc",
+            "category_id": "groceries",
+            "unit": "cashback_percent",
+            "rate": 5,
+            "priority": 10
+          }
+        ],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 2000,
+        "categoryId": "groceries",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 100,
+        "points": 100,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "exhausted spend cap falls back to the card base rate, not zero",
+      "why": "THE headline bug. A 10% card capped at 3000/month, cap spent, must read as the 1% card it now is.",
+      "card": {
+        "id": "capped",
+        "name": "Capped",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r-online",
+            "category_id": "online",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "cap-online",
+            "reward_rule_id": "r-online",
+            "label": "10% online cap",
+            "measure": "spend_amount",
+            "cap_value": 3000,
+            "post_cap_unit": null,
+            "post_cap_rate": null,
+            "period": "calendar_month"
+          }
+        ]
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "categoryId": "online",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {
+        "cap-online": 3000
+      },
+      "expected": {
+        "valueInr": 10,
+        "points": 10,
+        "capConsumedDelta": 1000
+      }
+    },
+    {
+      "name": "partially consumed spend cap blends bonus and base rate",
+      "card": {
+        "id": "capped",
+        "name": "Capped",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r-online",
+            "category_id": "online",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "cap-online",
+            "reward_rule_id": "r-online",
+            "label": "10% online cap",
+            "measure": "spend_amount",
+            "cap_value": 3000,
+            "post_cap_unit": null,
+            "post_cap_rate": null,
+            "period": "calendar_month"
+          }
+        ]
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "categoryId": "online",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {
+        "cap-online": 2500
+      },
+      "expected": {
+        "valueInr": 55,
+        "points": 55,
+        "capConsumedDelta": 1000
+      }
+    },
+    {
+      "name": "an explicit post-cap rate of zero really is zero",
+      "why": "Silence and an explicit zero are different facts about a card.",
+      "card": {
+        "id": "hard-stop",
+        "name": "Hard Stop",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "cap",
+            "reward_rule_id": "r",
+            "label": "cap",
+            "measure": "spend_amount",
+            "cap_value": 3000,
+            "post_cap_unit": "cashback_percent",
+            "post_cap_rate": 0,
+            "period": "calendar_month"
+          }
+        ]
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {
+        "cap": 3000
+      },
+      "expected": {
+        "valueInr": 0,
+        "points": 0,
+        "capConsumedDelta": 1000
+      }
+    },
+    {
+      "name": "a cap on a DIFFERENT rule is not consumed",
+      "why": "The server used to match caps with category_id IS NULL as a wildcard, so a rent payment burned a grocery cap.",
+      "card": {
+        "id": "two-rules",
+        "name": "Two Rules",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r-groc",
+            "category_id": "groceries",
+            "unit": "cashback_percent",
+            "rate": 5,
+            "priority": 10
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "cap-groc",
+            "reward_rule_id": "r-groc",
+            "label": "groceries cap",
+            "measure": "spend_amount",
+            "cap_value": 3000,
+            "post_cap_unit": null,
+            "post_cap_rate": null,
+            "period": "calendar_month"
+          }
+        ]
+      },
+      "transaction": {
+        "amountInr": 50000,
+        "categoryId": "rent",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 500,
+        "points": 500,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "merchant-restricted rule applies at the named merchant",
+      "card": {
+        "id": "amazon",
+        "name": "Amazon",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r-amz",
+            "merchant_pattern": "amazon",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "merchantName": "AMAZON  PAY IND*ORD",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 100,
+        "points": 100,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "merchant-restricted rule does not apply elsewhere",
+      "card": {
+        "id": "amazon",
+        "name": "Amazon",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r-amz",
+            "merchant_pattern": "amazon",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "merchantName": "Flipkart",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 10,
+        "points": 10,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "rail-restricted rule does not apply on another rail",
+      "card": {
+        "id": "swipe-only",
+        "name": "Swipe Only",
+        "network": "visa",
+        "is_upi_linkable": true,
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r-swipe",
+            "rail": "swipe",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "rail": "upi_qr"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 10,
+        "points": 10,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "below the minimum transaction the rule is off",
+      "card": {
+        "id": "min-500",
+        "name": "Min 500",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r",
+            "min_txn_inr": 500,
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 400,
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 4,
+        "points": 4,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "above the per-transaction ceiling the excess earns the base rate",
+      "why": "'10% on the first 5,000 per transaction' — the excess still earns, just not at 10%.",
+      "card": {
+        "id": "max-5000",
+        "name": "Max 5000",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r",
+            "max_txn_inr": 5000,
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 8000,
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 530,
+        "points": 530,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "a card-level excluded category earns nothing at all",
+      "card": {
+        "id": "no-rent",
+        "name": "No Rent",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "excluded_categories": [
+          "rent"
+        ],
+        "reward_rules": [
+          {
+            "id": "r",
+            "unit": "cashback_percent",
+            "rate": 5,
+            "priority": 10
+          }
+        ],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 50000,
+        "categoryId": "rent",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 0,
+        "points": 0,
+        "capConsumedDelta": 0,
+        "excluded": true
+      }
+    },
+    {
+      "name": "a rule-level excluded category still earns the base rate",
+      "card": {
+        "id": "no-fuel-bonus",
+        "name": "No Fuel Bonus",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "excluded_categories": [
+              "fuel"
+            ],
+            "priority": 10
+          }
+        ],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 2000,
+        "categoryId": "fuel",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 20,
+        "points": 20,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "points card: exhausted reward-value cap falls back to base points",
+      "why": "Points and value must both blend, and must agree with each other.",
+      "card": {
+        "id": "points",
+        "name": "Points",
+        "network": "visa",
+        "point_value_inr": 0.25,
+        "base_reward_unit": "points_per_100",
+        "base_reward_rate": 2,
+        "reward_rules": [
+          {
+            "id": "r-travel",
+            "category_id": "travel",
+            "unit": "points_per_100",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "cap-travel",
+            "reward_rule_id": "r-travel",
+            "label": "travel points cap",
+            "measure": "reward_value",
+            "cap_value": 1000,
+            "post_cap_unit": null,
+            "post_cap_rate": null,
+            "period": "calendar_month"
+          }
+        ]
+      },
+      "transaction": {
+        "amountInr": 10000,
+        "categoryId": "travel",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {
+        "cap-travel": 1000
+      },
+      "expected": {
+        "valueInr": 50,
+        "points": 200,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "points card: reward-value cap exhausted mid-transaction",
+      "why": "1,000 of headroom at 10 pts/100 valued 0.25 = 2.5% => 40,000 of spend fills it; a 50,000 spend splits.",
+      "card": {
+        "id": "points",
+        "name": "Points",
+        "network": "visa",
+        "point_value_inr": 0.25,
+        "base_reward_unit": "points_per_100",
+        "base_reward_rate": 2,
+        "reward_rules": [
+          {
+            "id": "r-travel",
+            "category_id": "travel",
+            "unit": "points_per_100",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "cap-travel",
+            "reward_rule_id": "r-travel",
+            "label": "travel points cap",
+            "measure": "reward_value",
+            "cap_value": 1000,
+            "post_cap_unit": null,
+            "post_cap_rate": null,
+            "period": "calendar_month"
+          }
+        ]
+      },
+      "transaction": {
+        "amountInr": 50000,
+        "categoryId": "travel",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 1050,
+        "points": 4200,
+        "capConsumedDelta": 1000
+      }
+    },
+    {
+      "name": "transaction-count cap: within the count",
+      "card": {
+        "id": "count",
+        "name": "Count",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "cap",
+            "reward_rule_id": "r",
+            "label": "5 txns",
+            "measure": "txn_count",
+            "cap_value": 5,
+            "post_cap_unit": null,
+            "post_cap_rate": null,
+            "period": "calendar_month"
+          }
+        ]
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {
+        "cap": 3
+      },
+      "expected": {
+        "valueInr": 100,
+        "points": 100,
+        "capConsumedDelta": 1
+      }
+    },
+    {
+      "name": "transaction-count cap: past the count, base rate applies",
+      "card": {
+        "id": "count",
+        "name": "Count",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "cap",
+            "reward_rule_id": "r",
+            "label": "5 txns",
+            "measure": "txn_count",
+            "cap_value": 5,
+            "post_cap_unit": null,
+            "post_cap_rate": null,
+            "period": "calendar_month"
+          }
+        ]
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {
+        "cap": 5
+      },
+      "expected": {
+        "valueInr": 10,
+        "points": 10,
+        "capConsumedDelta": 1
+      }
+    },
+    {
+      "name": "category-scoped cap is applied even with no reward_rule_id",
+      "card": {
+        "id": "cat-cap",
+        "name": "Cat Cap",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r-groc",
+            "category_id": "groceries",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "cap-groc",
+            "category_id": "groceries",
+            "label": "groceries cap",
+            "measure": "spend_amount",
+            "cap_value": 3000,
+            "post_cap_unit": null,
+            "post_cap_rate": null,
+            "period": "calendar_month"
+          }
+        ]
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "categoryId": "groceries",
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {
+        "cap-groc": 3000
+      },
+      "expected": {
+        "valueInr": 10,
+        "points": 10,
+        "capConsumedDelta": 1000
+      }
+    },
+    {
+      "name": "a cap with neither reward_rule_id nor category_id never bites",
+      "why": "NULL must not act as a wildcard on either key.",
+      "card": {
+        "id": "orphan",
+        "name": "Orphan",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "priority": 10
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "orphan-cap",
+            "label": "orphan",
+            "measure": "spend_amount",
+            "cap_value": 3000,
+            "post_cap_unit": null,
+            "post_cap_rate": null,
+            "period": "calendar_month"
+          }
+        ]
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "rail": "swipe"
+      },
+      "capConsumedBefore": {
+        "orphan-cap": 3000
+      },
+      "expected": {
+        "valueInr": 100,
+        "points": 100,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "an expired rule stops applying",
+      "card": {
+        "id": "promo",
+        "name": "Promo",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "effective_to": "2026-03-31",
+            "priority": 10
+          }
+        ],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "rail": "swipe",
+        "occurredAt": "2026-04-01T10:00:00"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 10,
+        "points": 10,
+        "capConsumedDelta": 0
+      }
+    },
+    {
+      "name": "a rule is still live on the last day of its window",
+      "card": {
+        "id": "promo",
+        "name": "Promo",
+        "network": "visa",
+        "point_value_inr": 0,
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "reward_rules": [
+          {
+            "id": "r",
+            "unit": "cashback_percent",
+            "rate": 10,
+            "effective_to": "2026-03-31",
+            "priority": 10
+          }
+        ],
+        "cap_rules": []
+      },
+      "transaction": {
+        "amountInr": 1000,
+        "rail": "swipe",
+        "occurredAt": "2026-03-31T18:00:00"
+      },
+      "capConsumedBefore": {},
+      "expected": {
+        "valueInr": 100,
+        "points": 100,
+        "capConsumedDelta": 0
+      }
+    }
+  ]
+}

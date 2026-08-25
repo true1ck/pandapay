@@ -12,12 +12,14 @@ class _FakeUserCardsRepository extends UserCardsRepository {
 
   @override
   Future<String> logTransaction({
-    required String userCardId,
+    String? userCardId,
     required Money amount,
     String? categoryId,
     String? merchantName,
     DateTime? occurredAt,
     String? note,
+    TxnInstrument instrument = TxnInstrument.creditCard,
+    TxnEntryKind entryKind = TxnEntryKind.spend,
   }) async {
     if (shouldFail) throw ApiException('offline');
     sent.add({'userCardId': userCardId, 'amount': amount});

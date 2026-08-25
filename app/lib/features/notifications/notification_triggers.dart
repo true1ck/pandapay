@@ -36,6 +36,7 @@ class NotificationTriggerRunner {
     await _tryRun(_checkPointsExpiry);
     await _tryRun(_checkMonthlyReport);
     await _tryRun(_checkNeedsReview);
+    await _tryRun(_checkBudgets);
   }
 
   Future<void> _tryRun(Future<void> Function() check) async {
@@ -223,5 +224,45 @@ class NotificationTriggerRunner {
       // precisely without a push/cron backend.
       dedupeKey: 'needs_review:$count',
     );
+  }
+
+  /// Budget warnings — the only trigger the user set the threshold for
+  /// themselves.
+  ///
+  /// Two distinct events, not one. "Over budget" on the 30th is a
+  /// post-mortem; "ahead of pace" on the 12th is something you can still
+  /// act on, and it is the one that earns this notification its place.
+  /// [BudgetStatus.isOffPace] carries a 5% margin so an ordinary purchase
+  /// doesn't tip a budget into warning and straight back out — an alert
+  /// that fires on noise is one people learn to dismiss without reading.
+  ///
+  /// The dedupe key includes the period start, so each period gets one
+  /// warning and one over-budget alert rather than the same message every
+  /// time the app is opened.
+  Future<void> _checkBudgets() async {
+    final flagged = ref.read(budgetsNeedingAttentionProvider);
+    if (flagged.isEmpty) return;
+    final gate = ref.read(notificationGateProvider);
+
+    for (final budget in flagged) {
+      final periodKey = '${budget.periodStart.year}-${budget.periodStart.month}-${budget.periodStart.day}';
+      if (budget.isOver) {
+        await gate.fire(
+          category: 'budget_exceeded',
+          title: 'Over budget on ${budget.label}',
+          body: 'You\'ve spent ${budget.spent.format(hidePaise: true)} of your '
+              '${budget.amount.format(hidePaise: true)} ${budget.period.label.toLowerCase()} budget.',
+          dedupeKey: 'budget_over:${budget.id}:$periodKey',
+        );
+      } else {
+        await gate.fire(
+          category: 'budget_warning',
+          title: 'Running ahead on ${budget.label}',
+          body: '${(budget.consumedFraction * 100).toStringAsFixed(0)}% of your budget is gone with '
+              '${(100 - budget.elapsedFraction * 100).toStringAsFixed(0)}% of the period left.',
+          dedupeKey: 'budget_pace:${budget.id}:$periodKey',
+        );
+      }
+    }
   }
 }

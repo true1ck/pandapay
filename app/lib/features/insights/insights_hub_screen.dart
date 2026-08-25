@@ -46,13 +46,46 @@ import 'insights_overview.dart';
 /// Due Dates, Lounge) are appended after in a fixed order — E3 in
 /// particular has no natural urgency (a utilization ratio isn't a
 /// deadline), so it stays unordered per the plan's own note.
+/// "12 tracked · 3 active" — one line covering everything behind the
+/// Limits & perks tile, so collapsing four tiles into one doesn't cost the
+/// at-a-glance counts the separate tiles used to give.
+String? _limitsHeadline(int caps, int milestones, int feeWaivers) {
+  final parts = <String>[
+    if (caps > 0) '$caps cap${caps == 1 ? '' : 's'}',
+    if (milestones > 0) '$milestones milestone${milestones == 1 ? '' : 's'}',
+    if (feeWaivers > 0) '$feeWaivers waiver${feeWaivers == 1 ? '' : 's'}',
+  ];
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
 class InsightsHubScreen extends ConsumerWidget {
   const InsightsHubScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final owned = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+    // The two review queues are ACTIONS, not insights, so they no longer
+    // take up two permanent tiles in the grid. They appear as a single row
+    // above it, and only when there is actually something to do — a queue
+    // that is empty most of the time does not deserve standing real estate.
     final needsReviewCount = ref.watch(needsReviewCountProvider);
+    final duplicateCount = ref.watch(duplicateCandidatesProvider).valueOrNull?.length ?? 0;
+
+    // A budget that needs attention is the one thing on this hub worth
+    // saying before the user taps anything, so it rides on the tile itself.
+    final flaggedBudgets = ref.watch(budgetsNeedingAttentionProvider);
+    final budgetHeadline = flaggedBudgets.isEmpty
+        ? null
+        : flaggedBudgets.first.isOver
+            ? 'Over on ${flaggedBudgets.first.label}'
+            : 'Ahead of pace';
+
+    // Shown on the tile because the annual figure is the whole point: a
+    // ₹649 monthly charge doesn't feel like much, and ₹7,788 a year does.
+    final recurring = ref.watch(recurringReportProvider).valueOrNull;
+    final subscriptionHeadline = recurring == null || recurring.series.isEmpty
+        ? null
+        : '${recurring.totalAnnual.format(compact: true)}/yr';
 
     final capRows = [
       for (final (userCard, product) in owned)
@@ -96,117 +129,72 @@ class InsightsHubScreen extends ConsumerWidget {
       }
     }
 
-    // E1 is the single entry point to every E-screen (see class doc-comment)
-    // — Caps/Milestones/Fee Waivers must stay reachable even for a user with
-    // no cap/milestone-bearing cards yet, so these three always render.
-    // Falling back to UrgencyScore() (0 ratio, "effectively never" days)
-    // only affects sort position, pushing an empty tile to the back
-    // alongside the other unordered tiles rather than hiding it.
+    // SIX tiles, not eighteen.
+    //
+    // This grid had grown one tile per shipped screen, and most of them
+    // answered slices of the same few questions: Caps/Milestones/Fee
+    // Waivers/Lounge are all "progress toward a threshold on a card";
+    // Savings/Missed/Portfolio are all "did this wallet pay off";
+    // Due Dates/Float/Utilization are all "when and how much to pay". Laid
+    // out as eighteen equal choices, the grouping had to happen in the
+    // user's head every single time — and "Spending Overview" had become a
+    // strict subset of "Spending" once the latter gained periods, a
+    // previous-period comparison and a per-card split.
+    //
+    // Each tile below opens a GroupedInsightScreen holding the ORIGINAL
+    // screens as tabs. Nothing was deleted and every old route still works;
+    // what changed is how many decisions the hub asks for at once.
     final urgentTiles = <(UrgencyScore, _InsightTile)>[
       (
-        mostUrgentCap ?? UrgencyScore(),
+        // Sorted by whichever of its tabs is most urgent — a cap about to
+        // run out should pull the tile up the grid even though the tile now
+        // covers milestones and fee waivers too.
+        [mostUrgentCap, mostUrgentMilestone, mostUrgentFeeWaiver]
+                .nonNulls
+                .fold<UrgencyScore?>(null, (a, b) => a == null || b.compareTo(a) < 0 ? b : a) ??
+            UrgencyScore(),
         _InsightTile(
           icon: Icons.speed_rounded,
-          label: 'Caps & Limits',
-          headline: capRows.isEmpty ? null : '${capRows.length} tracked',
-          onTap: () => context.push(AppRoute.caps),
+          label: 'Limits & perks',
+          headline: _limitsHeadline(capRows.length, milestoneRows.length, feeWaiverRows.length),
+          onTap: () => context.push(AppRoute.limitsAndPerks),
         ),
       ),
-      (
-        mostUrgentMilestone ?? UrgencyScore(),
-        _InsightTile(
-          icon: Icons.flag_outlined,
-          label: 'Milestones',
-          headline: milestoneRows.isEmpty ? null : '${milestoneRows.length} active',
-          onTap: () => context.push(AppRoute.milestones),
-        ),
-      ),
-      (
-        mostUrgentFeeWaiver ?? UrgencyScore(),
-        _InsightTile(
-          icon: Icons.card_giftcard_outlined,
-          label: 'Fee Waivers',
-          headline: feeWaiverRows.isEmpty ? null : '${feeWaiverRows.length} tracked',
-          onTap: () => context.push(AppRoute.feeWaivers),
-        ),
-      ),
-    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    ];
 
     final unorderedTiles = <_InsightTile>[
+      // First two on purpose. "Where is my money going" and "am I over
+      // budget" are the questions people open a spend tracker to ask;
+      // everything else here answers a question about a card.
       _InsightTile(
-        icon: Icons.event_available_outlined,
-        label: 'Billing Float',
-        headline: null,
-        onTap: () => context.push(AppRoute.billingFloat),
-      ),
-      _InsightTile(
-        icon: Icons.pie_chart_outline_rounded,
-        label: 'Credit Utilization',
-        headline: null,
-        onTap: () => context.push(AppRoute.creditUtilization),
-      ),
-      _InsightTile(
-        icon: Icons.airline_seat_flat_angled_rounded,
-        label: 'Lounge Access',
-        headline: null,
-        onTap: () => context.push(AppRoute.loungeAccess),
-      ),
-      _InsightTile(
-        icon: Icons.calendar_month_outlined,
-        label: 'Due Dates',
-        headline: null,
-        onTap: () => context.push(AppRoute.dueDateCalendar),
+        icon: Icons.show_chart_rounded,
+        label: 'Spending',
+        headline: 'Trends & reports',
+        onTap: () => context.push(AppRoute.spendTrends),
       ),
       _InsightTile(
         icon: Icons.savings_outlined,
-        label: 'Savings Report',
-        headline: null,
-        onTap: () => context.push(AppRoute.monthlySavings),
+        label: 'Budgets',
+        headline: budgetHeadline,
+        onTap: () => context.push(AppRoute.budgets),
       ),
       _InsightTile(
-        icon: Icons.fact_check_outlined,
-        label: 'Portfolio Audit',
-        headline: null,
-        onTap: () => context.push(AppRoute.portfolioAudit),
+        icon: Icons.workspace_premium_outlined,
+        label: 'Rewards',
+        headline: 'What your cards earned',
+        onTap: () => context.push(AppRoute.rewardsGroup),
       ),
       _InsightTile(
-        icon: Icons.donut_small_outlined,
-        label: 'Spending Overview',
-        headline: null,
-        onTap: () => context.push(AppRoute.spendingOverview),
+        icon: Icons.event_available_outlined,
+        label: 'Payments',
+        headline: 'Due dates & credit',
+        onTap: () => context.push(AppRoute.paymentsGroup),
       ),
       _InsightTile(
-        icon: Icons.diversity_3_outlined,
-        label: 'My Contributions',
-        headline: null,
-        onTap: () => context.push(AppRoute.myContributions),
-      ),
-      _InsightTile(
-        icon: Icons.receipt_long_rounded,
-        label: 'All Activity',
-        headline: null,
-        onTap: () => context.push(AppRoute.activity),
-      ),
-      _InsightTile(
-        icon: Icons.trending_down_rounded,
-        label: 'Missed Opportunities',
-        headline: null,
-        onTap: () => context.push(AppRoute.missedOpportunities),
-      ),
-      // Task D-4: needsReviewCountProvider is on-device only (see
-      // NeedsReviewRepository's doc-comment) — this tile is its one
-      // visible entry point outside the SMS import screens themselves.
-      _InsightTile(
-        icon: Icons.mark_email_unread_outlined,
-        label: 'Needs Review',
-        headline: needsReviewCount > 0 ? '$needsReviewCount' : null,
-        onTap: () => context.push(AppRoute.needsReview),
-      ),
-      _InsightTile(
-        icon: Icons.content_copy_outlined,
-        label: 'Duplicate Review',
-        headline: null,
-        onTap: () => context.push(AppRoute.duplicateReview),
+        icon: Icons.autorenew_rounded,
+        label: 'Subscriptions',
+        headline: subscriptionHeadline,
+        onTap: () => context.push(AppRoute.subscriptions),
       ),
     ];
 
@@ -246,6 +234,10 @@ class InsightsHubScreen extends ConsumerWidget {
             data: (data) => _OverviewSections(data: data, milestones: milestoneRows),
           ),
           const SizedBox(height: AppSpace.xxl),
+          if (needsReviewCount > 0 || duplicateCount > 0) ...[
+            _ReviewRow(needsReview: needsReviewCount, duplicates: duplicateCount),
+            const SizedBox(height: AppSpace.xl),
+          ],
           // The tile grid the whole screen used to be. Design 04 puts real
           // content first and doesn't show these at all, but every one of
           // them is a shipped E-screen whose only entry point is here —
@@ -273,7 +265,136 @@ class InsightsHubScreen extends ConsumerWidget {
             ),
             children: tiles,
           ),
+          const SizedBox(height: AppSpace.lg),
+          // Not a seventh tile — a plain row, because the transaction list
+          // is a destination rather than an insight.
+          //
+          // It also can't live ONLY inside Spending, which is where it sits
+          // contextually: that screen shows a sign-in wall when signed out,
+          // so burying Activity there made it unreachable for exactly the
+          // users who most need to find the sign-in prompt behind it.
+          _ActivityLink(),
         ],
+      ),
+    );
+  }
+}
+
+/// The transaction list, as a row rather than a grid tile.
+class _ActivityLink extends StatelessWidget {
+  const _ActivityLink();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        onTap: () => context.push(AppRoute.activity),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
+          child: Row(
+            children: [
+              const Icon(Icons.receipt_long_rounded, size: 18, color: BambooInk.ink500),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Text(
+                  'See every transaction',
+                  style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink500),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "3 to review" — the two transaction queues, shown only when non-empty.
+///
+/// Needs Review (a message we couldn't attribute) and Duplicate Review (a
+/// possible double-count) both mean the same thing to the user: some
+/// transactions need a decision. They held two permanent grid tiles that
+/// read "0" most of the time, which is the worst kind of clutter — always
+/// present, rarely relevant. Now they surface only when they have work in
+/// them, and above the grid rather than buried in it, because an item
+/// waiting on the user outranks anything they might browse to.
+class _ReviewRow extends StatelessWidget {
+  final int needsReview;
+  final int duplicates;
+
+  const _ReviewRow({required this.needsReview, required this.duplicates});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (needsReview > 0)
+          _ReviewTile(
+            icon: Icons.mark_email_unread_outlined,
+            label: needsReview == 1 ? '1 message needs review' : '$needsReview messages need review',
+            detail: 'We couldn\'t tell which card these belong to.',
+            onTap: () => context.push(AppRoute.needsReview),
+          ),
+        if (needsReview > 0 && duplicates > 0) const SizedBox(height: AppSpace.sm),
+        if (duplicates > 0)
+          _ReviewTile(
+            icon: Icons.content_copy_outlined,
+            label: duplicates == 1 ? '1 possible duplicate' : '$duplicates possible duplicates',
+            detail: 'Same amount and day from two different sources.',
+            onTap: () => context.push(AppRoute.duplicateReview),
+          ),
+      ],
+    );
+  }
+}
+
+class _ReviewTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String detail;
+  final VoidCallback onTap;
+
+  const _ReviewTile({
+    required this.icon,
+    required this.label,
+    required this.detail,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: BambooInk.paperMuted,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpace.md),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: BambooInk.amber),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: BambooFonts.ui(13.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(detail, style: BambooFonts.ui(12, color: BambooInk.ink500)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink500),
+            ],
+          ),
+        ),
       ),
     );
   }

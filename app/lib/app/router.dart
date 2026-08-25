@@ -39,7 +39,10 @@ import '../features/insights/missed_opportunities_screen.dart';
 import '../features/insights/monthly_savings_screen.dart';
 import '../features/insights/my_contributions_screen.dart';
 import '../features/insights/portfolio_audit_screen.dart';
-import '../features/insights/spending_overview_screen.dart';
+import '../features/insights/budgets_screen.dart';
+import '../features/insights/grouped_insight_screen.dart';
+import '../features/insights/spend_trends_screen.dart';
+import '../features/insights/subscriptions_screen.dart';
 import '../features/onboarding/account_choice_screen.dart';
 import '../features/onboarding/add_first_card_screen.dart';
 import '../features/onboarding/card_details_setup_screen.dart';
@@ -114,7 +117,25 @@ abstract final class AppRoute {
   static const dueDateCalendar = '/insights/due-dates';
   static const monthlySavings = '/insights/savings-report';
   static const portfolioAudit = '/insights/portfolio-audit';
-  static const spendingOverview = '/insights/spending-overview';
+
+  /// Spend Trends — the week/month/quarter/year view with a real comparison
+  /// against the previous period. Distinct from [spendingOverview], which
+  /// only ever shows the current calendar month.
+  static const spendTrends = '/insights/trends';
+
+  /// Budgets — advisory limits the user sets for themselves.
+  static const budgets = '/insights/budgets';
+
+  /// Subscriptions — repeating charges found in the user's own history.
+  static const subscriptions = '/insights/subscriptions';
+
+  /// The three GROUPED insights. Each holds screens that used to be their
+  /// own tile as tabs — see GroupedInsightScreen for why eighteen separate
+  /// entry points was the wrong shape. The individual routes below still
+  /// exist and still work; these are the entry points the hub now offers.
+  static const limitsAndPerks = '/insights/limits';
+  static const rewardsGroup = '/insights/rewards';
+  static const paymentsGroup = '/insights/payments';
   static const myContributions = '/insights/my-contributions';
 
   /// Group F (Data Import & Sync) — implementation-plan-group-e-f-g.md §3.
@@ -530,11 +551,51 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           body: const PortfolioAuditScreen(),
         ),
       ),
+      // These two carry their own Scaffold+AppBar (unlike the tile screens
+      // above, which are wrapped here) because both need a floating action
+      // button and their own period chips under the title.
+      GoRoute(path: AppRoute.spendTrends, builder: (context, state) => const SpendTrendsScreen()),
+      GoRoute(path: AppRoute.budgets, builder: (context, state) => const BudgetsScreen()),
+      GoRoute(path: AppRoute.subscriptions, builder: (context, state) => const SubscriptionsScreen()),
+
+      // Grouped insights. The tab bodies are the ORIGINAL screens — each was
+      // already a plain body the routes above wrap in a Scaffold, so they
+      // embed unchanged and the standalone routes keep working.
       GoRoute(
-        path: AppRoute.spendingOverview,
-        builder: (context, state) => Scaffold(
-          appBar: AppBar(title: const Text('Spending Overview')),
-          body: const SpendingOverviewScreen(),
+        path: AppRoute.limitsAndPerks,
+        builder: (context, state) => const GroupedInsightScreen(
+          title: 'Limits & perks',
+          tabs: [
+            (label: 'Caps', body: CapsScreen()),
+            (label: 'Milestones', body: MilestonesScreen()),
+            (label: 'Fee waivers', body: FeeWaiversScreen()),
+            // A lounge quota is the same shape as a cap — "N visits a year,
+            // M used" — so it belongs with the thresholds rather than
+            // sitting alone on the grid.
+            (label: 'Lounge', body: LoungeAccessScreen()),
+          ],
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.rewardsGroup,
+        builder: (context, state) => const GroupedInsightScreen(
+          title: 'Rewards',
+          tabs: [
+            (label: 'This month', body: MonthlySavingsScreen()),
+            (label: 'Missed', body: MissedOpportunitiesScreen(showChrome: false)),
+            (label: 'By card', body: PortfolioAuditScreen()),
+          ],
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.paymentsGroup,
+        builder: (context, state) => const GroupedInsightScreen(
+          title: 'Payments',
+          tabs: [
+            (label: 'Due dates', body: DueDateCalendarScreen()),
+            (label: 'Interest-free days', body: BillingFloatScreen()),
+            (label: 'Utilization', body: CreditUtilizationScreen()),
+          ],
         ),
       ),
       GoRoute(
@@ -723,6 +784,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // points-expiry/monthly-report/needs-review notifications. Same "read
     // once from the shell" reasoning as everything else on this list.
     ref.watch(notificationTriggerLifecycleProvider);
+    ref.watch(smsBackgroundFlushProvider);
     // Tell the user their guest wallet moved. Quietly relocating someone's
     // cards is nearly as disconcerting as losing them — and if any card
     // couldn't be carried over (its product was unpublished in the

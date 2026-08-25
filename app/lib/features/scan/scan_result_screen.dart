@@ -146,19 +146,29 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       vpa: widget.parsed.pa,
     );
 
+    // This is the one ranking path in the app that genuinely knows the
+    // merchant — a scanned UPI QR carries the payee name — so it is the
+    // path where merchant-restricted rules ("10% at Amazon only") can
+    // actually be honoured rather than falling through to the base rate.
+    final merchantName = widget.parsed.pn;
+    final now = DateTime.now();
     final upiContext = RecommendationContext(
       amount: _amount,
       categoryId: _selectedCategoryId,
       mcc: widget.parsed.mc,
       vpa: widget.parsed.pa,
+      merchantName: merchantName,
       rail: TxnRail.upiQr,
+      now: now,
     );
     final swipeContext = RecommendationContext(
       amount: _amount,
       categoryId: _selectedCategoryId,
       mcc: widget.parsed.mc,
       vpa: widget.parsed.pa,
+      merchantName: merchantName,
       rail: TxnRail.swipe,
+      now: now,
     );
 
     final snapshots = cards.where((c) => !_locallyRejectedCardIds.contains(c.id)).map((c) {

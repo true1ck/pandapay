@@ -87,10 +87,13 @@ void main() {
     expect(find.textContaining('could not be found'), findsOneWidget);
   });
 
-  testWidgets('renders the nickname as the app bar title and all six tabs', (tester) async {
+  testWidgets('renders the nickname as the app bar title and all seven tabs', (tester) async {
     await _pump(tester, catalogue: [_fullCard()], owned: [_ownedCard()]);
     expect(find.text('My Test Card'), findsOneWidget);
-    for (final label in ['Rewards', 'Caps', 'Milestones', 'Fees', 'Benefits', 'Statement']) {
+    // Spend sits second, right after Rewards: the other six describe the
+    // card's TERMS, and this one is the only tab that says what the card
+    // has actually done.
+    for (final label in ['Rewards', 'Spend', 'Caps', 'Milestones', 'Fees', 'Benefits', 'Statement']) {
       expect(find.text(label), findsOneWidget);
     }
   });
@@ -122,6 +125,15 @@ void main() {
       isDefault: false,
     );
     await _pump(tester, catalogue: [_fullCard()], owned: [noStatementCard], id: 'uc2');
+    // The tab bar is scrollable and, since the Spend tab was added, wider
+    // than the 800px test viewport — Statement sits past the right edge, so
+    // it has to be scrolled into view before it can be tapped.
+    await tester.dragUntilVisible(
+      find.text('Statement'),
+      find.byType(TabBar),
+      const Offset(-120, 0),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Statement'));
     await tester.pumpAndSettle();
     expect(find.text('Statement date not set'), findsOneWidget);

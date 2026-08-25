@@ -16,12 +16,22 @@ import '../../main.dart' show MoneyText;
 /// (base-rate-only, no historical cap/milestone/forex state). Filter by
 /// card/category, per spec.
 class MissedOpportunitiesScreen extends ConsumerWidget {
-  const MissedOpportunitiesScreen({super.key});
+  /// When false, the screen renders only its body — no Scaffold, no AppBar.
+  ///
+  /// Needed because this is the one insight screen that carried its own
+  /// chrome; every sibling was a plain body the router wrapped. It now also
+  /// appears as a tab inside the grouped "Rewards" insight, where a nested
+  /// Scaffold would stack a second app bar under the first.
+  final bool showChrome;
+
+  const MissedOpportunitiesScreen({super.key, this.showChrome = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final filterCardId = ref.watch(_missedOppCardFilterProvider);
     final missed = ref.watch(_missedOpportunitiesProvider);
+
+    if (!showChrome) return _body(context, ref, filterCardId, missed);
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -32,7 +42,13 @@ class MissedOpportunitiesScreen extends ConsumerWidget {
         elevation: 0,
         title: Text('Missed opportunities', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
-      body: AppBackground(
+      body: _body(context, ref, filterCardId, missed),
+    );
+  }
+
+  Widget _body(BuildContext context, WidgetRef ref, String? filterCardId,
+      AsyncValue<List<_MissedOpportunity>> missed) {
+    return AppBackground(
         child: missed.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
@@ -146,7 +162,6 @@ class MissedOpportunitiesScreen extends ConsumerWidget {
             );
           },
         ),
-      ),
     );
   }
 }

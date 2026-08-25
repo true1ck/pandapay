@@ -41,3 +41,19 @@ __pycache__/
 
 # Local test/QA screenshots
 session_screenshots/
+
+# SSH / signing keys. NOTHING matching these may ever be committed — a
+# private key in a public repo is a full server compromise, and git history
+# keeps it long after the file is deleted.
+#
+# Added after `PEM_PandaPay/` (a live Oracle Cloud SSH key for the
+# production backend) was found sitting untracked in the repo root, one
+# `git add .` away from being published.
+*.pem
+*.key
+!*.pub
+PEM_PandaPay/
+**/pem/
+*.p12
+*.jks
+*.keystore

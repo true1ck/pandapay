@@ -19,6 +19,12 @@ class NotificationPreferences {
   final bool categoryMonthlyReport;
   final bool categoryNeedsReview;
 
+  /// Two budget categories, not one. "Over budget" is a post-mortem and
+  /// "running ahead of pace" is still actionable — someone who wants the
+  /// early warning shouldn't be forced to take the late one as well.
+  final bool categoryBudgetWarning;
+  final bool categoryBudgetExceeded;
+
   /// "HH:MM:SS" (or "HH:MM") strings straight from Postgres `time` columns,
   /// or null when quiet hours aren't set. Kept as raw strings rather than
   /// parsed into TimeOfDay here — the repository layer stays UI-framework-free,
@@ -37,6 +43,8 @@ class NotificationPreferences {
     required this.categoryExpiry,
     required this.categoryMonthlyReport,
     required this.categoryNeedsReview,
+    this.categoryBudgetWarning = true,
+    this.categoryBudgetExceeded = true,
     this.quietHoursStart,
     this.quietHoursEnd,
     required this.dailyCap,
@@ -52,6 +60,8 @@ class NotificationPreferences {
       categoryExpiry: json['category_expiry'] as bool? ?? true,
       categoryMonthlyReport: json['category_monthly_report'] as bool? ?? false,
       categoryNeedsReview: json['category_needs_review'] as bool? ?? true,
+      categoryBudgetWarning: json['category_budget_warning'] as bool? ?? true,
+      categoryBudgetExceeded: json['category_budget_exceeded'] as bool? ?? true,
       quietHoursStart: json['quiet_hours_start'] as String?,
       quietHoursEnd: json['quiet_hours_end'] as String?,
       dailyCap: json['daily_cap'] is int ? json['daily_cap'] as int : int.parse(json['daily_cap'].toString()),

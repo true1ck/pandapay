@@ -12,12 +12,14 @@ class _FakeUserCardsRepository implements UserCardsRepository {
 
   @override
   Future<String> logTransaction({
-    required String userCardId,
+    String? userCardId,
     required dynamic amount,
     String? categoryId,
     String? merchantName,
     DateTime? occurredAt,
     String? note,
+    TxnInstrument instrument = TxnInstrument.creditCard,
+    TxnEntryKind entryKind = TxnEntryKind.spend,
   }) async {
     lastLogArgs = {'userCardId': userCardId, 'amount': amount, 'categoryId': categoryId};
     return 'fake-txn-id';

@@ -97,6 +97,12 @@ class SplitOptimizer {
                 rail: baseContext.rail,
                 isP2P: baseContext.isP2P,
                 travelMode: baseContext.travelMode,
+                // Propagated, not dropped: a merchant-restricted or expired
+                // rule must be evaluated identically on every marginal
+                // step, or the split plan optimises against a rate the
+                // card would not actually pay.
+                merchantName: baseContext.merchantName,
+                now: baseContext.now,
               ),
               [adjustedSnapshot],
             )
@@ -126,6 +132,8 @@ class SplitOptimizer {
               categoryId: baseContext.categoryId,
               rail: baseContext.rail,
               travelMode: baseContext.travelMode,
+              merchantName: baseContext.merchantName,
+              now: baseContext.now,
             ),
             [adjustedSnapshot],
           )
@@ -256,6 +264,8 @@ RailComparison compareRails(
       vpa: baseContext.vpa,
       rail: TxnRail.upiQr,
       travelMode: baseContext.travelMode,
+      merchantName: baseContext.merchantName,
+      now: baseContext.now,
     ),
     cards,
   );
@@ -267,6 +277,8 @@ RailComparison compareRails(
       vpa: baseContext.vpa,
       rail: TxnRail.swipe,
       travelMode: baseContext.travelMode,
+      merchantName: baseContext.merchantName,
+      now: baseContext.now,
     ),
     cards,
   );

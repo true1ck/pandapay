@@ -18,12 +18,30 @@ import '../../data/api_exception.dart';
 /// the credential. The password is only ever POSTed once, over HTTPS in a
 /// real deployment, and never logged/echoed back by this screen.
 ///
-/// NOT built this pass: an actual background IMAP poller that reads the
-/// mailbox (needs a scheduled job, same class of gap as F3's inbound-email
-/// ingestion — see Task F-0). "Test connection" performs a real IMAP
-/// handshake server-side (POST /imap-connections/:id/test decrypts the
-/// stored app password and opens a live TLS+LOGIN against imap_host:port —
-/// see api/src/imap_test.js) — not just a format check.
+/// The background poller IS now built (api/src/imap_poller.js). It runs in
+/// the API process on an interval, reads the mailbox READ-ONLY (IMAP
+/// EXAMINE, so polling never marks mail as read), applies the sender filter
+/// server-side so nothing but bank mail crosses the wire, and feeds
+/// whatever parses through the same import path SMS and forwarded email
+/// take. It is off unless the deployment sets
+/// IMAP_POLL_INTERVAL_MINUTES — a build with the variable unset behaves
+/// exactly as before, which is why the copy below hedges on "if your
+/// deployment has polling enabled" rather than promising it outright.
+///
+/// "Test connection" performs a real IMAP handshake server-side (POST
+/// /imap-connections/:id/test decrypts the stored app password and opens a
+/// live TLS+LOGIN against imap_host:port — see api/src/imap_test.js) — not
+/// just a format check.
+/// "3 hours ago" rather than a timestamp: what matters is whether the
+/// mailbox was checked recently, not the exact minute.
+String _relativeTime(DateTime when) {
+  final delta = DateTime.now().difference(when);
+  if (delta.inMinutes < 1) return 'just now';
+  if (delta.inMinutes < 60) return '${delta.inMinutes} min ago';
+  if (delta.inHours < 24) return '${delta.inHours} hour${delta.inHours == 1 ? '' : 's'} ago';
+  return '${delta.inDays} day${delta.inDays == 1 ? '' : 's'} ago';
+}
+
 class ImapConnectionScreen extends ConsumerStatefulWidget {
   const ImapConnectionScreen({super.key});
 
@@ -186,6 +204,27 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
                             ),
                           ],
                         ),
+                        // What the poller last did, verbatim from the
+                        // server. Shown rather than summarised because
+                        // "checked, found nothing" and "checked, your app
+                        // password stopped working" are the two outcomes a
+                        // user most needs to be able to tell apart — and a
+                        // silent mailbox looks identical either way.
+                        if (conn.lastPollStatus != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            conn.lastPollAt == null
+                                ? conn.lastPollStatus!
+                                : 'Last checked ${_relativeTime(conn.lastPollAt!)} — ${conn.lastPollStatus}',
+                            style: BambooFonts.ui(12, color: BambooInk.ink500),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Not checked yet.',
+                            style: BambooFonts.ui(12, color: BambooInk.ink500),
+                          ),
+                        ],
                       ],
                     ),
                   );
@@ -274,7 +313,8 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
             const SizedBox(height: AppSpace.sm),
             Text(
               '"Test connection" performs a real IMAP login against your mail server to confirm the credentials work. '
-              'No background poller is wired up yet to read the mailbox automatically (see this screen\'s doc-comment).',
+              'PandaPay then checks the mailbox periodically, reads it without marking anything as read, and only '
+              'looks at mail from the sender you filtered on. You can see when it last ran below.',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],

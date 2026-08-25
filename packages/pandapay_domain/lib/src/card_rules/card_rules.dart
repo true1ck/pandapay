@@ -52,15 +52,49 @@ enum CapMeasure { rewardValue, spendAmount, txnCount }
 
 /// A single reward rule (`reward_rules` table). `categoryId == null` means
 /// "all other spends" — the base rate.
+///
+/// Every constraint field here is enforced by
+/// [RecommendationEngine.ruleApplies]. That was not always true:
+/// [merchantPattern], [rail], [minTxn] and [maxTxn] all existed on this
+/// class (and as columns in Postgres) while the engine matched on
+/// [categoryId] alone, so "10% at Amazon only" paid out at every online
+/// merchant and "5%, min ₹500" paid out on a ₹50 purchase. If you add a
+/// field here, add it to that predicate too.
 class RewardRule {
   final String id;
   final String? categoryId;
+
+  /// Merchant this rule is restricted to, matched case-insensitively as a
+  /// substring of the transaction's merchant name ('amazon', 'swiggy').
+  /// Null means unrestricted.
   final String? merchantPattern;
+
+  /// Rail this rule is restricted to (a swipe-only accelerated rate that
+  /// doesn't pay over UPI, and vice versa). Null means any rail.
   final TxnRail? rail;
   final RewardUnit unit;
   final double rate;
+
+  /// Transaction floor — spends below this don't qualify for the rule at
+  /// all, so the card falls through to its base rate.
   final Money? minTxn;
+
+  /// Per-transaction ceiling on the *bonus* rate. Unlike [minTxn] this does
+  /// NOT disqualify the rule: the portion up to [maxTxn] earns [rate] and
+  /// the excess earns the card's base rate, which is how issuers actually
+  /// word these ("5% on the first ₹5,000 per transaction").
   final Money? maxTxn;
+
+  /// Categories this rule explicitly does not pay on. Distinct from
+  /// [CardProduct.excludedCategoryIds], which excludes at the card level.
+  final List<String> excludedCategoryIds;
+
+  /// Validity window from the catalogue. A rule whose window has closed is
+  /// not applied — without this, a promo rate that ended last quarter kept
+  /// being recommended indefinitely.
+  final DateTime? effectiveFrom;
+  final DateTime? effectiveTo;
+
   final int priority; // lower wins
 
   const RewardRule({
@@ -72,6 +106,9 @@ class RewardRule {
     required this.rate,
     this.minTxn,
     this.maxTxn,
+    this.excludedCategoryIds = const [],
+    this.effectiveFrom,
+    this.effectiveTo,
     this.priority = 100,
   });
 }
@@ -84,8 +121,24 @@ class CapRule {
   final String label;
   final Money capValue; // in the unit [measure] names — spend, reward value, or (as a count) txn_count
   final CapMeasure measure;
+
+  /// What you earn once the cap is spent.
+  ///
+  /// Both are NULLABLE and null means "the catalogue doesn't say", which is
+  /// the overwhelmingly common case — nothing in the import pipeline
+  /// populates them. Null is NOT the same as an explicit zero, and the
+  /// difference matters a lot: `postCapRate = 0` means the card genuinely
+  /// pays nothing past the cap (rare, but real), while null means the card
+  /// reverts to its ordinary base rate (the normal Indian-market
+  /// behaviour — "5% on groceries up to ₹3,000/month, 1% thereafter", where
+  /// the 1% is just the card's base rate and the catalogue never restates
+  /// it). [RecommendationEngine] resolves null against
+  /// [CardProduct.baseRewardRate]; treating it as 0 used to make a
+  /// cap-exhausted card report ₹0 and sort below cards that were worse than
+  /// its own base rate.
   final RewardUnit? postCapUnit;
-  final double postCapRate;
+  final double? postCapRate;
+
   final CapPeriod period;
 
   const CapRule({
@@ -96,7 +149,7 @@ class CapRule {
     required this.capValue,
     required this.measure,
     this.postCapUnit,
-    this.postCapRate = 0,
+    this.postCapRate,
     required this.period,
   });
 }
@@ -256,6 +309,17 @@ class CardProduct {
   final RewardUnit? baseRewardUnit;
   final double? baseRewardRate;
 
+  /// Categories this card earns nothing on, at any rate — rent, wallet
+  /// loads, fuel, insurance premiums, government payments, EMI conversions
+  /// and gift cards are all commonly excluded by Indian issuers, and are
+  /// excluded from the base rate too, not just from accelerated rules.
+  ///
+  /// The engine returns these as a proper exclusion with a reason rather
+  /// than quietly paying a rate the card doesn't actually honour. Without
+  /// it the app promised rewards on spend that earns nothing, which is the
+  /// single most trust-damaging thing a rewards optimizer can do.
+  final List<String> excludedCategoryIds;
+
   /// Whether the catalogue holds an issuer application link for this card
   /// (plan Phase 2.3). A boolean, never the URL: the destination is produced
   /// only by `pandapay.record_partner_click()` at tap time, which is what
@@ -276,6 +340,7 @@ class CardProduct {
     this.pointValueInr = 0,
     this.baseRewardUnit,
     this.baseRewardRate,
+    this.excludedCategoryIds = const [],
     this.rewardRules = const [],
     this.capRules = const [],
     this.milestoneRules = const [],
@@ -291,4 +356,25 @@ class CardProduct {
     this.artPrimaryColor,
     this.hasApplyUrl = false,
   });
+
+  /// The card's everything-else earn rate as a fraction of spend, or 0 when
+  /// the catalogue doesn't state one.
+  ///
+  /// `flatPoints` deliberately normalizes to 0 (see [RewardUnit]) — it's a
+  /// fixed bonus, not a per-rupee rate — so a card whose base reward is a
+  /// flat bonus reads as 0 here rather than advertising a rate it doesn't
+  /// have. Used both by the engine's no-matching-rule fallback and by
+  /// post-cap resolution, which must agree on what "the base rate" means.
+  double get baseRatePerRupee {
+    final unit = baseRewardUnit;
+    final rate = baseRewardRate;
+    if (unit == null || rate == null) return 0;
+    return unit.effectiveRatePerRupee(rate, pointValueInr: pointValueInr);
+  }
+
+  /// Whether [categoryId] earns nothing on this card. Null category (an
+  /// uncategorized import) is never treated as excluded — we don't know
+  /// what it is, and guessing "excluded" would under-report real rewards.
+  bool excludesCategory(String? categoryId) =>
+      categoryId != null && excludedCategoryIds.contains(categoryId);
 }

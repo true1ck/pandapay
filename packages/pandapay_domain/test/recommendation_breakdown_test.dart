@@ -140,10 +140,23 @@ void main() {
 
   test('merchant restriction is carried through, null when unrestricted', () {
     expect(breakdownFor(_card(id: 'c', rate: 5)).merchantRestriction, isNull);
-    expect(
-      breakdownFor(_card(id: 'c', rate: 5, merchantPattern: 'AMAZON')).merchantRestriction,
-      'AMAZON',
-    );
+
+    // The context must now name the merchant for a merchant-restricted rule
+    // to match at all — the restriction is enforced, not merely displayed
+    // (see RecommendationEngine.ruleApplies). Before that, this rule
+    // matched every transaction and design 09 showed a restriction the
+    // engine wasn't honouring.
+    final atAmazon = engine
+        .rank(
+          RecommendationContext(
+            amount: Money.fromRupees(2500),
+            rail: TxnRail.swipe,
+            merchantName: 'AMAZON PAY INDIA',
+          ),
+          [CardSnapshot(product: _card(id: 'c', rate: 5, merchantPattern: 'AMAZON'))],
+        )
+        .first;
+    expect(atAmazon.breakdown!.merchantRestriction, 'AMAZON');
   });
 
   test('adjustments are zero when they did not apply', () {

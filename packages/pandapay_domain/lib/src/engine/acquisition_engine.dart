@@ -121,19 +121,28 @@ class CardAcquisitionRecommender {
   /// is the one rail with no eligibility exclusion, so it never
   /// unfairly penalises or favours a card based on a rail assumption this
   /// engine has no real data for.
+  ///
+  /// [now], when given, is passed into every synthetic evaluation so a
+  /// candidate is not recommended on the strength of a promo rate whose
+  /// catalogue validity window has already closed — the most embarrassing
+  /// way for an acquisition recommendation to be wrong, since the user
+  /// would apply for the card and never see the rate. Left null it
+  /// preserves the previous behaviour of ignoring those windows; see
+  /// [RecommendationContext.now].
   List<AcquisitionCandidate> rank({
     required List<CardProduct> candidates,
     required List<CardProduct> ownedCards,
     required SpendProfile spendProfile,
+    DateTime? now,
   }) {
     final ownedIds = ownedCards.map((c) => c.id).toSet();
-    final baseline = _evaluatePortfolio(ownedCards, spendProfile);
+    final baseline = _evaluatePortfolio(ownedCards, spendProfile, now: now);
 
     final results = <AcquisitionCandidate>[];
     for (final candidate in candidates) {
       if (ownedIds.contains(candidate.id)) continue;
 
-      final withCandidate = _evaluatePortfolio([...ownedCards, candidate], spendProfile);
+      final withCandidate = _evaluatePortfolio([...ownedCards, candidate], spendProfile, now: now);
       final candidateSpendByCategory =
           withCandidate.attributedSpendByCardAndCategory[candidate.id] ?? const {};
       final fee = _netAnnualFee(candidate, candidateSpendByCategory);
@@ -162,7 +171,7 @@ class CardAcquisitionRecommender {
   /// here, rather than re-deriving rate/cap logic, is what keeps this
   /// projection consistent with what Home already shows for the same
   /// card+category — see the project's implementation plan for why.
-  _PortfolioEvaluation _evaluatePortfolio(List<CardProduct> cards, SpendProfile profile) {
+  _PortfolioEvaluation _evaluatePortfolio(List<CardProduct> cards, SpendProfile profile, {DateTime? now}) {
     if (cards.isEmpty) {
       return const _PortfolioEvaluation(
         totalValue: Money.zero(),
@@ -184,7 +193,7 @@ class CardAcquisitionRecommender {
       final amount = entry.value;
       if (amount.isZero || amount.isNegative) continue;
 
-      final ctx = RecommendationContext(amount: amount, categoryId: categoryId, rail: TxnRail.swipe);
+      final ctx = RecommendationContext(amount: amount, categoryId: categoryId, rail: TxnRail.swipe, now: now);
       // Milestones are stripped from the per-category snapshot on purpose:
       // RecommendationEngine._evaluate() adds its OWN milestone bonus given
       // milestoneProgress=0 and a large enough synthetic "transaction",

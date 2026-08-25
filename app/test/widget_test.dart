@@ -135,14 +135,25 @@ void main() {
     // Material's 5-item ceiling meant Insights displaced it, not joined it.
     await tester.tap(_navTab('Insights'));
     await tester.pumpAndSettle();
-    // The tile grid now sits below design 04's content (earned hero,
-    // category bars, missed/best pair) and is a shrinkWrap GridView, so
-    // every tile is built from first pump but laid out off-screen.
-    // scrollUntilVisible would match immediately and never scroll;
-    // ensureVisible is what actually brings the tile into the viewport.
-    await tester.ensureVisible(find.text('All Activity'));
+    // All Activity lost its own grid tile when the eighteen-tile grid was
+    // consolidated to six; it is a row below the grid now.
+    //
+    // It has to be DRAGGED into view, not just ensureVisible'd: the hub is
+    // a plain ListView, which builds its children lazily, so a row below
+    // the fold does not exist in the tree yet and ensureVisible would throw
+    // "No element" on a finder that matches nothing. The grid tiles above
+    // it are all inside one shrinkWrap GridView — a single ListView child —
+    // which is why they are all built while this row is not.
+    // scrollUntilVisible, not a fixed drag: how far the row sits below the
+    // fold depends on how much content the hub has above the grid, which
+    // differs between the signed-out empty state and a wallet with data.
+    await tester.scrollUntilVisible(
+      find.text('See every transaction'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('All Activity'));
+    await tester.tap(find.text('See every transaction'));
     await tester.pumpAndSettle();
 
     expect(find.text('Activity'), findsWidgets);
@@ -190,14 +201,25 @@ void main() {
 
     await tester.tap(_navTab('Insights'));
     await tester.pumpAndSettle();
-    // The tile grid now sits below design 04's content (earned hero,
-    // category bars, missed/best pair) and is a shrinkWrap GridView, so
-    // every tile is built from first pump but laid out off-screen.
-    // scrollUntilVisible would match immediately and never scroll;
-    // ensureVisible is what actually brings the tile into the viewport.
-    await tester.ensureVisible(find.text('All Activity'));
+    // All Activity lost its own grid tile when the eighteen-tile grid was
+    // consolidated to six; it is a row below the grid now.
+    //
+    // It has to be DRAGGED into view, not just ensureVisible'd: the hub is
+    // a plain ListView, which builds its children lazily, so a row below
+    // the fold does not exist in the tree yet and ensureVisible would throw
+    // "No element" on a finder that matches nothing. The grid tiles above
+    // it are all inside one shrinkWrap GridView — a single ListView child —
+    // which is why they are all built while this row is not.
+    // scrollUntilVisible, not a fixed drag: how far the row sits below the
+    // fold depends on how much content the hub has above the grid, which
+    // differs between the signed-out empty state and a wallet with data.
+    await tester.scrollUntilVisible(
+      find.text('See every transaction'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('All Activity'));
+    await tester.tap(find.text('See every transaction'));
     await tester.pumpAndSettle();
 
     expect(find.text('Test RuPay Card · Online'), findsOneWidget);

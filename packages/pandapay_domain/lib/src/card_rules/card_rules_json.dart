@@ -21,6 +21,25 @@ Money _moneyFromRupees(dynamic v) => Money.fromRupees(_num(v));
 
 Money? _moneyOrNull(dynamic v) => v == null ? null : _moneyFromRupees(v);
 
+/// `effective_from`/`effective_to` are Postgres `date` columns, which pg
+/// serializes as 'YYYY-MM-DD' — [DateTime.parse] handles that shape as well
+/// as the full ISO-8601 timestamps other columns use. Unparseable values
+/// resolve to null (= "no bound") rather than throwing: a malformed date in
+/// one catalogue row must not take down the whole catalogue decode, and
+/// "no bound" is the same behaviour as before these fields existed.
+DateTime? _dateOrNull(dynamic v) {
+  if (v == null) return null;
+  if (v is DateTime) return v;
+  return DateTime.tryParse(v as String);
+}
+
+/// Round-trips through the offline cache as a plain 'YYYY-MM-DD' date, the
+/// same shape [_dateOrNull] reads from the wire.
+String? _dateToJson(DateTime? v) =>
+    v == null ? null : '${v.year.toString().padLeft(4, '0')}-'
+        '${v.month.toString().padLeft(2, '0')}-'
+        '${v.day.toString().padLeft(2, '0')}';
+
 RewardUnit _parseRewardUnit(String value) {
   return RewardUnit.values.firstWhere(
     (u) => u.name == _camelFromSnake(value),
@@ -80,6 +99,9 @@ extension RewardRuleJson on RewardRule {
       rate: _num(json['rate']),
       minTxn: _moneyOrNull(json['min_txn_inr']),
       maxTxn: _moneyOrNull(json['max_txn_inr']),
+      excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const []).cast<String>(),
+      effectiveFrom: _dateOrNull(json['effective_from']),
+      effectiveTo: _dateOrNull(json['effective_to']),
       priority: (json['priority'] as num?)?.toInt() ?? 100,
     );
   }
@@ -93,6 +115,9 @@ extension RewardRuleJson on RewardRule {
         'rate': rate,
         'min_txn_inr': minTxn?.rupees,
         'max_txn_inr': maxTxn?.rupees,
+        'excluded_categories': excludedCategoryIds,
+        'effective_from': _dateToJson(effectiveFrom),
+        'effective_to': _dateToJson(effectiveTo),
         'priority': priority,
       };
 }
@@ -113,7 +138,11 @@ extension CapRuleJson on CapRule {
       capValue: _moneyFromRupees(json['cap_value']),
       measure: _parseCapMeasure(json['measure'] as String),
       postCapUnit: json['post_cap_unit'] != null ? _parseRewardUnit(json['post_cap_unit'] as String) : null,
-      postCapRate: _num(json['post_cap_rate']),
+      // _numOrNull, not _num: null must survive as null so the engine can
+      // tell "catalogue doesn't say, fall back to the card's base rate"
+      // from an explicit "this card pays nothing past the cap". See
+      // CapRule.postCapRate.
+      postCapRate: _numOrNull(json['post_cap_rate']),
       period: _parseCapPeriod(json['period'] as String),
     );
   }
@@ -250,6 +279,7 @@ extension CardProductJson on CardProduct {
           ? null
           : _parseRewardUnit(json['base_reward_unit'] as String),
       baseRewardRate: _numOrNull(json['base_reward_rate']),
+      excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const []).cast<String>(),
       rewardRules: ((json['reward_rules'] as List?) ?? const [])
           .map((e) => RewardRuleJson.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -285,6 +315,7 @@ extension CardProductJson on CardProduct {
         'point_value_inr': pointValueInr,
         'base_reward_unit': baseRewardUnit == null ? null : _snakeFromCamel(baseRewardUnit!.name),
         'base_reward_rate': baseRewardRate,
+        'excluded_categories': excludedCategoryIds,
         'reward_rules': rewardRules.map((r) => r.toJson()).toList(),
         'cap_rules': capRules.map((r) => r.toJson()).toList(),
         'milestone_rules': milestoneRules.map((r) => r.toJson()).toList(),

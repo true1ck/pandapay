@@ -27,6 +27,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
   final _nicknameController = TextEditingController();
   final _creditLimitController = TextEditingController();
   final _pointsBalanceController = TextEditingController();
+  final _last4Controller = TextEditingController();
   int? _statementDay;
   int? _dueDay;
   bool _initialized = false;
@@ -40,6 +41,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
     _nicknameController.dispose();
     _creditLimitController.dispose();
     _pointsBalanceController.dispose();
+    _last4Controller.dispose();
     super.dispose();
   }
 
@@ -56,6 +58,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
     _originalPointsBalance = card.totalPointsEarned;
     _statementDay = card.statementDay;
     _dueDay = card.dueDay;
+    _last4Controller.text = card.last4 ?? '';
   }
 
   Future<void> _save() async {
@@ -83,6 +86,10 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
           pointsBalance: _pointsBalanceController.text.trim().isEmpty
               ? null
               : double.tryParse(_pointsBalanceController.text.trim()),
+          // Always sent (never null-skipped), so clearing the field really
+          // clears the stored digits — '' is a meaningful value here, not
+          // "leave it alone". See UserCardsRepository.updateCard.
+          last4: _last4Controller.text.trim(),
         );
       }
       ref.invalidate(myCardsProvider);
@@ -118,6 +125,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                 : double.tryParse(_creditLimitController.text.trim()),
             'statement_day': _statementDay,
             'due_day': _dueDay,
+            'last4': _last4Controller.text.trim().isEmpty ? null : _last4Controller.text.trim(),
           },
         );
         ref.invalidate(pendingSyncCountProvider);
@@ -316,6 +324,25 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                 TextField(
                   controller: _nicknameController,
                   decoration: const InputDecoration(labelText: 'Nickname'),
+                ),
+                const SizedBox(height: AppSpace.lg),
+                // The field that makes automatic capture work. Without it,
+                // every bank SMS and forwarded email has to be assigned a
+                // card by hand, one message at a time. Labelled and
+                // helper-texted to say exactly what it's for and what it
+                // isn't — four digits are a matching key, and the app never
+                // asks for, stores, or transmits a full card number.
+                TextField(
+                  controller: _last4Controller,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Last 4 digits',
+                    helperText: 'Lets PandaPay match your bank\'s SMS and email alerts to this card '
+                        'automatically. Never your full card number.',
+                    helperMaxLines: 3,
+                    counterText: '',
+                  ),
                 ),
                 const SizedBox(height: AppSpace.lg),
                 TextField(

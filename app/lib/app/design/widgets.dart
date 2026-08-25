@@ -337,6 +337,52 @@ class SkeletonList extends StatelessWidget {
 /// Centered placeholder for "nothing here yet" states — icon, headline,
 /// optional supporting copy and action, so empty states read as
 /// intentional rather than broken.
+/// An [EmptyState] the user can pull down to refresh.
+///
+/// A plain EmptyState is not scrollable, so wrapping it in a
+/// RefreshIndicator does nothing — there is no scroll for the gesture to
+/// start from. That is not a cosmetic gap: an empty screen is exactly where
+/// a user most wants to retry, because "nothing here" and "nothing here
+/// YET" look identical. Subscriptions, for instance, only appear once three
+/// charges have been detected, and without this the screen kept saying "no
+/// repeating charges" after the third one landed until the user navigated
+/// away and back.
+///
+/// [AlwaysScrollableScrollPhysics] over a full-height box is what makes the
+/// pull register even though the content does not overflow.
+class RefreshableEmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? message;
+  final Widget? action;
+  final Future<void> Function() onRefresh;
+
+  const RefreshableEmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.message,
+    this.action,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: EmptyState(icon: icon, title: title, message: message, action: action),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;

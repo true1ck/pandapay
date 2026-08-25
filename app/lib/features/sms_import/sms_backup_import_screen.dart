@@ -168,6 +168,19 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
         return b.messages.length.compareTo(a.messages.length);
       });
 
+    // Pre-select the obvious ones. A group is keyed by the last 4 digits in
+    // the message, and cards now store their own last 4 (migration 0039),
+    // so for anyone who has entered them this turns "map every group by
+    // hand" into "check these look right". Only an unambiguous single match
+    // is filled in — two cards ending 4321 stay on Skip for the user to
+    // decide, rather than being silently assigned to whichever came first.
+    final wallet = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
+    for (final group in groups) {
+      if (group.last4 == null) continue;
+      final matches = wallet.where((c) => c.last4 == group.last4).toList();
+      if (matches.length == 1) group.userCardId = matches.first.id;
+    }
+
     setState(() {
       _fileName = fileName;
       _totalInFile = all.length;
@@ -348,8 +361,9 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
             ),
             const SizedBox(height: AppSpace.xs),
             Text(
-              'Grouped by the card number mentioned in the message. Leave a set on '
-              '"Skip" to leave it out entirely.',
+              'Grouped by the card number mentioned in the message. Sets whose digits match a '
+              'card you\'ve already entered are filled in for you — check them and change any '
+              'that look wrong. Leave a set on "Skip" to leave it out entirely.',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.md),

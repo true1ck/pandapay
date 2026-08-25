@@ -226,6 +226,9 @@ class _SwitchToSuggestion extends StatelessWidget {
         amount: const Money.fromPaise(100000), // nominal ₹1,000 — ranking only cares about relative rate
         categoryId: cap.categoryId,
         rail: TxnRail.swipe,
+        // "Switch to X after this cap" must not name a card whose better
+        // rate expired last quarter.
+        now: DateTime.now(),
       ),
       snapshots,
     );

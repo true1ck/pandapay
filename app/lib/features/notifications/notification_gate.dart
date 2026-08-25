@@ -51,6 +51,10 @@ class NotificationGate {
         return prefs.categoryMonthlyReport;
       case 'needs_review':
         return prefs.categoryNeedsReview;
+      case 'budget_warning':
+        return prefs.categoryBudgetWarning;
+      case 'budget_exceeded':
+        return prefs.categoryBudgetExceeded;
       default:
         // 'streak'/'card_added' etc. have no preference column — they're
         // in-app consequences of the user's own action, not push-style
