@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 
@@ -68,6 +69,7 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
       }
       final ok = await _localAuth.authenticate(
         localizedReason: 'Unlock PandaPay to continue',
+        biometricOnly: false,
       );
       if (ok) {
         _unlock();
@@ -85,6 +87,19 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
         setState(() {
           _noDeviceLockAvailable = noLockConfigured;
           _error = noLockConfigured ? null : 'Could not verify — try again.';
+        });
+      }
+    } on PlatformException catch (e) {
+      final code = e.code.toLowerCase();
+      final noLockConfigured =
+          code.contains('notavailable') ||
+          code.contains('passcodenotset') ||
+          code.contains('notenrolled') ||
+          code.contains('nohardware');
+      if (mounted) {
+        setState(() {
+          _noDeviceLockAvailable = noLockConfigured;
+          _error = noLockConfigured ? null : (e.message ?? 'Could not verify — try again.');
         });
       }
     } catch (_) {
@@ -154,7 +169,7 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                     onPressed: _disableAndContinue,
                     child: const Text('Turn off biometric lock and continue'),
                   )
-                else
+                else ...[
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: BambooInk.onSlate,
@@ -172,6 +187,17 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                           )
                         : const Text('Try again'),
                   ),
+                  if (_error != null) ...[
+                    const SizedBox(height: AppSpace.md),
+                    TextButton(
+                      onPressed: _disableAndContinue,
+                      child: Text(
+                        'Turn off lock',
+                        style: BambooFonts.ui(13.5, color: BambooInk.onSlateMuted),
+                      ),
+                    ),
+                  ],
+                ],
               ],
             ),
           ),
@@ -180,3 +206,4 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
     );
   }
 }
+

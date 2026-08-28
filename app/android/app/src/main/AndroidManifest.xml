@@ -49,6 +49,8 @@
          needs this to actually post the background-geofence-match alert
          (and the required persistent foreground-service notification). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
