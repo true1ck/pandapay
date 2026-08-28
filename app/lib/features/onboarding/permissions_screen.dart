@@ -31,7 +31,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
   // convenience feature doesn't qualify as. Showing the "Enable" button on
   // that flavor would request a permission the app never declared, which
   // can only fail.
-  bool get _isAndroid => !kIsWeb && Platform.isAndroid && !Env.isProd;
+  bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
   bool? _smsGranted;
   bool? _notificationsGranted;
@@ -51,7 +51,12 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
   Future<void> _requestSms() async {
     bool granted = false;
     try {
-      granted = await SmsListenerService().requestPermissions();
+      final status = await Permission.sms.status;
+      if (status.isPermanentlyDenied) {
+        await openAppSettings();
+      } else {
+        granted = await SmsListenerService().requestPermissions();
+      }
     } catch (_) {
       // fall through to "not granted"
     }

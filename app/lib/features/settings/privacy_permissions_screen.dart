@@ -82,7 +82,7 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
             // SMS/Call Log policy doesn't allow it for this optional
             // convenience feature. Showing a status row for a permission the
             // app never declared would just always read "denied".
-            if (Platform.isAndroid && !Env.isProd) ...[
+            if (Platform.isAndroid) ...[
               const SizedBox(height: AppSpace.sm),
               _PermissionRow(
                 icon: Icons.sms_outlined,

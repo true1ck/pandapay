@@ -60,7 +60,7 @@ android {
     productFlavors {
         create("dev") {
             dimension = "environment"
-            applicationIdSuffix = ".dev"
+            applicationIdSuffix = ".dev2"
             versionNameSuffix = "-dev"
             resValue("string", "app_name", "PandaPay Dev")
         }

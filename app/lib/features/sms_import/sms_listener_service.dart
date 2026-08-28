@@ -130,7 +130,7 @@ class SmsListenerService {
   /// so asking for background delivery there would register a handler whose
   /// permission can never be granted.
   void listenForeground(void Function(String sender, String body) onSms) {
-    final background = !Env.isProd;
+    final background = true;
     _telephony.listenIncomingSms(
       onNewMessage: (SmsMessage message) {
         final sender = message.address;

@@ -38,13 +38,13 @@ class Env {
   /// api/'s base URL. Default is api/'s live endpoint.
   static const String apiBaseUrl = String.fromEnvironment(
     'PANDAPAY_API_BASE_URL',
-    defaultValue: 'https://api.pandapath.site',
+    defaultValue: 'http://10.0.2.2:4000',
   );
 
   /// auth/'s base URL. Default is auth/'s live endpoint.
   static const String authBaseUrl = String.fromEnvironment(
     'PANDAPAY_AUTH_BASE_URL',
-    defaultValue: 'https://auth.pandapath.site',
+    defaultValue: 'http://10.0.2.2:3210',
   );
 
   static AppEnvironment get environment => switch (_rawEnv) {

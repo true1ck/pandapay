@@ -94,25 +94,23 @@ class ImportHubScreen extends ConsumerWidget {
             // SMS/Call Log policy doesn't allow it for this optional
             // feature. Tapping through to a permission request that can
             // only fail is worse than not showing the tile.
-            if (!Env.isProd) ...[
-              _ChannelCard(
-                icon: Icons.sms_outlined,
-                title: 'SMS auto-import (live)',
-                status: smsBatches.when(
-                  data: (batches) => batches.isEmpty
-                      ? const _Status('Not set up', BambooInk.ink500)
-                      : _Status(
-                          'Active — ${batches.length} import${batches.length == 1 ? '' : 's'}',
-                          BambooInk.jade,
-                        ),
-                  loading: () => const _Status('Checking…', BambooInk.ink500),
-                  error: (_, _) => const _Status('Error', BambooInk.clay),
-                ),
-                onTap: () =>
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
+            _ChannelCard(
+              icon: Icons.sms_outlined,
+              title: 'SMS auto-import (live)',
+              status: smsBatches.when(
+                data: (batches) => batches.isEmpty
+                    ? const _Status('Not set up', BambooInk.ink500)
+                    : _Status(
+                        'Active — ${batches.length} import${batches.length == 1 ? '' : 's'}',
+                        BambooInk.jade,
+                      ),
+                loading: () => const _Status('Checking…', BambooInk.ink500),
+                error: (_, _) => const _Status('Error', BambooInk.clay),
               ),
-              const SizedBox(height: AppSpace.md),
-            ],
+              onTap: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
+            ),
+            const SizedBox(height: AppSpace.md),
             _ChannelCard(
               icon: Icons.picture_as_pdf_outlined,
               title: 'Statement PDF import',
