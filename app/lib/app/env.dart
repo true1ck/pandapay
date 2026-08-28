@@ -35,16 +35,16 @@ class Env {
     defaultValue: 'dev',
   );
 
-  /// api/'s base URL. Default is api/'s local dev port.
+  /// api/'s base URL. Default is api/'s live endpoint.
   static const String apiBaseUrl = String.fromEnvironment(
     'PANDAPAY_API_BASE_URL',
-    defaultValue: 'http://localhost:4000',
+    defaultValue: 'https://api.pandapath.site',
   );
 
-  /// auth/'s base URL. Default is auth/'s local dev port.
+  /// auth/'s base URL. Default is auth/'s live endpoint.
   static const String authBaseUrl = String.fromEnvironment(
     'PANDAPAY_AUTH_BASE_URL',
-    defaultValue: 'http://localhost:3210',
+    defaultValue: 'https://auth.pandapath.site',
   );
 
   static AppEnvironment get environment => switch (_rawEnv) {

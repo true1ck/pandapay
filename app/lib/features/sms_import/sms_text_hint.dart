@@ -83,7 +83,8 @@ bool looksLikeTransactionSms(String smsBody) {
     'alert:',
     'inr',
     'rs.',
-    'rs '
+    'rs ',
+    '₹',
   ];
   return keywords.any(lower.contains);
 }

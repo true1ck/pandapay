@@ -1249,13 +1249,7 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
     }
   } catch (_) {}
 
-  try {
-    final bundledStr = await rootBundle.loadString('assets/data/bundled_catalogue.json');
-    final body = jsonDecode(bundledStr) as Map<String, dynamic>;
-    return (body['cards'] as List).cast<Map<String, dynamic>>().map(CardProductJson.fromJson).toList();
-  } catch (_) {
-    return const [];
-  }
+  return const [];
 });
 
 final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
