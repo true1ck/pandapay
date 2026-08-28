@@ -1,0 +1,321 @@
+{
+  "cards": [
+    {
+      "id": "a90c751c-2a63-49ec-88fe-18e4e4689029",
+      "slug": "axis-ace",
+      "name": "Axis Bank ACE",
+      "network": "rupay",
+      "card_type": "credit",
+      "data_version": "4",
+      "verified_at": "2026-08-05T05:06:12.726Z",
+      "annual_fee_inr": "499.00",
+      "joining_fee_inr": "499.00",
+      "is_upi_linkable": true,
+      "art_asset": null,
+      "art_primary_color": null,
+      "point_value_inr": "1.0000",
+      "issuer_slug": "axis",
+      "issuer_name": "Axis Bank",
+      "reward_rules": [
+        {
+          "id": "01fb9b57-416c-4aad-8ef1-05a52ee28dd8",
+          "rate": 5,
+          "unit": "cashback_percent",
+          "priority": 10,
+          "category_id": "ce5ddb18-7302-4f78-b2cc-8ed81d306a1e"
+        },
+        {
+          "id": "a7d7758e-7266-42dd-a629-90c78a03ec01",
+          "rate": 2,
+          "unit": "cashback_percent",
+          "priority": 20,
+          "category_id": "96304380-d658-442b-bd4f-2c014426444f"
+        }
+      ],
+      "cap_rules": [
+        {
+          "id": "62e5f1e3-c615-4fc7-8a91-5fe1b8b50a42",
+          "label": "5% bill payments — capped at ₹500 cashback/month",
+          "period": "calendar_month",
+          "measure": "reward_value",
+          "cap_value": 500,
+          "post_cap_rate": 1.5,
+          "post_cap_unit": "cashback_percent",
+          "reward_rule_id": "01fb9b57-416c-4aad-8ef1-05a52ee28dd8"
+        }
+      ],
+      "milestone_rules": [],
+      "fee_waiver_rules": [],
+      "benefits": []
+    },
+    {
+      "id": "957bab09-9a0f-450d-93ea-0b5b529eb7bf",
+      "slug": "hdfc-millennia",
+      "name": "HDFC Millennia",
+      "network": "visa",
+      "card_type": "credit",
+      "data_version": "4",
+      "verified_at": "2026-08-05T05:06:12.726Z",
+      "annual_fee_inr": "1000.00",
+      "joining_fee_inr": "1000.00",
+      "is_upi_linkable": false,
+      "art_asset": null,
+      "art_primary_color": null,
+      "point_value_inr": "1.0000",
+      "issuer_slug": "hdfc",
+      "issuer_name": "HDFC Bank",
+      "reward_rules": [
+        {
+          "id": "b6130af7-9986-4d63-bd29-6c943ee7db00",
+          "rate": 5,
+          "unit": "cashback_percent",
+          "priority": 10,
+          "category_id": "af14a139-1868-4fdd-8fb9-d091198da78b"
+        }
+      ],
+      "cap_rules": [
+        {
+          "id": "ba2073da-460b-45cd-a6f5-d9bf5f163c98",
+          "label": "5% online spends — capped at ₹1,000 cashback/cycle",
+          "period": "statement_cycle",
+          "measure": "reward_value",
+          "cap_value": 1000,
+          "post_cap_rate": 1,
+          "post_cap_unit": "cashback_percent",
+          "reward_rule_id": "b6130af7-9986-4d63-bd29-6c943ee7db00"
+        }
+      ],
+      "milestone_rules": [],
+      "fee_waiver_rules": [
+        {
+          "id": "e6c599c7-bf02-45ea-bbfb-ed51a424c56b",
+          "period": "annual",
+          "waives_fee_inr": 1000,
+          "threshold_spend_inr": 100000
+        }
+      ],
+      "benefits": []
+    },
+    {
+      "id": "aae9cdb6-ae26-4c06-a557-8f2b0589c79d",
+      "slug": "icici-amazon-pay",
+      "name": "Amazon Pay ICICI Credit Card",
+      "network": "visa",
+      "card_type": "credit",
+      "data_version": "4",
+      "verified_at": "2026-08-05T05:06:12.726Z",
+      "annual_fee_inr": "0.00",
+      "joining_fee_inr": "0.00",
+      "is_upi_linkable": false,
+      "art_asset": null,
+      "art_primary_color": null,
+      "point_value_inr": "1.0000",
+      "issuer_slug": "icici",
+      "issuer_name": "ICICI Bank",
+      "reward_rules": [
+        {
+          "id": "b43d7041-7437-4901-a924-1d171107b798",
+          "rate": 5,
+          "unit": "points_per_100",
+          "priority": 10,
+          "category_id": "af14a139-1868-4fdd-8fb9-d091198da78b"
+        }
+      ],
+      "cap_rules": [],
+      "milestone_rules": [],
+      "fee_waiver_rules": [],
+      "benefits": []
+    },
+    {
+      "id": "b97f1d35-abd7-4441-a2ca-56c475914a72",
+      "slug": "sbi-cashback",
+      "name": "SBI Cashback Card",
+      "network": "mastercard",
+      "card_type": "credit",
+      "data_version": "3",
+      "verified_at": "2026-08-05T05:06:12.726Z",
+      "annual_fee_inr": "999.00",
+      "joining_fee_inr": "999.00",
+      "is_upi_linkable": false,
+      "art_asset": null,
+      "art_primary_color": null,
+      "point_value_inr": "1.0000",
+      "issuer_slug": "sbi",
+      "issuer_name": "State Bank of India",
+      "reward_rules": [
+        {
+          "id": "a35d6ece-ec53-4094-9a1e-46d68a2472b5",
+          "rate": 5,
+          "unit": "cashback_percent",
+          "priority": 10,
+          "category_id": "af14a139-1868-4fdd-8fb9-d091198da78b"
+        }
+      ],
+      "cap_rules": [
+        {
+          "id": "d9044e12-17f1-4676-9bc8-d6da371429eb",
+          "label": "5% online spends — capped at ₹5,000 cashback/month",
+          "period": "calendar_month",
+          "measure": "reward_value",
+          "cap_value": 5000,
+          "post_cap_rate": 1,
+          "post_cap_unit": "cashback_percent",
+          "reward_rule_id": "a35d6ece-ec53-4094-9a1e-46d68a2472b5"
+        }
+      ],
+      "milestone_rules": [],
+      "fee_waiver_rules": [],
+      "benefits": []
+    },
+    {
+      "id": "c1a2b3c4-d5e6-47f8-a9b0-c1d2e3f4a5b6",
+      "slug": "hdfc-regalia-gold",
+      "name": "HDFC Regalia Gold",
+      "network": "visa",
+      "card_type": "credit",
+      "data_version": "1",
+      "verified_at": "2026-08-05T05:06:12.726Z",
+      "annual_fee_inr": "2500.00",
+      "joining_fee_inr": "2500.00",
+      "is_upi_linkable": false,
+      "art_asset": null,
+      "art_primary_color": null,
+      "point_value_inr": "1.0000",
+      "issuer_slug": "hdfc",
+      "issuer_name": "HDFC Bank",
+      "reward_rules": [
+        {
+          "id": "r-regalia-1",
+          "rate": 8,
+          "unit": "points_per_150",
+          "priority": 10,
+          "category_id": "96304380-d658-442b-bd4f-2c014426444f"
+        }
+      ],
+      "cap_rules": [],
+      "milestone_rules": [],
+      "fee_waiver_rules": [],
+      "benefits": []
+    },
+    {
+      "id": "d2e3f4a5-b6c7-48d9-b0c1-d2e3f4a5b6c7",
+      "slug": "hdfc-swiggy",
+      "name": "HDFC Swiggy Card",
+      "network": "rupay",
+      "card_type": "credit",
+      "data_version": "1",
+      "verified_at": "2026-08-05T05:06:12.726Z",
+      "annual_fee_inr": "500.00",
+      "joining_fee_inr": "500.00",
+      "is_upi_linkable": true,
+      "art_asset": null,
+      "art_primary_color": null,
+      "point_value_inr": "1.0000",
+      "issuer_slug": "hdfc",
+      "issuer_name": "HDFC Bank",
+      "reward_rules": [
+        {
+          "id": "r-swiggy-1",
+          "rate": 10,
+          "unit": "cashback_percent",
+          "priority": 10,
+          "category_id": "96304380-d658-442b-bd4f-2c014426444f"
+        }
+      ],
+      "cap_rules": [],
+      "milestone_rules": [],
+      "fee_waiver_rules": [],
+      "benefits": []
+    },
+    {
+      "id": "e3f4a5b6-c7d8-49e0-a1b2-c3d4e5f6a7b8",
+      "slug": "axis-flipkart",
+      "name": "Axis Flipkart Card",
+      "network": "rupay",
+      "card_type": "credit",
+      "data_version": "1",
+      "verified_at": "2026-08-05T05:06:12.726Z",
+      "annual_fee_inr": "500.00",
+      "joining_fee_inr": "500.00",
+      "is_upi_linkable": true,
+      "art_asset": null,
+      "art_primary_color": null,
+      "point_value_inr": "1.0000",
+      "issuer_slug": "axis",
+      "issuer_name": "Axis Bank",
+      "reward_rules": [
+        {
+          "id": "r-flipkart-1",
+          "rate": 5,
+          "unit": "cashback_percent",
+          "priority": 10,
+          "category_id": "af14a139-1868-4fdd-8fb9-d091198da78b"
+        }
+      ],
+      "cap_rules": [],
+      "milestone_rules": [],
+      "fee_waiver_rules": [],
+      "benefits": []
+    },
+    {
+      "id": "f4a5b6c7-d8e9-40f1-b2c3-d4e5f6a7b8c9",
+      "slug": "sbi-simplyclick",
+      "name": "SBI SimplyCLICK",
+      "network": "visa",
+      "card_type": "credit",
+      "data_version": "1",
+      "verified_at": "2026-08-05T05:06:12.726Z",
+      "annual_fee_inr": "499.00",
+      "joining_fee_inr": "499.00",
+      "is_upi_linkable": false,
+      "art_asset": null,
+      "art_primary_color": null,
+      "point_value_inr": "0.2500",
+      "issuer_slug": "sbi",
+      "issuer_name": "State Bank of India",
+      "reward_rules": [
+        {
+          "id": "r-simplyclick-1",
+          "rate": 10,
+          "unit": "points_per_100",
+          "priority": 10,
+          "category_id": "af14a139-1868-4fdd-8fb9-d091198da78b"
+        }
+      ],
+      "cap_rules": [],
+      "milestone_rules": [],
+      "fee_waiver_rules": [],
+      "benefits": []
+    },
+    {
+      "id": "a5b6c7d8-e9f0-41a2-c3d4-e5f6a7b8c9d0",
+      "slug": "icici-coral-rupay",
+      "name": "ICICI Coral RuPay",
+      "network": "rupay",
+      "card_type": "credit",
+      "data_version": "1",
+      "verified_at": "2026-08-05T05:06:12.726Z",
+      "annual_fee_inr": "500.00",
+      "joining_fee_inr": "0.00",
+      "is_upi_linkable": true,
+      "art_asset": null,
+      "art_primary_color": null,
+      "point_value_inr": "0.2500",
+      "issuer_slug": "icici",
+      "issuer_name": "ICICI Bank",
+      "reward_rules": [
+        {
+          "id": "r-coral-1",
+          "rate": 2,
+          "unit": "points_per_100",
+          "priority": 10,
+          "category_id": "4b6841fb-8aa3-4f9e-a89e-4c7fa433543f"
+        }
+      ],
+      "cap_rules": [],
+      "milestone_rules": [],
+      "fee_waiver_rules": [],
+      "benefits": []
+    }
+  ]
+}

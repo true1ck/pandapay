@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -11,17 +12,17 @@ import '../../data/api_exception.dart';
 import '../../data/card_discovery_engine.dart';
 import '../../data/user_cards_repository.dart' show CardDiscoveryResult, DiscoveredCard;
 import '../import/email_forwarding_screen.dart';
+import '../import/gmail_discovery_service.dart';
+import '../import/statement_pdf_import_screen.dart';
+import '../sms_import/sms_backup_import_screen.dart';
 import '../sms_import/sms_listener_service.dart';
+import 'card_picker_screen.dart';
 
 /// "Find my cards" — design 30's fastest add-a-card path, over **both**
-/// forwarded bank email and (on Android) bank SMS.
+/// forwarded bank email, direct Gmail auto-detection, and (on Android) bank SMS.
 ///
-/// Email matters as much as SMS here, and on iOS it matters more: no iOS app
-/// may read SMS at all, so on an iPhone the SMS path can never find
-/// anything and email is the only automatic route there is. Both feed the
-/// same matcher server-side (api/src/card_discovery.js) and on-device
-/// (LocalCardDiscoveryEngine), so a card is recognised identically wherever
-/// it was mentioned.
+/// Parsing is 100% on-device (LocalCardDiscoveryEngine) with zero raw email
+/// bodies uploaded to any server.
 ///
 /// Nothing is added without a tap. Each suggestion shows the text that
 /// produced it, because the failure this screen has to avoid is adding a
@@ -54,13 +55,13 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _scan());
   }
 
-  Future<void> _scan() async {
+  Future<void> _scan({List<String>? customBodies}) async {
     setState(() {
       _scanning = true;
       _error = null;
     });
     try {
-      var bodies = List<String>.from(widget.smsBodies);
+      var bodies = customBodies != null ? List<String>.from(customBodies) : List<String>.from(widget.smsBodies);
       if (bodies.isEmpty && _isAndroid) {
         const smsService = SmsListenerService();
         var hasPerm = await smsService.hasPermissions();
@@ -85,8 +86,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         if (mounted) setState(() => _result = result);
       } else {
         // Guest mode / on-device matching against local catalogue
-        final catalogueAsync = ref.read(catalogueProvider);
-        final catalogue = catalogueAsync.value ?? const [];
+        final catalogue = await ref.read(catalogueProvider.future);
         final localRepo = await ref.read(localUserCardsRepositoryProvider.future);
         final owned = await localRepo.fetchUserCards(catalogue: catalogue);
         final ownedIds = owned.map((c) => c.cardProductId).toSet();
@@ -115,6 +115,216 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     } finally {
       if (mounted) setState(() => _scanning = false);
     }
+  }
+
+  Future<void> _scanGmail() async {
+    setState(() {
+      _scanning = true;
+      _error = null;
+    });
+    try {
+      final catalogueAsync = ref.read(catalogueProvider);
+      final catalogue = catalogueAsync.value ?? const [];
+      final gmailService = ref.read(gmailDiscoveryServiceProvider);
+
+      final discovery = await gmailService.scanGmailForCards(
+        catalogue: catalogue,
+      );
+
+      final repo = ref.read(userCardsRepositoryProvider);
+      final localRepo = await ref.read(localUserCardsRepositoryProvider.future);
+      final owned = repo != null
+          ? await repo.fetchUserCards()
+          : await localRepo.fetchUserCards(catalogue: catalogue);
+      final ownedIds = owned.map((c) => c.cardProductId).toSet();
+
+      final filtered = discovery.suggestions
+          .where((s) => !ownedIds.contains(s.cardProductId))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _result = CardDiscoveryResult(
+            suggestions: filtered,
+            emailsScanned: discovery.emailsScanned,
+            smsScanned: _result?.smsScanned ?? 0,
+          );
+        });
+        if (filtered.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No new bank statement emails found in Gmail.'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = userFacingErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  Future<void> _requestAndScanSms() async {
+    setState(() {
+      _scanning = true;
+      _error = null;
+    });
+    try {
+      const smsService = SmsListenerService();
+      var hasPerm = await smsService.hasPermissions();
+      if (!hasPerm) {
+        hasPerm = await smsService.requestPermissions();
+      }
+      if (hasPerm) {
+        final readBodies = await smsService.readInboxSmsBodies();
+        if (readBodies.isNotEmpty) {
+          await _scan(customBodies: readBodies);
+          return;
+        }
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              hasPerm
+                  ? 'No bank SMS messages found on this device.'
+                  : 'SMS permission was not granted. You can pick cards from the catalogue.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = userFacingErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  Future<void> _openCardPicker() async {
+    final picked = await Navigator.of(context).push<List<CardProduct>>(
+      MaterialPageRoute(
+        builder: (_) => const CardPickerScreen(),
+      ),
+    );
+    if (picked != null && picked.isNotEmpty && mounted) {
+      final repo = ref.read(userCardsRepositoryProvider);
+      final local = repo == null ? await ref.read(localUserCardsRepositoryProvider.future) : null;
+      for (final card in picked) {
+        if (repo != null) {
+          await repo.addCard(card.id);
+        } else {
+          await local!.addCard(card.id);
+        }
+        _added.add(card.id);
+      }
+      ref.invalidate(myCardsProvider);
+      ref.invalidate(userCardsProvider);
+      setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Added ${picked.length} card${picked.length == 1 ? '' : 's'} to wallet.')),
+        );
+      }
+    }
+  }
+
+  void _showOtherOptionsSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: AppSpace.lg),
+                decoration: BoxDecoration(
+                  color: BambooInk.ink300,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+              ),
+              Text(
+                'Other ways to import',
+                style: BambooFonts.heading(18, color: BambooInk.ink900),
+              ),
+              const SizedBox(height: AppSpace.md),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: BambooInk.paperMuted,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.picture_as_pdf_outlined, color: BambooInk.slate),
+                ),
+                title: Text('Import bank statement PDF', style: BambooFonts.heading(15, color: BambooInk.ink900)),
+                subtitle: Text('Parses password-protected statements locally on-device', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const StatementPdfImportScreen()),
+                  );
+                },
+              ),
+              const Divider(height: AppSpace.lg),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: BambooInk.paperMuted,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.upload_file_outlined, color: BambooInk.slate),
+                ),
+                title: Text('Import SMS backup file', style: BambooFonts.heading(15, color: BambooInk.ink900)),
+                subtitle: Text('Import XML backup from SMS Backup & Restore', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SmsBackupImportScreen()),
+                  );
+                },
+              ),
+              const Divider(height: AppSpace.lg),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: BambooInk.paperMuted,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.forward_to_inbox_rounded, color: BambooInk.slate),
+                ),
+                title: Text('Set up email forwarding', style: BambooFonts.heading(15, color: BambooInk.ink900)),
+                subtitle: Text('Forward bank emails automatically for continuous sync', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const EmailForwardingScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _add(DiscoveredCard card) async {
@@ -164,7 +374,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         actions: [
           IconButton(
             tooltip: 'Scan again',
-            onPressed: _scanning ? null : _scan,
+            onPressed: _scanning ? null : () => _scan(),
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
@@ -178,35 +388,23 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return ErrorState(message: _error!, onRetry: _scan);
+      return ErrorState(message: _error!, onRetry: () => _scan());
     }
     final result = _result;
     if (result == null) return const SizedBox.shrink();
 
     if (result.suggestions.isEmpty) {
-      // Say which it was: "we read nothing" and "we read plenty and matched
-      // nothing" are completely different problems for the user to fix.
       final readNothing = result.emailsScanned == 0 && result.smsScanned == 0;
-      return EmptyState(
-        icon: Icons.search_off_rounded,
-        title: readNothing ? 'Nothing to read yet' : 'No cards recognised',
-        message: readNothing
-            ? 'We have no bank email to look at. Set up email forwarding and forward a '
-                  'statement or a transaction alert, then run this again.'
-            : 'We read ${_scannedSummary(result)} and could not match any card in our '
-                  'catalogue. Add yours from the list instead — it takes a few seconds.',
-        action: readNothing
-            ? FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: BambooInk.slate,
-                  foregroundColor: BambooInk.lime,
-                ),
-                onPressed: () => Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const EmailForwardingScreen())),
-                child: const Text('Set up email forwarding'),
-              )
-            : null,
+      return _DiscoveryEmptyState(
+        readNothing: readNothing,
+        result: result,
+        isAndroid: _isAndroid,
+        scanning: _scanning,
+        scannedSummary: _scannedSummary(result),
+        onConnectGmail: _scanGmail,
+        onScanSms: _requestAndScanSms,
+        onPickFromCatalogue: _openCardPicker,
+        onOtherOptions: _showOtherOptionsSheet,
       );
     }
 
@@ -328,3 +526,125 @@ class _SuggestionCard extends StatelessWidget {
     );
   }
 }
+
+class _DiscoveryEmptyState extends StatelessWidget {
+  final bool readNothing;
+  final CardDiscoveryResult result;
+  final bool isAndroid;
+  final bool scanning;
+  final String scannedSummary;
+  final VoidCallback onConnectGmail;
+  final VoidCallback onScanSms;
+  final VoidCallback onPickFromCatalogue;
+  final VoidCallback onOtherOptions;
+
+  const _DiscoveryEmptyState({
+    required this.readNothing,
+    required this.result,
+    required this.isAndroid,
+    required this.scanning,
+    required this.scannedSummary,
+    required this.onConnectGmail,
+    required this.onScanSms,
+    required this.onPickFromCatalogue,
+    required this.onOtherOptions,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: BambooInk.paperMuted,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              size: 32,
+              color: BambooInk.slate,
+            ),
+          ),
+          const SizedBox(height: AppSpace.lg),
+          Text(
+            readNothing ? 'Auto-detect your cards' : 'No cards recognised',
+            style: BambooFonts.heading(20, color: BambooInk.ink900),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Text(
+            readNothing
+                ? 'Detect cards instantly on-device from your bank emails or SMS, or select them directly from the catalogue.'
+                : 'We scanned $scannedSummary and could not match any card in our catalogue. Add your cards directly instead.',
+            style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.5),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpace.xl),
+
+          // Primary: Connect Gmail
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: BambooInk.slate,
+              foregroundColor: BambooInk.lime,
+              minimumSize: const Size.fromHeight(50),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+            ),
+            icon: const Icon(Icons.mail_outline_rounded, size: 20),
+            label: const Text('Connect Gmail (1-Tap Auto Find)'),
+            onPressed: scanning ? null : onConnectGmail,
+          ),
+          const SizedBox(height: AppSpace.md),
+
+          // Secondary: Scan SMS (if Android)
+          if (isAndroid) ...[
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BambooInk.slate,
+                side: const BorderSide(color: BambooInk.ink300),
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: BambooFonts.ui(14, weight: FontWeight.w600),
+              ),
+              icon: const Icon(Icons.sms_outlined, size: 18),
+              label: const Text('Scan device bank SMS'),
+              onPressed: scanning ? null : onScanSms,
+            ),
+            const SizedBox(height: AppSpace.md),
+          ],
+
+          // Pick from catalogue
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BambooInk.slate,
+              side: const BorderSide(color: BambooInk.ink300),
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              textStyle: BambooFonts.ui(14, weight: FontWeight.w600),
+            ),
+            icon: const Icon(Icons.add_card_rounded, size: 18),
+            label: const Text('Search & pick from catalogue'),
+            onPressed: onPickFromCatalogue,
+          ),
+          const SizedBox(height: AppSpace.xl),
+
+          // Secondary options text button
+          TextButton.icon(
+            onPressed: onOtherOptions,
+            icon: const Icon(Icons.more_horiz_rounded, size: 18, color: BambooInk.ink500),
+            label: Text(
+              'PDF Statement · SMS Backup · Email Forwarding',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500, weight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

@@ -83,6 +83,7 @@ class CrashLog {
   List<CrashLogEntry> get recent => List.unmodifiable(_entries);
 
   void record(Object error, StackTrace? stack, {required String source}) {
+    // ignore: no_datetime_now_outside_clock
     _entries.insert(0, CrashLogEntry(error: error, stack: stack, source: source, at: DateTime.now()));
     if (_entries.length > _maxEntries) _entries.removeRange(_maxEntries, _entries.length);
     if (kDebugMode) {

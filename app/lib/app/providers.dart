@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1231,15 +1232,29 @@ const _cardOverridesCacheKey = 'card_overrides';
 final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
   try {
     final cards = await ref.watch(catalogueRepositoryProvider).fetchCatalogue();
-    final cache = await _cacheOrNull(ref);
-    await cache?.put(_catalogueCacheKey, jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}));
-    return cards;
-  } catch (_) {
+    if (cards.isNotEmpty) {
+      final cache = await _cacheOrNull(ref);
+      await cache?.put(_catalogueCacheKey, jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}));
+      return cards;
+    }
+  } catch (_) {}
+
+  try {
     final cache = await _cacheOrNull(ref);
     final cached = await cache?.get(_catalogueCacheKey);
-    if (cached == null) rethrow;
-    final body = jsonDecode(cached) as Map<String, dynamic>;
+    if (cached != null) {
+      final body = jsonDecode(cached) as Map<String, dynamic>;
+      final cards = (body['cards'] as List).cast<Map<String, dynamic>>().map(CardProductJson.fromJson).toList();
+      if (cards.isNotEmpty) return cards;
+    }
+  } catch (_) {}
+
+  try {
+    final bundledStr = await rootBundle.loadString('assets/data/bundled_catalogue.json');
+    final body = jsonDecode(bundledStr) as Map<String, dynamic>;
     return (body['cards'] as List).cast<Map<String, dynamic>>().map(CardProductJson.fromJson).toList();
+  } catch (_) {
+    return const [];
   }
 });
 

@@ -63,6 +63,27 @@ String? extractLast4Hint(String smsBody) {
 /// silently never even attempted.
 bool looksLikeTransactionSms(String smsBody) {
   final lower = smsBody.toLowerCase();
-  const keywords = ['spent', 'debited', 'credited', 'txn', 'transaction', 'purchase of', 'paid'];
+  const keywords = [
+    'spent',
+    'debited',
+    'credited',
+    'txn',
+    'transaction',
+    'purchase',
+    'paid',
+    'used for',
+    'used at',
+    'charged',
+    'withdrawn',
+    'payment of',
+    'ending with',
+    'ending in',
+    'card no',
+    'a/c',
+    'alert:',
+    'inr',
+    'rs.',
+    'rs '
+  ];
   return keywords.any(lower.contains);
 }

@@ -108,7 +108,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                         icon: Icons.sms_outlined,
                         title: 'Read bank SMS alerts',
                         reason:
-                            'Automatically logs spend from your bank\'s SMS, on-device. '
+                            'Automatically finds your cards and logs spends from your bank\'s SMS, 100% on-device. '
                             'We never see full card numbers.',
                         granted: _smsGranted,
                         onRequest: _requestSms,
