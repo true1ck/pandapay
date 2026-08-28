@@ -8,8 +8,10 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/card_discovery_engine.dart';
 import '../../data/user_cards_repository.dart' show CardDiscoveryResult, DiscoveredCard;
 import '../import/email_forwarding_screen.dart';
+import '../sms_import/sms_listener_service.dart';
 
 /// "Find my cards" — design 30's fastest add-a-card path, over **both**
 /// forwarded bank email and (on Android) bank SMS.
@@ -17,8 +19,9 @@ import '../import/email_forwarding_screen.dart';
 /// Email matters as much as SMS here, and on iOS it matters more: no iOS app
 /// may read SMS at all, so on an iPhone the SMS path can never find
 /// anything and email is the only automatic route there is. Both feed the
-/// same matcher server-side (api/src/card_discovery.js), so a card is
-/// recognised identically wherever it was mentioned.
+/// same matcher server-side (api/src/card_discovery.js) and on-device
+/// (LocalCardDiscoveryEngine), so a card is recognised identically wherever
+/// it was mentioned.
 ///
 /// Nothing is added without a tap. Each suggestion shows the text that
 /// produced it, because the failure this screen has to avoid is adding a
@@ -26,12 +29,8 @@ import '../import/email_forwarding_screen.dart';
 class FindCardsScreen extends ConsumerStatefulWidget {
   /// Task S-3: SMS bodies to scan alongside the user's forwarded email,
   /// handed over by [SmsBackupImportScreen] after its on-device filter has
-  /// already narrowed a backup file down to probable bank alerts.
-  ///
-  /// Sent for this one request and never persisted — POST /card-discovery
-  /// holds them in memory to build the response and writes none of them.
-  /// Empty on every other entry point, which makes this screen email-only
-  /// there (and therefore email-only on iOS in all cases).
+  /// already narrowed a backup file down to probable bank alerts, or
+  /// populated by reading device SMS inbox on Android.
   final List<String> smsBodies;
 
   const FindCardsScreen({super.key, this.smsBodies = const []});
@@ -56,29 +55,61 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   }
 
   Future<void> _scan() async {
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null) {
-      setState(() => _error = 'Finding cards automatically needs an account.');
-      return;
-    }
     setState(() {
       _scanning = true;
       _error = null;
     });
     try {
-      // SMS bodies are read on-device and passed up for this one request;
-      // the server never stores them (see POST /card-discovery). On iOS
-      // there are none to read, so this is email-only there.
-      //
-      // The server caps `smsBodies` at 500. Rather than let it truncate an
-      // arbitrary first-500 — which on a chronological export is the OLDEST
-      // messages, the ones least likely to mention a card the user still
-      // holds — send the most recent 500 and let the cap be a no-op.
-      final bodies = widget.smsBodies.length > 500
-          ? widget.smsBodies.sublist(widget.smsBodies.length - 500)
-          : widget.smsBodies;
-      final result = await repo.discoverCards(smsBodies: bodies);
-      if (mounted) setState(() => _result = result);
+      var bodies = List<String>.from(widget.smsBodies);
+      if (bodies.isEmpty && _isAndroid) {
+        const smsService = SmsListenerService();
+        var hasPerm = await smsService.hasPermissions();
+        if (!hasPerm) {
+          hasPerm = await smsService.requestPermissions();
+        }
+        if (hasPerm) {
+          final readBodies = await smsService.readInboxSmsBodies();
+          if (readBodies.isNotEmpty) {
+            bodies = readBodies;
+          }
+        }
+      }
+
+      final repo = ref.read(userCardsRepositoryProvider);
+      if (repo != null) {
+        // Authenticated: scan via API (combines forwarded emails + local SMS bodies)
+        final subset = bodies.length > 500
+            ? bodies.sublist(bodies.length - 500)
+            : bodies;
+        final result = await repo.discoverCards(smsBodies: subset);
+        if (mounted) setState(() => _result = result);
+      } else {
+        // Guest mode / on-device matching against local catalogue
+        final catalogueAsync = ref.read(catalogueProvider);
+        final catalogue = catalogueAsync.value ?? const [];
+        final localRepo = await ref.read(localUserCardsRepositoryProvider.future);
+        final owned = await localRepo.fetchUserCards(catalogue: catalogue);
+        final ownedIds = owned.map((c) => c.cardProductId).toSet();
+
+        final localResult = LocalCardDiscoveryEngine.discoverAcrossMessages(
+          smsBodies: bodies,
+          catalogue: catalogue,
+        );
+
+        final filteredSuggestions = localResult.suggestions
+            .where((s) => !ownedIds.contains(s.cardProductId))
+            .toList();
+
+        if (mounted) {
+          setState(() {
+            _result = CardDiscoveryResult(
+              suggestions: filteredSuggestions,
+              emailsScanned: 0,
+              smsScanned: bodies.length,
+            );
+          });
+        }
+      }
     } catch (e) {
       if (mounted) setState(() => _error = userFacingErrorMessage(e));
     } finally {

@@ -96,6 +96,25 @@ class SmsListenerService {
     return Permission.sms.status.then((s) => s.isGranted);
   }
 
+  /// Queries the on-device SMS inbox (most recent first) and returns the
+  /// bodies of messages that match a bank-alert / transaction pattern.
+  Future<List<String>> readInboxSmsBodies({int limit = 500}) async {
+    try {
+      final messages = await _telephony.getInboxSms(
+        columns: const [SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
+        sortOrder: [OrderBy(SmsColumn.DATE, sort: Sort.DESC)],
+      );
+      return messages
+          .map((m) => m.body)
+          .whereType<String>()
+          .where((b) => looksLikeTransactionSms(b))
+          .take(limit)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// Registers a foreground listener. [onSms] is called with the raw
   /// sender address and message body for every incoming SMS while the app
   /// is running — no filtering by sender here (that's the server's

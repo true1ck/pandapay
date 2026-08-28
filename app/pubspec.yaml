@@ -194,6 +194,7 @@ dependencies:
   # interface so TokenStore's flutter_secure_storage calls work under the
   # headless flutter_tester harness — see that file's doc-comment.
   flutter_secure_storage_platform_interface: ^2.0.3
+  local_auth_platform_interface: ^1.1.0
 
   flutter_lints: ^6.0.0
   # Drives sessionKeepAliveProvider's Timer.periodic without real wall-clock

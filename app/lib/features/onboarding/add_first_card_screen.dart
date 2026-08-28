@@ -117,11 +117,18 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
   /// matcher can use; on iOS it goes straight to the email-backed scan,
   /// which is the only automatic source available there.
   Future<void> _findMyCards() async {
+    List<String> bodies = [];
     if (!kIsWeb && Platform.isAndroid) {
-      await SmsListenerService().requestPermissions();
+      const smsService = SmsListenerService();
+      final granted = await smsService.requestPermissions();
+      if (granted) {
+        bodies = await smsService.readInboxSmsBodies();
+      }
       if (!mounted) return;
     }
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FindCardsScreen()));
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => FindCardsScreen(smsBodies: bodies)),
+    );
     if (mounted) ref.invalidate(myCardsProvider);
   }
 
