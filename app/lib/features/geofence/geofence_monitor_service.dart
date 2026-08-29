@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 
 import '../notifications/notification_gate.dart';
 import 'nearby_merchants_repository.dart';
@@ -71,9 +73,16 @@ class GeofenceMonitorService {
 
   Future<void> _ensureInitialized() async {
     if (_initialized) return;
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosInit = DarwinInitializationSettings();
-    await notifications.initialize(const InitializationSettings(android: androidInit, iOS: iosInit));
+    try {
+      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const iosInit = DarwinInitializationSettings();
+      await notifications.initialize(const InitializationSettings(android: androidInit, iOS: iosInit));
+    } catch (e) {
+      // A second initialize() on the same plugin instance (NotificationGate
+      // shares it) is a no-op that can still throw on some platforms — the
+      // monitor does not need to abort for it.
+      debugPrint('GeofenceMonitorService: notifications.initialize failed: $e');
+    }
     _initialized = true;
   }
 
@@ -85,38 +94,60 @@ class GeofenceMonitorService {
   /// their own messaging, same "no fabricated success" posture as the
   /// original one-shot screen.
   Future<bool> requestPermissions() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return false;
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return false;
 
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission != LocationPermission.always) {
-      // On Android, requestPermission() only ever grants "whileInUse" in
-      // one shot — the OS requires a second, separate prompt for
-      // background access, which permission_handler's Permission
-      // .locationAlways triggers. iOS's Geolocator.requestPermission()
-      // can escalate directly to .always if NSLocationAlwaysAndWhenInUseUsageDescription
-      // is present (which it now is), but a second nudge here is harmless
-      // if already granted.
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission != LocationPermission.always) return false;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return false;
+      }
 
-    await _ensureInitialized();
-    if (Platform.isAndroid) {
-      final androidPlugin = notifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      final granted = await androidPlugin?.requestNotificationsPermission();
-      if (granted == false) return false;
+      // Background ("always") access is a SEPARATE grant the OS never bundles
+      // with the foreground prompt on Android 10+. Calling
+      // Geolocator.requestPermission() a second time here used to be the
+      // upgrade path, but back-to-back calls can throw
+      // PermissionRequestInProgressException on real devices — permission_handler's
+      // Permission.locationAlways is the supported way to ask for the upgrade,
+      // and it no-ops if already granted. On iOS this maps to the
+      // "Change to Always Allow?" prompt (needs NSLocationAlwaysAndWhenInUseUsageDescription).
+      if (permission != LocationPermission.always) {
+        final always = await ph.Permission.locationAlways.request();
+        if (!always.isGranted) return false;
+      }
+
+      await _ensureInitialized();
+      if (Platform.isAndroid) {
+        final androidPlugin = notifications
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        final granted = await androidPlugin?.requestNotificationsPermission();
+        if (granted == false) return false;
+      }
+      return true;
+    } catch (e) {
+      debugPrint('GeofenceMonitorService.requestPermissions failed: $e');
+      return false;
     }
-    return true;
   }
 
   Future<void> start() async {
     if (isMonitoring) return;
     await _ensureInitialized();
+
+    // Re-check the grant right before opening the stream: the user may have
+    // toggled permissions in system Settings since requestPermissions() ran,
+    // and opening a foreground-service location stream without "always" throws
+    // a SecurityException on Android 14+ that would otherwise crash the app.
+    final permission = await Geolocator.checkPermission();
+    if (permission != LocationPermission.always) {
+      throw StateError(
+        'Background location permission is not granted — enable "Allow all the time" in Settings.',
+      );
+    }
 
     final locationSettings = Platform.isAndroid
         ? AndroidSettings(
@@ -137,7 +168,18 @@ class GeofenceMonitorService {
                 )
               : const LocationSettings(accuracy: LocationAccuracy.medium, distanceFilter: 150));
 
-    _subscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(_onPosition);
+    _subscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+      _onPosition,
+      // Without onError, a stream error (GPS disabled mid-session, a transient
+      // PlatformException, LocationServiceDisabledException) is an UNHANDLED
+      // async error — which terminates the app. Swallow it here: the monitor
+      // just stops producing updates until the next successful fix, same
+      // posture as a failed single poll in _onPosition.
+      onError: (Object e, StackTrace st) {
+        debugPrint('GeofenceMonitorService position stream error: $e');
+      },
+      cancelOnError: false,
+    );
   }
 
   Future<void> stop() async {

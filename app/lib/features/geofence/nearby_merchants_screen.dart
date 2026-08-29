@@ -38,15 +38,18 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
       _backgroundToggleBusy = true;
       _backgroundError = null;
     });
-    final service = ref.read(geofenceMonitorServiceProvider);
     try {
+      final service = ref.read(geofenceMonitorServiceProvider);
       if (enable) {
         final granted = await service.requestPermissions();
         if (!granted) {
-          setState(
-            () => _backgroundError =
-                'Background location and notification permissions are needed for this — enable them in Settings.',
-          );
+          if (mounted) {
+            setState(
+              () => _backgroundError =
+                  'Background location and notification permissions are needed for this — '
+                  'set location access to "Allow all the time" and enable notifications in Settings.',
+            );
+          }
           return;
         }
         await service.start();
@@ -55,7 +58,10 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
       }
       ref.read(geofenceMonitoringEnabledProvider.notifier).state = enable;
     } catch (e) {
-      setState(() => _backgroundError = userFacingErrorMessage(e));
+      // Anything the permission/stream/plugin path throws is contained here —
+      // the toggle stays in its previous state and the user sees why, rather
+      // than the app going down.
+      if (mounted) setState(() => _backgroundError = userFacingErrorMessage(e));
     } finally {
       if (mounted) setState(() => _backgroundToggleBusy = false);
     }
@@ -144,12 +150,18 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
               ),
               const SizedBox(height: 12),
               Container(
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: BambooInk.glassFillOnPaper,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: BambooInk.hairlineOnPaper),
                 ),
-                child: SwitchListTile(
+                // SwitchListTile paints its background/ink on the nearest
+                // Material ancestor; without this wrapper it asserts because
+                // the DecoratedBox above would hide those effects.
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: SwitchListTile(
                   title: Text(
                     'Background alerts',
                     style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900),
@@ -165,6 +177,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                   activeThumbColor: BambooInk.lime,
                   value: backgroundEnabled,
                   onChanged: _backgroundToggleBusy ? null : _toggleBackgroundMonitoring,
+                  ),
                 ),
               ),
               if (_backgroundError != null)
