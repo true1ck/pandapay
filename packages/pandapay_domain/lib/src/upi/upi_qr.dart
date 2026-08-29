@@ -14,6 +14,16 @@ class ParsedUpiQr {
   final String cu; // currency, defaults to INR when absent
   final bool isLikelyP2P;
 
+  /// NPCI UPI Linking Spec merchant fields, carried through verbatim from the
+  /// scanned QR to the outgoing `upi://pay` intent so a verified-merchant QR
+  /// keeps its signature/reference and doesn't degrade to an "unverified
+  /// payee" prompt in the UPI app. Absent on a plain personal/static QR.
+  final String? tr; // transaction reference id (merchant order id)
+  final String? tn; // transaction note
+  final String? mode; // e.g. "02" for a static QR
+  final String? orgid; // acquiring org id
+  final String? sign; // merchant QR signature (base64)
+
   const ParsedUpiQr({
     required this.pa,
     this.pn,
@@ -21,6 +31,11 @@ class ParsedUpiQr {
     this.am,
     this.cu = 'INR',
     required this.isLikelyP2P,
+    this.tr,
+    this.tn,
+    this.mode,
+    this.orgid,
+    this.sign,
   });
 }
 
@@ -46,6 +61,11 @@ ParsedUpiQr? parseUpiQrString(String raw) {
   final am = parsedAm == null ? null : Money.fromRupees(parsedAm);
   final mc = uri.queryParameters['mc'];
 
+  String? nonEmpty(String key) {
+    final v = uri.queryParameters[key];
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
   return ParsedUpiQr(
     pa: pa,
     pn: uri.queryParameters['pn'],
@@ -53,19 +73,51 @@ ParsedUpiQr? parseUpiQrString(String raw) {
     am: am,
     cu: uri.queryParameters['cu'] ?? 'INR',
     isLikelyP2P: mc == null || mc.isEmpty,
+    tr: nonEmpty('tr'),
+    tn: nonEmpty('tn'),
+    mode: nonEmpty('mode'),
+    orgid: nonEmpty('orgid'),
+    sign: nonEmpty('sign'),
   );
 }
 
-/// B3.6 — "Pay with [card]" builds this and hands it to url_launcher.
-/// Query params are added in a fixed, stable order (pa, pn, am, cu) so the
-/// output is deterministic and test-comparable, matching every UPI app's
-/// documented query-string contract (order itself has no semantic meaning
-/// to a UPI app, but a stable order makes this function's output
-/// reproducible for tests and logs).
-String buildUpiPayUri({required String pa, String? pn, Money? am, String cu = 'INR'}) {
+/// B3.6 — "Pay with [card]" builds this and hands it to url_launcher (or, on
+/// Android, to a specific UPI app via the platform channel).
+///
+/// Query params are added in a fixed, stable order (pa, pn, am, cu, then the
+/// optional merchant fields) so the output is deterministic and
+/// test-comparable, matching every UPI app's documented query-string
+/// contract (order itself has no semantic meaning to a UPI app, but a stable
+/// order makes this function's output reproducible for tests and logs).
+///
+/// The merchant fields ([mc], [tr], [tn], [mode], [orgid], [sign]) are only
+/// emitted when non-null/non-empty — a plain personal QR produces exactly
+/// the same 4-param string it always did.
+String buildUpiPayUri({
+  required String pa,
+  String? pn,
+  Money? am,
+  String cu = 'INR',
+  String? mc,
+  String? tr,
+  String? tn,
+  String? mode,
+  String? orgid,
+  String? sign,
+}) {
   final params = <String>['pa=${Uri.encodeComponent(pa)}'];
   if (pn != null && pn.isNotEmpty) params.add('pn=${Uri.encodeComponent(pn)}');
   if (am != null) params.add('am=${am.rupees.toStringAsFixed(2)}');
   params.add('cu=${Uri.encodeComponent(cu)}');
+  void addIf(String key, String? value) {
+    if (value != null && value.isNotEmpty) params.add('$key=${Uri.encodeComponent(value)}');
+  }
+
+  addIf('mc', mc);
+  addIf('tr', tr);
+  addIf('tn', tn);
+  addIf('mode', mode);
+  addIf('orgid', orgid);
+  addIf('sign', sign);
   return 'upi://pay?${params.join('&')}';
 }

@@ -44,6 +44,27 @@ void main() {
       expect(parsed.am, isNull);
     });
 
+    test('carries NPCI merchant fields (tr/tn/mode/orgid/sign) through verbatim', () {
+      final parsed = parseUpiQrString(
+        'upi://pay?pa=q@ybl&pn=Petrol%20Pump&mc=5541&tr=ORD12345&tn=Fuel&mode=02&orgid=159761&sign=AbC%2Bd',
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.tr, 'ORD12345');
+      expect(parsed.tn, 'Fuel');
+      expect(parsed.mode, '02');
+      expect(parsed.orgid, '159761');
+      expect(parsed.sign, 'AbC+d');
+    });
+
+    test('leaves merchant fields null when the QR omits them', () {
+      final parsed = parseUpiQrString('upi://pay?pa=shop@okicici&mc=5812');
+
+      expect(parsed, isNotNull);
+      expect(parsed!.tr, isNull);
+      expect(parsed.sign, isNull);
+    });
+
     test('a non-UPI string returns null', () {
       expect(parseUpiQrString('https://example.com'), isNull);
       expect(parseUpiQrString('not a url at all'), isNull);
@@ -65,6 +86,23 @@ void main() {
       final uri = buildUpiPayUri(pa: 'shop@okhdfcbank', pn: 'DMart Powai');
 
       expect(uri, 'upi://pay?pa=shop%40okhdfcbank&pn=DMart%20Powai&cu=INR');
+    });
+
+    test('appends merchant fields after cu, in a fixed order, only when set', () {
+      final uri = buildUpiPayUri(
+        pa: 'q@ybl',
+        pn: 'Pump',
+        am: Money.fromRupees(500),
+        mc: '5541',
+        tr: 'ORD1',
+        tn: 'Fuel',
+        sign: 'a+b',
+      );
+
+      expect(
+        uri,
+        'upi://pay?pa=q%40ybl&pn=Pump&am=500.00&cu=INR&mc=5541&tr=ORD1&tn=Fuel&sign=a%2Bb',
+      );
     });
   });
 }
