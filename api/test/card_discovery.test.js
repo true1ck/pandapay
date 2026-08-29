@@ -23,6 +23,8 @@ const {
   significantTokens,
   looksPromotionalSms,
   looksTransactionalSms,
+  looksDebitAccountSms,
+  looksCreditCardSms,
 } = require('../src/card_discovery');
 
 /** A slice of `v_card_catalogue_export`'s shape, with real-ish names. */
@@ -271,6 +273,64 @@ test('the email path is unchanged by the SMS gating', () => {
   );
   assert.equal(merged.length, 1);
   assert.equal(merged[0].cardProductId, 'tn-inf-hdfc');
+});
+
+// --- debit-card / account alerts (credit-card app: don't surface these) ---
+
+test('looksDebitAccountSms / looksCreditCardSms classify the obvious cases', () => {
+  assert.equal(looksDebitAccountSms('Rs 500 spent on your HDFC Bank Debit Card XX8708'), true);
+  assert.equal(looksDebitAccountSms('Rs 900 debited from A/c XX1234 via UPI'), true);
+  assert.equal(looksDebitAccountSms('Rs 500 spent on your Axis Bank Flipkart Credit Card ending 7105'), false);
+  assert.equal(looksCreditCardSms('Rs 500 debited from your HDFC Bank Credit Card. Avl limit Rs 20000'), true);
+});
+
+test('a debit-card spend alert produces no placeholder card', () => {
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Rs 500 spent on your HDFC Bank Debit Card XX8708 at ATM on 12-Aug' }],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.deepEqual(merged, []);
+});
+
+test('a credit-card alert worded with "debited" still yields a placeholder', () => {
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Rs 500 debited from your HDFC Bank Credit Card XX8708. Avl limit Rs 20000' }],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].isPlaceholder, true);
+  assert.deepEqual(merged[0].last4, ['8708']);
+});
+
+test('a placeholder is dropped when a real match shares its issuer + last-4', () => {
+  // The screenshot bug: "Axis Bank Flipkart Credit Card ...7105" recognised
+  // AND a bare "Axis Bank card ...7105" placeholder, asking the user to
+  // identify a card already identified.
+  const merged = discoverCardsAcrossMessages(
+    [
+      { body: 'Rs 300 spent on your Axis Bank card ending 7105 at AMAZON' },
+      { body: 'Rs 2,499 spent on your Axis Bank Flipkart Credit Card ending 7105 at FLIPKART' },
+    ],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].cardProductId, 'axis-flipkart');
+});
+
+test('a placeholder with a coincidentally-equal last-4 for another issuer is kept', () => {
+  const merged = discoverCardsAcrossMessages(
+    [
+      { body: 'Spent Rs 900 on Tata Neu Infinity HDFC Bank Credit Card XX1234' },
+      { body: 'Rs 300 spent on your SBI Card ending 1234 at BigBazaar' },
+    ],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.equal(merged.length, 2);
+  assert.ok(merged.some((s) => s.isPlaceholder && s.issuerName === 'SBI Card'));
 });
 
 test('a catalogue entry whose name is all stopwords can never match', () => {
