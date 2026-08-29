@@ -10,7 +10,7 @@ const { parseSmsAgainstPatterns, redactSmsShape, senderMatches, parseTransaction
 const importResolvers = require('./import_resolvers');
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
-const { discoverCardsAcrossMessages } = require('./card_discovery');
+const { discoverCardsAcrossMessages, discoverCardsInMessage } = require('./card_discovery');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const rewardMath = require('./reward_math');
 const spendReports = require('./spend_reports');
@@ -1363,6 +1363,77 @@ app.post('/partner-conversions/webhook', async (req, res) => {
     res.status(202).json({ ok: true, matched: true });
   } catch (err) {
     console.error('POST /partner-conversions/webhook error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /inbound-emails/webhook — Phase 1: Card Discovery Only
+ *
+ * Receives forwarded emails via webhook (e.g. from SendGrid/Mailgun),
+ * maps the forwarding address to a user, and discovers credit cards mentioned
+ * in the email. Does NOT log transactions or store the email body.
+ */
+app.post('/inbound-emails/webhook', async (req, res) => {
+  // Shared secret for webhook security
+  const secret = config.partnerWebhookSecret;
+  if (!secret) {
+    console.error('POST /inbound-emails/webhook: PARTNER_WEBHOOK_SECRET is not configured');
+    return res.status(503).json({ error: 'webhook_not_configured' });
+  }
+  const provided = req.get('x-partner-signature') || '';
+  const ok =
+    provided.length === secret.length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(secret));
+  if (!ok) return res.status(401).json({ error: 'invalid_signature' });
+
+  try {
+    const { to, subject, text, sender } = req.body || {};
+    
+    // 1. Identify the user
+    const localPart = extractLocalPart(to);
+    if (!localPart) {
+      return res.status(202).json({ ok: true, matched: false, reason: 'invalid_to_address' });
+    }
+
+    // 0037's pandapay.get_profile_by_forwarding_address handles the SECURITY DEFINER lookup
+    const profileRes = await pool.query(
+      `SELECT pandapay.get_profile_by_forwarding_address($1) as profile_id`, 
+      [localPart]
+    );
+    const profileId = profileRes.rows[0]?.profile_id;
+    if (!profileId) {
+      return res.status(202).json({ ok: true, matched: false, reason: 'address_not_found' });
+    }
+
+    // 2. Load the catalogue for discovery
+    const catRes = await pool.query('SELECT * FROM v_card_catalogue_export');
+    const catalogue = catRes.rows;
+
+    // 3. Discover cards in this message
+    const suggestions = discoverCardsInMessage({ subject, body: text, sender }, catalogue);
+    
+    // 4. Add discovered cards to wallet (skip if already exists or low confidence)
+    let addedCount = 0;
+    for (const s of suggestions) {
+      if (s.score < 0.5) continue; // Only confident matches
+      
+      // Attempt insert; ON CONFLICT DO NOTHING ensures we don't duplicate
+      const insertRes = await pool.query(
+        `INSERT INTO user_cards (profile_id, card_product_id)
+         VALUES ($1, $2)
+         ON CONFLICT (profile_id, card_product_id) DO NOTHING
+         RETURNING id`,
+        [profileId, s.cardProductId]
+      );
+      if (insertRes.rowCount > 0) {
+        addedCount++;
+      }
+    }
+
+    res.status(202).json({ ok: true, matched: true, cardsDiscovered: suggestions.length, cardsAdded: addedCount });
+  } catch (err) {
+    console.error('POST /inbound-emails/webhook error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -4761,7 +4832,7 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
       const ownedIds = new Set(owned.rows.map((r) => r.card_product_id));
 
       const fromEmail = discoverCardsAcrossMessages(emails.rows, catalogue.rows);
-      const fromSms = discoverCardsAcrossMessages(smsMessages, catalogue.rows);
+      const fromSms = discoverCardsAcrossMessages(smsMessages, catalogue.rows, true);
 
       // Tag each suggestion with where it came from, so the UI can say
       // "found in your email" vs "found in your SMS" rather than an

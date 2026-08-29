@@ -594,6 +594,8 @@ class DiscoveredCard {
   final List<String> last4;
   final int messageCount;
   final List<String> sources; // 'email' and/or 'sms'
+  final bool isPlaceholder;
+  final String? issuerName;
 
   const DiscoveredCard({
     required this.cardProductId,
@@ -603,6 +605,8 @@ class DiscoveredCard {
     required this.last4,
     required this.messageCount,
     required this.sources,
+    this.isPlaceholder = false,
+    this.issuerName,
   });
 
   factory DiscoveredCard.fromJson(Map<String, dynamic> json) => DiscoveredCard(
@@ -613,6 +617,8 @@ class DiscoveredCard {
     last4: ((json['last4'] as List?) ?? const []).cast<String>(),
     messageCount: (json['messageCount'] as num?)?.toInt() ?? 1,
     sources: ((json['sources'] as List?) ?? const []).cast<String>(),
+    isPlaceholder: json['isPlaceholder'] as bool? ?? false,
+    issuerName: json['issuerName'] as String?,
   );
 }
 

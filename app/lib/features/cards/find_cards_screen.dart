@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -123,12 +124,23 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       _error = null;
     });
     try {
+      final googleSignIn = GoogleSignIn(scopes: ['https://www.googleapis.com/auth/gmail.readonly']);
+      final account = await googleSignIn.signIn();
+      if (account == null) {
+        if (mounted) setState(() => _scanning = false);
+        return; // User canceled
+      }
+      final auth = await account.authentication;
+      final accessToken = auth.accessToken;
+      if (accessToken == null) throw Exception("Failed to get Gmail access token");
+
       final catalogueAsync = ref.read(catalogueProvider);
       final catalogue = catalogueAsync.value ?? const [];
       final gmailService = ref.read(gmailDiscoveryServiceProvider);
 
       final discovery = await gmailService.scanGmailForCards(
         catalogue: catalogue,
+        accessToken: accessToken,
       );
 
       final repo = ref.read(userCardsRepositoryProvider);
@@ -329,6 +341,39 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
 
   Future<void> _add(DiscoveredCard card) async {
     if (_adding) return;
+
+    if (card.isPlaceholder) {
+      final picked = await Navigator.of(context).push<List<CardProduct>>(
+        MaterialPageRoute(
+          builder: (_) => CardPickerScreen(initialSearch: card.issuerName),
+        ),
+      );
+      if (picked != null && picked.isNotEmpty && mounted) {
+        setState(() => _adding = true);
+        final messenger = ScaffoldMessenger.of(context);
+        try {
+          final repo = ref.read(userCardsRepositoryProvider);
+          final local = repo == null ? await ref.read(localUserCardsRepositoryProvider.future) : null;
+          for (final c in picked) {
+            if (repo != null) {
+              await repo.addCard(c.id);
+            } else {
+              await local!.addCard(c.id);
+            }
+          }
+          if (mounted) setState(() => _added.add(card.cardProductId)); // Mark the placeholder as added
+          ref.invalidate(myCardsProvider);
+          ref.invalidate(userCardsProvider);
+          messenger.showSnackBar(SnackBar(content: Text('Added ${picked.length} card(s) to wallet.')));
+        } catch (e) {
+          messenger.showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+        } finally {
+          if (mounted) setState(() => _adding = false);
+        }
+      }
+      return;
+    }
+
     setState(() => _adding = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -432,6 +477,19 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
             busy: _adding,
             onAdd: () => _add(s),
           ),
+        const SizedBox(height: AppSpace.xl),
+        const Divider(color: BambooInk.ink300, height: 1),
+        const SizedBox(height: AppSpace.xl),
+        _DiscoveryActionButtons(
+          isAndroid: _isAndroid,
+          scanning: _scanning,
+          smsAlreadyScanned: result.smsScanned > 0,
+          gmailAlreadyScanned: result.emailsScanned > 0,
+          onConnectGmail: _scanGmail,
+          onScanSms: _requestAndScanSms,
+          onPickFromCatalogue: _openCardPicker,
+          onOtherOptions: _showOtherOptionsSheet,
+        ),
       ],
     );
   }
@@ -519,7 +577,7 @@ class _SuggestionCard extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
               ),
-              child: Text('Yes, I have ${card.name}'),
+              child: Text(card.isPlaceholder ? 'Select your ${card.issuerName ?? 'Bank'} Card' : 'Yes, I have ${card.name}'),
             ),
         ],
       ),
@@ -586,39 +644,66 @@ class _DiscoveryEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: AppSpace.xl),
 
-          // Primary: Connect Gmail
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: BambooInk.slate,
-              foregroundColor: BambooInk.lime,
-              minimumSize: const Size.fromHeight(50),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
-            ),
-            icon: const Icon(Icons.mail_outline_rounded, size: 20),
-            label: const Text('Connect Gmail (1-Tap Auto Find)'),
-            onPressed: scanning ? null : onConnectGmail,
+          // Action buttons
+          _DiscoveryActionButtons(
+            isAndroid: isAndroid,
+            scanning: scanning,
+            smsAlreadyScanned: result.smsScanned > 0,
+            gmailAlreadyScanned: result.emailsScanned > 0,
+            onConnectGmail: onConnectGmail,
+            onScanSms: onScanSms,
+            onPickFromCatalogue: onPickFromCatalogue,
+            onOtherOptions: onOtherOptions,
           ),
-          const SizedBox(height: AppSpace.md),
+        ],
+      ),
+    );
+  }
+}
 
-          // Secondary: Scan SMS (if Android)
-          if (isAndroid) ...[
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: BambooInk.slate,
-                side: const BorderSide(color: BambooInk.ink300),
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                textStyle: BambooFonts.ui(14, weight: FontWeight.w600),
-              ),
-              icon: const Icon(Icons.sms_outlined, size: 18),
-              label: const Text('Scan device bank SMS'),
-              onPressed: scanning ? null : onScanSms,
-            ),
-            const SizedBox(height: AppSpace.md),
-          ],
+class _DiscoveryActionButtons extends StatelessWidget {
+  final bool isAndroid;
+  final bool scanning;
+  final bool smsAlreadyScanned;
+  final bool gmailAlreadyScanned;
+  final VoidCallback onConnectGmail;
+  final VoidCallback onScanSms;
+  final VoidCallback onPickFromCatalogue;
+  final VoidCallback onOtherOptions;
 
-          // Pick from catalogue
+  const _DiscoveryActionButtons({
+    required this.isAndroid,
+    required this.scanning,
+    required this.smsAlreadyScanned,
+    required this.gmailAlreadyScanned,
+    required this.onConnectGmail,
+    required this.onScanSms,
+    required this.onPickFromCatalogue,
+    required this.onOtherOptions,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Primary: Connect Gmail
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: BambooInk.slate,
+            foregroundColor: BambooInk.lime,
+            minimumSize: const Size.fromHeight(50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+          ),
+          icon: const Icon(Icons.mail_outline_rounded, size: 20),
+          label: const Text('Connect Gmail (1-Tap Auto Find)'),
+          onPressed: scanning ? null : onConnectGmail,
+        ),
+        const SizedBox(height: AppSpace.md),
+
+        // Secondary: Scan SMS (if Android)
+        if (isAndroid && !smsAlreadyScanned) ...[
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               foregroundColor: BambooInk.slate,
@@ -627,23 +712,38 @@ class _DiscoveryEmptyState extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               textStyle: BambooFonts.ui(14, weight: FontWeight.w600),
             ),
-            icon: const Icon(Icons.add_card_rounded, size: 18),
-            label: const Text('Search & pick from catalogue'),
-            onPressed: onPickFromCatalogue,
+            icon: const Icon(Icons.sms_outlined, size: 18),
+            label: const Text('Scan device bank SMS'),
+            onPressed: scanning ? null : onScanSms,
           ),
-          const SizedBox(height: AppSpace.xl),
-
-          // Secondary options text button
-          TextButton.icon(
-            onPressed: onOtherOptions,
-            icon: const Icon(Icons.more_horiz_rounded, size: 18, color: BambooInk.ink500),
-            label: Text(
-              'PDF Statement · SMS Backup · Email Forwarding',
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500, weight: FontWeight.w500),
-            ),
-          ),
+          const SizedBox(height: AppSpace.md),
         ],
-      ),
+
+        // Pick from catalogue
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: BambooInk.slate,
+            side: const BorderSide(color: BambooInk.ink300),
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            textStyle: BambooFonts.ui(14, weight: FontWeight.w600),
+          ),
+          icon: const Icon(Icons.add_card_rounded, size: 18),
+          label: const Text('Search & pick from catalogue'),
+          onPressed: onPickFromCatalogue,
+        ),
+        const SizedBox(height: AppSpace.xl),
+
+        // Secondary options text button
+        TextButton.icon(
+          onPressed: onOtherOptions,
+          icon: const Icon(Icons.more_horiz_rounded, size: 18, color: BambooInk.ink500),
+          label: Text(
+            'PDF Statement · SMS Backup · Email Forwarding',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500, weight: FontWeight.w500),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -27,7 +27,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: pandapay
     ports:
-      - "5433:5432" # 5433 on the host so it doesn't collide with a local Postgres
+      - "5434:5432" # 5433 on the host so it doesn't collide with a local Postgres
     volumes:
       - pgdata:/var/lib/postgresql/data
       # TWO databases in one instance, not one shared database. `auth/` and

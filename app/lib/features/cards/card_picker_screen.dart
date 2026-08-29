@@ -21,14 +21,15 @@ import '../../data/api_exception.dart';
 /// existing "return a pick, caller acts on it" contract.
 class CardPickerScreen extends ConsumerStatefulWidget {
   final VoidCallback? onCardNotListed;
-  const CardPickerScreen({super.key, this.onCardNotListed});
+  final String? initialSearch;
+  const CardPickerScreen({super.key, this.onCardNotListed, this.initialSearch});
 
   @override
   ConsumerState<CardPickerScreen> createState() => _CardPickerScreenState();
 }
 
 class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
-  final _searchController = TextEditingController();
+  late final _searchController = TextEditingController(text: widget.initialSearch ?? '');
   final _selected = <String>{};
   final _networkFilters = <CardNetwork>{};
 

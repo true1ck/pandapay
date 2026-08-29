@@ -63,6 +63,16 @@ String? extractLast4Hint(String smsBody) {
 /// silently never even attempted.
 bool looksLikeTransactionSms(String smsBody) {
   final lower = smsBody.toLowerCase();
+  
+  // 1. Hard reject obvious promotional spam
+  const promoWords = [
+    'apply now', 'pre-approved', 'lifetime free', 'ltf', 
+    'personal loan', 'enjoy', 'exclusive offer', 'get free',
+    'special offer'
+  ];
+  if (promoWords.any(lower.contains)) return false;
+
+  // 2. Must contain transaction keywords
   const keywords = [
     'spent',
     'debited',

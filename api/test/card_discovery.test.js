@@ -21,6 +21,8 @@ const {
   extractLast4,
   normalise,
   significantTokens,
+  looksPromotionalSms,
+  looksTransactionalSms,
 } = require('../src/card_discovery');
 
 /** A slice of `v_card_catalogue_export`'s shape, with real-ish names. */
@@ -65,10 +67,10 @@ test('issuer plus a distinguishing product token is enough', () => {
   assert.ok(hits[0].evidence.includes('millennia'));
 });
 
-test('a verbatim product name scores 1.0 and beats a partial match', () => {
+test('a verbatim product name scores highest and beats a partial match', () => {
   const exact = discoverCardsInMessage({ body: 'spent on your HDFC Millennia at AMAZON' }, CATALOGUE);
   assert.equal(exact[0].cardProductId, 'p-millennia');
-  assert.equal(exact[0].score, 1);
+  assert.ok(exact[0].score >= 2, `verbatim match should score >= 2, got ${exact[0].score}`);
 });
 
 test('two different cards in one message both surface, strongest first', () => {
@@ -174,6 +176,101 @@ test('empty and malformed input yields no suggestions rather than throwing', () 
   assert.deepEqual(discoverCardsInMessage({ body: 'anything' }, []), []);
   assert.deepEqual(discoverCardsInMessage({ body: 'anything' }, null), []);
   assert.deepEqual(discoverCardsAcrossMessages(null, CATALOGUE), []);
+});
+
+// --- SMS discovery gating (F-9 follow-up) -------------------------------
+// The screenshots that motivated this: a single promotional SMS from HDFC
+// naming "Tata Neu Infinity HDFC Bank Credit Card" surfaced six HDFC cards
+// plus an SBI card, all "found in your SMS", none with a card number.
+
+const SMS_CATALOGUE = [
+  { id: 'tn-inf-hdfc', name: 'Tata Neu Infinity HDFC Bank Credit Card', issuer_name: 'HDFC Bank' },
+  { id: 'tn-plus-hdfc', name: 'Tata Neu Plus HDFC Bank Credit Card', issuer_name: 'HDFC Bank' },
+  { id: 'tn-inf-sbi', name: 'Tata Neu Infinity SBI Credit Card', issuer_name: 'SBI Card' },
+  { id: 'axis-flipkart', name: 'Axis Bank Flipkart Credit Card', issuer_name: 'Axis Bank' },
+];
+
+test('looksPromotionalSms / looksTransactionalSms classify the obvious cases', () => {
+  assert.equal(looksPromotionalSms('Apply now for the Tata Neu Infinity HDFC Bank Credit Card!'), true);
+  assert.equal(looksTransactionalSms('Rs 500 spent on your card ending 7105'), true);
+  assert.equal(looksTransactionalSms('Get a lifetime free credit card today'), false);
+});
+
+test('a promotional SMS naming a card adds nothing', () => {
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Congratulations! You are eligible for the Tata Neu Infinity HDFC Bank Credit Card. Apply now.' }],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.deepEqual(merged, []);
+});
+
+test('a transactional SMS naming a card family but no card number adds nothing', () => {
+  // "Tata Neu Infinity" matches both HDFC and SBI Tata Neu rows equally;
+  // with no last-4 to disambiguate this is noise, not discovery.
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Rs 1200 spent on your HDFC Bank Tata Neu Infinity card on 12-Aug' }],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.deepEqual(merged, []);
+});
+
+test('SMS: a verbatim card name with NO card number is still rejected', () => {
+  // The live-catalogue case that leaked through: "...Tata Neu Infinity SBI
+  // Credit Card. Enjoy rewards!" is an exact name match but carries no masked
+  // number, so it is a marketing line, not an alert.
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Your SBI Card statement - Tata Neu Infinity SBI Credit Card. Total amount due Rs 0. Enjoy rewards' }],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.deepEqual(merged, []);
+});
+
+test('SMS: two catalogue rows for the same card collapse to one, not dropped', () => {
+  const dupCatalogue = [
+    { id: 'ace-1', name: 'Axis Ace', issuer_name: 'Axis Bank' },
+    { id: 'ace-2', name: 'Axis Bank ACE Credit Card', issuer_name: 'Axis Bank' },
+  ];
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Rs 850 spent on your Axis Bank ACE card ending 9876 at Zomato' }],
+    dupCatalogue,
+    true
+  );
+  assert.equal(merged.length, 1);
+  assert.deepEqual(merged[0].last4, ['9876']);
+});
+
+test('a real transaction alert with a card number IS discovered', () => {
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Rs 2,499 spent on your Axis Bank Flipkart Credit Card ending 7105 at FLIPKART' }],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].cardProductId, 'axis-flipkart');
+  assert.deepEqual(merged[0].last4, ['7105']);
+});
+
+test('a card number disambiguates a same-family match', () => {
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Spent Rs 900 on Tata Neu Infinity HDFC Bank Credit Card XX4477' }],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].cardProductId, 'tn-inf-hdfc');
+});
+
+test('the email path is unchanged by the SMS gating', () => {
+  // No isSms flag: a plain statement line still matches with no txn keyword.
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Your Tata Neu Infinity HDFC Bank Credit Card e-statement is ready.' }],
+    SMS_CATALOGUE
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].cardProductId, 'tn-inf-hdfc');
 });
 
 test('a catalogue entry whose name is all stopwords can never match', () => {

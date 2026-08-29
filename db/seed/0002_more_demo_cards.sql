@@ -22,7 +22,8 @@ values
   ('au', 'AU Small Finance Bank', 'AU Bank'),
   ('scb', 'Standard Chartered', 'SC'),
   ('rbl', 'RBL Bank', 'RBL'),
-  ('amex', 'American Express', 'Amex')
+  ('amex', 'American Express', 'Amex'),
+  ('slice', 'Slice', 'Slice')
 on conflict (slug) do nothing;
 
 -- >>> Card 5: HDFC Regalia Gold — travel/lifestyle, milestone-heavy --------
@@ -373,6 +374,36 @@ on conflict (slug) do nothing;
 -- `effectiveRatePerRupee` doc comment) with no category reward_rules at
 -- all, exercising the "1 base point per ₹ spent, engine falls through to
 -- 0 effective rate for flat_points, no cap" shape.
+
+-- >>> Card 21: HDFC Moneyback+ Credit Card — entry level rewards -----------
+insert into card_products (
+  issuer_id, slug, name, network, card_type, joining_fee_inr, annual_fee_inr,
+  is_upi_linkable, base_reward_unit, base_reward_rate, point_value_inr, status
+)
+select id, 'hdfc-moneyback-plus', 'HDFC Moneyback+ Credit Card', 'visa', 'credit', 500, 500,
+       false, 'points_per_150', 2.0, 0.25, 'draft'
+from issuers where slug = 'hdfc'
+on conflict (slug) do nothing;
+
+-- >>> Card 22: Kotak League Platinum Card — entry level --------------------
+insert into card_products (
+  issuer_id, slug, name, network, card_type, joining_fee_inr, annual_fee_inr,
+  is_upi_linkable, base_reward_unit, base_reward_rate, point_value_inr, status
+)
+select id, 'kotak-league', 'Kotak League Platinum Card', 'visa', 'credit', 500, 500,
+       false, 'points_per_150', 8.0, 0.25, 'draft'
+from issuers where slug = 'kotak'
+on conflict (slug) do nothing;
+
+-- >>> Card 23: Slice Super Card — prepaid/credit card ----------------------
+insert into card_products (
+  issuer_id, slug, name, network, card_type, joining_fee_inr, annual_fee_inr,
+  is_upi_linkable, base_reward_unit, base_reward_rate, point_value_inr, status
+)
+select id, 'slice-super', 'Slice Super Card', 'visa', 'credit', 0, 0,
+       false, 'cashback_percent', 1.0, 1.0, 'draft'
+from issuers where slug = 'slice'
+on conflict (slug) do nothing;
 
 -- >>> Publish gate: verified_at required before status='published' --------
 -- Left as 'draft' deliberately (see header comment) — publishing these for

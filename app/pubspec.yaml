@@ -219,6 +219,7 @@ dependencies:
   # transitive dependency; promoted to direct since device_identity.dart
   # now uses it on purpose.
   uuid: ^4.6.0
+  google_sign_in: ^6.2.1
 flutter:
 
   # The following line ensures that the Material Icons font is

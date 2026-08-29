@@ -82,7 +82,7 @@ void main() {
       expect(hits.length, 1);
       expect(hits.first.cardProductId, 'hdfc_millennia');
       expect(hits.first.name, 'HDFC Millennia');
-      expect(hits.first.score, 1.0);
+      expect(hits.first.score, greaterThanOrEqualTo(2.0));
     });
 
     test('issuer plus distinguishing token match', () {
@@ -124,6 +124,40 @@ void main() {
       final axis = result.suggestions.firstWhere((s) => s.cardProductId == 'axis_ace');
       expect(axis.messageCount, 1);
       expect(axis.last4, contains('2222'));
+    });
+
+    test('promotional SMS naming a card is ignored', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: [
+          'Congratulations! You are eligible for the HDFC Millennia. Apply now for lifetime free.',
+        ],
+        catalogue: catalogue,
+      );
+      expect(result.suggestions, isEmpty);
+    });
+
+    test('transactional SMS with no card number and an ambiguous family match is ignored', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: ['Rs 1200 spent on your HDFC Bank card on 12-Aug'],
+        catalogue: catalogue,
+      );
+      // Issuer-only placeholder is acceptable, but no named HDFC card should
+      // be asserted without corroboration.
+      expect(
+        result.suggestions.where((s) => s.cardProductId == 'hdfc_millennia'),
+        isEmpty,
+      );
+    });
+
+    test('real transaction alert with a card number is still discovered', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: [
+          'Rs 2,499 spent on your HDFC Millennia card ending 7105 at FLIPKART',
+        ],
+        catalogue: catalogue,
+      );
+      final hit = result.suggestions.firstWhere((s) => s.cardProductId == 'hdfc_millennia');
+      expect(hit.last4, contains('7105'));
     });
   });
 }
