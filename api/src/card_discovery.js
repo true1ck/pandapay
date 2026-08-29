@@ -60,7 +60,7 @@ function significantTokens(name) {
  * as card alerts and seed placeholder cards.
  */
 const ACCOUNT_NUMBER_SPAN =
-  /\b(?:a\/c|ac|acct|account)\b\.?\s*(?:no\.?|number|#)?\s*[:\-]?\s*[x*.•\s]*\d{3,}/gi;
+  /\b(?:a\/c|ac|acct|account)\b(?:\s*(?:no\.?|number|#|ending(?:\s+(?:in|with))?))?\s*[:\-]?\s*[x*.•]*\s*\d{3,}|\bbank\s+[x*•]+\s*\d{3,}|\b(?:aadhaar|aadhar|uidai|pan|gstin)\b\s*[:\-]?\s*[x*.•]*\s*\d{3,}/gi;
 
 /**
  * Last-4 digits mentioned in the text, e.g. "ending 4568", "XX4568",
@@ -141,7 +141,8 @@ function looksTransactionalSms(text) {
 const DEBIT_ACCOUNT_MARKERS = [
   'debit card', 'a/c', 'ac no', 'acct', 'account no', 'from a/c', 'to a/c',
   'savings a/c', 'salary a/c', 'imps', 'neft', 'atm', 'upi/', 'by upi',
-  'vpa', 'withdrawn from',
+  'vpa', 'withdrawn from', 'withdrawn rs', 'block dc', ' dc ', 'account ending',
+  'deducted from', 'deposited in',
 ];
 
 /**
@@ -151,7 +152,8 @@ const DEBIT_ACCOUNT_MARKERS = [
 const CREDIT_CARD_MARKERS = [
   'credit card', 'avl lmt', 'available limit', 'avl. limit', 'credit limit',
   'outstanding', 'statement', 'min amt due', 'minimum amount due',
-  'total amount due', 'amount due', 'cc bill', 'card bill',
+  'total amount due', 'amount due', 'cc bill', 'card bill', 'block cc',
+  ' cc ', 'card ending with', 'available credit',
 ];
 
 /** True when the text reads like a bank-account / debit-card alert. */

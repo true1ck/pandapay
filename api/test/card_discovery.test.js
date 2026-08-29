@@ -390,6 +390,45 @@ test('poisoning is scoped to the exact issuer+last-4, not the whole issuer', () 
   assert.deepEqual(merged[0].last4, ['2222']);
 });
 
+// --- real HDFC SMS shapes (from a user export) that leaked an account as a card ---
+
+test('every real-world way HDFC names the savings account is stripped', () => {
+  for (const s of [
+    'Update! INR 48,000.00 deposited in HDFC Bank A/c XX1797 on 29-AUG-26 for Salary',
+    'PAYMENT ALERT! INR 1386.00 deducted from HDFC Bank A/C No 1797 towards Capital Float',
+    'Sent Rs.1000.00 From HDFC Bank A/C *1797 To MANDAR HARI GAUDE On 16/05/25 Ref 104892602823',
+    'HDFC Bank:Rs. 2000.00 debited from a/c *1797 on 02/07/25 to a/c **1772 (UPI Ref No. 107392990952)',
+    'UPDATE: INR 15,660.00 debited from HDFC Bank XX1797 on 08-AUG-26. Info: CC 000463202XXXXXX8708 Autopay',
+    'UPI Transaction Declined for your HDFC Bank account ending 1797 for security reasons',
+  ]) {
+    assert.equal(extractLast4(s).includes('1797'), false, `1797 leaked from: ${s}`);
+  }
+});
+
+test('the real HDFC SMS corpus surfaces the credit card and NOT the bank account', () => {
+  const catalogue = [
+    { id: 'hdfc-tataneu', name: 'Tata Neu Infinity HDFC Bank Credit Card', issuer_name: 'HDFC Bank' },
+  ];
+  const bodies = [
+    // savings account 1797 — many shapes, none should surface
+    { body: 'Update! INR 48,000.00 deposited in HDFC Bank A/c XX1797 on 29-AUG-26 for Salary' },
+    { body: 'Sent Rs.1000.00 From HDFC Bank A/C *1797 To SOMEONE On 16/05/25 Ref 104892602823' },
+    { body: 'UPDATE: INR 15,660.00 debited from HDFC Bank XX1797 on 08-AUG-26. Info: CC 000463202XXXXXX8708 Autopay' },
+    { body: 'UPI Transaction Declined for your HDFC Bank account ending 1797 for security reasons' },
+    // debit card 8406 — ATM / DC, should not surface
+    { body: '370846 is your SECRET 6-digit OTP to complete your ATM withdrawal of Rs. 20000 via Card XX8406 at HDFC Bank ATM' },
+    { body: 'Spent Rs.210 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2025-08-14 Bal Rs.81007 SMS BLOCK DC 8406' },
+    // credit card 8708 — real spends, SHOULD surface
+    { body: 'OTP is 047388 for txn of INR 335.00 at CHEQ DIGITA on HDFC Bank card ending 8708' },
+    { body: 'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 4150.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 8708. YOUR AVAILABLE LIMIT IS RS. 96149' },
+  ];
+  const merged = discoverCardsAcrossMessages(bodies, catalogue, true);
+  const l4s = merged.flatMap((s) => s.last4);
+  assert.equal(l4s.includes('1797'), false, 'savings account 1797 must not surface');
+  assert.equal(l4s.includes('8406'), false, 'debit card 8406 must not surface');
+  assert.ok(l4s.includes('8708'), 'credit card 8708 should surface');
+});
+
 test('a catalogue entry whose name is all stopwords can never match', () => {
   const hits = discoverCardsInMessage({ body: 'your credit card statement' }, [
     { id: 'p-generic', name: 'Credit Card', issuer_name: 'Some Bank' },

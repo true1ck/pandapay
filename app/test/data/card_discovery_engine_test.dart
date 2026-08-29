@@ -329,6 +329,60 @@ void main() {
       expect(result.suggestions, isEmpty);
     });
 
+    test('real HDFC SMS shapes never leak the savings account as a card', () {
+      const accountShapes = [
+        'Update! INR 48,000.00 deposited in HDFC Bank A/c XX1797 on 29-AUG-26 for Salary',
+        'PAYMENT ALERT! INR 1386.00 deducted from HDFC Bank A/C No 1797 towards Capital Float',
+        'Sent Rs.1000.00 From HDFC Bank A/C *1797 To SOMEONE On 16/05/25 Ref 104892602823',
+        'HDFC Bank:Rs. 2000.00 debited from a/c *1797 on 02/07/25 to a/c **1772 (UPI Ref No. 107392990952)',
+        'UPDATE: INR 15,660.00 debited from HDFC Bank XX1797 on 08-AUG-26. Info: CC 000463202XXXXXX8708 Autopay',
+        'UPI Transaction Declined for your HDFC Bank account ending 1797 for security reasons',
+      ];
+      for (final s in accountShapes) {
+        expect(
+          LocalCardDiscoveryEngine.extractLast4(s),
+          isNot(contains('1797')),
+          reason: '1797 leaked from: $s',
+        );
+      }
+    });
+
+    test('real HDFC corpus: credit card surfaces, savings account + debit card do not', () {
+      const cat = [
+        CardProduct(
+          id: 'hdfc_tataneu',
+          name: 'Tata Neu Infinity HDFC Bank Credit Card',
+          issuerName: 'HDFC Bank',
+          network: CardNetwork.visa,
+          isUpiLinkable: false,
+          pointValueInr: 1.0,
+          rewardRules: [],
+          capRules: [],
+          milestoneRules: [],
+          feeWaiverRules: [],
+          benefits: [],
+        ),
+      ];
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: const [
+          'Update! INR 48,000.00 deposited in HDFC Bank A/c XX1797 on 29-AUG-26 for Salary',
+          'Sent Rs.1000.00 From HDFC Bank A/C *1797 To SOMEONE On 16/05/25 Ref 104892602823',
+          'UPDATE: INR 15,660.00 debited from HDFC Bank XX1797 on 08-AUG-26. Info: CC 000463202XXXXXX8708 Autopay',
+          'UPI Transaction Declined for your HDFC Bank account ending 1797 for security reasons',
+          '370846 is your SECRET 6-digit OTP to complete your ATM withdrawal of Rs. 20000 via Card XX8406 at HDFC Bank ATM',
+          'Spent Rs.210 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2025-08-14 SMS BLOCK DC 8406',
+          'OTP is 047388 for txn of INR 335.00 at CHEQ DIGITA on HDFC Bank card ending 8708',
+          'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 4150.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 8708. YOUR AVAILABLE LIMIT IS RS. 96149',
+        ],
+        catalogue: cat,
+        isSms: true,
+      );
+      final l4s = result.suggestions.expand((s) => s.last4).toList();
+      expect(l4s, isNot(contains('1797')));
+      expect(l4s, isNot(contains('8406')));
+      expect(l4s, contains('8708'));
+    });
+
     test('poisoning is scoped to the exact issuer+last-4', () {
       final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
         smsBodies: const [

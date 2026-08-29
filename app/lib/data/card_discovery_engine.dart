@@ -78,7 +78,9 @@ class LocalCardDiscoveryEngine {
   /// last-4 (doing so let debit/UPI alerts masquerade as card alerts).
   /// Mirrors ACCOUNT_NUMBER_SPAN in api/src/card_discovery.js.
   static final RegExp _accountNumberSpan = RegExp(
-    r'\b(?:a\/c|ac|acct|account)\b\.?\s*(?:no\.?|number|#)?\s*[:\-]?\s*[x*.•\s]*\d{3,}',
+    r'\b(?:a/c|ac|acct|account)\b(?:\s*(?:no\.?|number|#|ending(?:\s+(?:in|with))?))?\s*[:\-]?\s*[x*.•]*\s*\d{3,}'
+    r'|\bbank\s+[x*•]+\s*\d{3,}'
+    r'|\b(?:aadhaar|aadhar|uidai|pan|gstin)\b\s*[:\-]?\s*[x*.•]*\s*\d{3,}',
     caseSensitive: false,
   );
 
@@ -148,7 +150,8 @@ class LocalCardDiscoveryEngine {
   static const List<String> debitAccountMarkers = [
     'debit card', 'a/c', 'ac no', 'acct', 'account no', 'from a/c', 'to a/c',
     'savings a/c', 'salary a/c', 'imps', 'neft', 'atm', 'upi/', 'by upi',
-    'vpa', 'withdrawn from',
+    'vpa', 'withdrawn from', 'withdrawn rs', 'block dc', ' dc ', 'account ending',
+    'deducted from', 'deposited in',
   ];
 
   /// Credit-card-specific markers. Their presence overrides the debit filter
@@ -156,7 +159,8 @@ class LocalCardDiscoveryEngine {
   static const List<String> creditCardMarkers = [
     'credit card', 'avl lmt', 'available limit', 'avl. limit', 'credit limit',
     'outstanding', 'statement', 'min amt due', 'minimum amount due',
-    'total amount due', 'amount due', 'cc bill', 'card bill',
+    'total amount due', 'amount due', 'cc bill', 'card bill', 'block cc',
+    ' cc ', 'card ending with', 'available credit',
   ];
 
   static bool looksDebitAccountSms(String text) {
