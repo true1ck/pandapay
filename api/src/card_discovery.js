@@ -53,16 +53,28 @@ function significantTokens(name) {
 }
 
 /**
+ * A bank-account reference and its trailing digits — "A/c XX1797",
+ * "Account No. XXXX 1772", "AC ...1234". Those digits are an *account*
+ * suffix, never a card number, so extractLast4 strips these spans before
+ * scanning: reading them as a card last-4 let debit/UPI alerts masquerade
+ * as card alerts and seed placeholder cards.
+ */
+const ACCOUNT_NUMBER_SPAN =
+  /\b(?:a\/c|ac|acct|account)\b\.?\s*(?:no\.?|number|#)?\s*[:\-]?\s*[x*.•\s]*\d{3,}/gi;
+
+/**
  * Last-4 digits mentioned in the text, e.g. "ending 4568", "XX4568",
- * "****4568", "a/c ...4568". Returned for display as evidence only — this
- * module never uses them to *identify* a product (a last-4 says nothing
- * about which product it is) and the app never stores them.
+ * "****4568". Account-number spans ("a/c ...4568") are removed first — see
+ * ACCOUNT_NUMBER_SPAN. Returned for display as evidence only — this module
+ * never uses them to *identify* a product (a last-4 says nothing about which
+ * product it is) and the app never stores them.
  */
 function extractLast4(text) {
+  const cleaned = String(text || '').replace(ACCOUNT_NUMBER_SPAN, ' ');
   const hits = new Set();
   const re = /(?:ending\s+in|ending\s+with|ending|no\.?\s*x+|xx+|\*{2,}|\.{3,})\s*(\d{4})\b/gi;
   let m;
-  while ((m = re.exec(String(text || ''))) !== null) hits.add(m[1]);
+  while ((m = re.exec(cleaned)) !== null) hits.add(m[1]);
   return [...hits];
 }
 
@@ -238,6 +250,27 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
     (catalogue || []).map((c) => c.issuer_name).filter(Boolean)
   );
 
+  // Pre-pass: an issuer + last-4 that appears in ANY debit/account alert is
+  // "poisoned" — no issuer placeholder is offered for it even if another,
+  // wordless message ("Rs 500 on card ending 1234") would otherwise seed
+  // one. One "…debited from A/c …1234 via UPI" is enough. Keyed
+  // "<normalised issuer>|<last4>" ('' last4 = the issuer with no number).
+  const debitPoisoned = new Set();
+  if (isSms) {
+    for (const message of messages || []) {
+      const text = [message?.subject, message?.body].filter(Boolean).join(' ');
+      if (!looksDebitAccountSms(text) || looksCreditCardSms(text)) continue;
+      const low = normalise(text);
+      const l4s = extractLast4(text);
+      for (const issuer of issuers) {
+        if (!low.includes(normalise(issuer))) continue;
+        const ni = normalise(issuer);
+        debitPoisoned.add(`${ni}|`);
+        for (const l of l4s) debitPoisoned.add(`${ni}|${l}`);
+      }
+    }
+  }
+
   for (const message of messages || []) {
     const text = [message?.subject, message?.body].filter(Boolean).join(' ');
 
@@ -304,6 +337,8 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
         if (haystack.includes(normIssuer)) {
           const l4sToUse = last4s.length === 0 ? [''] : last4s;
           for (const l4 of l4sToUse) {
+            // Skip a card this issuer was seen debiting an account for.
+            if (debitPoisoned.has(`${normIssuer}|${l4}`)) continue;
             const placeholderId = `placeholder_${normIssuer}_${l4}`;
             const existing = byCard.get(placeholderId);
             

@@ -93,9 +93,22 @@ test('a card from a different issuer is not suggested by an unrelated issuer ema
 test('extractLast4 reads the common masked shapes and nothing else', () => {
   assert.deepEqual(extractLast4('spent on card ending 4568').sort(), ['4568']);
   assert.deepEqual(extractLast4('card XX1234 used').sort(), ['1234']);
-  assert.deepEqual(extractLast4('a/c ...9012 debited').sort(), ['9012']);
+  assert.deepEqual(extractLast4('spent on Card No. XX 9012').sort(), ['9012']);
   // A bare number with no masking prefix is not a card suffix.
   assert.deepEqual(extractLast4('your OTP is 5678'), []);
+});
+
+test('extractLast4 does NOT read an account-number suffix as a card last-4', () => {
+  // "A/c ...1234" is a bank account, not a card. Reading it as a card
+  // number let debit/UPI alerts masquerade as card alerts.
+  assert.deepEqual(extractLast4('Rs 640 debited from A/c XX1797 via UPI'), []);
+  assert.deepEqual(extractLast4('INR 300 debited from your Canara Bank A/c ...1772 by UPI'), []);
+  assert.deepEqual(extractLast4('Account No. XXXX 5501 credited'), []);
+  // ...but a real card number in the same message still comes through.
+  assert.deepEqual(
+    extractLast4('spent on card ending 4568 from A/c XX1797').sort(),
+    ['4568']
+  );
 });
 
 test('a last-4 is carried as evidence only and never identifies a product on its own', () => {
@@ -331,6 +344,50 @@ test('a placeholder with a coincidentally-equal last-4 for another issuer is kep
   );
   assert.equal(merged.length, 2);
   assert.ok(merged.some((s) => s.isPlaceholder && s.issuerName === 'SBI Card'));
+});
+
+test('a UPI/debit alert that carries only an account number surfaces nothing', () => {
+  // The live screenshot case: HDFC …1797 and Canara …1772 kept appearing as
+  // placeholder cards. Both SMS only carry an A/c suffix, no card number.
+  const cat = [...SMS_CATALOGUE, { id: 'canara-x', name: 'Canara RuPay Card', issuer_name: 'Canara Bank' }];
+  const merged = discoverCardsAcrossMessages(
+    [
+      { body: 'Rs 640 debited from HDFC Bank A/c XX1797 via UPI to swiggy on 27-Aug' },
+      { body: 'INR 300 debited from your Canara Bank A/c ...1772 by UPI on 26-Aug' },
+    ],
+    cat,
+    true
+  );
+  assert.deepEqual(merged, []);
+});
+
+test('a debit alert POISONS its issuer+last-4 against a wordless sibling message', () => {
+  // One message names no card type ("card ending 1234") and alone would seed
+  // an HDFC placeholder; another shows the same 1234 being debited from an
+  // account. The account context wins for that card.
+  const merged = discoverCardsAcrossMessages(
+    [
+      { body: 'Rs 500 spent on HDFC Bank card ending 1234 at BigBazaar on 20-Aug' },
+      { body: 'Rs 900 debited from HDFC Bank Debit Card ending 1234 at ATM on 21-Aug' },
+    ],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.deepEqual(merged, []);
+});
+
+test('poisoning is scoped to the exact issuer+last-4, not the whole issuer', () => {
+  const merged = discoverCardsAcrossMessages(
+    [
+      { body: 'Rs 900 debited from HDFC Bank Debit Card ending 1111 at ATM' },
+      { body: 'Rs 500 spent on HDFC Bank card ending 2222 at Croma on 20-Aug' },
+    ],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].isPlaceholder, true);
+  assert.deepEqual(merged[0].last4, ['2222']);
 });
 
 test('a catalogue entry whose name is all stopwords can never match', () => {

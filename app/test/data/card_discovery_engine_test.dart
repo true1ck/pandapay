@@ -285,5 +285,62 @@ void main() {
         contains('1234'),
       );
     });
+
+    test('an account-number suffix is NOT read as a card last-4', () {
+      expect(
+        LocalCardDiscoveryEngine.extractLast4('Rs 640 debited from A/c XX1797 via UPI'),
+        isEmpty,
+      );
+      expect(
+        LocalCardDiscoveryEngine.extractLast4(
+            'INR 300 debited from your Canara Bank A/c ...1772 by UPI'),
+        isEmpty,
+      );
+      // A real card number alongside an account ref still comes through.
+      expect(
+        LocalCardDiscoveryEngine.extractLast4('spent on card ending 4568 from A/c XX1797'),
+        contains('4568'),
+      );
+    });
+  });
+
+  group('LocalCardDiscoveryEngine debit/account alerts', () {
+    test('a UPI/debit alert carrying only an account number surfaces nothing', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: const [
+          'Rs 640 debited from HDFC Bank A/c XX1797 via UPI to swiggy on 27-Aug',
+          'INR 300 debited from your Axis Bank A/c ...1772 by UPI on 26-Aug',
+        ],
+        catalogue: catalogue,
+        isSms: true,
+      );
+      expect(result.suggestions, isEmpty);
+    });
+
+    test('a debit alert poisons its issuer+last-4 against a wordless sibling', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: const [
+          'Rs 500 spent on HDFC Bank card ending 1234 at BigBazaar on 20-Aug',
+          'Rs 900 debited from HDFC Bank Debit Card ending 1234 at ATM on 21-Aug',
+        ],
+        catalogue: catalogue,
+        isSms: true,
+      );
+      expect(result.suggestions, isEmpty);
+    });
+
+    test('poisoning is scoped to the exact issuer+last-4', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: const [
+          'Rs 900 debited from HDFC Bank Debit Card ending 1111 at ATM',
+          'Rs 500 spent on HDFC Bank card ending 2222 at Croma on 20-Aug',
+        ],
+        catalogue: catalogue,
+        isSms: true,
+      );
+      expect(result.suggestions.length, 1);
+      expect(result.suggestions.first.isPlaceholder, isTrue);
+      expect(result.suggestions.first.last4, contains('2222'));
+    });
   });
 }

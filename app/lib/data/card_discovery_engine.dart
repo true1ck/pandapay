@@ -72,14 +72,27 @@ class LocalCardDiscoveryEngine {
         .toList();
   }
 
+  /// A bank-account reference and its trailing digits — "A/c XX1797",
+  /// "Account No. XXXX 1772", "AC ...1234". Those digits are an *account*
+  /// suffix, never a card number, so they must not be read as a card's
+  /// last-4 (doing so let debit/UPI alerts masquerade as card alerts).
+  /// Mirrors ACCOUNT_NUMBER_SPAN in api/src/card_discovery.js.
+  static final RegExp _accountNumberSpan = RegExp(
+    r'\b(?:a\/c|ac|acct|account)\b\.?\s*(?:no\.?|number|#)?\s*[:\-]?\s*[x*.•\s]*\d{3,}',
+    caseSensitive: false,
+  );
+
   /// Extracts last-4 digits mentioned in the text (e.g., "ending 4568", "XX4568", "****4568").
+  /// Account-number spans ("A/c XX1797") are stripped first — see
+  /// [_accountNumberSpan].
   static List<String> extractLast4(String text) {
+    final cleaned = text.replaceAll(_accountNumberSpan, ' ');
     final hits = <String>{};
     final re = RegExp(
       r'(?:ending\s+in|ending\s+with|ending|no\.?\s*x+|xx+|\*{2,}|\.{3,})\s*(\d{4})\b',
       caseSensitive: false,
     );
-    for (final match in re.allMatches(text)) {
+    for (final match in re.allMatches(cleaned)) {
       final val = match.group(1);
       if (val != null && val.isNotEmpty) hits.add(val);
     }
@@ -240,6 +253,28 @@ class LocalCardDiscoveryEngine {
         .where((s) => s.isNotEmpty)
         .toSet();
 
+    // Pre-pass: an issuer + last-4 that appears in ANY debit/account alert is
+    // "poisoned" — no issuer placeholder is offered for it even if another,
+    // wordless message ("Rs 500 on card ending 1234") would otherwise seed
+    // one. One "…debited from A/c …1234 via UPI" is enough. Keyed
+    // "<normalised issuer>|<last4>" ('' last4 = the issuer with no number).
+    final debitPoisoned = <String>{};
+    if (isSms) {
+      for (final body in smsBodies) {
+        if (!looksDebitAccountSms(body) || looksCreditCardSms(body)) continue;
+        final low = normalise(body);
+        final l4s = extractLast4(body);
+        for (final issuer in issuers) {
+          if (!low.contains(normalise(issuer))) continue;
+          final ni = normalise(issuer);
+          debitPoisoned.add('$ni|');
+          for (final l in l4s) {
+            debitPoisoned.add('$ni|$l');
+          }
+        }
+      }
+    }
+
     for (final body in smsBodies) {
       // SMS only: a card match is believable only when it rides on a real
       // transaction/statement alert, never a marketing blast that names the
@@ -326,6 +361,8 @@ class LocalCardDiscoveryEngine {
           if (haystack.contains(normIssuer)) {
             final l4sToUse = last4s.isEmpty ? [''] : last4s;
             for (final l4 in l4sToUse) {
+              // Skip a card this issuer was seen debiting an account for.
+              if (debitPoisoned.contains('$normIssuer|$l4')) continue;
               final placeholderId = 'placeholder_${normIssuer}_$l4';
               final existing = byCard[placeholderId];
               
