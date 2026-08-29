@@ -27,11 +27,17 @@ class LocalUserCardsRepository {
   UserCard _rowToUserCard(Row row, List<CardProduct> catalogue) {
     final cardProductId = row['card_product_id'] as String;
     final product = catalogue.where((c) => c.id == cardProductId).firstOrNull;
+    // Only call a card "unresolved" when we actually had a catalogue to miss
+    // it in. An empty catalogue means the fetch failed or is still in flight —
+    // a transient state that must not present every real card as a removable
+    // ghost.
+    final unresolved = catalogue.isNotEmpty && product == null;
     return UserCard(
       id: row['id'] as String,
       cardProductId: cardProductId,
       nickname: row['nickname'] as String?,
-      cardName: product?.name ?? 'Card',
+      cardName: product?.name ?? (unresolved ? 'Unrecognized card' : 'Card'),
+      isUnresolved: unresolved,
       isDefault: (row['is_default'] as int) != 0,
       isArchived: (row['is_archived'] as int) != 0,
     );
@@ -65,6 +71,14 @@ class LocalUserCardsRepository {
 
   Future<void> archiveCard(String userCardId) async {
     _raw.execute('UPDATE local_user_cards SET is_archived = 1 WHERE id = ?', [userCardId]);
+  }
+
+  /// Hard-deletes a single local card row. Used only for an [UserCard.isUnresolved]
+  /// ghost — a guest card whose product id no longer exists in the catalogue,
+  /// so there is nothing to archive/restore and "archive, never delete" (R4)
+  /// does not apply: it can never be a real card again.
+  Future<void> deleteCard(String userCardId) async {
+    _raw.execute('DELETE FROM local_user_cards WHERE id = ?', [userCardId]);
   }
 
   Future<void> unarchiveCard(String userCardId) async {

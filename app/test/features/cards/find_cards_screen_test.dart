@@ -83,7 +83,10 @@ void main() {
   testWidgets('shows discovered card suggestion and allows adding to wallet', (tester) async {
     await pumpFindCardsScreen(
       tester,
-      smsBodies: const ['Rs. 500 spent on your HDFC Millennia card at Amazon'],
+      // SMS discovery now requires a masked card number in the same message
+      // (a promo that merely names a card is not enough) — see
+      // LocalCardDiscoveryEngine.discoverAcrossMessages.
+      smsBodies: const ['Rs. 500 spent on your HDFC Millennia card ending 4567 at Amazon'],
     );
 
     expect(find.text('HDFC Millennia'), findsOneWidget);

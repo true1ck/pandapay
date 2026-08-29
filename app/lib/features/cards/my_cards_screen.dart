@@ -307,9 +307,48 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
     }
   }
 
+  Future<void> _removeUnresolved() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove this card?'),
+        content: const Text(
+          "This card isn't in our catalogue any more, so it can't be used for "
+          'recommendations. Removing it here is safe — add the current card from '
+          'the catalogue afterwards.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _archiving = true);
+    try {
+      final local = await ref.read(localUserCardsRepositoryProvider.future);
+      await local.deleteCard(widget.card.id);
+      ref.invalidate(myCardsProvider);
+      ref.invalidate(userCardsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Card removed.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed. ${userFacingErrorMessage(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _archiving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final card = widget.card;
+    if (card.isUnresolved) return _UnresolvedCardTile(busy: _archiving, onRemove: _removeUnresolved);
     final amount = ref.watch(enteredAmountProvider);
     final badges = <String>[
       if (card.totalPointsEarned > 0) '${card.totalPointsEarned.toStringAsFixed(0)} pts earned',
@@ -435,6 +474,68 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
     if (!next.isAfter(now)) next = DateTime(now.year, now.month + 1, dueDay);
     final daysLeft = next.difference(DateTime(now.year, now.month, now.day)).inDays;
     return 'Next due in $daysLeft days';
+  }
+}
+
+/// Shown in place of [_MyCardTile] for a guest card whose product id is no
+/// longer in the catalogue (added under an older/embedded catalogue). It has
+/// no name, art or rules and is already excluded from ranking — so rather
+/// than a silent, unusable "Card" tile, this says what happened and offers
+/// the one action that helps: remove it.
+class _UnresolvedCardTile extends StatelessWidget {
+  final bool busy;
+  final Future<void> Function() onRemove;
+  const _UnresolvedCardTile({required this.busy, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: BambooInk.paperMuted,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.help_outline_rounded, color: BambooInk.ink500, size: 20),
+          ),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Unrecognized card',
+                  style: BambooFonts.heading(15.5, color: BambooInk.ink900),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "Not in our catalogue any more — can't be used for picks.",
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          TextButton(
+            onPressed: busy ? null : onRemove,
+            style: TextButton.styleFrom(foregroundColor: BambooInk.clay),
+            child: busy
+                ? const SizedBox(
+                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Remove'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

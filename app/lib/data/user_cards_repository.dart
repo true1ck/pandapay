@@ -65,12 +65,23 @@ class UserCard {
   /// fall back to asking — the old behaviour, not a broken one.
   final String? last4;
 
+  /// True when this card's [cardProductId] could not be matched to any row
+  /// in the catalogue it was resolved against — a guest card added under an
+  /// older/embedded catalogue whose ids no longer exist. Such a card has no
+  /// name, art, or rules to show and is excluded from ranking; the wallet
+  /// surfaces it as "Unrecognized card" with a Remove action rather than a
+  /// silent, unusable "Card" tile. Always false on the signed-in path (the
+  /// server always returns `card_name`). Derived at join time, never
+  /// persisted.
+  final bool isUnresolved;
+
   const UserCard({
     required this.id,
     required this.cardProductId,
     this.nickname,
     required this.cardName,
     required this.isDefault,
+    this.isUnresolved = false,
     this.capConsumed = const {},
     this.milestoneQualifiedSpend = const {},
     this.milestonePeriodEnd = const {},
