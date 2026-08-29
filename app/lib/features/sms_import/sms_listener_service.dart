@@ -96,6 +96,18 @@ class SmsListenerService {
     return Permission.sms.status.then((s) => s.isGranted);
   }
 
+  /// True once Android will no longer show the runtime prompt (user picked
+  /// "Don't allow" twice, or "Don't ask again"). In that state the only way
+  /// back is the OS app-settings screen — see [openSettings].
+  Future<bool> isPermanentlyDenied() async {
+    return Permission.sms.status.then((s) => s.isPermanentlyDenied);
+  }
+
+  /// Opens the OS settings page for this app so the user can flip the SMS
+  /// permission back on manually. Returns false if the page could not be
+  /// opened.
+  Future<bool> openSettings() => openAppSettings();
+
   /// Queries the on-device SMS inbox (most recent first) and returns the
   /// bodies of messages that match a bank-alert / transaction pattern.
   Future<List<String>> readInboxSmsBodies({int limit = 500}) async {

@@ -47,6 +47,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   bool _scanning = false;
   bool _adding = false;
   String? _error;
+  bool _smsPermanentlyDenied = false;
   final _added = <String>{};
 
   bool get _isAndroid => !kIsWeb && Platform.isAndroid;
@@ -71,10 +72,13 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           hasPerm = await smsService.requestPermissions();
         }
         if (hasPerm) {
+          _smsPermanentlyDenied = false;
           final readBodies = await smsService.readInboxSmsBodies();
           if (readBodies.isNotEmpty) {
             bodies = readBodies;
           }
+        } else {
+          _smsPermanentlyDenied = await smsService.isPermanentlyDenied();
         }
       }
 
@@ -199,13 +203,19 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         hasPerm = await smsService.requestPermissions();
       }
       if (hasPerm) {
+        _smsPermanentlyDenied = false;
         final readBodies = await smsService.readInboxSmsBodies();
         if (readBodies.isNotEmpty) {
           await _scan(customBodies: readBodies);
           return;
         }
       }
-      if (mounted) {
+      final permanentlyDenied = hasPerm ? false : await smsService.isPermanentlyDenied();
+      if (mounted) setState(() => _smsPermanentlyDenied = permanentlyDenied);
+      if (!mounted) return;
+      if (permanentlyDenied) {
+        await _promptOpenSmsSettings();
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -221,6 +231,38 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     } finally {
       if (mounted) setState(() => _scanning = false);
     }
+  }
+
+  /// Android has stopped showing the runtime prompt for SMS. Offer a jump to
+  /// the OS settings page — the only place the user can re-grant it now.
+  Future<void> _promptOpenSmsSettings() async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('SMS access is turned off'),
+        content: const Text(
+          'Android won’t ask again from inside the app. To let PandaPay find '
+          'cards from your bank SMS, enable the SMS permission in Settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+    if (go == true) {
+      await const SmsListenerService().openSettings();
+    }
+  }
+
+  Future<void> _openSmsSettings() async {
+    await const SmsListenerService().openSettings();
   }
 
   Future<void> _openCardPicker() async {
@@ -455,9 +497,11 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         result: result,
         isAndroid: _isAndroid,
         scanning: _scanning,
+        smsPermanentlyDenied: _smsPermanentlyDenied,
         scannedSummary: _scannedSummary(result),
         onConnectGmail: _scanGmail,
         onScanSms: _requestAndScanSms,
+        onOpenSmsSettings: _openSmsSettings,
         onPickFromCatalogue: _openCardPicker,
         onOtherOptions: _showOtherOptionsSheet,
       );
@@ -495,8 +539,10 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           scanning: _scanning,
           smsAlreadyScanned: result.smsScanned > 0,
           gmailAlreadyScanned: result.emailsScanned > 0,
+          smsPermanentlyDenied: _smsPermanentlyDenied,
           onConnectGmail: _scanGmail,
           onScanSms: _requestAndScanSms,
+          onOpenSmsSettings: _openSmsSettings,
           onPickFromCatalogue: _openCardPicker,
           onOtherOptions: _showOtherOptionsSheet,
         ),
@@ -600,9 +646,11 @@ class _DiscoveryEmptyState extends StatelessWidget {
   final CardDiscoveryResult result;
   final bool isAndroid;
   final bool scanning;
+  final bool smsPermanentlyDenied;
   final String scannedSummary;
   final VoidCallback onConnectGmail;
   final VoidCallback onScanSms;
+  final VoidCallback onOpenSmsSettings;
   final VoidCallback onPickFromCatalogue;
   final VoidCallback onOtherOptions;
 
@@ -611,9 +659,11 @@ class _DiscoveryEmptyState extends StatelessWidget {
     required this.result,
     required this.isAndroid,
     required this.scanning,
+    required this.smsPermanentlyDenied,
     required this.scannedSummary,
     required this.onConnectGmail,
     required this.onScanSms,
+    required this.onOpenSmsSettings,
     required this.onPickFromCatalogue,
     required this.onOtherOptions,
   });
@@ -660,8 +710,10 @@ class _DiscoveryEmptyState extends StatelessWidget {
             scanning: scanning,
             smsAlreadyScanned: result.smsScanned > 0,
             gmailAlreadyScanned: result.emailsScanned > 0,
+            smsPermanentlyDenied: smsPermanentlyDenied,
             onConnectGmail: onConnectGmail,
             onScanSms: onScanSms,
+            onOpenSmsSettings: onOpenSmsSettings,
             onPickFromCatalogue: onPickFromCatalogue,
             onOtherOptions: onOtherOptions,
           ),
@@ -676,8 +728,10 @@ class _DiscoveryActionButtons extends StatelessWidget {
   final bool scanning;
   final bool smsAlreadyScanned;
   final bool gmailAlreadyScanned;
+  final bool smsPermanentlyDenied;
   final VoidCallback onConnectGmail;
   final VoidCallback onScanSms;
+  final VoidCallback onOpenSmsSettings;
   final VoidCallback onPickFromCatalogue;
   final VoidCallback onOtherOptions;
 
@@ -686,8 +740,10 @@ class _DiscoveryActionButtons extends StatelessWidget {
     required this.scanning,
     required this.smsAlreadyScanned,
     required this.gmailAlreadyScanned,
+    required this.smsPermanentlyDenied,
     required this.onConnectGmail,
     required this.onScanSms,
+    required this.onOpenSmsSettings,
     required this.onPickFromCatalogue,
     required this.onOtherOptions,
   });
@@ -712,8 +768,10 @@ class _DiscoveryActionButtons extends StatelessWidget {
         ),
         const SizedBox(height: AppSpace.md),
 
-        // Secondary: Scan SMS (if Android)
-        if (isAndroid && !smsAlreadyScanned) ...[
+        // Secondary: Scan SMS (if Android). Once Android has permanently
+        // denied the permission, the same slot becomes a jump to OS settings
+        // — the only place it can be re-granted.
+        if (isAndroid && (!smsAlreadyScanned || smsPermanentlyDenied)) ...[
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               foregroundColor: BambooInk.slate,
@@ -722,9 +780,18 @@ class _DiscoveryActionButtons extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               textStyle: BambooFonts.ui(14, weight: FontWeight.w600),
             ),
-            icon: const Icon(Icons.sms_outlined, size: 18),
-            label: const Text('Scan device bank SMS'),
-            onPressed: scanning ? null : onScanSms,
+            icon: Icon(
+              smsPermanentlyDenied ? Icons.settings_outlined : Icons.sms_outlined,
+              size: 18,
+            ),
+            label: Text(
+              smsPermanentlyDenied
+                  ? 'Enable SMS access in Settings'
+                  : 'Scan device bank SMS',
+            ),
+            onPressed: scanning
+                ? null
+                : (smsPermanentlyDenied ? onOpenSmsSettings : onScanSms),
           ),
           const SizedBox(height: AppSpace.md),
         ],
