@@ -108,6 +108,9 @@ class GmailDiscoveryService {
     final localResult = LocalCardDiscoveryEngine.discoverAcrossMessages(
       smsBodies: documents,
       catalogue: catalogue,
+      // Email is its own discovery channel — it must widen SMS coverage, not
+      // inherit SMS's strict promo/last-4/confident-only gating.
+      isSms: false,
     );
 
     // Re-label the sources as email (the engine tags everything 'sms').

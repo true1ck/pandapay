@@ -60,7 +60,7 @@ function significantTokens(name) {
  */
 function extractLast4(text) {
   const hits = new Set();
-  const re = /(?:ending|ending\s+with|xx+|\*{2,}|\.{3,})\s*(\d{4})\b/gi;
+  const re = /(?:ending\s+in|ending\s+with|ending|no\.?\s*x+|xx+|\*{2,}|\.{3,})\s*(\d{4})\b/gi;
   let m;
   while ((m = re.exec(String(text || ''))) !== null) hits.add(m[1]);
   return [...hits];
@@ -114,6 +114,44 @@ const TXN_MARKERS = [
 function looksTransactionalSms(text) {
   const lower = String(text || '').toLowerCase();
   return TXN_MARKERS.some((m) => lower.includes(m));
+}
+
+/**
+ * Account / debit-card alert markers.
+ *
+ * PandaPay ranks *credit* cards — a debit-card or savings-account spend
+ * alert has no rewards to optimise, so the placeholder fallback ignores a
+ * message that reads like one. Confident catalogue matches are unaffected
+ * (they already require a card *product* name, which a debit alert never
+ * carries). A genuine credit-card alert that an issuer happens to word with
+ * "debited" is kept in by CREDIT_CARD_MARKERS below.
+ */
+const DEBIT_ACCOUNT_MARKERS = [
+  'debit card', 'a/c', 'ac no', 'acct', 'account no', 'from a/c', 'to a/c',
+  'savings a/c', 'salary a/c', 'imps', 'neft', 'atm', 'upi/', 'by upi',
+  'vpa', 'withdrawn from',
+];
+
+/**
+ * Credit-card-specific markers. Their presence overrides the debit filter,
+ * so a "Rs X debited from your Credit Card" alert still yields a placeholder.
+ */
+const CREDIT_CARD_MARKERS = [
+  'credit card', 'avl lmt', 'available limit', 'avl. limit', 'credit limit',
+  'outstanding', 'statement', 'min amt due', 'minimum amount due',
+  'total amount due', 'amount due', 'cc bill', 'card bill',
+];
+
+/** True when the text reads like a bank-account / debit-card alert. */
+function looksDebitAccountSms(text) {
+  const lower = String(text || '').toLowerCase();
+  return DEBIT_ACCOUNT_MARKERS.some((m) => lower.includes(m));
+}
+
+/** True when the text carries an unambiguous credit-card signal. */
+function looksCreditCardSms(text) {
+  const lower = String(text || '').toLowerCase();
+  return CREDIT_CARD_MARKERS.some((m) => lower.includes(m));
 }
 
 /**
@@ -254,6 +292,11 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
         }
       }
     } else if (isSms) {
+      // A debit-card or bank-account spend alert has no credit card to rank;
+      // don't manufacture a placeholder from one. A real credit-card alert
+      // that merely says "debited" still trips a CREDIT_CARD_MARKER.
+      if (looksDebitAccountSms(text) && !looksCreditCardSms(text)) continue;
+
       // Fallback for SMS: generate placeholders if no exact match found
       const haystack = normalise([message?.subject, message?.body].filter(Boolean).join(' '));
       for (const issuer of issuers) {
@@ -285,6 +328,24 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
     }
   }
 
+  // Reconcile placeholders against the real, named cards. If a confident
+  // match carries the same issuer + last-4 as a placeholder, the placeholder
+  // is that same card discovered a second way — and its "pick from
+  // catalogue" prompt would ask the user to identify a card we already
+  // identified. Drop it.
+  const issuerById = new Map((catalogue || []).map((c) => [c.id, c.issuer_name]));
+  const realKeys = new Set();
+  for (const s of byCard.values()) {
+    if (s.isPlaceholder) continue;
+    const iss = normalise(issuerById.get(s.cardProductId) || '');
+    for (const l of s.last4 || []) realKeys.add(`${iss}|${l}`);
+  }
+  for (const [key, s] of [...byCard.entries()]) {
+    if (!s.isPlaceholder) continue;
+    const iss = normalise(s.issuerName || '');
+    if ((s.last4 || []).some((l) => realKeys.has(`${iss}|${l}`))) byCard.delete(key);
+  }
+
   return [...byCard.values()].sort(
     (a, b) => b.score - a.score || b.messageCount - a.messageCount || a.name.localeCompare(b.name)
   );
@@ -298,4 +359,6 @@ module.exports = {
   significantTokens,
   looksPromotionalSms,
   looksTransactionalSms,
+  looksDebitAccountSms,
+  looksCreditCardSms,
 };

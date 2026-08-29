@@ -96,6 +96,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         final localResult = LocalCardDiscoveryEngine.discoverAcrossMessages(
           smsBodies: bodies,
           catalogue: catalogue,
+          isSms: true,
         );
 
         final filteredSuggestions = localResult.suggestions
@@ -137,8 +138,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       _error = null;
     });
     try {
-      final catalogueAsync = ref.read(catalogueProvider);
-      final catalogue = catalogueAsync.value ?? const [];
+      final catalogue = await ref.read(catalogueProvider.future);
       final gmailService = ref.read(gmailDiscoveryServiceProvider);
 
       final discovery = await gmailService.scanGmailForCards(

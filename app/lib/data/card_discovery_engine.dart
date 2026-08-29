@@ -76,7 +76,7 @@ class LocalCardDiscoveryEngine {
   static List<String> extractLast4(String text) {
     final hits = <String>{};
     final re = RegExp(
-      r'(?:ending|ending\s+with|xx+|\*{2,}|\.{3,})\s*(\d{4})\b',
+      r'(?:ending\s+in|ending\s+with|ending|no\.?\s*x+|xx+|\*{2,}|\.{3,})\s*(\d{4})\b',
       caseSensitive: false,
     );
     for (final match in re.allMatches(text)) {
@@ -125,6 +125,35 @@ class LocalCardDiscoveryEngine {
   static bool looksTransactionalSms(String text) {
     final lower = text.toLowerCase();
     return txnMarkers.any(lower.contains);
+  }
+
+  /// Account / debit-card alert markers. PandaPay ranks *credit* cards, so
+  /// the placeholder fallback skips a message that reads like a
+  /// savings-account or debit-card spend alert — unless it also carries a
+  /// clear credit-card signal (some issuers word credit-card alerts as
+  /// "debited from"). Mirrors DEBIT_ACCOUNT_MARKERS in api/src/card_discovery.js.
+  static const List<String> debitAccountMarkers = [
+    'debit card', 'a/c', 'ac no', 'acct', 'account no', 'from a/c', 'to a/c',
+    'savings a/c', 'salary a/c', 'imps', 'neft', 'atm', 'upi/', 'by upi',
+    'vpa', 'withdrawn from',
+  ];
+
+  /// Credit-card-specific markers. Their presence overrides the debit filter
+  /// above. Mirrors CREDIT_CARD_MARKERS in api/src/card_discovery.js.
+  static const List<String> creditCardMarkers = [
+    'credit card', 'avl lmt', 'available limit', 'avl. limit', 'credit limit',
+    'outstanding', 'statement', 'min amt due', 'minimum amount due',
+    'total amount due', 'amount due', 'cc bill', 'card bill',
+  ];
+
+  static bool looksDebitAccountSms(String text) {
+    final lower = text.toLowerCase();
+    return debitAccountMarkers.any(lower.contains);
+  }
+
+  static bool looksCreditCardSms(String text) {
+    final lower = text.toLowerCase();
+    return creditCardMarkers.any(lower.contains);
   }
 
   /// Scan one message for cards from [catalogue].
@@ -189,9 +218,19 @@ class LocalCardDiscoveryEngine {
   }
 
   /// Fold multiple messages into one consolidated suggestion list.
+  /// [isSms] applies the stricter SMS-only gating (promo/transaction markers,
+  /// a mandatory masked card number in the same message, confident matches
+  /// only, family-ambiguity suppression, and the issuer placeholder
+  /// fallback). The email path passes `false`: forwarded/fetched mail is
+  /// already sender-verified upstream, so a plain statement line is trusted
+  /// and partial issuer+token matches are kept. SMS and email are meant to
+  /// widen each other's coverage, so email must not inherit SMS's filters.
+  /// Mirrors the `isSms` parameter of `discoverCardsAcrossMessages` in
+  /// api/src/card_discovery.js.
   static CardDiscoveryResult discoverAcrossMessages({
     required List<String> smsBodies,
     required List<CardProduct> catalogue,
+    bool isSms = false,
   }) {
     final byCard = <String, DiscoveredCard>{};
     
@@ -202,23 +241,26 @@ class LocalCardDiscoveryEngine {
         .toSet();
 
     for (final body in smsBodies) {
-      // A card match is believable only when it rides on a real
+      // SMS only: a card match is believable only when it rides on a real
       // transaction/statement alert, never a marketing blast that names the
-      // bank's whole product line.
-      if (looksPromotionalSms(body) || !looksTransactionalSms(body)) continue;
+      // bank's whole product line. Email is sender-verified upstream.
+      if (isSms && (looksPromotionalSms(body) || !looksTransactionalSms(body))) {
+        continue;
+      }
 
       final last4s = extractLast4(body);
 
-      // SMS discovery: a masked card number in the SAME message is required. A
-      // real spend/statement alert always carries "card ending 1234"; a
-      // marketing blast that merely spells a card's name does not. This is the
-      // single strongest signal separating a genuine alert from noise.
-      if (last4s.isEmpty) continue;
+      // SMS only: a masked card number in the SAME message is required. A real
+      // spend/statement alert always carries "card ending 1234"; a marketing
+      // blast that merely spells a card's name does not. Email statements
+      // frequently omit any masked number, so this gate would drop them.
+      if (isSms && last4s.isEmpty) continue;
 
       final hits = discoverInMessage(body: body, catalogue: catalogue);
 
-      // Only trust CONFIDENT matches from SMS (score >= 1.0).
-      final confidentHits = hits.where((h) => h.score >= 1.0).toList();
+      // SMS only: trust CONFIDENT matches (score >= 1.0). Email keeps partial
+      // issuer+token matches so a card SMS never saw can still be surfaced.
+      final confidentHits = isSms ? hits.where((h) => h.score >= 1.0).toList() : hits;
 
       if (confidentHits.isNotEmpty) {
         final maxScore = confidentHits.fold<double>(0, (max, h) => h.score > max ? h.score : max);
@@ -229,7 +271,7 @@ class LocalCardDiscoveryEngine {
         // equally) is ambiguous — surface nothing. Two catalogue rows that are
         // really the same card described twice (same issuer + distinguishing
         // tokens) are NOT ambiguous.
-        if (topHits.length > 1 && maxScore < 2) {
+        if (isSms && topHits.length > 1 && maxScore < 2) {
           String signature(DiscoveredCard h) {
             final rest = h.evidence.skip(1).toList()..sort();
             return '${normalise(h.evidence.isEmpty ? '' : h.evidence.first)}|${rest.join(',')}';
@@ -271,7 +313,12 @@ class LocalCardDiscoveryEngine {
             );
           }
         }
-      } else {
+      } else if (isSms) {
+        // A debit-card or bank-account spend alert has no credit card to
+        // rank; don't manufacture a placeholder from one. A real credit-card
+        // alert that merely says "debited" still trips a creditCardMarker.
+        if (looksDebitAccountSms(body) && !looksCreditCardSms(body)) continue;
+
         // No exact match. Fallback to generating Placeholder cards based on Issuer.
         final haystack = normalise(body);
         for (final issuer in issuers) {
@@ -313,6 +360,26 @@ class LocalCardDiscoveryEngine {
         }
       }
     }
+
+    // Reconcile placeholders against the real, named cards. A placeholder
+    // that shares an issuer + last-4 with a confident match is that same
+    // card discovered a second way; its "pick from catalogue" prompt would
+    // ask the user to identify a card we already identified. Drop it.
+    final issuerById = <String, String>{
+      for (final c in catalogue)
+        if (c.issuerName != null && c.issuerName!.isNotEmpty) c.id: c.issuerName!,
+    };
+    final realKeys = <String>{};
+    for (final s in byCard.values) {
+      if (s.isPlaceholder) continue;
+      final iss = normalise(issuerById[s.cardProductId] ?? '');
+      for (final l in s.last4) {
+        realKeys.add('$iss|$l');
+      }
+    }
+    byCard.removeWhere((_, s) =>
+        s.isPlaceholder &&
+        s.last4.any((l) => realKeys.contains('${normalise(s.issuerName ?? '')}|$l')));
 
     final suggestions = byCard.values.toList()
       ..sort((a, b) {

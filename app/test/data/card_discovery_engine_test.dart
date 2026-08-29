@@ -113,6 +113,7 @@ void main() {
       final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
         smsBodies: smsList,
         catalogue: catalogue,
+        isSms: true,
       );
       expect(result.smsScanned, 3);
       expect(result.suggestions.length, 2);
@@ -132,6 +133,7 @@ void main() {
           'Congratulations! You are eligible for the HDFC Millennia. Apply now for lifetime free.',
         ],
         catalogue: catalogue,
+        isSms: true,
       );
       expect(result.suggestions, isEmpty);
     });
@@ -140,6 +142,7 @@ void main() {
       final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
         smsBodies: ['Rs 1200 spent on your HDFC Bank card on 12-Aug'],
         catalogue: catalogue,
+        isSms: true,
       );
       // Issuer-only placeholder is acceptable, but no named HDFC card should
       // be asserted without corroboration.
@@ -149,15 +152,138 @@ void main() {
       );
     });
 
+    test('a debit-card spend alert produces no placeholder card', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: ['Rs 500 spent on your HDFC Bank Debit Card XX8708 at ATM on 12-Aug'],
+        catalogue: catalogue,
+        isSms: true,
+      );
+      expect(result.suggestions, isEmpty);
+    });
+
+    test('a credit-card alert worded with "debited" still yields a placeholder', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: [
+          'Rs 500 debited from your HDFC Bank Credit Card XX8708. Avl limit Rs 20000',
+        ],
+        catalogue: catalogue,
+        isSms: true,
+      );
+      expect(result.suggestions.length, 1);
+      expect(result.suggestions.first.isPlaceholder, isTrue);
+      expect(result.suggestions.first.last4, contains('8708'));
+    });
+
+    test('a placeholder is dropped when a real match shares its issuer + last-4', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: [
+          'Rs 300 spent on your HDFC Bank card ending 7105 at AMAZON',
+          'Rs 2,499 spent on your HDFC Millennia card ending 7105 at FLIPKART',
+        ],
+        catalogue: catalogue,
+        isSms: true,
+      );
+      expect(result.suggestions.length, 1);
+      expect(result.suggestions.first.cardProductId, 'hdfc_millennia');
+    });
+
+    test('a placeholder with a coincidental last-4 for another issuer is kept', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: [
+          'Rs 900 spent on your HDFC Millennia card ending 1234 at Swiggy',
+          'Rs 300 spent on your Axis Bank card ending 1234 at BigBazaar',
+        ],
+        catalogue: catalogue,
+        isSms: true,
+      );
+      expect(result.suggestions.length, 2);
+      expect(
+        result.suggestions.where((s) => s.isPlaceholder && s.issuerName == 'Axis Bank'),
+        isNotEmpty,
+      );
+    });
+
     test('real transaction alert with a card number is still discovered', () {
       final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
         smsBodies: [
           'Rs 2,499 spent on your HDFC Millennia card ending 7105 at FLIPKART',
         ],
         catalogue: catalogue,
+        isSms: true,
       );
       final hit = result.suggestions.firstWhere((s) => s.cardProductId == 'hdfc_millennia');
       expect(hit.last4, contains('7105'));
+    });
+  });
+
+  // Email is a separate discovery channel: connecting Gmail must widen SMS
+  // coverage, not inherit SMS's strict promo / mandatory-last-4 /
+  // confident-only gating. These lock that in (isSms defaults to false).
+  group('LocalCardDiscoveryEngine email path (isSms: false)', () {
+    test('statement email with no masked card number is still discovered', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: const [
+          'Your HDFC Bank Millennia Credit Card statement is ready. '
+              'Total amount due Rs 4,200. View online at https://hdfcbank.com',
+        ],
+        catalogue: catalogue,
+      );
+      expect(
+        result.suggestions.map((s) => s.cardProductId),
+        contains('hdfc_millennia'),
+      );
+    });
+
+    test('marketing-flavoured email footer does not suppress a real match', () {
+      // Contains "www." / "https://" / "know more" — all promo markers that
+      // would drop this on the SMS path.
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: const [
+          'Amazon Pay ICICI Credit Card e-statement. Know more at www.icicibank.com',
+        ],
+        catalogue: catalogue,
+      );
+      expect(
+        result.suggestions.map((s) => s.cardProductId),
+        contains('icici_amazon_pay'),
+      );
+    });
+
+    test('partial issuer + distinguishing token match is kept for email', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: const [
+          'Dear Customer, your Axis Bank statement for the ACE card is attached.',
+        ],
+        catalogue: catalogue,
+      );
+      expect(
+        result.suggestions.map((s) => s.cardProductId),
+        contains('axis_ace'),
+      );
+    });
+
+    test('an issuer name alone still suggests nothing on the email path', () {
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: const ['Your HDFC Bank account summary for August is ready.'],
+        catalogue: catalogue,
+      );
+      expect(result.suggestions, isEmpty);
+    });
+  });
+
+  group('LocalCardDiscoveryEngine.extractLast4 phrasing variants', () {
+    test('"ending in 1234" is recognised', () {
+      expect(
+        LocalCardDiscoveryEngine.extractLast4('spent on card ending in 4568'),
+        contains('4568'),
+      );
+    });
+
+    test('"Card No. XXXX 1234" is recognised', () {
+      expect(
+        LocalCardDiscoveryEngine.extractLast4('Card No. XXXX XXXX XXXX 1234'),
+        contains('1234'),
+      );
     });
   });
 }
