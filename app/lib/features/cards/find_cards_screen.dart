@@ -3,7 +3,6 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -13,6 +12,8 @@ import '../../data/api_exception.dart';
 import '../../data/card_discovery_engine.dart';
 import '../../data/user_cards_repository.dart' show CardDiscoveryResult, DiscoveredCard;
 import '../import/email_forwarding_screen.dart';
+import '../import/gmail_connect_screen.dart';
+import '../import/gmail_connect_service.dart';
 import '../import/gmail_discovery_service.dart';
 import '../import/statement_pdf_import_screen.dart';
 import '../sms_import/sms_backup_import_screen.dart';
@@ -119,21 +120,23 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   }
 
   Future<void> _scanGmail() async {
+    // First: a fresh connect via the pre-consent screen. If Gmail is already
+    // connected on this device, try a silent token and skip straight to the
+    // scan; otherwise walk the user through the explanation + Google picker.
+    String? accessToken = await ref.read(gmailConnectControllerProvider.notifier).silentToken();
+    if (accessToken == null) {
+      if (!mounted) return;
+      accessToken = await Navigator.of(context).push<String>(
+        MaterialPageRoute(builder: (_) => const GmailConnectScreen()),
+      );
+    }
+    if (accessToken == null || accessToken.isEmpty) return; // cancelled
+
     setState(() {
       _scanning = true;
       _error = null;
     });
     try {
-      final googleSignIn = GoogleSignIn(scopes: ['https://www.googleapis.com/auth/gmail.readonly']);
-      final account = await googleSignIn.signIn();
-      if (account == null) {
-        if (mounted) setState(() => _scanning = false);
-        return; // User canceled
-      }
-      final auth = await account.authentication;
-      final accessToken = auth.accessToken;
-      if (accessToken == null) throw Exception("Failed to get Gmail access token");
-
       final catalogueAsync = ref.read(catalogueProvider);
       final catalogue = catalogueAsync.value ?? const [];
       final gmailService = ref.read(gmailDiscoveryServiceProvider);
@@ -154,6 +157,10 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           .where((s) => !ownedIds.contains(s.cardProductId))
           .toList();
 
+      await ref
+          .read(gmailConnectControllerProvider.notifier)
+          .recordScan(cardsFound: filtered.length);
+
       if (mounted) {
         setState(() {
           _result = CardDiscoveryResult(
@@ -170,12 +177,15 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           );
         }
       }
+    } on GmailScanException catch (e) {
+      if (mounted) setState(() => _error = e.userMessage);
     } catch (e) {
       if (mounted) setState(() => _error = userFacingErrorMessage(e));
     } finally {
       if (mounted) setState(() => _scanning = false);
     }
   }
+
 
   Future<void> _requestAndScanSms() async {
     setState(() {

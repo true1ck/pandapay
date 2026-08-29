@@ -38,6 +38,7 @@ import '../data/spend_by_category_repository.dart';
 import '../data/spend_reports_repository.dart';
 import '../data/sync_api.dart';
 import '../data/token_store.dart';
+import '../data/upi_payment_service.dart';
 import '../data/user_cards_repository.dart';
 import '../data/user_settings_api.dart';
 import '../features/geofence/geofence_monitor_service.dart';
@@ -184,6 +185,13 @@ final acceptanceReportsRepositoryProvider = Provider<AcceptanceReportsRepository
   if (token == null) return null;
   return AcceptanceReportsRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
 });
+
+/// Scan-to-pay targeted UPI-app handoff (RuPay-on-UPI plan, Phase 1).
+/// Overridden with a fake in widget tests — the real one talks to a
+/// MethodChannel that isn't registered in the test harness.
+final upiPaymentServiceProvider = Provider<UpiPaymentService>(
+  (ref) => MethodChannelUpiPaymentService(),
+);
 
 /// Plan Phase 2.2 — product analytics. Deliberately NOT null when signed out:
 /// the activation funnel's most important steps (app opened, onboarding

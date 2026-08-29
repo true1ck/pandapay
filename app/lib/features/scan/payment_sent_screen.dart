@@ -42,6 +42,14 @@ class PaymentSentScreen extends ConsumerStatefulWidget {
   final String vpa;
   final CardNetwork cardNetwork;
 
+  /// RuPay-on-UPI plan, Phase 2. When the targeted-app handoff returned a
+  /// definite success status (Android only), the spend is logged
+  /// immediately on open — the UPI app already told us it went through, so
+  /// re-asking "did you pay?" would be asking the user to confirm a fact we
+  /// have. Everywhere else this stays false and the screen keeps its
+  /// honest manual-confirm button (see this class's doc comment).
+  final bool autoLog;
+
   const PaymentSentScreen({
     super.key,
     required this.merchantName,
@@ -53,6 +61,7 @@ class PaymentSentScreen extends ConsumerStatefulWidget {
     required this.confidence,
     required this.vpa,
     required this.cardNetwork,
+    this.autoLog = false,
   });
 
   @override
@@ -64,6 +73,17 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
   bool _logged = false;
   String? _error;
   bool _acceptanceAnswered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoLog) {
+      // The UPI app reported success — record the spend without making the
+      // user tap "I've paid" first. The acceptance prompt still appears
+      // afterwards (it's the one honest moment to ask).
+      WidgetsBinding.instance.addPostFrameCallback((_) => _confirmAndLog());
+    }
+  }
 
   /// Files an acceptance report (plan Phase 2.1). Every refusal path is
   /// handled as information rather than an error, because none of them is a
@@ -144,6 +164,14 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Spacer(),
+                // Scrolls rather than overflowing when the acceptance prompt
+                // is also on screen (auto-log path) on a short device.
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                 Container(
                   width: 64,
                   height: 64,
@@ -211,6 +239,10 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                     onDismiss: () => setState(() => _acceptanceAnswered = true),
                   ),
                 ],
+                      ],
+                    ),
+                  ),
+                ),
                 const Spacer(),
                 if (!_logged)
                   SizedBox(

@@ -10,6 +10,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/consents_api.dart';
 import '../../app/env.dart';
+import '../import/gmail_connect_service.dart';
 
 /// H4 Privacy & Permissions (docs/superpowers/plans/2026-08-07-group-h-settings-and-group-a-completion.md).
 /// Reached via `Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
@@ -91,6 +92,8 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
                 statusProvider: _smsStatusProvider,
               ),
             ],
+            const SizedBox(height: AppSpace.sm),
+            const _GmailConnectionRow(),
             const SizedBox(height: AppSpace.xl),
             Text(
               'How your data is handled',
@@ -251,6 +254,78 @@ class _StatusBadge extends StatelessWidget {
       child: Text(
         label,
         style: BambooFonts.ui(11, weight: FontWeight.w600, color: fg),
+      ),
+    );
+  }
+}
+
+/// On-device Gmail "1-Tap Auto Find" connection (read-only). Shows the
+/// connected inbox and a Disconnect that revokes the Google grant. Unlike the
+/// permission rows above, this isn't an OS permission — it's an OAuth grant
+/// PandaPay holds, so it's managed here rather than in system settings.
+class _GmailConnectionRow extends ConsumerWidget {
+  const _GmailConnectionRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final conn = ref.watch(gmailConnectControllerProvider);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(color: BambooInk.paperMuted, shape: BoxShape.circle),
+            child: const Icon(Icons.mark_email_read_outlined, size: 20, color: BambooInk.ink900),
+          ),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Gmail', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                const SizedBox(height: 2),
+                Text(
+                  'read-only, used on-device to find cards from bank emails',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+                const SizedBox(height: 4),
+                conn.when(
+                  loading: () => Text('Checking…', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  error: (_, _) => Text('Not connected', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  data: (c) => Text(
+                    c == null ? 'Not connected' : 'Connected — ${c.email}',
+                    style: BambooFonts.ui(
+                      12.5,
+                      weight: FontWeight.w600,
+                      color: c == null ? BambooInk.ink500 : BambooInk.jade,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (conn.valueOrNull != null)
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: BambooInk.clay),
+              onPressed: () async {
+                await ref.read(gmailConnectControllerProvider.notifier).disconnect();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Gmail disconnected. Access has been revoked.')),
+                  );
+                }
+              },
+              child: const Text('Disconnect'),
+            ),
+        ],
       ),
     );
   }

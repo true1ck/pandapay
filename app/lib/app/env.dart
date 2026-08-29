@@ -47,6 +47,17 @@ class Env {
     defaultValue: 'http://10.0.2.2:3210',
   );
 
+  /// iOS OAuth 2.0 client id for the on-device Gmail "1-Tap Auto Find" flow
+  /// (`app/lib/features/import/gmail_connect_service.dart`). Empty by default;
+  /// Android needs nothing here (the client is matched by package + SHA-1),
+  /// but iOS must pass the client id AND carry the reversed-client-id URL
+  /// scheme in Info.plist. See `docs/gmail-oauth-setup.md`. Not a secret —
+  /// client ids are public — so a compile-time define is fine.
+  static const String iosGoogleClientId = String.fromEnvironment(
+    'PANDAPAY_IOS_GOOGLE_CLIENT_ID',
+    defaultValue: '',
+  );
+
   static AppEnvironment get environment => switch (_rawEnv) {
     'prod' => AppEnvironment.prod,
     'staging' => AppEnvironment.staging,

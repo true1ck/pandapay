@@ -122,5 +122,64 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Scan-to-pay: enumerate installed UPI apps so the user can pick
+             which one to hand a `upi://pay` intent to. Android 11+ hides
+             other packages without this; QUERY_ALL_PACKAGES is not used
+             (Play Store disallows it — and it would need a Play policy
+             declaration anyway).
+
+             The <intent> query alone was unreliable in the field: on a real
+             device only Amazon Pay came back, while PhonePe / GPay / Paytm
+             (which do handle `upi://pay`) stayed hidden — their manifest
+             filters don't all match a scheme-only <queries> intent the way
+             runtime resolution does. So the major UPI apps are also listed
+             explicitly by package; the <intent> queries still cover the
+             long tail of bank/fintech apps not named here. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi" android:host="pay"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
+        </intent>
+        <package android:name="com.phonepe.app"/>
+        <package android:name="com.phonepe.app.preprod"/>
+        <package android:name="com.google.android.apps.nbu.paisa.user"/>
+        <package android:name="net.one97.paytm"/>
+        <package android:name="in.org.npci.upiapp"/>
+        <package android:name="in.amazon.mShop.android.shopping"/>
+        <package android:name="com.dreamplug.androidapp"/>
+        <package android:name="in.slice.android"/>
+        <package android:name="com.tatadigital.tcp"/>
+        <package android:name="com.mobikwik_new"/>
+        <package android:name="com.freecharge.android"/>
+        <package android:name="com.epifi.paisa"/>
+        <package android:name="com.naviapp"/>
+        <package android:name="money.jupiter"/>
+        <package android:name="com.nextbillion.groww"/>
+        <package android:name="com.whatsapp"/>
+        <package android:name="com.samsung.android.spay"/>
+        <package android:name="com.sbi.lotusintouch"/>
+        <package android:name="com.sbi.upi"/>
+        <package android:name="com.csam.icici.bank.imobile"/>
+        <package android:name="com.icicibank.pockets"/>
+        <package android:name="com.snapwork.hdfc"/>
+        <package android:name="com.axis.mobile"/>
+        <package android:name="com.axis.upiapp"/>
+        <package android:name="com.bankofbaroda.mconnect"/>
+        <package android:name="com.bankofbaroda.upi"/>
+        <package android:name="com.msf.kbank.mobile"/>
+        <package android:name="com.enstage.wibmo.hdfc"/>
+        <package android:name="com.infrasofttech.UnionBankofIndia"/>
+        <package android:name="com.fss.pnbpsp"/>
+        <package android:name="com.YES_BANK"/>
+        <package android:name="com.rblbank.mobank"/>
+        <package android:name="com.idbibank.abhay_card"/>
+        <package android:name="com.canarabank.mobility"/>
+        <package android:name="com.olacabs.customer"/>
+        <package android:name="com.myairtelapp"/>
+        <package android:name="com.jio.myjio"/>
+        <package android:name="com.whatsapp.w4b"/>
     </queries>
 </manifest>

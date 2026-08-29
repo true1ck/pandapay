@@ -11,10 +11,13 @@ import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/override_resolver.dart';
+import '../../data/upi_payment_service.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
+import '../cards/card_picker_screen.dart';
 import '../comparison/comparison_view_screen.dart';
 import 'payment_sent_screen.dart';
+import 'upi_app_picker_sheet.dart';
 
 /// ui-spec B3. See Task 12's plan-doc header for three stated scope
 /// reductions: no automatic VPA->merchant crowdsource lookup, no silent
@@ -39,8 +42,22 @@ class ScanResultScreen extends ConsumerStatefulWidget {
 class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   late final TextEditingController _merchantController;
   late final TextEditingController _amountController;
-  late Money _amount;
+  final FocusNode _amountFocusNode = FocusNode();
+  final GlobalKey _amountFieldKey = GlobalKey();
   String? _selectedCategoryId;
+  // Set when the user taps Pay with no amount — shows in red on the on-card
+  // amount field, per feedback that a modal / detached field was confusing.
+  String? _amountError;
+
+  /// The single source of truth for the amount, derived straight from the
+  /// on-card field's controller. Kept as a getter (not a mirrored `Money`
+  /// field) so the figure the engine ranks on can never drift from the text
+  /// the user sees — an earlier bug where a stale `_amount` left the reward
+  /// stuck on "enter an amount" while the field showed a number.
+  Money get _amount {
+    final parsed = double.tryParse(_amountController.text.trim());
+    return (parsed != null && parsed > 0) ? Money.fromRupees(parsed) : const Money.zero();
+  }
   // "Wasn't accepted" — session-local only re-rank, see scope note above.
   // This is deliberate, not a missing wire-up: POST /acceptance-reports and
   // AcceptanceReportsRepository DO exist and ARE used (payment_sent_screen.dart),
@@ -58,16 +75,28 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   void initState() {
     super.initState();
     _merchantController = TextEditingController(text: widget.parsed.pn ?? '');
-    _amount = widget.parsed.am ?? const Money.zero();
+    final scannedAmount = widget.parsed.am;
     _amountController = TextEditingController(
-      text: _amount.rupees == 0 ? '' : _amount.rupees.toStringAsFixed(0),
+      text: (scannedAmount != null && scannedAmount.rupees > 0)
+          ? scannedAmount.rupees.toStringAsFixed(0)
+          : '',
     );
+    // Rebuild the ranked list (and clear the red flag) as the user types.
+    _amountController.addListener(_onAmountControllerChanged);
+  }
+
+  void _onAmountControllerChanged() {
+    setState(() {
+      if (_amountError != null && _amount.rupees >= 1) _amountError = null;
+    });
   }
 
   @override
   void dispose() {
     _merchantController.dispose();
+    _amountController.removeListener(_onAmountControllerChanged);
     _amountController.dispose();
+    _amountFocusNode.dispose();
     super.dispose();
   }
 
@@ -107,13 +136,19 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     AsyncValue<List<CardOverride>> overrides,
     RecommendationEngine engine,
   ) {
-    // ui-spec B3.4 P2P edge case: never shown a card list — credit cards
-    // can't settle a personal transfer. Checked before the catalogue/
-    // categories/wallet/override loading-and-error gate below on purpose:
-    // a P2P notice needs none of that data, so it renders immediately from
-    // the already-available ParsedUpiQr rather than waiting on (or failing
-    // behind) API calls this screen doesn't actually need in that case.
-    if (widget.parsed.isLikelyP2P) {
+    // ui-spec B3.4 P2P edge case. A QR with no merchant category code looks
+    // like a personal transfer — but many small shops that only accept
+    // scan-to-pay use exactly such a QR, and a RuPay credit card on UPI can
+    // legitimately pay a *business* there. So: if the wallet holds a
+    // UPI-linkable RuPay card, fall through to a filtered list (with a
+    // "confirm this is a business" gate on Pay — see _payWith); otherwise
+    // keep the plain personal-transfer notice.
+    //
+    // The notice fast-path stays for the no-wallet / still-loading case so
+    // it renders without waiting on API calls it doesn't need.
+    final noMcc = widget.parsed.isLikelyP2P;
+    final walletPeek = userCards.valueOrNull;
+    if (noMcc && (walletPeek == null || walletPeek.isEmpty)) {
       return _P2PNotice(vpa: widget.parsed.pa);
     }
 
@@ -130,9 +165,25 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final wallet = userCards.requireValue;
     final overrideList = overrides.requireValue;
 
-    final cards = wallet.isEmpty
+    // ui-spec B1 says "No cards → CTA to add one". B3 has no rule of its own,
+    // so: with an empty wallet still rank the whole catalogue (a useful
+    // "best card for this merchant" signal), but every row is then a
+    // not-owned card — _ScanResultCard swaps its "Pay with" action for
+    // "Add this card" so we never offer a hand-off the user can't complete.
+    final walletEmpty = wallet.isEmpty;
+    var cards = walletEmpty
         ? allCards
         : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
+
+    // No merchant code on the QR: the only card that can pay here is a
+    // UPI-linkable RuPay credit card, and only at a business. Filter to
+    // those; if the user owns none, there is nothing to show but the notice.
+    if (noMcc) {
+      cards = cards
+          .where((c) => c.network == CardNetwork.rupay && c.isUpiLinkable)
+          .toList();
+      if (cards.isEmpty) return _P2PNotice(vpa: widget.parsed.pa);
+    }
 
     // Same reasoning as rankedRecommendationsProvider's own override
     // resolution (app/providers.dart), but with this screen's own vpa/
@@ -192,9 +243,41 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final bestUpi = upiRanked.where((r) => !r.isExcluded).firstOrNull;
     final bestSwipe = swipeRanked.where((r) => !r.isExcluded).firstOrNull;
 
+    // The amount is entered inline on the card the user actually pays with —
+    // the best owned, eligible card — not in a field detached from it. Null
+    // when the wallet is empty (nothing to pay yet; add a card first).
+    final amountEntryCardId =
+        (bestUpi != null && wallet.any((w) => w.cardProductId == bestUpi.card.id))
+        ? bestUpi.card.id
+        : null;
+
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
       children: [
+        if (noMcc) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: AppSpace.md),
+            padding: const EdgeInsets.all(AppSpace.md),
+            decoration: BoxDecoration(
+              color: BambooInk.paperMuted,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 18, color: BambooInk.ink500),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    "This QR has no merchant code. Only a RuPay credit card on UPI can pay "
+                    "here, and only for a payment to a business — you'll confirm that before paying.",
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         TextField(
           controller: _merchantController,
           style: BambooFonts.ui(15, color: BambooInk.ink900),
@@ -227,35 +310,30 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           selectedId: _selectedCategoryId,
           onSelected: (id) => setState(() => _selectedCategoryId = id),
         ),
-        const SizedBox(height: AppSpace.sm),
-        TextField(
-          style: BambooFonts.ui(15, color: BambooInk.ink900),
-          decoration: InputDecoration(
-            labelText: 'Amount',
-            labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-            prefixText: '₹ ',
-            filled: true,
-            fillColor: BambooInk.glassFillOnPaper,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-            enabledBorder: OutlineInputBorder(
+        const SizedBox(height: AppSpace.lg),
+        if (walletEmpty && !noMcc)
+          Container(
+            margin: const EdgeInsets.only(bottom: AppSpace.md),
+            padding: const EdgeInsets.all(AppSpace.md),
+            decoration: BoxDecoration(
+              color: BambooInk.paperMuted,
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 18, color: BambooInk.ink500),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    'These are the best options from the full catalogue. Add your own cards '
+                    'to pay from your wallet.',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                ),
+              ],
             ),
           ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          controller: _amountController,
-          onChanged: (v) {
-            final parsedAmount = double.tryParse(v);
-            if (parsedAmount != null && parsedAmount >= 0) {
-              setState(() => _amount = Money.fromRupees(parsedAmount));
-            }
-          },
-        ),
-        const SizedBox(height: AppSpace.lg),
         // ui-spec B3.5: UPI-vs-swipe comparison nudge — only shown when
         // swiping would actually earn strictly more than the best UPI
         // option, so it never nags when scan-and-pay is already optimal.
@@ -270,7 +348,26 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ),
-        if (upiRanked.isEmpty)
+        if (upiRanked.isEmpty && _locallyRejectedCardIds.isNotEmpty)
+          // Every card was marked "wasn't accepted" this scan — not the same
+          // as owning none. Offer to bring them back rather than showing a
+          // dead end.
+          Column(
+            children: [
+              const EmptyState(
+                icon: Icons.block_rounded,
+                title: 'No other cards to try',
+                message: "You've marked every card as not accepted at this merchant.",
+              ),
+              const SizedBox(height: AppSpace.md),
+              OutlinedButton.icon(
+                onPressed: () => setState(_locallyRejectedCardIds.clear),
+                icon: const Icon(Icons.undo_rounded, size: 18),
+                label: const Text('Show them again'),
+              ),
+            ],
+          )
+        else if (upiRanked.isEmpty)
           const EmptyState(
             icon: Icons.credit_card_off_rounded,
             title: 'No cards yet',
@@ -292,9 +389,19 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               child: _ScanResultCard(
                 recommendation: rec,
                 isHero: bestUpi != null && rec.card.id == bestUpi.card.id,
+                isOwned: wallet.any((w) => w.cardProductId == rec.card.id),
+                showRupayUpiNote:
+                    rec.card.network == CardNetwork.rupay && rec.card.isUpiLinkable,
+                showAmountEntry: rec.card.id == amountEntryCardId,
+                amountEntered: _amount.rupees >= 1,
+                amountController: _amountController,
+                amountFocusNode: _amountFocusNode,
+                amountFieldKey: _amountFieldKey,
+                amountError: _amountError,
                 onNotAccepted: () => setState(() => _locallyRejectedCardIds.add(rec.card.id)),
                 onPay: () => _payWith(rec, wallet),
                 onAlwaysUseHere: () => _createOverride(rec, wallet),
+                onAddCard: () => _addCard(rec.card),
               ),
             ),
       ],
@@ -302,10 +409,119 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   }
 
   Future<void> _payWith(Recommendation rec, List<UserCard> wallet) async {
-    final uri = Uri.parse(buildUpiPayUri(pa: widget.parsed.pa, pn: _merchantController.text, am: _amount));
+    // A UPI payment needs a real amount. Merchant QRs usually don't carry one
+    // (`am` absent), and handing ₹0 to the UPI app just bounces straight back
+    // ("minimum amount of ₹1 is required"). Flag the Amount field inline and
+    // focus it rather than popping a modal — the user fills it and taps Pay
+    // again.
+    if (_amount.rupees < 1) {
+      setState(() => _amountError = 'Enter an amount to pay');
+      _amountFocusNode.requestFocus();
+      final fieldContext = _amountFieldKey.currentContext;
+      if (fieldContext != null) {
+        await Scrollable.ensureVisible(
+          fieldContext,
+          alignment: 0.35,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+      return;
+    }
+
+    // No merchant code on the QR: RuPay-credit-on-UPI is merchant-only, so
+    // make the user affirm this is a business payment before handing off.
+    if (widget.parsed.isLikelyP2P) {
+      final payee = _merchantController.text.trim();
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Is this a business payment?'),
+          content: Text(
+            'A RuPay credit card on UPI can only pay a business — not send money to a '
+            'person. Continue only if ${payee.isEmpty ? 'this payee' : payee} is a shop or merchant.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes, continue')),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+
+    final merchant = _merchantController.text.trim();
+    final service = ref.read(upiPaymentServiceProvider);
+    final uriString = buildUpiPayUri(
+      pa: widget.parsed.pa,
+      pn: merchant.isEmpty ? widget.parsed.pn : merchant,
+      am: _amount,
+      // Carry the scanned merchant fields through so a verified-merchant QR
+      // isn't downgraded to an "unverified payee" prompt; synth a `tr` when
+      // the QR didn't carry an order reference of its own.
+      mc: widget.parsed.mc,
+      tr: widget.parsed.tr ?? service.newTransactionRef(),
+      tn: widget.parsed.tn,
+      mode: widget.parsed.mode,
+      orgid: widget.parsed.orgid,
+      sign: widget.parsed.sign,
+    );
+
+    final apps = await service.installedApps();
+    if (!mounted) return;
+
+    // iOS, or Android with nothing enumerable — fall back to the plain
+    // scheme launch (OS picks the app, no status comes back).
+    if (apps.isEmpty) {
+      await _legacyLaunch(rec, wallet, uriString);
+      return;
+    }
+
+    final chosen = await UpiAppPickerSheet.show(context, apps: apps, cardName: rec.card.name);
+    if (chosen == null || !mounted) return;
+
+    // The channel completes on the UPI app's Activity result. If Android
+    // recreated our Activity while the user was in the UPI app (low RAM), or
+    // they never came back, that result is lost — cap the wait so the future
+    // can't hang the screen forever, and fall to the manual-confirm path.
+    final result = await service
+        .pay(upiUri: uriString, packageName: chosen.packageName)
+        .timeout(
+          const Duration(minutes: 4),
+          onTimeout: () => const UpiPaymentResult(status: UpiPaymentStatus.submitted),
+        );
+    if (!mounted) return;
+
+    switch (result.status) {
+      case UpiPaymentStatus.success:
+        await _openPaymentSent(rec: rec, wallet: wallet, autoLog: true);
+        break;
+      case UpiPaymentStatus.submitted:
+        // The honest default: the app returned with no conclusive status.
+        await _openPaymentSent(rec: rec, wallet: wallet, autoLog: false);
+        break;
+      case UpiPaymentStatus.failure:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment failed in ${chosen.name}. Try another UPI app, or a different card.'),
+          ),
+        );
+        break;
+      case UpiPaymentStatus.cancelled:
+        break; // user backed out of the UPI app — nothing to report
+      case UpiPaymentStatus.noAppsAvailable:
+        await _legacyLaunch(rec, wallet, uriString);
+        break;
+    }
+  }
+
+  /// Pre-channel behaviour: hand the `upi://` link to the OS and hope. Used
+  /// on iOS and whenever no UPI app can be enumerated.
+  Future<void> _legacyLaunch(Recommendation rec, List<UserCard> wallet, String uriString) async {
+    final uri = Uri.parse(uriString);
     final launched = await canLaunchUrl(uri) && await launchUrl(uri);
+    if (!mounted) return;
     if (!launched) {
-      if (!mounted) return;
       // ui-spec B3 edge case: no UPI app installed -> recommendation-only
       // with a copy-VPA action.
       await Clipboard.setData(ClipboardData(text: widget.parsed.pa));
@@ -315,10 +531,15 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       );
       return;
     }
+    await _openPaymentSent(rec: rec, wallet: wallet, autoLog: false);
+  }
+
+  Future<void> _openPaymentSent({
+    required Recommendation rec,
+    required List<UserCard> wallet,
+    required bool autoLog,
+  }) async {
     if (!mounted) return;
-    // Design 17 "Payment sent" — only reachable once a UPI app genuinely
-    // opened (launched == true); see PaymentSentScreen's own doc-comment
-    // for why it doesn't just declare success outright.
     final owned = wallet.where((w) => w.cardProductId == rec.card.id).firstOrNull;
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -334,6 +555,10 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           // screen asks for once the user confirms they finished paying.
           vpa: widget.parsed.pa,
           cardNetwork: rec.card.network,
+          // Android returned a definite success — log the spend straight away
+          // rather than asking the user to confirm what the app already told
+          // us (RuPay-on-UPI plan, Phase 2).
+          autoLog: autoLog,
         ),
       ),
     );
@@ -360,6 +585,41 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('${rec.card.name} will always be suggested here.')));
+      }
+    } catch (err) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
+      }
+    }
+  }
+
+  /// "Add this card" on a not-owned suggestion (empty wallet). Opens the same
+  /// picker the Wallet tab uses, pre-filtered to this card, then adds the
+  /// pick to the wallet (server if signed in, local DB as a guest) so the
+  /// row flips to a real "Pay with" on the next rebuild.
+  Future<void> _addCard(CardProduct card) async {
+    final picked = await Navigator.of(context).push<List<CardProduct>>(
+      MaterialPageRoute(builder: (_) => CardPickerScreen(initialSearch: card.name)),
+    );
+    if (picked == null || picked.isEmpty || !mounted) return;
+    final repo = ref.read(userCardsRepositoryProvider);
+    try {
+      if (repo != null) {
+        for (final c in picked) {
+          await repo.addCard(c.id);
+        }
+      } else {
+        final local = await ref.read(localUserCardsRepositoryProvider.future);
+        for (final c in picked) {
+          await local.addCard(c.id);
+        }
+      }
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(rankedRecommendationsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Added — now suggesting from your wallet.')),
+        );
       }
     } catch (err) {
       if (mounted) {
@@ -420,16 +680,42 @@ class _P2PNotice extends StatelessWidget {
 class _ScanResultCard extends StatelessWidget {
   final Recommendation recommendation;
   final bool isHero;
+  final bool isOwned;
+  final bool showRupayUpiNote;
+
+  /// This is the card the user pays with, so the amount is entered right
+  /// here — in place of the reward figure — not in a field elsewhere.
+  final bool showAmountEntry;
+
+  /// Whether a payable amount (≥ ₹1) has been entered yet — drives the
+  /// "enter an amount" prompt vs. the resolved reward, independent of
+  /// whether *this* card happens to earn anything on the spend.
+  final bool amountEntered;
+  final TextEditingController? amountController;
+  final FocusNode? amountFocusNode;
+  final GlobalKey? amountFieldKey;
+  final String? amountError;
+
   final VoidCallback onNotAccepted;
   final VoidCallback onPay;
   final VoidCallback onAlwaysUseHere;
+  final VoidCallback onAddCard;
 
   const _ScanResultCard({
     required this.recommendation,
     required this.isHero,
+    required this.isOwned,
+    required this.showRupayUpiNote,
+    this.showAmountEntry = false,
+    this.amountEntered = false,
+    this.amountController,
+    this.amountFocusNode,
+    this.amountFieldKey,
+    this.amountError,
     required this.onNotAccepted,
     required this.onPay,
     required this.onAlwaysUseHere,
+    required this.onAddCard,
   });
 
   @override
@@ -508,51 +794,189 @@ class _ScanResultCard extends StatelessWidget {
               ],
             )
           else ...[
-            MoneyText(
-              recommendation.expectedValue,
-              confidence: recommendation.confidence,
-              style: BambooFonts.money(hero ? 34 : 22, color: BambooInk.ink900),
-            ),
-            for (final line in recommendation.reasonLines)
+            if (showRupayUpiNote)
               Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text('•  $line', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Row(
+                  children: [
+                    Icon(Icons.qr_code_2_rounded, size: 14, color: hero ? BambooInk.slate : BambooInk.ink500),
+                    const SizedBox(width: 4),
+                    Text(
+                      'RuPay credit card — pays through any UPI app',
+                      style: BambooFonts.ui(
+                        11.5,
+                        weight: FontWeight.w600,
+                        color: hero ? BambooInk.slate : BambooInk.ink500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (showAmountEntry) ...[
+              _OnCardAmountField(
+                controller: amountController!,
+                focusNode: amountFocusNode!,
+                fieldKey: amountFieldKey!,
+                errorText: amountError,
+                onSubmitted: (_) => onPay(),
+              ),
+              const SizedBox(height: AppSpace.sm),
+            ],
+            if (!showAmountEntry || amountEntered) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  MoneyText(
+                    recommendation.expectedValue,
+                    confidence: recommendation.confidence,
+                    style: BambooFonts.money(hero ? 34 : 22, color: BambooInk.ink900),
+                  ),
+                  if (recommendation.expectedValue.paise > 0) ...[
+                    const SizedBox(width: 6),
+                    Text('back', style: BambooFonts.ui(13, color: BambooInk.ink500)),
+                  ],
+                ],
+              ),
+              for (final line in recommendation.reasonLines)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text('•  $line', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                ),
+            ] else
+              Text(
+                'Enter an amount to see your reward',
+                style: BambooFonts.ui(12.5, color: hero ? BambooInk.slate : BambooInk.ink500),
               ),
             const SizedBox(height: AppSpace.sm),
-            Wrap(
-              spacing: AppSpace.sm,
-              runSpacing: AppSpace.xs,
-              children: [
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: BambooInk.slate,
-                    foregroundColor: BambooInk.lime,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            if (!isOwned)
+              // Empty wallet: this is a catalogue pick, not a card the user
+              // holds — offer to add it rather than a "Pay with" that can't
+              // complete (ui-spec B1's "No cards → add a card").
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "You don't have this card yet.",
+                    style: BambooFonts.ui(12.5, color: hero ? BambooInk.slate : BambooInk.ink500),
                   ),
-                  onPressed: onPay,
-                  child: Text('Pay with ${recommendation.card.name}'),
-                ),
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: hero ? BambooInk.slate : BambooInk.ink900,
-                    side: BorderSide(
-                      color: hero ? BambooInk.slate.withValues(alpha: 0.4) : BambooInk.hairlineOnPaper,
+                  const SizedBox(height: AppSpace.xs),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: BambooInk.slate,
+                      foregroundColor: BambooInk.lime,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    onPressed: onAddCard,
+                    icon: const Icon(Icons.add_card_rounded, size: 18),
+                    label: const Text('Add this card'),
                   ),
-                  onPressed: onAlwaysUseHere,
-                  child: const Text('Always use this card here'),
-                ),
-                TextButton(
-                  style: TextButton.styleFrom(foregroundColor: hero ? BambooInk.slate : BambooInk.ink500),
-                  onPressed: onNotAccepted,
-                  child: const Text("Wasn't accepted"),
-                ),
-              ],
-            ),
+                ],
+              )
+            else
+              Wrap(
+                spacing: AppSpace.sm,
+                runSpacing: AppSpace.xs,
+                children: [
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: BambooInk.slate,
+                      foregroundColor: BambooInk.lime,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: onPay,
+                    child: Text('Pay with ${recommendation.card.name}'),
+                  ),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: hero ? BambooInk.slate : BambooInk.ink900,
+                      side: BorderSide(
+                        color: hero ? BambooInk.slate.withValues(alpha: 0.4) : BambooInk.hairlineOnPaper,
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: onAlwaysUseHere,
+                    child: const Text('Always use this card here'),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: hero ? BambooInk.slate : BambooInk.ink500),
+                    onPressed: onNotAccepted,
+                    child: const Text("Wasn't accepted"),
+                  ),
+                ],
+              ),
           ],
         ],
       ),
+    );
+  }
+}
+
+/// The amount entry that sits on the hero card, where the reward figure
+/// would be — a large `₹ ____` line, red when the user tapped Pay with it
+/// empty. Sized for the lime card, so it paints its own light fill.
+class _OnCardAmountField extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final GlobalKey fieldKey;
+  final String? errorText;
+  final ValueChanged<String> onSubmitted;
+
+  const _OnCardAmountField({
+    required this.controller,
+    required this.focusNode,
+    required this.fieldKey,
+    required this.errorText,
+    required this.onSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasError = errorText != null;
+    return Column(
+      key: fieldKey,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+          decoration: BoxDecoration(
+            color: BambooInk.paper,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: hasError ? BambooInk.clay : BambooInk.slate.withValues(alpha: 0.25),
+              width: hasError ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Text('₹', style: BambooFonts.money(24, color: BambooInk.ink500)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: BambooFonts.money(26, color: BambooInk.ink900),
+                  cursorColor: BambooInk.slate,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    border: InputBorder.none,
+                    hintText: 'Amount',
+                    hintStyle: BambooFonts.money(24, color: BambooInk.ink500.withValues(alpha: 0.5)),
+                  ),
+                  onSubmitted: onSubmitted,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (hasError)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 4),
+            child: Text(errorText!, style: BambooFonts.ui(12, color: BambooInk.clay)),
+          ),
+      ],
     );
   }
 }
