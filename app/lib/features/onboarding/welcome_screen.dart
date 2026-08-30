@@ -14,9 +14,21 @@ class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
   static const _valuePoints = [
-    (Icons.qr_code_scanner_rounded, 'Scan any card', 'Point your camera at a card to add it in seconds.'),
-    (Icons.auto_graph_rounded, 'Automatic tracking', 'Spend, points, and milestones update themselves.'),
-    (Icons.notifications_active_outlined, 'Never miss a cap', 'Know before you lose a reward, not after.'),
+    (
+      Icons.qr_code_scanner_rounded,
+      'Scan any card',
+      'Point your camera at a card to add it in seconds.',
+    ),
+    (
+      Icons.auto_graph_rounded,
+      'Automatic tracking',
+      'Spend, points, and milestones update themselves.',
+    ),
+    (
+      Icons.notifications_active_outlined,
+      'Never miss a cap',
+      'Know before you lose a reward, not after.',
+    ),
   ];
 
   @override
@@ -43,7 +55,12 @@ class WelcomeScreen extends StatelessWidget {
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: IntrinsicHeight(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.xl, AppSpace.xl, AppSpace.xl),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpace.xl,
+                    AppSpace.xl,
+                    AppSpace.xl,
+                    AppSpace.xl,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -78,16 +95,32 @@ class WelcomeScreen extends StatelessWidget {
                                   color: BambooInk.slate,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Icon(icon, color: BambooInk.lime, size: 20),
+                                child: Icon(
+                                  icon,
+                                  color: BambooInk.lime,
+                                  size: 20,
+                                ),
                               ),
                               const SizedBox(width: AppSpace.md),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(title, style: BambooFonts.heading(15, color: BambooInk.ink900)),
+                                    Text(
+                                      title,
+                                      style: BambooFonts.heading(
+                                        15,
+                                        color: BambooInk.ink900,
+                                      ),
+                                    ),
                                     const SizedBox(height: 2),
-                                    Text(body, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                                    Text(
+                                      body,
+                                      style: BambooFonts.ui(
+                                        12.5,
+                                        color: BambooInk.ink500,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -100,10 +133,15 @@ class WelcomeScreen extends StatelessWidget {
                           backgroundColor: BambooInk.slate,
                           foregroundColor: BambooInk.lime,
                           minimumSize: const Size.fromHeight(52),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          textStyle: BambooFonts.ui(
+                            15,
+                            weight: FontWeight.w700,
+                          ),
                         ),
-                        onPressed: () => context.go(AppRoute.accountChoice),
+                        onPressed: () => context.push(AppRoute.accountChoice),
                         child: const Text('Get started'),
                       ),
                       const SizedBox(height: AppSpace.sm),
@@ -111,9 +149,16 @@ class WelcomeScreen extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: BambooInk.ink900,
                           minimumSize: const Size.fromHeight(48),
-                          side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          textStyle: BambooFonts.ui(14.5, weight: FontWeight.w600),
+                          side: const BorderSide(
+                            color: BambooInk.hairlineOnPaper,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          textStyle: BambooFonts.ui(
+                            14.5,
+                            weight: FontWeight.w600,
+                          ),
                         ),
                         onPressed: () => context.push(AppRoute.logIn),
                         child: const Text('I already have an account'),

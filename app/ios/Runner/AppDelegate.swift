@@ -11,6 +11,10 @@ import UIKit
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+#if !targetEnvironment(simulator)
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+#else
+    SimulatorPluginRegistrant.register(with: engineBridge.pluginRegistry)
+#endif
   }
 }

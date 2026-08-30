@@ -45,8 +45,19 @@ class AccountChoiceScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: AppSpace.xl),
-              Text('How do you want to start?', style: BambooFonts.heading(22, color: BambooInk.ink900)),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  tooltip: 'Back',
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
+              ),
+              const SizedBox(height: AppSpace.md),
+              Text(
+                'How do you want to start?',
+                style: BambooFonts.heading(22, color: BambooInk.ink900),
+              ),
               const SizedBox(height: AppSpace.sm),
               Text(
                 'You can always create an account later without losing anything.',
@@ -55,7 +66,8 @@ class AccountChoiceScreen extends ConsumerWidget {
               const SizedBox(height: AppSpace.xxl),
               _ChoiceCard(
                 title: 'Use without an account',
-                description: 'Everything stays on this phone. Nothing is uploaded.',
+                description:
+                    'Everything stays on this phone. Nothing is uploaded.',
                 badge: 'RECOMMENDED',
                 icon: Icons.phone_iphone_rounded,
                 onTap: () => _useWithoutAccount(ref, context),
@@ -63,7 +75,8 @@ class AccountChoiceScreen extends ConsumerWidget {
               const SizedBox(height: AppSpace.md),
               _ChoiceCard(
                 title: 'Create an account',
-                description: 'Sync across devices and restore if you lose your phone.',
+                description:
+                    'Sync across devices and restore if you lose your phone.',
                 icon: Icons.cloud_outlined,
                 onTap: () => _createAccount(ref, context),
               ),
@@ -104,7 +117,9 @@ class _ChoiceCard extends StatelessWidget {
             color: BambooInk.glassFillOnPaper,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: badge != null ? BambooInk.slate : BambooInk.hairlineOnPaper,
+              color: badge != null
+                  ? BambooInk.slate
+                  : BambooInk.hairlineOnPaper,
               width: badge != null ? 1.5 : 1,
             ),
           ),
@@ -114,7 +129,10 @@ class _ChoiceCard extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
-                decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(
+                  color: BambooInk.slate,
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: Icon(icon, color: BambooInk.lime, size: 22),
               ),
               const SizedBox(width: AppSpace.md),
@@ -125,12 +143,21 @@ class _ChoiceCard extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(title, style: BambooFonts.heading(16, color: BambooInk.ink900)),
+                          child: Text(
+                            title,
+                            style: BambooFonts.heading(
+                              16,
+                              color: BambooInk.ink900,
+                            ),
+                          ),
                         ),
                         if (badge != null) ...[
                           const SizedBox(width: AppSpace.xs),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: BambooInk.lime,
                               borderRadius: BorderRadius.circular(999),
@@ -148,7 +175,10 @@ class _ChoiceCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(description, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    Text(
+                      description,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
                   ],
                 ),
               ),

@@ -36,7 +36,21 @@ enum RewardUnit {
   }
 }
 
-enum CardNetwork { rupay, visa, mastercard, amex, diners }
+/// [unknown] exists for catalogue DRAFTS only.
+///
+/// The CardPipeline import resolves a card's network from extracted text.
+/// Roughly a quarter of real extractions either report none ("N/A") or name
+/// several at once ("Visa,Mastercard,RuPay" — a genuine multi-network
+/// product, not a bad reading). Both land here rather than being guessed at
+/// or, as before, causing the whole card and its reward rules to be thrown
+/// away over a field the ranking engine never reads.
+///
+/// A published card can never carry this: migration 0042's
+/// `card_published_needs_known_network` CHECK refuses it, and the device
+/// catalogue only ever contains published cards. So devices will not see
+/// [unknown] in practice — it is handled here because the model is shared
+/// with the admin console, which does show drafts.
+enum CardNetwork { rupay, visa, mastercard, amex, diners, unknown }
 
 enum TxnRail { upiQr, swipe, online, contactless, atm, emi, unknown }
 

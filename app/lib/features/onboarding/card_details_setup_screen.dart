@@ -28,10 +28,12 @@ class CardDetailsSetupScreen extends ConsumerStatefulWidget {
   const CardDetailsSetupScreen({super.key, required this.userCardIds});
 
   @override
-  ConsumerState<CardDetailsSetupScreen> createState() => _CardDetailsSetupScreenState();
+  ConsumerState<CardDetailsSetupScreen> createState() =>
+      _CardDetailsSetupScreenState();
 }
 
-class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen> {
+class _CardDetailsSetupScreenState
+    extends ConsumerState<CardDetailsSetupScreen> {
   int _index = 0;
   final _nicknameController = TextEditingController();
   final _creditLimitController = TextEditingController();
@@ -53,7 +55,9 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
   void _initFrom(UserCard card) {
     if (_initializedForId == card.id) return;
     _initializedForId = card.id;
-    _nicknameController.text = card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName;
+    _nicknameController.text = card.nickname?.isNotEmpty == true
+        ? card.nickname!
+        : card.cardName;
     _creditLimitController.text = '';
     _pointsBalanceController.text = '';
     _statementDay = card.statementDay;
@@ -86,12 +90,17 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
           // cap/points tracking to feed credit limit / statement day /
           // points balance into — see LocalUserCardsRepository).
           final local = await ref.read(localUserCardsRepositoryProvider.future);
-          await local.updateCard(card.id, nickname: nicknameChanged ? nickname : null);
+          await local.updateCard(
+            card.id,
+            nickname: nicknameChanged ? nickname : null,
+          );
         } else {
           await repo.updateCard(
             card.id,
             nickname: nicknameChanged ? nickname : null,
-            creditLimitInr: creditLimit.isEmpty ? null : double.tryParse(creditLimit),
+            creditLimitInr: creditLimit.isEmpty
+                ? null
+                : double.tryParse(creditLimit),
             statementDay: _statementDay,
             dueDay: _dueDay,
             pointsBalance: points.isEmpty ? null : double.tryParse(points),
@@ -108,7 +117,7 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
     if (!mounted) return;
     setState(() => _saving = false);
     if (_isLast) {
-      context.go(AppRoute.trackingSetup);
+      context.push(AppRoute.trackingSetup);
     } else {
       setState(() => _index++);
     }
@@ -151,7 +160,10 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
             return ListView(
               padding: const EdgeInsets.all(AppSpace.lg),
               children: [
-                Text(card.cardName, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                Text(
+                  card.cardName,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
                 const SizedBox(height: AppSpace.lg),
                 TextField(
                   controller: _nicknameController,
@@ -176,7 +188,10 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
                           labelText: 'Statement day',
                           helperText: 'Maximises interest-free days',
                         ),
-                        items: [for (var d = 1; d <= 31; d++) DropdownMenuItem(value: d, child: Text('$d'))],
+                        items: [
+                          for (var d = 1; d <= 31; d++)
+                            DropdownMenuItem(value: d, child: Text('$d')),
+                        ],
                         onChanged: (v) => setState(() => _statementDay = v),
                       ),
                     ),
@@ -188,7 +203,10 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
                           labelText: 'Due day',
                           helperText: 'For bill reminders',
                         ),
-                        items: [for (var d = 1; d <= 31; d++) DropdownMenuItem(value: d, child: Text('$d'))],
+                        items: [
+                          for (var d = 1; d <= 31; d++)
+                            DropdownMenuItem(value: d, child: Text('$d')),
+                        ],
                         onChanged: (v) => setState(() => _dueDay = v),
                       ),
                     ),
@@ -205,7 +223,10 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: AppSpace.md),
-                  Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
+                  Text(
+                    _error!,
+                    style: BambooFonts.ui(12.5, color: BambooInk.clay),
+                  ),
                 ],
                 const SizedBox(height: AppSpace.xl),
                 Row(
@@ -216,10 +237,16 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
                           style: OutlinedButton.styleFrom(
                             foregroundColor: BambooInk.ink900,
                             minimumSize: const Size.fromHeight(52),
-                            side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            side: const BorderSide(
+                              color: BambooInk.hairlineOnPaper,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
-                          onPressed: _saving ? null : () => setState(() => _index--),
+                          onPressed: _saving
+                              ? null
+                              : () => setState(() => _index--),
                           child: const Text('Back'),
                         ),
                       ),
@@ -230,15 +257,23 @@ class _CardDetailsSetupScreenState extends ConsumerState<CardDetailsSetupScreen>
                           backgroundColor: BambooInk.slate,
                           foregroundColor: BambooInk.lime,
                           minimumSize: const Size.fromHeight(52),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          textStyle: BambooFonts.ui(
+                            15,
+                            weight: FontWeight.w700,
+                          ),
                         ),
                         onPressed: _saving ? null : () => _next(card),
                         child: _saving
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: BambooInk.lime,
+                                ),
                               )
                             : Text(_isLast ? 'Finish' : 'Next'),
                       ),

@@ -76,7 +76,21 @@ const { Pool } = require('pg');
 
 // Increment whenever mapping semantics change in a way that should rebuild
 // existing drafts even if their CardPipeline JSON is byte-identical.
-const IMPORT_TRANSFORM_VERSION = '1';
+//
+// '1' -> '2': network now resolves to 'unknown' instead of rejecting the
+// card (migration 0042); zero-rate rules narrowed by conditions the engine
+// cannot evaluate are dropped rather than allowed to shadow the real earning
+// rule; `minimum_transaction_value_inr` is recognised; prose is no longer
+// stored as a merchant_pattern. Existing drafts carry the old mapping and
+// must be rebuilt, which is exactly what this version bump forces.
+// Explicit no-rewards products are now admitted when both reward rates are
+// marked N/A and effective return is 0. That changes admission of previously
+// skipped records, not the mapping of an existing draft, so it intentionally
+// does not bump this transform version or rebuild unrelated cards.
+// '2' -> '3': verified multi-network research is projected into
+// card_product_network_variants (migration 0043) instead of remaining only
+// in reviewer JSON. Existing drafts must be rebuilt so the child rows exist.
+const IMPORT_TRANSFORM_VERSION = '3';
 
 // Resolve env files from the repository, not process.cwd(), so the wrapper
 // works the same from a terminal, cron, or the production deploy directory.
@@ -138,6 +152,7 @@ function parseArgs(argv) {
   const args = {
     dryRun: false,
     force: false,
+    slugs: [],
     adminId: process.env.CARD_IMPORT_ADMIN_ID || null,
     reportDir: process.env.CARD_IMPORT_REPORT_DIR || null,
   };
@@ -149,6 +164,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--input') args.input = takeValue(a, i++);
+    else if (a === '--slug') args.slugs.push(takeValue(a, i++));
     else if (a === '--admin-id') args.adminId = takeValue(a, i++);
     else if (a === '--report-dir') args.reportDir = takeValue(a, i++);
     else if (a === '--dry-run') args.dryRun = true;
@@ -262,9 +278,215 @@ const NETWORK_MAP = {
   diners: 'diners',
   'diners club': 'diners',
 };
+// Resolves card_product.network to exactly one card_network enum value, or
+// to 'unknown'.
+//
+// 'unknown' is NOT a failure path — see migration 0042. Measured against a
+// real 148-record collection, 40 cards (27%) resolved to no single network:
+// 35 reported "N/A"/"null", and 5 named several at once
+// ("Visa,Mastercard,RuPay", "American Express / Mastercard"). The latter are
+// correct readings of genuinely multi-network products, not bad extractions.
+//
+// Those cards used to be rejected outright, discarding every reward rule
+// they carried over a field RecommendationEngine never reads. They now
+// import as drafts with network='unknown', which migration 0042's CHECK
+// makes unpublishable until a human resolves it.
+//
+// A multi-network card resolves to 'unknown' rather than to the first
+// network named: "Visa,Mastercard,RuPay" is not a Visa card, and rendering a
+// definite-but-wrong logo is worse than rendering none.
+//
+// Returns { network, candidates, ambiguous } — candidates/ambiguous feed
+// the report so the reviewer sees what the source said; the raw value is
+// already preserved in extended_data.card_product_source.
+function resolveNetwork(raw) {
+  if (isNA(raw)) return { network: 'unknown', candidates: [], ambiguous: false };
+  // One real extraction (hdfc-freedom) emits an ARRAY here rather than a
+  // string. Joining explicitly rather than relying on String(array)'s
+  // comma-joining, which happens to feed the splitter below correctly today
+  // but only by coincidence of JS semantics.
+  const text = (Array.isArray(raw) ? raw.join(',') : String(raw)).toLowerCase().trim();
+
+  const exact = NETWORK_MAP[text];
+  if (exact) return { network: exact, candidates: [exact], ambiguous: false };
+
+  // Split on the separators real extractions actually use, then map each
+  // fragment. Deliberately not a substring scan over the whole string:
+  // "mastercard" contains "master card"'s tokens and a naive scan double
+  // counts, while "Diners Club" would match both 'diners' and nothing else.
+  const fragments = text.split(/[/,;|]|\band\b|\bor\b|\+/).map((f) => f.trim()).filter(Boolean);
+  const candidates = [...new Set(fragments.map((f) => NETWORK_MAP[f]).filter(Boolean))];
+
+  if (candidates.length === 1) return { network: candidates[0], candidates, ambiguous: false };
+  return { network: 'unknown', candidates, ambiguous: candidates.length > 1 };
+}
+
+// Back-compat shape for callers that only need the enum value.
 function mapNetwork(raw) {
-  if (isNA(raw)) return null;
-  return NETWORK_MAP[String(raw).toLowerCase().trim()] || null;
+  return resolveNetwork(raw).network;
+}
+
+function extractVerifiedNetworkVariants(record) {
+  const items = record?.additional_data?.items;
+  if (!Array.isArray(items)) return [];
+  const research = items.find((item) => item?.key === 'verified_network_research')?.value;
+  const candidates = Array.isArray(research?.candidates) ? research.candidates : [];
+  // One candidate on an unresolved finding is not a verified variant set
+  // (SBI ELITE Advantage currently has exactly that shape). It must remain a
+  // review item rather than becoming publishable by accident.
+  if (research?.product_status !== 'active' || candidates.length < 2) return [];
+
+  const seen = new Set();
+  const variants = [];
+  for (const candidate of candidates) {
+    const network = resolveNetwork(candidate?.network).network;
+    if (network === 'unknown') continue;
+    const networkTier = typeof candidate?.network_tier === 'string' && candidate.network_tier.trim()
+      ? candidate.network_tier.trim()
+      : 'N/A';
+    const key = `${network}\u0000${networkTier}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    variants.push({
+      network,
+      networkTier,
+      label: typeof candidate?.label === 'string' ? candidate.label : null,
+      sourceUrl: typeof candidate?.source_url === 'string' ? candidate.source_url.trim() : research.source_url?.trim() || null,
+      evidence: typeof candidate?.evidence === 'string' ? candidate.evidence : research.evidence || null,
+    });
+  }
+  return variants.length >= 2 ? variants : [];
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Rule conditions the importer can actually project onto engine-readable
+// columns, and the ones it can't.
+// ───────────────────────────────────────────────────────────────────────
+
+// Every spelling of a transaction floor/ceiling seen in real extractions.
+// `minimum_transaction_value_inr` is here because it was NOT, and its absence
+// silently turned IndiGo 6E Rewards' "no points below ₹100" into "no points,
+// ever" — the card scored ₹0 at ₹50, ₹500 and ₹5,000 alike.
+const MIN_TXN_KEYS = [
+  'minimum_transaction_inr',
+  'minimum_transaction_amount_inr',
+  'minimum_transaction_value_inr',
+  'minimum_single_transaction_inr',
+  'transaction_amount_min_inr',
+  'min_transaction_inr',
+];
+const MAX_TXN_KEYS = [
+  'maximum_transaction_inr',
+  'maximum_transaction_amount_inr',
+  'maximum_transaction_value_inr',
+  'transaction_amount_max_inr',
+  'max_transaction_inr',
+];
+// Keys whose value this importer reads. Anything threshold-shaped outside
+// this set is reported rather than dropped in silence.
+// Block-size keys are threshold-shaped but are consumed by ruleUnitAndRate
+// as the ₹ accrual block, not as a transaction floor. Listed so they do not
+// show up as "not read" when they are, in fact, read.
+const BLOCK_SIZE_KEYS = [
+  'spend_block_inr', 'accrual_block_inr', 'minimum_block_inr',
+  'base_spend_block_inr', 'block_inr', 'reward_block_inr',
+];
+const CONSUMED_CONDITION_KEYS = new Set([
+  ...MIN_TXN_KEYS, ...MAX_TXN_KEYS, ...BLOCK_SIZE_KEYS,
+  'merchant_pattern', 'excluded_categories',
+]);
+// Deliberately narrow: an amount threshold, not merely any key with "min" in
+// it. `minimum_block_inr` is a points block size, not a transaction floor,
+// and mapping it to min_txn_inr would invent a spend threshold that the
+// issuer never published.
+const THRESHOLD_KEY_SHAPE = /^(min|max|minimum|maximum)_.*(inr|amount|value)/;
+
+// Purely descriptive keys. Their presence does not narrow a rule, so they
+// must not make one look unenforceable.
+const DESCRIPTIVE_CONDITION_KEYS = new Set([
+  'description', 'reason', 'notes', 'note', 'source', 'comment', 'label',
+]);
+// channel_type values that mean "no channel restriction".
+const CHANNEL_WILDCARDS = new Set(['all', 'any', 'all_channels', '']);
+
+/// Conditions that narrow a rule but have nowhere to go in reward_rules —
+/// i.e. things RecommendationEngine.ruleApplies() will never see. Returns a
+/// list of human-readable reasons, empty when the rule is fully expressible.
+function unmappedNarrowing(rule, sourceConditions, acceptedMerchantPattern) {
+  const reasons = [];
+
+  const channel = rule.channel_type;
+  if (!isNA(channel) && !CHANNEL_WILDCARDS.has(String(channel).toLowerCase().trim())) {
+    reasons.push(`channel_type=${channel}`);
+  }
+
+  for (const [key, value] of Object.entries(sourceConditions)) {
+    if (DESCRIPTIVE_CONDITION_KEYS.has(key)) continue;
+    // A merchant pattern only counts as expressible if it survived
+    // usableMerchantPattern; prose that was rejected still narrows the rule.
+    if (key === 'merchant_pattern') {
+      if (!acceptedMerchantPattern) reasons.push('merchant_pattern (unusable as a pattern)');
+      continue;
+    }
+    if (key === 'excluded_categories') continue;
+    // A minimum-transaction floor on a ZERO-rate rule inverts: the source
+    // means "earns nothing BELOW ₹X", while min_txn_inr means "this rule
+    // applies AT OR ABOVE ₹X". Storing it would zero out every spend above
+    // the floor — the exact opposite. reward_rules has no "applies below"
+    // form, so it counts as unmappable here rather than being consumed.
+    if (MIN_TXN_KEYS.includes(key)) {
+      reasons.push(`${key} (a floor on an exclusion inverts to "applies below", which reward_rules cannot express)`);
+      continue;
+    }
+    if (MAX_TXN_KEYS.includes(key)) continue;
+    if (value === null || value === undefined) continue;
+    reasons.push(key);
+  }
+  return reasons;
+}
+
+/// reward_rules.merchant_pattern is matched as a normalised SUBSTRING of the
+/// transaction's merchant name. Extractions sometimes put prose there
+/// ("Eligible non-Shoppers Stop spends"), which can never match any real
+/// merchant string — so the rule silently stops applying to anything.
+/// Accept only values that read like a merchant name.
+function usableMerchantPattern(raw, cardProductId, rule, report) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const words = trimmed.split(/\s+/);
+  const prose =
+    words.length > 3 ||
+    /\b(eligible|excluding|except|other|others|all|any|non|spends?|transactions?)\b/i.test(trimmed);
+  if (prose) {
+    report.unusableMerchantPatterns.push({
+      card_product_id: cardProductId,
+      rule: rule.id || null,
+      value: trimmed,
+    });
+    return null;
+  }
+  return trimmed;
+}
+
+// The sections a complete extraction carries. A record missing several of
+// them is not corrupt — it imports fine and its reward rules are real — but
+// it is INCOMPLETE, and that is invisible once it is a row in Postgres.
+//
+// A truncated extraction (one real case: hdfc-diners-club-privilege stopped
+// after 8 of 17 sections) produces a draft with no fees, no benefits, no
+// redemption options and no fee waiver. To a reviewer that is indistinguishable
+// from a card that genuinely has none of those, and publishing it would ship
+// a card whose annual fee silently reads ₹0. Flagged so the reviewer knows to
+// re-extract rather than trust the blanks.
+const EXPECTED_RECORD_SECTIONS = [
+  'card_product', 'accrual_engine', 'reward_rules', 'cap_rules',
+  'fees_and_surcharges', 'statement_and_late_fees', 'fee_waiver_and_milestones',
+  'lifestyle_and_network_benefits', 'insurance_and_protection',
+  'addon_card_rules', 'redemption_matrix',
+];
+function missingSections(record) {
+  return EXPECTED_RECORD_SECTIONS.filter((s) => !(s in record));
 }
 
 const CARD_TYPES = ['credit', 'debit', 'prepaid', 'forex'];
@@ -320,6 +542,32 @@ const STOPWORDS = new Set([
 // mean "nothing usable here" to this importer.
 function isNA(v) {
   return v === null || v === undefined || v === 'N/A';
+}
+function hasExplicitNoRewardProgram(record) {
+  const accrual = record?.accrual_engine || {};
+  const literalNoRewards = Array.isArray(record?.reward_rules)
+    && record.reward_rules.length === 0
+    && accrual.base_points_per_block === 'N/A'
+    && accrual.base_cashback_percent === 'N/A'
+    && accrual.effective_base_return_percent === 0;
+  if (literalNoRewards) return true;
+
+  // Two issuer-audited records use null for the absent point fields but carry
+  // explicit product evidence that no base programme exists: Kotak Travel
+  // Agent says automatic base incentive accrual was discontinued, and RBL
+  // Play says no base schedule is published because its value is delivered as
+  // BookMyShow discounts. Keep this evidence-driven and require an official
+  // issuer source tier plus an explicit 0% result; a merely incomplete record
+  // with null rates still fails closed.
+  if (!Array.isArray(record?.reward_rules) || record.reward_rules.length !== 0
+      || accrual.effective_base_return_percent !== 0
+      || !String(record?.card_product?.data_source_tier || '').startsWith('issuer_')) return false;
+  const items = Array.isArray(record?.additional_data?.items) ? record.additional_data.items : [];
+  return items.some((item) =>
+    item?.key === 'reward_accrual_discontinuation'
+    || (item?.key === 'reward_program_status'
+      && /no active|not officially published|rather than a published base/i.test(JSON.stringify(item.value || item.description || '')))
+  );
 }
 function asNumber(v) {
   if (isNA(v)) return null;
@@ -440,13 +688,20 @@ function deriveCardEconomics(record, report) {
 
 function normalizeTokens(str) {
   if (!str) return new Set();
-  return new Set(
-    String(str)
+  const tokens = String(str)
       .toLowerCase()
+      // FIRST EA₹N is IDFC's official stylisation of FIRST EARN.
+      .replace(/₹/g, 'r')
       .replace(/[^a-z0-9\s]/g, ' ')
       .split(/\s+/)
-      .filter((t) => t && !STOPWORDS.has(t))
-  );
+      .filter((t) => t && !STOPWORDS.has(t));
+  const out = new Set(tokens);
+  // Preserve ordinary token matching, but also recognise a brand word that
+  // official artwork writes without spaces (DreamDifferent vs Dream
+  // Different). The concatenated form is used only as another equality
+  // token; unrelated names still have no overlap.
+  if (tokens.length > 1) out.add(tokens.join(''));
+  return out;
 }
 
 // Compares a record's own card_product.name against the name CardPipeline's
@@ -551,14 +806,38 @@ function sanityCheck(record, indexEntry, report) {
   if (typeof issuerSlug !== 'string' || !issuerSlug.trim()) {
     return 'card_product.issuer_slug missing';
   }
-  if (!mapNetwork(record?.card_product?.network)) {
-    return `card_product.network missing, unrecognized, or ambiguous ("${record?.card_product?.network}")`;
+  // network is NO LONGER a rejection reason. It resolves to 'unknown' when
+  // the source is missing or names several networks, and migration 0042's
+  // CHECK stops such a card being published. Rejecting here instead threw
+  // away 27% of a real collection over a display-only field — see
+  // resolveNetwork.
+  const gaps = missingSections(record);
+  if (gaps.length) {
+    report.incompleteRecords.push({ slug, missing: gaps });
+  }
+
+  const net = resolveNetwork(record?.card_product?.network);
+  if (net.network === 'unknown') {
+    const variants = extractVerifiedNetworkVariants(record);
+    if (variants.length > 1) {
+      report.networkVariantCards.push({
+        slug,
+        variants: variants.map(({ network, networkTier }) => ({ network, network_tier: networkTier })),
+      });
+    } else {
+      report.unresolvedNetworks.push({
+        slug,
+        raw: record?.card_product?.network ?? null,
+        candidates: net.candidates,
+        reason: net.ambiguous ? 'names several networks' : 'no verified network variant set',
+      });
+    }
   }
   const hasRewardRule = Array.isArray(record.reward_rules) && record.reward_rules.length > 0;
   const hasBaseRate =
     !isNA(record?.accrual_engine?.base_cashback_percent) ||
     !isNA(record?.accrual_engine?.base_points_per_block);
-  if (!hasRewardRule && !hasBaseRate) {
+  if (!hasRewardRule && !hasBaseRate && !hasExplicitNoRewardProgram(record)) {
     return 'no reward_rules and no accrual_engine base rate — nothing for the ranking engine to use';
   }
   if (containsCardNumber(record)) {
@@ -737,6 +1016,7 @@ async function upsertCardProduct(
   // unique within one extraction, not a real primary key we can match
   // against on a re-run).
   for (const table of [
+    'card_product_network_variants',
     'reward_rules',
     'cap_rules',
     'milestone_rules',
@@ -752,42 +1032,93 @@ async function upsertCardProduct(
   return { cardProductId: row.id, action: row.status === 'draft' ? 'refreshed' : 'refreshed_forced', existingStatus: row.status };
 }
 
+/// The unit+rate a source rule projects onto. Shared by the collision pre-pass
+/// and the import loop so the two can never disagree about which rules are
+/// zero-rate.
+function ruleUnitAndRate(r, cardBaseBlockInr, report) {
+  const cashback = asNumber(r.action?.cashback_percent);
+  if (cashback !== null) return { unit: 'cashback_percent', rate: cashback };
+
+  const pointsPerBlock = asNumber(r.action?.points_per_block);
+  if (pointsPerBlock !== null) {
+    const conditions = r.conditions || {};
+    const block = asNumber(firstDefined(
+      conditions.spend_block_inr,
+      conditions.accrual_block_inr,
+      conditions.minimum_block_inr,
+      conditions.base_spend_block_inr,
+      conditions.block_inr,
+      conditions.reward_block_inr,
+      cardBaseBlockInr
+    ));
+    return pointsUnitAndRate(pointsPerBlock, block, report);
+  }
+
+  // Exclusion rules (multiplier: 0) commonly have both "N/A" — a zero rate in
+  // any unit is equivalent, and this row still matters: it's what makes the
+  // engine correctly return ₹0 for this category instead of silently falling
+  // through to the card's base rate.
+  return { unit: 'cashback_percent', rate: 0 };
+}
+function ruleRate(r, cardBaseBlockInr, report) {
+  return ruleUnitAndRate(r, cardBaseBlockInr, report).rate;
+}
+
+/// Zero-rate rules that would SHADOW a real earning rule.
+///
+/// The engine picks the applicable rule with the lowest priority number. Two
+/// rules with the same (category, rail) have the same match surface as far as
+/// ruleApplies() is concerned, so if the zero-rate one sorts first it wins
+/// every time and the category reads as earning nothing.
+///
+/// This is deliberately a COLLISION test, not a "does the rule have
+/// conditions the engine can't read" test. Most zero-rate rules carry an MCC
+/// list that merely enumerates the category they already target — redundant,
+/// not narrowing — and they are the card's genuine exclusions ("rent earns
+/// nothing", "wallet loads earn nothing"). An earlier, broader version of
+/// this dropped 537 of them and would have made cards promise rewards their
+/// issuers do not pay. Only a rule that actually collides with an earning
+/// rule is a problem worth solving.
+function shadowingZeroRateRules(projected) {
+  const shadowing = new Set();
+  for (const z of projected) {
+    if (z.rate !== 0) continue;
+    const shadowed = projected.some(
+      (e) => e !== z && e.rate > 0 && e.categoryId === z.categoryId && e.rail === z.rail && e.priority > z.priority
+    );
+    if (shadowed) shadowing.add(z.source);
+  }
+  return shadowing;
+}
+
 async function importRewardRules(client, cardProductId, rules, cardBaseBlockInr, report) {
   const localIdToUuid = {};
   const capReferenceToRewardIds = {};
+
+  // First pass: project every rule onto the fields the engine matches on, so
+  // the loop below can tell a colliding zero-rate rule from a standalone one.
+  // Uses a throwaway report so this pass cannot double-count the warnings the
+  // real pass emits.
+  const scratch = newReport();
+  const projected = [];
+  for (const r of rules || []) {
+    const { skip, categoryId } = mapCategory(r.category_id, scratch, '');
+    if (skip) continue;
+    projected.push({
+      source: r,
+      categoryId,
+      rail: mapRail(r.rail, scratch),
+      rate: ruleRate(r, cardBaseBlockInr, scratch),
+      priority: Number.isInteger(r.priority) ? r.priority : 100,
+    });
+  }
+  const shadowing = shadowingZeroRateRules(projected);
+
   for (const r of rules || []) {
     const { skip, categoryId } = mapCategory(r.category_id, report, `reward_rule ${r.id || ''}`);
     if (skip) continue;
 
-    const cashback = asNumber(r.action?.cashback_percent);
-    const pointsPerBlock = asNumber(r.action?.points_per_block);
-    let unit = 'cashback_percent';
-    let rate = 0;
-    if (cashback !== null) {
-      unit = 'cashback_percent';
-      rate = cashback;
-    } else if (pointsPerBlock !== null) {
-      const conditions = r.conditions || {};
-      const block = asNumber(firstDefined(
-        conditions.spend_block_inr,
-        conditions.accrual_block_inr,
-        conditions.minimum_block_inr,
-        conditions.base_spend_block_inr,
-        conditions.block_inr,
-        conditions.reward_block_inr,
-        cardBaseBlockInr
-      ));
-      const mapped = pointsUnitAndRate(pointsPerBlock, block, report);
-      unit = mapped.unit;
-      rate = mapped.rate;
-    } else {
-      // Exclusion rules (multiplier: 0) commonly have both "N/A" — a zero
-      // rate in any unit is equivalent, and this row still matters: it's
-      // what makes the engine correctly return ₹0 for this category
-      // instead of silently falling through to the card's base rate.
-      unit = 'cashback_percent';
-      rate = 0;
-    }
+    const { unit, rate } = ruleUnitAndRate(r, cardBaseBlockInr, report);
 
     const conditions = {
       source_local_id: r.id || null,
@@ -798,23 +1129,64 @@ async function importRewardRules(client, cardProductId, rules, cardBaseBlockInr,
     };
 
     const sourceConditions = r.conditions || {};
-    const merchantPattern =
-      typeof sourceConditions.merchant_pattern === 'string'
-        ? sourceConditions.merchant_pattern
-        : null;
-    const minTxn = asNumber(firstDefined(
-      sourceConditions.minimum_transaction_inr,
-      sourceConditions.minimum_transaction_amount_inr,
-      sourceConditions.transaction_amount_min_inr,
-      sourceConditions.min_transaction_inr
-    ));
-    const maxTxn = asNumber(firstDefined(
-      sourceConditions.maximum_transaction_inr,
-      sourceConditions.maximum_transaction_amount_inr,
-      sourceConditions.transaction_amount_max_inr,
-      sourceConditions.max_transaction_inr
-    ));
+    const merchantPattern = usableMerchantPattern(
+      sourceConditions.merchant_pattern, cardProductId, r, report
+    );
+    const minTxn = asNumber(firstDefined(...MIN_TXN_KEYS.map((k) => sourceConditions[k])));
+    const maxTxn = asNumber(firstDefined(...MAX_TXN_KEYS.map((k) => sourceConditions[k])));
     const excludedSlugs = mappedCategorySlugs(sourceConditions.excluded_categories);
+
+    // Surface threshold-shaped condition keys this importer does not read, so
+    // the next new spelling shows up in the report instead of silently
+    // vanishing. `minimum_transaction_value_inr` reached production exactly
+    // that way: unrecognised, dropped, and the rule it belonged to became a
+    // blanket exclusion that scored one whole card at ₹0 for every spend.
+    for (const key of Object.keys(sourceConditions)) {
+      if (THRESHOLD_KEY_SHAPE.test(key) && !CONSUMED_CONDITION_KEYS.has(key)) {
+        report.unmappedConditionKeys[key] = (report.unmappedConditionKeys[key] || 0) + 1;
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Drop a zero-rate rule ONLY when it both shadows a real earning rule and
+    // is narrowed by something the engine cannot evaluate.
+    //
+    // RecommendationEngine.ruleApplies() evaluates category, merchant
+    // pattern, rail, min/max txn and effective dates — and nothing else. The
+    // extraction routinely narrows a rule by things outside that set:
+    // channel_type ("third_party_aggregator" vs "direct_school_college"), or
+    // a conditions.category sub-type ("supermarket" vs "grocery").
+    //
+    // When such a rule collides with an earning rule on the same (category,
+    // rail) and sorts first, the engine picks the zero every time and the
+    // category reads as earning nothing. On a real 148-record collection
+    // that hit 13 cards — four SBI SimplySave variants whose 10%
+    // entertainment rate scored 0%, and one card that scored ₹0 on every
+    // spend at every amount.
+    //
+    // BOTH conditions are required. Gating on narrowing alone dropped 537
+    // rules, because most zero-rate rules carry an MCC list that just
+    // enumerates the category they already target — those are the card's
+    // genuine exclusions, and removing them would make cards promise rewards
+    // their issuers do not pay. That is the worse direction to be wrong in.
+    //
+    // Dropping a colliding rule means the category falls through to the
+    // card's real rate: wrong in the narrow sub-case the exclusion described,
+    // right everywhere else. Keeping it is wrong everywhere. Reported so a
+    // reviewer can see what could not be modelled.
+    if (rate === 0 && shadowing.has(r)) {
+      const narrowing = unmappedNarrowing(r, sourceConditions, merchantPattern);
+      if (narrowing.length) {
+        report.unenforceableExclusions.push({
+          card_product_id: cardProductId,
+          rule: r.id || null,
+          category: r.category_id ?? null,
+          narrowed_by: narrowing,
+          source_reason: r.action?.reason || sourceConditions.description || null,
+        });
+        continue;
+      }
+    }
 
     const inserted = await client.query(
       `INSERT INTO reward_rules
@@ -1152,14 +1524,44 @@ async function importRedemptionOptions(client, cardProductId, redemption, report
   }
 }
 
+async function importNetworkVariants(client, cardProductId, record, report) {
+  const variants = extractVerifiedNetworkVariants(record);
+  for (const variant of variants) {
+    await client.query(
+      `INSERT INTO card_product_network_variants
+         (card_product_id, network, network_tier, label, source_url, evidence)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (card_product_id, network, network_tier) DO UPDATE SET
+         label = EXCLUDED.label,
+         source_url = EXCLUDED.source_url,
+         evidence = EXCLUDED.evidence,
+         is_active = true`,
+      [
+        cardProductId,
+        variant.network,
+        variant.networkTier,
+        variant.label,
+        variant.sourceUrl,
+        variant.evidence,
+      ]
+    );
+  }
+  report.networkVariantsImported += variants.length;
+}
+
 function buildExtendedData(record) {
   const { card_product, reward_rules, cap_rules, fees_and_surcharges, ...rest } = record;
   const unsupportedRewardRules = (reward_rules || []).filter((rule) => {
     const category = rule.category_id;
     return !isNA(category) && category !== CATEGORY_ALL_RETAIL && !CATEGORY_MAP[category];
   });
+  const sectionGaps = missingSections(record);
   return {
     schema_version: record.schema_version,
+    // Non-empty means the extraction was truncated: the blanks below are
+    // "not extracted", NOT "this card has none". See EXPECTED_RECORD_SECTIONS.
+    incomplete_extraction_sections: sectionGaps.length ? sectionGaps : undefined,
+
     // Full source product metadata is reviewer context. The structured
     // columns remain the runtime source of truth; this preserves schema
     // fields PandaPay does not model yet without losing them on import.
@@ -1216,6 +1618,8 @@ async function importOneCard(client, adminId, record, indexEntry, force, report)
     return;
   }
 
+  await importNetworkVariants(client, cardProductId, record, report);
+
   const { localIdToUuid, capReferenceToRewardIds } = await importRewardRules(
     client, cardProductId, record.reward_rules, asNumber(record.accrual_engine?.base_block_inr), report
   );
@@ -1266,6 +1670,15 @@ function newReport() {
     unmappedCategories: {}, skippedCategories: [], unmappedPeriods: {}, unmappedRails: {},
     unusualBlockSizes: {}, aggregateScopeCaps: [], unenforcedCaps: [],
     skippedCapRules: [], skippedRedemptionOptions: [],
+    // Cards that imported with network='unknown' and cannot be published
+    // until a human sets one, plus verified variant sets that migration 0043
+    // makes publishable without inventing a scalar network.
+    unresolvedNetworks: [], incompleteRecords: [],
+    networkVariantCards: [], networkVariantsImported: 0,
+    // Zero-rate rules dropped because the engine cannot see what narrows
+    // them, and unrecognised condition keys that might be the next such gap.
+    unenforceableExclusions: [], unmappedConditionKeys: {},
+    unusableMerchantPatterns: [],
     warnings: [],
   };
 }
@@ -1275,7 +1688,8 @@ async function main() {
   if (args.help) {
     console.log(
       'Usage: node import_card_pipeline.js --input <all-collected.json> ' +
-        '[--admin-id <uuid>] [--report-dir <dir>] [--dry-run] [--force]\n' +
+        '[--admin-id <uuid>] [--report-dir <dir>] [--slug <card-slug>] ' +
+        '[--dry-run] [--force]\n' +
         'CARD_IMPORT_ADMIN_ID may be used instead of --admin-id.'
     );
     return;
@@ -1298,6 +1712,16 @@ async function main() {
       `all-collected-index.json has ${index.length} row(s), but the input has ${records.length}; ` +
         'refusing a positionally misaligned import.'
     );
+  }
+  const requestedSlugs = new Set(args.slugs);
+  const selectedIndexes = records
+    .map((record, i) => ({ i, slug: record?.card_product?.slug }))
+    .filter(({ slug }) => requestedSlugs.size === 0 || requestedSlugs.has(slug))
+    .map(({ i }) => i);
+  if (requestedSlugs.size > 0) {
+    const found = new Set(selectedIndexes.map((i) => records[i]?.card_product?.slug));
+    const missing = [...requestedSlugs].filter((slug) => !found.has(slug));
+    if (missing.length) throw new Error(`--slug not found in input: ${missing.join(', ')}`);
   }
 
   const pool = createPool();
@@ -1338,6 +1762,15 @@ async function main() {
         `database is missing ${missing.join(', ')}; apply migration 0041_card_import_provenance.sql first.`
       );
     }
+    const variantsTable = await pool.query(
+      `select to_regclass('public.card_product_network_variants') as table_name`
+    );
+    if (!variantsTable.rows[0]?.table_name) {
+      throw new Error(
+        'database is missing card_product_network_variants; apply migration ' +
+        '0043_card_product_network_variants.sql first.'
+      );
+    }
 
     // Set app.user_id even for the preflight read. admin_users has FORCE RLS,
     // so a naked SELECT with the app role can never see the row it is trying
@@ -1353,7 +1786,7 @@ async function main() {
     }
 
     console.log(
-      `Importing ${records.length} record(s) from ${args.input}${args.dryRun ? ' (DRY RUN)' : ''}`
+      `Importing ${selectedIndexes.length} record(s) from ${args.input}${args.dryRun ? ' (DRY RUN)' : ''}`
     );
     if (args.dryRun) {
       console.log(
@@ -1365,7 +1798,7 @@ async function main() {
     }
 
     const seenImportSlugs = new Set();
-    for (let i = 0; i < records.length; i++) {
+    for (const i of selectedIndexes) {
       const record = records[i];
       const indexEntry = index ? index[i] : null;
       const failReason = sanityCheck(record, indexEntry, report);
@@ -1419,6 +1852,38 @@ async function main() {
         `caps retained for review but not enforced (no rule/category link): ${report.unenforcedCaps.length}`
       );
     }
+    // These three are review work, not errors — each one is a place the
+    // source said something the catalogue schema cannot hold exactly.
+    if (report.unresolvedNetworks.length) {
+      console.log(
+        `network unresolved (imported as 'unknown', BLOCKS publishing until set): ${report.unresolvedNetworks.length}`
+      );
+    }
+    if (report.networkVariantCards.length) {
+      console.log(
+        `verified multi-network products: ${report.networkVariantCards.length} ` +
+        `(${report.networkVariantsImported} variant rows written)`
+      );
+    }
+    if (report.incompleteRecords.length) {
+      console.log(`\nIncomplete extractions (imported, but sections are MISSING not empty):`);
+      for (const r of report.incompleteRecords) {
+        console.log(`  - ${r.slug}: missing ${r.missing.join(', ')}`);
+      }
+    }
+    if (report.unenforceableExclusions.length) {
+      console.log(
+        `zero-rate rules dropped as unenforceable (would have shadowed a real rate): ${report.unenforceableExclusions.length}`
+      );
+    }
+    if (report.unusableMerchantPatterns.length) {
+      console.log(
+        `merchant patterns rejected as prose: ${report.unusableMerchantPatterns.length}`
+      );
+    }
+    if (Object.keys(report.unmappedConditionKeys).length) {
+      console.log('threshold-shaped condition keys NOT read:', report.unmappedConditionKeys);
+    }
     if (report.skippedGarbage.length) {
       console.log('\nSkipped (garbage/invalid):');
       for (const s of report.skippedGarbage) console.log(`  - ${s.slug}: ${s.reason}`);
@@ -1450,9 +1915,18 @@ if (require.main === module) {
 
 module.exports = {
   canonicalize,
+  missingSections,
+  resolveNetwork,
+  shadowingZeroRateRules,
+  unmappedNarrowing,
+  usableMerchantPattern,
+  MIN_TXN_KEYS,
   deriveCardEconomics,
+  extractVerifiedNetworkVariants,
+  hasExplicitNoRewardProgram,
   IMPORT_TRANSFORM_VERSION,
   importCapRules,
+  importNetworkVariants,
   importRewardRules,
   importOneCard,
   mapCategory,

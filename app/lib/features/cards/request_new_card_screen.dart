@@ -153,7 +153,12 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
           style: BambooFonts.ui(14.5, color: BambooInk.ink900),
           decoration: inputDecoration('Network (if known)'),
           items: [
-            for (final n in CardNetwork.values) DropdownMenuItem(value: n, child: Text(_networkLabel(n))),
+            // CardNetwork.unknown is a catalogue-draft marker, not something
+            // to offer a user: leaving this optional field unset already says
+            // "not known", and two ways to say the same thing is worse than
+            // one. Only real networks are selectable.
+            for (final n in CardNetwork.values.where((n) => n != CardNetwork.unknown))
+              DropdownMenuItem(value: n, child: Text(_networkLabel(n))),
           ],
           onChanged: (v) => setState(() => _networkGuess = v),
         ),
@@ -195,5 +200,6 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
     CardNetwork.mastercard => 'Mastercard',
     CardNetwork.amex => 'American Express',
     CardNetwork.diners => 'Diners Club',
+    CardNetwork.unknown => 'Not sure',
   };
 }

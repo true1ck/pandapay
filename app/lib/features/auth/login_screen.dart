@@ -99,7 +99,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.length < 10) return 'That phone number looks too short.';
     if (_isSignUp) {
-      if (!_acceptedTerms) return 'You need to accept the Terms & Privacy Policy to continue.';
+      if (!_acceptedTerms) {
+        return 'You need to accept the Terms & Privacy Policy to continue.';
+      }
     }
     return null;
   }
@@ -121,7 +123,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       setState(() => _error = userFacingErrorMessage(e));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -146,16 +150,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
 
       final store = await ref.read(tokenStoreProvider.future);
-      await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+      await store.save(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      );
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
 
       // Persist what we just verified so design 22's Email & phone screen
       // has something real to show. Only sign-up sends the phone — see
       // AuthMode's doc comment for why log-in never writes it.
-      await ref.read(profileApiProvider)!.ensureProfile(
-        email: identifier,
-        phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
-      );
+      await ref
+          .read(profileApiProvider)!
+          .ensureProfile(
+            email: identifier,
+            phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
+          );
 
       // A4: record the three purpose-specific consents now that a profile
       // row exists to attach them to. Each POST /consents call inserts its
@@ -185,7 +194,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         // Mirrors E12/H4's actual toggle — profiles.contributions_opt_in is
         // the live flag other screens read, not the consent log itself.
         if (_optInCrowdsource) {
-          await ref.read(userCardsRepositoryProvider)!.setContributionsOptIn(true);
+          await ref
+              .read(userCardsRepositoryProvider)!
+              .setContributionsOptIn(true);
         }
       }
       ref.invalidate(profileProvider);
@@ -243,12 +254,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.xxl, AppSpace.xl, AppSpace.xl),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.xl,
+                AppSpace.xxl,
+                AppSpace.xl,
+                AppSpace.xl,
+              ),
               child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight - AppSpace.xxl - AppSpace.xl),
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - AppSpace.xxl - AppSpace.xl,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        tooltip: 'Back',
+                        color: BambooInk.onSlate,
+                        onPressed: () => context.pop(),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                      ),
+                    ),
                     // Design 06 sets a bare 76pt mark on the slate, no tile.
                     // This was a 64pt white-filled Container — but inside a
                     // CrossAxisAlignment.stretch Column its width was
@@ -263,7 +290,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 10),
                     Text(
                       _subtitle,
-                      style: BambooFonts.ui(13.5, color: BambooInk.onSlateMuted, height: 1.5),
+                      style: BambooFonts.ui(
+                        13.5,
+                        color: BambooInk.onSlateMuted,
+                        height: 1.5,
+                      ),
                     ),
                     const SizedBox(height: AppSpace.xl),
                     if (!_otpRequested) ...[
@@ -276,9 +307,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         acceptedTerms: _acceptedTerms,
                         optInCrowdsource: _optInCrowdsource,
                         optInMarketing: _optInMarketing,
-                        onAcceptedTermsChanged: (v) => setState(() => _acceptedTerms = v),
-                        onOptInCrowdsourceChanged: (v) => setState(() => _optInCrowdsource = v),
-                        onOptInMarketingChanged: (v) => setState(() => _optInMarketing = v),
+                        onAcceptedTermsChanged: (v) =>
+                            setState(() => _acceptedTerms = v),
+                        onOptInCrowdsourceChanged: (v) =>
+                            setState(() => _optInCrowdsource = v),
+                        onOptInMarketingChanged: (v) =>
+                            setState(() => _optInMarketing = v),
                       ),
                     ],
                     if (_otpRequested)
@@ -300,11 +334,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: AppSpace.md),
                       Center(
                         child: TextButton(
-                          onPressed: () => Navigator.of(
-                            context,
-                          ).push(MaterialPageRoute(builder: (_) => const AccountRecoveryScreen())),
-                          style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
-                          child: const Text("Can't sign in? Recover your account"),
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AccountRecoveryScreen(),
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: BambooInk.onSlateMuted,
+                          ),
+                          child: const Text(
+                            "Can't sign in? Recover your account",
+                          ),
                         ),
                       ),
                     ],
@@ -318,10 +358,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     // account at all, not just someone temporarily signed out.
                     Center(
                       child: TextButton.icon(
-                        style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
-                        onPressed: () => context.push(AppRoute.emergencyCardInfo),
+                        style: TextButton.styleFrom(
+                          foregroundColor: BambooInk.onSlateMuted,
+                        ),
+                        onPressed: () =>
+                            context.push(AppRoute.emergencyCardInfo),
                         icon: const Icon(Icons.emergency_outlined, size: 16),
-                        label: const Text('Lost or stolen card? Get emergency help — no sign-in needed'),
+                        label: const Text(
+                          'Lost or stolen card? Get emergency help — no sign-in needed',
+                        ),
                       ),
                     ),
                     // A4: the bundled "by continuing you agree..." footer is
@@ -335,7 +380,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Center(
                         child: Text(
                           'By continuing you agree to PandaPay\'s Terms & Privacy Policy.',
-                          style: BambooFonts.ui(12, color: BambooInk.onSlateMuted),
+                          style: BambooFonts.ui(
+                            12,
+                            color: BambooInk.onSlateMuted,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -385,14 +433,20 @@ class _IdentifierStep extends StatelessWidget {
     required this.onOptInMarketingChanged,
   });
 
-  static InputDecoration _fieldDecoration({required String hint, required IconData icon}) {
+  static InputDecoration _fieldDecoration({
+    required String hint,
+    required IconData icon,
+  }) {
     return InputDecoration(
       hintText: hint,
       hintStyle: BambooFonts.ui(14, color: BambooInk.onSlateMuted),
       prefixIcon: Icon(icon, color: BambooInk.onSlateMuted),
       filled: true,
       fillColor: BambooInk.slateLow,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: const BorderSide(color: BambooInk.slateHairline),
@@ -406,7 +460,11 @@ class _IdentifierStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labelStyle = BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.onSlateMuted);
+    final labelStyle = BambooFonts.ui(
+      13,
+      weight: FontWeight.w600,
+      color: BambooInk.onSlateMuted,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -418,7 +476,10 @@ class _IdentifierStep extends StatelessWidget {
           textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.email],
           style: BambooFonts.ui(15, color: BambooInk.onSlate),
-          decoration: _fieldDecoration(hint: 'you@example.com', icon: Icons.mail_outline_rounded),
+          decoration: _fieldDecoration(
+            hint: 'you@example.com',
+            icon: Icons.mail_outline_rounded,
+          ),
         ),
         const SizedBox(height: AppSpace.lg),
         Text('Phone number', style: labelStyle),
@@ -440,13 +501,20 @@ class _IdentifierStep extends StatelessWidget {
           autofillHints: const [AutofillHints.telephoneNumber],
           onSubmitted: (_) => loading ? null : onSubmit(),
           style: BambooFonts.ui(15, color: BambooInk.onSlate),
-          decoration: _fieldDecoration(hint: '+91 98765 43210', icon: Icons.phone_outlined),
+          decoration: _fieldDecoration(
+            hint: '+91 98765 43210',
+            icon: Icons.phone_outlined,
+          ),
         ),
         const SizedBox(height: AppSpace.sm),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.info_outline_rounded, size: 14, color: BambooInk.onSlateMuted),
+            const Icon(
+              Icons.info_outline_rounded,
+              size: 14,
+              color: BambooInk.onSlateMuted,
+            ),
             const SizedBox(width: AppSpace.xs),
             Expanded(
               child: Text(
@@ -484,7 +552,9 @@ class _IdentifierStep extends StatelessWidget {
             backgroundColor: BambooInk.lime,
             foregroundColor: BambooInk.slate,
             minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
           ),
           onPressed: loading ? null : onSubmit,
@@ -492,7 +562,10 @@ class _IdentifierStep extends StatelessWidget {
               ? const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.4, color: BambooInk.slate),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: BambooInk.slate,
+                  ),
                 )
               : const Text('Send code'),
         ),
@@ -563,7 +636,11 @@ class _OtpStep extends StatelessWidget {
       children: [
         Text(
           'Verification code',
-          style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.onSlateMuted),
+          style: BambooFonts.ui(
+            13,
+            weight: FontWeight.w600,
+            color: BambooInk.onSlateMuted,
+          ),
         ),
         const SizedBox(height: AppSpace.sm),
         TextField(
@@ -574,13 +651,24 @@ class _OtpStep extends StatelessWidget {
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           onSubmitted: (_) => loading ? null : onSubmit(),
           textAlign: TextAlign.center,
-          style: BambooFonts.money(28, color: BambooInk.onSlate, letterSpacing: 8),
+          style: BambooFonts.money(
+            28,
+            color: BambooInk.onSlate,
+            letterSpacing: 8,
+          ),
           decoration: InputDecoration(
             hintText: '••••',
-            hintStyle: BambooFonts.money(28, color: BambooInk.onSlateMuted, letterSpacing: 8),
+            hintStyle: BambooFonts.money(
+              28,
+              color: BambooInk.onSlateMuted,
+              letterSpacing: 8,
+            ),
             filled: true,
             fillColor: BambooInk.slateLow,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(color: BambooInk.slateHairline),
@@ -596,7 +684,9 @@ class _OtpStep extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             TextButton(
-              style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
+              style: TextButton.styleFrom(
+                foregroundColor: BambooInk.onSlateMuted,
+              ),
               onPressed: loading ? null : onChangeIdentifier,
               child: const Text('Change'),
             ),
@@ -615,7 +705,9 @@ class _OtpStep extends StatelessWidget {
         // password flow bolted onto a system that doesn't have one.
         Center(
           child: TextButton(
-            style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
+            style: TextButton.styleFrom(
+              foregroundColor: BambooInk.onSlateMuted,
+            ),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const FeedbackSupportScreen(
@@ -633,7 +725,9 @@ class _OtpStep extends StatelessWidget {
             backgroundColor: BambooInk.lime,
             foregroundColor: BambooInk.slate,
             minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
           ),
           onPressed: loading ? null : onSubmit,
@@ -641,7 +735,10 @@ class _OtpStep extends StatelessWidget {
               ? const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.4, color: BambooInk.slate),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: BambooInk.slate,
+                  ),
                 )
               : const Text('Verify & continue'),
         ),
@@ -666,10 +763,17 @@ class _ErrorBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded, color: BambooInk.clay, size: 20),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: BambooInk.clay,
+            size: 20,
+          ),
           const SizedBox(width: AppSpace.sm),
           Expanded(
-            child: Text(message, style: BambooFonts.ui(13, color: BambooInk.onSlate)),
+            child: Text(
+              message,
+              style: BambooFonts.ui(13, color: BambooInk.onSlate),
+            ),
           ),
         ],
       ),
@@ -698,7 +802,12 @@ class _Headline extends StatelessWidget {
       TextSpan(
         text: title,
         style: base,
-        children: [TextSpan(text: accent, style: base.copyWith(color: BambooInk.lime))],
+        children: [
+          TextSpan(
+            text: accent,
+            style: base.copyWith(color: BambooInk.lime),
+          ),
+        ],
       ),
     );
   }

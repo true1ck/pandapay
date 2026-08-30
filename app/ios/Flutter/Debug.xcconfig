@@ -1,2 +1,6 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
 #include "Generated.xcconfig"
+
+// ML Kit has no arm64 simulator binary. In simulator-only validation mode the
+// app boots without native plugin registration; device builds retain it.
+EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*] = GeneratedPluginRegistrant.m

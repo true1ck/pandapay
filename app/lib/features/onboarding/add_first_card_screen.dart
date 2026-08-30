@@ -423,6 +423,9 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
     CardNetwork.mastercard => 'Mastercard',
     CardNetwork.amex => 'Amex',
     CardNetwork.diners => 'Diners',
+    // Draft-only marker (see CardNetwork.unknown); published cards, which is
+    // all a device ever receives, can never carry it.
+    CardNetwork.unknown => 'Other',
   };
 }
 

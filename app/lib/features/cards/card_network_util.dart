@@ -9,6 +9,7 @@ String cardNetworkLabel(CardNetwork n) => switch (n) {
   CardNetwork.mastercard => 'Mastercard',
   CardNetwork.amex => 'Amex',
   CardNetwork.diners => 'Diners',
+  CardNetwork.unknown => 'Other',
 };
 
 const _networkWordsInName = [

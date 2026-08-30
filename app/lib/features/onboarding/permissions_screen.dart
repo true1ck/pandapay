@@ -97,8 +97,19 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: AppSpace.md),
-              Text('Set up a few permissions', style: BambooFonts.heading(24, color: BambooInk.onSlate)),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  tooltip: 'Back',
+                  color: BambooInk.onSlate,
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
+              ),
+              Text(
+                'Set up a few permissions',
+                style: BambooFonts.heading(24, color: BambooInk.onSlate),
+              ),
               const SizedBox(height: AppSpace.xs),
               Text(
                 'Every one of these is optional — skip any you\'re not sure about, you can turn them on later.',
@@ -122,7 +133,8 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                     _PermissionRow(
                       icon: Icons.notifications_none_rounded,
                       title: 'Notifications',
-                      reason: 'Reward alerts, due-date reminders, and cap warnings.',
+                      reason:
+                          'Reward alerts, due-date reminders, and cap warnings.',
                       granted: _notificationsGranted,
                       onRequest: _requestNotifications,
                     ),
@@ -130,7 +142,8 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                     _PermissionRow(
                       icon: Icons.location_on_outlined,
                       title: 'Location',
-                      reason: 'Suggests the best card the moment you\'re near a merchant.',
+                      reason:
+                          'Suggests the best card the moment you\'re near a merchant.',
                       granted: _locationGranted,
                       onRequest: _requestLocation,
                     ),
@@ -143,10 +156,12 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                   backgroundColor: BambooInk.lime,
                   foregroundColor: BambooInk.slate,
                   minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
                 ),
-                onPressed: () => context.go(AppRoute.tour),
+                onPressed: () => context.push(AppRoute.tour),
                 child: const Text('Continue'),
               ),
             ],
@@ -187,7 +202,10 @@ class _PermissionRow extends StatelessWidget {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: BambooInk.slateLow, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: BambooInk.slateLow,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Icon(icon, color: BambooInk.lime, size: 20),
           ),
           const SizedBox(width: AppSpace.md),
@@ -195,15 +213,25 @@ class _PermissionRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: BambooFonts.heading(15, color: BambooInk.onSlate)),
+                Text(
+                  title,
+                  style: BambooFonts.heading(15, color: BambooInk.onSlate),
+                ),
                 const SizedBox(height: 3),
-                Text(reason, style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
+                Text(
+                  reason,
+                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+                ),
               ],
             ),
           ),
           const SizedBox(width: AppSpace.sm),
           if (granted == true)
-            const Icon(Icons.check_circle_rounded, color: BambooInk.lime, size: 22)
+            const Icon(
+              Icons.check_circle_rounded,
+              color: BambooInk.lime,
+              size: 22,
+            )
           else
             OutlinedButton(
               style: OutlinedButton.styleFrom(
@@ -211,7 +239,9 @@ class _PermissionRow extends StatelessWidget {
                 side: const BorderSide(color: BambooInk.slateHairline),
                 minimumSize: const Size(0, 34),
                 padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
               onPressed: onRequest,
               child: const Text('Enable'),

@@ -127,7 +127,11 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
               initialValue: _networkGuess,
               decoration: const InputDecoration(labelText: 'Network (optional)'),
               items: [
-                for (final n in CardNetwork.values) DropdownMenuItem(value: n, child: Text(_networkLabel(n))),
+                // CardNetwork.unknown is a catalogue-draft marker, not a
+                // user-facing choice: leaving this optional field unset
+                // already means "not known".
+                for (final n in CardNetwork.values.where((n) => n != CardNetwork.unknown))
+                  DropdownMenuItem(value: n, child: Text(_networkLabel(n))),
               ],
               onChanged: (v) => setState(() => _networkGuess = v),
             ),
@@ -205,5 +209,8 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
     CardNetwork.mastercard => 'Mastercard',
     CardNetwork.amex => 'Amex',
     CardNetwork.diners => 'Diners',
+    // Draft-only marker (see CardNetwork.unknown); published cards, which is
+    // all a device ever receives, can never carry it.
+    CardNetwork.unknown => 'Other',
   };
 }

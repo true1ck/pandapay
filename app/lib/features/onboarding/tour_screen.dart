@@ -66,13 +66,16 @@ class _TourScreenState extends State<TourScreen> {
     if (widget.onFinished != null) {
       widget.onFinished!();
     } else {
-      context.go(AppRoute.addFirstCard);
+      context.push(AppRoute.addFirstCard);
     }
   }
 
   void _next() {
     if (_page < _steps.length - 1) {
-      _controller.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      _controller.nextPage(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
     } else {
       _finishOrAdvance();
     }
@@ -87,9 +90,20 @@ class _TourScreenState extends State<TourScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 0),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.md,
+                AppSpace.lg,
+                0,
+              ),
               child: Row(
                 children: [
+                  IconButton(
+                    tooltip: 'Back',
+                    onPressed: () => context.pop(),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                  const SizedBox(width: AppSpace.xs),
                   Container(
                     width: 40,
                     height: 40,
@@ -104,7 +118,9 @@ class _TourScreenState extends State<TourScreen> {
                   const Spacer(),
                   TextButton(
                     onPressed: _skip,
-                    style: TextButton.styleFrom(foregroundColor: BambooInk.ink500),
+                    style: TextButton.styleFrom(
+                      foregroundColor: BambooInk.ink500,
+                    ),
                     child: const Text('Skip'),
                   ),
                 ],
@@ -118,7 +134,12 @@ class _TourScreenState extends State<TourScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.xl),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.xl,
+                0,
+                AppSpace.xl,
+                AppSpace.xl,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -132,7 +153,9 @@ class _TourScreenState extends State<TourScreen> {
                           width: i == _page ? 20 : 6,
                           height: 6,
                           decoration: BoxDecoration(
-                            color: i == _page ? BambooInk.slate : BambooInk.ink300,
+                            color: i == _page
+                                ? BambooInk.slate
+                                : BambooInk.ink300,
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -144,11 +167,15 @@ class _TourScreenState extends State<TourScreen> {
                       backgroundColor: BambooInk.slate,
                       foregroundColor: BambooInk.lime,
                       minimumSize: const Size.fromHeight(52),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
                     ),
                     onPressed: _next,
-                    child: Text(_page == _steps.length - 1 ? 'Add my cards' : 'Next'),
+                    child: Text(
+                      _page == _steps.length - 1 ? 'Add my cards' : 'Next',
+                    ),
                   ),
                 ],
               ),
@@ -207,18 +234,30 @@ class _TourPage extends StatelessWidget {
           Container(
             width: 64,
             height: 64,
-            decoration: BoxDecoration(color: BambooInk.lime, borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(
+              color: BambooInk.lime,
+              borderRadius: BorderRadius.circular(20),
+            ),
             child: Icon(step.icon, color: BambooInk.slate, size: 30),
           ),
           const SizedBox(height: AppSpace.xl),
-          Text(step.title, style: BambooFonts.heading(26, color: BambooInk.ink900)),
+          Text(
+            step.title,
+            style: BambooFonts.heading(26, color: BambooInk.ink900),
+          ),
           const SizedBox(height: AppSpace.md),
-          Text(step.body, style: BambooFonts.ui(15, color: BambooInk.ink500, height: 1.5)),
+          Text(
+            step.body,
+            style: BambooFonts.ui(15, color: BambooInk.ink500, height: 1.5),
+          ),
           if (step.example != null) ...[
             const SizedBox(height: AppSpace.xl),
             Container(
               padding: const EdgeInsets.all(AppSpace.lg),
-              decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(22)),
+              decoration: BoxDecoration(
+                color: BambooInk.slate,
+                borderRadius: BorderRadius.circular(22),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -255,11 +294,19 @@ class _TourPage extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _StatTile(label: 'EARNED', value: step.earnedMissed!.earned, color: BambooInk.jade),
+                  child: _StatTile(
+                    label: 'EARNED',
+                    value: step.earnedMissed!.earned,
+                    color: BambooInk.jade,
+                  ),
                 ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
-                  child: _StatTile(label: 'MISSED', value: step.earnedMissed!.missed, color: BambooInk.clay),
+                  child: _StatTile(
+                    label: 'MISSED',
+                    value: step.earnedMissed!.missed,
+                    color: BambooInk.clay,
+                  ),
                 ),
               ],
             ),
@@ -274,14 +321,20 @@ class _ExampleCard extends StatelessWidget {
   final String label;
   final String value;
   final bool good;
-  const _ExampleCard({required this.label, required this.value, required this.good});
+  const _ExampleCard({
+    required this.label,
+    required this.value,
+    required this.good,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(AppSpace.md),
       decoration: BoxDecoration(
-        color: good ? BambooInk.lime.withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.06),
+        color: good
+            ? BambooInk.lime.withValues(alpha: 0.12)
+            : Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -289,10 +342,20 @@ class _ExampleCard extends StatelessWidget {
         children: [
           Text(
             label,
-            style: BambooFonts.ui(11, weight: FontWeight.w600, color: BambooInk.onSlateMuted),
+            style: BambooFonts.ui(
+              11,
+              weight: FontWeight.w600,
+              color: BambooInk.onSlateMuted,
+            ),
           ),
           const SizedBox(height: 4),
-          Text(value, style: BambooFonts.money(20, color: good ? BambooInk.lime : BambooInk.onSlateSubtle)),
+          Text(
+            value,
+            style: BambooFonts.money(
+              20,
+              color: good ? BambooInk.lime : BambooInk.onSlateSubtle,
+            ),
+          ),
         ],
       ),
     );
@@ -303,7 +366,11 @@ class _StatTile extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _StatTile({required this.label, required this.value, required this.color});
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {

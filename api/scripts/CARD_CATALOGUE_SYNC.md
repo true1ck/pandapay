@@ -15,9 +15,16 @@ It performs two stages:
 Every imported card is a `draft`. Neither script publishes cards or writes
 `verified_at`/`verified_by`.
 
+After a human has reviewed and explicitly approved an exact collected input,
+`publish_card_pipeline.js` is the repeatable publication step. It refuses any
+row whose database import hash or transform version differs from that input,
+uses the normal `draft -> in_review -> published` state machine, and writes an
+`admin_audit_log` row for every transition. Run `--dry-run` first; it executes
+the database constraints and rolls each card back.
+
 ## One-time setup
 
-Apply database migrations through `0041_card_import_provenance.sql`. The
+Apply database migrations through `0043_card_product_network_variants.sql`. The
 normal production deploy applies it automatically; a direct run fails before
 writing anything if the migration is missing.
 
@@ -45,6 +52,19 @@ real import:
 ```bash
 CARD_IMPORT_ADMIN_ID=<admin-uuid> \
   api/scripts/sync_card_catalogue.sh
+```
+
+Then, only after explicit approval of that exact staged JSON:
+
+```bash
+CARD_IMPORT_ADMIN_ID=<admin-uuid> \
+  node api/scripts/publish_card_pipeline.js \
+    --input api/scripts/.staging/all-collected.json \
+    --dry-run
+
+CARD_IMPORT_ADMIN_ID=<admin-uuid> \
+  node api/scripts/publish_card_pipeline.js \
+    --input api/scripts/.staging/all-collected.json
 ```
 
 The default pipeline path is the sibling

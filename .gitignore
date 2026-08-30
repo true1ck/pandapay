@@ -42,6 +42,12 @@ __pycache__/
 # Local test/QA screenshots
 session_screenshots/
 
+# Local agent/audit artifacts and generated analysis caches
+.codex-tmp/
+outputs/
+**/graphify-out/
+**/.gradle/
+
 # SSH / signing keys. NOTHING matching these may ever be committed — a
 # private key in a public repo is a full server compromise, and git history
 # keeps it long after the file is deleted.
