@@ -18,6 +18,7 @@ import '../import/gmail_discovery_service.dart';
 import '../import/statement_pdf_import_screen.dart';
 import '../sms_import/sms_backup_import_screen.dart';
 import '../sms_import/sms_listener_service.dart';
+import 'card_network_util.dart';
 import 'card_picker_screen.dart';
 
 /// "Find my cards" — design 30's fastest add-a-card path, over **both**
@@ -391,7 +392,12 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     );
   }
 
-  Future<void> _add(DiscoveredCard card) async {
+  /// [variant] is the network the user picked on the suggestion card when the
+  /// matched product turned out to have sibling rows on other networks — the
+  /// SMS never states the network, so an "Axis Flipkart" match defaults to
+  /// whichever catalogue row it resolved to (often RuPay) until the user says
+  /// otherwise. Null when there was nothing to choose.
+  Future<void> _add(DiscoveredCard card, {CardProduct? variant}) async {
     if (_adding) return;
 
     if (card.isPlaceholder) {
@@ -428,13 +434,15 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
 
     setState(() => _adding = true);
     final messenger = ScaffoldMessenger.of(context);
+    final productId = variant?.id ?? card.cardProductId;
+    final displayName = variant?.name ?? card.name;
     try {
       final repo = ref.read(userCardsRepositoryProvider);
       final local = repo == null ? await ref.read(localUserCardsRepositoryProvider.future) : null;
       if (repo != null) {
-        await repo.addCard(card.cardProductId);
+        await repo.addCard(productId);
       } else {
-        await local!.addCard(card.cardProductId);
+        await local!.addCard(productId);
       }
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
@@ -444,13 +452,13 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       await recordAppNotification(
         ref,
         category: 'card_added',
-        title: '${card.name} added',
+        title: '$displayName added',
         body: 'Found automatically in ${card.sources.contains('email') ? 'your bank email' : 'your SMS'}.',
         severity: 'good',
-        dedupeKey: 'card_added:${card.cardProductId}',
+        dedupeKey: 'card_added:$productId',
       );
       if (mounted) setState(() => _added.add(card.cardProductId));
-      messenger.showSnackBar(SnackBar(content: Text('${card.name} added to your wallet.')));
+      messenger.showSnackBar(SnackBar(content: Text('$displayName added to your wallet.')));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
     } finally {
@@ -481,6 +489,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   }
 
   Widget _body() {
+    final catalogue = ref.watch(catalogueProvider).valueOrNull ?? const <CardProduct>[];
     if (_scanning && _result == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -524,12 +533,13 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           ),
         ],
         const SizedBox(height: AppSpace.lg),
-        for (final s in result.suggestions)
+        for (final s in _dedupeNetworkVariants(result.suggestions, catalogue))
           _SuggestionCard(
             card: s,
+            variants: _variantsFor(s, catalogue),
             added: _added.contains(s.cardProductId),
             busy: _adding,
-            onAdd: () => _add(s),
+            onAdd: (variant) => _add(s, variant: variant),
           ),
         const SizedBox(height: AppSpace.xl),
         const Divider(color: BambooInk.ink300, height: 1),
@@ -550,6 +560,42 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     );
   }
 
+  /// Once the catalogue carries the same card on several networks, a
+  /// confident SMS match ("...Flipkart...4567...") can hit every network row
+  /// equally and the engine surfaces one suggestion per row. Collapse those
+  /// to a single card — the network chooser on the suggestion covers the
+  /// rest.
+  List<DiscoveredCard> _dedupeNetworkVariants(
+    List<DiscoveredCard> suggestions,
+    List<CardProduct> catalogue,
+  ) {
+    if (catalogue.isEmpty) return suggestions;
+    final seenFamilies = <String>{};
+    final out = <DiscoveredCard>[];
+    for (final s in suggestions) {
+      final matched = catalogue.where((c) => c.id == s.cardProductId).firstOrNull;
+      if (matched == null || matched.issuerName == null) {
+        out.add(s);
+        continue;
+      }
+      final key = '${matched.issuerName}|${networkAgnosticCardName(matched.name)}';
+      if (seenFamilies.add(key)) out.add(s);
+    }
+    return out;
+  }
+
+  /// The matched catalogue row plus any sibling rows on other networks, so
+  /// the suggestion card can offer a network chooser. Empty (nothing to
+  /// choose) for placeholders, an unresolved match, or a card that only
+  /// exists on one network in the catalogue.
+  List<CardProduct> _variantsFor(DiscoveredCard s, List<CardProduct> catalogue) {
+    if (s.isPlaceholder || catalogue.isEmpty) return const [];
+    final matched = catalogue.where((c) => c.id == s.cardProductId).firstOrNull;
+    if (matched == null) return const [];
+    final variants = networkVariantsOf(matched, catalogue);
+    return variants.length > 1 ? variants : const [];
+  }
+
   String _scannedSummary(CardDiscoveryResult r) {
     final parts = <String>[
       if (r.emailsScanned > 0) '${r.emailsScanned} bank email${r.emailsScanned == 1 ? '' : 's'}',
@@ -559,21 +605,42 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   }
 }
 
-class _SuggestionCard extends StatelessWidget {
+class _SuggestionCard extends StatefulWidget {
   final DiscoveredCard card;
+
+  /// The matched catalogue row plus its sibling rows on other networks.
+  /// Empty when there is nothing to choose (placeholder, unresolved match, or
+  /// a card that exists on one network only) — the card then keeps its plain
+  /// confirm button.
+  final List<CardProduct> variants;
   final bool added;
   final bool busy;
-  final VoidCallback onAdd;
+  final void Function(CardProduct? variant) onAdd;
 
   const _SuggestionCard({
     required this.card,
+    required this.variants,
     required this.added,
     required this.busy,
     required this.onAdd,
   });
 
   @override
+  State<_SuggestionCard> createState() => _SuggestionCardState();
+}
+
+class _SuggestionCardState extends State<_SuggestionCard> {
+  late CardProduct? _picked = widget.variants.isEmpty
+      ? null
+      : widget.variants.firstWhere(
+          (v) => v.id == widget.card.cardProductId,
+          orElse: () => widget.variants.first,
+        );
+
+  @override
   Widget build(BuildContext context) {
+    final card = widget.card;
+    final hasNetworkChoice = widget.variants.length > 1;
     final sources = card.sources
         .map((s) => s == 'email' ? 'your bank email' : 'your SMS')
         .join(' and ');
@@ -611,8 +678,36 @@ class _SuggestionCard extends StatelessWidget {
             'Found in $sources — ${card.evidence.take(3).join(', ')}',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.45),
           ),
+          if (hasNetworkChoice && !widget.added) ...[
+            const SizedBox(height: AppSpace.md),
+            Text(
+              'Which network? Check the logo on your card.',
+              style: BambooFonts.ui(12, color: BambooInk.ink500, height: 1.4),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Wrap(
+              spacing: AppSpace.xs,
+              children: [
+                for (final v in widget.variants)
+                  ChoiceChip(
+                    label: Text(cardNetworkLabel(v.network)),
+                    labelStyle: BambooFonts.ui(
+                      13,
+                      weight: FontWeight.w600,
+                      color: _picked?.id == v.id ? BambooInk.onSlate : BambooInk.ink900,
+                    ),
+                    selected: _picked?.id == v.id,
+                    selectedColor: BambooInk.slate,
+                    backgroundColor: BambooInk.paperMuted,
+                    side: BorderSide.none,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                    onSelected: widget.busy ? null : (_) => setState(() => _picked = v),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpace.md),
-          if (added)
+          if (widget.added)
             Row(
               children: [
                 const Icon(Icons.check_circle_rounded, size: 18, color: BambooInk.jade),
@@ -625,7 +720,7 @@ class _SuggestionCard extends StatelessWidget {
             )
           else
             FilledButton(
-              onPressed: busy ? null : onAdd,
+              onPressed: widget.busy ? null : () => widget.onAdd(hasNetworkChoice ? _picked : null),
               style: FilledButton.styleFrom(
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.lime,
@@ -633,7 +728,13 @@ class _SuggestionCard extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
               ),
-              child: Text(card.isPlaceholder ? 'Select your ${card.issuerName ?? 'Bank'} Card' : 'Yes, I have ${card.name}'),
+              child: Text(
+                card.isPlaceholder
+                    ? 'Select your ${card.issuerName ?? 'Bank'} Card'
+                    : hasNetworkChoice
+                        ? 'Yes, I have this card'
+                        : 'Yes, I have ${card.name}',
+              ),
             ),
         ],
       ),
@@ -822,6 +923,13 @@ class _DiscoveryActionButtons extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull {
+    final it = iterator;
+    return it.moveNext() ? it.current : null;
   }
 }
 

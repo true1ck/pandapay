@@ -15,7 +15,12 @@ class _FakeCatalogueRepository implements CatalogueRepository {
   Future<List<CardProduct>> fetchCatalogue() async => cards;
 }
 
+_FakeLocalUserCardsRepository? _lastLocalRepo;
+
 class _FakeLocalUserCardsRepository implements LocalUserCardsRepository {
+  _FakeLocalUserCardsRepository() {
+    _lastLocalRepo = this;
+  }
   final List<String> addedCards = [];
 
   @override
@@ -54,11 +59,12 @@ void main() {
   Future<void> pumpFindCardsScreen(
     WidgetTester tester, {
     List<String> smsBodies = const [],
+    List<CardProduct> catalogueOverride = catalogue,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogue)),
+          catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogueOverride)),
           localUserCardsRepositoryProvider.overrideWith((ref) async => _FakeLocalUserCardsRepository()),
           userCardsRepositoryProvider.overrideWithValue(null),
         ],
@@ -96,6 +102,56 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Added to your wallet'), findsOneWidget);
+  });
+
+  testWidgets('offers a network chooser when the matched card has sibling rows', (tester) async {
+    const flipkartVariants = [
+      CardProduct(
+        id: 'axis_flipkart_rupay',
+        name: 'Axis Flipkart Card',
+        issuerName: 'Axis Bank',
+        network: CardNetwork.rupay,
+        isUpiLinkable: true,
+        pointValueInr: 1.0,
+        rewardRules: [],
+        capRules: [],
+        milestoneRules: [],
+        feeWaiverRules: [],
+        benefits: [],
+      ),
+      CardProduct(
+        id: 'axis_flipkart_mastercard',
+        name: 'Axis Flipkart Card',
+        issuerName: 'Axis Bank',
+        network: CardNetwork.mastercard,
+        isUpiLinkable: false,
+        pointValueInr: 1.0,
+        rewardRules: [],
+        capRules: [],
+        milestoneRules: [],
+        feeWaiverRules: [],
+        benefits: [],
+      ),
+    ];
+
+    await pumpFindCardsScreen(
+      tester,
+      catalogueOverride: flipkartVariants,
+      smsBodies: const ['Rs. 500 spent on your Axis Flipkart Card ending 4567 at Flipkart'],
+    );
+
+    // One suggestion, not one per network row.
+    expect(find.text('Axis Flipkart Card'), findsOneWidget);
+    expect(find.text('RuPay'), findsOneWidget);
+    expect(find.text('Mastercard'), findsOneWidget);
+    expect(find.text('Yes, I have this card'), findsOneWidget);
+
+    await tester.tap(find.text('Mastercard'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, I have this card'));
+    await tester.pumpAndSettle();
+
+    expect(_lastLocalRepo!.addedCards, ['axis_flipkart_mastercard']);
   });
 
   testWidgets('opens other ways to import bottom sheet', (tester) async {

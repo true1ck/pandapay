@@ -6,6 +6,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import 'card_network_util.dart';
 
 /// C3 Add Card (ui-spec Group C: "same picker as A7"). A standalone,
 /// reusable widget deliberately kept out of features/onboarding/ — A7
@@ -142,7 +143,7 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                                 padding: const EdgeInsets.only(right: AppSpace.xs),
                                 child: FilterChip(
                                   label: Text(
-                                    network == CardNetwork.amex ? 'Amex/Diners' : _networkLabel(network),
+                                    network == CardNetwork.amex ? 'Amex/Diners' : cardNetworkLabel(network),
                                   ),
                                   labelStyle: BambooFonts.ui(
                                     13,
@@ -216,13 +217,6 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
     );
   }
 
-  static String _networkLabel(CardNetwork n) => switch (n) {
-    CardNetwork.rupay => 'RuPay',
-    CardNetwork.visa => 'Visa',
-    CardNetwork.mastercard => 'Mastercard',
-    CardNetwork.amex => 'Amex',
-    CardNetwork.diners => 'Diners',
-  };
 }
 
 class _CardRow extends StatelessWidget {
