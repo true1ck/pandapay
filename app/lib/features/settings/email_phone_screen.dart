@@ -35,6 +35,13 @@ class EmailPhoneScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileProvider);
+    // The phone lives in the auth service (`users.phone_number`), not in
+    // api/'s `profiles` row — that column is only ever written on the
+    // email-OTP *sign-up* path, so reading it here made the Phone row appear
+    // or vanish depending on how the account was first created. The recovery
+    // endpoint already knows the real state; use it, and keep the profile
+    // value only as a fallback while that call is in flight.
+    final recovery = ref.watch(recoveryStatusProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -54,7 +61,12 @@ class EmailPhoneScreen extends ConsumerWidget {
           ),
           data: (data) {
             final email = (data?['email'] as String?)?.trim();
-            final phone = (data?['phone_number'] as String?)?.trim();
+            final profilePhone = (data?['phone_number'] as String?)?.trim();
+
+            final phoneHint = recovery?.phoneHint;
+            final hasPhone = (phoneHint != null && phoneHint.isNotEmpty) ||
+                profilePhone?.isNotEmpty == true;
+            final phoneVerified = recovery?.phoneVerified == true;
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, AppSpace.md, 20, 30),
@@ -62,16 +74,21 @@ class EmailPhoneScreen extends ConsumerWidget {
                 const _RecoveryBanner(),
                 const _SectionLabel('Phone'),
                 _IdentifierCard(
-                  value: phone?.isNotEmpty == true ? phone! : 'Not on file',
-                  // See the class doc-comment: present is not the same as
-                  // verified, and auth/ has no way to prove this one.
-                  badge: phone?.isNotEmpty == true
-                      ? const _Badge('Unverified', verified: false)
+                  value: phoneHint?.isNotEmpty == true
+                      ? phoneHint!
+                      : (profilePhone?.isNotEmpty == true ? profilePhone! : 'Not on file'),
+                  badge: hasPhone
+                      ? _Badge(
+                          phoneVerified ? 'Verified' : 'Unverified',
+                          verified: phoneVerified,
+                        )
                       : null,
-                  note: phone?.isNotEmpty == true
-                      ? 'Used to match bank SMS to your cards. We have never sent a code to it, '
-                            'so it is linked but not proven.'
-                      : 'Add one at sign-up to let PandaPay match bank SMS to your cards.',
+                  note: !hasPhone
+                      ? 'Add one at sign-up to let PandaPay match bank SMS to your cards.'
+                      : phoneVerified
+                          ? 'Used to match bank SMS to your cards, and confirmed by a code we sent to it.'
+                          : 'Used to match bank SMS to your cards. We have never sent a code to it, '
+                              'so it is linked but not proven.',
                 ),
                 const SizedBox(height: AppSpace.xl),
                 const _SectionLabel('Email'),
