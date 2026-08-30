@@ -681,8 +681,8 @@ class _SuggestionCardState extends State<_SuggestionCard> {
           if (hasNetworkChoice && !widget.added) ...[
             const SizedBox(height: AppSpace.md),
             Text(
-              'Which network? It’s printed on the front of your physical card.',
-              style: BambooFonts.ui(12, color: BambooInk.ink500, height: 1.4),
+              'Which network?',
+              style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink900),
             ),
             const SizedBox(height: AppSpace.sm),
             Wrap(
