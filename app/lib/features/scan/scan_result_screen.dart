@@ -175,13 +175,13 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         ? allCards
         : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
 
-    // No merchant code on the QR: the only card that can pay here is a
-    // UPI-linkable RuPay credit card, and only at a business. Filter to
-    // those; if the user owns none, there is nothing to show but the notice.
+    // No merchant code on the QR: the only card that can pay here is one
+    // linkable to UPI (today, per NPCI, that's RuPay credit cards — but the
+    // rule lives in the catalogue's `is_upi_linkable` flag, not here, so it
+    // stays a data change if that ever widens), and only at a business.
+    // Filter to those; if the user owns none, show nothing but the notice.
     if (noMcc) {
-      cards = cards
-          .where((c) => c.network == CardNetwork.rupay && c.isUpiLinkable)
-          .toList();
+      cards = cards.where((c) => c.isUpiLinkable).toList();
       if (cards.isEmpty) return _P2PNotice(vpa: widget.parsed.pa);
     }
 
@@ -390,8 +390,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                 recommendation: rec,
                 isHero: bestUpi != null && rec.card.id == bestUpi.card.id,
                 isOwned: wallet.any((w) => w.cardProductId == rec.card.id),
-                showRupayUpiNote:
-                    rec.card.network == CardNetwork.rupay && rec.card.isUpiLinkable,
+                showRupayUpiNote: rec.card.isUpiLinkable,
                 showAmountEntry: rec.card.id == amountEntryCardId,
                 amountEntered: _amount.rupees >= 1,
                 amountController: _amountController,

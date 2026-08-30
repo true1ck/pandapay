@@ -318,7 +318,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          catalogueProvider.overrideWith((ref) async => [_card('visa-1')]),
+          // A real Visa card: not linkable to UPI, so a no-MCC QR has nothing
+          // to offer and the personal-transfer notice stays.
+          catalogueProvider
+              .overrideWith((ref) async => [_card('visa-1', isUpiLinkable: false)]),
           categoriesProvider.overrideWith((ref) async => const []),
           userCardsProvider.overrideWith(
             (ref) async => const [
