@@ -630,17 +630,17 @@ class _SuggestionCard extends StatefulWidget {
 }
 
 class _SuggestionCardState extends State<_SuggestionCard> {
-  late CardProduct? _picked = widget.variants.isEmpty
-      ? null
-      : widget.variants.firstWhere(
-          (v) => v.id == widget.card.cardProductId,
-          orElse: () => widget.variants.first,
-        );
+  /// Deliberately starts unselected. A bank SMS almost never states the
+  /// network, so preselecting whichever catalogue row matched first reads to
+  /// the user as a claim they own that variant — "wait, I have a Mastercard
+  /// too?". The confirm button stays disabled until they pick.
+  CardProduct? _picked;
 
   @override
   Widget build(BuildContext context) {
     final card = widget.card;
     final hasNetworkChoice = widget.variants.length > 1;
+    final needsNetworkPick = hasNetworkChoice && _picked == null;
     final sources = card.sources
         .map((s) => s == 'email' ? 'your bank email' : 'your SMS')
         .join(' and ');
@@ -718,9 +718,11 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                 ),
               ],
             )
-          else
+          else ...[
             FilledButton(
-              onPressed: widget.busy ? null : () => widget.onAdd(hasNetworkChoice ? _picked : null),
+              onPressed: widget.busy || needsNetworkPick
+                  ? null
+                  : () => widget.onAdd(hasNetworkChoice ? _picked : null),
               style: FilledButton.styleFrom(
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.lime,
@@ -736,6 +738,14 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                         : 'Yes, I have ${card.name}',
               ),
             ),
+            if (needsNetworkPick) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Pick a network above to continue',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
+            ],
+          ],
         ],
       ),
     );

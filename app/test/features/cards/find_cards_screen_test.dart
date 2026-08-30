@@ -146,8 +146,18 @@ void main() {
     expect(find.text('Mastercard'), findsOneWidget);
     expect(find.text('Yes, I have this card'), findsOneWidget);
 
+    // The SMS never stated a network, so nothing is preselected and the
+    // confirm button is disabled until the user picks.
+    expect(find.text('Pick a network above to continue'), findsOneWidget);
+    final buttonBefore = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Yes, I have this card'),
+    );
+    expect(buttonBefore.onPressed, isNull);
+
     await tester.tap(find.text('Mastercard'));
     await tester.pumpAndSettle();
+    expect(find.text('Pick a network above to continue'), findsNothing);
+
     await tester.tap(find.text('Yes, I have this card'));
     await tester.pumpAndSettle();
 
