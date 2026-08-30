@@ -1257,16 +1257,6 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
     }
   } catch (_) {}
 
-  // Last resort: the catalogue snapshot shipped in the app bundle. Keeps a
-  // guest with no network (or a dev build pointed at an empty backend) from
-  // landing on an empty picker / a discovery run that can match nothing.
-  try {
-    final raw = await rootBundle.loadString('assets/data/bundled_catalogue.json');
-    final body = jsonDecode(raw) as Map<String, dynamic>;
-    final cards = (body['cards'] as List).cast<Map<String, dynamic>>().map(CardProductJson.fromJson).toList();
-    if (cards.isNotEmpty) return cards;
-  } catch (_) {}
-
   return const [];
 });
 
