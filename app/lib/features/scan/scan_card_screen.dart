@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -32,19 +33,46 @@ import 'card_text_matcher.dart';
 ///
 /// ## What happens to the photo
 ///
-/// A card's front usually prints a full or partial card number. The
-/// captured frame is processed entirely on-device (camera → MLKit OCR →
-/// the pure matcher in `card_text_matcher.dart`, no network call in this
-/// flow) and the file is deleted the moment recognition finishes — success
-/// or failure — so a photo of the card face never lingers in app storage.
-/// Anything shown on screen (the "why this matched" text) runs through
-/// [redactDigitRuns] first, same reasoning as the SMS-import pipeline's
-/// server-side redaction: a UI is also a place raw card data can leak, via
-/// a screenshot, a screen recording, or someone glancing at the phone.
+/// A card's front usually prints a full or partial card number. The frame
+/// is processed entirely on-device (camera → MLKit OCR → the pure matcher
+/// in `card_text_matcher.dart`, no network call in this flow). A frame the
+/// *camera* captured is a throwaway temp file and is deleted the moment
+/// recognition finishes — success or failure — so a photo of the card face
+/// never lingers in app storage. A photo the user picked from their own
+/// gallery ("Upload a photo instead") is left exactly where it was: it is
+/// their file, not ours to delete, and it is still only ever read
+/// on-device. Anything shown on screen (the "why this matched" text) runs
+/// through [redactDigitRuns] first, same reasoning as the SMS-import
+/// pipeline's server-side redaction: a UI is also a place raw card data can
+/// leak, via a screenshot, a screen recording, or someone glancing at the
+/// phone.
 class ScanCardScreen extends StatefulWidget {
   final List<CardProduct> catalogue;
 
-  const ScanCardScreen({super.key, required this.catalogue});
+  /// Test seam: overrides the on-device text recognizer. Production leaves
+  /// this null and a real [MlKitCardTextRecognizer] is used.
+  @visibleForTesting
+  final CardTextRecognizer Function()? recognizerFactory;
+
+  /// Test seam: returns the path of an image the user picked, or null if
+  /// they backed out. Production leaves this null and the real
+  /// `image_picker` gallery flow is used.
+  @visibleForTesting
+  final Future<String?> Function()? pickImagePath;
+
+  /// Test seam: decodes the first QR/barcode payload in an image file, or
+  /// null if none. Production leaves this null and `MobileScannerController`
+  /// does the decode.
+  @visibleForTesting
+  final Future<String?> Function(String path)? decodeBarcodeFromImage;
+
+  const ScanCardScreen({
+    super.key,
+    required this.catalogue,
+    this.recognizerFactory,
+    this.pickImagePath,
+    this.decodeBarcodeFromImage,
+  });
 
   @override
   State<ScanCardScreen> createState() => _ScanCardScreenState();
@@ -58,9 +86,12 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   // ---- OCR (primary) state ----
   CameraController? _cameraController;
   Future<void>? _cameraInitFuture;
-  MlKitCardTextRecognizer? _recognizer;
+  CardTextRecognizer? _recognizer;
   bool _capturing = false;
   String? _cameraError;
+
+  /// A gallery pick + on-device decode is in flight (either mode).
+  bool _processingImage = false;
 
   // ---- QR (secondary) state ----
   final MobileScannerController _qrController = MobileScannerController();
@@ -70,6 +101,19 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   List<CardMatch> _matches = const [];
   bool _resultIsFromOcr = false;
 
+  /// Bumped every time we drop our hold on the camera (lifecycle change,
+  /// mode switch, screen dispose). An in-flight [_initCamera] captures the
+  /// generation it started under and re-checks it after every await before
+  /// publishing its controller — if it changed, the world moved on while we
+  /// were initializing, so the freshly built controller is disposed instead
+  /// of being stranded on the sensor. Without this, pulling the notification
+  /// shade (which fires inactive→resumed, sometimes more than once) could
+  /// kick off two overlapping initializations and leave one CameraController
+  /// alive and holding the camera until the screen was recreated — the
+  /// "I have to go back and come in again" bug.
+  int _cameraGeneration = 0;
+  bool _initializing = false;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +122,10 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   }
 
   Future<void> _initCamera() async {
+    if (_initializing || !mounted) return;
+    _initializing = true;
+    final generation = _cameraGeneration;
+    CameraController? controller;
     try {
       final cameras = await availableCameras();
       final back = cameras.firstWhere(
@@ -89,18 +137,41 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
       // app. This screen only ever calls takePicture(); requesting an audio
       // track this flow never uses is what would otherwise put a
       // microphone permission on a card-scanning screen.
-      final controller = CameraController(
-        back,
-        ResolutionPreset.high,
-        enableAudio: false,
-      );
-      _cameraInitFuture = controller.initialize();
-      await _cameraInitFuture;
-      _recognizer = MlKitCardTextRecognizer();
-      if (mounted) setState(() => _cameraController = controller);
+      controller = CameraController(back, ResolutionPreset.high, enableAudio: false);
+      final initFuture = controller.initialize();
+      await initFuture;
+      _ensureRecognizer();
+      if (!mounted || generation != _cameraGeneration || _mode != _ScanMode.ocr || _lastExtracted != null) {
+        // Torn down (or moved past the live-camera view) while we awaited.
+        await controller.dispose();
+        return;
+      }
+      setState(() {
+        _cameraController = controller;
+        _cameraInitFuture = initFuture;
+        _cameraError = null;
+      });
     } catch (e) {
-      if (mounted) setState(() => _cameraError = _friendlyCameraError(e));
+      await controller?.dispose();
+      if (mounted && generation == _cameraGeneration) {
+        setState(() => _cameraError = _friendlyCameraError(e));
+      }
+    } finally {
+      if (generation == _cameraGeneration) _initializing = false;
     }
+  }
+
+  /// Synchronously releases the camera and invalidates any in-flight
+  /// [_initCamera]. Safe to call when there is nothing to release.
+  Future<void> _teardownCamera() async {
+    _cameraGeneration++;
+    _initializing = false;
+    final controller = _cameraController;
+    if (controller == null) return;
+    _cameraController = null;
+    _cameraInitFuture = null;
+    if (mounted) setState(() {});
+    await controller.dispose();
   }
 
   String _friendlyCameraError(Object e) {
@@ -113,22 +184,38 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // A live camera session must not keep running (or keep the sensor
-    // reserved) while the app is backgrounded — the QR path already got
-    // this for free from MobileScanner; the OCR path owns its own
-    // CameraController now, so it has to handle the lifecycle itself.
-    final controller = _cameraController;
-    if (controller == null || !controller.value.isInitialized) return;
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      controller.dispose();
-      _cameraController = null;
-    } else if (state == AppLifecycleState.resumed && _mode == _ScanMode.ocr) {
-      _initCamera();
+    // reserved) while the app is backgrounded — including the momentary
+    // "inactive" the OS reports when the notification shade or app switcher
+    // is dragged over the screen. The QR path gets this for free from
+    // MobileScanner; the OCR path owns its own CameraController, so it has
+    // to handle the lifecycle itself. On the way back we only re-open the
+    // camera if the live view is actually what's on screen (OCR mode, no
+    // result showing) — otherwise the re-open is deferred to _rescan /
+    // _switchMode, whichever brings the user back to it.
+    switch (state) {
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        unawaited(_teardownCamera());
+      case AppLifecycleState.resumed:
+        if (_mode == _ScanMode.ocr &&
+            _lastExtracted == null &&
+            !_processingImage &&
+            _cameraController == null &&
+            _cameraError == null) {
+          _initCamera();
+        }
+      case AppLifecycleState.detached:
+        break;
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // Invalidate any in-flight _initCamera so it disposes its controller
+    // instead of publishing it into a dead State.
+    _cameraGeneration++;
     _cameraController?.dispose();
     _recognizer?.dispose();
     _qrController.dispose();
@@ -168,6 +255,86 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
     }
   }
 
+  CardTextRecognizer _ensureRecognizer() =>
+      _recognizer ??= widget.recognizerFactory?.call() ?? MlKitCardTextRecognizer();
+
+  /// "Upload a photo instead": the card may not be in hand (a partner's
+  /// card, a card mailer photographed earlier, a card in another room), and
+  /// a still, well-lit photo also sidesteps the "try again with more light"
+  /// failure the live view hits in poor lighting. Runs the same on-device
+  /// pipeline as the live paths — OCR in "Front of card" mode, QR decode in
+  /// "QR / barcode" mode — and feeds the same matcher. The picked file is
+  /// the user's own and is never deleted (see this file's doc-comment).
+  Future<void> _pickImage() async {
+    if (_processingImage || _capturing) return;
+    setState(() => _processingImage = true);
+    final mode = _mode;
+    try {
+      final String? path;
+      if (widget.pickImagePath != null) {
+        path = await widget.pickImagePath!();
+      } else {
+        final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+        path = picked?.path;
+      }
+      if (path == null || !mounted) return;
+
+      final ExtractedCardText extracted;
+      if (mode == _ScanMode.ocr) {
+        extracted = await _ensureRecognizer().recognizeText(path);
+      } else {
+        final raw = widget.decodeBarcodeFromImage != null
+            ? await widget.decodeBarcodeFromImage!(path)
+            : await _decodeBarcodeFromImage(path);
+        extracted = ExtractedCardText(raw ?? '');
+      }
+      if (!mounted) return;
+
+      if (extracted.rawText.trim().isEmpty) {
+        _showSnack(
+          mode == _ScanMode.ocr
+              ? "Couldn't read a card in that photo — try a clearer, straight-on shot of the front."
+              : 'No QR code or barcode found in that image.',
+        );
+        return;
+      }
+      setState(() {
+        _lastExtracted = extracted;
+        _resultIsFromOcr = mode == _ScanMode.ocr;
+        _matches = matchCardText(extracted, widget.catalogue);
+      });
+    } catch (_) {
+      if (mounted) {
+        _showSnack("Couldn't use that photo. Try another, or add the card from the list below.");
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _processingImage = false);
+        // Opening the system photo picker backgrounds the app, so the
+        // lifecycle handler released the camera. If we're back on the live
+        // OCR view (no match taken from the photo), bring it back rather
+        // than leaving a permanent spinner.
+        if (_mode == _ScanMode.ocr &&
+            _lastExtracted == null &&
+            _cameraController == null &&
+            _cameraError == null) {
+          _initCamera();
+        }
+      }
+    }
+  }
+
+  Future<String?> _decodeBarcodeFromImage(String path) async {
+    final capture = await _qrController.analyzeImage(path);
+    final barcodes = capture?.barcodes ?? const <Barcode>[];
+    if (barcodes.isEmpty) return null;
+    return barcodes.first.rawValue ?? barcodes.first.displayValue;
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   void _onQrDetect(BarcodeCapture capture) {
     if (capture.barcodes.isEmpty || _lastExtracted != null) return;
     final extracted = extractedTextFromBarcode(capture.barcodes.first);
@@ -184,6 +351,12 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
       _lastExtracted = null;
       _matches = const [];
     });
+    // The camera preview may have been torn down while the result panel was
+    // up (notification shade, app switch) — bring it back so "Scan again"
+    // lands on a live view, not a dead frame.
+    if (_mode == _ScanMode.ocr && _cameraController == null && _cameraError == null) {
+      _initCamera();
+    }
   }
 
   Future<void> _switchMode(_ScanMode mode) async {
@@ -194,17 +367,13 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
     // opened a second session — invisible on this emulator's virtual
     // camera, which tolerates concurrent opens, but a real device would
     // either fail the second open or silently starve one of the two feeds.
-    if (mode == _ScanMode.qr && _cameraController != null) {
-      final controller = _cameraController;
-      setState(() {
-        _cameraController = null;
-        _cameraInitFuture = null;
-      });
-      await controller?.dispose();
+    if (mode == _ScanMode.qr) {
+      await _teardownCamera();
     }
     setState(() {
       _mode = mode;
-      _rescan();
+      _lastExtracted = null;
+      _matches = const [];
     });
     if (mode == _ScanMode.ocr && _cameraController == null && _cameraError == null) {
       await _initCamera();
@@ -229,6 +398,8 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
               flex: 3,
               child: _lastExtracted != null
                   ? const _CapturedPreview()
+                  : _processingImage
+                  ? const _BusyView()
                   : _mode == _ScanMode.ocr
                   ? _OcrView(
                       controller: _cameraController,
@@ -244,8 +415,11 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
               child: Container(
                 color: BambooInk.paper,
                 child: _lastExtracted == null
-                    ? _IdleHint(mode: _mode)
-                    : _ResultPanel(
+                    ? _IdleHint(
+                        mode: _mode,
+                        onPickImage: _processingImage ? null : _pickImage,
+                      )
+                    : ScanResultPanel(
                         extracted: _lastExtracted!,
                         matches: _matches,
                         showRawText: !_resultIsFromOcr,
@@ -476,9 +650,28 @@ class _CapturedPreview extends StatelessWidget {
   }
 }
 
+/// Fills the preview area while a picked image is being decoded on-device —
+/// the camera has been released for the system photo picker, so there is no
+/// live frame to show behind it.
+class _BusyView extends StatelessWidget {
+  const _BusyView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Colors.black,
+      child: Center(child: CircularProgressIndicator(color: BambooInk.lime)),
+    );
+  }
+}
+
 class _IdleHint extends StatelessWidget {
   final _ScanMode mode;
-  const _IdleHint({required this.mode});
+
+  /// Null while a pick is already in flight (disables the button).
+  final VoidCallback? onPickImage;
+
+  const _IdleHint({required this.mode, required this.onPickImage});
 
   @override
   Widget build(BuildContext context) {
@@ -497,21 +690,40 @@ class _IdleHint extends StatelessWidget {
             '"Front of card" for that.',
       ),
     };
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(title, style: BambooFonts.heading(15, color: BambooInk.ink900), textAlign: TextAlign.center),
-          const SizedBox(height: AppSpace.sm),
-          Text(body, style: BambooFonts.ui(12.5, color: BambooInk.ink500), textAlign: TextAlign.center),
-        ],
+    final pickLabel = mode == _ScanMode.ocr ? 'Upload a photo instead' : 'Pick an image instead';
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, style: BambooFonts.heading(15, color: BambooInk.ink900), textAlign: TextAlign.center),
+            const SizedBox(height: AppSpace.sm),
+            Text(body, style: BambooFonts.ui(12.5, color: BambooInk.ink500), textAlign: TextAlign.center),
+            const SizedBox(height: AppSpace.md),
+            OutlinedButton.icon(
+              onPressed: onPickImage,
+              icon: const Icon(Icons.photo_library_outlined, size: 18),
+              label: Text(pickLabel),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BambooInk.ink900,
+                side: const BorderSide(color: BambooInk.hairlineOnPaper),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ResultPanel extends StatelessWidget {
+/// The bottom half of [ScanCardScreen] once something has been scanned:
+/// the possible catalogue matches plus "Scan again". Public only so a
+/// widget test can pin its layout — see
+/// `test/features/scan/scan_result_panel_test.dart`, which guards the
+/// regression where the app-wide full-width FilledButton theme crushed the
+/// match text to one character per line.
+class ScanResultPanel extends StatelessWidget {
   final ExtractedCardText extracted;
   final List<CardMatch> matches;
 
@@ -525,7 +737,8 @@ class _ResultPanel extends StatelessWidget {
   final void Function(CardProduct) onConfirm;
   final VoidCallback onRescan;
 
-  const _ResultPanel({
+  const ScanResultPanel({
+    super.key,
     required this.extracted,
     required this.matches,
     required this.showRawText,
@@ -560,22 +773,43 @@ class _ResultPanel extends StatelessWidget {
               style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500),
             ),
           for (final match in matches.take(5))
-            ListTile(
-              title: Text(match.product.name, style: BambooFonts.ui(14.5, color: BambooInk.ink900)),
-              subtitle: Text(
-                '${match.confidence.name} confidence · ${redactDigitRuns(match.reason)}',
-                style: BambooFonts.ui(12, color: BambooInk.ink500),
-              ),
-              trailing: match.confidence == MatchConfidence.low
-                  ? null
-                  : FilledButton(
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(match.product.name, style: BambooFonts.ui(14.5, color: BambooInk.ink900)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${match.confidence.name} confidence · ${redactDigitRuns(match.reason)}',
+                          style: BambooFonts.ui(12, color: BambooInk.ink500),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (match.confidence != MatchConfidence.low) ...[
+                    const SizedBox(width: 12),
+                    FilledButton(
+                      // The app-wide FilledButton theme forces Size.fromHeight(52),
+                      // i.e. full-width; override it here so the button shrink-wraps
+                      // "Use this" instead of crushing the match text beside it.
                       style: FilledButton.styleFrom(
                         backgroundColor: BambooInk.slate,
                         foregroundColor: BambooInk.lime,
+                        minimumSize: const Size(0, 40),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       onPressed: () => onConfirm(match.product),
                       child: const Text('Use this'),
                     ),
+                  ],
+                ],
+              ),
             ),
           const SizedBox(height: 8),
           OutlinedButton(

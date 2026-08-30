@@ -35,6 +35,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .design_preview/
+/.pub-cache/
+/.appdata/
 
 # macOS
 .DS_Store
@@ -47,6 +49,11 @@ session_screenshots/
 outputs/
 **/graphify-out/
 **/.gradle/
+
+# Local emulator inspection output
+app/emulator_screen_*.png
+**/window_dump.xml
+app/third_party/telephony/android/.gradle/
 
 # SSH / signing keys. NOTHING matching these may ever be committed — a
 # private key in a public repo is a full server compromise, and git history
