@@ -32,12 +32,19 @@ class RecoveryStatus {
   /// access token.
   final String? emailHint;
 
+  /// A masked form (`+91•••••••3210`) of the phone on file, or null when there
+  /// is none. Returned whenever a number is linked at all, verified or not —
+  /// the Email & phone screen uses its presence to tell "linked but unproven"
+  /// apart from "no number", and keys the badge off [phoneVerified].
+  final String? phoneHint;
+
   const RecoveryStatus({
     required this.phoneVerified,
     required this.emailVerified,
     required this.hasBackupChannel,
     this.missingChannel,
     this.emailHint,
+    this.phoneHint,
   });
 
   factory RecoveryStatus.fromJson(Map<String, dynamic> json) {
@@ -47,6 +54,7 @@ class RecoveryStatus {
       hasBackupChannel: json['has_backup_channel'] == true,
       missingChannel: json['missing_channel'] as String?,
       emailHint: json['email_hint'] as String?,
+      phoneHint: json['phone_hint'] as String?,
     );
   }
 }

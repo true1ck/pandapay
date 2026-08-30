@@ -106,6 +106,9 @@ router.get('/me/recovery-status', auth, userRateLimitRead, async (req, res) => {
     }
 
     const user = rows[0];
+    // Stored encrypted (see GET /me) — decrypt before it can be masked for
+    // display. Kept local; only the masked form ever leaves this handler.
+    const phonePlain = user.phone_number ? decryptPhoneNumber(user.phone_number) : null;
     const phoneVerified = Boolean(user.phone_number) && user.is_phone_verified;
     const emailVerified = Boolean(user.email) && user.is_email_verified;
     const verifiedCount = (phoneVerified ? 1 : 0) + (emailVerified ? 1 : 0);
@@ -119,6 +122,11 @@ router.get('/me/recovery-status', auth, userRateLimitRead, async (req, res) => {
       // Which channel to offer, so the client doesn't have to re-derive it.
       missing_channel: verifiedCount >= 2 ? null : phoneVerified ? 'email' : 'phone',
       email_hint: emailVerified ? maskEmail(user.email) : null,
+      // Masked, and returned whenever a phone is on file at all — not gated on
+      // `phoneVerified` — because the Email & phone screen needs to show "we
+      // have this number, it just isn't proven" as a distinct state from "no
+      // number". `phone_verified` above is what the UI keys the badge off.
+      phone_hint: phonePlain ? maskPhone(phonePlain) : null,
     });
   } catch (err) {
     console.error('recovery status error', err);
@@ -137,6 +145,24 @@ function maskEmail(email) {
   const [local, domain] = email.split('@');
   const head = local.slice(0, Math.min(2, local.length));
   return `${head}${'•'.repeat(Math.max(local.length - head.length, 1))}@${domain}`;
+}
+
+/**
+ * Masks a phone for display: `+919876543210` -> `+91•••••••3210`. Keeps a
+ * leading country code (up to the first 3 digits) and the last 4 so the owner
+ * recognises it; everything between is bulleted. Like `maskEmail`, this is for
+ * recognition only — an ordinary access token must not be able to read the
+ * full number back.
+ */
+function maskPhone(phone) {
+  if (!phone) return null;
+  const digits = String(phone).replace(/[^\d]/g, '');
+  if (digits.length < 4) return '•'.repeat(digits.length || 1);
+  const last4 = digits.slice(-4);
+  const headLen = digits.length > 10 ? Math.min(3, digits.length - 4) : 0;
+  const head = headLen ? `+${digits.slice(0, headLen)}` : '';
+  const hiddenLen = digits.length - headLen - 4;
+  return `${head}${'•'.repeat(Math.max(hiddenLen, 1))}${last4}`;
 }
 
 // PUT /users/me
