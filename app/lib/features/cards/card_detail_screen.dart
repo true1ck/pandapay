@@ -278,6 +278,7 @@ class _RewardsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final fuelCategory = categories.where((c) => c.slug == 'fuel').firstOrNull;
     String categoryName(String? id) {
       if (id == null) return 'All other spends';
       for (final c in categories) {
@@ -288,7 +289,11 @@ class _RewardsTab extends ConsumerWidget {
 
     final rules = List<RewardRule>.from(product.rewardRules)
       ..sort((a, b) => a.priority.compareTo(b.priority));
-    if (rules.isEmpty) {
+    final hasFuelInRules = rules.any((r) =>
+        (fuelCategory != null && r.categoryId == fuelCategory.id) ||
+        r.categoryId == 'fuel');
+
+    if (rules.isEmpty && product.fuelRule == null) {
       return const EmptyState(icon: Icons.percent_outlined, title: 'No reward structure on file yet');
     }
     return ListView(
@@ -305,6 +310,53 @@ class _RewardsTab extends ConsumerWidget {
         for (final rule in rules)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
+            child: Builder(
+              builder: (context) {
+                final isFuelRule = (fuelCategory != null && rule.categoryId == fuelCategory.id) ||
+                    rule.categoryId == 'fuel';
+                final String rateText;
+                if (isFuelRule && product.fuelRule != null && product.fuelRule!.waiverPercent > 0) {
+                  rateText = rule.rate == 0
+                      ? '${_rate(product.fuelRule!.waiverPercent)}% waiver'
+                      : '${_rate(rule.rate)}% + ${_rate(product.fuelRule!.waiverPercent)}% waiver';
+                } else {
+                  rateText = _rateLabel(rule);
+                }
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: BambooInk.glassFillOnPaper,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    border: Border.all(color: BambooInk.hairlineOnPaper),
+                  ),
+                  padding: const EdgeInsets.all(AppSpace.lg),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              categoryName(rule.categoryId),
+                              style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                            ),
+                            if (rule.rail != null) ...[
+                              const SizedBox(height: 2),
+                              Text(_railLabel(rule.rail!), style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                            ],
+                          ],
+                        ),
+                      ),
+                      Text(rateText, style: BambooFonts.heading(17, color: BambooInk.ink900)),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        if (!hasFuelInRules && product.fuelRule != null && product.fuelRule!.waiverPercent > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: Container(
               decoration: BoxDecoration(
                 color: BambooInk.glassFillOnPaper,
@@ -319,17 +371,16 @@ class _RewardsTab extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          categoryName(rule.categoryId),
+                          'Fuel',
                           style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                         ),
-                        if (rule.rail != null) ...[
-                          const SizedBox(height: 2),
-                          Text(_railLabel(rule.rail!), style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                        ],
+                        const SizedBox(height: 2),
+                        Text('Surcharge waiver', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
                       ],
                     ),
                   ),
-                  Text(_rateLabel(rule), style: BambooFonts.heading(17, color: BambooInk.ink900)),
+                  Text('${_rate(product.fuelRule!.waiverPercent)}% waiver',
+                      style: BambooFonts.heading(17, color: BambooInk.ink900)),
                 ],
               ),
             ),
@@ -386,7 +437,7 @@ class _CapsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (product.capRules.isEmpty) {
+    if (product.capRules.isEmpty && product.fuelRule == null) {
       return const EmptyState(icon: Icons.speed_outlined, title: 'No caps on this card');
     }
     return ListView(
@@ -439,6 +490,44 @@ class _CapsTab extends StatelessWidget {
               },
             ),
           ),
+        if (product.fuelRule != null) ...[
+          if (product.capRules.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpace.sm),
+              child: Text(
+                'Fuel surcharge waivers',
+                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              ),
+            ),
+          ],
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
+            child: Container(
+              decoration: BoxDecoration(
+                color: BambooInk.glassFillOnPaper,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: BambooInk.hairlineOnPaper),
+              ),
+              padding: const EdgeInsets.all(AppSpace.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
+                    style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${product.fuelRule!.waiverPercent.toStringAsFixed(product.fuelRule!.waiverPercent == product.fuelRule!.waiverPercent.roundToDouble() ? 0 : 2)}% surcharge waived'
+                    '${product.fuelRule!.minTxn != null ? " on spends above ${product.fuelRule!.minTxn!.format()}" : ""}'
+                    '${product.fuelRule!.maxTxn != null ? " up to ${product.fuelRule!.maxTxn!.format()}" : ""}',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -722,7 +811,21 @@ class _BenefitsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (product.benefits.isEmpty) {
+    final benefits = [
+      ...product.benefits,
+      if (product.fuelRule != null &&
+          !product.benefits.any((b) => b.kind == BenefitKind.fuelSurcharge))
+        CardBenefit(
+          id: 'fuel-${product.id}',
+          kind: BenefitKind.fuelSurcharge,
+          label:
+              '${product.fuelRule!.waiverPercent == product.fuelRule!.waiverPercent.roundToDouble() ? product.fuelRule!.waiverPercent.toStringAsFixed(0) : product.fuelRule!.waiverPercent.toStringAsFixed(2)}% fuel surcharge waiver',
+          description: 'Fuel surcharge waived'
+              '${product.fuelRule!.minTxn != null ? " on transactions above ${product.fuelRule!.minTxn!.format()}" : ""}'
+              '${product.fuelRule!.maxTxn != null ? " up to ${product.fuelRule!.maxTxn!.format()}" : ""}.',
+        ),
+    ];
+    if (benefits.isEmpty) {
       return const EmptyState(
         icon: Icons.workspace_premium_outlined,
         title: 'No benefits on file for this card',
@@ -731,7 +834,7 @@ class _BenefitsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpace.lg),
       children: [
-        for (final benefit in product.benefits)
+        for (final benefit in benefits)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: Container(

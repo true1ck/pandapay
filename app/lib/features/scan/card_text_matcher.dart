@@ -33,7 +33,8 @@ class CardMatch {
   final CardProduct product;
   final MatchConfidence confidence;
   final String reason;
-  const CardMatch({required this.product, required this.confidence, required this.reason});
+  final double overlap;
+  const CardMatch({required this.product, required this.confidence, required this.reason, this.overlap = 0.0});
 }
 
 /// Card networks scanning cares about, plus the raw synonyms printed on
@@ -147,9 +148,18 @@ List<CardMatch> matchCardText(ExtractedCardText extracted, List<CardProduct> cat
       reasonParts.add('network match (${product.network.name})');
     }
 
-    results.add(CardMatch(product: product, confidence: confidence, reason: reasonParts.join(', ')));
+    results.add(CardMatch(
+      product: product,
+      confidence: confidence,
+      reason: reasonParts.join(', '),
+      overlap: overlap,
+    ));
   }
 
-  results.sort((a, b) => b.confidence.index.compareTo(a.confidence.index));
+  results.sort((a, b) {
+    final confCmp = b.confidence.index.compareTo(a.confidence.index);
+    if (confCmp != 0) return confCmp;
+    return b.overlap.compareTo(a.overlap);
+  });
   return results;
 }

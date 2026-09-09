@@ -18,6 +18,7 @@ class HomeWidgetService {
   /// Must match the Android `<receiver>` name / iOS widget kind wired up in
   /// the (unverified) native skeletons — see PROGRESS.md.
   static const String androidWidgetName = 'BestCardWidgetProvider';
+  static const String qualifiedAndroidName = 'app.pandapay.pandapay.BestCardWidgetProvider';
   static const String iosWidgetName = 'PandaPayBestCardWidget';
 
   static const String cardNameKey = 'best_card_name';
@@ -65,6 +66,37 @@ class HomeWidgetService {
     }
     await HomeWidget.saveWidgetData<String>(updatedAtKey, nowIso);
 
-    await HomeWidget.updateWidget(androidName: androidWidgetName, iOSName: iosWidgetName);
+    await HomeWidget.updateWidget(
+      androidName: androidWidgetName,
+      qualifiedAndroidName: qualifiedAndroidName,
+      iOSName: iosWidgetName,
+    );
+  }
+
+  /// Checks whether the user's Android launcher supports pinning widgets directly.
+  Future<bool> isPinWidgetSupported() async {
+    final supported = await HomeWidget.isRequestPinWidgetSupported();
+    return supported ?? false;
+  }
+
+  /// Requests the OS/launcher to pin the PandaPay widget to the home screen.
+  Future<void> pinBestCardWidget() async {
+    await configure();
+    await HomeWidget.requestPinWidget(
+      androidName: androidWidgetName,
+      qualifiedAndroidName: qualifiedAndroidName,
+    );
+  }
+
+  /// Checks whether the widget is currently placed on the user's home screen.
+  Future<bool> isWidgetInstalled() async {
+    try {
+      final widgets = await HomeWidget.getInstalledWidgets();
+      return widgets.any(
+        (w) => w.androidClassName?.contains(androidWidgetName) ?? false,
+      );
+    } catch (_) {
+      return false;
+    }
   }
 }

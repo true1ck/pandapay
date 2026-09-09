@@ -203,9 +203,12 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // actually be honoured rather than falling through to the base rate.
     final merchantName = widget.parsed.pn;
     final now = DateTime.now();
+    final selectedCategorySlug =
+        categoryList.where((c) => c.id == _selectedCategoryId).firstOrNull?.slug;
     final upiContext = RecommendationContext(
       amount: _amount,
       categoryId: _selectedCategoryId,
+      categorySlug: selectedCategorySlug,
       mcc: widget.parsed.mc,
       vpa: widget.parsed.pa,
       merchantName: merchantName,
@@ -215,6 +218,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final swipeContext = RecommendationContext(
       amount: _amount,
       categoryId: _selectedCategoryId,
+      categorySlug: selectedCategorySlug,
       mcc: widget.parsed.mc,
       vpa: widget.parsed.pa,
       merchantName: merchantName,

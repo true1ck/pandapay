@@ -58,15 +58,21 @@ import 'env.dart';
 const _apiBaseUrl = Env.apiBaseUrl;
 const _authBaseUrl = Env.authBaseUrl;
 
-final authApiProvider = Provider<AuthApi>((ref) => AuthApi(authBaseUrl: _authBaseUrl));
+final authApiProvider = Provider<AuthApi>(
+  (ref) => AuthApi(authBaseUrl: _authBaseUrl),
+);
 
-final tokenStoreProvider = FutureProvider<TokenStore>((ref) => TokenStore.load());
+final tokenStoreProvider = FutureProvider<TokenStore>(
+  (ref) => TokenStore.load(),
+);
 
 /// This install's stable device identifier — see device_identity.dart's
 /// own doc-comment for why this exists (every install used to send the
 /// same literal `'app-mobile'` string, so there was nothing real to
 /// generate/persist/compare here before).
-final localDeviceIdProvider = FutureProvider<String>((ref) => DeviceIdentity().localDeviceId());
+final localDeviceIdProvider = FutureProvider<String>(
+  (ref) => DeviceIdentity().localDeviceId(),
+);
 
 /// The signed-in access token, or null when signed out. Seeded on startup
 /// by sessionInitProvider from a stored refresh token; login_screen.dart
@@ -114,7 +120,9 @@ final partnerApplyRepositoryProvider = Provider<PartnerApplyRepository?>((ref) {
 /// New-card-acquisition recommender's data input. Null when signed out: a
 /// guest has no server-side transaction history to project a spend pattern
 /// from, same reasoning as every other repository provider in this file.
-final spendByCategoryRepositoryProvider = Provider<SpendByCategoryRepository?>((ref) {
+final spendByCategoryRepositoryProvider = Provider<SpendByCategoryRepository?>((
+  ref,
+) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
   return SpendByCategoryRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
@@ -130,7 +138,9 @@ final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
   return repo.fetchSpendByCategory();
 });
 
-final acquisitionRecommenderProvider = Provider<CardAcquisitionRecommender>((ref) {
+final acquisitionRecommenderProvider = Provider<CardAcquisitionRecommender>((
+  ref,
+) {
   return const CardAcquisitionRecommender();
 });
 
@@ -142,49 +152,65 @@ final acquisitionRecommenderProvider = Provider<CardAcquisitionRecommender>((ref
 /// catalogue, not pre-filtered to non-owned here — the recommender itself
 /// already excludes owned cards (see its own rank()), so this stays
 /// consistent with the one place that filtering logic is meant to live.
-final acquisitionCandidatesProvider = Provider<AsyncValue<List<AcquisitionCandidate>>>((ref) {
-  final catalogue = ref.watch(catalogueProvider);
-  final userCards = ref.watch(userCardsProvider);
-  final categorySpend = ref.watch(categorySpendProvider);
-  final recommender = ref.watch(acquisitionRecommenderProvider);
+final acquisitionCandidatesProvider =
+    Provider<AsyncValue<List<AcquisitionCandidate>>>((ref) {
+      final catalogue = ref.watch(catalogueProvider);
+      final userCards = ref.watch(userCardsProvider);
+      final categorySpend = ref.watch(categorySpendProvider);
+      final recommender = ref.watch(acquisitionRecommenderProvider);
 
-  if (catalogue.isLoading || userCards.isLoading || categorySpend.isLoading) {
-    return const AsyncValue.loading();
-  }
-  final combinedError = catalogue.error ?? userCards.error ?? categorySpend.error;
-  if (combinedError != null) {
-    return AsyncValue.error(
-      combinedError,
-      catalogue.stackTrace ?? userCards.stackTrace ?? categorySpend.stackTrace!,
-    );
-  }
+      if (catalogue.isLoading ||
+          userCards.isLoading ||
+          categorySpend.isLoading) {
+        return const AsyncValue.loading();
+      }
+      final combinedError =
+          catalogue.error ?? userCards.error ?? categorySpend.error;
+      if (combinedError != null) {
+        return AsyncValue.error(
+          combinedError,
+          catalogue.stackTrace ??
+              userCards.stackTrace ??
+              categorySpend.stackTrace!,
+        );
+      }
 
-  final allCards = catalogue.requireValue;
-  final wallet = userCards.requireValue;
-  final spend = categorySpend.requireValue;
+      final allCards = catalogue.requireValue;
+      final wallet = userCards.requireValue;
+      final spend = categorySpend.requireValue;
 
-  final ownedProducts = allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
-  final profile = SpendProfile(annualSpendByCategory: {for (final s in spend) s.categoryId: s.totalSpend});
+      final ownedProducts = allCards
+          .where((c) => wallet.any((w) => w.cardProductId == c.id))
+          .toList();
+      final profile = SpendProfile(
+        annualSpendByCategory: {
+          for (final s in spend) s.categoryId: s.totalSpend,
+        },
+      );
 
-  final results = recommender.rank(
-    candidates: allCards,
-    ownedCards: ownedProducts,
-    spendProfile: profile,
-    // Never suggest applying for a card on the strength of a promo rate
-    // that has already expired — the user would apply and never see it.
-    now: ref.watch(clockProvider).now(),
-  );
-  return AsyncValue.data(results);
-});
+      final results = recommender.rank(
+        candidates: allCards,
+        ownedCards: ownedProducts,
+        spendProfile: profile,
+        // Never suggest applying for a card on the strength of a promo rate
+        // that has already expired — the user would apply and never see it.
+        now: ref.watch(clockProvider).now(),
+      );
+      return AsyncValue.data(results);
+    });
 
 /// Plan Phase 2.1 — acceptance reports ("did this card work here?"). Null
 /// when signed out: a guest has no profile for the server-side opt-in check
 /// to consult, and `submit_acceptance_report()` refuses without one.
-final acceptanceReportsRepositoryProvider = Provider<AcceptanceReportsRepository?>((ref) {
-  final token = ref.watch(accessTokenProvider);
-  if (token == null) return null;
-  return AcceptanceReportsRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
-});
+final acceptanceReportsRepositoryProvider =
+    Provider<AcceptanceReportsRepository?>((ref) {
+      final token = ref.watch(accessTokenProvider);
+      if (token == null) return null;
+      return AcceptanceReportsRepository(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: token,
+      );
+    });
 
 /// Scan-to-pay targeted UPI-app handoff (RuPay-on-UPI plan, Phase 1).
 /// Overridden with a fake in widget tests — the real one talks to a
@@ -268,7 +294,9 @@ final recoveryApiProvider = Provider<RecoveryApi?>((ref) {
   return RecoveryApi(authBaseUrl: _authBaseUrl, accessToken: token);
 });
 
-final recoveryStatusProvider = FutureProvider.autoDispose<RecoveryStatus?>((ref) async {
+final recoveryStatusProvider = FutureProvider.autoDispose<RecoveryStatus?>((
+  ref,
+) async {
   final api = ref.watch(recoveryApiProvider);
   if (api == null) return null;
   return api.fetchStatus();
@@ -294,20 +322,26 @@ final userSettingsApiProvider = Provider<UserSettingsApi?>((ref) {
 
 /// Same pattern as console/lib/app/providers.dart's sessionInitProvider:
 /// resolve a stored refresh token through auth/'s real POST /auth/refresh
-/// on startup; on any failure (expired/reused/invalid), clear storage and
-/// stay signed out rather than retry-looping.
+/// on startup. Credentials are never cleared here: signing out is an explicit
+/// user action, not a consequence of a refresh failure.
 final sessionInitProvider = FutureProvider<void>((ref) async {
   final store = await ref.watch(tokenStoreProvider.future);
+  if (store.accessToken != null) {
+    ref.read(accessTokenProvider.notifier).state = store.accessToken;
+  }
   final refreshToken = store.refreshToken;
   if (refreshToken == null) return;
 
   final authApi = ref.read(authApiProvider);
   try {
     final tokens = await authApi.refresh(refreshToken);
-    await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+    await store.save(
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    );
     ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
   } catch (_) {
-    await store.clear();
+    // Keep the current credentials. Only manual sign-out clears them.
   }
 });
 
@@ -319,41 +353,54 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
 /// every API call while accessTokenProvider still held the now-dead token
 /// — "signed in" on screen, broken underneath. This re-reads the CURRENT
 /// refresh token from storage (not a captured value) every 10 minutes,
-/// comfortably inside the 15-minute TTL, and signs the user out cleanly
-/// (matching sessionInitProvider's own failure behavior) if the refresh
-/// token itself turns out to be dead rather than retry-looping against it.
+/// comfortably inside the 15-minute TTL. Refresh failures leave the current
+/// session intact; only manual sign-out clears credentials.
 /// Read once from `_AppShell` in main.dart so it runs for the app's whole
 /// lifetime regardless of which tab is showing.
 /// How often to proactively rotate the access token. Must stay comfortably
 /// below auth/'s JWT_ACCESS_TTL (15m by default) — overridable so tests can
 /// drive the timer without waiting in real time.
-final sessionRefreshIntervalProvider = Provider<Duration>((ref) => const Duration(minutes: 10));
+final sessionRefreshIntervalProvider = Provider<Duration>(
+  (ref) => const Duration(minutes: 10),
+);
 
 final sessionKeepAliveProvider = Provider<void>((ref) {
   Timer? timer;
+  var refreshInProgress = false;
 
   Future<void> tick() async {
     final currentToken = ref.read(accessTokenProvider);
-    if (currentToken == null) return; // signed out since the timer was scheduled
-
-    final store = await ref.read(tokenStoreProvider.future);
-    final refreshToken = store.refreshToken;
-    if (refreshToken == null) return;
+    if (currentToken == null || refreshInProgress) {
+      return; // avoid rotating one-time tokens concurrently
+    }
+    refreshInProgress = true;
 
     try {
+      final store = await ref.read(tokenStoreProvider.future);
+      final refreshToken = store.refreshToken;
+      if (refreshToken == null) return;
+
       final tokens = await ref.read(authApiProvider).refresh(refreshToken);
-      await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+      if (ref.read(accessTokenProvider) != currentToken) return;
+      await store.save(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      );
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
     } catch (_) {
-      await store.clear();
-      ref.read(accessTokenProvider.notifier).state = null;
+      // Never sign out automatically. The next timer tick retries.
+    } finally {
+      refreshInProgress = false;
     }
   }
 
   ref.listen<String?>(accessTokenProvider, (previous, next) {
     timer?.cancel();
     if (next != null) {
-      timer = Timer.periodic(ref.read(sessionRefreshIntervalProvider), (_) => tick());
+      timer = Timer.periodic(
+        ref.read(sessionRefreshIntervalProvider),
+        (_) => tick(),
+      );
     }
   }, fireImmediately: true);
 
@@ -369,9 +416,10 @@ final sessionKeepAliveProvider = Provider<void>((ref) {
 /// welcome flow again).
 const _onboardingCompleteKey = 'pandapay_app.onboarding_complete_v1';
 
-final onboardingCompleteProvider = StateNotifierProvider<OnboardingController, AsyncValue<bool>>(
-  OnboardingController.new,
-);
+final onboardingCompleteProvider =
+    StateNotifierProvider<OnboardingController, AsyncValue<bool>>(
+      OnboardingController.new,
+    );
 
 class OnboardingController extends StateNotifier<AsyncValue<bool>> {
   final Ref _ref;
@@ -414,9 +462,10 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
 /// through Welcome/Account Choice.
 const _tutorialSeenKey = 'pandapay_app.tutorial_seen_v1';
 
-final tutorialSeenProvider = StateNotifierProvider<TutorialController, AsyncValue<bool>>(
-  TutorialController.new,
-);
+final tutorialSeenProvider =
+    StateNotifierProvider<TutorialController, AsyncValue<bool>>(
+      TutorialController.new,
+    );
 
 class TutorialController extends StateNotifier<AsyncValue<bool>> {
   final Ref _ref;
@@ -454,9 +503,10 @@ class TutorialController extends StateNotifier<AsyncValue<bool>> {
 /// territory (out of scope here) — this only owns the on/off state.
 const _dueDateRemindersKey = 'pandapay_app.due_date_reminders_v1';
 
-final dueDateRemindersProvider = StateNotifierProvider<DueDateRemindersController, Set<String>>(
-  DueDateRemindersController.new,
-);
+final dueDateRemindersProvider =
+    StateNotifierProvider<DueDateRemindersController, Set<String>>(
+      DueDateRemindersController.new,
+    );
 
 class DueDateRemindersController extends StateNotifier<Set<String>> {
   final Ref _ref;
@@ -489,7 +539,9 @@ class DueDateRemindersController extends StateNotifier<Set<String>> {
 /// `ref.invalidate`), same pull-based refresh pattern as every other
 /// FutureProvider in this file rather than a StateNotifier — the store is
 /// a dumb list, not something with derived state worth a controller class.
-final needsReviewRepositoryProvider = Provider<NeedsReviewRepository>((ref) => NeedsReviewRepository());
+final needsReviewRepositoryProvider = Provider<NeedsReviewRepository>(
+  (ref) => NeedsReviewRepository(),
+);
 
 final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((ref) {
   return ref.watch(needsReviewRepositoryProvider).fetchAll();
@@ -544,14 +596,19 @@ final spendReportsRepositoryProvider = Provider<SpendReportsRepository?>((ref) {
 /// "selected period" StateProvider: switching period is a different fetch,
 /// and keying the cache by period means flipping back to a period already
 /// looked at is instant instead of re-fetching.
-final spendReportProvider = FutureProvider.family<SpendReport?, SpendPeriod>((ref, period) async {
+final spendReportProvider = FutureProvider.family<SpendReport?, SpendPeriod>((
+  ref,
+  period,
+) async {
   final repo = ref.watch(spendReportsRepositoryProvider);
   if (repo == null) return null;
   return repo.fetchReport(period: period);
 });
 
 /// The period the Trends screen is currently showing.
-final selectedSpendPeriodProvider = StateProvider<SpendPeriod>((ref) => SpendPeriod.month);
+final selectedSpendPeriodProvider = StateProvider<SpendPeriod>(
+  (ref) => SpendPeriod.month,
+);
 
 /// Every active budget with its current-period progress.
 final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
@@ -587,9 +644,12 @@ final budgetsNeedingAttentionProvider = Provider<List<BudgetStatus>>((ref) {
 /// [userCardsProvider]/[myCardsProvider] when [userCardsRepositoryProvider]
 /// is null. A FutureProvider because opening the sqlite file
 /// ([appDatabaseProvider]) is itself async.
-final localUserCardsRepositoryProvider = FutureProvider<LocalUserCardsRepository>((ref) async {
-  return LocalUserCardsRepository(await ref.watch(appDatabaseProvider.future));
-});
+final localUserCardsRepositoryProvider =
+    FutureProvider<LocalUserCardsRepository>((ref) async {
+      return LocalUserCardsRepository(
+        await ref.watch(appDatabaseProvider.future),
+      );
+    });
 
 /// The signed-in user's own wallet — empty (not an error) when signed out,
 /// so rankedRecommendationsProvider below can fall back to the whole
@@ -605,26 +665,36 @@ final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   try {
     final cards = await repo.fetchUserCards();
     final cache = await _cacheOrNull(ref);
-    await cache?.put(_userCardsCacheKey, jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}));
+    await cache?.put(
+      _userCardsCacheKey,
+      jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
+    );
     return cards;
   } catch (_) {
     final cache = await _cacheOrNull(ref);
     final cached = await cache?.get(_userCardsCacheKey);
     if (cached == null) rethrow;
     final body = jsonDecode(cached) as Map<String, dynamic>;
-    return (body['userCards'] as List).cast<Map<String, dynamic>>().map(UserCard.fromJson).toList();
+    return (body['userCards'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(UserCard.fromJson)
+        .toList();
   }
 });
 
 /// UA-3+ (Chunk 18): the Activity tab's data — empty (not an error) when
 /// signed out, same reasoning as userCardsProvider above.
-final transactionsProvider = FutureProvider<List<TransactionEntry>>((ref) async {
+final transactionsProvider = FutureProvider<List<TransactionEntry>>((
+  ref,
+) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   return repo.fetchTransactions();
 });
 
-final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((ref) {
+final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((
+  ref,
+) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
   return CardOverridesRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
@@ -648,7 +718,10 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
     final cached = await cache?.get(_cardOverridesCacheKey);
     if (cached == null) rethrow;
     final body = jsonDecode(cached) as Map<String, dynamic>;
-    return (body['overrides'] as List).cast<Map<String, dynamic>>().map(CardOverride.fromJson).toList();
+    return (body['overrides'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(CardOverride.fromJson)
+        .toList();
   }
 });
 
@@ -680,12 +753,18 @@ final isOnlineProvider = StreamProvider<bool>((ref) {
   return Connectivity().onConnectivityChanged.map(connectivityResultToIsOnline);
 });
 
-final outboxRepositoryProvider = FutureProvider<TransactionOutboxRepository>((ref) async {
-  return TransactionOutboxRepository(await ref.watch(appDatabaseProvider.future));
+final outboxRepositoryProvider = FutureProvider<TransactionOutboxRepository>((
+  ref,
+) async {
+  return TransactionOutboxRepository(
+    await ref.watch(appDatabaseProvider.future),
+  );
 });
 
 final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
-  final items = await (await ref.watch(outboxRepositoryProvider.future)).pending();
+  final items = await (await ref.watch(
+    outboxRepositoryProvider.future,
+  )).pending();
   return items.length;
 });
 
@@ -711,7 +790,9 @@ final outboxFlushProvider = Provider<void>((ref) {
 
 /// Task D-5: pending duplicate-candidate pairs; empty (not an error) when
 /// signed out, same pattern as every other repository-backed provider here.
-final duplicateCandidatesProvider = FutureProvider<List<DuplicateCandidate>>((ref) async {
+final duplicateCandidatesProvider = FutureProvider<List<DuplicateCandidate>>((
+  ref,
+) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   return repo.fetchDuplicateCandidates();
@@ -732,7 +813,10 @@ final myCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   if (repo == null) {
     final local = await ref.watch(localUserCardsRepositoryProvider.future);
     final catalogue = await ref.watch(catalogueProvider.future);
-    return local.fetchUserCards(includeArchived: includeArchived, catalogue: catalogue);
+    return local.fetchUserCards(
+      includeArchived: includeArchived,
+      catalogue: catalogue,
+    );
   }
   return repo.fetchUserCards(includeArchived: includeArchived);
 });
@@ -741,23 +825,28 @@ final myCardsProvider = FutureProvider<List<UserCard>>((ref) async {
 /// from myCardsProvider so C1 (with its archived toggle on) and C2 (deep-
 /// linked into an archived card from C1) can both resolve a product for a
 /// card ownedCardsWithProductProvider would have silently excluded.
-final myCardsWithProductProvider = Provider<AsyncValue<List<(UserCard, CardProduct)>>>((ref) {
-  final userCards = ref.watch(myCardsProvider);
-  final catalogue = ref.watch(catalogueProvider);
+final myCardsWithProductProvider =
+    Provider<AsyncValue<List<(UserCard, CardProduct)>>>((ref) {
+      final userCards = ref.watch(myCardsProvider);
+      final catalogue = ref.watch(catalogueProvider);
 
-  if (userCards.isLoading || catalogue.isLoading) return const AsyncValue.loading();
-  final combinedError = userCards.error ?? catalogue.error;
-  if (combinedError != null) {
-    return AsyncValue.error(combinedError, userCards.stackTrace ?? catalogue.stackTrace!);
-  }
+      if (userCards.isLoading || catalogue.isLoading)
+        return const AsyncValue.loading();
+      final combinedError = userCards.error ?? catalogue.error;
+      if (combinedError != null) {
+        return AsyncValue.error(
+          combinedError,
+          userCards.stackTrace ?? catalogue.stackTrace!,
+        );
+      }
 
-  final products = {for (final p in catalogue.requireValue) p.id: p};
-  final pairs = [
-    for (final uc in userCards.requireValue)
-      if (products[uc.cardProductId] case final product?) (uc, product),
-  ];
-  return AsyncValue.data(pairs);
-});
+      final products = {for (final p in catalogue.requireValue) p.id: p};
+      final pairs = [
+        for (final uc in userCards.requireValue)
+          if (products[uc.cardProductId] case final product?) (uc, product),
+      ];
+      return AsyncValue.data(pairs);
+    });
 
 /// Task 7: pairs each owned [UserCard] (consumption/progress state) with its
 /// [CardProduct] (the actual rule DEFINITIONS — cap values, milestone
@@ -766,23 +855,28 @@ final myCardsWithProductProvider = Provider<AsyncValue<List<(UserCard, CardProdu
 /// Milestones, Billing Float, Benefits Cheat Sheet) needs both halves
 /// together, so this is the one join point rather than four screens
 /// re-deriving it.
-final ownedCardsWithProductProvider = Provider<AsyncValue<List<(UserCard, CardProduct)>>>((ref) {
-  final userCards = ref.watch(userCardsProvider);
-  final catalogue = ref.watch(catalogueProvider);
+final ownedCardsWithProductProvider =
+    Provider<AsyncValue<List<(UserCard, CardProduct)>>>((ref) {
+      final userCards = ref.watch(userCardsProvider);
+      final catalogue = ref.watch(catalogueProvider);
 
-  if (userCards.isLoading || catalogue.isLoading) return const AsyncValue.loading();
-  final combinedError = userCards.error ?? catalogue.error;
-  if (combinedError != null) {
-    return AsyncValue.error(combinedError, userCards.stackTrace ?? catalogue.stackTrace!);
-  }
+      if (userCards.isLoading || catalogue.isLoading)
+        return const AsyncValue.loading();
+      final combinedError = userCards.error ?? catalogue.error;
+      if (combinedError != null) {
+        return AsyncValue.error(
+          combinedError,
+          userCards.stackTrace ?? catalogue.stackTrace!,
+        );
+      }
 
-  final products = {for (final p in catalogue.requireValue) p.id: p};
-  final pairs = [
-    for (final uc in userCards.requireValue)
-      if (products[uc.cardProductId] case final product?) (uc, product),
-  ];
-  return AsyncValue.data(pairs);
-});
+      final products = {for (final p in catalogue.requireValue) p.id: p};
+      final pairs = [
+        for (final uc in userCards.requireValue)
+          if (products[uc.cardProductId] case final product?) (uc, product),
+      ];
+      return AsyncValue.data(pairs);
+    });
 
 /// Task G-0 (scoped to what E3 needs): wraps `creditUtilization()` per
 /// owned card that has a [UserCard.creditLimit] set — cards without one are
@@ -791,8 +885,11 @@ final ownedCardsWithProductProvider = Provider<AsyncValue<List<(UserCard, CardPr
 /// fabricated limit. Recomputes automatically whenever
 /// ownedCardsWithProductProvider changes (a new transaction, a limit being
 /// added), same as every other derived provider in this file.
-final creditUtilizationProvider = Provider<Map<String, UtilizationResult>>((ref) {
-  final pairs = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+final creditUtilizationProvider = Provider<Map<String, UtilizationResult>>((
+  ref,
+) {
+  final pairs =
+      ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
   final result = <String, UtilizationResult>{};
   for (final (userCard, _) in pairs) {
     final limit = userCard.creditLimit;
@@ -807,7 +904,10 @@ final creditUtilizationProvider = Provider<Map<String, UtilizationResult>>((ref)
     // marks the figure as such in the screen (E3's own confidence badge) —
     // flagged explicitly in the final report rather than silently treated
     // as an exact balance.
-    final spendProxy = userCard.capConsumed.values.fold<Money>(const Money.zero(), (a, b) => a + b);
+    final spendProxy = userCard.capConsumed.values.fold<Money>(
+      const Money.zero(),
+      (a, b) => a + b,
+    );
     result[userCard.id] = creditUtilization(spendProxy, limit);
   }
   return result;
@@ -819,9 +919,13 @@ final creditUtilizationProvider = Provider<Map<String, UtilizationResult>>((ref)
 /// user intents (one txn vs. a total to divide) that happen to share a
 /// widget shape; sharing the same provider would mean typing on Home
 /// silently changed what G2 last planned, and vice versa.
-final splitPlannerAmountProvider = StateProvider<Money>((ref) => const Money.zero());
+final splitPlannerAmountProvider = StateProvider<Money>(
+  (ref) => const Money.zero(),
+);
 
-final splitOptimizerProvider = Provider<SplitOptimizer>((ref) => const SplitOptimizer());
+final splitOptimizerProvider = Provider<SplitOptimizer>(
+  (ref) => const SplitOptimizer(),
+);
 
 /// G2 Multi-Card Split Planner. `SplitOptimizer.optimize()` (calculators.dart)
 /// was already fully built with zero callers per the plan's own audit — this
@@ -834,7 +938,8 @@ final splitOptimizerProvider = Provider<SplitOptimizer>((ref) => const SplitOpti
 /// unlimited (its own default when a key is missing).
 final splitPlanProvider = Provider<List<SplitAllocation>>((ref) {
   final amount = ref.watch(splitPlannerAmountProvider);
-  final pairs = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+  final pairs =
+      ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
   if (amount.isZero || pairs.isEmpty) return const [];
 
   final wallet = [for (final (uc, _) in pairs) uc];
@@ -846,9 +951,14 @@ final splitPlanProvider = Provider<List<SplitAllocation>>((ref) {
     final limit = userCard.creditLimit;
     if (limit == null || limit.isZero) continue;
     final threshold = limit * 0.30;
-    final spendProxy = userCard.capConsumed.values.fold<Money>(const Money.zero(), (a, b) => a + b);
+    final spendProxy = userCard.capConsumed.values.fold<Money>(
+      const Money.zero(),
+      (a, b) => a + b,
+    );
     final headroom = threshold - spendProxy;
-    utilizationCeiling[product.id] = headroom.isNegative ? const Money.zero() : headroom;
+    utilizationCeiling[product.id] = headroom.isNegative
+        ? const Money.zero()
+        : headroom;
   }
 
   // No category filter: G2's "total amount to split" is deliberately
@@ -863,7 +973,12 @@ final splitPlanProvider = Provider<List<SplitAllocation>>((ref) {
     travelMode: ref.watch(travelModeProvider),
     now: ref.watch(clockProvider).now(),
   );
-  return optimizer.optimize(amount, baseContext, snapshots, utilizationCeiling: utilizationCeiling);
+  return optimizer.optimize(
+    amount,
+    baseContext,
+    snapshots,
+    utilizationCeiling: utilizationCeiling,
+  );
 });
 
 /// G3 EMI Advisor. `adviseEmi()` (calculators.dart) already returns exactly
@@ -884,9 +999,13 @@ typedef EmiAdviceParams = ({
   double annualInterestRatePercent,
 });
 
-final emiAdviceProvider = Provider.family<EmiAdvice?, EmiAdviceParams>((ref, params) {
+final emiAdviceProvider = Provider.family<EmiAdvice?, EmiAdviceParams>((
+  ref,
+  params,
+) {
   if (params.principalRupees <= 0 || params.tenureMonths <= 0) return null;
-  final pairs = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+  final pairs =
+      ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
   final match = pairs.firstWhereOrNull((p) => p.$2.id == params.cardProductId);
   if (match == null) return null;
   final (userCard, product) = match;
@@ -894,13 +1013,17 @@ final emiAdviceProvider = Provider.family<EmiAdvice?, EmiAdviceParams>((ref, par
   final engine = ref.watch(recommendationEngineProvider);
   final principal = Money.fromRupees(params.principalRupees);
   final snapshot = _userCardSnapshots([product], [userCard]).first;
-  final rec = engine
-      .rank(
-        RecommendationContext(amount: principal, rail: TxnRail.swipe, now: ref.watch(clockProvider).now()),
-        [snapshot],
-      )
-      .first;
-  final forgoneRewardValue = rec.isExcluded ? const Money.zero() : rec.expectedValue;
+  final rec = engine.rank(
+    RecommendationContext(
+      amount: principal,
+      rail: TxnRail.swipe,
+      now: ref.watch(clockProvider).now(),
+    ),
+    [snapshot],
+  ).first;
+  final forgoneRewardValue = rec.isExcluded
+      ? const Money.zero()
+      : rec.expectedValue;
 
   return adviseEmi(
     principal: principal,
@@ -914,17 +1037,22 @@ final emiAdviceProvider = Provider.family<EmiAdvice?, EmiAdviceParams>((ref, par
 /// every other repository provider in this file, because this data has no
 /// per-user sensitivity and the spec requires it reachable with zero login
 /// (see api/'s GET /issuer-emergency-contacts doc-comment).
-final emergencyContactsRepositoryProvider = Provider<EmergencyContactsRepository>((ref) {
-  return HttpEmergencyContactsRepository(baseUrl: _apiBaseUrl);
-});
+final emergencyContactsRepositoryProvider =
+    Provider<EmergencyContactsRepository>((ref) {
+      return HttpEmergencyContactsRepository(baseUrl: _apiBaseUrl);
+    });
 
-final emergencyContactsCacheProvider = Provider<EmergencyContactsCache>((ref) => EmergencyContactsCache());
+final emergencyContactsCacheProvider = Provider<EmergencyContactsCache>(
+  (ref) => EmergencyContactsCache(),
+);
 
 /// Never throws (see EmergencyContactsService.load's own doc-comment) —
 /// always resolves to real, renderable content, live/cached/bundled, so
 /// G4's screen has no "offline" error path to design around, only a
 /// data-freshness banner reflecting whichever of the three it got.
-final emergencyContactsProvider = FutureProvider<EmergencyContactsResult>((ref) async {
+final emergencyContactsProvider = FutureProvider<EmergencyContactsResult>((
+  ref,
+) async {
   final service = EmergencyContactsService(
     repository: ref.watch(emergencyContactsRepositoryProvider),
     cache: ref.watch(emergencyContactsCacheProvider),
@@ -944,16 +1072,22 @@ final loungeUsageProvider = FutureProvider<List<LoungeVisit>>((ref) async {
 /// every owned card's programs on one screen, each needing its own fetch
 /// (unlike userCardsProvider's single lifetime SUM, this is the individual
 /// rows behind it). Empty (not an error) when signed out.
-final pointsLedgerProvider = FutureProvider.family<List<PointsLedgerEntry>, String>((ref, userCardId) async {
-  final repo = ref.watch(userCardsRepositoryProvider);
-  if (repo == null) return const [];
-  return repo.fetchPointsLedger(userCardId);
-});
+final pointsLedgerProvider =
+    FutureProvider.family<List<PointsLedgerEntry>, String>((
+      ref,
+      userCardId,
+    ) async {
+      final repo = ref.watch(userCardsRepositoryProvider);
+      if (repo == null) return const [];
+      return repo.fetchPointsLedger(userCardId);
+    });
 
 /// Task E9: current month's report, recomputed on demand server-side each
 /// time this is watched/invalidated (see GET /monthly-reports' doc-comment
 /// for why only the current month is safe to always-recompute).
-final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((ref) async {
+final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((
+  ref,
+) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return null;
   return repo.fetchMonthlyReport();
@@ -972,11 +1106,15 @@ final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
 
 /// Design 19's notification inbox. Empty (not an error) when signed out —
 /// the inbox lives server-side, so guest mode simply has none.
-final notificationsProvider = FutureProvider<({List<AppNotification> items, int unreadCount})>((ref) async {
-  final repo = ref.watch(userCardsRepositoryProvider);
-  if (repo == null) return (items: const <AppNotification>[], unreadCount: 0);
-  return repo.fetchNotifications();
-});
+final notificationsProvider =
+    FutureProvider<({List<AppNotification> items, int unreadCount})>((
+      ref,
+    ) async {
+      final repo = ref.watch(userCardsRepositoryProvider);
+      if (repo == null)
+        return (items: const <AppNotification>[], unreadCount: 0);
+      return repo.fetchNotifications();
+    });
 
 /// Records an inbox entry for something the app itself just observed, and
 /// refreshes the inbox so the badge updates immediately.
@@ -1027,17 +1165,22 @@ final unreadNotificationCountProvider = Provider<int>((ref) {
 /// userCardsRepositoryProvider above. notification_gate.dart (Part B) reads
 /// these directly — it needs the exact preferences this screen shows, not a
 /// second copy of them.
-final notificationPreferencesRepositoryProvider = Provider<NotificationPreferencesRepository?>((ref) {
-  final token = ref.watch(accessTokenProvider);
-  if (token == null) return null;
-  return NotificationPreferencesRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
-});
+final notificationPreferencesRepositoryProvider =
+    Provider<NotificationPreferencesRepository?>((ref) {
+      final token = ref.watch(accessTokenProvider);
+      if (token == null) return null;
+      return NotificationPreferencesRepository(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: token,
+      );
+    });
 
-final notificationPreferencesProvider = FutureProvider<NotificationPreferences?>((ref) async {
-  final repo = ref.watch(notificationPreferencesRepositoryProvider);
-  if (repo == null) return null;
-  return repo.fetch();
-});
+final notificationPreferencesProvider =
+    FutureProvider<NotificationPreferences?>((ref) async {
+      final repo = ref.watch(notificationPreferencesRepositoryProvider);
+      if (repo == null) return null;
+      return repo.fetch();
+    });
 
 /// Design 25's Invite friends payload. Null when signed out — an invite
 /// code belongs to an account.
@@ -1055,11 +1198,12 @@ final deviceTimeZoneProvider = Provider<String>((ref) => 'Asia/Kolkata');
 
 /// Task E12: network-wide aggregate stats (see ContributionNetworkStats'
 /// doc-comment for the R2 privacy reason this isn't per-user).
-final contributionNetworkStatsProvider = FutureProvider<ContributionNetworkStats?>((ref) async {
-  final repo = ref.watch(userCardsRepositoryProvider);
-  if (repo == null) return null;
-  return repo.fetchContributionNetworkStats();
-});
+final contributionNetworkStatsProvider =
+    FutureProvider<ContributionNetworkStats?>((ref) async {
+      final repo = ref.watch(userCardsRepositoryProvider);
+      if (repo == null) return null;
+      return repo.fetchContributionNetworkStats();
+    });
 
 /// Task E12: this profile's own opt-in flag, read off profileProvider's
 /// already-fetched row (profiles.contributions_opt_in) rather than a
@@ -1079,7 +1223,9 @@ final importRepositoryProvider = Provider<ImportRepository?>((ref) {
 });
 
 /// F3: this profile's forwarding address, or null if never issued.
-final forwardingAddressProvider = FutureProvider<ForwardingAddress?>((ref) async {
+final forwardingAddressProvider = FutureProvider<ForwardingAddress?>((
+  ref,
+) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return null;
   return repo.fetchForwardingAddress();
@@ -1089,7 +1235,9 @@ final forwardingAddressProvider = FutureProvider<ForwardingAddress?>((ref) async
 /// issued address, if one has arrived. Null is the normal state — it only
 /// becomes non-null during the few minutes between the user starting setup
 /// in Gmail and finishing it.
-final forwardingVerificationProvider = FutureProvider<ForwardingVerification?>((ref) async {
+final forwardingVerificationProvider = FutureProvider<ForwardingVerification?>((
+  ref,
+) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return null;
   return repo.fetchForwardingVerification();
@@ -1105,14 +1253,18 @@ final inboundEmailsProvider = FutureProvider<List<InboundEmail>>((ref) async {
 });
 
 /// F2/F1: recent statement imports, newest first.
-final statementImportsProvider = FutureProvider<List<StatementImport>>((ref) async {
+final statementImportsProvider = FutureProvider<List<StatementImport>>((
+  ref,
+) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return const [];
   return repo.fetchStatementImports();
 });
 
 /// F4/F1: recent SMS backup-file import batches.
-final smsImportBatchesProvider = FutureProvider<List<SmsImportBatch>>((ref) async {
+final smsImportBatchesProvider = FutureProvider<List<SmsImportBatch>>((
+  ref,
+) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return const [];
   return repo.fetchSmsImportBatches();
@@ -1141,7 +1293,9 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
 });
 
 /// B5 — public read, no auth, same pattern as catalogueRepositoryProvider.
-final merchantSearchRepositoryProvider = Provider<MerchantSearchRepository>((ref) {
+final merchantSearchRepositoryProvider = Provider<MerchantSearchRepository>((
+  ref,
+) {
   return HttpMerchantSearchRepository(baseUrl: _apiBaseUrl);
 });
 
@@ -1239,10 +1393,16 @@ const _cardOverridesCacheKey = 'card_overrides';
 /// never treated as "fetch failed."
 final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
   try {
-    final cards = await ref.watch(catalogueRepositoryProvider).fetchCatalogue();
+    final cards = await ref
+        .watch(catalogueRepositoryProvider)
+        .fetchCatalogue()
+        .timeout(const Duration(seconds: 15));
     if (cards.isNotEmpty) {
       final cache = await _cacheOrNull(ref);
-      await cache?.put(_catalogueCacheKey, jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}));
+      await cache?.put(
+        _catalogueCacheKey,
+        jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}),
+      );
       return cards;
     }
   } catch (_) {}
@@ -1252,9 +1412,22 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
     final cached = await cache?.get(_catalogueCacheKey);
     if (cached != null) {
       final body = jsonDecode(cached) as Map<String, dynamic>;
-      final cards = (body['cards'] as List).cast<Map<String, dynamic>>().map(CardProductJson.fromJson).toList();
+      final cards = (body['cards'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(CardProductJson.fromJson)
+          .toList();
       if (cards.isNotEmpty) return cards;
     }
+  } catch (_) {}
+
+  try {
+    final raw = await rootBundle.loadString('assets/data/bundled_catalogue.json');
+    final body = jsonDecode(raw) as Map<String, dynamic>;
+    final cards = (body['cards'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(CardProductJson.fromJson)
+        .toList();
+    if (cards.isNotEmpty) return cards;
   } catch (_) {}
 
   return const [];
@@ -1262,7 +1435,9 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
 
 final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
   try {
-    final categories = await ref.watch(categoryRepositoryProvider).fetchCategories();
+    final categories = await ref
+        .watch(categoryRepositoryProvider)
+        .fetchCategories();
     final cache = await _cacheOrNull(ref);
     await cache?.put(
       _categoriesCacheKey,
@@ -1274,7 +1449,10 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
     final cached = await cache?.get(_categoriesCacheKey);
     if (cached == null) rethrow;
     final body = jsonDecode(cached) as Map<String, dynamic>;
-    return (body['categories'] as List).cast<Map<String, dynamic>>().map(SpendCategory.fromJson).toList();
+    return (body['categories'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(SpendCategory.fromJson)
+        .toList();
   }
 });
 
@@ -1303,7 +1481,9 @@ final travelModeProvider = StateProvider<bool>((ref) => false);
 /// rankedRecommendationsProvider (below) and Cards' log-spend button read
 /// this same provider, so what a user types on Home is exactly what gets
 /// logged if they then tap "log spend" on a card.
-final enteredAmountProvider = StateProvider<Money>((ref) => const Money.fromPaise(100000));
+final enteredAmountProvider = StateProvider<Money>(
+  (ref) => const Money.fromPaise(100000),
+);
 
 /// Bridges the app shell's central scan FAB (main.dart, tab-agnostic) to
 /// Cards' `_AddCardForm` (Chunk 30's scan flow was originally only reachable
@@ -1325,62 +1505,83 @@ final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
 /// milestone-progress state (that's user-usage tracking, a separate,
 /// larger surface than "which cards does this person actually have") —
 /// every card is evaluated as if its caps/milestones are fully fresh.
-final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>((ref) {
-  final catalogue = ref.watch(catalogueProvider);
-  final categories = ref.watch(categoriesProvider);
-  final userCards = ref.watch(userCardsProvider);
-  final overrides = ref.watch(cardOverridesProvider);
-  final selectedSlug = ref.watch(selectedCategoryProvider);
-  final engine = ref.watch(recommendationEngineProvider);
+final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>(
+  (ref) {
+    final catalogue = ref.watch(catalogueProvider);
+    final categories = ref.watch(categoriesProvider);
+    final userCards = ref.watch(userCardsProvider);
+    final overrides = ref.watch(cardOverridesProvider);
+    final selectedSlug = ref.watch(selectedCategoryProvider);
+    final engine = ref.watch(recommendationEngineProvider);
 
-  if (catalogue.isLoading || categories.isLoading || userCards.isLoading || overrides.isLoading) {
-    return const AsyncValue.loading();
-  }
-  final combinedError = catalogue.error ?? categories.error ?? userCards.error ?? overrides.error;
-  if (combinedError != null) {
-    return AsyncValue.error(
-      combinedError,
-      catalogue.stackTrace ?? categories.stackTrace ?? userCards.stackTrace ?? overrides.stackTrace!,
+    if (catalogue.isLoading ||
+        categories.isLoading ||
+        userCards.isLoading ||
+        overrides.isLoading) {
+      return const AsyncValue.loading();
+    }
+    final combinedError =
+        catalogue.error ??
+        categories.error ??
+        userCards.error ??
+        overrides.error;
+    if (combinedError != null) {
+      return AsyncValue.error(
+        combinedError,
+        catalogue.stackTrace ??
+            categories.stackTrace ??
+            userCards.stackTrace ??
+            overrides.stackTrace!,
+      );
+    }
+
+    final allCards = catalogue.requireValue;
+    final categoryList = categories.requireValue;
+    final wallet = userCards.requireValue;
+    final categoryId = categoryList
+        .firstWhereOrNull((c) => c.slug == selectedSlug)
+        ?.id;
+
+    final cards = wallet.isEmpty
+        ? allCards
+        : allCards
+              .where((c) => wallet.any((w) => w.cardProductId == c.id))
+              .toList();
+
+    // B8: resolve once per rank() call — Home only carries category context
+    // (no merchant/vpa yet, that's B3's scan-result context), so vpa/
+    // merchantName are omitted here on purpose.
+    final overrideProductId = resolveActiveOverrideCardProductId(
+      overrides: overrides.requireValue,
+      wallet: wallet,
+      categoryId: categoryId,
     );
-  }
 
-  final allCards = catalogue.requireValue;
-  final categoryList = categories.requireValue;
-  final wallet = userCards.requireValue;
-  final categoryId = categoryList.firstWhereOrNull((c) => c.slug == selectedSlug)?.id;
-
-  final cards = wallet.isEmpty
-      ? allCards
-      : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
-
-  // B8: resolve once per rank() call — Home only carries category context
-  // (no merchant/vpa yet, that's B3's scan-result context), so vpa/
-  // merchantName are omitted here on purpose.
-  final overrideProductId = resolveActiveOverrideCardProductId(
-    overrides: overrides.requireValue,
-    wallet: wallet,
-    categoryId: categoryId,
-  );
-
-  final context = RecommendationContext(
-    amount: ref.watch(enteredAmountProvider),
-    categoryId: categoryId,
-    rail: TxnRail.swipe,
-    // G1: the toggle. Everything else about ranking is unchanged — this is
-    // the entire wiring the plan called "the cheapest part of G1."
-    travelMode: ref.watch(travelModeProvider),
-    // Rules carry a catalogue validity window and the engine only checks it
-    // when given a date. Without this, a promo rate that ended last quarter
-    // would keep winning Home's verdict indefinitely.
-    now: ref.watch(clockProvider).now(),
-  );
-  // Chunk 17: real capRemaining/milestoneProgress for owned cards, derived
-  // from cap_states.consumed / milestone_states.qualified_spend — a card
-  // not in the wallet (whole-catalogue fallback above) has no state to
-  // look up, so it's evaluated as freshly-uncapped, same as before Chunk 17.
-  final snapshots = _userCardSnapshots(cards, wallet, forcedOverrideCardId: overrideProductId);
-  return AsyncValue.data(engine.rank(context, snapshots));
-});
+    final context = RecommendationContext(
+      amount: ref.watch(enteredAmountProvider),
+      categoryId: categoryId,
+      categorySlug: selectedSlug,
+      rail: TxnRail.swipe,
+      // G1: the toggle. Everything else about ranking is unchanged — this is
+      // the entire wiring the plan called "the cheapest part of G1."
+      travelMode: ref.watch(travelModeProvider),
+      // Rules carry a catalogue validity window and the engine only checks it
+      // when given a date. Without this, a promo rate that ended last quarter
+      // would keep winning Home's verdict indefinitely.
+      now: ref.watch(clockProvider).now(),
+    );
+    // Chunk 17: real capRemaining/milestoneProgress for owned cards, derived
+    // from cap_states.consumed / milestone_states.qualified_spend — a card
+    // not in the wallet (whole-catalogue fallback above) has no state to
+    // look up, so it's evaluated as freshly-uncapped, same as before Chunk 17.
+    final snapshots = _userCardSnapshots(
+      cards,
+      wallet,
+      forcedOverrideCardId: overrideProductId,
+    );
+    return AsyncValue.data(engine.rank(context, snapshots));
+  },
+);
 
 /// Chunk 38: factored out of rankedRecommendationsProvider and
 /// bestCardForMerchantProvider, which both built an identical
@@ -1398,7 +1599,8 @@ List<CardSnapshot> _userCardSnapshots(
         ? const <String, Money>{}
         : {
             for (final cap in c.capRules)
-              if (owned.capConsumed.containsKey(cap.id)) cap.id: cap.capValue - owned.capConsumed[cap.id]!,
+              if (owned.capConsumed.containsKey(cap.id))
+                cap.id: cap.capValue - owned.capConsumed[cap.id]!,
           };
     return CardSnapshot(
       product: c,
@@ -1419,7 +1621,9 @@ final clockProvider = Provider<Clock>((ref) => const Clock.system());
 
 /// UA-8: public read, no auth needed — same shape as catalogueRepositoryProvider/
 /// categoryRepositoryProvider above.
-final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((ref) {
+final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((
+  ref,
+) {
   return HttpNearbyMerchantsRepository(baseUrl: _apiBaseUrl);
 });
 
@@ -1429,15 +1633,19 @@ final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((r
 /// NotificationGate (B2) needs to show OS notifications too, and two
 /// independent plugin instances means two independent (and possibly
 /// racing) `initialize()` calls registering the same Android channel.
-final localNotificationsPluginProvider = Provider<FlutterLocalNotificationsPlugin>((ref) {
-  return FlutterLocalNotificationsPlugin();
-});
+final localNotificationsPluginProvider =
+    Provider<FlutterLocalNotificationsPlugin>((ref) {
+      return FlutterLocalNotificationsPlugin();
+    });
 
 /// UA-8.3 (B2): the single choke point every real (OS-level) notification
 /// must pass through — see notification_gate.dart's own doc-comment for
 /// what it enforces and why POST /notifications alone isn't enough.
 final notificationGateProvider = Provider<NotificationGate>((ref) {
-  return NotificationGate(ref: ref, notifications: ref.watch(localNotificationsPluginProvider));
+  return NotificationGate(
+    ref: ref,
+    notifications: ref.watch(localNotificationsPluginProvider),
+  );
 });
 
 /// Background geofence monitor — one instance for the app's lifetime, kept
@@ -1466,7 +1674,9 @@ final geofenceMonitoringEnabledProvider = StateProvider<bool>((ref) => false);
 /// UA-8.3 (B3): the trigger side — see notification_triggers.dart's own
 /// doc-comment for what it checks and why this is the realistic ceiling
 /// for a client-only (no push/cron backend) notification system.
-final notificationTriggerRunnerProvider = Provider<NotificationTriggerRunner>((ref) {
+final notificationTriggerRunnerProvider = Provider<NotificationTriggerRunner>((
+  ref,
+) {
   return NotificationTriggerRunner(ref);
 });
 
@@ -1506,8 +1716,16 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     // there is one rather than being discarded.
     if (repo == null) return;
     try {
-      await SmsListenerService().flushBackgroundQueue((sender, body, receivedAt) async {
-        await repo.logTransactionFromSms(sender: sender, body: body, occurredAt: receivedAt);
+      await SmsListenerService().flushBackgroundQueue((
+        sender,
+        body,
+        receivedAt,
+      ) async {
+        await repo.logTransactionFromSms(
+          sender: sender,
+          body: body,
+          occurredAt: receivedAt,
+        );
         // Every one of these is "dealt with": imported, recognised as
         // already imported, filed for review because the card is unknown,
         // or logged as an unparseable shape server-side. Only a network or
@@ -1552,47 +1770,63 @@ final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {
 /// recommendation on Home. Same resolveActiveOverrideCardProductId call
 /// rankedRecommendationsProvider makes, so the two never disagree about
 /// which override is active for a given category.
-final bestCardForMerchantProvider = Provider.family<AsyncValue<Recommendation?>, String?>((ref, categoryId) {
-  final catalogue = ref.watch(catalogueProvider);
-  final userCards = ref.watch(userCardsProvider);
-  final overrides = ref.watch(cardOverridesProvider);
-  final picker = ref.watch(_bestCardForWidgetProvider);
+final bestCardForMerchantProvider =
+    Provider.family<AsyncValue<Recommendation?>, String?>((ref, categoryId) {
+      final catalogue = ref.watch(catalogueProvider);
+      final userCards = ref.watch(userCardsProvider);
+      final overrides = ref.watch(cardOverridesProvider);
+      final picker = ref.watch(_bestCardForWidgetProvider);
 
-  if (catalogue.isLoading || userCards.isLoading || overrides.isLoading) {
-    return const AsyncValue.loading();
-  }
-  final combinedError = catalogue.error ?? userCards.error ?? overrides.error;
-  if (combinedError != null) {
-    return AsyncValue.error(
-      combinedError,
-      catalogue.stackTrace ?? userCards.stackTrace ?? overrides.stackTrace!,
-    );
-  }
+      if (catalogue.isLoading || userCards.isLoading || overrides.isLoading) {
+        return const AsyncValue.loading();
+      }
+      final combinedError =
+          catalogue.error ?? userCards.error ?? overrides.error;
+      if (combinedError != null) {
+        return AsyncValue.error(
+          combinedError,
+          catalogue.stackTrace ?? userCards.stackTrace ?? overrides.stackTrace!,
+        );
+      }
 
-  final allCards = catalogue.requireValue;
-  final wallet = userCards.requireValue;
-  final cards = wallet.isEmpty
-      ? allCards
-      : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
+      final allCards = catalogue.requireValue;
+      final wallet = userCards.requireValue;
+      final cards = wallet.isEmpty
+          ? allCards
+          : allCards
+                .where((c) => wallet.any((w) => w.cardProductId == c.id))
+                .toList();
 
-  final overrideProductId = resolveActiveOverrideCardProductId(
-    overrides: overrides.requireValue,
-    wallet: wallet,
-    categoryId: categoryId,
-  );
+      final overrideProductId = resolveActiveOverrideCardProductId(
+        overrides: overrides.requireValue,
+        wallet: wallet,
+        categoryId: categoryId,
+      );
 
-  final snapshots = _userCardSnapshots(cards, wallet, forcedOverrideCardId: overrideProductId);
+      final snapshots = _userCardSnapshots(
+        cards,
+        wallet,
+        forcedOverrideCardId: overrideProductId,
+      );
 
-  return AsyncValue.data(
-    picker.pickBestCard(
-      cards: snapshots,
-      categoryId: categoryId,
-      now: ref.watch(clockProvider).now(),
-    ),
-  );
-});
+      final categories = ref.watch(categoriesProvider);
+      final categorySlug = categories.valueOrNull
+          ?.firstWhereOrNull((c) => c.id == categoryId)
+          ?.slug;
 
-final homeWidgetServiceProvider = Provider<HomeWidgetService>((ref) => HomeWidgetService());
+      return AsyncValue.data(
+        picker.pickBestCard(
+          cards: snapshots,
+          categoryId: categoryId,
+          categorySlug: categorySlug,
+          now: ref.watch(clockProvider).now(),
+        ),
+      );
+    });
+
+final homeWidgetServiceProvider = Provider<HomeWidgetService>(
+  (ref) => HomeWidgetService(),
+);
 
 /// UA-8.2: "top overall card" default the widget falls back to when there's
 /// no last-used-category context — reuses bestCardForMerchantProvider(null),

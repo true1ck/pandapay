@@ -18,7 +18,8 @@ class AuthTokens {
 class AuthApi {
   final String authBaseUrl;
   final http.Client _client;
-  AuthApi({required this.authBaseUrl, http.Client? client}) : _client = client ?? http.Client();
+  AuthApi({required this.authBaseUrl, http.Client? client})
+    : _client = client ?? http.Client();
 
   Future<void> requestOtp(String phoneNumber) async {
     final response = await _client.post(
@@ -27,18 +28,30 @@ class AuthApi {
       body: jsonEncode({'phone_number': phoneNumber}),
     );
     if (response.statusCode != 200) {
-      throw ApiException('OTP request failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'OTP request failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
-  Future<AuthTokens> verifyOtp(String phoneNumber, String code, String deviceId) async {
+  Future<AuthTokens> verifyOtp(
+    String phoneNumber,
+    String code,
+    String deviceId,
+  ) async {
     final response = await _client.post(
       Uri.parse('$authBaseUrl/auth/verify-otp'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone_number': phoneNumber, 'code': code, 'device_id': deviceId}),
+      body: jsonEncode({
+        'phone_number': phoneNumber,
+        'code': code,
+        'device_id': deviceId,
+      }),
     );
     if (response.statusCode != 200) {
-      throw ApiException('OTP verify failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'OTP verify failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return AuthTokens(
@@ -54,7 +67,9 @@ class AuthApi {
       body: jsonEncode({'refresh_token': refreshToken}),
     );
     if (response.statusCode != 200) {
-      throw ApiException('Refresh failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'Refresh failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return AuthTokens(
@@ -77,7 +92,9 @@ class AuthApi {
       body: jsonEncode({'email': email}),
     );
     if (response.statusCode != 200) {
-      throw ApiException('OTP request failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'OTP request failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -88,7 +105,12 @@ class AuthApi {
   /// where they already belong to different accounts. The key is omitted
   /// entirely when absent — sending an explicit null would fail that route's
   /// validatePhone() check rather than being treated as "not provided".
-  Future<AuthTokens> verifyEmailOtp(String email, String code, String deviceId, {String? phoneNumber}) async {
+  Future<AuthTokens> verifyEmailOtp(
+    String email,
+    String code,
+    String deviceId, {
+    String? phoneNumber,
+  }) async {
     final trimmedPhone = phoneNumber?.trim();
     final response = await _client.post(
       Uri.parse('$authBaseUrl/auth/verify-email-otp'),
@@ -97,11 +119,14 @@ class AuthApi {
         'email': email,
         'code': code,
         'device_id': deviceId,
-        if (trimmedPhone != null && trimmedPhone.isNotEmpty) 'phone_number': trimmedPhone,
+        if (trimmedPhone != null && trimmedPhone.isNotEmpty)
+          'phone_number': trimmedPhone,
       }),
     );
     if (response.statusCode != 200) {
-      throw ApiException('OTP verify failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'OTP verify failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return AuthTokens(
@@ -118,8 +143,11 @@ class ProfileApi {
   final String apiBaseUrl;
   final String accessToken;
   final http.Client _client;
-  ProfileApi({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-    : _client = client ?? http.Client();
+  ProfileApi({
+    required this.apiBaseUrl,
+    required this.accessToken,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer $accessToken',
@@ -127,9 +155,14 @@ class ProfileApi {
   };
 
   Future<Map<String, dynamic>?> fetchProfile() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/profile'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/profile'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /profile failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /profile failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['profile'] as Map<String, dynamic>?;
@@ -157,7 +190,9 @@ class ProfileApi {
       }),
     );
     if (response.statusCode != 201) {
-      throw ApiException('POST /profile failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /profile failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['profile'] as Map<String, dynamic>;

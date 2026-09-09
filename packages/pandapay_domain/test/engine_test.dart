@@ -407,4 +407,33 @@ void main() {
       expect(result.isExcluded, isTrue);
     });
   });
+
+  group('UA-2.2.7 fuel surcharge waiver sync', () {
+    test('fuel category exclusion does not block fuel surcharge waiver', () {
+      const fuelUuid = 'fuel-category-uuid';
+      final card = CardProduct(
+        id: 'axis-cb',
+        name: 'Axis Cashback',
+        network: CardNetwork.visa,
+        excludedCategoryIds: const [fuelUuid],
+        fuelRule: const FuelSurchargeRule(surchargePercent: 1.0, waiverPercent: 1.0),
+        rewardRules: const [],
+      );
+
+      final ctx = RecommendationContext(
+        amount: Money.fromRupees(1000),
+        categoryId: fuelUuid,
+        categorySlug: 'fuel',
+        rail: TxnRail.swipe,
+      );
+
+      final result = engine.rank(ctx, [CardSnapshot(product: card)]).first;
+      expect(result.isExcluded, isFalse);
+      expect(result.expectedValue, Money.fromRupees(10));
+      expect(result.effectiveRatePerRupee, 0.01);
+      expect(result.breakdown?.fuelWaiver, Money.fromRupees(10));
+      expect(result.reasonLines.first, contains('Fuel surcharge waiver'));
+    });
+  });
 }
+

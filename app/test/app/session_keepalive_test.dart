@@ -45,12 +45,18 @@ void main() {
         );
       });
 
-      final container = ProviderContainer(overrides: [
-        sessionRefreshIntervalProvider.overrideWithValue(const Duration(minutes: 10)),
-        tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
-        authApiProvider.overrideWithValue(AuthApi(authBaseUrl: 'http://auth.test', client: client)),
-        sessionInitProvider.overrideWith((ref) async {}),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sessionRefreshIntervalProvider.overrideWithValue(
+            const Duration(minutes: 10),
+          ),
+          tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+          authApiProvider.overrideWithValue(
+            AuthApi(authBaseUrl: 'http://auth.test', client: client),
+          ),
+          sessionInitProvider.overrideWith((ref) async {}),
+        ],
+      );
       addTearDown(container.dispose);
 
       // Resolve the token store future synchronously under the fake clock
@@ -62,9 +68,15 @@ void main() {
 
       async.elapse(const Duration(minutes: 11));
 
-      expect(container.read(accessTokenProvider), isNot('initial-access'),
-          reason: 'token must rotate before auth/ expires it at 15 minutes');
-      expect(container.read(accessTokenProvider), startsWith('rotated-access-'));
+      expect(
+        container.read(accessTokenProvider),
+        isNot('initial-access'),
+        reason: 'token must rotate before auth/ expires it at 15 minutes',
+      );
+      expect(
+        container.read(accessTokenProvider),
+        startsWith('rotated-access-'),
+      );
     });
   });
 
@@ -93,12 +105,18 @@ void main() {
         );
       });
 
-      final container = ProviderContainer(overrides: [
-        sessionRefreshIntervalProvider.overrideWithValue(const Duration(minutes: 10)),
-        tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
-        authApiProvider.overrideWithValue(AuthApi(authBaseUrl: 'http://auth.test', client: client)),
-        sessionInitProvider.overrideWith((ref) async {}),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sessionRefreshIntervalProvider.overrideWithValue(
+            const Duration(minutes: 10),
+          ),
+          tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+          authApiProvider.overrideWithValue(
+            AuthApi(authBaseUrl: 'http://auth.test', client: client),
+          ),
+          sessionInitProvider.overrideWith((ref) async {}),
+        ],
+      );
       addTearDown(container.dispose);
 
       async.elapse(Duration.zero);
@@ -107,15 +125,22 @@ void main() {
 
       async.elapse(const Duration(minutes: 21));
 
-      expect(refreshTokensSeen.length, greaterThanOrEqualTo(2),
-          reason: 'expected two ticks in a 21-minute window on a 10-minute interval');
+      expect(
+        refreshTokensSeen.length,
+        greaterThanOrEqualTo(2),
+        reason:
+            'expected two ticks in a 21-minute window on a 10-minute interval',
+      );
       expect(refreshTokensSeen.first, 'initial-refresh');
-      expect(refreshTokensSeen[1], 'rotated-refresh-1',
-          reason: 'must send the newly-issued token, never replay a spent one');
+      expect(
+        refreshTokensSeen[1],
+        'rotated-refresh-1',
+        reason: 'must send the newly-issued token, never replay a spent one',
+      );
     });
   });
 
-  test('signs the user out cleanly when the refresh token is rejected', () {
+  test('keeps the session when the refresh token is rejected', () {
     fakeAsync((async) {
       SharedPreferences.setMockInitialValues({
         'pandapay_app.access_token': 'initial-access',
@@ -123,15 +148,22 @@ void main() {
       });
 
       final client = MockClient(
-        (req) async => http.Response(jsonEncode({'error': 'Invalid refresh token'}), 401),
+        (req) async =>
+            http.Response(jsonEncode({'error': 'Invalid refresh token'}), 401),
       );
 
-      final container = ProviderContainer(overrides: [
-        sessionRefreshIntervalProvider.overrideWithValue(const Duration(minutes: 10)),
-        tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
-        authApiProvider.overrideWithValue(AuthApi(authBaseUrl: 'http://auth.test', client: client)),
-        sessionInitProvider.overrideWith((ref) async {}),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sessionRefreshIntervalProvider.overrideWithValue(
+            const Duration(minutes: 10),
+          ),
+          tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+          authApiProvider.overrideWithValue(
+            AuthApi(authBaseUrl: 'http://auth.test', client: client),
+          ),
+          sessionInitProvider.overrideWith((ref) async {}),
+        ],
+      );
       addTearDown(container.dispose);
 
       async.elapse(Duration.zero);
@@ -143,9 +175,47 @@ void main() {
 
       async.elapse(const Duration(minutes: 11));
 
-      expect(container.read(accessTokenProvider), isNull,
-          reason: 'a dead refresh token must sign out, not retry-loop forever');
-      expect(capturedStore?.refreshToken, isNull, reason: 'stored tokens must be cleared');
+      expect(container.read(accessTokenProvider), 'initial-access');
+      expect(capturedStore?.refreshToken, 'initial-refresh');
+    });
+  });
+
+  test('keeps the session when refresh has a temporary server failure', () {
+    fakeAsync((async) {
+      SharedPreferences.setMockInitialValues({
+        'pandapay_app.access_token': 'initial-access',
+        'pandapay_app.refresh_token': 'initial-refresh',
+      });
+
+      final client = MockClient(
+        (req) async =>
+            http.Response(jsonEncode({'error': 'temporary failure'}), 500),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          sessionRefreshIntervalProvider.overrideWithValue(
+            const Duration(minutes: 10),
+          ),
+          tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+          authApiProvider.overrideWithValue(
+            AuthApi(authBaseUrl: 'http://auth.test', client: client),
+          ),
+          sessionInitProvider.overrideWith((ref) async {}),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      async.elapse(Duration.zero);
+      container.read(accessTokenProvider.notifier).state = 'initial-access';
+      container.read(sessionKeepAliveProvider);
+      async.elapse(const Duration(minutes: 11));
+
+      expect(container.read(accessTokenProvider), 'initial-access');
+      expect(
+        container.read(tokenStoreProvider).requireValue.refreshToken,
+        'initial-refresh',
+      );
     });
   });
 
@@ -159,15 +229,24 @@ void main() {
       final refreshTokensSeen = <String>[];
       final client = MockClient((req) async {
         refreshTokensSeen.add('called');
-        return http.Response(jsonEncode({'access_token': 'x', 'refresh_token': 'y'}), 200);
+        return http.Response(
+          jsonEncode({'access_token': 'x', 'refresh_token': 'y'}),
+          200,
+        );
       });
 
-      final container = ProviderContainer(overrides: [
-        sessionRefreshIntervalProvider.overrideWithValue(const Duration(minutes: 10)),
-        tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
-        authApiProvider.overrideWithValue(AuthApi(authBaseUrl: 'http://auth.test', client: client)),
-        sessionInitProvider.overrideWith((ref) async {}),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sessionRefreshIntervalProvider.overrideWithValue(
+            const Duration(minutes: 10),
+          ),
+          tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+          authApiProvider.overrideWithValue(
+            AuthApi(authBaseUrl: 'http://auth.test', client: client),
+          ),
+          sessionInitProvider.overrideWith((ref) async {}),
+        ],
+      );
       addTearDown(container.dispose);
 
       async.elapse(Duration.zero);
@@ -176,8 +255,11 @@ void main() {
 
       async.elapse(const Duration(minutes: 30));
 
-      expect(refreshTokensSeen, isEmpty,
-          reason: 'a signed-out app must not hit /auth/refresh on a timer');
+      expect(
+        refreshTokensSeen,
+        isEmpty,
+        reason: 'a signed-out app must not hit /auth/refresh on a timer',
+      );
     });
   });
 }

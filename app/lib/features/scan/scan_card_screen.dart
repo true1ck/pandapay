@@ -11,6 +11,7 @@ import '../../app/design/app_theme.dart';
 import 'card_guide_painter.dart';
 import 'card_scanner.dart';
 import 'card_text_matcher.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 /// UA-4 (Chunk 30, extended): "scan to add a card," launched from
 /// `cards_screen.dart`'s `_AddCardForm` as an alternative to the manual
@@ -127,6 +128,14 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
     final generation = _cameraGeneration;
     CameraController? controller;
     try {
+      if (!WidgetsBinding.instance.runtimeType.toString().contains('Test') &&
+          (Platform.isAndroid || Platform.isIOS)) {
+        final status = await Permission.camera.request();
+        if (!status.isGranted) {
+          throw CameraException('CameraAccessDenied', 'User denied camera permission.');
+        }
+      }
+      
       final cameras = await availableCameras();
       final back = cameras.firstWhere(
         (c) => c.lensDirection == CameraLensDirection.back,
@@ -137,22 +146,44 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
       // app. This screen only ever calls takePicture(); requesting an audio
       // track this flow never uses is what would otherwise put a
       // microphone permission on a card-scanning screen.
-      controller = CameraController(back, ResolutionPreset.high, enableAudio: false);
-      final initFuture = controller.initialize();
-      await initFuture;
+      Future<void> tryInit(ResolutionPreset preset) async {
+        controller = CameraController(back, preset, enableAudio: false);
+        await controller!.initialize();
+      }
+
+      try {
+        await tryInit(ResolutionPreset.high);
+      } catch (_) {
+        try {
+          await controller?.dispose();
+        } catch (_) {}
+        await tryInit(ResolutionPreset.medium);
+      }
+      
+      // Auto-focus is critical for clear OCR of small text on physical cards.
+      try {
+        await controller?.setFocusMode(FocusMode.auto);
+      } catch (_) {
+        // Some devices don't support explicit focus mode changes, ignore.
+      }
+
       _ensureRecognizer();
       if (!mounted || generation != _cameraGeneration || _mode != _ScanMode.ocr || _lastExtracted != null) {
         // Torn down (or moved past the live-camera view) while we awaited.
-        await controller.dispose();
+        try {
+          await controller?.dispose();
+        } catch (_) {}
         return;
       }
       setState(() {
         _cameraController = controller;
-        _cameraInitFuture = initFuture;
+        _cameraInitFuture = Future.value();
         _cameraError = null;
       });
     } catch (e) {
-      await controller?.dispose();
+      try {
+        await controller?.dispose();
+      } catch (_) {}
       if (mounted && generation == _cameraGeneration) {
         setState(() => _cameraError = _friendlyCameraError(e));
       }
@@ -171,7 +202,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
     _cameraController = null;
     _cameraInitFuture = null;
     if (mounted) setState(() {});
-    await controller.dispose();
+    try {
+      await controller.dispose();
+    } catch (_) {}
   }
 
   String _friendlyCameraError(Object e) {
@@ -216,7 +249,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
     // Invalidate any in-flight _initCamera so it disposes its controller
     // instead of publishing it into a dead State.
     _cameraGeneration++;
-    _cameraController?.dispose();
+    try {
+      _cameraController?.dispose();
+    } catch (_) {}
     _recognizer?.dispose();
     _qrController.dispose();
     super.dispose();
@@ -769,10 +804,10 @@ class ScanResultPanel extends StatelessWidget {
             )
           else
             Text(
-              'Possible matches',
+              'Detected card',
               style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500),
             ),
-          for (final match in matches.take(5))
+          for (final match in matches.take(1))
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(

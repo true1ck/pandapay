@@ -97,4 +97,52 @@ void main() {
     expect(find.text('8 domestic visits'), findsOneWidget);
     expect(find.text('4 international visits'), findsOneWidget);
   });
+
+  testWidgets('tapping on a benefit tile navigates to BenefitDetailScreen', (tester) async {
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Dining Card',
+      network: CardNetwork.visa,
+      benefits: const [
+        CardBenefit(
+          id: 'b1',
+          kind: BenefitKind.diningProgram,
+          label: 'Dining Delights Program',
+        ),
+      ],
+    );
+    final owned = [const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Dining Card', isDefault: false)];
+
+    await _pump(tester, catalogue: [product], owned: owned);
+
+    expect(find.text('Dining Delights Program'), findsOneWidget);
+
+    await tester.tap(find.text('Dining Delights Program'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Benefit details'), findsOneWidget);
+    expect(find.text('BENEFIT PARAMETERS'), findsOneWidget);
+    expect(find.text('TERMS & DETAILS'), findsOneWidget);
+  });
+
+  testWidgets('synthesizes and shows fuel surcharge waiver when fuelRule is present', (tester) async {
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Fuel Card',
+      network: CardNetwork.visa,
+      fuelRule: FuelSurchargeRule(
+        surchargePercent: 1.0,
+        waiverPercent: 1.0,
+        minTxn: Money.fromRupees(400),
+        maxTxn: Money.fromRupees(4000),
+      ),
+    );
+    final owned = [const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Fuel Card', isDefault: false)];
+
+    await _pump(tester, catalogue: [product], owned: owned);
+
+    expect(find.text('Fuel surcharge waiver'), findsOneWidget);
+    expect(find.text('1% fuel surcharge waiver'), findsOneWidget);
+  });
 }
+

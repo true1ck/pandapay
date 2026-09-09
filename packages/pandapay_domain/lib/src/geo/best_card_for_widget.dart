@@ -41,6 +41,7 @@ class BestCardForWidget {
   Recommendation? pickBestCard({
     required List<CardSnapshot> cards,
     String? categoryId,
+    String? categorySlug,
     Money? amount,
     DateTime? now,
   }) {
@@ -48,6 +49,7 @@ class BestCardForWidget {
     final context = RecommendationContext(
       amount: amount ?? defaultNominalAmount,
       categoryId: categoryId,
+      categorySlug: categorySlug,
       rail: TxnRail.swipe,
       now: now,
     );

@@ -38,13 +38,19 @@ class Env {
   /// api/'s base URL. Default is api/'s live endpoint.
   static const String apiBaseUrl = String.fromEnvironment(
     'PANDAPAY_API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:4000',
+    defaultValue: 'https://api.pandapath.site',
   );
 
   /// auth/'s base URL. Default is auth/'s live endpoint.
   static const String authBaseUrl = String.fromEnvironment(
     'PANDAPAY_AUTH_BASE_URL',
-    defaultValue: 'http://10.0.2.2:3210',
+    defaultValue: 'https://auth.pandapath.site',
+  );
+
+  /// Hosted legal pages (Terms, Privacy Policy).
+  static const String legalBaseUrl = String.fromEnvironment(
+    'PANDAPAY_LEGAL_BASE_URL',
+    defaultValue: 'https://api.pandapath.site/legal/',
   );
 
   /// iOS OAuth 2.0 client id for the on-device Gmail "1-Tap Auto Find" flow

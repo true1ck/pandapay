@@ -7,6 +7,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart' show CardOverride;
+import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/override_resolver.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
@@ -166,7 +167,7 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
                 ],
               ),
               const SizedBox(height: AppSpace.lg),
-              Expanded(child: _buildResults(catalogue, userCards, engine, overrides)),
+              Expanded(child: _buildResults(catalogue, userCards, categories, engine, overrides)),
             ],
           ),
         ),
@@ -177,6 +178,7 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
   Widget _buildResults(
     AsyncValue<List<CardProduct>> catalogue,
     AsyncValue<List<UserCard>> userCards,
+    AsyncValue<List<SpendCategory>> categories,
     RecommendationEngine engine,
     AsyncValue<List<CardOverride>> overrides,
   ) {
@@ -197,9 +199,16 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
     }
     final owned = allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
 
+    final categorySlug = _categoryId == null
+        ? null
+        : categories.valueOrNull
+            ?.where((c) => c.id == _categoryId)
+            .firstOrNull
+            ?.slug;
     final context = RecommendationContext(
       amount: _amount,
       categoryId: _categoryId,
+      categorySlug: categorySlug,
       rail: TxnRail.swipe,
       now: DateTime.now(),
     );

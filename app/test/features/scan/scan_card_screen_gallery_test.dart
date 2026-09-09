@@ -67,9 +67,9 @@ void main() {
 
     expect(recognizer.recognizeCalls, 1);
     expect(recognizer.lastPath, '/tmp/fake-card.jpg');
-    expect(find.text('Possible matches'), findsOneWidget);
+    expect(find.text('Detected card'), findsOneWidget);
     expect(find.text('HDFC Millennia'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Use this'), findsWidgets);
+    expect(find.widgetWithText(FilledButton, 'Use this'), findsOneWidget);
     // OCR of a physical card face is never echoed back verbatim.
     expect(find.text('Scanned text'), findsNothing);
   });
@@ -200,8 +200,12 @@ void main() {
   });
 
   testWidgets('privacy: a gallery-picked file is never deleted', (tester) async {
-    final dir = await Directory.systemTemp.createTemp('scan_card_gallery_test');
-    addTearDown(() => dir.delete(recursive: true));
+    final dir = Directory.systemTemp.createTempSync('scan_card_gallery_test');
+    addTearDown(() {
+      try {
+        dir.deleteSync(recursive: true);
+      } catch (_) {}
+    });
     final photo = File('${dir.path}/my-card.jpg')..writeAsBytesSync([1, 2, 3, 4]);
 
     await tester.pumpWidget(
@@ -217,7 +221,7 @@ void main() {
 
     await tester.tap(find.text('Upload a photo instead'));
     await _tick(tester);
-    await tester.pump(const Duration(seconds: 1));
+    await _tick(tester);
 
     expect(photo.existsSync(), isTrue, reason: 'the user\'s own photo must be left alone');
   });

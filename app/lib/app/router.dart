@@ -17,6 +17,7 @@ import '../features/activity/needs_review_screen.dart';
 import '../features/activity/transaction_detail_screen.dart';
 import '../features/auth/guest_migration.dart';
 import '../features/auth/login_screen.dart';
+import '../features/cards/benefit_detail_screen.dart';
 import '../features/cards/benefits_cheat_sheet_screen.dart';
 import '../features/cards/card_detail_screen.dart';
 import '../features/cards/discover_new_cards_screen.dart';
@@ -84,6 +85,7 @@ abstract final class AppRoute {
   /// pattern as importHub/toolsHub above — deep-linkable per ui-spec §1
   /// ("card detail" is explicitly named there), reached from C1 My Cards.
   static const benefitsCheatSheet = '/cards/benefits';
+  static const benefitDetail = '/cards/benefits/detail';
   static const cardDetail = '/cards/:id';
   static const editCard = '/cards/:id/edit';
   static const pointsExpiry = '/cards/points-expiry';
@@ -616,6 +618,17 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoute.benefitsCheatSheet,
         builder: (context, state) => const BenefitsCheatSheetScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.benefitDetail,
+        builder: (context, state) {
+          final benefitId = state.uri.queryParameters['benefitId'];
+          final userCardId = state.uri.queryParameters['userCardId'];
+          return BenefitDetailScreen(
+            benefitId: benefitId,
+            userCardId: userCardId,
+          );
+        },
       ),
       // C2 Card Detail — deep-linkable (ui-spec §1 names "card detail"
       // explicitly). go_router matches routes in declaration order, not by

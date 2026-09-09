@@ -27,11 +27,15 @@ class RecommendationContext {
   /// therefore keeps the pre-existing behaviour of ignoring validity
   /// windows, so a caller that hasn't been updated degrades to the old
   /// answer rather than silently dropping every dated rule.
+  /// The slug of the spend category (e.g. 'fuel', 'dining').
+  final String? categorySlug;
+
   final DateTime? now;
 
   const RecommendationContext({
     required this.amount,
     this.categoryId,
+    this.categorySlug,
     this.mcc,
     this.vpa,
     required this.rail,
@@ -40,6 +44,13 @@ class RecommendationContext {
     this.merchantName,
     this.now,
   });
+
+  /// Whether this context represents a fuel transaction (by category slug, id, or MCC).
+  bool get isFuel =>
+      categorySlug == 'fuel' ||
+      categoryId == 'fuel' ||
+      mcc == '5541' ||
+      mcc == '5542';
 }
 
 /// UA-2.1.2. Per-card state the engine needs, assembled by a repository —
@@ -388,7 +399,10 @@ class RecommendationEngine {
     // rate included, so falling through to the base-rate path below would
     // still be wrong. Rent, wallet loads, fuel, insurance premiums,
     // government payments and EMI conversions are the usual list.
-    if (card.excludesCategory(context.categoryId)) {
+    // However, for fuel, credit cards generally exclude fuel from reward
+    // points/cashback, but provide a fuel surcharge waiver (UA-2.2.7).
+    final isCategoryExcluded = card.excludesCategory(context.categoryId);
+    if (isCategoryExcluded && (!context.isFuel || card.fuelRule == null)) {
       return Recommendation(
         card: card,
         expectedValue: const Money.zero(),
@@ -401,8 +415,11 @@ class RecommendationEngine {
     // Pick the highest-priority (lowest number) APPLICABLE reward rule.
     // See [ruleApplies] — this used to filter on category alone, ignoring
     // the merchant/rail/min-txn/validity constraints the rule carried.
-    final matching = card.rewardRules.where((r) => ruleApplies(r, context)).toList()
-      ..sort((a, b) => a.priority.compareTo(b.priority));
+    // If the category is excluded from rewards, it earns no reward rule rate.
+    final matching = isCategoryExcluded
+        ? <RewardRule>[]
+        : (card.rewardRules.where((r) => ruleApplies(r, context)).toList()
+          ..sort((a, b) => a.priority.compareTo(b.priority)));
 
     if (matching.isEmpty) {
       // No applicable rule — fall back to the card's own everything-else
@@ -415,13 +432,42 @@ class RecommendationEngine {
       // doc-comment: it's a fixed bonus, not a per-rupee rate), so checking
       // the *resolved* rate rather than the nominal one keeps such a card
       // honestly excluded instead of advertising "Base rate 0.0%".
-      final ratePerRupee = card.baseRatePerRupee;
+      final ratePerRupee = isCategoryExcluded ? 0.0 : card.baseRatePerRupee;
+      if (context.isFuel && card.fuelRule != null) {
+        final waiverFraction = card.fuelRule!.waiverPercent / 100;
+        final waiverValue = context.amount * waiverFraction;
+        final baseRewardValue = context.amount * ratePerRupee;
+        final totalValue = baseRewardValue + waiverValue;
+        final reasons = <String>[];
+        if (ratePerRupee > 0) {
+          reasons.add(
+              'Base rate ${(ratePerRupee * 100).toStringAsFixed(1)}% — no category bonus on this spend');
+        }
+        reasons.add('Fuel surcharge waiver: +${waiverValue.format()}');
+        return Recommendation(
+          card: card,
+          expectedValue: totalValue,
+          confidence: Confidence.estimated,
+          effectiveRatePerRupee: ratePerRupee > 0 ? ratePerRupee : waiverFraction,
+          reasonLines: reasons,
+          breakdown: RecommendationBreakdown(
+            baseRatePerRupee: ratePerRupee,
+            baseValue: baseRewardValue,
+            fuelWaiver: waiverValue,
+            effectiveRatePerRupee: context.amount.paise == 0
+                ? waiverFraction
+                : totalValue.paise / context.amount.paise,
+          ),
+        );
+      }
       if (ratePerRupee <= 0) {
         return Recommendation(
           card: card,
           expectedValue: const Money.zero(),
           confidence: Confidence.estimated,
-          exclusionReason: 'No applicable reward rule.',
+          exclusionReason: isCategoryExcluded
+              ? "This card doesn't earn rewards on this kind of spend."
+              : 'No applicable reward rule.',
           reasonLines: const [],
         );
       }
@@ -610,7 +656,7 @@ class RecommendationEngine {
     }
 
     // UA-2.2.7 fuel surcharge waiver, additive.
-    if (context.categoryId == 'fuel' && card.fuelRule != null) {
+    if (context.isFuel && card.fuelRule != null) {
       final waiverFraction = card.fuelRule!.waiverPercent / 100;
       final waiverValue = context.amount * waiverFraction;
       fuelWaiver = waiverValue;
@@ -653,7 +699,9 @@ class RecommendationEngine {
       // would be diluted by cap blending and milestone bonuses, so a card
       // advertised as "5% on Online" would read as e.g. 3.2% once its cap
       // ran low. This is the rate the headline badge is naming.
-      effectiveRatePerRupee: baseRatePerRupee > 0 ? baseRatePerRupee : null,
+      effectiveRatePerRupee: baseRatePerRupee > 0
+          ? baseRatePerRupee
+          : (context.isFuel && card.fuelRule != null ? card.fuelRule!.waiverPercent / 100 : null),
       reasonLines: reasons,
       isOverride: isOverride,
       breakdown: RecommendationBreakdown(

@@ -4,6 +4,7 @@
          camera + google_mlkit_text_recognition). -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
     <!-- The `camera` plugin (specifically camera_android_camerax) declares
          three permissions this screen has no use for: RECORD_AUDIO and
          WRITE_EXTERNAL_STORAGE (its own manifest scopes this one to
@@ -58,7 +59,7 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:allowBackup="false">
         <activity
-            android:name=".MainActivity"
+            android:name="app.pandapay.pandapay.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
@@ -85,11 +86,14 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- UA-8.2 (Chunk 32): home-screen widget provider skeleton. Never
-             built/run through a real Android toolchain in this sandbox — see
-             BestCardWidgetProvider.kt and PROGRESS.md for exactly what is
-             and isn't verified. -->
-        <receiver android:name=".BestCardWidgetProvider" android:exported="false">
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr,barcode" />
+
+        <!-- UA-8.2 (Chunk 32): home-screen widget provider. Fully-qualified
+             class name ensures flavor applicationIdSuffix (.dev2, .staging)
+             does not misroute the class lookup. -->
+        <receiver android:name="app.pandapay.pandapay.BestCardWidgetProvider" android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -98,11 +102,9 @@
                 android:resource="@xml/best_card_widget_info" />
         </receiver>
 
-        <!-- S2 (GAP_ANALYSIS.md §3): Quick Settings tile. Same "never built
-             through a real Android toolchain in this sandbox" caveat as the
-             widget receiver above — see BestCardTileService.kt. -->
+        <!-- S2 (GAP_ANALYSIS.md §3): Quick Settings tile. -->
         <service
-            android:name=".BestCardTileService"
+            android:name="app.pandapay.pandapay.BestCardTileService"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:label="PandaPay"

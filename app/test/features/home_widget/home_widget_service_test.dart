@@ -21,6 +21,17 @@ void main() {
       calls.add(call);
       if (call.method == 'saveWidgetData') return true;
       if (call.method == 'updateWidget') return true;
+      if (call.method == 'isRequestPinWidgetSupported') return true;
+      if (call.method == 'requestPinWidget') return null;
+      if (call.method == 'getInstalledWidgets') {
+        return [
+          {
+            'widgetId': 1,
+            'androidClassName': '.BestCardWidgetProvider',
+            'label': 'PandaPay',
+          }
+        ];
+      }
       return null;
     });
   });
@@ -38,7 +49,7 @@ void main() {
         rewardRules: [RewardRule(id: '$id-rule', unit: RewardUnit.cashbackPercent, rate: rate)],
       );
 
-  test('writes the recommendation\'s card name/value and triggers an update', () async {
+  test('writes the recommendation\'s card name/value and triggers an update with qualifiedAndroidName', () async {
     final engine = RecommendationEngine();
     final rec = engine
         .rank(
@@ -54,6 +65,8 @@ void main() {
     final updateCalls = calls.where((c) => c.method == 'updateWidget').toList();
 
     expect(updateCalls, hasLength(1));
+    expect(updateCalls.single.arguments['qualifiedAndroidName'], HomeWidgetService.qualifiedAndroidName);
+    expect(updateCalls.single.arguments['android'], HomeWidgetService.androidWidgetName);
 
     final saved = <String, dynamic>{
       for (final c in saveCalls) c.arguments['id'] as String: c.arguments['data'],
@@ -84,5 +97,22 @@ void main() {
     final setAppGroupCalls = calls.where((c) => c.method == 'setAppGroupId').toList();
     expect(setAppGroupCalls, hasLength(1));
     expect(setAppGroupCalls.single.arguments['groupId'], HomeWidgetService.iosAppGroupId);
+  });
+
+  test('checks pin support and requests pin with qualifiedAndroidName', () async {
+    final service = HomeWidgetService();
+    final supported = await service.isPinWidgetSupported();
+    expect(supported, isTrue);
+
+    await service.pinBestCardWidget();
+    final pinCalls = calls.where((c) => c.method == 'requestPinWidget').toList();
+    expect(pinCalls, hasLength(1));
+    expect(pinCalls.single.arguments['qualifiedAndroidName'], HomeWidgetService.qualifiedAndroidName);
+  });
+
+  test('detects if widget is installed on home screen', () async {
+    final service = HomeWidgetService();
+    final installed = await service.isWidgetInstalled();
+    expect(installed, isTrue);
   });
 }
