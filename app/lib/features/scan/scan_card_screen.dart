@@ -820,7 +820,7 @@ class ScanResultPanel extends StatelessWidget {
                         Text(match.product.name, style: BambooFonts.ui(14.5, color: BambooInk.ink900)),
                         const SizedBox(height: 2),
                         Text(
-                          '${match.confidence.name} confidence · ${redactDigitRuns(match.reason)}',
+                          '${match.confidence.name} confidence · ${match.reason}',
                           style: BambooFonts.ui(12, color: BambooInk.ink500),
                         ),
                       ],

@@ -34,7 +34,8 @@ class CardMatch {
   final MatchConfidence confidence;
   final String reason;
   final double overlap;
-  const CardMatch({required this.product, required this.confidence, required this.reason, this.overlap = 0.0});
+  final int hits;
+  const CardMatch({required this.product, required this.confidence, required this.reason, this.overlap = 0.0, this.hits = 0});
 }
 
 /// Card networks scanning cares about, plus the raw synonyms printed on
@@ -105,11 +106,17 @@ String _normalize(String s) {
 /// anywhere in the normalized extracted text. Deliberately simple — no
 /// edit-distance/library dependency — because OCR'd card text is short and
 /// mostly-correct issuer/product names, not free-form prose. 0.0-1.0.
-double _tokenOverlapScore(String normalizedText, String productName) {
-  final tokens = _normalize(productName).split(' ').where((t) => t.length >= 2).toList();
-  if (tokens.isEmpty) return 0.0;
+({double overlap, int hits}) _tokenOverlapScore(String normalizedText, String productName) {
+  final ignoreWords = {'credit', 'card', 'debit', 'prepaid'};
+  final tokens = _normalize(productName)
+      .split(' ')
+      .where((t) => t.length >= 2 && !ignoreWords.contains(t))
+      .toList();
+  if (tokens.isEmpty) {
+    return (overlap: 0.0, hits: 0);
+  }
   final hits = tokens.where((t) => normalizedText.contains(t)).length;
-  return hits / tokens.length;
+  return (overlap: hits / tokens.length, hits: hits);
 }
 
 /// Matches [extracted] against [catalogue], returning candidates sorted
@@ -124,7 +131,9 @@ List<CardMatch> matchCardText(ExtractedCardText extracted, List<CardProduct> cat
 
   final results = <CardMatch>[];
   for (final product in catalogue) {
-    final overlap = _tokenOverlapScore(normalizedText, product.name);
+    final score = _tokenOverlapScore(normalizedText, product.name);
+    final overlap = score.overlap;
+    final hits = score.hits;
     final networkMatches = network != null && network == product.network;
 
     MatchConfidence confidence;
@@ -153,13 +162,16 @@ List<CardMatch> matchCardText(ExtractedCardText extracted, List<CardProduct> cat
       confidence: confidence,
       reason: reasonParts.join(', '),
       overlap: overlap,
+      hits: hits,
     ));
   }
 
   results.sort((a, b) {
     final confCmp = b.confidence.index.compareTo(a.confidence.index);
     if (confCmp != 0) return confCmp;
-    return b.overlap.compareTo(a.overlap);
+    final overlapCmp = b.overlap.compareTo(a.overlap);
+    if (overlapCmp != 0) return overlapCmp;
+    return b.hits.compareTo(a.hits);
   });
   return results;
 }
