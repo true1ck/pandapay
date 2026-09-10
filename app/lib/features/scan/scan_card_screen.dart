@@ -95,7 +95,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   bool _processingImage = false;
 
   // ---- QR (secondary) state ----
-  final MobileScannerController _qrController = MobileScannerController();
+  final MobileScannerController _qrController = MobileScannerController(
+    autoZoom: true,
+  );
 
   // ---- Shared result state ----
   ExtractedCardText? _lastExtracted;
@@ -626,8 +628,20 @@ class _QrView extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        MobileScanner(controller: controller, onDetect: onDetect),
-        CustomPaint(painter: _CornerBracketPainter(), size: Size.infinite),
+        GestureDetector(
+          onTapDown: (details) {
+            final box = context.findRenderObject() as RenderBox?;
+            if (box == null) return;
+            final offset = details.localPosition;
+            controller.setFocusPoint(
+              Offset(offset.dx / box.size.width, offset.dy / box.size.height),
+            );
+          },
+          child: MobileScanner(controller: controller, onDetect: onDetect),
+        ),
+        IgnorePointer(
+          child: CustomPaint(painter: _CornerBracketPainter(), size: Size.infinite),
+        ),
       ],
     );
   }

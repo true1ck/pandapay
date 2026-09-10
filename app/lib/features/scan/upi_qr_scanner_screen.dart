@@ -22,7 +22,10 @@ class UpiQrScannerScreen extends StatefulWidget {
 }
 
 class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
-  final MobileScannerController _controller = MobileScannerController();
+  final MobileScannerController _controller = MobileScannerController(
+    formats: const [BarcodeFormat.qrCode],
+    autoZoom: true,
+  );
   bool _handling = false;
   String? _hint;
   bool _torchOn = false;
@@ -83,23 +86,35 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-            errorBuilder: (context, error) => _PermissionExplainer(error: error),
+          GestureDetector(
+            onTapDown: (details) {
+              final box = context.findRenderObject() as RenderBox?;
+              if (box == null) return;
+              final offset = details.localPosition;
+              _controller.setFocusPoint(
+                Offset(offset.dx / box.size.width, offset.dy / box.size.height),
+              );
+            },
+            child: MobileScanner(
+              controller: _controller,
+              onDetect: _onDetect,
+              errorBuilder: (context, error) => _PermissionExplainer(error: error),
+            ),
           ),
           // The feed is a live photograph; the chrome below needs a floor of
           // contrast against whatever happens to be in frame.
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xB32B313A), Color(0x332B313A), Color(0xCC2B313A)],
-                stops: [0.0, 0.42, 1.0],
+          const IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xB32B313A), Color(0x332B313A), Color(0xCC2B313A)],
+                  stops: [0.0, 0.42, 1.0],
+                ),
               ),
+              child: SizedBox.expand(),
             ),
-            child: SizedBox.expand(),
           ),
           SafeArea(
             child: Padding(
