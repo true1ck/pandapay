@@ -1499,9 +1499,10 @@ final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
 
 /// Ranks the fetched catalogue for the selected category, scoped to the
 /// signed-in user's own wallet (Chunk 16's user_cards) when they own any —
-/// falling back to the whole catalogue when signed out or before they've
-/// added a first card, so Home is never empty just because nobody's built
-/// UA-1.2's onboarding flow yet. Still no cap-consumption or
+/// falling back to the three highest-ranked catalogue cards when signed out
+/// or before they've added a first card. A user should not receive an
+/// unbounded list of cards they do not own; their Wallet still ranks every
+/// card they have added. Still no cap-consumption or
 /// milestone-progress state (that's user-usage tracking, a separate,
 /// larger surface than "which cards does this person actually have") —
 /// every card is evaluated as if its caps/milestones are fully fresh.
@@ -1579,7 +1580,8 @@ final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>
       wallet,
       forcedOverrideCardId: overrideProductId,
     );
-    return AsyncValue.data(engine.rank(context, snapshots));
+    final ranked = engine.rank(context, snapshots);
+    return AsyncValue.data(wallet.isEmpty ? ranked.take(3).toList() : ranked);
   },
 );
 

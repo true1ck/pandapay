@@ -78,6 +78,27 @@ void main() {
     expect(find.text('Nothing to recommend yet'), findsOneWidget);
   });
 
+  testWidgets('shows only the top three worthwhile cards the user does not own', (tester) async {
+    final candidates = List.generate(
+      4,
+      (index) => AcquisitionCandidate(
+        card: _card('candidate-$index', 'Candidate $index'),
+        projectedAnnualValue: Money.fromRupees(1000 - index),
+        annualFeeNet: const Money.zero(),
+        uplift: Money.fromRupees(1000 - index),
+        valueByCategory: {_diningCategoryId: Money.fromRupees(1000 - index)},
+      ),
+    );
+
+    await tester.pumpWidget(_screenWith(candidates: AsyncValue.data(candidates)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Candidate 0'), findsOneWidget);
+    expect(find.text('Candidate 1'), findsOneWidget);
+    expect(find.text('Candidate 2'), findsOneWidget);
+    expect(find.text('Candidate 3'), findsNothing);
+  });
+
   testWidgets('tapping Apply while signed out shows a sign-in prompt rather than crashing', (tester) async {
     final card = _card('candidate-3', 'Sign-In Test Card');
     final candidate = AcquisitionCandidate(

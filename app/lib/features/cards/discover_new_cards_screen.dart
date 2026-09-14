@@ -73,7 +73,10 @@ class _DiscoverNewCardsScreenState extends ConsumerState<DiscoverNewCardsScreen>
       );
     }
 
-    final worthwhile = candidates.requireValue.where((c) => c.isWorthwhile).toList();
+    // The recommender already removes wallet cards. Keep the discovery
+    // surface focused on the three best unowned options rather than making a
+    // user sift through every catalogue row.
+    final worthwhile = candidates.requireValue.where((c) => c.isWorthwhile).take(3).toList();
     final categoryNames = {for (final c in categories.requireValue) c.id: c.name};
 
     if (worthwhile.isEmpty) {

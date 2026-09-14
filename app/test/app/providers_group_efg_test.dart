@@ -40,6 +40,44 @@ UserCard _owned(String cardProductId, {Money? creditLimit, Map<String, Money> ca
 }
 
 void main() {
+  group('rankedRecommendationsProvider catalogue fallback', () {
+    Future<List<Recommendation>> rankForWallet(List<UserCard> wallet) async {
+      final cards = List.generate(4, (index) => _flatRateCard('card-$index', index + 1.0));
+      final container = ProviderContainer(overrides: [
+        userCardsProvider.overrideWith((ref) async => wallet),
+        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(cards)),
+        categoriesProvider.overrideWith((ref) async => const []),
+        cardOverridesProvider.overrideWith((ref) async => const []),
+      ]);
+      addTearDown(container.dispose);
+
+      await container.read(userCardsProvider.future);
+      await container.read(catalogueProvider.future);
+      await container.read(categoriesProvider.future);
+      await container.read(cardOverridesProvider.future);
+      return container.read(rankedRecommendationsProvider).requireValue;
+    }
+
+    test('limits unowned catalogue recommendations to the top three', () async {
+      final recommendations = await rankForWallet(const []);
+
+      expect(recommendations, hasLength(3));
+      expect(recommendations.map((r) => r.card.id), ['card-3', 'card-2', 'card-1']);
+    });
+
+    test('keeps every card from the user wallet in the ranking', () async {
+      final recommendations = await rankForWallet([
+        _owned('card-0'),
+        _owned('card-1'),
+        _owned('card-2'),
+        _owned('card-3'),
+      ]);
+
+      expect(recommendations, hasLength(4));
+      expect(recommendations.map((r) => r.card.id).toSet(), {'card-0', 'card-1', 'card-2', 'card-3'});
+    });
+  });
+
   group('travelModeProvider', () {
     test('defaults to off', () {
       final container = ProviderContainer();
