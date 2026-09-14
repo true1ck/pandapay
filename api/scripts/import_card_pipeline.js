@@ -90,7 +90,23 @@ const { Pool } = require('pg');
 // '2' -> '3': verified multi-network research is projected into
 // card_product_network_variants (migration 0043) instead of remaining only
 // in reviewer JSON. Existing drafts must be rebuilt so the child rows exist.
-const IMPORT_TRANSFORM_VERSION = '3';
+// '3' -> '4': is_upi_linkable is now constrained by the resolved product
+// network. A known non-RuPay row can never be UPI-linkable; an unknown
+// multi-network product is linkable only when its verified variants include
+// RuPay. Existing drafts must be rebuilt so an extracted product-level flag
+// cannot leak onto a Visa or Mastercard catalogue row.
+// '4' -> '5': transaction-count/welcome/activation reward rules and event-only
+// milestones are no longer projected into the spend recommender. The engine
+// cannot evaluate account age, first-transaction state, birthdays, or a count
+// of qualifying transactions. Treating their fixed bonus as points-per-spend-
+// block produced impossible results such as 1,000 bonus points / ₹50 = 500%
+// on every purchase. The complete source objects remain in extended_data for
+// operator review; only the unsafe structured projection is omitted.
+// '5' -> '6': rewards gated by cumulative statement/month/quarter spend are
+// likewise not transaction rates. The engine does not know whether that
+// threshold has already been met, so fixed milestone awards must not be
+// converted to a per-₹100 rate.
+const IMPORT_TRANSFORM_VERSION = '6';
 
 // Resolve env files from the repository, not process.cwd(), so the wrapper
 // works the same from a terminal, cron, or the production deploy directory.
@@ -244,6 +260,7 @@ const PERIOD_MAP = {
   half_year: 'half_year',
   annual: 'annual',
   card_anniversary_year: 'annual',
+  enrollment_year: 'annual',
   lifetime: 'lifetime',
 };
 const DEFAULT_PERIOD = 'statement_cycle';
@@ -443,6 +460,110 @@ function unmappedNarrowing(rule, sourceConditions, acceptedMerchantPattern) {
     reasons.push(key);
   }
   return reasons;
+}
+
+// Conditions that make a positive reward depend on lifecycle or accumulated
+// transaction state RecommendationContext does not carry. These cannot be
+// represented honestly by reward_rules: importing a fixed welcome/transaction
+// bonus as `points_per_100` turns it into a recurring percentage on every
+// purchase. Keep this list structural (keys/field names), with a narrow text
+// fallback for source records that put the whole trigger in one string.
+const UNSUPPORTED_REWARD_TRIGGER_KEYS = new Set([
+  'transaction_count',
+  'transaction_sequence',
+  'first_transaction',
+  'first_spend',
+  'within_days_of_card_receipt',
+  'within_days_of_card_issuance',
+  'days_from_card_issuance',
+  'days_from_card_receipt',
+  'deadline_days_from_receipt',
+  'deadline_days_from_issuance',
+  // The engine has no calendar-day or reward-frequency state. These are
+  // commonly fixed weekend/persistence bonuses, not a rate on every spend.
+  'days',
+  'frequency',
+  'consecutive_months',
+]);
+
+// A reward which changes only after an accumulated-spend threshold needs
+// statement/period progress. RecommendationContext intentionally has neither,
+// so treating its points value as a transaction rate can manufacture a 500%
+// return. Keep ordinary per-transaction minimums out of these expressions:
+// those map safely to min_txn_inr elsewhere in this importer.
+const ACCUMULATED_SPEND_TRIGGER_KEY =
+  /(?:^|_)(?:minimum_|maximum_)?(?:statement(?:_cycle|_month)?|calendar_(?:month|quarter|year)|quarter(?:ly)?|annual|lifetime|cumulative).*spend.*(?:threshold|target|qualification|net)?(?:_inr)?$/;
+const ACCUMULATED_SPEND_FIELD =
+  /(?:^|_)(?:statement|calendar|quarter|annual|lifetime|cumulative).*(?:cumulative_)?spend(?:_inr)?$/;
+
+function rewardRuleHasUnsupportedTrigger(rule) {
+  const hasPositiveRate =
+    (asNumber(rule?.action?.cashback_percent) ?? 0) > 0 ||
+    (asNumber(rule?.action?.points_per_block) ?? 0) > 0;
+  if (!hasPositiveRate) return false;
+
+  const conditions = rule?.conditions;
+  const visit = (value, key = '') => {
+    const normalizedKey = String(key).toLowerCase();
+    if (UNSUPPORTED_REWARD_TRIGGER_KEYS.has(normalizedKey)) return true;
+    if (ACCUMULATED_SPEND_TRIGGER_KEY.test(normalizedKey)) return true;
+    if (normalizedKey === 'trigger' && !isNA(value) && String(value).trim()) return true;
+    if (
+      normalizedKey === 'field' &&
+      (
+        UNSUPPORTED_REWARD_TRIGGER_KEYS.has(String(value).toLowerCase()) ||
+        ACCUMULATED_SPEND_FIELD.test(String(value).toLowerCase())
+      )
+    ) {
+      return true;
+    }
+    if (Array.isArray(value)) return value.some((entry) => visit(entry));
+    if (value && typeof value === 'object') {
+      return Object.entries(value).some(([childKey, child]) => visit(child, childKey));
+    }
+    if (typeof value !== 'string') return false;
+    return /\b(first (?:qualifying )?(?:transaction|spend|purchase)|after (?:\w+|\d+) transactions?|within \d+ days? of (?:card )?(?:receipt|issuance))\b/i.test(value);
+  };
+
+  if (visit(conditions)) return true;
+  // Some sources encode the lifecycle trigger only in the local rule id.
+  // Requiring the reward to be a positive accelerator avoids touching normal
+  // base rules that happen to use words such as "activation" descriptively.
+  const id = String(rule?.id || '');
+  return rule?.evaluation_type === 'accelerator' && /(?:welcome|activation)[_-]/i.test(id);
+}
+
+const SUPPORTED_MILESTONE_PERIODS = new Set([
+  'day',
+  'statement_cycle',
+  'calendar_month',
+  'quarter',
+  'half_year',
+  'annual',
+  'card_anniversary_year',
+  'enrollment_year',
+  'lifetime',
+]);
+
+// milestone_rules can model "spend ₹X during period Y" only. Event benefits
+// need extra state (birthday, activation, first EMI/fuel transaction, account
+// age) that the engine does not have, so including them fabricates value on
+// unrelated purchases. Return a reason for the import report, or null when
+// the milestone is a plain spend threshold the engine can evaluate.
+function unsupportedMilestoneReason(milestone) {
+  const period = milestone?.period;
+  if (!isNA(period) && !SUPPORTED_MILESTONE_PERIODS.has(String(period))) {
+    return `unsupported period ${period}`;
+  }
+  const identity = `${milestone?.id || ''} ${milestone?.label || ''}`;
+  if (
+    /\b(?:birthday|welcome|activation|upgrade)\b|\bjoining[- ]fee\b|\bfee (?:waiver|reversal)\b|\bfirst[-_ ](?:transaction|spend|purchase|fuel|hpcl|emi|year|60|90)\b/i.test(
+      identity
+    )
+  ) {
+    return 'requires lifecycle/event state the recommendation engine does not track';
+  }
+  return null;
 }
 
 /// reward_rules.merchant_pattern is matched as a normalised SUBSTRING of the
@@ -900,7 +1021,8 @@ async function upsertCardProduct(
   economics,
   force,
   hash,
-  runId
+  runId,
+  verifiedNetworkVariants = []
 ) {
   const existing = await client.query(
     `SELECT id, status, import_source_hash, import_transform_version
@@ -908,14 +1030,24 @@ async function upsertCardProduct(
     [cp.slug]
   );
 
+  const network = mapNetwork(cp.network);
+  const cardType = CARD_TYPES.includes(cp.card_type) ? cp.card_type : 'credit';
+  const hasVerifiedRupayVariant = verifiedNetworkVariants.some(
+    (variant) => variant.network === 'rupay'
+  );
+  const isUpiLinkable =
+    cp.is_upi_linkable === true &&
+    cardType === 'credit' &&
+    (network === 'rupay' || (network === 'unknown' && hasVerifiedRupayVariant));
+
   const baseValues = {
     issuer_id: issuerId,
     name: cp.name,
-    network: mapNetwork(cp.network),
-    card_type: CARD_TYPES.includes(cp.card_type) ? cp.card_type : 'credit',
+    network,
+    card_type: cardType,
     joining_fee_inr: asNumber(cp.joining_fee_inr) ?? 0,
     annual_fee_inr: asNumber(cp.annual_fee_inr) ?? 0,
-    is_upi_linkable: cp.is_upi_linkable === true,
+    is_upi_linkable: isUpiLinkable,
     source_url: isNA(cp.source_url) ? null : cp.source_url,
     extended_data: JSON.stringify(extendedData),
     base_reward_unit: economics.baseRewardUnit,
@@ -1102,6 +1234,7 @@ async function importRewardRules(client, cardProductId, rules, cardBaseBlockInr,
   const scratch = newReport();
   const projected = [];
   for (const r of rules || []) {
+    if (rewardRuleHasUnsupportedTrigger(r)) continue;
     const { skip, categoryId } = mapCategory(r.category_id, scratch, '');
     if (skip) continue;
     projected.push({
@@ -1115,6 +1248,15 @@ async function importRewardRules(client, cardProductId, rules, cardBaseBlockInr,
   const shadowing = shadowingZeroRateRules(projected);
 
   for (const r of rules || []) {
+    if (rewardRuleHasUnsupportedTrigger(r)) {
+      report.unenforceableRewardTriggers.push({
+        card_product_id: cardProductId,
+        rule: r.id || null,
+        source_reason: r.action?.reason || null,
+        source_conditions: r.conditions || null,
+      });
+      continue;
+    }
     const { skip, categoryId } = mapCategory(r.category_id, report, `reward_rule ${r.id || ''}`);
     if (skip) continue;
 
@@ -1345,6 +1487,16 @@ async function importCapRules(
 
 async function importMilestoneRules(client, cardProductId, milestones, report) {
   for (const m of milestones || []) {
+    const unsupportedReason = unsupportedMilestoneReason(m);
+    if (unsupportedReason) {
+      report.unenforceableMilestones.push({
+        card_product_id: cardProductId,
+        milestone: m.id || null,
+        reason: unsupportedReason,
+        label: m.label || null,
+      });
+      continue;
+    }
     const threshold = asNumber(m.threshold_spend_inr);
     const rewardValue = asNumber(m.reward_value_inr);
     if (threshold === null || rewardValue === null) continue; // not-null columns; nothing safe to insert
@@ -1567,6 +1719,11 @@ function buildExtendedData(record) {
     // fields PandaPay does not model yet without losing them on import.
     card_product_source: card_product,
     unmapped_reward_rules: unsupportedRewardRules,
+    // The recommendation engine cannot evaluate lifecycle/count triggers.
+    // Preserve the exact source records even though their unsafe recurring
+    // projections are deliberately omitted from reward_rules.
+    unenforceable_reward_rules: (reward_rules || []).filter(rewardRuleHasUnsupportedTrigger),
+    source_fee_waiver_and_milestones: rest.fee_waiver_and_milestones,
     // Cap rows have no generic JSON conditions column, so retain the exact
     // source shapes (including MCC lists and effective windows) alongside
     // their structured projections.
@@ -1598,7 +1755,8 @@ async function importOneCard(client, adminId, record, indexEntry, force, report)
       economics,
       force,
       hash,
-      indexEntry?.runId || null
+      indexEntry?.runId || null,
+      extractVerifiedNetworkVariants(record)
     );
 
   if (action === 'unchanged') {
@@ -1675,9 +1833,10 @@ function newReport() {
     // makes publishable without inventing a scalar network.
     unresolvedNetworks: [], incompleteRecords: [],
     networkVariantCards: [], networkVariantsImported: 0,
-    // Zero-rate rules dropped because the engine cannot see what narrows
-    // them, and unrecognised condition keys that might be the next such gap.
+    // Rules/milestones dropped because the engine cannot see what triggers
+    // them, plus unrecognised condition keys that might be the next such gap.
     unenforceableExclusions: [], unmappedConditionKeys: {},
+    unenforceableRewardTriggers: [], unenforceableMilestones: [],
     unusableMerchantPatterns: [],
     warnings: [],
   };
@@ -1914,6 +2073,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildExtendedData,
   canonicalize,
   missingSections,
   resolveNetwork,
@@ -1926,13 +2086,16 @@ module.exports = {
   hasExplicitNoRewardProgram,
   IMPORT_TRANSFORM_VERSION,
   importCapRules,
+  importMilestoneRules,
   importNetworkVariants,
   importRewardRules,
   importOneCard,
   mapCategory,
   parseArgs,
   pointsUnitAndRate,
+  rewardRuleHasUnsupportedTrigger,
   sanityCheck,
   sourceHash,
   upsertCardProduct,
+  unsupportedMilestoneReason,
 };

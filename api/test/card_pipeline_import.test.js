@@ -6,23 +6,28 @@ const path = require('path');
 
 const { collect } = require('../scripts/collect_card_pipeline');
 const {
+  buildExtendedData,
   deriveCardEconomics,
   extractVerifiedNetworkVariants,
   hasExplicitNoRewardProgram,
   IMPORT_TRANSFORM_VERSION,
   importCapRules,
+  importMilestoneRules,
   importNetworkVariants,
+  importRewardRules,
   mapCategory,
   MIN_TXN_KEYS,
   missingSections,
   parseArgs,
   resolveNetwork,
+  rewardRuleHasUnsupportedTrigger,
   sanityCheck,
   shadowingZeroRateRules,
   sourceHash,
   unmappedNarrowing,
   upsertCardProduct,
   usableMerchantPattern,
+  unsupportedMilestoneReason,
 } = require('../scripts/import_card_pipeline');
 const {
   parseArgs: parsePublishArgs,
@@ -35,6 +40,13 @@ function report() {
     warnings: [],
     unmappedCategories: {},
     skippedCategories: [],
+    unmappedRails: {},
+    unmappedPeriods: {},
+    unmappedConditionKeys: {},
+    unusableMerchantPatterns: [],
+    unenforceableExclusions: [],
+    unenforceableRewardTriggers: [],
+    unenforceableMilestones: [],
   };
 }
 
@@ -126,6 +138,204 @@ test('deriveCardEconomics normalizes unusual point blocks without changing value
   assert.equal(r.unusualBlockSizes[500], 1);
 });
 
+test('conditional fixed-point bonuses are not projected as recurring reward rates', async () => {
+  const base = {
+    id: 'base',
+    category_id: 'all_retail',
+    priority: 100,
+    evaluation_type: 'standard_accrual',
+    conditions: {},
+    action: { points_per_block: 1, reason: '1 point per ₹50' },
+  };
+  const sixTransactionBonus = {
+    id: 'monthly_six_transaction_bonus',
+    category_id: 'all_retail',
+    priority: 20,
+    evaluation_type: 'accelerator',
+    conditions: {
+      period: 'calendar_month',
+      transaction_count: 6,
+      minimum_transaction_amount_inr: 1000,
+    },
+    action: {
+      points_per_block: 1000,
+      reason: '1,000 bonus points after six ₹1,000 transactions',
+    },
+  };
+  const firstSpendBonus = {
+    id: 'welcome_500_edge_miles',
+    category_id: 'all_retail',
+    priority: 10,
+    evaluation_type: 'accelerator',
+    conditions: {
+      all: [
+        { field: 'first_transaction', operator: '==', value: true },
+        { field: 'days_from_card_issuance', operator: '<=', value: 30 },
+      ],
+    },
+    action: { points_per_block: 500, reason: '500 miles on the first spend' },
+  };
+  const quarterlyMilestone = {
+    id: 'quarterly_bonus',
+    category_id: 'all_retail',
+    priority: 30,
+    evaluation_type: 'accelerator',
+    conditions: { calendar_quarter_spend_threshold_inr: 50000 },
+    action: { points_per_block: 2500, reason: '2,500 points after ₹50,000 quarterly spend' },
+  };
+  const cumulativeSpendBonus = {
+    id: 'statement_cycle_bonus',
+    category_id: 'all_retail',
+    priority: 40,
+    evaluation_type: 'accelerator',
+    conditions: { minimum_cumulative_net_spend_inr: 30000, period: 'statement_cycle' },
+    action: { points_per_block: 1500, reason: '1,500 points after ₹30,000 statement-cycle spend' },
+  };
+
+  assert.equal(rewardRuleHasUnsupportedTrigger(base), false);
+  assert.equal(rewardRuleHasUnsupportedTrigger(sixTransactionBonus), true);
+  assert.equal(rewardRuleHasUnsupportedTrigger(firstSpendBonus), true);
+  assert.equal(rewardRuleHasUnsupportedTrigger(quarterlyMilestone), true);
+  assert.equal(rewardRuleHasUnsupportedTrigger(cumulativeSpendBonus), true);
+  assert.equal(
+    rewardRuleHasUnsupportedTrigger({
+      ...firstSpendBonus,
+      id: 'conditional-exclusion',
+      action: { points_per_block: 0 },
+    }),
+    false,
+    'conditional exclusions stay on the existing conservative handling path'
+  );
+
+  const queries = [];
+  const client = {
+    async query(sql, params) {
+      queries.push({ sql, params });
+      return { rows: [{ id: `rule-${queries.length}` }] };
+    },
+  };
+  const r = report();
+  await importRewardRules(
+    client,
+    'amex-gold',
+    [sixTransactionBonus, firstSpendBonus, quarterlyMilestone, cumulativeSpendBonus, base],
+    50,
+    r
+  );
+
+  assert.equal(queries.length, 1, 'only the ordinary base earn should be inserted');
+  assert.equal(queries[0].params[4], 'points_per_100');
+  assert.equal(queries[0].params[5], 2, '1 point per ₹50 normalizes to 2 points per ₹100');
+  assert.deepEqual(
+    r.unenforceableRewardTriggers.map((entry) => entry.rule),
+    ['monthly_six_transaction_bonus', 'welcome_500_edge_miles', 'quarterly_bonus', 'statement_cycle_bonus']
+  );
+});
+
+test('event-only milestones are excluded from spend recommendations', async () => {
+  const eventMilestones = [
+    {
+      id: 'zenith_birthday_bonus_points',
+      label: 'Birthday Bonus Reward Points',
+      threshold_spend_inr: 1,
+      reward_value_inr: 250,
+      period: 'annual',
+    },
+    {
+      id: 'activation_gift_voucher',
+      label: '₹250 gift voucher on card activation',
+      threshold_spend_inr: 200,
+      reward_value_inr: 250,
+      period: 'card_anniversary_year',
+    },
+    {
+      id: 'first_hpcl_welcome',
+      label: '₹500 welcome voucher on first HPCL fuel transaction',
+      threshold_spend_inr: 500,
+      reward_value_inr: 500,
+      period: 'annual',
+    },
+    {
+      id: 'first_emi_cashback',
+      label: '5% cashback on first EMI conversion',
+      threshold_spend_inr: 2500,
+      reward_value_inr: 1000,
+      period: 'annual',
+    },
+  ];
+  const ordinary = {
+    id: 'quarterly_spend_100k',
+    label: '₹1,000 voucher on ₹1 lakh quarterly spend',
+    threshold_spend_inr: 100000,
+    reward_value_inr: 1000,
+    period: 'quarter',
+    is_repeatable: true,
+  };
+
+  for (const milestone of eventMilestones) {
+    assert.match(unsupportedMilestoneReason(milestone), /lifecycle\/event state/);
+  }
+  assert.equal(unsupportedMilestoneReason(ordinary), null);
+
+  const queries = [];
+  const client = {
+    async query(sql, params) {
+      queries.push({ sql, params });
+      return { rows: [] };
+    },
+  };
+  const r = report();
+  await importMilestoneRules(client, 'card-id', [...eventMilestones, ordinary], r);
+
+  assert.equal(queries.length, 1, 'only the plain quarterly spend milestone should be inserted');
+  assert.equal(queries[0].params[2], 'quarter');
+  assert.equal(r.unenforceableMilestones.length, 4);
+});
+
+test('unenforceable event evidence remains available for later modelling', () => {
+  const eventRule = {
+    id: 'welcome_bonus',
+    evaluation_type: 'accelerator',
+    conditions: { first_transaction: true },
+    action: { points_per_block: 500 },
+  };
+  const sourceMilestones = {
+    spend_milestones: [{ id: 'birthday', label: 'Birthday reward', period: 'annual' }],
+  };
+
+  const extended = buildExtendedData({
+    schema_version: '1',
+    card_product: { slug: 'test-card' },
+    reward_rules: [eventRule],
+    cap_rules: [],
+    fee_waiver_and_milestones: sourceMilestones,
+  });
+
+  assert.deepEqual(extended.unenforceable_reward_rules, [eventRule]);
+  assert.deepEqual(extended.source_fee_waiver_and_milestones, sourceMilestones);
+});
+
+test('an enrollment-year spend target remains a normal annual milestone', async () => {
+  const milestone = {
+    id: 'annual-voucher',
+    label: 'Voucher on annual spends of ₹75,000',
+    threshold_spend_inr: 75000,
+    reward_value_inr: 1000,
+    period: 'enrollment_year',
+  };
+  assert.equal(unsupportedMilestoneReason(milestone), null);
+
+  const queries = [];
+  await importMilestoneRules(
+    { async query(sql, params) { queries.push({ sql, params }); return { rows: [] }; } },
+    'card-id',
+    [milestone],
+    report()
+  );
+  assert.equal(queries.length, 1);
+  assert.equal(queries[0].params[2], 'annual');
+});
+
 test('unknown source categories are skipped rather than broadened to other', () => {
   const r = report();
   assert.deepEqual(mapCategory('flipkart_partner_only', r, 'rule x'), {
@@ -173,6 +383,57 @@ test('upsertCardProduct performs no writes when the source hash is unchanged', a
   assert.equal(result.action, 'unchanged');
   assert.equal(queries.length, 1);
   assert.match(queries[0].sql, /^SELECT id, status, import_source_hash/);
+});
+
+test('UPI linkability is limited to RuPay credit-card networks', async () => {
+  async function insertedFlag(cardProduct, verifiedNetworkVariants = []) {
+    const queries = [];
+    const client = {
+      async query(sql, params) {
+        queries.push({ sql, params });
+        if (sql.startsWith('SELECT id, status, import_source_hash')) return { rows: [] };
+        return { rows: [{ id: 'card-id' }] };
+      },
+    };
+    await upsertCardProduct(
+      client,
+      'issuer-id',
+      cardProduct,
+      {},
+      {
+        baseRewardUnit: 'cashback_percent',
+        baseRewardRate: 1,
+        pointValueInr: null,
+        pointValueBasis: null,
+        excludedCategorySlugs: [],
+      },
+      false,
+      'source-hash',
+      'run-1',
+      verifiedNetworkVariants
+    );
+    const insert = queries.find((query) => query.sql.includes('INSERT INTO card_products'));
+    return insert.params[7];
+  }
+
+  const base = {
+    slug: 'test-card',
+    name: 'Test Card',
+    card_type: 'credit',
+    is_upi_linkable: true,
+  };
+  assert.equal(await insertedFlag({ ...base, network: 'rupay' }), true);
+  assert.equal(await insertedFlag({ ...base, network: 'visa' }), false);
+  assert.equal(await insertedFlag({ ...base, network: 'mastercard' }), false);
+  assert.equal(await insertedFlag({ ...base, network: 'rupay', card_type: 'debit' }), false);
+  assert.equal(await insertedFlag({ ...base, network: 'N/A' }), false);
+  assert.equal(
+    await insertedFlag(
+      { ...base, network: 'N/A' },
+      [{ network: 'visa' }, { network: 'rupay' }]
+    ),
+    true
+  );
 });
 
 test('legacy cap_reference links a points cap to its reward rule and converts it to rupees', async () => {
