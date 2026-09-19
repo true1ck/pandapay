@@ -40,6 +40,14 @@ class IncomingSmsReceiver : BroadcastReceiver() {
 
     companion object {
         var foregroundSmsChannel: MethodChannel? = null
+
+        // ActivityAware only tells the plugin that an Activity is attached;
+        // it does not change when the Activity is merely backgrounded. Keep
+        // the host Activity's visibility as a separate signal so a manifest
+        // SMS receiver cannot route a background SMS into a stale foreground
+        // Flutter channel.
+        @Volatile
+        var isHostActivityVisible: Boolean = false
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
@@ -69,7 +77,14 @@ class IncomingSmsReceiver : BroadcastReceiver() {
                     .plus(smsMessage.messageBody.trim())
             }
         }
-        if (IncomingSmsHandler.isApplicationForeground(context)) {
+        // A manifest BroadcastReceiver runs in the app process while Android
+        // is dispatching the broadcast. On some Android versions that makes
+        // the short-lived receiver process look IMPORTANCE_FOREGROUND even
+        // when the app has no visible Activity. Use the host Activity's
+        // lifecycle flag as the source of truth; otherwise a background SMS
+        // can be sent into a stale foreground channel and silently dropped.
+        if (IncomingSmsReceiver.isHostActivityVisible &&
+            IncomingSmsReceiver.foregroundSmsChannel != null) {
             val args = HashMap<String, Any>()
             args[MESSAGE] = messageMap
             foregroundSmsChannel?.invokeMethod(ON_MESSAGE, args)

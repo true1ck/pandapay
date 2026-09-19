@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/design/app_theme.dart';
-import '../../app/env.dart';
 import '../../app/router.dart';
 import '../sms_import/sms_listener_service.dart';
 
@@ -25,12 +24,8 @@ class PermissionsScreen extends ConsumerStatefulWidget {
 }
 
 class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
-  // The prod flavor's manifest (app/android/app/src/prod/AndroidManifest.xml)
-  // strips READ_SMS/RECEIVE_SMS entirely — Google Play's SMS/Call Log policy
-  // only allows them for a default SMS handler, which this optional
-  // convenience feature doesn't qualify as. Showing the "Enable" button on
-  // that flavor would request a permission the app never declared, which
-  // can only fail.
+  // Personal-use builds declare SMS permissions in every flavor. Play Store
+  // policy handling is intentionally deferred until the feature is complete.
   bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
   bool? _smsGranted;

@@ -820,6 +820,7 @@ class UserCardsRepository {
     String? merchantName,
     DateTime? occurredAt,
     String? note,
+    String? rail,
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
   }) async {
@@ -833,6 +834,7 @@ class UserCardsRepository {
         'merchantName': ?merchantName,
         'occurredAt': occurredAt?.toIso8601String(),
         'note': ?note,
+        'rail': ?rail,
         'instrument': instrument.wireValue,
         'entryKind': entryKind.wireValue,
       }),
@@ -1358,7 +1360,7 @@ class TransactionEntry {
   /// `t.rail`/`t.status` (always present in the row) but nothing parsed
   /// them into the client model until D2 (Transaction Detail, "source"/
   /// "reconciliation status") and D3 (Edit, needs every field) needed them.
-  final String userCardId;
+  final String? userCardId;
   final TxnRail rail;
   final String source;
   final String status;
@@ -1391,7 +1393,7 @@ class TransactionEntry {
     this.categoryId,
     this.categoryName,
     this.cardDisplayName,
-    required this.userCardId,
+    this.userCardId,
     this.rail = TxnRail.unknown,
     required this.source,
     required this.status,
@@ -1410,7 +1412,7 @@ class TransactionEntry {
       categoryId: json['category_id'] as String?,
       categoryName: json['category_name'] as String?,
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
-      userCardId: json['user_card_id'] as String,
+      userCardId: json['user_card_id'] as String?,
       rail: _parseRail(json['rail'] as String?),
       source: json['source'] as String? ?? 'manual',
       status: json['status'] as String? ?? 'active',

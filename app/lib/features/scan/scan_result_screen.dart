@@ -497,7 +497,10 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
 
     switch (result.status) {
       case UpiPaymentStatus.success:
-        await _openPaymentSent(rec: rec, wallet: wallet, autoLog: true);
+        // The UPI result is useful UX feedback, but the bank SMS is the
+        // authoritative settled spend. Logging here first creates a manual
+        // row which can race the SMS and count the same QR payment twice.
+        await _openPaymentSent(rec: rec, wallet: wallet, autoLog: false);
         break;
       case UpiPaymentStatus.submitted:
         // The honest default: the app returned with no conclusive status.

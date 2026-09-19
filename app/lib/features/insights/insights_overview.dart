@@ -168,7 +168,8 @@ final insightsOverviewProvider = FutureProvider.family<InsightsOverview, Insight
     // was nothing else to have chosen. Same guard D6 Missed Opportunities
     // applies.
     if (allProducts.length < 2) continue;
-    final usedProduct = productsByUserCardId[txn.userCardId];
+    if (txn.userCardId == null) continue;
+    final usedProduct = productsByUserCardId[txn.userCardId!];
     if (usedProduct == null) continue; // card since archived — nothing to compare against
 
     final comparison = compareToOwnedCards(

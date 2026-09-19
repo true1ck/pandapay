@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
+import com.shounakmulay.telephony.sms.IncomingSmsReceiver
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -31,6 +32,16 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private var pendingResult: MethodChannel.Result? = null
+
+    override fun onResume() {
+        super.onResume()
+        IncomingSmsReceiver.isHostActivityVisible = true
+    }
+
+    override fun onPause() {
+        IncomingSmsReceiver.isHostActivityVisible = false
+        super.onPause()
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

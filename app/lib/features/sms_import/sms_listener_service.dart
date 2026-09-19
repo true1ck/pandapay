@@ -5,7 +5,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:telephony/telephony.dart';
 
-import '../../app/env.dart';
 import 'sms_background_queue.dart';
 import 'sms_text_hint.dart';
 
@@ -43,7 +42,13 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
     final prefs = await SharedPreferences.getInstance();
     await SmsBackgroundQueue.enqueue(
       prefs,
-      QueuedSms(sender: sender, body: body, receivedAt: DateTime.now()),
+      QueuedSms(
+        sender: sender,
+        body: body,
+        receivedAt: message.date == null
+            ? DateTime.now()
+            : DateTime.fromMillisecondsSinceEpoch(message.date!),
+      ),
     );
   } catch (_) {
     // Nothing in a background isolate can surface an error to the user, and
@@ -127,32 +132,30 @@ class SmsListenerService {
     }
   }
 
-  /// Registers a foreground listener. [onSms] is called with the raw
-  /// sender address and message body for every incoming SMS while the app
-  /// is running — no filtering by sender here (that's the server's
+  /// Registers a foreground listener. [onSms] is called with the raw sender
+  /// address, message body and Android received timestamp for every incoming
+  /// SMS while the app is running — no filtering by sender here (that's the server's
   /// parser_patterns.sender_pattern's job); this layer only does the cheap
   /// looksLikeTransactionSms() pre-filter to avoid forwarding obvious
   /// non-transaction noise (OTPs, delivery notices) to the API at all.
   ///
   /// Background delivery is registered alongside it via
   /// [smsBackgroundHandler], so an alert arriving while the app is closed
-  /// is queued on disk and uploaded on next resume rather than lost. It is
-  /// enabled only OUTSIDE the prod flavor: prod strips READ_SMS/RECEIVE_SMS
-  /// at the manifest level for Play Store policy reasons (see [Env.isProd]),
-  /// so asking for background delivery there would register a handler whose
-  /// permission can never be granted.
-  void listenForeground(void Function(String sender, String body) onSms) {
-    final background = true;
+  /// is queued on disk and uploaded on next resume rather than lost.
+  void listenForeground(void Function(String sender, String body, DateTime receivedAt) onSms) {
     _telephony.listenIncomingSms(
       onNewMessage: (SmsMessage message) {
         final sender = message.address;
         final body = message.body;
         if (sender == null || body == null) return;
         if (!looksLikeTransactionSms(body)) return;
-        onSms(sender, body);
+        final receivedAt = message.date == null
+            ? DateTime.now()
+            : DateTime.fromMillisecondsSinceEpoch(message.date!);
+        onSms(sender, body, receivedAt);
       },
-      onBackgroundMessage: background ? smsBackgroundHandler : null,
-      listenInBackground: background,
+      onBackgroundMessage: smsBackgroundHandler,
+      listenInBackground: true,
     );
   }
 

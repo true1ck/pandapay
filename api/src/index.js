@@ -2698,8 +2698,9 @@ async function insertTransactionAndUpdateState(client, userId, {
   // the same day are not a double-import, and flagging them as one would
   // teach the user to ignore the review queue.
   const duplicates = resolvedEntryKind === 'spend'
-    ? await detectDuplicates(client, userId, {
-        newTxnId: txn.rows[0].id, amount, occurred, merchantName, source: source || 'manual',
+      ? await detectDuplicates(client, userId, {
+        newTxnId: txn.rows[0].id, amount, occurred, merchantName,
+        source: source || 'manual', rail: rail || 'unknown',
       })
     : { autoMergeAgainst: null };
 
@@ -2782,10 +2783,25 @@ async function importParsedMessage(client, userId, {
   parsed, patternIssuerId, sender, rawText, source, occurred, sourceKey, backfill,
   explicitUserCardId, explicitCategoryId, rail, vpa, mcc,
 }) {
+  // A QR payment can produce either a credit-card alert or a bank-account
+  // UPI debit alert. Account-number suffixes are not card last-4 digits and
+  // must never be used to attach a cardless bank payment to the wrong card.
+  // The parser supplies this hint; unknown legacy card patterns retain the
+  // historical credit-card default.
+  const instrument = parsed.fields.instrument || (parsed.fields.last4 ? 'credit_card' : 'upi_bank');
+  const entryKind = parsed.fields.entryKind || 'spend';
   let userCardId = explicitUserCardId || null;
   let matchBasis = userCardId ? 'caller-supplied' : null;
 
-  if (!userCardId) {
+  // A selected card is only an override for credit-card alerts. A bank
+  // account UPI debit is deliberately cardless even if the settings screen
+  // has a remembered card selected.
+  if (instrument !== 'credit_card') {
+    userCardId = null;
+    matchBasis = 'instrument-cardless';
+  }
+
+  if (instrument === 'credit_card' && !userCardId) {
     const resolved = await importResolvers.resolveUserCardForImport(client, userId, {
       last4: parsed.fields.last4,
       patternIssuerId,
@@ -2796,7 +2812,7 @@ async function importParsedMessage(client, userId, {
     }
   }
 
-  if (!userCardId) {
+  if (instrument === 'credit_card' && !userCardId) {
     const reviewItemId = await importResolvers.fileForReview(client, userId, {
       source,
       rawText,
@@ -2826,11 +2842,13 @@ async function importParsedMessage(client, userId, {
     amount: parsed.fields.amountInr,
     occurred,
     categoryId,
-    rail: rail || 'unknown',
+    rail: rail || (instrument === 'upi_bank' || /\bupi\b/i.test(rawText) ? 'upi_qr' : 'unknown'),
     merchantName: parsed.fields.merchant || null,
     source,
     sourceKey,
     backfill,
+    instrument,
+    entryKind,
   });
 
   return { ...inserted, matchBasis, resolvedCategoryId: categoryId, userCardId };
@@ -2885,12 +2903,12 @@ const DUPLICATE_AMOUNT_TOLERANCE_INR = 1;
 /** At or above this score, the pair is merged rather than queued. */
 const DUPLICATE_AUTO_MERGE_SCORE = 0.9;
 
-async function detectDuplicates(client, userId, { newTxnId, amount, occurred, merchantName, source }) {
+async function detectDuplicates(client, userId, { newTxnId, amount, occurred, merchantName, source, rail }) {
   // The amount comparison is a small RANGE, not equality. An SMS reading
   // "Rs.1,234" and a statement line reading "1234.50" are the same swipe,
   // and requiring an exact match let that pair through as two transactions.
   const candidates = await client.query(
-    `SELECT id, merchant_name FROM transactions
+    `SELECT id, merchant_name, rail, source FROM transactions
       WHERE profile_id = $1 AND status = 'active' AND id != $2
         AND amount_inr BETWEEN $3::numeric - $6::numeric AND $3::numeric + $6::numeric
         AND source != $4
@@ -2909,9 +2927,13 @@ async function detectDuplicates(client, userId, { newTxnId, amount, occurred, me
       bothNamed &&
       rewardMath.normalizeMerchant(merchantName) === rewardMath.normalizeMerchant(candidate.merchant_name);
     if (bothNamed && !namesMatch) continue; // both have a name and they disagree — not a match
-    const matchScore = namesMatch ? 0.9 : 0.6;
+    const sameQrAttempt = rail === 'upi_qr' && candidate.rail === 'upi_qr'
+      && (source === 'sms' || candidate.source === 'sms');
+    const matchScore = namesMatch || sameQrAttempt ? 0.9 : 0.6;
     const matchReason = namesMatch
       ? 'Same amount, same day, merchant name matches, different source'
+      : sameQrAttempt
+        ? 'Same amount, same day, same QR rail, SMS reconciles the payment'
       : 'Same amount, same day, different source (merchant name unavailable on at least one side)';
 
     const [txnA, txnB] = [newTxnId, candidate.id].sort();
@@ -3375,10 +3397,12 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       // Bump the winning pattern's telemetry in the same transaction as the
       // insert it enabled — success_count/failure_count are evidently meant
       // to track a pattern's live hit rate, not just exist unused.
-      await client.query(
-        `UPDATE parser_patterns SET success_count = success_count + 1, updated_at = now() WHERE id = $1`,
-        [parsed.patternId]
-      );
+      if (parsed.patternId) {
+        await client.query(
+          `UPDATE parser_patterns SET success_count = success_count + 1, updated_at = now() WHERE id = $1`,
+          [parsed.patternId]
+        );
+      }
 
       // The SMS's own date beats the request's, which beats now(). Banks
       // text about a swipe that already happened, sometimes hours later and
@@ -3387,7 +3411,11 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       // a month boundary, the wrong month.
       const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
       const parsedDate = parseTransactionDate(parsed.fields.date, occurred);
-      const effectiveOccurred = occurredAt ? occurred : (parsedDate || occurred);
+      // The request timestamp is the SMS-received time and is used for the
+      // stable source key. The bank's own transaction date is the better
+      // accounting date when it parses confidently; otherwise fall back to
+      // the original message timestamp.
+      const effectiveOccurred = parsedDate || occurred;
 
       const inserted = await importParsedMessage(client, req.userId, {
         parsed,
@@ -3504,10 +3532,12 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           continue;
         }
 
-        await client.query(
-          `UPDATE parser_patterns SET success_count = success_count + 1, updated_at = now() WHERE id = $1`,
-          [parsed.patternId]
-        );
+        if (parsed.patternId) {
+          await client.query(
+            `UPDATE parser_patterns SET success_count = success_count + 1, updated_at = now() WHERE id = $1`,
+            [parsed.patternId]
+          );
+        }
 
         const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
         const inserted = await importParsedMessage(client, req.userId, {
@@ -4327,6 +4357,7 @@ app.get('/spend-by-category', requireAuth, async (req, res) => {
            FROM transactions t
            LEFT JOIN spend_categories sc ON sc.id = t.category_id
           WHERE t.profile_id = $1 AND t.status = 'active'
+            AND t.entry_kind = 'spend'
             AND t.occurred_at >= now() - ($2 || ' months')::interval
           GROUP BY sc.id, sc.slug, sc.name
           ORDER BY total_spend_inr DESC`,
@@ -5104,7 +5135,7 @@ app.get('/home-summary', requireAuth, async (req, res) => {
            ), 0) AS this_month,
            COUNT(*) AS txn_count
          FROM transactions
-         WHERE profile_id = $1 AND status = 'active'`,
+         WHERE profile_id = $1 AND status = 'active' AND entry_kind = 'spend'`,
         [req.userId, zone]
       );
 
@@ -5115,7 +5146,7 @@ app.get('/home-summary', requireAuth, async (req, res) => {
         `WITH days AS (
            SELECT DISTINCT (occurred_at AT TIME ZONE $2)::date AS d
              FROM transactions
-            WHERE profile_id = $1 AND status = 'active'
+            WHERE profile_id = $1 AND status = 'active' AND entry_kind = 'spend'
          ), islands AS (
            SELECT d, d - (ROW_NUMBER() OVER (ORDER BY d))::int AS anchor FROM days
          ), latest AS (

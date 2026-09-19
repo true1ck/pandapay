@@ -47,6 +47,7 @@ import '../features/home_widget/home_widget_service.dart';
 import '../features/notifications/notification_gate.dart';
 import '../features/notifications/notification_triggers.dart';
 import '../features/sms_import/sms_listener_service.dart';
+import '../features/sms_import/sms_background_queue.dart';
 import '../features/settings/settings_sync.dart';
 import 'env.dart';
 
@@ -1723,11 +1724,23 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         body,
         receivedAt,
       ) async {
-        await repo.logTransactionFromSms(
+        final result = await repo.logTransactionFromSms(
           sender: sender,
           body: body,
           occurredAt: receivedAt,
         );
+        if (!result.parsed) {
+          await ref.read(needsReviewRepositoryProvider).add(
+            NeedsReviewItem(
+              id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
+              sender: sender,
+              body: body,
+              reason: result.reason,
+              receivedAt: receivedAt,
+            ),
+          );
+          ref.invalidate(needsReviewItemsProvider);
+        }
         // Every one of these is "dealt with": imported, recognised as
         // already imported, filed for review because the card is unknown,
         // or logged as an unparseable shape server-side. Only a network or
@@ -1735,6 +1748,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         return true;
       });
       ref.invalidate(userCardsProvider);
+      ref.invalidate(transactionsProvider);
     } catch (_) {
       // Offline or server down — the queue keeps what it couldn't send.
     }
@@ -1745,6 +1759,85 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   // Once at startup too: the most common case is the app being opened
   // fresh after messages arrived, which fires no resume event.
   flush();
+});
+
+/// Owns the one live SMS registration for the whole app. The old listener
+/// was only started from SmsImportScreen, which meant QR payments made from
+/// Home/Scan were never captured unless the user had opened that screen and
+/// tapped "Start listening" first.
+class SmsAutoImportController {
+  SmsAutoImportController(this._ref) : _service = SmsListenerService();
+
+  final Ref _ref;
+  final SmsListenerService _service;
+  bool _registered = false;
+  String? _userCardIdOverride;
+
+  void setCardOverride(String? userCardId) => _userCardIdOverride = userCardId;
+
+  Future<void> start() async {
+    if (_registered || !await _service.hasPermissions()) return;
+    _service.listenForeground((sender, body, receivedAt) {
+      unawaited(_handle(sender, body, receivedAt));
+    });
+    _registered = true;
+  }
+
+  Future<void> _handle(String sender, String body, DateTime receivedAt) async {
+    final repo = _ref.read(userCardsRepositoryProvider);
+    if (repo == null) {
+      final prefs = await SharedPreferences.getInstance();
+      await SmsBackgroundQueue.enqueue(
+        prefs,
+        QueuedSms(sender: sender, body: body, receivedAt: receivedAt),
+      );
+      return;
+    }
+    try {
+      final result = await repo.logTransactionFromSms(
+        userCardId: _userCardIdOverride,
+        sender: sender,
+        body: body,
+        occurredAt: receivedAt,
+      );
+      if (!result.parsed) {
+        await _ref.read(needsReviewRepositoryProvider).add(
+          NeedsReviewItem(
+            id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
+            sender: sender,
+            body: body,
+            reason: result.reason,
+            receivedAt: receivedAt,
+          ),
+        );
+        _ref.invalidate(needsReviewItemsProvider);
+      }
+      _ref.invalidate(userCardsProvider);
+      _ref.invalidate(transactionsProvider);
+      _ref.invalidate(needsReviewCountProvider);
+    } catch (_) {
+      // Never lose a valid alert because auth/network was temporarily down.
+      final prefs = await SharedPreferences.getInstance();
+      await SmsBackgroundQueue.enqueue(
+        prefs,
+        QueuedSms(sender: sender, body: body, receivedAt: receivedAt),
+      );
+    }
+  }
+}
+
+final smsAutoImportProvider = Provider<SmsAutoImportController>((ref) {
+  return SmsAutoImportController(ref);
+});
+
+/// Starts live capture at app startup and retries after every resume. This
+/// matters when permission is granted from the SMS settings screen after the
+/// app shell has already been built.
+final smsListenerLifecycleProvider = Provider<void>((ref) {
+  final controller = ref.read(smsAutoImportProvider);
+  final listener = AppLifecycleListener(onResume: () => unawaited(controller.start()));
+  ref.onDispose(listener.dispose);
+  unawaited(controller.start());
 });
 
 final _bestCardForWidgetProvider = Provider<BestCardForWidget>((ref) {

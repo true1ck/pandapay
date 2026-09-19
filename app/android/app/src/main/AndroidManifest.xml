@@ -102,6 +102,18 @@
                 android:resource="@xml/best_card_widget_info" />
         </receiver>
 
+        <!-- The telephony plugin reaches its background Dart callback through
+             this receiver. Without it, live SMS capture only works while a
+             page happens to register a foreground listener. -->
+        <receiver
+            android:name="com.shounakmulay.telephony.sms.IncomingSmsReceiver"
+            android:permission="android.permission.BROADCAST_SMS"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+            </intent-filter>
+        </receiver>
+
         <!-- S2 (GAP_ANALYSIS.md §3): Quick Settings tile. -->
         <service
             android:name="app.pandapay.pandapay.BestCardTileService"

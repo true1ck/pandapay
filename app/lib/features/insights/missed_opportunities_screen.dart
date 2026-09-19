@@ -189,7 +189,8 @@ final _missedOpportunitiesProvider = FutureProvider<List<_MissedOpportunity>>((r
   final results = <_MissedOpportunity>[];
   for (final txn in transactions) {
     if (txn.status != 'active') continue;
-    final usedProduct = productsByUserCardId[txn.userCardId];
+    if (txn.userCardId == null) continue;
+    final usedProduct = productsByUserCardId[txn.userCardId!];
     if (usedProduct == null) continue; // card since archived/removed — nothing to compare
     final comparison = compareToOwnedCards(
       usedCard: usedProduct,

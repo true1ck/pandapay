@@ -140,3 +140,35 @@ test('redactSmsShape strips digits to # and collapses letter runs to X, leaving 
   assert.doesNotMatch(shape, /\d/);
   assert.doesNotMatch(shape, /[A-Za-z]{2,}/);
 });
+
+test('built-in UPI debit fallback parses a bank-account SMS without treating the account suffix as a card', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Rs 640 debited from HDFC Bank A/c XX1797 via UPI to SWIGGY on 19-09-26. UPI Ref No 107392990952',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 640);
+  assert.equal(result.fields.instrument, 'upi_bank');
+  assert.equal(result.fields.entryKind, 'spend');
+  assert.equal(result.fields.last4, undefined);
+  assert.equal(result.fields.reference, '107392990952');
+});
+
+test('declined UPI alerts are never converted into spending', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'UPI Transaction Declined for your HDFC Bank account ending 1797 for security reasons',
+  });
+  assert.equal(result.ok, false);
+});
+
+test('built-in card fallback handles a QR/card alert when no issuer pattern is configured', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Rs.1,250 debited from your HDFC Bank Credit Card ending 8708 at CAFE via UPI on 19-09-26',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 1250);
+  assert.equal(result.fields.last4, '8708');
+  assert.equal(result.fields.instrument, 'credit_card');
+});

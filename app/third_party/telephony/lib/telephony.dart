@@ -12,6 +12,11 @@ part 'filter.dart';
 typedef MessageHandler(SmsMessage message);
 typedef SmsSendStatusListener(SendStatus status);
 
+// This function is invoked by the Android SMS receiver through a persisted
+// Dart callback handle. Keep it reachable in release/profile builds as well
+// as debug; without the entry-point pragma the background isolate fails
+// before it can deliver the queued SMS.
+@pragma('vm:entry-point')
 void _flutterSmsSetupBackgroundChannel(
     {MethodChannel backgroundChannel =
         const MethodChannel(_BACKGROUND_CHANNEL)}) async {

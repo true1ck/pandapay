@@ -4,8 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
-import '../../data/api_exception.dart';
-import '../../data/needs_review_repository.dart';
 import 'sms_backup_import_screen.dart';
 import 'sms_consent_screen.dart';
 import 'sms_listener_service.dart';
@@ -66,59 +64,10 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
     }
   }
 
-  void _startListening() {
-    _service.listenForeground((sender, body) async {
-      final repo = ref.read(userCardsRepositoryProvider);
-      if (repo == null) return;
-      try {
-        final result = await repo.logTransactionFromSms(
-          userCardId: _selectedCardId,
-          sender: sender,
-          body: body,
-        );
-        if (mounted) {
-          setState(() {
-            _recentLog.insert(
-              0,
-              switch ((result.parsed, result.needsReview, result.duplicate)) {
-                (true, true, _) => 'Read an SMS from $sender but couldn\'t tell which card — '
-                    'added to Needs Review',
-                (true, _, true) => 'Already imported this SMS from $sender — skipped',
-                (true, _, _) => 'Logged a transaction from SMS ($sender)',
-                _ => 'Could not parse SMS from $sender — added to Needs Review',
-              },
-            );
-          });
-          if (result.parsed) {
-            // Both the imported and the needs-review outcomes changed
-            // server-side state worth re-reading: one moved cap/reward
-            // totals, the other added a queue item Home badges.
-            ref.invalidate(userCardsProvider);
-            if (result.needsReview) ref.invalidate(needsReviewCountProvider);
-          } else {
-            // Task D-4: never silently drop an unparsed message — the raw
-            // text is right here, on-device, and would otherwise vanish
-            // once this screen's ephemeral _recentLog scrolls away.
-            await ref
-                .read(needsReviewRepositoryProvider)
-                .add(
-                  NeedsReviewItem(
-                    id: '${sender}_${DateTime.now().microsecondsSinceEpoch}',
-                    sender: sender,
-                    body: body,
-                    reason: result.reason,
-                    receivedAt: DateTime.now(),
-                  ),
-                );
-            ref.invalidate(needsReviewItemsProvider);
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          setState(() => _recentLog.insert(0, 'SMS import failed. ${userFacingErrorMessage(e)}'));
-        }
-      }
-    });
+  Future<void> _startListening() async {
+    final controller = ref.read(smsAutoImportProvider);
+    controller.setCardOverride(_selectedCardId);
+    await controller.start();
     setState(() => _listening = true);
   }
 

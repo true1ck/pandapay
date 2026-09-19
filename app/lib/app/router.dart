@@ -246,7 +246,6 @@ class _RouterRefreshNotifier extends ChangeNotifier {
     ref.listen(biometricLockProvider, (_, _) => notifyListeners());
   }
 }
-
 /// Task 3 shipped the navigation-shell swap alone, deferring the
 /// auth/onboarding redirect guard until its target screens (Welcome,
 /// Account Choice — Tasks 4-6) existed. They do now, so this wires the real
@@ -801,6 +800,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // once from the shell" reasoning as everything else on this list.
     ref.watch(notificationTriggerLifecycleProvider);
     ref.watch(smsBackgroundFlushProvider);
+    ref.watch(smsListenerLifecycleProvider);
     // Tell the user their guest wallet moved. Quietly relocating someone's
     // cards is nearly as disconcerting as losing them — and if any card
     // couldn't be carried over (its product was unpublished in the

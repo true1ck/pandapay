@@ -58,7 +58,8 @@ final _monthlyExtrasProvider = FutureProvider.family<_MonthlyExtras, DateTime>((
 
   var valueMissed = const Money.zero();
   for (final txn in active) {
-    final usedProduct = productsByUserCardId[txn.userCardId];
+    if (txn.userCardId == null) continue;
+    final usedProduct = productsByUserCardId[txn.userCardId!];
     if (usedProduct == null) continue; // card since archived/removed
     final comparison = compareToOwnedCards(
       usedCard: usedProduct,

@@ -42,12 +42,9 @@ class PaymentSentScreen extends ConsumerStatefulWidget {
   final String vpa;
   final CardNetwork cardNetwork;
 
-  /// RuPay-on-UPI plan, Phase 2. When the targeted-app handoff returned a
-  /// definite success status (Android only), the spend is logged
-  /// immediately on open — the UPI app already told us it went through, so
-  /// re-asking "did you pay?" would be asking the user to confirm a fact we
-  /// have. Everywhere else this stays false and the screen keeps its
-  /// honest manual-confirm button (see this class's doc comment).
+  /// Kept for callers that may still provide a definite status. The QR flow
+  /// deliberately leaves this false now: the settled bank SMS is the source
+  /// of truth and the button remains only as a fallback if no SMS arrives.
   final bool autoLog;
 
   const PaymentSentScreen({
@@ -136,6 +133,7 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
         amount: widget.amount,
         categoryId: widget.categoryId,
         merchantName: widget.merchantName,
+        rail: 'upi_qr',
       );
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
@@ -191,7 +189,7 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                 Text(
                   _logged
                       ? 'This spend now counts toward ${widget.cardName}\'s caps, milestones and points.'
-                      : 'Finish paying ${widget.merchantName.isEmpty ? '' : widget.merchantName} there, then come back and confirm below.',
+                      : 'Finish paying ${widget.merchantName.isEmpty ? '' : widget.merchantName} there, then wait for your bank SMS. If it does not arrive, log it manually below.',
                   style: BambooFonts.ui(14, color: BambooInk.onSlateSubtle),
                 ),
                 const SizedBox(height: AppSpace.xxl),
@@ -261,7 +259,7 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.slate),
                             )
-                          : const Text("I've paid — log this spend"),
+                          : const Text("No SMS? Log this spend manually"),
                     ),
                   )
                 else

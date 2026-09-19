@@ -9,12 +9,76 @@
  * field_map is jsonb like {"amount": 1, "merchant": 2, "last4": 3, "date": 4}
  * mapping a known field name -> capture group index (1-based, matching JS
  * regex exec() group indexing) in `regex`. Only "amount", "merchant",
- * "last4", "date" are recognized fields; anything else in field_map is
+ * "last4", "date", "instrument", "reference" and "direction" are recognized fields; anything else in field_map is
  * ignored rather than erroring, so a pattern can carry forward-compatible
  * extra keys without breaking older parser code.
  */
 
-const KNOWN_FIELDS = ['amount', 'merchant', 'last4', 'date'];
+const KNOWN_FIELDS = ['amount', 'merchant', 'last4', 'date', 'instrument', 'reference', 'direction'];
+
+function inferInstrument(body, hasLast4) {
+  const text = String(body || '').toLowerCase();
+  if (/\bdebit\s+card\b/.test(text)) return 'debit_card';
+  if (/\bcredit\s+card\b/.test(text) || (hasLast4 && /\bcard\b/.test(text))) return 'credit_card';
+  if (/\b(?:upi|a\/?c\.?|account)\b/.test(text) && /\b(?:debit(?:ed)?|paid|spent)\b/.test(text)) return 'upi_bank';
+  return null;
+}
+
+function isSuccessfulSpend(body) {
+  const text = String(body || '').toLowerCase();
+  if (/\b(?:declined|failed|failure|reversed|reversal|refund(?:ed)?|cancelled|canceled|credited)\b/.test(text)) return false;
+  return /\b(?:spent|debited|debit|paid|purchase|charged|withdrawn)\b/.test(text);
+}
+
+function parseBuiltInUpiDebit(sms) {
+  const body = String(sms?.body || '');
+  if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_builtin_upi_match' };
+  const instrument = inferInstrument(body, false);
+  if (instrument !== 'upi_bank') return { ok: false, reason: 'no_builtin_upi_match' };
+  const amountMatch = body.match(/(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_builtin_upi_match' };
+  const merchantMatch = body.match(/\b(?:to|at|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:on|via|upi|ref(?:erence)?|txn|transaction)\b|[.,]|$)/i);
+  const dateMatch = body.match(/\b(\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  const referenceMatch = body.match(/\b(?:upi\s*)?(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
+  return {
+    ok: true,
+    patternId: null,
+    fields: {
+      amountInr: Number(amountMatch[1].replace(/,/g, '')),
+      ...(merchantMatch ? { merchant: merchantMatch[1].trim() } : {}),
+      ...(dateMatch ? { date: dateMatch[1] } : {}),
+      ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
+      instrument,
+      entryKind: 'spend',
+    },
+  };
+}
+
+function parseBuiltInCardSpend(sms) {
+  const body = String(sms?.body || '');
+  if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_builtin_card_match' };
+  const last4Match = body.match(/\b(?:credit|debit)\s+card\b[\s\S]{0,50}?(?:ending|xx|x{2,}|last\s*4)\D{0,5}(\d{4})/i)
+    || body.match(/\bcard\b[\s\S]{0,30}?(?:ending|xx|x{2,}|last\s*4)\D{0,5}(\d{4})/i);
+  if (!last4Match) return { ok: false, reason: 'no_builtin_card_match' };
+  const instrument = inferInstrument(body, true);
+  if (instrument !== 'credit_card' && instrument !== 'debit_card') return { ok: false, reason: 'no_builtin_card_match' };
+  const amountMatch = body.match(/(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_builtin_card_match' };
+  const merchantMatch = body.match(/\b(?:at|to|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:on|via|upi|ref(?:erence)?|txn|transaction)\b|[.,]|$)/i);
+  const dateMatch = body.match(/\b(\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  return {
+    ok: true,
+    patternId: null,
+    fields: {
+      amountInr: Number(amountMatch[1].replace(/,/g, '')),
+      last4: last4Match[1],
+      ...(merchantMatch ? { merchant: merchantMatch[1].trim() } : {}),
+      ...(dateMatch ? { date: dateMatch[1] } : {}),
+      instrument,
+      entryKind: 'spend',
+    },
+  };
+}
 
 /**
  * Does `sender` match a pattern's `sender_pattern`? sender_pattern is a
@@ -95,6 +159,10 @@ function parseSms(pattern, sms) {
         return { ok: false, reason: 'unparseable_merchant' };
       }
       fields.merchant = merchant;
+    } else if (fieldName === 'instrument' || fieldName === 'reference' || fieldName === 'direction') {
+      const value = raw.trim();
+      if (!value) return { ok: false, reason: `unparseable_${fieldName}` };
+      fields[fieldName] = value;
     }
   }
 
@@ -105,6 +173,15 @@ function parseSms(pattern, sms) {
     return { ok: false, reason: 'no_amount_field_mapped' };
   }
 
+  const direction = String(fields.direction || '').toLowerCase();
+  if (direction && /credit|refund|reversal|failed|declin/.test(direction)) {
+    return { ok: false, reason: 'not_a_successful_spend' };
+  }
+  if (!direction && !isSuccessfulSpend(sms.body)) {
+    return { ok: false, reason: 'not_a_successful_spend' };
+  }
+  fields.instrument = fields.instrument || inferInstrument(sms.body, Boolean(fields.last4)) || 'credit_card';
+  fields.entryKind = 'spend';
   return { ok: true, fields };
 }
 
@@ -126,6 +203,10 @@ function parseSmsAgainstPatterns(patterns, sms) {
     if (result.ok) return { ...result, patternId: pattern.id };
     lastReason = result.reason;
   }
+  const builtin = parseBuiltInUpiDebit(sms);
+  if (builtin.ok) return builtin;
+  const cardBuiltin = parseBuiltInCardSpend(sms);
+  if (cardBuiltin.ok) return cardBuiltin;
   return { ok: false, reason: lastReason };
 }
 

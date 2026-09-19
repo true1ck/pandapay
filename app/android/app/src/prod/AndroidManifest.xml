@@ -5,17 +5,9 @@
   standard app/src/<flavor>/AndroidManifest.xml mechanism, not a
   duplicate/competing manifest).
 
-  Strips READ_SMS/RECEIVE_SMS for the flavor Play Console releases ship
-  under. Google Play's SMS/Call Log permissions policy only allows these
-  for apps that are the user's default SMS handler with the permission as
-  core, unremovable functionality — PandaPay's SMS auto-import is an
-  optional convenience feature (manual entry and card-scan both work
-  without it), which does not qualify and would very likely get the whole
-  app rejected. dev/staging flavors keep the permission unchanged (no
-  override file for those flavors) since they're never submitted to Play.
-
-  app/lib/app/env.dart's Env.isProd hides the corresponding "Enable"
-  buttons in the UI so there's no request that can only fail.
+  Personal-use build: SMS capture is intentionally enabled in this flavor.
+  Play Store policy review is deferred until the product behaviour is
+  complete; this manifest must not silently disable the spending feature.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
