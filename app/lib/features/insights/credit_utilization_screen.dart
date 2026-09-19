@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -37,8 +38,12 @@ class CreditUtilizationScreen extends ConsumerWidget {
             message: 'Add a card to track credit utilization.',
           );
         }
-        final withLimit = owned.where((p) => utilization.containsKey(p.$1.id)).toList();
-        final withoutLimit = owned.where((p) => !utilization.containsKey(p.$1.id)).toList();
+        final withLimit = owned
+            .where((p) => utilization.containsKey(p.$1.id))
+            .toList();
+        final withoutLimit = owned
+            .where((p) => !utilization.containsKey(p.$1.id))
+            .toList();
 
         return ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
@@ -55,7 +60,11 @@ class CreditUtilizationScreen extends ConsumerWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline_rounded, size: 18, color: BambooInk.ink500),
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: BambooInk.ink500,
+                  ),
                   const SizedBox(width: AppSpace.sm),
                   Expanded(
                     child: Text(
@@ -85,7 +94,11 @@ class CreditUtilizationScreen extends ConsumerWidget {
               const SizedBox(height: AppSpace.md),
               Text(
                 'Add a credit limit to track these',
-                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w700,
+                  color: BambooInk.ink900,
+                ),
               ),
               const SizedBox(height: AppSpace.sm),
               for (final (userCard, product) in withoutLimit)
@@ -129,20 +142,43 @@ class _AddLimitPrompt extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
-      padding: const EdgeInsets.all(AppSpace.md),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-              style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          onTap: () => context.push('/cards/${userCard.id}/edit'),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpace.md),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    userCard.nickname?.isNotEmpty == true
+                        ? userCard.nickname!
+                        : product.name,
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Text(
+                  'Add credit limit',
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w700,
+                    color: BambooInk.jade,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: BambooInk.jade,
+                ),
+              ],
             ),
           ),
-          // C4 Edit Card isn't confirmed built yet in this pass — a plain
-          // disabled-looking hint rather than a broken navigation target,
-          // per the plan's "acceptable stopgap" note on this exact gap.
-          Text('Add credit limit in Cards → Edit', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-        ],
+        ),
       ),
     );
   }
@@ -152,7 +188,11 @@ class _UtilizationTile extends StatelessWidget {
   final UserCard userCard;
   final CardProduct product;
   final UtilizationResult result;
-  const _UtilizationTile({required this.userCard, required this.product, required this.result});
+  const _UtilizationTile({
+    required this.userCard,
+    required this.product,
+    required this.result,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -174,20 +214,28 @@ class _UtilizationTile extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
+                  userCard.nickname?.isNotEmpty == true
+                      ? userCard.nickname!
+                      : product.name,
                   style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                 ),
               ),
               // Never colour-alone: icon + text alongside the colour.
               Icon(
-                over ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded,
+                over
+                    ? Icons.warning_amber_rounded
+                    : Icons.check_circle_outline_rounded,
                 size: 16,
                 color: color,
               ),
               const SizedBox(width: 4),
               Text(
                 '${(ratio * 100).toStringAsFixed(0)}%',
-                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: color),
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w700,
+                  color: color,
+                ),
               ),
             ],
           ),
@@ -204,7 +252,10 @@ class _UtilizationTile extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Row(
             children: [
-              Text('Limit ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              Text(
+                'Limit ',
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
               MoneyText(
                 userCard.creditLimit!,
                 confidence: Confidence.confirmed,

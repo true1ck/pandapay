@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -17,11 +18,17 @@ class _FakeCatalogueRepository implements CatalogueRepository {
   Future<List<CardProduct>> fetchCatalogue() async => cards;
 }
 
-Future<void> _pump(WidgetTester tester, {required List<CardProduct> catalogue, required List<UserCard> owned}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  required List<CardProduct> catalogue,
+  required List<UserCard> owned,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogue)),
+        catalogueRepositoryProvider.overrideWithValue(
+          _FakeCatalogueRepository(catalogue),
+        ),
         userCardsProvider.overrideWith((ref) async => owned),
       ],
       child: const MaterialApp(home: Scaffold(body: CreditUtilizationScreen())),
@@ -31,38 +38,113 @@ Future<void> _pump(WidgetTester tester, {required List<CardProduct> catalogue, r
 }
 
 void main() {
-  testWidgets('shows an empty state when the wallet has no cards', (tester) async {
+  testWidgets('shows an empty state when the wallet has no cards', (
+    tester,
+  ) async {
     await _pump(tester, catalogue: const [], owned: const []);
     expect(find.text('No cards yet'), findsOneWidget);
   });
 
-  testWidgets('shows the "add a credit limit" prompt when no owned card has one set', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
-    final owned = UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Card', isDefault: false);
+  testWidgets(
+    'shows the "add a credit limit" prompt when no owned card has one set',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+      );
+      final owned = UserCard(
+        id: 'uc1',
+        cardProductId: 'p1',
+        cardName: 'Test Card',
+        isDefault: false,
+      );
 
-    await _pump(tester, catalogue: [product], owned: [owned]);
+      await _pump(tester, catalogue: [product], owned: [owned]);
 
-    expect(find.text('Add a credit limit to see utilization'), findsOneWidget);
-  });
+      expect(
+        find.text('Add a credit limit to see utilization'),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('always shows the informational disclaimer banner, even with data present', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+  testWidgets('opens the card editor when the missing-limit prompt is tapped', (
+    tester,
+  ) async {
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.rupay,
+    );
     final owned = UserCard(
       id: 'uc1',
       cardProductId: 'p1',
       cardName: 'Test Card',
       isDefault: false,
-      creditLimit: Money.fromRupees(10000),
-      capConsumed: {'cap1': Money.fromRupees(2000)},
+    );
+    final router = GoRouter(
+      initialLocation: '/insights/credit-utilization',
+      routes: [
+        GoRoute(
+          path: '/insights/credit-utilization',
+          builder: (context, state) => ProviderScope(
+            overrides: [
+              catalogueRepositoryProvider.overrideWithValue(
+                _FakeCatalogueRepository([product]),
+              ),
+              userCardsProvider.overrideWith((ref) async => [owned]),
+            ],
+            child: const Scaffold(body: CreditUtilizationScreen()),
+          ),
+        ),
+        GoRoute(
+          path: '/cards/:id/edit',
+          builder: (context, state) =>
+              Text('Editing ${state.pathParameters['id']}'),
+        ),
+      ],
     );
 
-    await _pump(tester, catalogue: [product], owned: [owned]);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add credit limit'));
+    await tester.pumpAndSettle();
 
-    expect(find.textContaining('does not guarantee how any'), findsOneWidget);
+    expect(find.text('Editing uc1'), findsOneWidget);
   });
 
-  testWidgets('renders utilization under the 30% threshold without a warning', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+  testWidgets(
+    'always shows the informational disclaimer banner, even with data present',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+      );
+      final owned = UserCard(
+        id: 'uc1',
+        cardProductId: 'p1',
+        cardName: 'Test Card',
+        isDefault: false,
+        creditLimit: Money.fromRupees(10000),
+        capConsumed: {'cap1': Money.fromRupees(2000)},
+      );
+
+      await _pump(tester, catalogue: [product], owned: [owned]);
+
+      expect(find.textContaining('does not guarantee how any'), findsOneWidget);
+    },
+  );
+
+  testWidgets('renders utilization under the 30% threshold without a warning', (
+    tester,
+  ) async {
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.rupay,
+    );
     final owned = UserCard(
       id: 'uc1',
       cardProductId: 'p1',
@@ -78,8 +160,14 @@ void main() {
     expect(find.textContaining('Above the 30% guideline'), findsNothing);
   });
 
-  testWidgets('renders a warning and the over-threshold copy above 30%', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+  testWidgets('renders a warning and the over-threshold copy above 30%', (
+    tester,
+  ) async {
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.rupay,
+    );
     final owned = UserCard(
       id: 'uc1',
       cardProductId: 'p1',
