@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -78,7 +79,6 @@ class ScanCardScreen extends StatefulWidget {
   @override
   State<ScanCardScreen> createState() => _ScanCardScreenState();
 }
-
 enum _ScanMode { ocr, qr }
 
 class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObserver {
@@ -578,13 +578,18 @@ class _OcrViewState extends State<_OcrView> with SingleTickerProviderStateMixin 
           return const Center(child: CircularProgressIndicator(color: BambooInk.lime));
         }
         return Stack(
-          fit: StackFit.expand,
           children: [
-            CameraPreview(controller),
-            AnimatedBuilder(
-              animation: _pulseController,
-              builder: (context, _) =>
-                  CustomPaint(painter: CardGuidePainter(pulse: _pulseController.value), size: Size.infinite),
+            Positioned.fill(child: _AspectPreservingCameraPreview(controller)),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, _) => CustomPaint(
+                    painter: CardGuidePainter(pulse: _pulseController.value),
+                    size: Size.infinite,
+                  ),
+                ),
+              ),
             ),
             Positioned(
               bottom: 20,
@@ -612,6 +617,56 @@ class _OcrViewState extends State<_OcrView> with SingleTickerProviderStateMixin 
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+/// Displays the live camera feed without stretching it to the scan panel's
+/// portrait bounds. The camera plugin's [CameraPreview] has its own
+/// [AspectRatio], but an outer [StackFit.expand] can give that widget tight
+/// constraints and override the ratio. This wrapper gives the preview its
+/// native oriented size, then crops only the excess edges like a normal camera
+/// viewfinder.
+class _AspectPreservingCameraPreview extends StatelessWidget {
+  final CameraController controller;
+
+  const _AspectPreservingCameraPreview(this.controller);
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<CameraValue>(
+      valueListenable: controller,
+      builder: (context, value, _) {
+        final nativeAspectRatio = value.aspectRatio;
+        if (nativeAspectRatio <= 0) return const SizedBox.expand();
+
+        final orientation = value.isRecordingVideo
+            ? value.recordingOrientation
+            : (value.previewPauseOrientation ?? value.lockedCaptureOrientation ?? value.deviceOrientation);
+        final isLandscape = orientation == DeviceOrientation.landscapeLeft ||
+            orientation == DeviceOrientation.landscapeRight;
+        final previewAspectRatio = isLandscape ? nativeAspectRatio : 1 / nativeAspectRatio;
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final viewportAspectRatio = constraints.maxWidth / constraints.maxHeight;
+            final previewWidth = previewAspectRatio >= viewportAspectRatio
+                ? constraints.maxHeight * previewAspectRatio
+                : constraints.maxWidth;
+            final previewHeight = previewWidth / previewAspectRatio;
+
+            return ClipRect(
+              child: Center(
+                child: SizedBox(
+                  width: previewWidth,
+                  height: previewHeight,
+                  child: CameraPreview(controller),
+                ),
+              ),
+            );
+          },
         );
       },
     );
