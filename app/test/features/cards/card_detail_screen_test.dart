@@ -66,7 +66,13 @@ UserCard _ownedCard({Map<String, Money> capConsumed = const {}}) => UserCard(
       ],
     );
 
-Future<void> _pump(WidgetTester tester, {required List<CardProduct> catalogue, required List<UserCard> owned, String id = 'uc1'}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  required List<CardProduct> catalogue,
+  required List<UserCard> owned,
+  String id = 'uc1',
+  int initialTabIndex = 0,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -75,7 +81,9 @@ Future<void> _pump(WidgetTester tester, {required List<CardProduct> catalogue, r
         userCardsProvider.overrideWith((ref) async => owned),
         myCardsProvider.overrideWith((ref) async => owned),
       ],
-      child: MaterialApp(home: CardDetailScreen(userCardId: id)),
+      child: MaterialApp(
+        home: CardDetailScreen(userCardId: id, initialTabIndex: initialTabIndex),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -137,5 +145,17 @@ void main() {
     await tester.tap(find.text('Statement'));
     await tester.pumpAndSettle();
     expect(find.text('Statement date not set'), findsOneWidget);
+  });
+
+  testWidgets('can open directly on the Statement tab', (tester) async {
+    await _pump(
+      tester,
+      catalogue: [_fullCard()],
+      owned: [_ownedCard()],
+      initialTabIndex: 6,
+    );
+
+    expect(find.text('Statement cuts on day 5'), findsOneWidget);
+    expect(find.text('Payment due on day 25'), findsOneWidget);
   });
 }

@@ -654,7 +654,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.cardDetail,
-        builder: (context, state) => CardDetailScreen(userCardId: state.pathParameters['id']!),
+        builder: (context, state) => CardDetailScreen(
+          userCardId: state.pathParameters['id']!,
+          initialTabIndex: state.uri.queryParameters['tab'] == 'statement' ? 6 : 0,
+        ),
       ),
       GoRoute(
         path: AppRoute.editCard,

@@ -22,13 +22,20 @@ const _assumedGracePeriodDays = 20; // matches billing_float_screen.dart's own a
 /// archived filter must still resolve here, read-only.
 class CardDetailScreen extends ConsumerWidget {
   final String userCardId;
-  const CardDetailScreen({super.key, required this.userCardId});
+  final int initialTabIndex;
+
+  const CardDetailScreen({super.key, required this.userCardId, this.initialTabIndex = 0});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pairs = ref.watch(myCardsWithProductProvider);
     return DefaultTabController(
       length: 7,
+      initialIndex: initialTabIndex < 0
+          ? 0
+          : initialTabIndex > 6
+              ? 6
+              : initialTabIndex,
       child: Scaffold(
         backgroundColor: BambooInk.paper,
         appBar: AppBar(

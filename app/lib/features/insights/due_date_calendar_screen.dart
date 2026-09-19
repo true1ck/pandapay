@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -103,44 +104,51 @@ class _CardDateTile extends StatelessWidget {
     final now = DateTime.now();
     final nextDue = userCard.dueDay == null ? null : _nextOccurrence(userCard.dueDay!, now);
     final nextStatement = userCard.statementDay == null ? null : _nextOccurrence(userCard.statementDay!, now);
+    final displayName = userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-      ),
-      padding: const EdgeInsets.all(AppSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+    return Pressable(
+      semanticLabel: 'Open details for $displayName',
+      haptic: false,
+      onTap: () => context.push('/cards/${userCard.id}?tab=statement'),
+      child: Container(
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        padding: const EdgeInsets.all(AppSpace.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    displayName,
+                    style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                  ),
                 ),
-              ),
-              IconButton(
-                tooltip: reminderOn ? 'Reminder on (this device only)' : 'Remind me (this device only)',
-                icon: Icon(
-                  reminderOn ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
-                  color: reminderOn ? BambooInk.jade : BambooInk.ink300,
+                const Icon(Icons.chevron_right_rounded, color: BambooInk.ink300),
+                IconButton(
+                  tooltip: reminderOn ? 'Reminder on (this device only)' : 'Remind me (this device only)',
+                  icon: Icon(
+                    reminderOn ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
+                    color: reminderOn ? BambooInk.jade : BambooInk.ink300,
+                  ),
+                  onPressed: onToggleReminder,
                 ),
-                onPressed: onToggleReminder,
-              ),
+              ],
+            ),
+            if (nextStatement != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              _DateRow(icon: Icons.receipt_outlined, label: 'Statement cuts', date: nextStatement),
             ],
-          ),
-          if (nextStatement != null) ...[
-            const SizedBox(height: AppSpace.sm),
-            _DateRow(icon: Icons.receipt_outlined, label: 'Statement cuts', date: nextStatement),
+            if (nextDue != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              _DateRow(icon: Icons.event_outlined, label: 'Payment due', date: nextDue, emphasize: true),
+            ],
           ],
-          if (nextDue != null) ...[
-            const SizedBox(height: AppSpace.sm),
-            _DateRow(icon: Icons.event_outlined, label: 'Payment due', date: nextDue, emphasize: true),
-          ],
-        ],
+        ),
       ),
     );
   }
