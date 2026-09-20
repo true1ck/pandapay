@@ -140,7 +140,7 @@ void main() {
       expect(matches.where((m) => m.product.id == platinum.id), isEmpty);
     });
 
-    test('tolerates small OCR substitutions and split Cashback text', () {
+    test('normalizes the stylized Cashback logo lockup', () {
       final matches = matchCardText(
         const ExtractedCardText('CASIH B<CK SBI card'),
         [_product('sbi-cashback', 'SBI Cashback Credit Card', CardNetwork.visa)],

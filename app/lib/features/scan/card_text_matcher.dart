@@ -136,6 +136,9 @@ String _normalize(String s) {
   ).replaceAllMapped(
     RegExp(r'\bcash\s*back\b', caseSensitive: false),
     (_) => 'cashback',
+  ).replaceAllMapped(
+    RegExp(r'\bca(?:sh|sih)\s+b[^a-z0-9\s]*ck\b', caseSensitive: false),
+    (_) => 'cashback',
   );
   return canonical
       .toLowerCase()
