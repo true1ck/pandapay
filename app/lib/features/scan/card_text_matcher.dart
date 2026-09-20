@@ -197,6 +197,11 @@ int _levenshteinDistance(String a, String b) {
   return previous[b.length];
 }
 
+String _searchableProductName(CardProduct product) => [
+  product.issuerName,
+  product.name,
+].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
+
 /// Very small token-overlap fuzzy score: fraction of the catalogue product
 /// name's tokens (e.g. "hdfc", "millennia") that appear as substrings
 /// anywhere in the normalized extracted text. Deliberately simple — no
@@ -247,10 +252,11 @@ List<CardMatch> matchCardText(
 
   final results = <CardMatch>[];
   for (final product in catalogue) {
-    final score = _tokenOverlapScore(normalizedText, product.name);
+    final searchableName = _searchableProductName(product);
+    final score = _tokenOverlapScore(normalizedText, searchableName);
     final overlap = score.overlap;
     final hits = score.hits;
-    final identityHits = _identityTokenHits(normalizedText, product.name);
+    final identityHits = _identityTokenHits(normalizedText, searchableName);
     final networkMatches = network != null && network == product.network;
 
     MatchConfidence confidence;

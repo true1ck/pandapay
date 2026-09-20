@@ -2,8 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/features/scan/card_text_matcher.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
-CardProduct _product(String id, String name, CardNetwork network) =>
-    CardProduct(id: id, name: name, network: network);
+CardProduct _product(
+  String id,
+  String name,
+  CardNetwork network, {
+  String? issuerName,
+}) => CardProduct(
+  id: id,
+  name: name,
+  network: network,
+  issuerName: issuerName,
+);
 
 void main() {
   group('detectNetworkFromText', () {
@@ -149,6 +158,24 @@ void main() {
       expect(matches, isNotEmpty);
       expect(matches.first.product.id, 'sbi-cashback');
       expect(matches.first.confidence, MatchConfidence.medium);
+    });
+
+    test('uses issuer text to disambiguate short catalogue names', () {
+      final matches = matchCardText(
+        const ExtractedCardText('YES BANK ACE VISA'),
+        [
+          _product(
+            'yes-bank-ace',
+            'ACE',
+            CardNetwork.visa,
+            issuerName: 'Yes Bank',
+          ),
+        ],
+      );
+
+      expect(matches, isNotEmpty);
+      expect(matches.first.product.id, 'yes-bank-ace');
+      expect(matches.first.confidence, MatchConfidence.high);
     });
 
     test(
