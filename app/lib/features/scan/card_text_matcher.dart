@@ -125,7 +125,16 @@ String redactDigitRuns(String text) {
 /// Normalizes text for fuzzy comparison: lowercase, strip anything that
 /// isn't a letter/digit/space, collapse whitespace.
 String _normalize(String s) {
-  return s
+  // The physical Tata Neu Plus artwork prints the product mark as
+  // “NEUCARD+”. OCR commonly returns that as one token, so canonicalize the
+  // visible plus marker into the catalogue's separate “Neu Plus” token before
+  // punctuation is stripped. This lets the matcher distinguish Plus from
+  // Infinity instead of treating both as the same Tata Neu family.
+  final canonical = s.replaceAllMapped(
+    RegExp(r'\bneu\s*card\s*\+', caseSensitive: false),
+    (_) => 'neu plus',
+  );
+  return canonical
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')

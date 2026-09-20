@@ -113,6 +113,33 @@ void main() {
       expect(matches.where((m) => m.product.id == platinum.id), isEmpty);
     });
 
+    test('uses the NEUCARD+ mark to prefer Tata Neu Plus', () {
+      final plus = _product(
+        'tata-neu-plus-hdfc',
+        'Tata Neu Plus HDFC Bank Credit Card',
+        CardNetwork.rupay,
+      );
+      final infinity = _product(
+        'tata-neu-infinity-hdfc',
+        'Tata Neu Infinity HDFC Bank Credit Card',
+        CardNetwork.rupay,
+      );
+      final platinum = _product(
+        'indusind-platinum',
+        'Platinum Credit Card',
+        CardNetwork.visa,
+      );
+
+      final matches = matchCardText(
+        const ExtractedCardText('TATA NEUCARD+ HDFC BANK RuPay PLATINUM'),
+        [infinity, platinum, plus],
+      );
+
+      expect(matches.first.product.id, plus.id);
+      expect(matches.first.confidence, MatchConfidence.high);
+      expect(matches.where((m) => m.product.id == platinum.id), isEmpty);
+    });
+
     test(
       'does not treat a single generic tier word as card identification',
       () {

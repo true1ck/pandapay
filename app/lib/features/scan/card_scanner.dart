@@ -78,29 +78,33 @@ class MlKitCardTextRecognizer implements CardTextRecognizer {
     final originalLongEdge = math.max(decoded.width, decoded.height);
     if (originalLongEdge >= minimumLongEdge) return [imagePath];
 
+    // A tiny gallery image can contain the product wordmark only a few
+    // pixels high. Cropping the two wordmark zones before upscaling gives
+    // ML Kit more pixels per character than resizing the whole card. The
+    // lower crop intentionally reaches the bottom edge; the previous
+    // 20%-offset crop stopped at 80% and could discard HDFC/SBI marks.
     final variants = <img.Image>[decoded];
-    final cropHeight = (decoded.height * 0.60).round();
-    final middle = (decoded.height * 0.20).round();
-    if (cropHeight > 0 && cropHeight < decoded.height) {
-      variants.add(
-        img.copyCrop(
-          decoded,
-          x: 0,
-          y: 0,
-          width: decoded.width,
-          height: cropHeight,
-        ),
-      );
-      variants.add(
-        img.copyCrop(
-          decoded,
-          x: 0,
-          y: middle,
-          width: decoded.width,
-          height: cropHeight,
-        ),
-      );
+    void addCrop(double yFraction, double heightFraction) {
+      final cropHeight = (decoded.height * heightFraction).round();
+      final maxY = decoded.height - cropHeight;
+      final y = (decoded.height * yFraction).round().clamp(0, maxY).toInt();
+      if (cropHeight > 0 && cropHeight < decoded.height) {
+        variants.add(
+          img.copyCrop(
+            decoded,
+            x: 0,
+            y: y,
+            width: decoded.width,
+            height: cropHeight,
+          ),
+        );
+      }
     }
+
+    addCrop(0.0, 0.45); // Tata/issuer marks at the top.
+    addCrop(0.55, 0.45); // Bank/network marks at the bottom.
+    addCrop(0.0, 0.72); // Preserve larger product text near the top.
+    addCrop(0.28, 0.72); // Preserve larger product text near the bottom.
 
     final paths = <String>[];
     for (var i = 0; i < variants.length; i++) {
@@ -109,7 +113,7 @@ class MlKitCardTextRecognizer implements CardTextRecognizer {
       final scale = longEdge < minimumLongEdge
           ? minimumLongEdge / longEdge
           : 1.0;
-      final prepared = scale == 1.0
+      var prepared = scale == 1.0
           ? variant
           : img.copyResize(
               variant,
@@ -117,6 +121,16 @@ class MlKitCardTextRecognizer implements CardTextRecognizer {
               height: (variant.height * scale).round(),
               interpolation: img.Interpolation.cubic,
             );
+      if (i > 0) {
+        // Light grayscale/contrast normalization helps white wordmarks on
+        // saturated purple/blue card artwork without changing the original
+        // full-card pass used for normal images.
+        prepared = img.adjustColor(
+          img.grayscale(prepared),
+          contrast: 1.25,
+          brightness: 1.05,
+        );
+      }
       if (i == 0 && scale == 1.0) {
         paths.add(imagePath);
         continue;
