@@ -140,6 +140,17 @@ void main() {
       expect(matches.where((m) => m.product.id == platinum.id), isEmpty);
     });
 
+    test('tolerates small OCR substitutions and split Cashback text', () {
+      final matches = matchCardText(
+        const ExtractedCardText('CASIH B<CK SBI card'),
+        [_product('sbi-cashback', 'SBI Cashback Credit Card', CardNetwork.visa)],
+      );
+
+      expect(matches, isNotEmpty);
+      expect(matches.first.product.id, 'sbi-cashback');
+      expect(matches.first.confidence, MatchConfidence.medium);
+    });
+
     test(
       'does not treat a single generic tier word as card identification',
       () {

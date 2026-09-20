@@ -133,12 +133,65 @@ String _normalize(String s) {
   final canonical = s.replaceAllMapped(
     RegExp(r'\bneu\s*card\s*\+', caseSensitive: false),
     (_) => 'neu plus',
+  ).replaceAllMapped(
+    RegExp(r'\bcash\s*back\b', caseSensitive: false),
+    (_) => 'cashback',
   );
   return canonical
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+/// OCR can turn a printed token into a near-spelling (`CASIH`) or split it
+/// into short fragments (`B<CK`). Keep fuzzy matching deliberately local and
+/// conservative: only product-name tokens of four or more characters are
+/// eligible, and the token still needs to be reasonably close to one OCR word
+/// or a short run of adjacent OCR fragments.
+bool _fuzzyTokenMatch(String normalizedText, String token) {
+  if (normalizedText.contains(token)) return true;
+  if (token.length < 4) return false;
+
+  final words = normalizedText.split(' ').where((word) => word.isNotEmpty);
+  final candidates = <String>{...words};
+  final wordList = words.toList();
+  for (var i = 0; i < wordList.length; i++) {
+    candidates.add(wordList[i] + (i + 1 < wordList.length ? wordList[i + 1] : ''));
+    if (i + 2 < wordList.length) {
+      candidates.add(wordList[i] + wordList[i + 1] + wordList[i + 2]);
+    }
+  }
+
+  final maxDistance = token.length >= 7 ? 3 : 2;
+  return candidates.any((candidate) {
+    if (candidate.length < token.length - maxDistance ||
+        candidate.length > token.length + maxDistance) {
+      return false;
+    }
+    return _levenshteinDistance(candidate, token) <= maxDistance;
+  });
+}
+
+int _levenshteinDistance(String a, String b) {
+  if (a == b) return 0;
+  if (a.isEmpty) return b.length;
+  if (b.isEmpty) return a.length;
+
+  var previous = List<int>.generate(b.length + 1, (i) => i);
+  for (var i = 0; i < a.length; i++) {
+    final current = List<int>.filled(b.length + 1, 0)..[0] = i + 1;
+    for (var j = 0; j < b.length; j++) {
+      final substitutionCost = a[i] == b[j] ? 0 : 1;
+      current[j + 1] = [
+        current[j] + 1,
+        previous[j + 1] + 1,
+        previous[j] + substitutionCost,
+      ].reduce((x, y) => x < y ? x : y);
+    }
+    previous = current;
+  }
+  return previous[b.length];
 }
 
 /// Very small token-overlap fuzzy score: fraction of the catalogue product
@@ -157,7 +210,7 @@ String _normalize(String s) {
   if (tokens.isEmpty) {
     return (overlap: 0.0, hits: 0);
   }
-  final hits = tokens.where((t) => normalizedText.contains(t)).length;
+  final hits = tokens.where((t) => _fuzzyTokenMatch(normalizedText, t)).length;
   return (overlap: hits / tokens.length, hits: hits);
 }
 
@@ -172,7 +225,7 @@ int _identityTokenHits(String normalizedText, String productName) {
             !_genericCardWords.contains(t),
       )
       .toSet();
-  return tokens.where((t) => normalizedText.contains(t)).length;
+  return tokens.where((t) => _fuzzyTokenMatch(normalizedText, t)).length;
 }
 
 /// Matches [extracted] against [catalogue], returning candidates sorted
