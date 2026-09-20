@@ -623,12 +623,14 @@ class _OcrViewState extends State<_OcrView> with SingleTickerProviderStateMixin 
   }
 }
 
-/// Displays the live camera feed without stretching it to the scan panel's
-/// portrait bounds. The camera plugin's [CameraPreview] has its own
-/// [AspectRatio], but an outer [StackFit.expand] can give that widget tight
-/// constraints and override the ratio. This wrapper gives the preview its
-/// native oriented size, then crops only the excess edges like a normal camera
-/// viewfinder.
+/// Displays the live camera feed as a cover crop, never a stretch.
+///
+/// [CameraPreview] already applies the camera plugin's orientation and native
+/// aspect ratio. The important part here is to let it lay itself out with
+/// loose constraints, then scale the completed preview uniformly until it
+/// covers the viewport. Giving CameraPreview a tight viewport-sized box makes
+/// its internal AspectRatio fill that box and can visibly squash a 4:3 sensor
+/// into a tall phone panel.
 class _AspectPreservingCameraPreview extends StatelessWidget {
   final CameraController controller;
 
@@ -652,16 +654,21 @@ class _AspectPreservingCameraPreview extends StatelessWidget {
         return LayoutBuilder(
           builder: (context, constraints) {
             final viewportAspectRatio = constraints.maxWidth / constraints.maxHeight;
-            final previewWidth = previewAspectRatio >= viewportAspectRatio
-                ? constraints.maxHeight * previewAspectRatio
-                : constraints.maxWidth;
-            final previewHeight = previewWidth / previewAspectRatio;
+            if (!viewportAspectRatio.isFinite || viewportAspectRatio <= 0) {
+              return const SizedBox.expand();
+            }
+            // Uniformly scale the preview to cover the panel. This is the
+            // same geometry as BoxFit.cover: the excess is cropped, and no
+            // axis is independently stretched.
+            final coverScale = previewAspectRatio >= viewportAspectRatio
+                ? previewAspectRatio / viewportAspectRatio
+                : viewportAspectRatio / previewAspectRatio;
 
             return ClipRect(
               child: Center(
-                child: SizedBox(
-                  width: previewWidth,
-                  height: previewHeight,
+                child: Transform.scale(
+                  scale: coverScale,
+                  alignment: Alignment.center,
                   child: CameraPreview(controller),
                 ),
               ),
@@ -852,7 +859,11 @@ class ScanResultPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final confident = matches.where((m) => m.confidence != MatchConfidence.low).toList();
+    // Low-confidence candidates are suggestions only. Showing one as the
+    // detected card made OCR noise such as the word "platinum" look like a
+    // real identification. Never present a low-confidence row as a result.
+    final usableMatches = matches.where((m) => m.confidence != MatchConfidence.low).toList();
+    final highConfidence = usableMatches.where((m) => m.confidence == MatchConfidence.high).toList();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -866,17 +877,22 @@ class ScanResultPanel extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          if (confident.isEmpty)
+          if (usableMatches.isEmpty)
             Text(
               'No confident match in the catalogue — pick the card manually below.',
               style: BambooFonts.ui(13, color: BambooInk.amber),
+            )
+          else if (highConfidence.isEmpty)
+            Text(
+              'Possible matches — verify the card name before adding it.',
+              style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500),
             )
           else
             Text(
               'Detected card',
               style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500),
             ),
-          for (final match in matches.take(1))
+          for (final match in usableMatches.take(highConfidence.isNotEmpty ? 1 : 3))
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(

@@ -35,7 +35,13 @@ class CardMatch {
   final String reason;
   final double overlap;
   final int hits;
-  const CardMatch({required this.product, required this.confidence, required this.reason, this.overlap = 0.0, this.hits = 0});
+  const CardMatch({
+    required this.product,
+    required this.confidence,
+    required this.reason,
+    this.overlap = 0.0,
+    this.hits = 0,
+  });
 }
 
 /// Card networks scanning cares about, plus the raw synonyms printed on
@@ -46,6 +52,22 @@ const Map<CardNetwork, List<String>> _networkSynonyms = {
   CardNetwork.rupay: ['rupay'],
   CardNetwork.amex: ['amex', 'american express'],
   CardNetwork.diners: ['diners', 'diners club'],
+};
+
+// These words describe a network or a broad tier, but do not identify a
+// catalogue product on their own. A low-resolution photo can easily preserve
+// only "RuPay Platinum" while losing the small Tata/HDFC/SBI wordmark.
+const _genericCardWords = {
+  'visa',
+  'mastercard',
+  'rupay',
+  'amex',
+  'diners',
+  'platinum',
+  'gold',
+  'classic',
+  'signature',
+  'select',
 };
 
 /// Finds a network keyword anywhere in [text] (case-insensitive). Returns
@@ -68,7 +90,9 @@ CardNetwork? detectNetworkFromText(String text) {
 /// this never stores a full card number, only whatever the last recognized
 /// digit group is).
 String? extractLastFourDigits(String text) {
-  final matches = RegExp(r'\d{4}').allMatches(text.replaceAll(RegExp(r'[\s-]'), ' '));
+  final matches = RegExp(
+    r'\d{4}',
+  ).allMatches(text.replaceAll(RegExp(r'[\s-]'), ' '));
   final groups = matches.map((m) => m.group(0)!).toList();
   if (groups.isEmpty) return null;
   return groups.last;
@@ -92,13 +116,82 @@ String? extractLastFourDigits(String text) {
 /// match failed, and an issuer name is exactly the part that's safe and
 /// useful to show.
 String redactDigitRuns(String text) {
-  return text.replaceAllMapped(RegExp(r'\d{3,}'), (m) => '•' * m.group(0)!.length);
+  return text.replaceAllMapped(
+    RegExp(r'\d{3,}'),
+    (m) => '•' * m.group(0)!.length,
+  );
 }
 
 /// Normalizes text for fuzzy comparison: lowercase, strip anything that
 /// isn't a letter/digit/space, collapse whitespace.
 String _normalize(String s) {
-  return s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  // The physical Tata Neu Plus artwork prints the product mark as
+  // “NEUCARD+”. OCR commonly returns that as one token, so canonicalize the
+  // visible plus marker into the catalogue's separate “Neu Plus” token before
+  // punctuation is stripped. This lets the matcher distinguish Plus from
+  // Infinity instead of treating both as the same Tata Neu family.
+  final canonical = s.replaceAllMapped(
+    RegExp(r'\bneu\s*card\s*\+', caseSensitive: false),
+    (_) => 'neu plus',
+  ).replaceAllMapped(
+    RegExp(r'\bcash\s*back\b', caseSensitive: false),
+    (_) => 'cashback',
+  );
+  return canonical
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+/// OCR can turn a printed token into a near-spelling (`CASIH`) or split it
+/// into short fragments (`B<CK`). Keep fuzzy matching deliberately local and
+/// conservative: only product-name tokens of four or more characters are
+/// eligible, and the token still needs to be reasonably close to one OCR word
+/// or a short run of adjacent OCR fragments.
+bool _fuzzyTokenMatch(String normalizedText, String token) {
+  if (normalizedText.contains(token)) return true;
+  if (token.length < 4) return false;
+
+  final words = normalizedText.split(' ').where((word) => word.isNotEmpty);
+  final candidates = <String>{...words};
+  final wordList = words.toList();
+  for (var i = 0; i < wordList.length; i++) {
+    candidates.add(wordList[i] + (i + 1 < wordList.length ? wordList[i + 1] : ''));
+    if (i + 2 < wordList.length) {
+      candidates.add(wordList[i] + wordList[i + 1] + wordList[i + 2]);
+    }
+  }
+
+  final maxDistance = token.length >= 7 ? 3 : 2;
+  return candidates.any((candidate) {
+    if (candidate.length < token.length - maxDistance ||
+        candidate.length > token.length + maxDistance) {
+      return false;
+    }
+    return _levenshteinDistance(candidate, token) <= maxDistance;
+  });
+}
+
+int _levenshteinDistance(String a, String b) {
+  if (a == b) return 0;
+  if (a.isEmpty) return b.length;
+  if (b.isEmpty) return a.length;
+
+  var previous = List<int>.generate(b.length + 1, (i) => i);
+  for (var i = 0; i < a.length; i++) {
+    final current = List<int>.filled(b.length + 1, 0)..[0] = i + 1;
+    for (var j = 0; j < b.length; j++) {
+      final substitutionCost = a[i] == b[j] ? 0 : 1;
+      current[j + 1] = [
+        current[j] + 1,
+        previous[j + 1] + 1,
+        previous[j] + substitutionCost,
+      ].reduce((x, y) => x < y ? x : y);
+    }
+    previous = current;
+  }
+  return previous[b.length];
 }
 
 /// Very small token-overlap fuzzy score: fraction of the catalogue product
@@ -106,26 +199,46 @@ String _normalize(String s) {
 /// anywhere in the normalized extracted text. Deliberately simple — no
 /// edit-distance/library dependency — because OCR'd card text is short and
 /// mostly-correct issuer/product names, not free-form prose. 0.0-1.0.
-({double overlap, int hits}) _tokenOverlapScore(String normalizedText, String productName) {
+({double overlap, int hits}) _tokenOverlapScore(
+  String normalizedText,
+  String productName,
+) {
   final ignoreWords = {'credit', 'card', 'debit', 'prepaid'};
-  final tokens = _normalize(productName)
-      .split(' ')
-      .where((t) => t.length >= 2 && !ignoreWords.contains(t))
-      .toList();
+  final tokens = _normalize(
+    productName,
+  ).split(' ').where((t) => t.length >= 2 && !ignoreWords.contains(t)).toList();
   if (tokens.isEmpty) {
     return (overlap: 0.0, hits: 0);
   }
-  final hits = tokens.where((t) => normalizedText.contains(t)).length;
+  final hits = tokens.where((t) => _fuzzyTokenMatch(normalizedText, t)).length;
   return (overlap: hits / tokens.length, hits: hits);
+}
+
+int _identityTokenHits(String normalizedText, String productName) {
+  final ignoreWords = {'credit', 'card', 'debit', 'prepaid'};
+  final tokens = _normalize(productName)
+      .split(' ')
+      .where(
+        (t) =>
+            t.length >= 2 &&
+            !ignoreWords.contains(t) &&
+            !_genericCardWords.contains(t),
+      )
+      .toSet();
+  return tokens.where((t) => _fuzzyTokenMatch(normalizedText, t)).length;
 }
 
 /// Matches [extracted] against [catalogue], returning candidates sorted
 /// best-first. Confidence bands (deliberately conservative — see file doc):
 /// - `high`: network detected AND token overlap >= 0.75
-/// - `medium`: token overlap >= 0.5 (network match optional boost)
-/// - `low`: token overlap >= 0.25, or network-only match with no name hit
+/// - `medium`: at least two product-name tokens and token overlap >= 0.5
+///   (network match optional boost)
+/// - `low`: a weak multi-token name hit, or network-only match with no name hit
 /// - cards below all thresholds are omitted entirely, not returned as `none`
-List<CardMatch> matchCardText(ExtractedCardText extracted, List<CardProduct> catalogue) {
+List<CardMatch> matchCardText(
+  ExtractedCardText extracted,
+  List<CardProduct> catalogue,
+) {
   final normalizedText = _normalize(extracted.rawText);
   final network = detectNetworkFromText(extracted.rawText);
 
@@ -134,17 +247,34 @@ List<CardMatch> matchCardText(ExtractedCardText extracted, List<CardProduct> cat
     final score = _tokenOverlapScore(normalizedText, product.name);
     final overlap = score.overlap;
     final hits = score.hits;
+    final identityHits = _identityTokenHits(normalizedText, product.name);
     final networkMatches = network != null && network == product.network;
 
     MatchConfidence confidence;
     final reasonParts = <String>[];
-    if (overlap >= 0.75) {
-      confidence = networkMatches ? MatchConfidence.high : MatchConfidence.medium;
+    // A one-token match is not card identification. Generic catalogue names
+    // such as "Platinum Credit Card" would otherwise win whenever OCR picks
+    // up the word "platinum" from card art or nearby text. Keep those as
+    // network-only low-confidence suggestions at most; the result panel does
+    // not show low-confidence candidates as detected cards.
+    if (identityHits == 0) {
+      // Network/tier-only labels (for example "RuPay Platinum") are not
+      // sufficient to identify a product. Keep the row diagnostic-only.
+      if (networkMatches) {
+        confidence = MatchConfidence.low;
+        reasonParts.add('network/tier text only (${product.network.name})');
+      } else {
+        continue;
+      }
+    } else if (hits >= 2 && overlap >= 0.75) {
+      confidence = networkMatches
+          ? MatchConfidence.high
+          : MatchConfidence.medium;
       reasonParts.add('name match ${(overlap * 100).round()}%');
-    } else if (overlap >= 0.5) {
+    } else if (hits >= 2 && overlap >= 0.5) {
       confidence = MatchConfidence.medium;
       reasonParts.add('partial name match ${(overlap * 100).round()}%');
-    } else if (overlap >= 0.25) {
+    } else if (hits >= 2 && overlap >= 0.25) {
       confidence = MatchConfidence.low;
       reasonParts.add('weak name match ${(overlap * 100).round()}%');
     } else if (networkMatches) {
@@ -157,13 +287,15 @@ List<CardMatch> matchCardText(ExtractedCardText extracted, List<CardProduct> cat
       reasonParts.add('network match (${product.network.name})');
     }
 
-    results.add(CardMatch(
-      product: product,
-      confidence: confidence,
-      reason: reasonParts.join(', '),
-      overlap: overlap,
-      hits: hits,
-    ));
+    results.add(
+      CardMatch(
+        product: product,
+        confidence: confidence,
+        reason: reasonParts.join(', '),
+        overlap: overlap,
+        hits: hits,
+      ),
+    );
   }
 
   results.sort((a, b) {

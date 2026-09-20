@@ -13,7 +13,11 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 /// button itself sprawling across the panel.
 void main() {
   final catalogue = [
-    CardProduct(id: 'c1', name: 'HDFC Bank Millennia', network: CardNetwork.visa),
+    CardProduct(
+      id: 'c1',
+      name: 'HDFC Bank Millennia',
+      network: CardNetwork.visa,
+    ),
     CardProduct(id: 'c2', name: 'SBI Cashback', network: CardNetwork.rupay),
   ];
 
@@ -22,7 +26,11 @@ void main() {
       const ExtractedCardText('HDFC BANK MILLENNIA VISA 4242 1234'),
       catalogue,
     );
-    expect(matches, isNotEmpty, reason: 'test needs at least one match to render');
+    expect(
+      matches,
+      isNotEmpty,
+      reason: 'test needs at least one match to render',
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -33,7 +41,9 @@ void main() {
               width: width,
               height: 400,
               child: ScanResultPanel(
-                extracted: const ExtractedCardText('HDFC BANK MILLENNIA VISA 4242 1234'),
+                extracted: const ExtractedCardText(
+                  'HDFC BANK MILLENNIA VISA 4242 1234',
+                ),
                 matches: matches,
                 showRawText: true,
                 onConfirm: (_) {},
@@ -47,24 +57,31 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('lays out without overflow at a phone-panel width', (tester) async {
+  testWidgets('lays out without overflow at a phone-panel width', (
+    tester,
+  ) async {
     await pumpPanel(tester, width: 360);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('match name is not crushed to a sliver by the "Use this" button', (tester) async {
-    await pumpPanel(tester, width: 360);
+  testWidgets(
+    'match name is not crushed to a sliver by the "Use this" button',
+    (tester) async {
+      await pumpPanel(tester, width: 360);
 
-    final nameFinder = find.text('HDFC Bank Millennia');
-    expect(nameFinder, findsOneWidget);
+      final nameFinder = find.text('HDFC Bank Millennia');
+      expect(nameFinder, findsOneWidget);
 
-    // The bug rendered this text in a ~10px column (one glyph per line).
-    // A healthy layout gives it the lion's share of the row.
-    final nameWidth = tester.getSize(nameFinder).width;
-    expect(nameWidth, greaterThan(150));
-  });
+      // The bug rendered this text in a ~10px column (one glyph per line).
+      // A healthy layout gives it the lion's share of the row.
+      final nameWidth = tester.getSize(nameFinder).width;
+      expect(nameWidth, greaterThan(150));
+    },
+  );
 
-  testWidgets('"Use this" button stays compact, not full-width', (tester) async {
+  testWidgets('"Use this" button stays compact, not full-width', (
+    tester,
+  ) async {
     await pumpPanel(tester, width: 360);
 
     final useThis = find.widgetWithText(FilledButton, 'Use this');
@@ -77,5 +94,38 @@ void main() {
   testWidgets('"Scan again" is present and full-width', (tester) async {
     await pumpPanel(tester, width: 360);
     expect(find.widgetWithText(OutlinedButton, 'Scan again'), findsOneWidget);
+  });
+
+  testWidgets('does not show a low-confidence generic candidate as detected', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: ScanResultPanel(
+            extracted: const ExtractedCardText('PLATINUM VISA'),
+            matches: [
+              CardMatch(
+                product: CardProduct(
+                  id: 'platinum',
+                  name: 'Platinum Credit Card',
+                  network: CardNetwork.visa,
+                ),
+                confidence: MatchConfidence.low,
+                reason: 'weak name match 100%',
+              ),
+            ],
+            showRawText: false,
+            onConfirm: (_) {},
+            onRescan: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Platinum Credit Card'), findsNothing);
+    expect(find.textContaining('No confident match'), findsOneWidget);
   });
 }
