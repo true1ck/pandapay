@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image/image.dart' as img;
 import 'package:mobile_scanner/mobile_scanner.dart' as mobile_scanner;
 
 import 'card_text_matcher.dart';
@@ -36,13 +39,97 @@ class MlKitCardTextRecognizer implements CardTextRecognizer {
   final TextRecognizer _recognizer;
 
   MlKitCardTextRecognizer({TextRecognizer? recognizer})
-    : _recognizer = recognizer ?? TextRecognizer(script: TextRecognitionScript.latin);
+    : _recognizer =
+          recognizer ?? TextRecognizer(script: TextRecognitionScript.latin);
 
   @override
   Future<ExtractedCardText> recognizeText(String imagePath) async {
-    final inputImage = InputImage.fromFilePath(imagePath);
-    final result = await _recognizer.processImage(inputImage);
-    return ExtractedCardText(result.text);
+    final ocrPaths = await _prepareOcrVariants(imagePath);
+    try {
+      final texts = <String>[];
+      for (final ocrPath in ocrPaths) {
+        final inputImage = InputImage.fromFilePath(ocrPath);
+        final result = await _recognizer.processImage(inputImage);
+        if (result.text.trim().isNotEmpty) texts.add(result.text.trim());
+      }
+      return ExtractedCardText(texts.join('\n'));
+    } finally {
+      for (final ocrPath in ocrPaths.where((path) => path != imagePath)) {
+        try {
+          await File(ocrPath).delete();
+        } catch (_) {
+          // The OCR result is already available; a best-effort temp-file
+          // cleanup must never turn a successful scan into an error.
+        }
+      }
+    }
+  }
+
+  /// ML Kit can miss the small issuer/product wordmark on a low-resolution
+  /// gallery image while confidently reading a large network/tier label such
+  /// as "RuPay Platinum". Upscale genuinely small inputs and run overlapping
+  /// horizontal crops so small top/bottom wordmarks get a larger OCR target.
+  Future<List<String>> _prepareOcrVariants(String imagePath) async {
+    final bytes = await File(imagePath).readAsBytes();
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return [imagePath];
+
+    const minimumLongEdge = 1400;
+    final originalLongEdge = math.max(decoded.width, decoded.height);
+    if (originalLongEdge >= minimumLongEdge) return [imagePath];
+
+    final variants = <img.Image>[decoded];
+    final cropHeight = (decoded.height * 0.60).round();
+    final middle = (decoded.height * 0.20).round();
+    if (cropHeight > 0 && cropHeight < decoded.height) {
+      variants.add(
+        img.copyCrop(
+          decoded,
+          x: 0,
+          y: 0,
+          width: decoded.width,
+          height: cropHeight,
+        ),
+      );
+      variants.add(
+        img.copyCrop(
+          decoded,
+          x: 0,
+          y: middle,
+          width: decoded.width,
+          height: cropHeight,
+        ),
+      );
+    }
+
+    final paths = <String>[];
+    for (var i = 0; i < variants.length; i++) {
+      final variant = variants[i];
+      final longEdge = math.max(variant.width, variant.height);
+      final scale = longEdge < minimumLongEdge
+          ? minimumLongEdge / longEdge
+          : 1.0;
+      final prepared = scale == 1.0
+          ? variant
+          : img.copyResize(
+              variant,
+              width: (variant.width * scale).round(),
+              height: (variant.height * scale).round(),
+              interpolation: img.Interpolation.cubic,
+            );
+      if (i == 0 && scale == 1.0) {
+        paths.add(imagePath);
+        continue;
+      }
+      final tempPath =
+          '${Directory.systemTemp.path}${Platform.pathSeparator}'
+          'pandapay_ocr_${DateTime.now().microsecondsSinceEpoch}_$i.jpg';
+      await File(tempPath).writeAsBytes(
+        img.encodeJpg(prepared, quality: 95, chroma: img.JpegChroma.yuv444),
+      );
+      paths.add(tempPath);
+    }
+    return paths;
   }
 
   @override

@@ -8,7 +8,10 @@ CardProduct _product(String id, String name, CardNetwork network) =>
 void main() {
   group('detectNetworkFromText', () {
     test('finds a known network keyword case-insensitively', () {
-      expect(detectNetworkFromText('some text VISA platinum'), CardNetwork.visa);
+      expect(
+        detectNetworkFromText('some text VISA platinum'),
+        CardNetwork.visa,
+      );
       expect(detectNetworkFromText('MasterCard World'), CardNetwork.mastercard);
       expect(detectNetworkFromText('RuPay Select'), CardNetwork.rupay);
       expect(detectNetworkFromText('American Express Gold'), CardNetwork.amex);
@@ -46,14 +49,17 @@ void main() {
       expect(matches.first.confidence, MatchConfidence.high);
     });
 
-    test('medium confidence on a strong name match without network confirmation', () {
-      final matches = matchCardText(
-        const ExtractedCardText('sbi cashback credit card statement'),
-        catalogue,
-      );
-      final sbiMatch = matches.firstWhere((m) => m.product.id == 'c2');
-      expect(sbiMatch.confidence, MatchConfidence.medium);
-    });
+    test(
+      'medium confidence on a strong name match without network confirmation',
+      () {
+        final matches = matchCardText(
+          const ExtractedCardText('sbi cashback credit card statement'),
+          catalogue,
+        );
+        final sbiMatch = matches.firstWhere((m) => m.product.id == 'c2');
+        expect(sbiMatch.confidence, MatchConfidence.medium);
+      },
+    );
 
     test('no candidates returned when text matches nothing at all', () {
       final matches = matchCardText(
@@ -72,12 +78,75 @@ void main() {
 
     test('results are sorted best confidence first', () {
       final matches = matchCardText(
-        const ExtractedCardText('HDFC BANK MILLENNIA VISA and also sbi cashback mention'),
+        const ExtractedCardText(
+          'HDFC BANK MILLENNIA VISA and also sbi cashback mention',
+        ),
         catalogue,
       );
       for (var i = 1; i < matches.length; i++) {
-        expect(matches[i - 1].confidence.index, greaterThanOrEqualTo(matches[i].confidence.index));
+        expect(
+          matches[i - 1].confidence.index,
+          greaterThanOrEqualTo(matches[i].confidence.index),
+        );
       }
+    });
+
+    test('recognizes the Tata Neu sample ahead of a generic Platinum row', () {
+      final tataNeu = _product(
+        'tata-neu-infinity-hdfc',
+        'Tata Neu Infinity HDFC Bank Credit Card',
+        CardNetwork.rupay,
+      );
+      final platinum = _product(
+        'indusind-platinum',
+        'Platinum Credit Card',
+        CardNetwork.visa,
+      );
+
+      final matches = matchCardText(
+        const ExtractedCardText('TATA NEUCARD HDFC BANK RuPay PLATINUM'),
+        [tataNeu, platinum],
+      );
+
+      expect(matches.first.product.id, tataNeu.id);
+      expect(matches.first.confidence, MatchConfidence.high);
+      expect(matches.where((m) => m.product.id == platinum.id), isEmpty);
+    });
+
+    test(
+      'does not treat a single generic tier word as card identification',
+      () {
+        final matches = matchCardText(
+          const ExtractedCardText('PLATINUM VISA'),
+          [_product('platinum', 'Platinum Credit Card', CardNetwork.visa)],
+        );
+
+        expect(
+          matches,
+          isNotEmpty,
+          reason:
+              'network-only low suggestions remain available for diagnostics',
+        );
+        expect(matches.single.confidence, MatchConfidence.low);
+      },
+    );
+
+    test('does not promote a network plus tier label to a real card', () {
+      final matches = matchCardText(const ExtractedCardText('RuPay Platinum'), [
+        _product(
+          'rupay-platinum',
+          'RuPay Platinum Credit Card',
+          CardNetwork.rupay,
+        ),
+        _product(
+          'tata-neu',
+          'Tata Neu Infinity HDFC Bank Credit Card',
+          CardNetwork.rupay,
+        ),
+      ]);
+
+      expect(matches, hasLength(2));
+      expect(matches.every((m) => m.confidence == MatchConfidence.low), isTrue);
     });
   });
 
@@ -91,7 +160,9 @@ void main() {
 
     test('masks digits embedded in surrounding issuer text', () {
       expect(
-        redactDigitRuns('HDFC BANK MILLENNIA 5241 8765 3412 9087 VALID THRU 04/29'),
+        redactDigitRuns(
+          'HDFC BANK MILLENNIA 5241 8765 3412 9087 VALID THRU 04/29',
+        ),
         'HDFC BANK MILLENNIA •••• •••• •••• •••• VALID THRU 04/29',
       );
     });
@@ -101,9 +172,12 @@ void main() {
       expect(redactDigitRuns('branch 7'), 'branch 7');
     });
 
-    test('masks a 3-digit run — the CVV length is exactly the line to hold', () {
-      expect(redactDigitRuns('123'), '•••');
-    });
+    test(
+      'masks a 3-digit run — the CVV length is exactly the line to hold',
+      () {
+        expect(redactDigitRuns('123'), '•••');
+      },
+    );
 
     test('leaves letters and punctuation untouched', () {
       expect(redactDigitRuns('HDFC Bank — Millennia'), 'HDFC Bank — Millennia');
