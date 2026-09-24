@@ -97,7 +97,13 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                 child: IconButton(
                   tooltip: 'Back',
                   color: BambooInk.onSlate,
-                  onPressed: () => context.pop(),
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(AppRoute.accountChoice);
+                    }
+                  },
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
               ),
