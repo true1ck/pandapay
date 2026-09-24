@@ -653,16 +653,16 @@ class _AspectPreservingCameraPreview extends StatelessWidget {
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            final viewportAspectRatio = constraints.maxWidth / constraints.maxHeight;
-            if (!viewportAspectRatio.isFinite || viewportAspectRatio <= 0) {
-              return const SizedBox.expand();
-            }
-            // Uniformly scale the preview to cover the panel. This is the
-            // same geometry as BoxFit.cover: the excess is cropped, and no
-            // axis is independently stretched.
-            final coverScale = previewAspectRatio >= viewportAspectRatio
-                ? previewAspectRatio / viewportAspectRatio
-                : viewportAspectRatio / previewAspectRatio;
+            final viewW = constraints.maxWidth;
+            final viewH = constraints.maxHeight;
+            if (viewW <= 0 || viewH <= 0) return const SizedBox.expand();
+
+            // BoxFit.cover: scale each axis so the preview exactly fills that
+            // dimension, then take the max — that axis covers the viewport and
+            // the other axis overflows (gets cropped). Never stretches.
+            final scaleX = viewW / (viewH * previewAspectRatio);
+            final scaleY = viewH / (viewW / previewAspectRatio);
+            final coverScale = scaleX > scaleY ? scaleX : scaleY;
 
             return ClipRect(
               child: Center(
