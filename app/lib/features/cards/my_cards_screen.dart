@@ -100,12 +100,14 @@ class MyCardsScreen extends ConsumerWidget {
                   children: [
                     Expanded(
                       child: SegmentedButton<bool>(
+                        showSelectedIcon: false,
                         style: SegmentedButton.styleFrom(
                           selectedBackgroundColor: BambooInk.slate,
                           selectedForegroundColor: BambooInk.onSlate,
                           foregroundColor: BambooInk.ink500,
                           side: const BorderSide(color: BambooInk.hairlineOnPaper),
                           textStyle: BambooFonts.ui(13.5, weight: FontWeight.w600),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
                         ),
                         segments: const [
                           ButtonSegment(value: false, label: Text('Active')),
