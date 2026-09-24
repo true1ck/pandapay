@@ -389,6 +389,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (!complete) {
+        if (path == AppRoute.emergencyCardInfo) return null;
         return AppRoute.preOnboarding.contains(path) ? null : AppRoute.welcome;
       }
 
