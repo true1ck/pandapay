@@ -103,6 +103,7 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   ExtractedCardText? _lastExtracted;
   List<CardMatch> _matches = const [];
   bool _resultIsFromOcr = false;
+  File? _capturedImageFile;
 
   /// Bumped every time we drop our hold on the camera (lifecycle change,
   /// mode switch, screen dispose). An in-flight [_initCamera] captures the
@@ -248,6 +249,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (_capturedImageFile != null) {
+      unawaited(_capturedImageFile!.delete().catchError((_) => _capturedImageFile!));
+    }
     // Invalidate any in-flight _initCamera so it disposes its controller
     // instead of publishing it into a dead State.
     _cameraGeneration++;
@@ -268,6 +272,10 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
     XFile? file;
     try {
       file = await controller.takePicture();
+      if (!mounted) return;
+      setState(() {
+        _capturedImageFile = File(file!.path);
+      });
       final extracted = await recognizer.recognizeText(file.path);
       if (!mounted) return;
       setState(() {
@@ -282,12 +290,6 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
         ).showSnackBar(const SnackBar(content: Text("Couldn't read that — try again with more light.")));
       }
     } finally {
-      // Deleted unconditionally, success or failure: a captured card-face
-      // photo has no reason to exist past this function returning. See
-      // this file's doc-comment.
-      if (file != null) {
-        unawaited(File(file.path).delete().catchError((_) => File(file!.path)));
-      }
       if (mounted) setState(() => _capturing = false);
     }
   }
@@ -387,6 +389,10 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
     setState(() {
       _lastExtracted = null;
       _matches = const [];
+      if (_capturedImageFile != null) {
+        unawaited(_capturedImageFile!.delete().catchError((_) => _capturedImageFile!));
+        _capturedImageFile = null;
+      }
     });
     // The camera preview may have been torn down while the result panel was
     // up (notification shade, app switch) — bring it back so "Scan again"
@@ -444,6 +450,7 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
                       // After capture: keep the frozen frame visible with the
                       // guide overlay intact and a success badge on top.
                       captured: _lastExtracted != null,
+                      capturedImageFile: _capturedImageFile,
                       onCapture: _capture,
                     )
                   : _lastExtracted != null
@@ -528,6 +535,9 @@ class _OcrView extends StatefulWidget {
   /// True once OCR has returned a result — keeps the frozen camera frame
   /// visible (rather than going black) and overlays a success badge.
   final bool captured;
+  /// The image file taken by the camera. Rendered directly to avoid Android
+  /// blacking out the preview texture buffer when takePicture is called.
+  final File? capturedImageFile;
   final VoidCallback onCapture;
 
   const _OcrView({
@@ -536,6 +546,7 @@ class _OcrView extends StatefulWidget {
     required this.error,
     required this.capturing,
     required this.captured,
+    this.capturedImageFile,
     required this.onCapture,
   });
 
@@ -587,8 +598,14 @@ class _OcrViewState extends State<_OcrView> with SingleTickerProviderStateMixin 
         return Stack(
           children: [
             // Keep the frozen camera frame visible at all times — after capture
-            // the plugin freezes the feed naturally; this avoids a black flash.
-            Positioned.fill(child: _AspectPreservingCameraPreview(controller)),
+            // the plugin freezes the feed naturally, but on some Androids the
+            // texture buffer clears to black, so we render the captured file
+            // if we have one.
+            Positioned.fill(
+              child: widget.capturedImageFile != null
+                  ? Image.file(widget.capturedImageFile!, fit: BoxFit.cover)
+                  : _AspectPreservingCameraPreview(controller),
+            ),
             // Guide overlay: static (pulse = 0) once captured so it reads as
             // a freeze-frame rather than a live view.
             Positioned.fill(

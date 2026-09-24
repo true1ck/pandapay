@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/env.dart';
 import '../../app/router.dart';
 import '../sms_import/sms_listener_service.dart';
 
@@ -31,6 +32,25 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
   bool? _smsGranted;
   bool? _notificationsGranted;
   bool? _locationGranted;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialStatuses();
+  }
+
+  Future<void> _checkInitialStatuses() async {
+    if (_isAndroid) {
+      final smsStatus = await Permission.sms.status;
+      if (mounted) setState(() => _smsGranted = smsStatus.isGranted);
+    }
+    
+    final notifStatus = await Permission.notification.status;
+    if (mounted) setState(() => _notificationsGranted = notifStatus.isGranted);
+    
+    final locStatus = await Permission.locationWhenInUse.status;
+    if (mounted) setState(() => _locationGranted = locStatus.isGranted);
+  }
 
   // All three requests below are wrapped in try/catch for the same reason:
   // `permission_handler`'s `.request()` can throw on some OEM builds
@@ -85,7 +105,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
     // `WidgetsApp._errorTextStyle`, which painted a yellow underline under
     // each line. `color:` fills the same opaque slate the box did.
     return Material(
-      color: BambooInk.slate,
+      color: BambooInk.paper,
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.xl),
@@ -96,7 +116,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                 alignment: Alignment.centerLeft,
                 child: IconButton(
                   tooltip: 'Back',
-                  color: BambooInk.onSlate,
+                  color: BambooInk.ink900,
                   onPressed: () {
                     if (context.canPop()) {
                       context.pop();
@@ -109,12 +129,12 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
               ),
               Text(
                 'Set up a few permissions',
-                style: BambooFonts.heading(24, color: BambooInk.onSlate),
+                style: BambooFonts.heading(24, color: BambooInk.ink900),
               ),
               const SizedBox(height: AppSpace.xs),
               Text(
                 'Every one of these is optional — skip any you\'re not sure about, you can turn them on later.',
-                style: BambooFonts.ui(14, color: BambooInk.onSlateMuted),
+                style: BambooFonts.ui(14, color: BambooInk.ink500),
               ),
               const SizedBox(height: AppSpace.xl),
               Expanded(
@@ -154,8 +174,8 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
               const SizedBox(height: AppSpace.md),
               FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: BambooInk.lime,
-                  foregroundColor: BambooInk.slate,
+                  backgroundColor: BambooInk.jade,
+                  foregroundColor: BambooInk.paper,
                   minimumSize: const Size.fromHeight(52),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -193,9 +213,9 @@ class _PermissionRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
-        color: BambooInk.slateRaised,
+        color: BambooInk.paperMuted,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: BambooInk.slateHairline),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,10 +224,11 @@ class _PermissionRow extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: BambooInk.slateLow,
+              color: BambooInk.paper,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: BambooInk.hairlineOnPaper),
             ),
-            child: Icon(icon, color: BambooInk.lime, size: 20),
+            child: Icon(icon, color: BambooInk.jade, size: 20),
           ),
           const SizedBox(width: AppSpace.md),
           Expanded(
@@ -216,12 +237,12 @@ class _PermissionRow extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: BambooFonts.heading(15, color: BambooInk.onSlate),
+                  style: BambooFonts.heading(15, color: BambooInk.ink900),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   reason,
-                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
               ],
             ),
@@ -230,14 +251,14 @@ class _PermissionRow extends StatelessWidget {
           if (granted == true)
             const Icon(
               Icons.check_circle_rounded,
-              color: BambooInk.lime,
+              color: BambooInk.jade,
               size: 22,
             )
           else
             OutlinedButton(
               style: OutlinedButton.styleFrom(
-                foregroundColor: BambooInk.onSlate,
-                side: const BorderSide(color: BambooInk.slateHairline),
+                foregroundColor: BambooInk.ink900,
+                side: const BorderSide(color: BambooInk.hairlineOnPaper),
                 minimumSize: const Size(0, 34),
                 padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
                 shape: RoundedRectangleBorder(

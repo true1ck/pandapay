@@ -74,7 +74,7 @@ class MlKitCardTextRecognizer implements CardTextRecognizer {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return [imagePath];
 
-    const minimumLongEdge = 1400;
+    const minimumLongEdge = 1200;
     final originalLongEdge = math.max(decoded.width, decoded.height);
     if (originalLongEdge >= minimumLongEdge) return [imagePath];
 
