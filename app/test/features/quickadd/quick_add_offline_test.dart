@@ -25,6 +25,7 @@ class _OfflineUserCardsRepository extends UserCardsRepository {
     String? merchantName,
     DateTime? occurredAt,
     String? note,
+    String? rail,
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
   }) async {
