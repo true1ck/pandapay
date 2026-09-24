@@ -236,6 +236,28 @@ int _identityTokenHits(String normalizedText, String productName) {
   return tokens.where((t) => _fuzzyTokenMatch(normalizedText, t)).length;
 }
 
+/// Returns how many product-specific tokens (name tokens NOT in the issuer
+/// name) match in [normalizedText]. An issuer-only match (e.g. only "sbi")
+/// means every card from that issuer would score the same — result is arbitrary.
+int _productSpecificHits(String normalizedText, String issuerName, String searchableName) {
+  final ignoreWords = {'credit', 'card', 'debit', 'prepaid'};
+  final issuerTokens = _normalize(issuerName)
+      .split(' ')
+      .where((t) => t.isNotEmpty)
+      .toSet();
+  final tokens = _normalize(searchableName)
+      .split(' ')
+      .where(
+        (t) =>
+            t.length >= 2 &&
+            !ignoreWords.contains(t) &&
+            !_genericCardWords.contains(t) &&
+            !issuerTokens.contains(t),
+      )
+      .toSet();
+  return tokens.where((t) => _fuzzyTokenMatch(normalizedText, t)).length;
+}
+
 /// Matches [extracted] against [catalogue], returning candidates sorted
 /// best-first. Confidence bands (deliberately conservative — see file doc):
 /// - `high`: network detected AND token overlap >= 0.75
@@ -253,10 +275,12 @@ List<CardMatch> matchCardText(
   final results = <CardMatch>[];
   for (final product in catalogue) {
     final searchableName = _searchableProductName(product);
+    final issuerName = product.issuerName ?? '';
     final score = _tokenOverlapScore(normalizedText, searchableName);
     final overlap = score.overlap;
     final hits = score.hits;
     final identityHits = _identityTokenHits(normalizedText, searchableName);
+    final productHits = _productSpecificHits(normalizedText, issuerName, searchableName);
     final networkMatches = network != null && network == product.network;
 
     MatchConfidence confidence;
@@ -275,13 +299,24 @@ List<CardMatch> matchCardText(
       } else {
         continue;
       }
+    } else if (productHits == 0) {
+      // Only issuer tokens matched — every card from this issuer scores the
+      // same, so the top result is arbitrary. Downgrade to low/skip.
+      if (networkMatches) {
+        confidence = MatchConfidence.low;
+        reasonParts.add('issuer match only (${product.network.name})');
+      } else {
+        continue;
+      }
     } else if (hits >= 2 && overlap >= 0.75) {
       confidence = networkMatches
           ? MatchConfidence.high
           : MatchConfidence.medium;
       reasonParts.add('name match ${(overlap * 100).round()}%');
     } else if (hits >= 2 && overlap >= 0.5) {
-      confidence = MatchConfidence.medium;
+      // Require network confirmation for medium on a partial match — without
+      // it the 50% bar is too easy to hit with overlapping issuer tokens.
+      confidence = networkMatches ? MatchConfidence.medium : MatchConfidence.low;
       reasonParts.add('partial name match ${(overlap * 100).round()}%');
     } else if (hits >= 2 && overlap >= 0.25) {
       confidence = MatchConfidence.low;

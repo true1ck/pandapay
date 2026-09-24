@@ -433,9 +433,7 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
             _ModeToggle(mode: _mode, onChanged: _switchMode),
             Expanded(
               flex: 3,
-              child: _lastExtracted != null
-                  ? const _CapturedPreview()
-                  : _processingImage
+              child: _processingImage
                   ? const _BusyView()
                   : _mode == _ScanMode.ocr
                   ? _OcrView(
@@ -443,8 +441,13 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
                       initFuture: _cameraInitFuture,
                       error: _cameraError,
                       capturing: _capturing,
+                      // After capture: keep the frozen frame visible with the
+                      // guide overlay intact and a success badge on top.
+                      captured: _lastExtracted != null,
                       onCapture: _capture,
                     )
+                  : _lastExtracted != null
+                  ? const _CapturedPreview()
                   : _QrView(controller: _qrController, onDetect: _onQrDetect),
             ),
             Expanded(
@@ -522,6 +525,9 @@ class _OcrView extends StatefulWidget {
   final Future<void>? initFuture;
   final String? error;
   final bool capturing;
+  /// True once OCR has returned a result — keeps the frozen camera frame
+  /// visible (rather than going black) and overlays a success badge.
+  final bool captured;
   final VoidCallback onCapture;
 
   const _OcrView({
@@ -529,6 +535,7 @@ class _OcrView extends StatefulWidget {
     required this.initFuture,
     required this.error,
     required this.capturing,
+    required this.captured,
     required this.onCapture,
   });
 
@@ -579,43 +586,66 @@ class _OcrViewState extends State<_OcrView> with SingleTickerProviderStateMixin 
         }
         return Stack(
           children: [
+            // Keep the frozen camera frame visible at all times — after capture
+            // the plugin freezes the feed naturally; this avoids a black flash.
             Positioned.fill(child: _AspectPreservingCameraPreview(controller)),
+            // Guide overlay: static (pulse = 0) once captured so it reads as
+            // a freeze-frame rather than a live view.
             Positioned.fill(
               child: IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (context, _) => CustomPaint(
-                    painter: CardGuidePainter(pulse: _pulseController.value),
-                    size: Size.infinite,
-                  ),
-                ),
+                child: widget.captured
+                    ? CustomPaint(
+                        painter: const CardGuidePainter(pulse: 0),
+                        size: Size.infinite,
+                      )
+                    : AnimatedBuilder(
+                        animation: _pulseController,
+                        builder: (context, _) => CustomPaint(
+                          painter: CardGuidePainter(pulse: _pulseController.value),
+                          size: Size.infinite,
+                        ),
+                      ),
               ),
             ),
-            Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: GestureDetector(
-                  onTap: widget.capturing ? null : widget.onCapture,
-                  child: Container(
-                    width: 68,
-                    height: 68,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      border: Border.all(color: BambooInk.lime, width: 3),
+            // Success badge — replaces the capture button once we have a result.
+            if (widget.captured)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: Center(
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      size: 56,
+                      color: BambooInk.lime,
                     ),
-                    child: widget.capturing
-                        ? const Padding(
-                            padding: EdgeInsets.all(20),
-                            child: CircularProgressIndicator(strokeWidth: 3, color: BambooInk.slate),
-                          )
-                        : null,
+                  ),
+                ),
+              )
+            else
+              Positioned(
+                bottom: 20,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: GestureDetector(
+                    onTap: widget.capturing ? null : widget.onCapture,
+                    child: Container(
+                      width: 68,
+                      height: 68,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        border: Border.all(color: BambooInk.lime, width: 3),
+                      ),
+                      child: widget.capturing
+                          ? const Padding(
+                              padding: EdgeInsets.all(20),
+                              child: CircularProgressIndicator(strokeWidth: 3, color: BambooInk.slate),
+                            )
+                          : null,
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         );
       },
@@ -745,10 +775,9 @@ class _CornerBracketPainter extends CustomPainter {
   bool shouldRepaint(covariant _CornerBracketPainter oldDelegate) => false;
 }
 
-/// Shown for the brief moment between capture and the recognizer returning
-/// — the camera preview itself has already been torn down (dispose isn't
-/// called, but the picture-taking freezes the feed), so this fills that gap
-/// rather than showing a dead frame.
+/// Shown after a QR/barcode scan completes — the MobileScanner feed is
+/// separate from the OCR CameraController, so we can't freeze it in place;
+/// a plain dark screen with a checkmark is the fallback for that path only.
 class _CapturedPreview extends StatelessWidget {
   const _CapturedPreview();
 
@@ -756,7 +785,7 @@ class _CapturedPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return const ColoredBox(
       color: Colors.black,
-      child: Center(child: Icon(Icons.check_circle_outline_rounded, size: 56, color: BambooInk.lime)),
+      child: Center(child: Icon(Icons.check_circle_rounded, size: 56, color: BambooInk.lime)),
     );
   }
 }
