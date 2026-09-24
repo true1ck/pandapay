@@ -242,13 +242,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Sign-up uses the light paper/wash palette; log-in keeps the dark slate.
+    final isLight = _isSignUp;
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
-        ),
+      decoration: BoxDecoration(
+        gradient: isLight
+            ? const LinearGradient(
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+                colors: [BambooInk.wash, BambooInk.paper, BambooInk.paperCool],
+              )
+            : const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  BambooInk.slateRaised,
+                  BambooInk.slate,
+                  BambooInk.slateLow,
+                ],
+              ),
       ),
       child: SafeArea(
         child: LayoutBuilder(
@@ -271,7 +283,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       alignment: Alignment.centerLeft,
                       child: IconButton(
                         tooltip: 'Back',
-                        color: BambooInk.onSlate,
+                        color: isLight ? BambooInk.ink900 : BambooInk.onSlate,
                         onPressed: () => context.pop(),
                         icon: const Icon(Icons.arrow_back_rounded),
                       ),
@@ -286,13 +298,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: PandaMark(size: 76),
                     ),
                     const SizedBox(height: 18),
-                    _Headline(title: _title, accent: _titleAccent),
+                    _Headline(
+                      title: _title,
+                      accent: _titleAccent,
+                      baseColor: isLight ? BambooInk.ink900 : BambooInk.onSlate,
+                      accentColor:
+                          isLight ? BambooInk.jade : BambooInk.lime,
+                    ),
                     const SizedBox(height: 10),
                     Text(
                       _subtitle,
                       style: BambooFonts.ui(
                         13.5,
-                        color: BambooInk.onSlateMuted,
+                        color: isLight
+                            ? BambooInk.ink500
+                            : BambooInk.onSlateMuted,
                         height: 1.5,
                       ),
                     ),
@@ -300,6 +320,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     if (!_otpRequested) ...[
                       _IdentifierStep(
                         isSignUp: _isSignUp,
+                        isLight: isLight,
                         identifierController: _identifierController,
                         phoneController: _phoneController,
                         loading: _loading,
@@ -340,7 +361,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                           style: TextButton.styleFrom(
-                            foregroundColor: BambooInk.onSlateMuted,
+                            foregroundColor: isLight
+                                ? BambooInk.ink500
+                                : BambooInk.onSlateMuted,
                           ),
                           child: const Text(
                             "Can't sign in? Recover your account",
@@ -359,7 +382,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Center(
                       child: TextButton.icon(
                         style: TextButton.styleFrom(
-                          foregroundColor: BambooInk.onSlateMuted,
+                          foregroundColor: isLight
+                              ? BambooInk.ink500
+                              : BambooInk.onSlateMuted,
                         ),
                         onPressed: () =>
                             context.push(AppRoute.emergencyCardInfo),
@@ -382,7 +407,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           'By continuing you agree to PandaPay\'s Terms & Privacy Policy.',
                           style: BambooFonts.ui(
                             12,
-                            color: BambooInk.onSlateMuted,
+                            color: isLight
+                                ? BambooInk.ink500
+                                : BambooInk.onSlateMuted,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -405,6 +432,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 /// sends it anywhere (see AuthMode's doc comment).
 class _IdentifierStep extends StatelessWidget {
   final bool isSignUp;
+  final bool isLight;
   final TextEditingController identifierController;
   final TextEditingController phoneController;
   final bool loading;
@@ -421,6 +449,7 @@ class _IdentifierStep extends StatelessWidget {
 
   const _IdentifierStep({
     required this.isSignUp,
+    required this.isLight,
     required this.identifierController,
     required this.phoneController,
     required this.loading,
@@ -433,37 +462,46 @@ class _IdentifierStep extends StatelessWidget {
     required this.onOptInMarketingChanged,
   });
 
-  static InputDecoration _fieldDecoration({
+  InputDecoration _fieldDecoration({
     required String hint,
     required IconData icon,
   }) {
+    final hintColor =
+        isLight ? BambooInk.ink500 : BambooInk.onSlateMuted;
+    final fillColor =
+        isLight ? BambooInk.paperMuted : BambooInk.slateLow;
+    final borderColor =
+        isLight ? BambooInk.hairlineOnPaper : BambooInk.slateHairline;
     return InputDecoration(
       hintText: hint,
-      hintStyle: BambooFonts.ui(14, color: BambooInk.onSlateMuted),
-      prefixIcon: Icon(icon, color: BambooInk.onSlateMuted),
+      hintStyle: BambooFonts.ui(14, color: hintColor),
+      prefixIcon: Icon(icon, color: hintColor),
       filled: true,
-      fillColor: BambooInk.slateLow,
+      fillColor: fillColor,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: BambooInk.slateHairline),
+        borderSide: BorderSide(color: borderColor),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: BambooInk.lime, width: 1.5),
+        borderSide: const BorderSide(color: BambooInk.jade, width: 1.5),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final labelColor = isLight ? BambooInk.ink300 : BambooInk.onSlateMuted;
+    final bodyColor  = isLight ? BambooInk.ink500 : BambooInk.onSlateMuted;
+    final textColor  = isLight ? BambooInk.ink900 : BambooInk.onSlate;
     final labelStyle = BambooFonts.ui(
       13,
       weight: FontWeight.w600,
-      color: BambooInk.onSlateMuted,
+      color: labelColor,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -475,7 +513,7 @@ class _IdentifierStep extends StatelessWidget {
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.email],
-          style: BambooFonts.ui(15, color: BambooInk.onSlate),
+          style: BambooFonts.ui(15, color: textColor),
           decoration: _fieldDecoration(
             hint: 'you@example.com',
             icon: Icons.mail_outline_rounded,
@@ -491,7 +529,7 @@ class _IdentifierStep extends StatelessWidget {
           isSignUp
               ? 'Used to detect card transactions from your bank SMS.'
               : 'The phone number on your account.',
-          style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+          style: BambooFonts.ui(12.5, color: bodyColor),
         ),
         const SizedBox(height: AppSpace.sm),
         TextField(
@@ -500,7 +538,7 @@ class _IdentifierStep extends StatelessWidget {
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.telephoneNumber],
           onSubmitted: (_) => loading ? null : onSubmit(),
-          style: BambooFonts.ui(15, color: BambooInk.onSlate),
+          style: BambooFonts.ui(15, color: textColor),
           decoration: _fieldDecoration(
             hint: '+91 98765 43210',
             icon: Icons.phone_outlined,
@@ -510,16 +548,16 @@ class _IdentifierStep extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(
+            Icon(
               Icons.info_outline_rounded,
               size: 14,
-              color: BambooInk.onSlateMuted,
+              color: bodyColor,
             ),
             const SizedBox(width: AppSpace.xs),
             Expanded(
               child: Text(
                 'We\'ll send your verification code to your email.',
-                style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+                style: BambooFonts.ui(12.5, color: bodyColor),
               ),
             ),
           ],
@@ -534,40 +572,49 @@ class _IdentifierStep extends StatelessWidget {
             onChanged: onAcceptedTermsChanged,
             label: "I accept PandaPay's Terms & Privacy Policy",
             required: true,
+            isLight: isLight,
           ),
           _ConsentCheckbox(
             value: optInCrowdsource,
             onChanged: onOptInCrowdsourceChanged,
             label: 'Contribute anonymized merchant data to improve the app',
+            isLight: isLight,
           ),
           _ConsentCheckbox(
             value: optInMarketing,
             onChanged: onOptInMarketingChanged,
             label: 'Send me product update emails',
+            isLight: isLight,
           ),
         ],
         const SizedBox(height: AppSpace.xl),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: BambooInk.lime,
-            foregroundColor: BambooInk.slate,
-            minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+        // Dim the button when the required terms checkbox is not yet ticked.
+        // Opacity communicates "not ready" without fully hiding affordance.
+        AnimatedOpacity(
+          opacity: (!isSignUp || acceptedTerms) ? 1.0 : 0.38,
+          duration: const Duration(milliseconds: 200),
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: BambooInk.lime,
+              foregroundColor: BambooInk.slate,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
             ),
-            textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+            onPressed: loading ? null : onSubmit,
+            child: loading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: BambooInk.slate,
+                    ),
+                  )
+                : const Text('Send code'),
           ),
-          onPressed: loading ? null : onSubmit,
-          child: loading
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    color: BambooInk.slate,
-                  ),
-                )
-              : const Text('Send code'),
         ),
       ],
     );
@@ -579,12 +626,14 @@ class _ConsentCheckbox extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   final String label;
   final bool required;
+  final bool isLight;
 
   const _ConsentCheckbox({
     required this.value,
     required this.onChanged,
     required this.label,
     this.required = false,
+    this.isLight = false,
   });
 
   @override
@@ -602,12 +651,17 @@ class _ConsentCheckbox extends StatelessWidget {
         controlAffinity: ListTileControlAffinity.leading,
         contentPadding: EdgeInsets.zero,
         dense: true,
-        activeColor: BambooInk.lime,
-        checkColor: BambooInk.slate,
-        side: const BorderSide(color: BambooInk.slateHairline),
+        activeColor: isLight ? BambooInk.jade : BambooInk.lime,
+        checkColor: isLight ? BambooInk.paper : BambooInk.slate,
+        side: BorderSide(
+          color: isLight ? BambooInk.hairlineOnPaper : BambooInk.slateHairline,
+        ),
         title: Text(
           required ? '$label (required)' : '$label (optional)',
-          style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+          style: BambooFonts.ui(
+            12.5,
+            color: isLight ? BambooInk.ink500 : BambooInk.onSlateMuted,
+          ),
         ),
       ),
     );
@@ -781,21 +835,27 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-/// Design 06's 30pt headline with its last phrase in bamboo lime — one of
-/// the very few places the deck sets lime as text rather than on a chip,
-/// and it works here because the surface underneath is slate (see
-/// [BambooInk.lime]'s own doc-comment on why lime never goes on paper).
+/// Design 06's 30pt headline with its last phrase accented — one of
+/// the very few places the deck sets an accent as text rather than on a chip.
+/// On slate: lime accent. On paper: jade accent (lime has no contrast on white).
 class _Headline extends StatelessWidget {
   final String title;
   final String accent;
-  const _Headline({required this.title, required this.accent});
+  final Color baseColor;
+  final Color accentColor;
+  const _Headline({
+    required this.title,
+    required this.accent,
+    required this.baseColor,
+    required this.accentColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     final base = BambooFonts.heading(
       30,
       weight: FontWeight.w800,
-      color: BambooInk.onSlate,
+      color: baseColor,
       height: 1.1,
     );
     return Text.rich(
@@ -805,7 +865,7 @@ class _Headline extends StatelessWidget {
         children: [
           TextSpan(
             text: accent,
-            style: base.copyWith(color: BambooInk.lime),
+            style: base.copyWith(color: accentColor),
           ),
         ],
       ),
