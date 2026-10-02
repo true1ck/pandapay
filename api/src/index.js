@@ -3358,10 +3358,8 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'occurredAt is not a valid date' });
   }
 
-  let importPhase = 'start';
   try {
     const result = await withUserClient(req.userId, async (client) => {
-      importPhase = 'load_patterns';
       const sourceKey = occurredAt ? importSourceKey(req.userId, sender, body, occurred) : null;
       const patterns = await client.query(
         `SELECT id, issuer_id, sender_pattern, regex, field_map
@@ -3371,8 +3369,6 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       );
 
       const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
-      importPhase = parsed.ok ? 'resolve_and_insert' : 'record_parser_failure';
-
       if (!parsed.ok) {
         // Through the RPC, not a direct INSERT. `parser_failures` is
         // admin-only under RLS (0011), so the direct insert that used to be
@@ -3453,21 +3449,8 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
     }
     res.status(result.status).json(result);
   } catch (err) {
-    console.error('POST /transactions/from-sms error', {
-      requestId: req.requestId,
-      phase: importPhase,
-      code: err.code,
-      constraint: err.constraint,
-      table: err.table,
-      column: err.column,
-    });
-    res.status(500).json({
-      error: 'internal_error',
-      requestId: req.requestId,
-      debugCode: err.code || null,
-      debugPhase: importPhase,
-      debugMessage: err.message || null,
-    });
+    console.error('POST /transactions/from-sms error', err);
+    res.status(500).json({ error: 'internal_error' });
   }
 });
 
