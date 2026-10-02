@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../../app/env.dart';
 import '../../app/providers.dart';
 import '../sms_import/sms_backup_import_screen.dart';
 import '../sms_import/sms_import_screen.dart';

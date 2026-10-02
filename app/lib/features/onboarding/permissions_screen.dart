@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/design/app_theme.dart';
-import '../../app/env.dart';
 import '../../app/router.dart';
 import '../sms_import/sms_listener_service.dart';
 

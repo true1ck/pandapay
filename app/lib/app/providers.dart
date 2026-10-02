@@ -840,8 +840,9 @@ final myCardsWithProductProvider =
       final userCards = ref.watch(myCardsProvider);
       final catalogue = ref.watch(catalogueProvider);
 
-      if (userCards.isLoading || catalogue.isLoading)
+      if (userCards.isLoading || catalogue.isLoading) {
         return const AsyncValue.loading();
+      }
       final combinedError = userCards.error ?? catalogue.error;
       if (combinedError != null) {
         return AsyncValue.error(
@@ -870,8 +871,9 @@ final ownedCardsWithProductProvider =
       final userCards = ref.watch(userCardsProvider);
       final catalogue = ref.watch(catalogueProvider);
 
-      if (userCards.isLoading || catalogue.isLoading)
+      if (userCards.isLoading || catalogue.isLoading) {
         return const AsyncValue.loading();
+      }
       final combinedError = userCards.error ?? catalogue.error;
       if (combinedError != null) {
         return AsyncValue.error(
@@ -1121,8 +1123,9 @@ final notificationsProvider =
       ref,
     ) async {
       final repo = ref.watch(userCardsRepositoryProvider);
-      if (repo == null)
+      if (repo == null) {
         return (items: const <AppNotification>[], unreadCount: 0);
+      }
       return repo.fetchNotifications();
     });
 
