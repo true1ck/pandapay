@@ -2872,9 +2872,14 @@ async function importParsedMessage(client, userId, {
  * on `now()` would differ on every run, which is worse than no key at all.
  */
 function importSourceKey(userId, sender, body, occurred) {
+  // Use a JSON tuple as the hash input rather than a  -delimited string.
+  //   is a convenient in-memory separator, but PostgreSQL text parameters
+  // Use a JSON tuple as the hash input rather than a NUL-delimited string.
+  // NUL is a convenient in-memory separator, but PostgreSQL text parameters
+  // cannot carry it; imported SMS requests then fail before insertion.
   return crypto
     .createHash('sha256')
-    .update(`${userId} ${sender || ''} ${body} ${occurred.toISOString()}`)
+    .update(JSON.stringify([userId, sender || '', body, occurred.toISOString()]))
     .digest('hex');
 }
 
