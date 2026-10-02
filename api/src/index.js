@@ -3471,6 +3471,7 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       requestId: req.requestId,
       debugCode: err.code || null,
       debugPhase: importPhase,
+      debugMessage: err.message || null,
     });
   }
 });
