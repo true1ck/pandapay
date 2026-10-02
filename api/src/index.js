@@ -2627,6 +2627,34 @@ async function insertTransactionAndUpdateState(client, userId, {
   const resolvedInstrument = instrument || 'credit_card';
   const resolvedEntryKind = entryKind || 'spend';
 
+  // Older app builds used the SMS receive timestamp for source_key. Inbox
+  // reconciliation uses the provider timestamp, which can differ slightly
+  // from the broadcast timestamp and would otherwise re-insert those legacy
+  // rows. During a backfill, treat an identical SMS spend on the same card,
+  // merchant, amount, and accounting day as already handled. This guard is
+  // intentionally limited to SMS backfill so two genuine live same-day
+  // purchases are never collapsed by a broad heuristic.
+  if (source === 'sms' && backfill && merchantName) {
+    const legacyDuplicate = await client.query(
+      `SELECT id
+         FROM transactions
+        WHERE profile_id = $1
+          AND source = 'sms'
+          AND amount_inr = $2
+          AND instrument = $3
+          AND entry_kind = $4
+          AND lower(coalesce(merchant_name, '')) = lower($5)
+          AND occurred_at >= date_trunc('day', $6::timestamptz)
+          AND occurred_at < date_trunc('day', $6::timestamptz) + interval '1 day'
+          AND ($7::uuid IS NULL OR user_card_id = $7::uuid)
+        LIMIT 1`,
+      [userId, amount, resolvedInstrument, resolvedEntryKind, merchantName, occurred, userCardId || null]
+    );
+    if (legacyDuplicate.rowCount > 0) {
+      return { status: 200, duplicate: true, transaction: null };
+    }
+  }
+
   // Only a credit-card SPEND moves card state.
   //
   // Migration 0040 opened this route to cash, debit, UPI-from-bank, income
@@ -3361,7 +3389,6 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
-      const sourceKey = occurredAt ? importSourceKey(req.userId, sender, body, occurred) : null;
       const patterns = await client.query(
         `SELECT id, issuer_id, sender_pattern, regex, field_map
            FROM parser_patterns
@@ -3409,10 +3436,13 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
       const parsedDate = parseTransactionDate(parsed.fields.date, occurred);
       // The request timestamp is the SMS-received time and is used for the
-      // stable source key. The bank's own transaction date is the better
       // accounting date when it parses confidently; otherwise fall back to
-      // the original message timestamp.
+      // the original message timestamp. Deriving the key from this same
+      // effective timestamp makes foreground delivery and inbox
+      // reconciliation idempotent even when Android records them a few
+      // milliseconds apart.
       const effectiveOccurred = parsedDate || occurred;
+      const sourceKey = occurredAt ? importSourceKey(req.userId, sender, body, effectiveOccurred) : null;
 
       const inserted = await importParsedMessage(client, req.userId, {
         parsed,
@@ -3549,7 +3579,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           rawText: body,
           source: 'sms',
           occurred: effectiveOccurred,
-          sourceKey: importSourceKey(req.userId, sender, body, occurred),
+          sourceKey: importSourceKey(req.userId, sender, body, effectiveOccurred),
           backfill: backfill === true,
           explicitUserCardId: userCardId,
           explicitCategoryId: categoryId || null,

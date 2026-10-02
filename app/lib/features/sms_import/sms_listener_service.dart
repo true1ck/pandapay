@@ -60,19 +60,26 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
 
 /// UA-5.3 (Chunk 31): the on-device SMS listening plumbing.
 ///
-/// STATUS: structurally present, NOT verified against a real device or a
-/// real incoming SMS. This sandbox has no Android SDK/emulator and no way
-/// to receive a real text message — same honesty gap as UA-4 (Chunk 30)'s
-/// camera preview, and the same reason: nothing here can be exercised, so
-/// nothing here is claimed as tested. What IS genuinely verified is
-/// everything downstream of "a (sender, body) string pair arrived" — the
-/// `sms_text_hint.dart` extraction logic (unit tests) and the whole
-/// server-side parse+insert path (curl-verified against live Postgres, see
-/// PROGRESS.md Chunk 31).
+/// The live receiver is paired with a small inbox reconciliation pass on app
+/// startup/resume. Android can deliver an SMS to the default messaging app
+/// without reliably invoking every third-party receiver on every emulator or
+/// OEM build; reconciling the provider makes a missed broadcast recoverable.
 ///
 /// Wraps the `telephony` plugin (RECEIVE_SMS BroadcastReceiver +
 /// READ_SMS query) so callers deal in plain (sender, body) pairs, not
 /// platform-channel details.
+class InboxSms {
+  final String sender;
+  final String body;
+  final DateTime receivedAt;
+
+  const InboxSms({
+    required this.sender,
+    required this.body,
+    required this.receivedAt,
+  });
+}
+
 class SmsListenerService {
   final Telephony? _injected;
 
@@ -113,23 +120,42 @@ class SmsListenerService {
   /// opened.
   Future<bool> openSettings() => openAppSettings();
 
-  /// Queries the on-device SMS inbox (most recent first) and returns the
-  /// bodies of messages that match a bank-alert / transaction pattern.
-  Future<List<String>> readInboxSmsBodies({int limit = 500}) async {
+  /// Queries the on-device SMS inbox (most recent first) and returns only
+  /// messages worth sending to the server parser. The original sender and
+  /// provider timestamp are retained so the API's source key stays stable
+  /// across a live broadcast and a later reconciliation pass.
+  Future<List<InboxSms>> readInboxSms({int limit = 500}) async {
     try {
       final messages = await _telephony.getInboxSms(
         columns: const [SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
         sortOrder: [OrderBy(SmsColumn.DATE, sort: Sort.DESC)],
       );
       return messages
-          .map((m) => m.body)
-          .whereType<String>()
-          .where((b) => looksLikeTransactionSms(b))
+          .map((m) {
+            final sender = m.address;
+            final body = m.body;
+            final date = m.date;
+            if (sender == null || body == null || date == null) return null;
+            return InboxSms(
+              sender: sender,
+              body: body,
+              receivedAt: DateTime.fromMillisecondsSinceEpoch(date),
+            );
+          })
+          .whereType<InboxSms>()
+          .where((m) => looksLikeTransactionSms(m.body))
           .take(limit)
           .toList();
     } catch (_) {
       return [];
     }
+  }
+
+  /// Compatibility helper for card discovery/onboarding callers that only
+  /// need message bodies.
+  Future<List<String>> readInboxSmsBodies({int limit = 500}) async {
+    final messages = await readInboxSms(limit: limit);
+    return [for (final message in messages) message.body];
   }
 
   /// Registers a foreground listener. [onSms] is called with the raw sender

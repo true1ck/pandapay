@@ -1728,6 +1728,8 @@ final notificationTriggerLifecycleProvider = Provider<void>((ref) {
 /// resume while offline loses nothing.
 final smsBackgroundFlushProvider = Provider<void>((ref) {
   var workInProgress = false;
+  const inboxReconciliationKey = 'pandapay_app.sms_inbox_reconciled_at_v1';
+  const inboxReconciliationInterval = Duration(minutes: 5);
 
   Future<void> flush() async {
     final repo = ref.read(userCardsRepositoryProvider);
@@ -1797,11 +1799,47 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     }
   }
 
+  /// Reconcile recent provider SMS in addition to the broadcast listener.
+  ///
+  /// This is deliberately automatic and idempotent. Some Android emulator
+  /// and OEM messaging stacks write an incoming SMS to the provider but do
+  /// not deliver the third-party SMS_RECEIVED callback consistently. The
+  /// server source key makes re-reading recent rows safe, while `backfill`
+  /// prevents old inbox history from changing current reward-cycle state.
+  Future<void> reconcileInbox() async {
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final lastRunMillis = prefs.getInt(inboxReconciliationKey);
+    if (lastRunMillis != null &&
+        now.difference(DateTime.fromMillisecondsSinceEpoch(lastRunMillis)) <
+            inboxReconciliationInterval) {
+      return;
+    }
+
+    final messages = await SmsListenerService().readInboxSms(limit: 250);
+    for (final message in messages) {
+      await repo.logTransactionFromSms(
+        sender: message.sender,
+        body: message.body,
+        occurredAt: message.receivedAt,
+        backfill: true,
+      );
+    }
+    await prefs.setInt(inboxReconciliationKey, now.millisecondsSinceEpoch);
+    ref.invalidate(userCardsProvider);
+    ref.invalidate(transactionsProvider);
+    ref.invalidate(needsReviewCountProvider);
+  }
+
   Future<void> flushAndRetry() async {
     if (workInProgress) return;
     workInProgress = true;
     try {
       await flush();
+      await reconcileInbox();
       await retryExistingNeedsReview();
     } finally {
       workInProgress = false;

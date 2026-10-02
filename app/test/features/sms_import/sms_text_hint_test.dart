@@ -86,5 +86,23 @@ void main() {
         false,
       );
     });
+
+    test('false for a declined card transaction', () {
+      expect(
+        looksLikeTransactionSms(
+          'TXN DECLINED: Rs.400.00 on HDFC Bank Debit Card xx8406.',
+        ),
+        false,
+      );
+    });
+
+    test('false for a reversed transaction', () {
+      expect(
+        looksLikeTransactionSms(
+          'Transaction Reversed on HDFC Bank Credit Card xx8708 Amt Rs.103.49.',
+        ),
+        false,
+      );
+    });
   });
 }

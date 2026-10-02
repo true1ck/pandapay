@@ -73,6 +73,24 @@ bool looksLikeTransactionSms(String smsBody) {
       RegExp(r"\b(?:do not|don't|never)\s+share\b").hasMatch(lower) ||
       RegExp(r'\bvalid\s+(?:for|till|until)\b').hasMatch(lower);
   if (otpOrSecurity) return false;
+
+  // These alerts describe a failed, cancelled, reversed, pending, or
+  // refunded attempt. They are not completed spending and must never become
+  // a spend row just because they contain an amount and the word "txn".
+  const nonSpendWords = [
+    'declined',
+    'decline',
+    'reversed',
+    'reversal',
+    'failed',
+    'failure',
+    'cancelled',
+    'canceled',
+    'pending',
+    'refund',
+    'refunded',
+  ];
+  if (nonSpendWords.any(lower.contains)) return false;
   
   // 1. Hard reject obvious promotional spam
   const promoWords = [
