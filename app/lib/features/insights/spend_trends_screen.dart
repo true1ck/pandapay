@@ -190,6 +190,15 @@ class _ReportBody extends StatelessWidget {
           for (final row in report.byCategory)
             _BreakdownRow(label: row.label, amount: row.total, total: report.spend.total, count: row.txnCount),
           const SizedBox(height: AppSpace.lg),
+          _SectionHeader('Payment method'),
+          for (final row in report.byInstrument)
+            _BreakdownRow(
+              label: row.label,
+              amount: row.total,
+              total: report.spend.total,
+              count: row.txnCount,
+            ),
+          const SizedBox(height: AppSpace.lg),
           _SectionHeader('Which card'),
           for (final row in report.byCard) _CardRow(row: row, total: report.spend.total),
           const SizedBox(height: AppSpace.lg),

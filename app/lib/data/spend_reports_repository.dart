@@ -104,6 +104,28 @@ class CardSpendRow {
   Money? get netOfFee => annualFee == null ? null : rewards - annualFee!;
 }
 
+/// One payment-method contribution to a period.
+class InstrumentSpendRow {
+  final String instrument;
+  final Money total;
+  final int txnCount;
+
+  const InstrumentSpendRow({
+    required this.instrument,
+    required this.total,
+    required this.txnCount,
+  });
+
+  String get label => switch (instrument) {
+    'credit_card' => 'Credit cards',
+    'debit_card' => 'Debit cards',
+    'upi_bank' => 'UPI from bank account',
+    'cash' => 'Cash',
+    'wallet' => 'Wallets',
+    _ => 'Other',
+  };
+}
+
 /// One point on the trend chart.
 class SpendSeriesPoint {
   final DateTime periodStart;
@@ -143,6 +165,7 @@ class SpendReport {
   final List<SpendBreakdownRow> byCategory;
   final List<SpendBreakdownRow> byMerchant;
   final List<CardSpendRow> byCard;
+  final List<InstrumentSpendRow> byInstrument;
   final List<SpendSeriesPoint> series;
 
   const SpendReport({
@@ -157,6 +180,7 @@ class SpendReport {
     required this.byCategory,
     required this.byMerchant,
     required this.byCard,
+    required this.byInstrument,
     required this.series,
   });
 
@@ -229,6 +253,16 @@ class SpendReport {
               effectiveRatePerRupee: e['effectiveRatePerRupee'] == null
                   ? null
                   : _num(e['effectiveRatePerRupee']),
+            ),
+          )
+          .toList(),
+      byInstrument: ((json['byInstrument'] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()
+          .map(
+            (e) => InstrumentSpendRow(
+              instrument: e['instrument'] as String? ?? 'other',
+              total: _money(e['totalInr']),
+              txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,
             ),
           )
           .toList(),

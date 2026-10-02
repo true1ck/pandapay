@@ -4410,12 +4410,13 @@ app.get('/spend-report', requireAuth, async (req, res) => {
       const current = spendReports.periodBounds(period, anchor);
       const previous = spendReports.previousPeriodBounds(period, anchor);
 
-      const [totals, previousTotals, byCategory, byMerchant, byCard, series] = await Promise.all([
+      const [totals, previousTotals, byCategory, byMerchant, byCard, byInstrument, series] = await Promise.all([
         spendReports.periodTotals(client, req.userId, current),
         spendReports.periodTotals(client, req.userId, previous),
         spendReports.spendByCategory(client, req.userId, current),
         spendReports.spendByMerchant(client, req.userId, current),
         spendReports.spendByCard(client, req.userId, current),
+        spendReports.spendByInstrument(client, req.userId, current),
         spendReports.spendSeries(client, req.userId, period, buckets, anchor),
       ]);
 
@@ -4431,6 +4432,7 @@ app.get('/spend-report', requireAuth, async (req, res) => {
         byCategory,
         byMerchant,
         byCard,
+        byInstrument,
         series,
       };
     });

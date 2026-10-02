@@ -17,6 +17,7 @@ SpendReport _report({
   double elapsed = 0.5,
   List<SpendBreakdownRow> byCategory = const [],
   List<CardSpendRow> byCard = const [],
+  List<InstrumentSpendRow> byInstrument = const [],
   List<SpendSeriesPoint> series = const [],
 }) => SpendReport(
   period: SpendPeriod.month,
@@ -42,6 +43,7 @@ SpendReport _report({
   byCategory: byCategory,
   byMerchant: const [],
   byCard: byCard,
+  byInstrument: byInstrument,
   series: series,
 );
 
@@ -122,6 +124,31 @@ void main() {
     expect(find.textContaining('1.00% back on what you spent here'), findsOneWidget);
   });
 
+  testWidgets('shows detected payment methods separately from card rows', (tester) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 1500,
+        byInstrument: [
+          InstrumentSpendRow(
+            instrument: 'credit_card',
+            total: Money.fromRupees(1000),
+            txnCount: 1,
+          ),
+          InstrumentSpendRow(
+            instrument: 'upi_bank',
+            total: Money.fromRupees(500),
+            txnCount: 1,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('PAYMENT METHOD'), findsOneWidget);
+    expect(find.text('Credit cards'), findsOneWidget);
+    expect(find.text('UPI from bank account'), findsOneWidget);
+  });
+
   testWidgets('an empty period explains what would fill it rather than showing zeroes', (tester) async {
     await _pump(
       tester,
@@ -137,6 +164,7 @@ void main() {
         byCategory: const [],
         byMerchant: const [],
         byCard: const [],
+        byInstrument: const [],
         series: const [],
       ),
     );

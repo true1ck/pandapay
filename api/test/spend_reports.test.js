@@ -5,6 +5,7 @@ const {
   previousPeriodBounds,
   budgetPeriodBounds,
   periodElapsedFraction,
+  spendByInstrument,
 } = require('../src/spend_reports');
 
 /**
@@ -113,4 +114,27 @@ test('elapsed fraction is clamped to 0..1 outside the period', () => {
 test('an unknown period throws rather than silently defaulting', () => {
   // Defaulting to "month" would produce plausible-looking wrong numbers.
   assert.throws(() => periodBounds('fortnight', new Date()), /unknown period/);
+});
+
+test('payment-method spend rows preserve instrument totals and counts', async () => {
+  const client = {
+    query: async (sql, params) => {
+      assert.match(sql, /t\.instrument/);
+      assert.deepEqual(params, ['user-1', 'start', 'end']);
+      return {
+        rows: [
+          { instrument: 'credit_card', total: '1000.00', txn_count: '2' },
+          { instrument: 'upi_bank', total: '500.00', txn_count: '1' },
+        ],
+      };
+    },
+  };
+
+  assert.deepEqual(
+    await spendByInstrument(client, 'user-1', { start: 'start', end: 'end' }),
+    [
+      { instrument: 'credit_card', totalInr: 1000, txnCount: 2 },
+      { instrument: 'upi_bank', totalInr: 500, txnCount: 1 },
+    ],
+  );
 });

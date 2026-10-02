@@ -211,6 +211,26 @@ async function spendByCard(client, userId, { start, end }) {
   });
 }
 
+/** Spend split by the payment instrument detected on the transaction. */
+async function spendByInstrument(client, userId, { start, end }) {
+  const result = await client.query(
+    `SELECT COALESCE(NULLIF(t.instrument, ''), 'other') AS instrument,
+            COALESCE(SUM(t.amount_inr), 0) AS total,
+            COUNT(*) AS txn_count
+       FROM transactions t
+      WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+        AND t.occurred_at >= $2 AND t.occurred_at < $3
+      GROUP BY 1
+      ORDER BY total DESC`,
+    [userId, start, end]
+  );
+  return result.rows.map((r) => ({
+    instrument: r.instrument,
+    totalInr: Number(r.total),
+    txnCount: Number(r.txn_count),
+  }));
+}
+
 /**
  * A bucketed series for the trend chart — one point per week/month/quarter
  * going back [buckets] periods, oldest first.
@@ -353,6 +373,7 @@ module.exports = {
   spendByCategory,
   spendByMerchant,
   spendByCard,
+  spendByInstrument,
   spendSeries,
   budgetSpend,
   budgetPeriodBounds,
