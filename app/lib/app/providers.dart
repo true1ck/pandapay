@@ -1783,7 +1783,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           await reviewRepo.remove(item.id);
           changed = true;
         }
-      } catch (_) {
+      } catch (error) {
+        debugPrint('SMS retry error=$error');
         // Keep the remaining items for the next app start if the API is
         // offline or auth has not finished restoring yet.
         break;
