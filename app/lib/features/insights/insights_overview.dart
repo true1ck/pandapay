@@ -136,7 +136,13 @@ final insightsOverviewProvider = FutureProvider.family<InsightsOverview, Insight
   final allProducts = [for (final (_, p) in pairs) p];
 
   final transactions = await repo.fetchTransactions(from: from, to: to);
-  final active = transactions.where((t) => t.status == 'active').toList();
+  // Insights is a spending/rewards view. Keep income, investments and
+  // transfers out of both the spend total and the reward/card comparisons.
+  // The API exposes entry_kind so this remains correct for SMS-imported rows
+  // as well as manually logged rows.
+  final active = transactions
+      .where((t) => t.status == 'active' && t.entryKind == TxnEntryKind.spend)
+      .toList();
   if (active.isEmpty) return InsightsOverview.empty;
 
   var earned = const Money.zero();

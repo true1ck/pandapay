@@ -1534,6 +1534,8 @@ class TransactionEntry {
   /// "reconciliation status") and D3 (Edit, needs every field) needed them.
   final String? userCardId;
   final TxnRail rail;
+  final TxnInstrument instrument;
+  final TxnEntryKind entryKind;
   final String source;
   final String status;
   final String? note;
@@ -1567,6 +1569,8 @@ class TransactionEntry {
     this.cardDisplayName,
     this.userCardId,
     this.rail = TxnRail.unknown,
+    this.instrument = TxnInstrument.creditCard,
+    this.entryKind = TxnEntryKind.spend,
     required this.source,
     required this.status,
     this.note,
@@ -1586,6 +1590,8 @@ class TransactionEntry {
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
       userCardId: json['user_card_id'] as String?,
       rail: _parseRail(json['rail'] as String?),
+      instrument: TxnInstrument.fromJson(json['instrument'] as String?),
+      entryKind: TxnEntryKind.fromJson(json['entry_kind'] as String?),
       source: json['source'] as String? ?? 'manual',
       status: json['status'] as String? ?? 'active',
       note: json['note'] as String?,

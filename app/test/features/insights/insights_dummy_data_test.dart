@@ -156,6 +156,26 @@ void main() {
     expect(o.transactionCount, 0);
   });
 
+  test('excludes active income from spending and rewards totals', () async {
+    final c = await _container([
+      ..._thisMonth,
+      TransactionEntry(
+        id: 'income-1',
+        amount: Money.fromRupees(50000),
+        occurredAt: DateTime(2026, 8, 11),
+        source: 'sms',
+        status: 'active',
+        entryKind: TxnEntryKind.income,
+        rewardValue: Money.fromRupees(999),
+      ),
+    ]);
+    final o = await c.read(insightsOverviewProvider(InsightsPeriod.thisMonth).future);
+
+    expect(o.transactionCount, 4);
+    expect(o.spend, Money.fromRupees(14000));
+    expect(o.earned, Money.fromRupees(420));
+  });
+
   testWidgets('Insights tab renders the earned hero and category bar from dummy data', (tester) async {
     await tester.pumpWidget(
       ProviderScope(

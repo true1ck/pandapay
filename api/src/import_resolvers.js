@@ -1,5 +1,33 @@
 const { normalizeMerchant } = require('./reward_math');
 
+// Conservative fallback hints for common Indian SMS merchant names. These
+// only run after the user's own history and admin-managed rules, so a
+// deliberate correction always wins. Keep the list high-confidence: an
+// uncategorized row is preferable to silently putting a payment in the wrong
+// reward category.
+const BUILTIN_CATEGORY_HINTS = [
+  {
+    slug: 'fuel',
+    patterns: [
+      'fuelstation', 'petrol', 'diesel', 'indianoil', 'iocl',
+      'bharatpetroleum', 'hindustanpetroleum', 'hpcl', 'bpcl',
+      'reliancepetroleum', 'nayara', 'shell', 'jiobp', 'essar',
+    ],
+  },
+  {
+    slug: 'dining',
+    patterns: ['swiggy', 'zomato', 'restaurant', 'dining', 'dominos', 'mcdonald', 'kfc'],
+  },
+  {
+    slug: 'groceries',
+    patterns: ['grocery', 'supermarket', 'bigbasket', 'blinkit', 'zepto', 'dmart', 'jiomart'],
+  },
+  {
+    slug: 'travel',
+    patterns: ['makemytrip', 'goibibo', 'cleartrip', 'irctc', 'airindia', 'indigo', 'uber', 'ola'],
+  },
+];
+
 /**
  * Resolving the two things a parsed bank message does NOT tell us: which of
  * the user's cards it belongs to, and what kind of spend it was.
@@ -41,17 +69,27 @@ const { normalizeMerchant } = require('./reward_math');
 async function resolveUserCardForImport(client, userId, { last4, patternIssuerId }) {
   if (last4 && /^[0-9]{4}$/.test(last4)) {
     const byLast4 = await client.query(
-      `SELECT id FROM user_cards
-        WHERE profile_id = $1 AND is_archived = false AND last4 = $2`,
-      [userId, last4]
+      `SELECT uc.id
+         FROM user_cards uc
+         JOIN card_products cp ON cp.id = uc.card_product_id
+        WHERE uc.profile_id = $1 AND uc.is_archived = false AND uc.last4 = $2
+          AND ($3::uuid IS NULL OR cp.issuer_id = $3::uuid)`,
+      [userId, last4, patternIssuerId || null]
     );
     if (byLast4.rows.length === 1) {
-      return { userCardId: byLast4.rows[0].id, basis: `last4:${last4}` };
+      return {
+        userCardId: byLast4.rows[0].id,
+        basis: patternIssuerId ? `issuer+last4:${last4}` : `last4:${last4}`,
+      };
     }
     // Two or more matches: ambiguous. Deliberately does NOT fall through to
-    // the issuer heuristic — last4 is the stronger signal, and if it can't
-    // decide, a weaker signal has no business overruling it.
+    // the issuer-only heuristic — last4 is the stronger signal, and if it
+    // can't decide, a weaker signal has no business overruling it.
     if (byLast4.rows.length > 1) return null;
+    // If the parser pattern had no issuer, a unique last4 is still useful.
+    // When an issuer is known and no card of that issuer has this last4,
+    // don't attach the SMS to a same-number card from another bank.
+    if (patternIssuerId) return null;
   }
 
   if (patternIssuerId) {
@@ -140,6 +178,15 @@ async function resolveCategoryForImport(client, userId, { merchantName, vpa, mcc
       [normalized]
     );
     if (byName.rows[0]) return byName.rows[0].category_id;
+
+    for (const hint of BUILTIN_CATEGORY_HINTS) {
+      if (!hint.patterns.some((pattern) => normalized.includes(pattern))) continue;
+      const builtin = await client.query(
+        `SELECT id FROM spend_categories WHERE slug = $1 LIMIT 1`,
+        [hint.slug]
+      );
+      if (builtin.rows[0]) return builtin.rows[0].id;
+    }
   }
 
   return null;

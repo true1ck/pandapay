@@ -2794,15 +2794,16 @@ async function importParsedMessage(client, userId, {
   let userCardId = explicitUserCardId || null;
   let matchBasis = userCardId ? 'caller-supplied' : null;
 
-  // A selected card is only an override for credit-card alerts. A bank
+  // A selected card is only an override for physical-card alerts. A bank
   // account UPI debit is deliberately cardless even if the settings screen
   // has a remembered card selected.
-  if (instrument !== 'credit_card') {
+  const isPhysicalCard = instrument === 'credit_card' || instrument === 'debit_card';
+  if (!isPhysicalCard) {
     userCardId = null;
     matchBasis = 'instrument-cardless';
   }
 
-  if (instrument === 'credit_card' && !userCardId) {
+  if (isPhysicalCard && !userCardId) {
     const resolved = await importResolvers.resolveUserCardForImport(client, userId, {
       last4: parsed.fields.last4,
       patternIssuerId,
@@ -3536,16 +3537,18 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         }
 
         const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
+        // The SMS timestamp is the stable import identity, but the bank's
+        // transaction date is the accounting date. Using the received time
+        // here moves backfilled purchases into the wrong week/month whenever
+        // a message arrives later than the purchase.
+        const effectiveOccurred = parseTransactionDate(parsed.fields.date, occurred) || occurred;
         const inserted = await importParsedMessage(client, req.userId, {
           parsed,
           patternIssuerId: patternRow ? patternRow.issuer_id : null,
           sender,
           rawText: body,
           source: 'sms',
-          // The batch path always has a real message timestamp (it's
-          // required above, for source_key), so it stays authoritative
-          // here rather than deferring to the body's own date text.
-          occurred,
+          occurred: effectiveOccurred,
           sourceKey: importSourceKey(req.userId, sender, body, occurred),
           backfill: backfill === true,
           explicitUserCardId: userCardId,
@@ -3644,6 +3647,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
       client.query(
         `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
+                t.instrument, t.entry_kind,
                 t.expected_value_inr,
                 cp.name AS card_name, uc.nickname AS card_nickname
            FROM transactions t
