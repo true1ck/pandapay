@@ -19,6 +19,7 @@ const { buildMonthlyReport } = require('./monthly_report');
 const { csvDocument } = require('./csv');
 const { startImapPoller, fetchRecentMessages } = require('./imap_poller');
 const { requestLogger, errorHandler } = require('./observability');
+const { importSourceKey } = require('./import_source_key');
 
 const app = express();
 app.use(cors());
@@ -2670,7 +2671,7 @@ async function insertTransactionAndUpdateState(client, userId, {
   if (movesCardState && !userCard) return { status: 404, error: 'user_card not found' };
 
   // Migration 0036: `source_key` is the identity of an imported message
-  // (hash of sender+body+timestamp, salted per profile). ON CONFLICT DO
+  // (hash of normalized sender+body, salted per profile). ON CONFLICT DO
   // NOTHING against the partial unique index is what makes re-importing the
   // same SMS backup file a no-op instead of a silent doubling of every
   // number. Manual transactions pass no key, so they're unaffected — the
@@ -2878,33 +2879,6 @@ async function importParsedMessage(client, userId, {
   });
 
   return { ...inserted, matchBasis, resolvedCategoryId: categoryId, userCardId };
-}
-
-/**
- * The stable identity of an imported message, for migration 0036's
- * `transactions.source_key` unique index.
- *
- * Computed HERE rather than accepted from the client on purpose. A
- * client-supplied key would let a malicious or buggy caller pick a value
- * that collides with a row it shouldn't touch, turning an idempotency
- * mechanism into a way to suppress inserts. The server has sender, body and
- * timestamp in hand anyway, so there is nothing to gain by trusting.
- *
- * Salted with the profile id so the same bank template — and Indian bank
- * alerts are extremely templated — never collides across two accounts.
- * Hashed rather than stored raw because the input contains the full SMS
- * body, and `transactions` must not hold message text.
- *
- * Uses the message's ORIGINAL timestamp, so it is stable across re-imports
- * of the same file. Callers with no original timestamp pass none and get no
- * key: a message we can't date can't be identified either, and a key based
- * on `now()` would differ on every run, which is worse than no key at all.
- */
-function importSourceKey(userId, sender, body, occurred) {
-  return crypto
-    .createHash('sha256')
-    .update(JSON.stringify([userId, sender || '', body, occurred.toISOString()]))
-    .digest('hex');
 }
 
 /**
@@ -3436,13 +3410,14 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
       const parsedDate = parseTransactionDate(parsed.fields.date, occurred);
       // The request timestamp is the SMS-received time and is used for the
-      // accounting date when it parses confidently; otherwise fall back to
-      // the original message timestamp. Deriving the key from this same
-      // effective timestamp makes foreground delivery and inbox
-      // reconciliation idempotent even when Android records them a few
-      // milliseconds apart.
+      // accounting date only when the bank's own date cannot be parsed. The
+      // idempotency key deliberately does not use either timestamp: Android
+      // can expose one message through broadcast and inbox with different
+      // receive times.
       const effectiveOccurred = parsedDate || occurred;
-      const sourceKey = occurredAt ? importSourceKey(req.userId, sender, body, effectiveOccurred) : null;
+      // Sender + body are available even when the caller has no provider
+      // timestamp, so replay protection should not disappear in that case.
+      const sourceKey = importSourceKey(req.userId, sender, body);
 
       const inserted = await importParsedMessage(client, req.userId, {
         parsed,
@@ -3540,11 +3515,9 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         }
         const occurred = occurredAt ? new Date(occurredAt) : null;
         if (!occurred || Number.isNaN(occurred.getTime())) {
-          // No usable original timestamp means no stable source_key, which
-          // means no re-import protection. Rejected rather than silently
-          // dated `now()` — that default is the D2 bug this task exists to
-          // remove, and reintroducing it in the batch path would undo the
-          // fix for exactly the high-volume case that matters most.
+          // No usable original timestamp means no reliable accounting date.
+          // Reject rather than silently dating the message `now()` — that
+          // default is the D2 bug this task exists to remove.
           results.push({ index: i, outcome: 'invalid', reason: 'occurredAt is required for a batch import' });
           continue;
         }
@@ -3567,10 +3540,9 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         }
 
         const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
-        // The SMS timestamp is the stable import identity, but the bank's
-        // transaction date is the accounting date. Using the received time
-        // here moves backfilled purchases into the wrong week/month whenever
-        // a message arrives later than the purchase.
+        // The bank's transaction date is the accounting date. Using the
+        // received time here moves backfilled purchases into the wrong
+        // week/month whenever a message arrives later than the purchase.
         const effectiveOccurred = parseTransactionDate(parsed.fields.date, occurred) || occurred;
         const inserted = await importParsedMessage(client, req.userId, {
           parsed,
@@ -3579,7 +3551,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           rawText: body,
           source: 'sms',
           occurred: effectiveOccurred,
-          sourceKey: importSourceKey(req.userId, sender, body, effectiveOccurred),
+          sourceKey: importSourceKey(req.userId, sender, body),
           backfill: backfill === true,
           explicitUserCardId: userCardId,
           explicitCategoryId: categoryId || null,
@@ -6737,7 +6709,7 @@ app.post('/inbound-emails/webhook', async (req, res) => {
             occurred,
             // Same identity a re-forwarded copy of this mail would produce,
             // so a provider retry or a user forwarding twice can't double-count.
-            sourceKey: importSourceKey(row.profile_id, from, body, occurred),
+            sourceKey: importSourceKey(row.profile_id, from, body),
             backfill: false,
           });
           if (imported.status === 201 && imported.transaction) {

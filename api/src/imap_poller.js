@@ -98,11 +98,11 @@ async function pollConnection(connection, deps) {
         rawText: message.body,
         source: 'email',
         occurred,
-        // Keyed on the message body and its own date, so the same mail
-        // fetched again by an overlapping poll window cannot double-count.
+        // Keyed on the normalized message body, so the same mail fetched
+        // again by an overlapping poll window cannot double-count.
         // The overlap is deliberate: `SINCE` has day granularity, so
         // consecutive polls always re-see part of a day.
-        sourceKey: importSourceKey(connection.profile_id, message.sender, message.body, occurred),
+        sourceKey: importSourceKey(connection.profile_id, message.sender, message.body),
         backfill: false,
       });
 
