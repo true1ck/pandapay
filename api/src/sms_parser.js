@@ -32,6 +32,17 @@ function isRejectedTransaction(body) {
   return /\b(?:declined|failed|failure|reversed|reversal|refund(?:ed)?|cancelled|canceled|credited)\b/.test(text);
 }
 
+// Bank-account UPI alerts often contain a four-digit account suffix. That
+// suffix is not a card last-4, and a configured pattern must not be allowed to
+// turn the alert into a credit-card transaction just because it mapped one of
+// its capture groups to `last4` or `instrument`.
+function isBankAccountUpiMessage(body) {
+  const text = String(body || '').toLowerCase();
+  return /\b(?:upi|a\/?c\.?|account)\b/.test(text)
+    && /\b(?:debit(?:ed)?|paid|spent|sent|transferred)\b/.test(text)
+    && !/\b(?:credit|debit)\s+card\b/.test(text);
+}
+
 function inferInstrument(body, hasLast4) {
   const text = String(body || '').toLowerCase();
   if (/\bdebit\s+card\b/.test(text)) return 'debit_card';
@@ -202,7 +213,14 @@ function parseSms(pattern, sms) {
   if (!direction && !isSuccessfulSpend(sms.body)) {
     return { ok: false, reason: 'not_a_successful_spend' };
   }
-  fields.instrument = fields.instrument || inferInstrument(sms.body, Boolean(fields.last4)) || 'credit_card';
+  if (isBankAccountUpiMessage(sms.body)) {
+    // Never carry an account suffix into transaction.last4. It could match a
+    // user's unrelated card and silently corrupt card attribution.
+    delete fields.last4;
+    fields.instrument = 'upi_bank';
+  } else {
+    fields.instrument = fields.instrument || inferInstrument(sms.body, Boolean(fields.last4)) || 'credit_card';
+  }
   fields.entryKind = 'spend';
   return { ok: true, fields };
 }

@@ -62,9 +62,8 @@ const _authBaseUrl = Env.authBaseUrl;
 /// A bank can send several messages that contain transaction-shaped words but
 /// do not represent money spent: OTPs, declines, reversals, refunds and
 /// credits. Those are expected negative matches, not parser failures, so they
-/// must never become a user-facing review item. Unknown successful formats
-/// still go to review so the server parser can be improved without losing a
-/// real spend.
+/// must never become a user-facing review item. Successful formats are
+/// recorded by the server as transactions; card attribution is optional.
 bool _isIgnorableSmsResult(SmsImportResult result) =>
     result.reason == 'security_message' ||
     result.reason == 'not_a_successful_spend';
@@ -1432,7 +1431,9 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
   } catch (_) {}
 
   try {
-    final raw = await rootBundle.loadString('assets/data/bundled_catalogue.json');
+    final raw = await rootBundle.loadString(
+      'assets/data/bundled_catalogue.json',
+    );
     final body = jsonDecode(raw) as Map<String, dynamic>;
     final cards = (body['cards'] as List)
         .cast<Map<String, dynamic>>()
@@ -1734,27 +1735,15 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         body,
         receivedAt,
       ) async {
-        final result = await repo.logTransactionFromSms(
+        await repo.logTransactionFromSms(
           sender: sender,
           body: body,
           occurredAt: receivedAt,
         );
-        if (!result.parsed && !_isIgnorableSmsResult(result)) {
-          await ref.read(needsReviewRepositoryProvider).add(
-            NeedsReviewItem(
-              id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
-              sender: sender,
-              body: body,
-              reason: result.reason,
-              receivedAt: receivedAt,
-            ),
-          );
-          ref.invalidate(needsReviewItemsProvider);
-        }
         // Every one of these is "dealt with": imported, recognised as
-        // already imported, filed for review because the card is unknown,
-        // or logged as an unparseable shape server-side. Only a network or
-        // server failure (which throws) leaves it queued.
+        // already imported, or explicitly ignored as a non-spend. Successful
+        // spends are recorded without requiring card attribution. Only a
+        // network or server failure (which throws) leaves it queued.
         return true;
       });
       ref.invalidate(userCardsProvider);
@@ -1766,10 +1755,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
 
   // Parser improvements must also help messages that were already placed in
   // the on-device review queue before this app version was installed. Retry
-  // once at startup through the same server path. Successful imports and
-  // explicitly recognised security/non-spend messages leave the local queue;
-  // an item that still needs card attribution stays visible for a safe manual
-  // choice.
+  // once at startup through the same server path. Successful imports,
+  // cardless imports, and explicitly recognised security/non-spend messages
+  // are removed from the old queue.
   Future<void> retryExistingNeedsReview() async {
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null) return;
@@ -1783,7 +1771,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           body: item.body,
           occurredAt: item.receivedAt,
         );
-        final canRemove = (result.parsed && !result.needsReview) ||
+        final canRemove =
+            (result.parsed && !result.needsReview) ||
             _isIgnorableSmsResult(result);
         if (canRemove) {
           await reviewRepo.remove(item.id);
@@ -1843,24 +1832,12 @@ class SmsAutoImportController {
       return;
     }
     try {
-      final result = await repo.logTransactionFromSms(
+      await repo.logTransactionFromSms(
         userCardId: _userCardIdOverride,
         sender: sender,
         body: body,
         occurredAt: receivedAt,
       );
-      if (!result.parsed && !_isIgnorableSmsResult(result)) {
-        await _ref.read(needsReviewRepositoryProvider).add(
-          NeedsReviewItem(
-            id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
-            sender: sender,
-            body: body,
-            reason: result.reason,
-            receivedAt: receivedAt,
-          ),
-        );
-        _ref.invalidate(needsReviewItemsProvider);
-      }
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(needsReviewCountProvider);
@@ -1884,7 +1861,9 @@ final smsAutoImportProvider = Provider<SmsAutoImportController>((ref) {
 /// app shell has already been built.
 final smsListenerLifecycleProvider = Provider<void>((ref) {
   final controller = ref.read(smsAutoImportProvider);
-  final listener = AppLifecycleListener(onResume: () => unawaited(controller.start()));
+  final listener = AppLifecycleListener(
+    onResume: () => unawaited(controller.start()),
+  );
   ref.onDispose(listener.dispose);
   unawaited(controller.start());
 });

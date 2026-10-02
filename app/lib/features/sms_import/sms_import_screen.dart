@@ -19,9 +19,9 @@ import 'sms_listener_service.dart';
 /// quietly wrong for everyone else.
 ///
 /// The server resolves the card per message now, from `user_cards.last4`
-/// (migration 0039) or from the issuer behind the matched parser pattern,
-/// and files anything it can't identify in the needs-review queue rather
-/// than guessing. The dropdown remains as an override for the
+/// (migration 0039) or from the issuer behind the matched parser pattern. If
+/// a valid spend cannot be safely tied to one card, it is still recorded as a
+/// cardless spend so Spending never depends on a manual review step. The dropdown remains as an override for the
 /// single-card case and for anyone who hasn't entered their last-4 digits
 /// yet.
 class SmsImportScreen extends ConsumerStatefulWidget {
@@ -55,7 +55,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       if (!granted && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('SMS permission was not granted — auto-import needs it to read incoming bank SMS.'),
+            content: Text(
+              'SMS permission was not granted — auto-import needs it to read incoming bank SMS.',
+            ),
           ),
         );
       }
@@ -82,7 +84,10 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('SMS auto-import', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+        title: Text(
+          'SMS auto-import',
+          style: BambooFonts.heading(17, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: Padding(
@@ -103,20 +108,28 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: BambooInk.ink900,
                   side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 icon: const Icon(Icons.upload_file_outlined),
                 label: const Text('Import from an SMS backup file (one-time)'),
-                onPressed: () => Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const SmsBackupImportScreen())),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SmsBackupImportScreen(),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               const Divider(color: BambooInk.hairlineOnPaper),
               const SizedBox(height: 16),
               Text(
                 'Live auto-read (Android)',
-                style: BambooFonts.ui(13, weight: FontWeight.w700, color: BambooInk.ink900),
+                style: BambooFonts.ui(
+                  13,
+                  weight: FontWeight.w700,
+                  color: BambooInk.ink900,
+                ),
               ),
               const SizedBox(height: 8),
               if (!_permissionGranted)
@@ -124,18 +137,27 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                   style: FilledButton.styleFrom(
                     backgroundColor: BambooInk.slate,
                     foregroundColor: BambooInk.lime,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   onPressed: _requesting ? null : _requestPermission,
-                  child: Text(_requesting ? 'Requesting…' : 'Grant SMS permission'),
+                  child: Text(
+                    _requesting ? 'Requesting…' : 'Grant SMS permission',
+                  ),
                 )
               else
-                Text('SMS permission granted.', style: BambooFonts.ui(13.5, color: BambooInk.jade)),
+                Text(
+                  'SMS permission granted.',
+                  style: BambooFonts.ui(13.5, color: BambooInk.jade),
+                ),
               const SizedBox(height: 16),
               userCards.when(
                 loading: () => const CircularProgressIndicator(),
-                error: (err, _) =>
-                    Text('Failed to load cards: $err', style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                error: (err, _) => Text(
+                  'Failed to load cards: $err',
+                  style: BambooFonts.ui(13.5, color: BambooInk.clay),
+                ),
                 data: (cards) => DropdownButton<String>(
                   hint: Text(
                     'Always use one card? (optional)',
@@ -147,7 +169,11 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                     for (final c in cards)
                       DropdownMenuItem(
                         value: c.id,
-                        child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                        child: Text(
+                          c.nickname?.isNotEmpty == true
+                              ? c.nickname!
+                              : c.cardName,
+                        ),
                       ),
                   ],
                   onChanged: (v) => setState(() => _selectedCardId = v),
@@ -156,8 +182,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
               const SizedBox(height: 8),
               Text(
                 'Leave this empty and PandaPay works out the card from the last 4 digits in each '
-                'message. Add those digits to each card (Cards → Edit) so it can. Anything it '
-                'can\'t identify goes to Needs Review rather than being logged against the wrong card.',
+                'message. Add those digits to each card (Cards → Edit) for card-level rewards. '
+                'If a message has no safe card match, the spend is still logged without attaching '
+                'it to the wrong card.',
                 style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),
               const SizedBox(height: 16),
@@ -166,7 +193,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                   style: FilledButton.styleFrom(
                     backgroundColor: BambooInk.slate,
                     foregroundColor: BambooInk.lime,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   onPressed: _startListening,
                   child: const Text('Start listening'),
@@ -174,14 +203,20 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
               if (_listening)
                 Text(
                   'Listening for incoming SMS…',
-                  style: BambooFonts.ui(13.5, color: BambooInk.ink500).copyWith(fontStyle: FontStyle.italic),
+                  style: BambooFonts.ui(
+                    13.5,
+                    color: BambooInk.ink500,
+                  ).copyWith(fontStyle: FontStyle.italic),
                 ),
               const SizedBox(height: 16),
               Expanded(
                 child: ListView(
                   children: [
                     for (final line in _recentLog)
-                      Text(line, style: BambooFonts.ui(13, color: BambooInk.ink900)),
+                      Text(
+                        line,
+                        style: BambooFonts.ui(13, color: BambooInk.ink900),
+                      ),
                   ],
                 ),
               ),

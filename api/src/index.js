@@ -2763,16 +2763,17 @@ async function insertTransactionAndUpdateState(client, userId, {
  * the forwarded-email webhook and POST /inbound-emails/:id/create-transaction.
  *
  * Everything those four used to duplicate — or, worse, not do at all — lives
- * here: resolving which card the message belongs to, resolving what kind of
- * spend it was, and choosing between inserting a transaction and filing the
- * message for human review.
+ * here: resolving which card the message belongs to and resolving what kind of
+ * spend it was. A valid spend is always inserted; if a credit-card alert has
+ * no unambiguous card match, it is retained as a cardless `other` transaction
+ * instead of blocking the user's spending history behind a review queue.
  *
- * The behaviour change this represents is the important one. Every import
- * route previously REQUIRED the caller to supply `userCardId`, so no
- * transaction was ever recorded without a person tapping a card for that
- * specific message. Now an unresolvable message goes to
- * `needs_review_items` (which has existed for this since 0004) instead of
- * being rejected with a 400, and a resolvable one lands on its own.
+ * Every import route previously REQUIRED the caller to supply `userCardId`,
+ * so no transaction was ever recorded without a person tapping a card for
+ * that specific message. Now an unresolvable successful spend is recorded
+ * immediately without a card association. This keeps Spending automatic and
+ * avoids attaching it to the wrong card; later card enrichment can still use
+ * the stored transaction metadata.
  *
  * Nothing is guessed: `resolveUserCardForImport` returns a card only when
  * the evidence is unambiguous. Attaching spend to the WRONG card is far
@@ -2788,7 +2789,7 @@ async function importParsedMessage(client, userId, {
   // must never be used to attach a cardless bank payment to the wrong card.
   // The parser supplies this hint; unknown legacy card patterns retain the
   // historical credit-card default.
-  const instrument = parsed.fields.instrument || (parsed.fields.last4 ? 'credit_card' : 'upi_bank');
+  let instrument = parsed.fields.instrument || (parsed.fields.last4 ? 'credit_card' : 'upi_bank');
   const entryKind = parsed.fields.entryKind || 'spend';
   let userCardId = explicitUserCardId || null;
   let matchBasis = userCardId ? 'caller-supplied' : null;
@@ -2813,16 +2814,12 @@ async function importParsedMessage(client, userId, {
   }
 
   if (instrument === 'credit_card' && !userCardId) {
-    const reviewItemId = await importResolvers.fileForReview(client, userId, {
-      source,
-      rawText,
-      sender,
-      parseError: 'could_not_match_a_card',
-      amount: parsed.fields.amountInr,
-      merchant: parsed.fields.merchant || null,
-      receivedAt: occurred,
-    });
-    return { status: 200, parsed: true, needsReview: true, needsReviewItemId: reviewItemId };
+    // Do not make the user classify normal spending. A cardless transaction
+    // is still useful for totals, trends, and merchant/category reporting,
+    // while avoiding a dangerous guess against an unrelated card. The
+    // transaction row remains eligible for future card enrichment.
+    instrument = 'other';
+    matchBasis = 'unresolved-cardless';
   }
 
   // An explicitly-supplied category always wins; otherwise resolve it.

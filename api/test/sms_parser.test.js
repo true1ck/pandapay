@@ -208,6 +208,22 @@ test('built-in UPI fallback stops merchant extraction before the source-account 
   assert.equal(result.fields.instrument, 'upi_bank');
 });
 
+test('configured patterns cannot misclassify a bank-account UPI alert as a card spend', () => {
+  const broadPattern = {
+    id: 'p-wrong-instrument',
+    sender_pattern: 'HDFCBK',
+    regex: 'Rs\\s([\\d]+) sent to ([A-Za-z0-9@]+) using (credit_card)',
+    field_map: { amount: 1, merchant: 2, instrument: 3 },
+  };
+  const result = parseSmsAgainstPatterns([broadPattern], {
+    sender: 'VM-HDFCBK-S',
+    body: 'Rs 500 sent to TESTMERCHANT@upi using credit_card from your account via UPI on 2026-10-02',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.instrument, 'upi_bank');
+  assert.equal(result.fields.last4, undefined);
+});
+
 test('OTP/security alerts are rejected even when they contain transaction-shaped fields', () => {
   const otp = {
     sender: 'VM-HDFCBK-S',

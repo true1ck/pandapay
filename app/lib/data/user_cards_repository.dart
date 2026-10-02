@@ -5,7 +5,8 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'api_exception.dart';
 
-double _num(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.parse(v as String));
+double _num(dynamic v) =>
+    v == null ? 0 : (v is num ? v.toDouble() : double.parse(v as String));
 
 /// Chunk 17: the CURRENTLY-ACTIVE period's cap/milestone consumption for
 /// this owned card — a missing entry for a given cap/milestone rule id
@@ -18,10 +19,14 @@ class UserCard {
   final String? nickname;
   final String cardName;
   final bool isDefault;
-  final Map<String, Money> capConsumed; // capRule.id -> consumed (in the cap's own measure unit)
-  final Map<String, Money> milestoneQualifiedSpend; // milestoneRule.id -> qualified spend so far
-  final Map<String, DateTime> milestonePeriodEnd; // milestoneRule.id -> this period's deadline (E4)
-  final double totalPointsEarned; // lifetime, in the reward's own native unit — not an INR Money
+  final Map<String, Money>
+  capConsumed; // capRule.id -> consumed (in the cap's own measure unit)
+  final Map<String, Money>
+  milestoneQualifiedSpend; // milestoneRule.id -> qualified spend so far
+  final Map<String, DateTime>
+  milestonePeriodEnd; // milestoneRule.id -> this period's deadline (E4)
+  final double
+  totalPointsEarned; // lifetime, in the reward's own native unit — not an INR Money
   final List<FeeWaiverProgress> feeWaiverStates;
 
   /// Task 11 (E7 Billing Cycle Float): day-of-month the statement cuts, and
@@ -98,9 +103,12 @@ class UserCard {
   });
 
   factory UserCard.fromJson(Map<String, dynamic> json) {
-    final capStates = (json['cap_states'] as List? ?? const []).cast<Map<String, dynamic>>();
-    final milestoneStates = (json['milestone_states'] as List? ?? const []).cast<Map<String, dynamic>>();
-    final feeWaiverStates = (json['fee_waiver_states'] as List? ?? const []).cast<Map<String, dynamic>>();
+    final capStates = (json['cap_states'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final milestoneStates = (json['milestone_states'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final feeWaiverStates = (json['fee_waiver_states'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
     return UserCard(
       id: json['id'] as String,
       cardProductId: json['card_product_id'] as String,
@@ -108,24 +116,35 @@ class UserCard {
       cardName: json['card_name'] as String,
       isDefault: json['is_default'] as bool? ?? false,
       capConsumed: {
-        for (final s in capStates) s['cap_rule_id'] as String: Money.fromRupees(_num(s['consumed'])),
+        for (final s in capStates)
+          s['cap_rule_id'] as String: Money.fromRupees(_num(s['consumed'])),
       },
       milestoneQualifiedSpend: {
         for (final s in milestoneStates)
-          s['milestone_rule_id'] as String: Money.fromRupees(_num(s['qualified_spend'])),
+          s['milestone_rule_id'] as String: Money.fromRupees(
+            _num(s['qualified_spend']),
+          ),
       },
       milestonePeriodEnd: {
         for (final s in milestoneStates)
           if (s['period_end'] != null)
-            s['milestone_rule_id'] as String: DateTime.parse(s['period_end'] as String),
+            s['milestone_rule_id'] as String: DateTime.parse(
+              s['period_end'] as String,
+            ),
       },
       totalPointsEarned: _num(json['total_points_earned']),
       feeWaiverStates: feeWaiverStates.map(FeeWaiverProgress.fromJson).toList(),
       statementDay: json['statement_day'] as int?,
-      openedOn: json['opened_on'] == null ? null : DateTime.parse(json['opened_on'] as String),
-      creditLimit: json['credit_limit_inr'] == null ? null : Money.fromRupees(_num(json['credit_limit_inr'])),
+      openedOn: json['opened_on'] == null
+          ? null
+          : DateTime.parse(json['opened_on'] as String),
+      creditLimit: json['credit_limit_inr'] == null
+          ? null
+          : Money.fromRupees(_num(json['credit_limit_inr'])),
       dueDay: json['due_day'] as int?,
-      anniversaryOn: json['anniversary_on'] == null ? null : DateTime.parse(json['anniversary_on'] as String),
+      anniversaryOn: json['anniversary_on'] == null
+          ? null
+          : DateTime.parse(json['anniversary_on'] as String),
       isArchived: json['is_archived'] as bool? ?? false,
       autopayMode: AutopayMode.fromJson(json['autopay_mode'] as String?),
       last4: json['last4'] as String?,
@@ -142,7 +161,8 @@ class UserCard {
     'card_name': cardName,
     'is_default': isDefault,
     'cap_states': [
-      for (final entry in capConsumed.entries) {'cap_rule_id': entry.key, 'consumed': entry.value.rupees},
+      for (final entry in capConsumed.entries)
+        {'cap_rule_id': entry.key, 'consumed': entry.value.rupees},
     ],
     'milestone_states': [
       for (final entry in milestoneQualifiedSpend.entries)
@@ -183,10 +203,11 @@ enum TxnInstrument {
   final String label;
   const TxnInstrument(this.wireValue, this.label);
 
-  static TxnInstrument fromJson(String? value) => TxnInstrument.values.firstWhere(
-    (i) => i.wireValue == value,
-    orElse: () => TxnInstrument.creditCard,
-  );
+  static TxnInstrument fromJson(String? value) =>
+      TxnInstrument.values.firstWhere(
+        (i) => i.wireValue == value,
+        orElse: () => TxnInstrument.creditCard,
+      );
 }
 
 /// Whether an entry is spending at all — migration 0040's
@@ -235,8 +256,10 @@ enum AutopayMode {
   /// server that grows a fourth mode must not crash an older client, and
   /// [off] is the conservative reading — it prompts the user to confirm
   /// rather than reassuring them.
-  static AutopayMode fromJson(String? value) =>
-      AutopayMode.values.firstWhere((m) => m.wireValue == value, orElse: () => AutopayMode.off);
+  static AutopayMode fromJson(String? value) => AutopayMode.values.firstWhere(
+    (m) => m.wireValue == value,
+    orElse: () => AutopayMode.off,
+  );
 
   /// True only when the whole statement balance is covered. [minimum] is
   /// deliberately excluded — see the enum's own doc-comment.
@@ -271,14 +294,15 @@ class TransactionSplit {
     this.note,
   });
 
-  factory TransactionSplit.fromJson(Map<String, dynamic> json) => TransactionSplit(
-    id: json['id'] as String?,
-    userCardId: json['user_card_id'] as String?,
-    categoryId: json['category_id'] as String?,
-    categoryName: json['category_name'] as String?,
-    amount: Money.fromRupees(_num(json['amount_inr'])),
-    note: json['note'] as String?,
-  );
+  factory TransactionSplit.fromJson(Map<String, dynamic> json) =>
+      TransactionSplit(
+        id: json['id'] as String?,
+        userCardId: json['user_card_id'] as String?,
+        categoryId: json['category_id'] as String?,
+        categoryName: json['category_name'] as String?,
+        amount: Money.fromRupees(_num(json['amount_inr'])),
+        note: json['note'] as String?,
+      );
 
   /// The PUT body shape, which is camelCase and omits server-owned fields —
   /// deliberately not the mirror of [fromJson].
@@ -316,7 +340,9 @@ class FeeWaiverProgress {
       qualifiedSpend: Money.fromRupees(_num(json['qualified_spend'])),
       thresholdSpend: Money.fromRupees(_num(json['threshold_spend_inr'])),
       waivesFee: Money.fromRupees(_num(json['waives_fee_inr'])),
-      waivedAt: json['waived_at'] == null ? null : DateTime.parse(json['waived_at'] as String),
+      waivedAt: json['waived_at'] == null
+          ? null
+          : DateTime.parse(json['waived_at'] as String),
       periodEnd: DateTime.parse(json['period_end'] as String),
     );
   }
@@ -361,8 +387,12 @@ class PointsLedgerEntry {
       id: json['id'] as String,
       deltaPoints: _num(json['delta_points']),
       reason: json['reason'] as String,
-      state: json['state'] == 'confirmed' ? Confidence.confirmed : Confidence.estimated,
-      expiresOn: json['expires_on'] == null ? null : DateTime.parse(json['expires_on'] as String),
+      state: json['state'] == 'confirmed'
+          ? Confidence.confirmed
+          : Confidence.estimated,
+      expiresOn: json['expires_on'] == null
+          ? null
+          : DateTime.parse(json['expires_on'] as String),
       occurredAt: DateTime.parse(json['occurred_at'] as String),
     );
   }
@@ -428,7 +458,9 @@ class MonthlyReport {
       periodMonth: DateTime.parse(json['period_month'] as String),
       totalSpend: Money.fromRupees(_num(json['total_spend_inr'])),
       rewardsEarned: Money.fromRupees(_num(json['rewards_earned_inr'])),
-      baselineSingleCard: Money.fromRupees(_num(json['baseline_single_card_inr'])),
+      baselineSingleCard: Money.fromRupees(
+        _num(json['baseline_single_card_inr']),
+      ),
       valueMissed: Money.fromRupees(_num(json['value_missed_inr'])),
       extraEarned: Money.fromRupees(_num(json['extra_earned_inr'])),
     );
@@ -450,8 +482,12 @@ class ContributionNetworkStats {
 
   factory ContributionNetworkStats.fromJson(Map<String, dynamic> json) {
     return ContributionNetworkStats(
-      publishedMerchantCount: int.parse(json['published_merchant_count'].toString()),
-      contributingDeviceCount: int.parse(json['contributing_device_count'].toString()),
+      publishedMerchantCount: int.parse(
+        json['published_merchant_count'].toString(),
+      ),
+      contributingDeviceCount: int.parse(
+        json['contributing_device_count'].toString(),
+      ),
     );
   }
 }
@@ -519,7 +555,9 @@ class AppNotification {
       title: json['title'] as String,
       body: json['body'] as String?,
       deepLink: json['deep_link'] as String?,
-      readAt: json['read_at'] == null ? null : DateTime.parse(json['read_at'] as String),
+      readAt: json['read_at'] == null
+          ? null
+          : DateTime.parse(json['read_at'] as String),
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
@@ -556,7 +594,8 @@ class ReferralInfo {
       rewardsActive: program?['is_active'] as bool? ?? false,
       referrerReward: Money.fromRupees(_num(program?['referrer_reward_inr'])),
       refereeReward: Money.fromRupees(_num(program?['referee_reward_inr'])),
-      qualifyingAction: program?['qualifying_action'] as String? ?? 'first ranked payment',
+      qualifyingAction:
+          program?['qualifying_action'] as String? ?? 'first ranked payment',
       code: json['code'] as String?,
       referrals: ((json['referrals'] as List?) ?? const [])
           .cast<Map<String, dynamic>>()
@@ -574,7 +613,12 @@ class Referral {
   final String rewardState; // 'pending' | 'signed_up' | 'qualified'
   final DateTime createdAt;
 
-  const Referral({required this.id, this.label, required this.rewardState, required this.createdAt});
+  const Referral({
+    required this.id,
+    this.label,
+    required this.rewardState,
+    required this.createdAt,
+  });
 
   bool get isQualified => rewardState == 'qualified';
 
@@ -665,8 +709,11 @@ class UserCardsRepository {
   final String accessToken;
   final http.Client _client;
 
-  UserCardsRepository({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-    : _client = client ?? http.Client();
+  UserCardsRepository({
+    required this.apiBaseUrl,
+    required this.accessToken,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer $accessToken',
@@ -674,15 +721,20 @@ class UserCardsRepository {
   };
 
   Future<List<UserCard>> fetchUserCards({bool includeArchived = false}) async {
-    final uri = Uri.parse(
-      '$apiBaseUrl/user-cards',
-    ).replace(queryParameters: includeArchived ? {'includeArchived': 'true'} : null);
+    final uri = Uri.parse('$apiBaseUrl/user-cards').replace(
+      queryParameters: includeArchived ? {'includeArchived': 'true'} : null,
+    );
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw ApiException('GET /user-cards failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /user-cards failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['userCards'] as List).cast<Map<String, dynamic>>().map(UserCard.fromJson).toList();
+    return (body['userCards'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(UserCard.fromJson)
+        .toList();
   }
 
   /// Returns the newly-created `user_cards.id`. A9 (Card Details Setup)
@@ -690,14 +742,24 @@ class UserCardsRepository {
   /// used to return void because nothing needed the id back until A7/A9
   /// existed; POST /user-cards already returns it (`{userCard: {id, ...}}`),
   /// this just stops discarding it.
-  Future<String> addCard(String cardProductId, {String? nickname, String? last4}) async {
+  Future<String> addCard(
+    String cardProductId, {
+    String? nickname,
+    String? last4,
+  }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/user-cards'),
       headers: _headers,
-      body: jsonEncode({'cardProductId': cardProductId, 'nickname': ?nickname, 'last4': ?last4}),
+      body: jsonEncode({
+        'cardProductId': cardProductId,
+        'nickname': ?nickname,
+        'last4': ?last4,
+      }),
     );
     if (response.statusCode != 201) {
-      throw ApiException('POST /user-cards failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /user-cards failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['userCard'] as Map<String, dynamic>)['id'] as String;
@@ -709,7 +771,9 @@ class UserCardsRepository {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw ApiException('archive failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'archive failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -722,7 +786,9 @@ class UserCardsRepository {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw ApiException('set default failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'set default failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -734,7 +800,9 @@ class UserCardsRepository {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw ApiException('unarchive failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'unarchive failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -747,7 +815,9 @@ class UserCardsRepository {
       body: jsonEncode({'order': orderedIds}),
     );
     if (response.statusCode != 200) {
-      throw ApiException('reorder failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'reorder failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -787,7 +857,9 @@ class UserCardsRepository {
       body: jsonEncode(body),
     );
     if (response.statusCode != 200) {
-      throw ApiException('update failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'update failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -840,7 +912,9 @@ class UserCardsRepository {
       }),
     );
     if (response.statusCode != 201) {
-      throw ApiException('POST /transactions failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /transactions failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['transaction'] as Map<String, dynamic>)['id'] as String;
@@ -857,7 +931,9 @@ class UserCardsRepository {
       body: jsonEncode({'note': note}),
     );
     if (response.statusCode != 200) {
-      throw ApiException('note update failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'note update failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -869,17 +945,25 @@ class UserCardsRepository {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw ApiException('GET splits failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET splits failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['splits'] as List).cast<Map<String, dynamic>>().map(TransactionSplit.fromJson).toList();
+    return (body['splits'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(TransactionSplit.fromJson)
+        .toList();
   }
 
   /// Replaces the whole split set. Replace rather than append is the
   /// server's contract too — a split is a partition of one amount, so the
   /// set is the only coherent unit of edit. An empty list clears the
   /// splits.
-  Future<List<TransactionSplit>> saveSplits(String transactionId, List<TransactionSplit> splits) async {
+  Future<List<TransactionSplit>> saveSplits(
+    String transactionId,
+    List<TransactionSplit> splits,
+  ) async {
     final response = await _client.put(
       Uri.parse('$apiBaseUrl/transactions/$transactionId/splits'),
       headers: _headers,
@@ -888,10 +972,15 @@ class UserCardsRepository {
       }),
     );
     if (response.statusCode != 200) {
-      throw ApiException('save splits failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'save splits failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['splits'] as List).cast<Map<String, dynamic>>().map(TransactionSplit.fromJson).toList();
+    return (body['splits'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(TransactionSplit.fromJson)
+        .toList();
   }
 
   /// UA-5.3 (Chunk 31): SMS auto-import. Sends the raw SMS sender+body to
@@ -904,13 +993,13 @@ class UserCardsRepository {
   /// message belongs to — so the listener had to ask the user, once per
   /// message. The server now resolves it from `user_cards.last4` or from
   /// the issuer behind the matched pattern (api/src/import_resolvers.js),
-  /// and when it can't be sure it files the message in the needs-review
-  /// queue instead of guessing. Passing an explicit id still wins.
+  /// and when it can't be sure it records a cardless spend instead of asking
+  /// the user to classify every message. Passing an explicit id still wins.
   ///
-  /// A 200 with `parsed: false` is not an error — it's
-  /// the server telling us the SMS didn't match any active pattern and was
-  /// logged to parser_failures for admin triage instead of silently
-  /// dropped; the caller decides whether to surface that as "log manually?"
+  /// A 200 with `parsed: false` is not an error — it means the message was
+  /// not a successful transaction (for example an OTP or decline), or it did
+  /// not contain enough fields to create one. Successful spend messages return
+  /// `parsed: true` and are stored without a manual review step.
   Future<SmsImportResult> logTransactionFromSms({
     String? userCardId,
     required String sender,
@@ -925,12 +1014,15 @@ class UserCardsRepository {
         'userCardId': ?userCardId,
         'sender': sender,
         'body': body,
-        if (occurredAt != null) 'occurredAt': occurredAt.toUtc().toIso8601String(),
+        if (occurredAt != null)
+          'occurredAt': occurredAt.toUtc().toIso8601String(),
         if (backfill) 'backfill': true,
       }),
     );
     if (response.statusCode != 201 && response.statusCode != 200) {
-      throw ApiException('POST /transactions/from-sms failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /transactions/from-sms failed: ${response.statusCode} ${response.body}',
+      );
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return SmsImportResult(
@@ -980,7 +1072,8 @@ class UserCardsRepository {
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final summary = json['summary'] as Map<String, dynamic>? ?? const {};
-    final results = (json['results'] as List? ?? const []).cast<Map<String, dynamic>>();
+    final results = (json['results'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
     return SmsBatchImportResult(
       imported: (summary['imported'] as num?)?.toInt() ?? 0,
       duplicate: (summary['duplicate'] as num?)?.toInt() ?? 0,
@@ -989,15 +1082,17 @@ class UserCardsRepository {
       needsReview: (summary['needsReview'] as num?)?.toInt() ?? 0,
       errored: (summary['error'] as num?)?.toInt() ?? 0,
       // Indices are batch-relative; the caller maps them back to its own
-      // list so an unparsed/unmatched message can still reach the needs-review queue
-      // with its original text, exactly as the one-at-a-time path does.
+      // list so callers can report genuinely unparsed messages without
+      // turning successful cardless spends into a manual workflow.
       unparsedIndices: [
         for (final r in results)
-          if (r['outcome'] == 'unparsed' || r['outcome'] == 'needs_review') (r['index'] as num).toInt(),
+          if (r['outcome'] == 'unparsed' || r['outcome'] == 'needs_review')
+            (r['index'] as num).toInt(),
       ],
       reasonByIndex: {
         for (final r in results)
-          if (r['reason'] != null) (r['index'] as num).toInt(): r['reason'] as String,
+          if (r['reason'] != null)
+            (r['index'] as num).toInt(): r['reason'] as String,
       },
     );
   }
@@ -1030,7 +1125,9 @@ class UserCardsRepository {
     ).replace(queryParameters: params.isEmpty ? null : params);
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw ApiException('GET /transactions failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /transactions failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['transactions'] as List)
@@ -1043,12 +1140,19 @@ class UserCardsRepository {
   /// status='active' server-side (see the route's own doc-comment) — D2
   /// must be able to show an ignored transaction too.
   Future<TransactionEntry> fetchTransaction(String id) async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/transactions/$id'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/transactions/$id'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /transactions/:id failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /transactions/:id failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return TransactionEntry.fromJson(body['transaction'] as Map<String, dynamic>);
+    return TransactionEntry.fromJson(
+      body['transaction'] as Map<String, dynamic>,
+    );
   }
 
   /// Task D-3 (ui-spec D3 Edit Transaction). Only non-null fields are sent.
@@ -1075,7 +1179,9 @@ class UserCardsRepository {
       body: jsonEncode(body),
     );
     if (response.statusCode != 200) {
-      throw ApiException('PATCH /transactions/:id failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'PATCH /transactions/:id failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -1099,15 +1205,22 @@ class UserCardsRepository {
       body: jsonEncode({'reason': reason}),
     );
     if (response.statusCode != 200) {
-      throw ApiException('POST /transactions/:id/ignore failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /transactions/:id/ignore failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   /// Task D-5 (ui-spec D5 Duplicate Review). Pending pairs only.
   Future<List<DuplicateCandidate>> fetchDuplicateCandidates() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/duplicate-candidates'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/duplicate-candidates'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /duplicate-candidates failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /duplicate-candidates failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['duplicateCandidates'] as List)
@@ -1148,7 +1261,9 @@ class UserCardsRepository {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw ApiException('GET /user-cards/:id/points-ledger failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /user-cards/:id/points-ledger failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['pointsLedger'] as List)
@@ -1170,7 +1285,10 @@ class UserCardsRepository {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/user-cards/$userCardId/points-adjustment'),
       headers: _headers,
-      body: jsonEncode({'newBalance': newBalance, if (expiresOn != null) 'expiresOn': _dateOnly(expiresOn)}),
+      body: jsonEncode({
+        'newBalance': newBalance,
+        if (expiresOn != null) 'expiresOn': _dateOnly(expiresOn),
+      }),
     );
     if (response.statusCode != 201) {
       throw ApiException(
@@ -1181,12 +1299,20 @@ class UserCardsRepository {
 
   /// Task E6: GET/POST /lounge-usage.
   Future<List<LoungeVisit>> fetchLoungeUsage() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/lounge-usage'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/lounge-usage'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /lounge-usage failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /lounge-usage failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['loungeUsage'] as List).cast<Map<String, dynamic>>().map(LoungeVisit.fromJson).toList();
+    return (body['loungeUsage'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(LoungeVisit.fromJson)
+        .toList();
   }
 
   Future<void> logLoungeVisit({
@@ -1206,40 +1332,61 @@ class UserCardsRepository {
       }),
     );
     if (response.statusCode != 201) {
-      throw ApiException('POST /lounge-usage failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /lounge-usage failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
   /// "Find my cards" over forwarded bank email and, on Android, SMS bodies
   /// the device reads locally. [smsBodies] are sent for this request only
   /// and never stored server-side — see POST /card-discovery.
-  Future<CardDiscoveryResult> discoverCards({List<String> smsBodies = const []}) async {
+  Future<CardDiscoveryResult> discoverCards({
+    List<String> smsBodies = const [],
+  }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/card-discovery'),
       headers: _headers,
       body: jsonEncode({'smsBodies': smsBodies}),
     );
     if (response.statusCode != 200) {
-      throw ApiException('POST /card-discovery failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /card-discovery failed: ${response.statusCode} ${response.body}',
+      );
     }
-    return CardDiscoveryResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return CardDiscoveryResult.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   /// Design 25's Invite friends screen, in one call.
   Future<ReferralInfo> fetchReferrals() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/referrals'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/referrals'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /referrals failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /referrals failed: ${response.statusCode} ${response.body}',
+      );
     }
-    return ReferralInfo.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return ReferralInfo.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   /// Design 19's inbox. Newest first; the server does no grouping — the
   /// client buckets Today/Earlier in the device's own timezone.
-  Future<({List<AppNotification> items, int unreadCount})> fetchNotifications() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/notifications'), headers: _headers);
+  Future<({List<AppNotification> items, int unreadCount})>
+  fetchNotifications() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/notifications'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /notifications failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /notifications failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (
@@ -1260,7 +1407,9 @@ class UserCardsRepository {
       body: jsonEncode(id == null ? <String, dynamic>{} : {'id': id}),
     );
     if (response.statusCode != 200) {
-      throw ApiException('POST /notifications/read failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /notifications/read failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -1288,7 +1437,9 @@ class UserCardsRepository {
       }),
     );
     if (response.statusCode != 201 && response.statusCode != 204) {
-      throw ApiException('POST /notifications failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /notifications failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -1300,36 +1451,55 @@ class UserCardsRepository {
     ).replace(queryParameters: timeZone == null ? null : {'tz': timeZone});
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw ApiException('GET /home-summary failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /home-summary failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final summary = body['homeSummary'];
-    return summary == null ? null : HomeSummary.fromJson(summary as Map<String, dynamic>);
+    return summary == null
+        ? null
+        : HomeSummary.fromJson(summary as Map<String, dynamic>);
   }
 
   /// Task E9: GET /monthly-reports. Null [month] means "the current month."
   Future<MonthlyReport?> fetchMonthlyReport({DateTime? month}) async {
-    final params = month == null ? null : {'month': _dateOnly(DateTime(month.year, month.month, 1))};
-    final uri = Uri.parse('$apiBaseUrl/monthly-reports').replace(queryParameters: params);
+    final params = month == null
+        ? null
+        : {'month': _dateOnly(DateTime(month.year, month.month, 1))};
+    final uri = Uri.parse(
+      '$apiBaseUrl/monthly-reports',
+    ).replace(queryParameters: params);
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw ApiException('GET /monthly-reports failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /monthly-reports failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final report = body['monthlyReport'];
-    return report == null ? null : MonthlyReport.fromJson(report as Map<String, dynamic>);
+    return report == null
+        ? null
+        : MonthlyReport.fromJson(report as Map<String, dynamic>);
   }
 
   /// Task E12: GET /my-contributions (network-wide aggregate only — see
   /// ContributionNetworkStats' doc-comment for why) and the contributions
   /// opt-in toggle, which mirrors H4 per the plan.
   Future<ContributionNetworkStats> fetchContributionNetworkStats() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/my-contributions'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/my-contributions'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /my-contributions failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /my-contributions failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return ContributionNetworkStats.fromJson(body['networkStats'] as Map<String, dynamic>);
+    return ContributionNetworkStats.fromJson(
+      body['networkStats'] as Map<String, dynamic>,
+    );
   }
 
   Future<void> setContributionsOptIn(bool optIn) async {
@@ -1430,13 +1600,16 @@ class TransactionEntry {
       if (part.isEmpty) return '';
       return i == 0 ? part : part[0].toUpperCase() + part.substring(1);
     }).join();
-    return TxnRail.values.firstWhere((r) => r.name == camel, orElse: () => TxnRail.unknown);
+    return TxnRail.values.firstWhere(
+      (r) => r.name == camel,
+      orElse: () => TxnRail.unknown,
+    );
   }
 }
 
 /// UA-5.3 (Chunk 31): the outcome of a POST /transactions/from-sms call.
-/// [parsed] false with a [reason] is a normal, expected outcome (the server
-/// logged a parser_failures row instead of a transaction) — not exceptional.
+/// [parsed] false with a [reason] is a normal, expected outcome for a
+/// non-spend or malformed message — not exceptional.
 class SmsImportResult {
   final bool parsed;
   final String? reason;
@@ -1447,12 +1620,9 @@ class SmsImportResult {
   /// not count it as a new transaction, and must not add it to needs-review.
   final bool duplicate;
 
-  /// True when the message parsed cleanly but the server could not say
-  /// which card it belongs to, so it was filed in the needs-review queue
-  /// for the user to confirm. A third outcome alongside parsed/duplicate,
-  /// not a failure: the transaction data is safely captured, only its card
-  /// is unknown. Callers must not count it as imported and must not report
-  /// it as a parse failure.
+  /// Kept for API compatibility with older servers. Current servers record
+  /// an unresolvable successful spend as a cardless transaction, so normal
+  /// SMS auto-import does not require this manual outcome.
   final bool needsReview;
 
   const SmsImportResult({
@@ -1467,8 +1637,8 @@ class SmsImportResult {
 class SmsBatchMessage {
   /// Optional since the server resolves it — see [logTransactionFromSms].
   /// A backup-file import that maps a last4 group to a card still passes it
-  /// explicitly; one that can't leaves it null and lets the server decide
-  /// or file for review.
+  /// explicitly; one that can't leaves it null and lets the server record it
+  /// cardlessly.
   final String? userCardId;
   final String sender;
   final String body;
@@ -1493,8 +1663,8 @@ class SmsBatchImportResult {
   final int unparsed;
   final int invalid;
 
-  /// Parsed fine, but the server couldn't identify the card — filed in the
-  /// needs-review queue rather than dropped. See [SmsImportResult.needsReview].
+  /// Kept for compatibility with older batch responses. Current successful
+  /// messages are counted as imported even when card attribution is unknown.
   final int needsReview;
   final int errored;
   final List<int> unparsedIndices;
@@ -1568,8 +1738,12 @@ class DuplicateCandidate {
   factory DuplicateCandidate.fromJson(Map<String, dynamic> json) {
     return DuplicateCandidate(
       id: json['id'] as String,
-      txnA: DuplicateTransactionSummary.fromJson(json['txn_a'] as Map<String, dynamic>),
-      txnB: DuplicateTransactionSummary.fromJson(json['txn_b'] as Map<String, dynamic>),
+      txnA: DuplicateTransactionSummary.fromJson(
+        json['txn_a'] as Map<String, dynamic>,
+      ),
+      txnB: DuplicateTransactionSummary.fromJson(
+        json['txn_b'] as Map<String, dynamic>,
+      ),
       matchScore: _num(json['match_score']),
       matchReason: json['match_reason'] as String,
     );
