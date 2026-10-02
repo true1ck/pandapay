@@ -59,6 +59,16 @@ import 'env.dart';
 const _apiBaseUrl = Env.apiBaseUrl;
 const _authBaseUrl = Env.authBaseUrl;
 
+/// A bank can send several messages that contain transaction-shaped words but
+/// do not represent money spent: OTPs, declines, reversals, refunds and
+/// credits. Those are expected negative matches, not parser failures, so they
+/// must never become a user-facing review item. Unknown successful formats
+/// still go to review so the server parser can be improved without losing a
+/// real spend.
+bool _isIgnorableSmsResult(SmsImportResult result) =>
+    result.reason == 'security_message' ||
+    result.reason == 'not_a_successful_spend';
+
 final authApiProvider = Provider<AuthApi>(
   (ref) => AuthApi(authBaseUrl: _authBaseUrl),
 );
@@ -1729,7 +1739,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           body: body,
           occurredAt: receivedAt,
         );
-        if (!result.parsed) {
+        if (!result.parsed && !_isIgnorableSmsResult(result)) {
           await ref.read(needsReviewRepositoryProvider).add(
             NeedsReviewItem(
               id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
@@ -1757,8 +1767,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   // Parser improvements must also help messages that were already placed in
   // the on-device review queue before this app version was installed. Retry
   // once at startup through the same server path. Successful imports and
-  // explicitly recognised security messages leave the local queue; an item
-  // that still needs card attribution stays visible for a safe manual choice.
+  // explicitly recognised security/non-spend messages leave the local queue;
+  // an item that still needs card attribution stays visible for a safe manual
+  // choice.
   Future<void> retryExistingNeedsReview() async {
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null) return;
@@ -1773,7 +1784,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           occurredAt: item.receivedAt,
         );
         final canRemove = (result.parsed && !result.needsReview) ||
-            result.reason == 'security_message';
+            _isIgnorableSmsResult(result);
         if (canRemove) {
           await reviewRepo.remove(item.id);
           changed = true;
@@ -1838,7 +1849,7 @@ class SmsAutoImportController {
         body: body,
         occurredAt: receivedAt,
       );
-      if (!result.parsed) {
+      if (!result.parsed && !_isIgnorableSmsResult(result)) {
         await _ref.read(needsReviewRepositoryProvider).add(
           NeedsReviewItem(
             id: '${sender}_${receivedAt.microsecondsSinceEpoch}',

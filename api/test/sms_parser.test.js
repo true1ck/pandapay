@@ -129,10 +129,10 @@ test('parseSmsAgainstPatterns returns ok:false with a reason when nothing matche
   assert.ok(result.reason);
 });
 
-test('parseSmsAgainstPatterns with an empty pattern list fails with no_patterns_configured', () => {
+test('parseSmsAgainstPatterns with an empty pattern list reports a transaction mismatch', () => {
   const result = parseSmsAgainstPatterns([], { sender: 'HDFCBK', body: 'Rs.10 spent' });
   assert.equal(result.ok, false);
-  assert.equal(result.reason, 'no_patterns_configured');
+  assert.equal(result.reason, 'no_transaction_match');
 });
 
 test('redactSmsShape strips digits to # and collapses letter runs to X, leaving no digits (matches parser_failures CHECK)', () => {
@@ -185,6 +185,18 @@ test('built-in card fallback handles a single-x mask, rupee symbol, and ISO date
   assert.equal(result.fields.date, '2025-08-14');
 });
 
+test('built-in card fallback handles the bare HDFC Card NNNN format and underscore merchant', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'JD-HDFCBK-S',
+    body: 'Rs.1229 spent on HDFC Bank Card 8708 at _ABHIKSHA PALACE. on 2026-07-18:21:32:14.Not U? To Block & Reissue',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 1229);
+  assert.equal(result.fields.last4, '8708');
+  assert.equal(result.fields.merchant, 'ABHIKSHA PALACE');
+  assert.equal(result.fields.date, '2026-07-18');
+});
+
 test('built-in UPI fallback stops merchant extraction before the source-account clause', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'HDFCBK',
@@ -208,4 +220,49 @@ test('OTP/security alerts are rejected even when they contain transaction-shaped
   };
   assert.equal(parseSms(broadPattern, otp).reason, 'security_message');
   assert.equal(parseSmsAgainstPatterns([broadPattern], otp).ok, false);
+});
+
+test('synthetic live-SMS matrix auto-parses completed spend alerts and rejects non-spends', () => {
+  const cases = [
+    {
+      name: 'HDFC x-mask card spend',
+      body: 'Spent Rs.210 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2026-10-02:13:50:00 Bal Rs.91903.82 Not You?',
+      expected: { amountInr: 210, last4: '8406', merchant: 'QUALITY FUEL STATION', instrument: 'credit_card' },
+    },
+    {
+      name: 'HDFC bare card suffix spend',
+      body: 'Rs.1229 spent on HDFC Bank Card 8708 at _ABHIKSHA PALACE. on 2026-10-02:13:51:00 Not U?',
+      expected: { amountInr: 1229, last4: '8708', merchant: 'ABHIKSHA PALACE', instrument: 'credit_card' },
+    },
+    {
+      name: 'UPI debit',
+      body: 'Rs 500 sent to TESTMERCHANT@upi from your account via UPI on 2026-10-02. UPI Ref 627289108470',
+      expected: { amountInr: 500, merchant: 'TESTMERCHANT@upi', instrument: 'upi_bank', reference: '627289108470' },
+    },
+  ];
+
+  for (const scenario of cases) {
+    const result = parseSmsAgainstPatterns([], { sender: 'SYNTHETIC-BANK', body: scenario.body });
+    assert.equal(result.ok, true, scenario.name);
+    for (const [field, value] of Object.entries(scenario.expected)) {
+      assert.equal(result.fields[field], value, `${scenario.name}: ${field}`);
+    }
+  }
+
+  const rejected = [
+    'TXN DECLINED: Rs.400.00 on 2026-10-02 at 13:52 on HDFC Bank Debit Card xx8406. Reason: Tap and Pay usage disabled',
+    'Transaction Reversed! On HDFC Bank CREDIT Card xx8708 Amt: Rs.103.49 By TEST MERCHANT On 2026-10-02:13:53:00',
+  ];
+  for (const body of rejected) {
+    const result = parseSmsAgainstPatterns([], { sender: 'SYNTHETIC-BANK', body });
+    assert.equal(result.ok, false, body);
+    assert.equal(result.reason, 'not_a_successful_spend', body);
+  }
+
+  const otp = parseSmsAgainstPatterns([], {
+    sender: 'SYNTHETIC-BANK',
+    body: 'OTP is 643697 for txn of INR 889.46 at TESTPAYMENT on HDFC Bank card ending 1366. Valid till 07:25. Do not share OTP.',
+  });
+  assert.equal(otp.ok, false);
+  assert.equal(otp.reason, 'security_message');
 });
