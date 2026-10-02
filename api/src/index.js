@@ -3453,8 +3453,21 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
     }
     res.status(result.status).json(result);
   } catch (err) {
-    console.error('POST /transactions/from-sms error', err);
-    res.status(500).json({ error: 'internal_error' });
+    console.error('POST /transactions/from-sms error', {
+      requestId: req.requestId,
+      phase: importPhase,
+      code: err.code,
+      constraint: err.constraint,
+      table: err.table,
+      column: err.column,
+    });
+    res.status(500).json({
+      error: 'internal_error',
+      requestId: req.requestId,
+      debugCode: err.code || null,
+      debugPhase: importPhase,
+      debugMessage: err.message || null,
+    });
   }
 });
 
