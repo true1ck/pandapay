@@ -1007,18 +1007,20 @@ class UserCardsRepository {
     DateTime? occurredAt,
     bool backfill = false,
   }) async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/transactions/from-sms'),
-      headers: _headers,
-      body: jsonEncode({
-        'userCardId': ?userCardId,
-        'sender': sender,
-        'body': body,
-        if (occurredAt != null)
-          'occurredAt': occurredAt.toUtc().toIso8601String(),
-        if (backfill) 'backfill': true,
-      }),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/transactions/from-sms'),
+          headers: _headers,
+          body: jsonEncode({
+            'userCardId': ?userCardId,
+            'sender': sender,
+            'body': body,
+            if (occurredAt != null)
+              'occurredAt': occurredAt.toUtc().toIso8601String(),
+            if (backfill) 'backfill': true,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw ApiException(
         'POST /transactions/from-sms failed: ${response.statusCode} ${response.body}',

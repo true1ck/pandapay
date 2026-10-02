@@ -1727,6 +1727,8 @@ final notificationTriggerLifecycleProvider = Provider<void>((ref) {
 /// A message stays queued unless the upload actually dealt with it, so a
 /// resume while offline loses nothing.
 final smsBackgroundFlushProvider = Provider<void>((ref) {
+  var workInProgress = false;
+
   Future<void> flush() async {
     final repo = ref.read(userCardsRepositoryProvider);
     // Guest mode has no server to send to; the queue simply waits until
@@ -1795,11 +1797,30 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     }
   }
 
-  final listener = AppLifecycleListener(onResume: flush);
+  Future<void> flushAndRetry() async {
+    if (workInProgress) return;
+    workInProgress = true;
+    try {
+      await flush();
+      await retryExistingNeedsReview();
+    } finally {
+      workInProgress = false;
+    }
+  }
+
+  // Auth restoration is asynchronous. The first startup pass can happen
+  // while there is no repository yet, so retry again as soon as the token is
+  // restored instead of leaving valid SMS spends stranded in the old local
+  // review queue.
+  ref.listen<String?>(accessTokenProvider, (previous, next) {
+    if (next != null && next != previous) unawaited(flushAndRetry());
+  });
+
+  final listener = AppLifecycleListener(onResume: () => unawaited(flushAndRetry()));
   ref.onDispose(listener.dispose);
   // Once at startup too: the most common case is the app being opened
   // fresh after messages arrived, which fires no resume event.
-  unawaited(flush().then((_) => retryExistingNeedsReview()));
+  unawaited(flushAndRetry());
 });
 
 /// Owns the one live SMS registration for the whole app. The old listener
