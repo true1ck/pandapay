@@ -99,7 +99,7 @@ set search_path = public, pandapay
 as $$
 begin
   return encode(
-    digest(p_profile::text || '|' || pandapay.current_contribution_salt(), 'sha256'),
+    extensions.digest(p_profile::text || '|' || pandapay.current_contribution_salt(), 'sha256'),
     'hex');
 end $$;
 

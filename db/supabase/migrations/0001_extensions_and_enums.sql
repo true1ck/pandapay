@@ -1,8 +1,26 @@
 -- >>> MIGRATION 0001 — EXTENSIONS AND ENUMS ===================================
 
+-- Supabase installs extensions in the `extensions` schema; the plain
+-- postgres image used by CI installs them in `public`. Keep a compatibility
+-- schema/function in the latter case so the same migrations exercise the
+-- same qualified `extensions.digest(...)` call in both environments.
+create schema if not exists extensions;
 create extension if not exists "pgcrypto";   -- gen_random_uuid, digest
 create extension if not exists "citext";     -- case-insensitive email/vpa
 create extension if not exists "pg_trgm";    -- merchant fuzzy search
+
+do $$
+begin
+  if to_regprocedure('extensions.digest(text,text)') is null
+     and to_regprocedure('public.digest(text,text)') is not null then
+    execute $sql$
+      create function extensions.digest(data text, type text)
+      returns bytea
+      language sql immutable strict
+      as 'select public.digest($1, $2)'
+    $sql$;
+  end if;
+end $$;
 
 
 create schema if not exists pandapay;        -- helper functions live here
