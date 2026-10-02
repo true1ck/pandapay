@@ -14,10 +14,9 @@ import '../../data/user_cards_repository.dart';
 import '../cards/find_cards_screen.dart';
 import 'sms_text_hint.dart';
 
-/// ui-spec.md F4 SMS Import — the one-time backup-file import path, and the
-/// only SMS path that ships in the prod build (smsextractionimple.md §2).
-/// It needs no SMS permission: the user exports their own messages with a
-/// backup app and hands us the file.
+/// ui-spec.md F4 SMS Import — the one-time backup-file import path. Live SMS
+/// auto-import is also available in the production build; this screen is the
+/// separate path for a user-provided backup export and needs no SMS permission.
 ///
 /// ## What actually happens to the user's messages
 ///

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # verify_prod_manifest.sh
-# Verifies that the prod flavor AndroidManifest.xml correctly strips READ_SMS and RECEIVE_SMS
-# to comply with Google Play Store policies.
+# Verifies that the prod flavor AndroidManifest.xml keeps the SMS permissions
+# and receiver required for automatic spending detection.
 
 set -e
 
@@ -16,18 +16,17 @@ if [ ! -f "$MANIFEST_PATH" ]; then
   exit 1
 fi
 
-echo "Verifying $MANIFEST_PATH for Play Store compliance..."
+echo "Verifying $MANIFEST_PATH for SMS auto-import..."
 
-if ! grep -q 'android.permission.READ_SMS.*tools:node="remove"' "$MANIFEST_PATH"; then
-  echo "❌ Error: READ_SMS permission is not explicitly removed in the prod manifest."
-  echo "Google Play Store Policy bans regular apps from requesting raw READ_SMS."
+if grep -q 'android.permission.READ_SMS.*tools:node="remove"' "$MANIFEST_PATH"; then
+  echo "❌ Error: READ_SMS is explicitly removed in the prod manifest."
   exit 1
 fi
 
-if ! grep -q 'android.permission.RECEIVE_SMS.*tools:node="remove"' "$MANIFEST_PATH"; then
-  echo "❌ Error: RECEIVE_SMS permission is not explicitly removed in the prod manifest."
+if grep -q 'android.permission.RECEIVE_SMS.*tools:node="remove"' "$MANIFEST_PATH"; then
+  echo "❌ Error: RECEIVE_SMS is explicitly removed in the prod manifest."
   exit 1
 fi
 
-echo "✅ Success: Prod manifest correctly strips SMS permissions."
+echo "✅ Success: Prod manifest does not remove SMS permissions."
 exit 0

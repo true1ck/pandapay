@@ -51,7 +51,7 @@ contract both reward engines are tested against.
 | W1.2 Email auto-creates a transaction | Done | `POST /inbound-emails/webhook` now runs `importParsedMessage` under `withUserClient(profile_id)` after the SECURITY DEFINER RPC returns the owner. |
 | W1.3 Email transaction date | Done | `parseTransactionDate()` in `api/src/sms_parser.js` — day-first, rejects impossible and future dates, returns null rather than falling back to "today". 9 tests. |
 | W1.4 IMAP poller | Done | `api/src/imap_client.js` (dependency-free IMAP subset, read-only `EXAMINE`) + `api/src/imap_poller.js` (advisory-locked interval, `last_poll_at` only advances on success). Off unless `IMAP_POLL_INTERVAL_MINUTES` is set. 13 tests. |
-| W1.5 Background SMS | Done, dev/staging only | `smsBackgroundHandler` (`@pragma('vm:entry-point')`) queues to disk; `smsBackgroundFlushProvider` uploads on resume. Gated on `!Env.isProd` — prod strips the permission at the manifest level for Play policy. 10 tests. |
+| W1.5 Background SMS | Done in all flavors | `smsBackgroundHandler` (`@pragma('vm:entry-point')`) queues to disk; `smsBackgroundFlushProvider` uploads on resume. Production retains the SMS permissions and receiver. 10 tests. |
 | W1.6 Merchant → category | Done | `resolveCategoryForImport` — user's own history, then crowdsourced VPA, then MCC, then the shipped `merchant_category_rules` table. |
 | W1.7 Dedupe sharpening | Done | ±₹1 amount tolerance, normalized merchant comparison, and **auto-merge at 0.9** — the later row is reversed and marked `ignored`, recorded as `resolution='merged'`, reversible from Duplicate Review. |
 
@@ -92,10 +92,9 @@ someone may want to revisit.
    server-side so only bank mail crosses the wire, and is **off by default**
    — a deployment must set `IMAP_POLL_INTERVAL_MINUTES` to enable it.
 
-2. **Background SMS: dev/staging only.** Enabled via
-   `onBackgroundMessage` when `!Env.isProd`. The prod flavor still strips
-   `READ_SMS`/`RECEIVE_SMS` at the manifest level, so the Play Store
-   position is unchanged.
+2. **Background SMS: enabled in all flavors.** The production manifest
+   retains `READ_SMS`/`RECEIVE_SMS` and the telephony receiver. Runtime
+   permission and user consent are still required before capture starts.
 
 3. **Duplicate auto-merge at 0.9: enabled.** Flagging alone left both copies
    `active` — and active means counted — so the exact double-count the queue

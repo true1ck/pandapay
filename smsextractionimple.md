@@ -37,12 +37,12 @@
 
 **Two governing constraints:**
 
-1. **Nothing here may put the Play Store listing at risk.** Every task ships *without* adding a permission to the prod manifest. Where a feature would need a restricted permission, the plan changes the feature, not the manifest. §1 states the rule; every task conforms to it.
+1. **Permissions must be deliberate and reviewable.** The production build includes the SMS permissions because automatic bank-spend detection is a core product feature. Runtime permission and explicit user consent remain required, and Play Console declarations must match the shipped behaviour.
 2. **Nothing here may ship a privacy claim the code does not honour.** §0.2 documents three user-facing statements that are currently false. Correcting them is a *blocker* on shipping the SMS path to prod, not a polish item — an inaccurate Data Safety declaration is a bigger enforcement risk than the permission it was written to avoid.
 
-**Scope:** get SMS-derived transaction import and card detection into the *production* build with **zero** SMS permissions.
+**Scope:** keep SMS-derived transaction import and card detection working in the *production* build with the required SMS permissions enabled.
 
-**Out of scope, deliberately:** Account Aggregator (RBI) integration, and re-adding `READ_SMS`/`RECEIVE_SMS` to prod. Both are legitimate but each is a large, separately-scoped investment with review or cost exposure. See §1.3.
+**Out of scope, deliberately:** Account Aggregator (RBI) integration. The production SMS permission path is in scope and enabled.
 
 **Map / location work has been removed from this plan** and is deferred. The `ACCESS_BACKGROUND_LOCATION` item in §1.2 is retained because it is a live review risk in the *current* manifest, independent of any map feature.
 
@@ -58,10 +58,10 @@ Every row was confirmed by reading the file or running the command, not inferred
 | **Inbound email receiver** | Built. Shared-secret auth, constant-time compare, non-enumerable. Retention is real (`purge_after` + [0013_cron_jobs.sql](db/supabase/migrations/0013_cron_jobs.sql)). No mail routed to it yet | **Yes** — blocked on infra only (F-8) | [index.js:5262](api/src/index.js) |
 | **Forwarding address issuance** | Built. One active address per profile, idempotent | Yes | [index.js:5213](api/src/index.js), [email_forwarding_screen.dart](app/lib/features/import/email_forwarding_screen.dart) |
 | **SMS backup-file import** | Real `file_picker`, real XML parser for the SMS Backup & Restore format, writes `sms_import_batches`. Requires no SMS permission | **No — six blocking defects.** See §0.1. Do not surface this in prod as-is | [sms_backup_import_screen.dart](app/lib/features/sms_import/sms_backup_import_screen.dart), [sms_backup_xml_parser.dart](app/lib/data/sms_backup_xml_parser.dart) |
-| **SMS live auto-read** | Correctly disabled in prod — manifest strips the permission, `Env.isProd` hides the UI | Yes (as disabled) | [sms_import_screen.dart](app/lib/features/sms_import/sms_import_screen.dart), [prod/AndroidManifest.xml](app/android/app/src/prod/AndroidManifest.xml) |
+| **SMS live auto-read** | Enabled in prod — merged manifest retains both permissions and the telephony receiver; the user grants permission before listening | Yes | [sms_import_screen.dart](app/lib/features/sms_import/sms_import_screen.dart), [AndroidManifest.xml](app/android/app/src/main/AndroidManifest.xml) |
 | **IMAP connection** | Form + live test-login. No background poller | Recommend **drop** — see F-10 | [imap_connection_screen.dart](app/lib/features/import/imap_connection_screen.dart), [imap_test.js](api/src/imap_test.js) |
 | **`user_cards` schema** | Stores no PAN, not even last-4. Do not add one | Yes | [0004_user_domain.sql:69](db/supabase/migrations/0004_user_domain.sql) |
-| **Prod merged manifest** | **Verified clean.** `prodRelease` packaged manifest contains no SMS and no storage permission. `ACCESS_BACKGROUND_LOCATION` *is* present | Answers old task S-2 — see S-2 (now a regression guard) | `app/build/app/intermediates/packaged_manifests/prodRelease/…/AndroidManifest.xml` |
+| **Prod merged manifest** | **Verified.** `prodRelease` packaged manifest contains `READ_SMS`, `RECEIVE_SMS`, the telephony receiver, and no broad storage permission. `ACCESS_BACKGROUND_LOCATION` *is* present | Answers the SMS packaging check | `app/build/app/intermediates/merged_manifests/prodRelease/…/AndroidManifest.xml` |
 
 ### 0.1 The six defects in the backup-import path
 
@@ -112,7 +112,7 @@ Why this framing rather than "apply for the permission": a permission declaratio
 
 ### 1.2 ⭐ Existing risk to resolve: `ACCESS_BACKGROUND_LOCATION`
 
-**Confirmed present in the built prod artefact**, not just the source manifest — `ACCESS_BACKGROUND_LOCATION` and `FOREGROUND_SERVICE_LOCATION` both appear in `prodRelease`'s packaged manifest. The prod flavor does not strip them the way it strips SMS.
+**Confirmed present in the built prod artefact**, not just the source manifest — `ACCESS_BACKGROUND_LOCATION` and `FOREGROUND_SERVICE_LOCATION` both appear in `prodRelease`'s packaged manifest. The prod flavor also retains the SMS permissions required by live auto-import.
 
 Google requires a Permissions Declaration and a demo video for background location, reviews it manually, and rejects apps whose core function doesn't demonstrably need it. PandaPay's background geofence is an **opt-in toggle, off by default** — precisely the "optional convenience feature" framing the prod SMS manifest comment correctly identified as *disqualifying*.
 
@@ -122,9 +122,9 @@ Google requires a Permissions Declaration and a demo video for background locati
 - **(b) Keep it and file the declaration** — accept manual review on every release, prepare a demo video, expect scrutiny of whether an off-by-default toggle justifies it.
 - **DoD:** a written decision, and if (a): `tools:node="remove"` entries alongside the SMS ones, `Env.isProd` gating on the background toggle in `nearby_merchants_screen.dart`, **and** a re-built `prodRelease` packaged manifest confirming both permissions are gone.
 
-### 1.3 Why not just get SMS permission back
+### 1.3 Production SMS permission
 
-The route exists — Google's Permissions Declaration Form, arguing SMS is *core* rather than optional. It's a poor bet: the prod manifest's own comment already concluded PandaPay's SMS import is optional (manual entry and card-scan both work without it). Filing a declaration that contradicts the app's own design invites rejection. §2 gets the same user value without the form.
+The production flavor keeps `READ_SMS` and `RECEIVE_SMS` because automatic bank-spend detection is a core product capability. The release process must keep the Play Console Permissions Declaration and Data Safety information aligned with this behaviour.
 
 > **Note:** Play policy changes, and this plan's policy reasoning has a knowledge cutoff. Re-verify current SMS/Call Log and background-location terms in the Play Console before acting on §1.2 or §1.3.
 
@@ -172,19 +172,19 @@ Do this before S-1. It is the prerequisite that makes S-1 shippable.
 Only after S-0 and S-1a.
 
 - Add a dedicated Import Hub tile — "Import SMS backup file" — **shown in all flavors**, routing directly to `SmsBackupImportScreen` rather than through `SmsImportScreen` ([import_hub_screen.dart:56](app/lib/features/import/import_hub_screen.dart) is the gate that currently hides it).
-- Keep the existing "SMS import" (live auto-read) tile `!Env.isProd`-gated exactly as it is. Do not merge the two: one is permission-free and shippable, the other is not.
+- Keep the live SMS auto-read tile available in every flavor. The backup-file import remains a separate permission-free path.
 - Copy must set expectations: the user exports SMS with a backup app (SMS Backup & Restore's XML is the format the parser handles), then picks the file — and must use the S-0 wording, not the old on-device claim.
 - **Add a kill switch.** Gate the tile behind a server-side flag so the feature can be disabled without a release if the first real-world exports behave unexpectedly. The blast radius of a bad import is the user's whole transaction history.
 - **Skill:** `flutter-riverpod-gorouter`.
-- **DoD:** a prod-flavor build reaches the backup import, parses a real export file, and creates correctly-dated transactions — with `READ_SMS` absent from the rebuilt `prodRelease` packaged manifest.
+- **DoD:** a prod-flavor build reaches both import paths, parses a real export file, creates correctly-dated transactions, and retains the live SMS permissions and receiver in the rebuilt `prodRelease` packaged manifest.
 
 ### Task S-2 Regression guard on the merged manifest (was: "verify file_picker")
 
-**Already verified — no work needed to answer the original question.** The current `prodRelease` packaged manifest contains no SMS and no storage permission; `file_picker`'s own library manifest contributes only a `<queries>` block for `GET_CONTENT`, and `telephony`'s contributes only `ACCESS_COARSE_LOCATION` (already present via the geofence feature). The Storage Access Framework assumption held.
+**Already verified — no work needed to answer the original question.** The current `prodRelease` packaged manifest contains the SMS permissions and receiver required for live auto-import, and no broad storage permission; `file_picker`'s own library manifest contributes only a `<queries>` block for `GET_CONTENT`. The Storage Access Framework assumption held.
 
 What is actually worth doing instead:
 
-- **Turn the check into CI.** Add a build step that greps the `prodRelease` packaged manifest for a denylist (`READ_SMS`, `RECEIVE_SMS`, `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, and — if §1.2 goes with (a) — `ACCESS_BACKGROUND_LOCATION`) and fails the build on a hit. A plugin bump is exactly how this regresses silently, and a human spot-check will not catch it.
+- **Turn the check into CI.** Add a build step that requires `READ_SMS`, `RECEIVE_SMS`, and the telephony receiver in the `prodRelease` packaged manifest while keeping broad storage permissions on a denylist. A plugin or flavor change is exactly how this can regress silently, and a human spot-check will not catch it.
 - **Pin `file_picker`.** `pubspec.yaml` currently declares `file_picker: ">=12.0.0-beta.1"` with **no upper bound**, resolving to `12.0.0-beta.7`. An unbounded range on a pre-release is a live risk of a breaking pull on any `pub upgrade`, in the one dependency this whole feature depends on. Pin to `12.0.0-beta.7` exactly, with a note to move to stable 12.x when it lands.
 - **Skill:** `codemagic-yaml-quickstart` for the CI step; `owasp-mobile-security-checker` for the denylist.
 - **DoD:** CI fails on an artificially-added `READ_SMS`; `file_picker` pinned.

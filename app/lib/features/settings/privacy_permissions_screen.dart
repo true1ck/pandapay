@@ -78,11 +78,6 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
               caption: 'used to scan payment QR codes',
               statusProvider: _cameraStatusProvider,
             ),
-            // prod flavor strips READ_SMS/RECEIVE_SMS from the manifest (see
-            // app/android/app/src/prod/AndroidManifest.xml) — Google Play's
-            // SMS/Call Log policy doesn't allow it for this optional
-            // convenience feature. Showing a status row for a permission the
-            // app never declared would just always read "denied".
             if (Platform.isAndroid) ...[
               const SizedBox(height: AppSpace.sm),
               _PermissionRow(

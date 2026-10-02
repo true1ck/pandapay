@@ -55,12 +55,8 @@ class ImportHubScreen extends ConsumerWidget {
             const SizedBox(height: AppSpace.lg),
             // Task S-1b: the backup-file import needs NO SMS permission —
             // the user exports their own messages and picks the file — so
-            // it ships in every flavor, including the one Play Console
-            // releases come from. It used to be reachable only THROUGH the
-            // live auto-read screen below, which meant the `!Env.isProd`
-            // gate on that tile hid the compliant path along with the
-            // non-compliant one. Two separate tiles, deliberately: merging
-            // them is what caused the bug.
+            // it remains available alongside live SMS auto-import in every
+            // flavor. The two paths stay as separate tiles deliberately.
             //
             // `smsBackupImportEnabled` is the server-side kill switch
             // (migration 0036) — a bad import's blast radius is the user's
@@ -87,12 +83,8 @@ class ImportHubScreen extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpace.md),
             ],
-            // The LIVE auto-read path is a different thing and stays gated:
-            // the prod flavor has no READ_SMS/RECEIVE_SMS (see
-            // app/android/app/src/prod/AndroidManifest.xml) — Google Play's
-            // SMS/Call Log policy doesn't allow it for this optional
-            // feature. Tapping through to a permission request that can
-            // only fail is worse than not showing the tile.
+            // The live auto-read path is available in every flavor. The user
+            // still grants SMS permission explicitly before listening starts.
             _ChannelCard(
               icon: Icons.sms_outlined,
               title: 'SMS auto-import (live)',

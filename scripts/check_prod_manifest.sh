@@ -1,26 +1,17 @@
 #!/usr/bin/env bash
 #
-# smsextractionimple.md Task S-2 — fail the build if a permission Play Store
-# review punishes us for has crept back into the shipped prod manifest.
+# smsextractionimple.md Task S-2 — verify the shipped prod manifest keeps
+# the permissions required by automatic SMS spending detection.
 #
 # WHY THIS EXISTS
 #
-# app/android/app/src/prod/AndroidManifest.xml strips READ_SMS/RECEIVE_SMS
-# with `tools:node="remove"`, and that is currently working. But the property
-# it guarantees — "the prod artefact declares no SMS permission" — is not
-# actually enforced by anything. It can regress silently in at least three
-# ways, none of which touch the file a human would think to check:
+# The production manifest inherits READ_SMS/RECEIVE_SMS and the telephony
+# receiver from the main manifest. The packaged manifest is checked because
+# plugin and flavor merges can change the final permission set.
 #
-#   1. A plugin bump. Library manifests merge into the app's, and a
-#      dependency that adds READ_EXTERNAL_STORAGE (or an SMS permission) does
-#      so with no diff in this repo at all beyond a version bump.
-#   2. Someone adds the permission to the main manifest without knowing the
-#      prod flavor is supposed to strip it.
-#   3. A refactor of the flavor manifest that drops or misspells a
-#      `tools:node="remove"` — which fails OPEN, keeping the permission.
-#
-# All three ship a Play Store review problem that no test catches, because
-# the app's own tests never look at the merged manifest.
+# A plugin bump can still accidentally remove the receiver or add broad
+# storage permissions, so this check covers both required SMS entries and the
+# storage denylist.
 #
 # This checks the MERGED, PACKAGED manifest for the prodRelease variant —
 # the actual bytes that go in the bundle — not the source manifest, which
@@ -40,12 +31,16 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../app" && pwd)"
 DEFAULT_MANIFEST="$APP_DIR/build/app/intermediates/packaged_manifests/prodRelease/processProdReleaseManifestForPackage/AndroidManifest.xml"
 MANIFEST="${1:-$DEFAULT_MANIFEST}"
 
-# Permissions that must never appear in a prod release.
+# Permissions that must be present in every prod release.
 #
-# The SMS pair is Play's SMS/Call Log policy: allowed only for an app that is
-# the user's default SMS handler with the permission as core, unremovable
-# functionality. PandaPay is not, and the backup-file import path
-# deliberately needs neither.
+# These are required for the live SMS auto-import feature. Runtime permission
+# and explicit user consent are still enforced by the app.
+REQUIRED_SMS=(
+  "android.permission.READ_SMS"
+  "android.permission.RECEIVE_SMS"
+)
+
+# Permissions that must never appear in a prod release.
 #
 # The storage pair is the Scoped Storage era: `file_picker` goes through the
 # Storage Access Framework and needs no permission, so one appearing means a
@@ -76,6 +71,15 @@ fi
 echo "check_prod_manifest: checking $MANIFEST"
 
 failed=0
+for perm in "${REQUIRED_SMS[@]}"; do
+  if grep -Eq "uses-permission[^>]*android:name=\"${perm//./\\.}\"" "$MANIFEST"; then
+    echo "  ok: $perm present"
+  else
+    echo "  MISSING: $perm is not declared in the prod release manifest" >&2
+    failed=1
+  fi
+done
+
 for perm in "${DENYLIST[@]}"; do
   # Match the permission name inside a uses-permission element specifically,
   # so a comment mentioning the constant doesn't trip the check.
@@ -90,7 +94,7 @@ done
 if [ "$failed" -ne 0 ]; then
   cat >&2 <<'EOF'
 
-The prod release manifest declares a permission that must not ship.
+The prod release manifest has an invalid permission set.
 
 This usually means a dependency's library manifest merged one in. Find it:
 
@@ -98,8 +102,9 @@ This usually means a dependency's library manifest merged one in. Find it:
   # then read the merge report:
   cat build/app/outputs/logs/manifest-merger-prodRelease-report.txt
 
-Strip it in app/android/app/src/prod/AndroidManifest.xml alongside the
-existing SMS entries:
+For missing SMS permissions, check app/android/app/src/main/AndroidManifest.xml
+and the flavor merge. For unwanted permissions, strip them in
+app/android/app/src/prod/AndroidManifest.xml:
 
   <uses-permission android:name="THE.PERMISSION" tools:node="remove"/>
 

@@ -72,16 +72,9 @@ class Env {
 
   static bool get isDev => environment == AppEnvironment.dev;
 
-  /// True for the `prod` Android flavor — the one Play Console releases
-  /// ship under (see app/android/app/build.gradle.kts). Used to hide SMS
-  /// auto-import's permission UI: Google Play's SMS/Call Log policy only
-  /// allows READ_SMS/RECEIVE_SMS for apps that are the user's default SMS
-  /// handler with the permission as core, unremovable functionality —
-  /// PandaPay's SMS import is an optional convenience feature (manual entry
-  /// and card-scan both work without it), so it doesn't qualify.
-  /// app/android/app/src/prod/AndroidManifest.xml strips both permissions
-  /// for this flavor at the manifest level; this flag keeps the UI from
-  /// showing an "Enable" button whose permission request can only fail.
+  /// True for the `prod` Android flavor — the one used for the production
+  /// application id. SMS capture remains enabled in this flavor; this getter
+  /// is retained for other environment-specific presentation decisions.
   static bool get isProd => environment == AppEnvironment.prod;
 
   /// True when either base URL still points at a loopback address. Used both
