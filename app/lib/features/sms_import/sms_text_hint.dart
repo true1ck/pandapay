@@ -63,6 +63,16 @@ String? extractLast4Hint(String smsBody) {
 /// silently never even attempted.
 bool looksLikeTransactionSms(String smsBody) {
   final lower = smsBody.toLowerCase();
+
+  // OTP and security alerts often contain "txn", "INR", and a card suffix.
+  // Reject them before the high-recall keyword check so they never reach the
+  // importer or appear in Needs Review as if they were failed transactions.
+  final otpOrSecurity = RegExp(
+        r'\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b',
+      ).hasMatch(lower) ||
+      RegExp(r"\b(?:do not|don't|never)\s+share\b").hasMatch(lower) ||
+      RegExp(r'\bvalid\s+(?:for|till|until)\b').hasMatch(lower);
+  if (otpOrSecurity) return false;
   
   // 1. Hard reject obvious promotional spam
   const promoWords = [

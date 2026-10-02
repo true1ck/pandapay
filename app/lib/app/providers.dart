@@ -1754,11 +1754,49 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     }
   }
 
+  // Parser improvements must also help messages that were already placed in
+  // the on-device review queue before this app version was installed. Retry
+  // once at startup through the same server path. Successful imports and
+  // explicitly recognised security messages leave the local queue; an item
+  // that still needs card attribution stays visible for a safe manual choice.
+  Future<void> retryExistingNeedsReview() async {
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null) return;
+    final reviewRepo = ref.read(needsReviewRepositoryProvider);
+    final items = await reviewRepo.fetchAll();
+    var changed = false;
+    for (final item in items) {
+      try {
+        final result = await repo.logTransactionFromSms(
+          sender: item.sender,
+          body: item.body,
+          occurredAt: item.receivedAt,
+        );
+        final canRemove = (result.parsed && !result.needsReview) ||
+            result.reason == 'security_message';
+        if (canRemove) {
+          await reviewRepo.remove(item.id);
+          changed = true;
+        }
+      } catch (_) {
+        // Keep the remaining items for the next app start if the API is
+        // offline or auth has not finished restoring yet.
+        break;
+      }
+    }
+    if (changed) {
+      ref.invalidate(needsReviewItemsProvider);
+      ref.invalidate(needsReviewCountProvider);
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(transactionsProvider);
+    }
+  }
+
   final listener = AppLifecycleListener(onResume: flush);
   ref.onDispose(listener.dispose);
   // Once at startup too: the most common case is the app being opened
   // fresh after messages arrived, which fires no resume event.
-  flush();
+  unawaited(flush().then((_) => retryExistingNeedsReview()));
 });
 
 /// Owns the one live SMS registration for the whole app. The old listener

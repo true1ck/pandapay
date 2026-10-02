@@ -172,3 +172,40 @@ test('built-in card fallback handles a QR/card alert when no issuer pattern is c
   assert.equal(result.fields.last4, '8708');
   assert.equal(result.fields.instrument, 'credit_card');
 });
+
+test('built-in card fallback handles a single-x mask, rupee symbol, and ISO date', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Spent ₹210 from HDFC Bank Card x8406 at QUALITY FUEL STATION on 2025-08-14. Available limit ₹12,000.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 210);
+  assert.equal(result.fields.last4, '8406');
+  assert.equal(result.fields.merchant, 'QUALITY FUEL STATION');
+  assert.equal(result.fields.date, '2025-08-14');
+});
+
+test('built-in UPI fallback stops merchant extraction before the source-account clause', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: '₹500 sent to merchant@upi from your account via UPI on 2025-08-14. UPI Ref 627289108470',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 500);
+  assert.equal(result.fields.merchant, 'merchant@upi');
+  assert.equal(result.fields.instrument, 'upi_bank');
+});
+
+test('OTP/security alerts are rejected even when they contain transaction-shaped fields', () => {
+  const otp = {
+    sender: 'VM-HDFCBK-S',
+    body: 'OTP is 643697 for txn of INR 889.46 at TATAPAYMENT on HDFC Bank card ending 1366. Valid till 07:25. Do not share OTP.',
+  };
+  const broadPattern = {
+    id: 'p-broad',
+    regex: 'INR ([\\d.]+).*card ending (\\d{4})',
+    field_map: { amount: 1, last4: 2 },
+  };
+  assert.equal(parseSms(broadPattern, otp).reason, 'security_message');
+  assert.equal(parseSmsAgainstPatterns([broadPattern], otp).ok, false);
+});

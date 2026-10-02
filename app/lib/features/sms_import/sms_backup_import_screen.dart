@@ -103,7 +103,7 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
 
   Future<void> _pickFile() async {
     setState(() => _pickError = null);
-    final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['xml']);
+    final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['xml', 'csv', 'txt']);
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.single;
 
@@ -125,7 +125,8 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
       // parsing for every issuer whose template uses the symbol.
       // allowMalformed keeps one bad byte from failing an otherwise good
       // 40,000-message file.
-      final messages = parseSmsBackupXml(utf8.decode(bytes, allowMalformed: true));
+      final content = utf8.decode(bytes, allowMalformed: true);
+      final messages = parseSmsBackup(content);
       if (messages.isEmpty) {
         setState(() => _pickError = "Couldn't find any messages in that file.");
         return;
@@ -176,6 +177,11 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
     // decide, rather than being silently assigned to whichever came first.
     final wallet = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
     for (final group in groups) {
+      // Default to letting the server decide (or it being a cardless bank transaction).
+      // The user can manually skip them if they want, but this avoids manual work
+      // for the vast majority of valid SMS groups.
+      group.userCardId = '__unassigned__';
+
       if (group.last4 == null) continue;
       final matches = wallet.where((c) => c.last4 == group.last4).toList();
       if (matches.length == 1) group.userCardId = matches.first.id;
@@ -211,7 +217,7 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
       for (final m in group.messages) {
         queue.add(
           SmsBatchMessage(
-            userCardId: group.userCardId!,
+            userCardId: group.userCardId == '__unassigned__' ? null : group.userCardId,
             sender: m.sender,
             body: m.body,
             occurredAt: m.sentAt!,
@@ -531,9 +537,10 @@ class _PickView extends StatelessWidget {
         ),
         const SizedBox(height: AppSpace.sm),
         Text(
-          'Export your messages with a backup app (SMS Backup & Restore produces the XML '
-          'format this reads), then pick the file here. PandaPay never reads your messages '
-          'off your phone directly — you choose the file, and you choose which cards it applies to.',
+          'Export your messages with any SMS backup app (SMS Backup & Restore, SMS Exporter, '
+          'or similar — both XML and CSV formats are supported), then pick the file here. '
+          'PandaPay never reads your messages off your phone directly — you choose the file, '
+          'and you choose which cards it applies to.',
           style: BambooFonts.ui(13.5, color: BambooInk.ink500),
         ),
         const SizedBox(height: AppSpace.xl),
@@ -723,6 +730,10 @@ class _GroupCard extends StatelessWidget {
               DropdownMenuItem(
                 value: null,
                 child: Text('Skip these', style: BambooFonts.ui(14, color: BambooInk.ink500)),
+              ),
+              DropdownMenuItem(
+                value: '__unassigned__',
+                child: Text('Bank account / Let PandaPay decide', style: BambooFonts.ui(14, color: BambooInk.ink900)),
               ),
               for (final c in cards)
                 DropdownMenuItem(

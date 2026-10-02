@@ -989,11 +989,11 @@ class UserCardsRepository {
       needsReview: (summary['needsReview'] as num?)?.toInt() ?? 0,
       errored: (summary['error'] as num?)?.toInt() ?? 0,
       // Indices are batch-relative; the caller maps them back to its own
-      // list so an unparsed message can still reach the needs-review queue
+      // list so an unparsed/unmatched message can still reach the needs-review queue
       // with its original text, exactly as the one-at-a-time path does.
       unparsedIndices: [
         for (final r in results)
-          if (r['outcome'] == 'unparsed') (r['index'] as num).toInt(),
+          if (r['outcome'] == 'unparsed' || r['outcome'] == 'needs_review') (r['index'] as num).toInt(),
       ],
       reasonByIndex: {
         for (final r in results)

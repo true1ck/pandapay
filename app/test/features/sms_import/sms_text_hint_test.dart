@@ -77,5 +77,14 @@ void main() {
     test('false for an OTP message', () {
       expect(looksLikeTransactionSms('8123 is your OTP. Valid for 10 minutes.'), false);
     });
+
+    test('false for an OTP that also mentions a transaction, amount, and card suffix', () {
+      expect(
+        looksLikeTransactionSms(
+          'OTP is 643697 for txn of INR 889.46 at TATAPAYMENT on HDFC Bank card ending 1366. Valid till 07:25. Do not share OTP.',
+        ),
+        false,
+      );
+    });
   });
 }

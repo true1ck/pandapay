@@ -61,4 +61,43 @@ void main() {
     final repo = NeedsReviewRepository();
     expect(await repo.fetchAll(), isEmpty);
   });
+
+  test('does not enqueue the same SMS twice when delivery timestamps are close', () async {
+    final repo = NeedsReviewRepository();
+    final receivedAt = DateTime(2026, 1, 2, 10, 0);
+    await repo.add(NeedsReviewItem(
+      id: 'first',
+      sender: 'VM-SLICE',
+      body: 'Rs. 875 spent on your credit card xx9080 at slice on 29-Sep-26.',
+      receivedAt: receivedAt,
+    ));
+    await repo.add(NeedsReviewItem(
+      id: 'duplicate',
+      sender: 'vm-slice',
+      body: '  Rs. 875 spent on your credit card xx9080 at slice on 29-Sep-26.  ',
+      receivedAt: receivedAt.add(const Duration(minutes: 2)),
+    ));
+
+    final all = await repo.fetchAll();
+    expect(all, hasLength(1));
+    expect(all.single.id, 'first');
+  });
+
+  test('keeps identical SMS text when it arrived on a different day', () async {
+    final repo = NeedsReviewRepository();
+    await repo.add(NeedsReviewItem(
+      id: 'day-one',
+      sender: 'VM-SLICE',
+      body: 'Rs. 875 spent on your credit card xx9080 at slice.',
+      receivedAt: DateTime(2026, 1, 2),
+    ));
+    await repo.add(NeedsReviewItem(
+      id: 'day-two',
+      sender: 'VM-SLICE',
+      body: 'Rs. 875 spent on your credit card xx9080 at slice.',
+      receivedAt: DateTime(2026, 1, 3),
+    ));
+
+    expect(await repo.fetchAll(), hasLength(2));
+  });
 }

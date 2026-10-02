@@ -16,18 +16,30 @@
 
 const KNOWN_FIELDS = ['amount', 'merchant', 'last4', 'date', 'instrument', 'reference', 'direction'];
 
+// OTP/security alerts can contain the same words as a transaction alert
+// ("txn", "INR", "card ending") but must never become spending records.
+// Keep this check before admin-configured patterns so a broad pattern cannot
+// accidentally turn an OTP into a transaction.
+function isSecurityOrOtpMessage(body) {
+  const text = String(body || '').toLowerCase();
+  return /\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b/.test(text)
+    || /\b(?:do not|don't|never)\s+share\b/.test(text)
+    || /\bvalid\s+(?:for|till|until)\b/.test(text);
+}
+
 function inferInstrument(body, hasLast4) {
   const text = String(body || '').toLowerCase();
   if (/\bdebit\s+card\b/.test(text)) return 'debit_card';
   if (/\bcredit\s+card\b/.test(text) || (hasLast4 && /\bcard\b/.test(text))) return 'credit_card';
-  if (/\b(?:upi|a\/?c\.?|account)\b/.test(text) && /\b(?:debit(?:ed)?|paid|spent)\b/.test(text)) return 'upi_bank';
+  if (/\b(?:upi|a\/?c\.?|account)\b/.test(text) && /\b(?:debit(?:ed)?|paid|spent|sent|transferred)\b/.test(text)) return 'upi_bank';
   return null;
 }
 
 function isSuccessfulSpend(body) {
   const text = String(body || '').toLowerCase();
+  if (isSecurityOrOtpMessage(text)) return false;
   if (/\b(?:declined|failed|failure|reversed|reversal|refund(?:ed)?|cancelled|canceled|credited)\b/.test(text)) return false;
-  return /\b(?:spent|debited|debit|paid|purchase|charged|withdrawn)\b/.test(text);
+  return /\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b/.test(text);
 }
 
 function parseBuiltInUpiDebit(sms) {
@@ -35,10 +47,10 @@ function parseBuiltInUpiDebit(sms) {
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_builtin_upi_match' };
   const instrument = inferInstrument(body, false);
   if (instrument !== 'upi_bank') return { ok: false, reason: 'no_builtin_upi_match' };
-  const amountMatch = body.match(/(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_builtin_upi_match' };
-  const merchantMatch = body.match(/\b(?:to|at|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:on|via|upi|ref(?:erence)?|txn|transaction)\b|[.,]|$)/i);
-  const dateMatch = body.match(/\b(\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  const merchantMatch = body.match(/\b(?:to|at|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|[.,]|$)/i);
+  const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:upi\s*)?(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
   return {
     ok: true,
@@ -57,15 +69,15 @@ function parseBuiltInUpiDebit(sms) {
 function parseBuiltInCardSpend(sms) {
   const body = String(sms?.body || '');
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_builtin_card_match' };
-  const last4Match = body.match(/\b(?:credit|debit)\s+card\b[\s\S]{0,50}?(?:ending|xx|x{2,}|last\s*4)\D{0,5}(\d{4})/i)
-    || body.match(/\bcard\b[\s\S]{0,30}?(?:ending|xx|x{2,}|last\s*4)\D{0,5}(\d{4})/i);
+  const last4Match = body.match(/\b(?:credit|debit)\s+card\b[\s\S]{0,60}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|\.{3,}|last\s*4|no\.?)\D{0,5}(\d{4})/i)
+    || body.match(/\bcard\b[\s\S]{0,40}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|\.{3,}|last\s*4|no\.?)\D{0,5}(\d{4})/i);
   if (!last4Match) return { ok: false, reason: 'no_builtin_card_match' };
   const instrument = inferInstrument(body, true);
   if (instrument !== 'credit_card' && instrument !== 'debit_card') return { ok: false, reason: 'no_builtin_card_match' };
-  const amountMatch = body.match(/(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_builtin_card_match' };
-  const merchantMatch = body.match(/\b(?:at|to|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:on|via|upi|ref(?:erence)?|txn|transaction)\b|[.,]|$)/i);
-  const dateMatch = body.match(/\b(\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  const merchantMatch = body.match(/\b(?:at|to|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|[.,]|$)/i);
+  const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   return {
     ok: true,
     patternId: null,
@@ -108,6 +120,9 @@ function parseSms(pattern, sms) {
   }
   if (!sms || typeof sms.body !== 'string' || !sms.body.trim()) {
     return { ok: false, reason: 'empty_body' };
+  }
+  if (isSecurityOrOtpMessage(sms.body)) {
+    return { ok: false, reason: 'security_message' };
   }
   if (!senderMatches(pattern.sender_pattern, sms.sender)) {
     return { ok: false, reason: 'sender_mismatch' };

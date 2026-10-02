@@ -67,6 +67,19 @@ class NeedsReviewRepository {
   Future<void> add(NeedsReviewItem item) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
+    final normalizedSender = item.sender.trim().toLowerCase();
+    final normalizedBody = item.body.trim();
+    final duplicate = raw.any((encoded) {
+      final existing = NeedsReviewItem.fromJson(
+        jsonDecode(encoded) as Map<String, dynamic>,
+      );
+      final sameMessage = existing.sender.trim().toLowerCase() == normalizedSender &&
+          existing.body.trim() == normalizedBody;
+      final closeInTime = existing.receivedAt.difference(item.receivedAt).abs() <=
+          const Duration(minutes: 5);
+      return sameMessage && closeInTime;
+    });
+    if (duplicate) return;
     await prefs.setStringList(_needsReviewKey, [...raw, jsonEncode(item.toJson())]);
   }
 
