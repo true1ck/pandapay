@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -448,7 +448,7 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
     state = const AsyncValue.data(true);
     // Plan Phase 1.1: the highest-value key in the sync registry. Without
     // it, an existing user signing in on a second device is sent back
-    // through Welcome and Account Choice as though they were brand new.
+    // through Welcome and direct auth as though they were brand new.
     _ref.read(settingsSyncProvider).pushKeyQuietly(_onboardingCompleteKey);
     // Plan Phase 2.2: the activation funnel's first measurable completion.
     _ref.read(analyticsProvider).track(AnalyticsEvent.onboardingCompleted);
@@ -469,7 +469,7 @@ class OnboardingController extends StateNotifier<AsyncValue<bool>> {
 /// been seen. Deliberately a SEPARATE flag from onboardingCompleteProvider
 /// above, not a reuse of it — Settings' future "Replay tutorial" (Task 21)
 /// must reset only the coach marks, never send a returning user back
-/// through Welcome/Account Choice.
+/// through Welcome/direct auth.
 const _tutorialSeenKey = 'pandapay_app.tutorial_seen_v1';
 
 final tutorialSeenProvider =
@@ -823,12 +823,14 @@ final myCardsProvider = FutureProvider<List<UserCard>>((ref) async {
   if (repo == null) {
     final local = await ref.watch(localUserCardsRepositoryProvider.future);
     final catalogue = await ref.watch(catalogueProvider.future);
-    return local.fetchUserCards(
+    final cards = await local.fetchUserCards(
       includeArchived: includeArchived,
       catalogue: catalogue,
     );
+    return cards.where((card) => card.isArchived == includeArchived).toList();
   }
-  return repo.fetchUserCards(includeArchived: includeArchived);
+  final cards = await repo.fetchUserCards(includeArchived: includeArchived);
+  return cards.where((card) => card.isArchived == includeArchived).toList();
 });
 
 /// Task C-1/C-2: same join as ownedCardsWithProductProvider, but sourced
@@ -1742,11 +1744,27 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         body,
         receivedAt,
       ) async {
-        await repo.logTransactionFromSms(
+        final result = await repo.logTransactionFromSms(
           sender: sender,
           body: body,
           occurredAt: receivedAt,
         );
+        if (!result.parsed) {
+          // Match the foreground behavior. This id stays stable if the app
+          // stops before the background queue is cleared.
+          await ref
+              .read(needsReviewRepositoryProvider)
+              .add(
+                NeedsReviewItem(
+                  id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
+                  sender: sender,
+                  body: body,
+                  reason: result.reason,
+                  receivedAt: receivedAt,
+                ),
+              );
+          ref.invalidate(needsReviewItemsProvider);
+        }
         // Every one of these is "dealt with": imported, recognised as
         // already imported, or explicitly ignored as a non-spend. Successful
         // spends are recorded without requiring card attribution. Only a
@@ -1854,7 +1872,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     if (next != null && next != previous) unawaited(flushAndRetry());
   });
 
-  final listener = AppLifecycleListener(onResume: () => unawaited(flushAndRetry()));
+  final listener = AppLifecycleListener(
+    onResume: () => unawaited(flushAndRetry()),
+  );
   ref.onDispose(listener.dispose);
   // Once at startup too: the most common case is the app being opened
   // fresh after messages arrived, which fires no resume event.

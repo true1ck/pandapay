@@ -40,14 +40,15 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
 
   try {
     final prefs = await SharedPreferences.getInstance();
+    final messageTimestamp = message.date ?? message.dateSent;
     await SmsBackgroundQueue.enqueue(
       prefs,
       QueuedSms(
         sender: sender,
         body: body,
-        receivedAt: message.date == null
+        receivedAt: messageTimestamp == null
             ? DateTime.now()
-            : DateTime.fromMillisecondsSinceEpoch(message.date!),
+            : DateTime.fromMillisecondsSinceEpoch(messageTimestamp),
       ),
     );
   } catch (_) {
@@ -168,6 +169,11 @@ class SmsListenerService {
   /// Background delivery is registered alongside it via
   /// [smsBackgroundHandler], so an alert arriving while the app is closed
   /// is queued on disk and uploaded on next resume rather than lost.
+  /// is queued on disk and uploaded on next resume rather than lost. It is
+  /// enabled only OUTSIDE the prod flavor: prod strips READ_SMS/RECEIVE_SMS
+  /// at the manifest level for Play Store policy reasons (see [Env.isProd]),
+  /// so asking for background delivery there would register a handler whose
+  /// permission can never be granted.
   void listenForeground(void Function(String sender, String body, DateTime receivedAt) onSms) {
     _telephony.listenIncomingSms(
       onNewMessage: (SmsMessage message) {
@@ -175,10 +181,14 @@ class SmsListenerService {
         final body = message.body;
         if (sender == null || body == null) return;
         if (!looksLikeTransactionSms(body)) return;
-        final receivedAt = message.date == null
-            ? DateTime.now()
-            : DateTime.fromMillisecondsSinceEpoch(message.date!);
-        onSms(sender, body, receivedAt);
+        final messageTimestamp = message.date ?? message.dateSent;
+        onSms(
+          sender,
+          body,
+          messageTimestamp == null
+              ? DateTime.now()
+              : DateTime.fromMillisecondsSinceEpoch(messageTimestamp),
+        );
       },
       onBackgroundMessage: smsBackgroundHandler,
       listenInBackground: true,

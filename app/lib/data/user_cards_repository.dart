@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:uuid/uuid.dart';
 
 import 'api_exception.dart';
 
@@ -895,7 +896,9 @@ class UserCardsRepository {
     String? rail,
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
+    String? clientMutationId,
   }) async {
+    final mutationId = clientMutationId ?? const Uuid().v4();
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/transactions'),
       headers: _headers,
@@ -909,12 +912,13 @@ class UserCardsRepository {
         'rail': ?rail,
         'instrument': instrument.wireValue,
         'entryKind': entryKind.wireValue,
+        'clientMutationId': mutationId,
       }),
     );
-    if (response.statusCode != 201) {
-      throw ApiException(
-        'POST /transactions failed: ${response.statusCode} ${response.body}',
-      );
+    // A 200 is an exact retry whose first response was lost. The canonical
+    // transaction is returned in both cases and must leave the outbox.
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw ApiException('POST /transactions failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['transaction'] as Map<String, dynamic>)['id'] as String;

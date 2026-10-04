@@ -69,18 +69,25 @@ class NeedsReviewRepository {
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
     final normalizedSender = item.sender.trim().toLowerCase();
     final normalizedBody = item.body.trim();
-    final duplicate = raw.any((encoded) {
-      final existing = NeedsReviewItem.fromJson(
-        jsonDecode(encoded) as Map<String, dynamic>,
-      );
-      final sameMessage = existing.sender.trim().toLowerCase() == normalizedSender &&
-          existing.body.trim() == normalizedBody;
-      final closeInTime = existing.receivedAt.difference(item.receivedAt).abs() <=
-          const Duration(minutes: 5);
-      return sameMessage && closeInTime;
+    var duplicate = false;
+    final withoutRetry = raw.where((entry) {
+      try {
+        final existing = NeedsReviewItem.fromJson(
+          jsonDecode(entry) as Map<String, dynamic>,
+        );
+        if (existing.id == item.id) return false;
+        final sameMessage = existing.sender.trim().toLowerCase() == normalizedSender &&
+            existing.body.trim() == normalizedBody;
+        final closeInTime = existing.receivedAt.difference(item.receivedAt).abs() <=
+            const Duration(minutes: 5);
+        if (sameMessage && closeInTime) duplicate = true;
+        return true;
+      } catch (_) {
+        return true;
+      }
     });
     if (duplicate) return;
-    await prefs.setStringList(_needsReviewKey, [...raw, jsonEncode(item.toJson())]);
+    await prefs.setStringList(_needsReviewKey, [...withoutRetry, jsonEncode(item.toJson())]);
   }
 
   /// "Not a transaction" dismiss, or a successful one-tap-fill resolution —

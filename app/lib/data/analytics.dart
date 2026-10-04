@@ -33,7 +33,6 @@ enum AnalyticsEvent {
   importCompleted('import_completed'),
   acceptanceReportSubmitted('acceptance_report_submitted'),
   partnerApplyTapped('partner_apply_tapped'),
-  guestWalletMigrated('guest_wallet_migrated'),
   deviceRevoked('device_revoked');
 
   final String wire;
@@ -73,7 +72,14 @@ class Analytics {
   /// `pandapay.filter_analytics_props`). Duplicated here so a call site
   /// passing something else fails loudly in debug rather than having the key
   /// silently dropped in production and the analysis quietly come out wrong.
-  static const allowedPropKeys = {'source', 'placement', 'step', 'result', 'count_bucket', 'surface'};
+  static const allowedPropKeys = {
+    'source',
+    'placement',
+    'step',
+    'result',
+    'count_bucket',
+    'surface',
+  };
 
   final List<Map<String, Object?>> _buffer = [];
   bool _flushing = false;

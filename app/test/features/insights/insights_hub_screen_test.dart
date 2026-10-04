@@ -26,14 +26,21 @@ class _EmptyCategoryRepository implements CategoryRepository {
 }
 
 Future<void> _pumpApp(WidgetTester tester) async {
-  SharedPreferences.setMockInitialValues({'pandapay_app.onboarding_complete_v1': true});
+  SharedPreferences.setMockInitialValues({
+    'pandapay_app.onboarding_complete_v1': true,
+  });
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(const [])),
-        categoryRepositoryProvider.overrideWithValue(_EmptyCategoryRepository()),
+        catalogueRepositoryProvider.overrideWithValue(
+          _FakeCatalogueRepository(const []),
+        ),
+        categoryRepositoryProvider.overrideWithValue(
+          _EmptyCategoryRepository(),
+        ),
         userCardsProvider.overrideWith((ref) async => const []),
         sessionInitProvider.overrideWith((ref) async {}),
+        accessTokenProvider.overrideWith((ref) => 'test-token'),
       ],
       child: Consumer(
         builder: (context, ref, _) => MaterialApp.router(
@@ -63,13 +70,18 @@ Future<void> _reveal(WidgetTester tester, String label) async {
 Future<void> _openInsights(WidgetTester tester) async {
   await _pumpApp(tester);
   await tester.tap(
-    find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('Insights')),
+    find.descendant(
+      of: find.byKey(const ValueKey('appShellNavBar')),
+      matching: find.text('Insights'),
+    ),
   );
   await tester.pumpAndSettle();
 }
 
 void main() {
-  testWidgets('the grid offers six grouped insights, not eighteen', (tester) async {
+  testWidgets('the grid offers six grouped insights, not eighteen', (
+    tester,
+  ) async {
     // The grid had grown one tile per shipped screen and most of them
     // answered slices of the same few questions. These six are the whole
     // list now; anything that used to be its own tile is a tab behind one
@@ -88,11 +100,17 @@ void main() {
       'Subscriptions',
     ]) {
       await _reveal(tester, label);
-      expect(find.text(label), findsOneWidget, reason: '$label tile should be reachable by scrolling');
+      expect(
+        find.text(label),
+        findsOneWidget,
+        reason: '$label tile should be reachable by scrolling',
+      );
     }
   });
 
-  testWidgets('the tiles that were merged away are gone from the grid', (tester) async {
+  testWidgets('the tiles that were merged away are gone from the grid', (
+    tester,
+  ) async {
     // Guards the consolidation itself: if one of these reappears as its own
     // tile, the grid has started regrowing and the merge has been undone.
     await _openInsights(tester);
@@ -114,11 +132,17 @@ void main() {
       'All Activity',
       'My Contributions',
     ]) {
-      expect(find.text(gone), findsNothing, reason: '$gone should live behind a grouped tile now');
+      expect(
+        find.text(gone),
+        findsNothing,
+        reason: '$gone should live behind a grouped tile now',
+      );
     }
   });
 
-  testWidgets('leads with the earned figure, not the tile grid', (tester) async {
+  testWidgets('leads with the earned figure, not the tile grid', (
+    tester,
+  ) async {
     await _openInsights(tester);
 
     // The point of the rebuild: the tab answers "what did I earn" on
@@ -129,7 +153,9 @@ void main() {
     expect(find.text('Nothing to report yet'), findsOneWidget);
   });
 
-  testWidgets('Limits & perks opens the grouped screen, landing on Caps', (tester) async {
+  testWidgets('Limits & perks opens the grouped screen, landing on Caps', (
+    tester,
+  ) async {
     // Caps is still one tap away — it is the first tab of the group, so the
     // merge cost no depth for the most-used view while putting milestones,
     // fee waivers and lounge quotas one tap from it instead of three.
@@ -142,7 +168,11 @@ void main() {
     expect(find.byType(CapsScreen), findsOneWidget);
     expect(find.byType(BackButton), findsOneWidget);
     for (final tab in const ['Caps', 'Milestones', 'Fee waivers', 'Lounge']) {
-      expect(find.text(tab), findsWidgets, reason: 'the group must expose its siblings as tabs');
+      expect(
+        find.text(tab),
+        findsWidgets,
+        reason: 'the group must expose its siblings as tabs',
+      );
     }
   });
 }

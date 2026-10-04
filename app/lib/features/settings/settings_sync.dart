@@ -49,7 +49,7 @@ class SyncedPref {
 const kSyncedPrefs = <SyncedPref>[
   // First-run state. The single most valuable thing here: without it, an
   // existing user signing in on a new phone is walked through Welcome and
-  // Account Choice again as if they had never used the app.
+  // direct auth again as if they had never used the app.
   SyncedPref('pandapay_app.onboarding_complete_v1', SyncedPrefType.boolean),
   SyncedPref('pandapay_app.tutorial_seen_v1', SyncedPrefType.boolean),
   // H6 Appearance.

@@ -21,9 +21,9 @@
 #
 # staging/prod require PANDAPAY_API_BASE_URL and PANDAPAY_AUTH_BASE_URL to
 # already be set in the environment (deploy/DEPLOY.md documents where
-# those come from) — dev defaults to localhost, matching env.dart's own
-# defaults, since that's the only flavor a debug/local build should ever
-# use.
+# those come from) — dev defaults to 10.0.2.2, the Android emulator's alias
+# for this Mac. Set the variables explicitly when running a dev build on iOS,
+# desktop, or a physical device.
 #
 # Target defaults to `apk` (sideloading/testing) — pass `appbundle` as the
 # second argument for a Play Console upload; Play no longer accepts a bare
@@ -47,8 +47,9 @@ fi
 case "$ENV_NAME" in
   dev)
     FLAVOR=dev
-    API_BASE_URL="${PANDAPAY_API_BASE_URL:-http://localhost:4000}"
-    AUTH_BASE_URL="${PANDAPAY_AUTH_BASE_URL:-http://localhost:3210}"
+    API_BASE_URL="${PANDAPAY_API_BASE_URL:-http://10.0.2.2:4000}"
+    AUTH_BASE_URL="${PANDAPAY_AUTH_BASE_URL:-http://10.0.2.2:3210}"
+    LEGAL_BASE_URL="${PANDAPAY_LEGAL_BASE_URL:-http://10.0.2.2:4000/legal/}"
     ;;
   staging)
     FLAVOR=staging
@@ -56,6 +57,7 @@ case "$ENV_NAME" in
     : "${PANDAPAY_AUTH_BASE_URL:?staging build requires PANDAPAY_AUTH_BASE_URL to be set}"
     API_BASE_URL="$PANDAPAY_API_BASE_URL"
     AUTH_BASE_URL="$PANDAPAY_AUTH_BASE_URL"
+    LEGAL_BASE_URL="${PANDAPAY_LEGAL_BASE_URL:-${API_BASE_URL%/}/legal/}"
     ;;
   prod)
     FLAVOR=prod
@@ -63,6 +65,7 @@ case "$ENV_NAME" in
     : "${PANDAPAY_AUTH_BASE_URL:?prod build requires PANDAPAY_AUTH_BASE_URL to be set}"
     API_BASE_URL="$PANDAPAY_API_BASE_URL"
     AUTH_BASE_URL="$PANDAPAY_AUTH_BASE_URL"
+    LEGAL_BASE_URL="${PANDAPAY_LEGAL_BASE_URL:-${API_BASE_URL%/}/legal/}"
     ;;
   *)
     echo "Unknown environment '$ENV_NAME' — expected dev, staging, or prod" >&2
@@ -76,10 +79,12 @@ cd "$REPO_ROOT/app"
 echo "==> Building $FLAVOR flavor ($BUILD_TARGET) against:"
 echo "    PANDAPAY_API_BASE_URL=$API_BASE_URL"
 echo "    PANDAPAY_AUTH_BASE_URL=$AUTH_BASE_URL"
+echo "    PANDAPAY_LEGAL_BASE_URL=$LEGAL_BASE_URL"
 
 exec flutter build "$BUILD_TARGET" \
   --flavor "$FLAVOR" \
   --dart-define=PANDAPAY_ENV="$ENV_NAME" \
   --dart-define=PANDAPAY_API_BASE_URL="$API_BASE_URL" \
   --dart-define=PANDAPAY_AUTH_BASE_URL="$AUTH_BASE_URL" \
+  --dart-define=PANDAPAY_LEGAL_BASE_URL="$LEGAL_BASE_URL" \
   "$@"

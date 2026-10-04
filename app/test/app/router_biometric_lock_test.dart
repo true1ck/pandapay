@@ -6,7 +6,8 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/home/home_screen.dart';
-import 'package:pandapay/features/settings/account_settings_screen.dart' show biometricLockProvider;
+import 'package:pandapay/features/settings/account_settings_screen.dart'
+    show biometricLockProvider;
 import 'package:pandapay/features/system/biometric_lock_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -48,9 +49,16 @@ Future<void> _pumpApp(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_EmptyCatalogueRepository()),
-        categoryRepositoryProvider.overrideWithValue(_EmptyCategoryRepository()),
+        catalogueRepositoryProvider.overrideWithValue(
+          _EmptyCatalogueRepository(),
+        ),
+        categoryRepositoryProvider.overrideWithValue(
+          _EmptyCategoryRepository(),
+        ),
+        userCardsProvider.overrideWith((ref) async => const []),
         sessionInitProvider.overrideWith((ref) async {}),
+        sessionKeepAliveProvider.overrideWith((ref) {}),
+        accessTokenProvider.overrideWith((ref) => 'test-token'),
         ...extraOverrides,
       ],
       child: Consumer(
@@ -71,34 +79,39 @@ Future<void> _pumpApp(
 }
 
 void main() {
-  testWidgets('the toggle off reaches Home normally, never showing the lock screen', (tester) async {
-    await _pumpApp(tester, biometricLockEnabled: false);
+  testWidgets(
+    'the toggle off reaches Home normally, never showing the lock screen',
+    (tester) async {
+      await _pumpApp(tester, biometricLockEnabled: false);
 
-    expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.byType(BiometricLockScreen), findsNothing);
-  });
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(BiometricLockScreen), findsNothing);
+    },
+  );
 
-  testWidgets('the toggle on, not yet unlocked this session, blocks every route with BiometricLockScreen', (
-    tester,
-  ) async {
-    await _pumpApp(tester, biometricLockEnabled: true, settleAfter: false);
+  testWidgets(
+    'the toggle on, not yet unlocked this session, blocks every route with BiometricLockScreen',
+    (tester) async {
+      await _pumpApp(tester, biometricLockEnabled: true, settleAfter: false);
 
-    expect(find.byType(BiometricLockScreen), findsOneWidget);
-    expect(find.byType(HomeScreen), findsNothing);
-  });
+      expect(find.byType(BiometricLockScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+    },
+  );
 
-  testWidgets('the toggle on but already unlocked this session reaches Home, not the lock screen', (
-    tester,
-  ) async {
-    await _pumpApp(
-      tester,
-      biometricLockEnabled: true,
-      extraOverrides: [biometricUnlockedProvider.overrideWith((ref) => true)],
-    );
+  testWidgets(
+    'the toggle on but already unlocked this session reaches Home, not the lock screen',
+    (tester) async {
+      await _pumpApp(
+        tester,
+        biometricLockEnabled: true,
+        extraOverrides: [biometricUnlockedProvider.overrideWith((ref) => true)],
+      );
 
-    expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.byType(BiometricLockScreen), findsNothing);
-  });
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(BiometricLockScreen), findsNothing);
+    },
+  );
 
   // A scenario about flipping biometricUnlockedProvider mid-session and
   // confirming the redirect reacts live via _RouterRefreshNotifier was
@@ -120,42 +133,52 @@ void main() {
   // previous session. Drives the controller's own real setEnabled() rather
   // than a synthetic subclass, so this exercises the exact API
   // account_settings_screen.dart's toggle calls.
-  testWidgets('turning the toggle on live locks the app without any other navigation happening', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({
-      'pandapay_app.onboarding_complete_v1': true,
-      'biometric_lock_enabled_v1': false,
-    });
-    final container = ProviderContainer(
-      overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_EmptyCatalogueRepository()),
-        categoryRepositoryProvider.overrideWithValue(_EmptyCategoryRepository()),
-        sessionInitProvider.overrideWith((ref) async {}),
-      ],
-    );
-    addTearDown(container.dispose);
+  testWidgets(
+    'turning the toggle on live locks the app without any other navigation happening',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'pandapay_app.onboarding_complete_v1': true,
+        'biometric_lock_enabled_v1': false,
+      });
+      final container = ProviderContainer(
+        overrides: [
+          catalogueRepositoryProvider.overrideWithValue(
+            _EmptyCatalogueRepository(),
+          ),
+          categoryRepositoryProvider.overrideWithValue(
+            _EmptyCategoryRepository(),
+          ),
+          userCardsProvider.overrideWith((ref) async => const []),
+          sessionInitProvider.overrideWith((ref) async {}),
+          sessionKeepAliveProvider.overrideWith((ref) {}),
+          accessTokenProvider.overrideWith((ref) => 'test-token'),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: Consumer(
-          builder: (context, ref, _) =>
-              MaterialApp.router(theme: AppTheme.light(), routerConfig: ref.watch(goRouterProvider)),
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: Consumer(
+            builder: (context, ref, _) => MaterialApp.router(
+              theme: AppTheme.light(),
+              routerConfig: ref.watch(goRouterProvider),
+            ),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.byType(BiometricLockScreen), findsNothing);
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(BiometricLockScreen), findsNothing);
 
-    // Same call account_settings_screen.dart's SwitchListTile makes.
-    await container.read(biometricLockProvider.notifier).setEnabled(true);
-    for (var i = 0; i < 10; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+      // Same call account_settings_screen.dart's SwitchListTile makes.
+      await container.read(biometricLockProvider.notifier).setEnabled(true);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
 
-    expect(find.byType(BiometricLockScreen), findsOneWidget);
-    expect(find.byType(HomeScreen), findsNothing);
-  });
+      expect(find.byType(BiometricLockScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+    },
+  );
 }

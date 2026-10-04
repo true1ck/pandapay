@@ -7,13 +7,12 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/account_api.dart';
 import '../../data/api_exception.dart';
-import '../auth/login_screen.dart';
 import '../../app/env.dart';
 
 /// H2 Account (real) — replaces AccountScreen's ~15%-built body (signed-in
-/// state + sign-out only) with the full spec surface: sign-out, "upgrade
-/// from local mode", a biometric-lock toggle, and the account-deletion
-/// flow. Built as a standalone pushed screen per this task's plan — a
+/// state + sign-out only) with the full spec surface: sign-out, a
+/// biometric-lock toggle, and the account-deletion flow. Built as a standalone
+/// pushed screen per this task's plan — a
 /// later task wires it into AccountScreen/SettingsHubScreen, so this file
 /// does not touch providers.dart, router.dart, or account_screen.dart.
 class AccountSettingsScreen extends ConsumerWidget {
@@ -28,7 +27,10 @@ class AccountSettingsScreen extends ConsumerWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Account', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Account',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(child: const _AccountSettingsBody()),
     );
@@ -43,14 +45,14 @@ class _AccountSettingsBody extends ConsumerWidget {
     final profile = ref.watch(profileProvider);
     return profile.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) =>
-          ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(profileProvider)),
+      error: (err, _) => ErrorState(
+        message: userFacingErrorMessage(err),
+        onRetry: () => ref.invalidate(profileProvider),
+      ),
       data: (profileData) => ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
         children: [
           _IdentityCard(profileData: profileData),
-          const SizedBox(height: AppSpace.xxl),
-          const _UpgradeFromLocalModeRow(),
           const SizedBox(height: AppSpace.xxl),
           Text(
             'SECURITY',
@@ -79,7 +81,9 @@ class _IdentityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final email = profileData?['email'] as String?;
-    final identifier = (email != null && email.isNotEmpty) ? email : 'ID · ${profileData?['id'] ?? '—'}';
+    final identifier = (email != null && email.isNotEmpty)
+        ? email
+        : 'ID · ${profileData?['id'] ?? '—'}';
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
@@ -95,15 +99,25 @@ class _IdentityCard extends StatelessWidget {
           Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(color: BambooInk.lime.withValues(alpha: 0.16), shape: BoxShape.circle),
-            child: const Icon(Icons.person_rounded, color: BambooInk.lime, size: 24),
+            decoration: BoxDecoration(
+              color: BambooInk.lime.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.person_rounded,
+              color: BambooInk.lime,
+              size: 24,
+            ),
           ),
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Signed in', style: BambooFonts.heading(16, color: BambooInk.onSlate)),
+                Text(
+                  'Signed in',
+                  style: BambooFonts.heading(16, color: BambooInk.onSlate),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   identifier,
@@ -119,64 +133,6 @@ class _IdentityCard extends StatelessWidget {
   }
 }
 
-/// Visible only in local/guest mode (`accessTokenProvider == null`).
-/// Per the plan's own honesty scoping: this wires the navigation to
-/// account creation only. Local->cloud data migration (moving any
-/// locally-cached cards/transactions onto the new account) is a real,
-/// separate gap — there is no offline cache today for Cards/Activity to
-/// migrate from (both screens are server-fetched once signed in), so
-/// nothing here silently implies migration works.
-class _UpgradeFromLocalModeRow extends ConsumerWidget {
-  const _UpgradeFromLocalModeRow();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final token = ref.watch(accessTokenProvider);
-    if (token != null) return const SizedBox.shrink();
-
-    return Material(
-      color: BambooInk.glassFillOnPaper,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        onTap: () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const LoginScreen(mode: AuthMode.signUp))),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: BambooInk.hairlineOnPaper),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
-          child: Row(
-            children: [
-              const Icon(Icons.cloud_upload_outlined, size: 20, color: BambooInk.ink900),
-              const SizedBox(width: AppSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Upgrade from local mode',
-                      style: BambooFonts.ui(14.5, weight: FontWeight.w500, color: BambooInk.ink900),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Sync across devices and back up your cards.',
-                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink300),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _SignOutButton extends ConsumerWidget {
   const _SignOutButton();
 
@@ -185,7 +141,10 @@ class _SignOutButton extends ConsumerWidget {
     return OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
         foregroundColor: BambooInk.clay,
-        side: BorderSide(color: BambooInk.clay.withValues(alpha: 0.3), width: 1.5),
+        side: BorderSide(
+          color: BambooInk.clay.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
       ),
       icon: const Icon(Icons.logout_rounded, size: 18),
       onPressed: () => _signOut(ref),
@@ -215,9 +174,10 @@ const _biometricLockKey = 'biometric_lock_enabled_v1';
 /// launch is a separate follow-up not built here (this ships the toggle +
 /// persisted state only, matching this codebase's existing "toggle is
 /// real, enforcement is a documented follow-up" pattern).
-final biometricLockProvider = StateNotifierProvider<BiometricLockController, AsyncValue<bool>>(
-  (ref) => BiometricLockController(),
-);
+final biometricLockProvider =
+    StateNotifierProvider<BiometricLockController, AsyncValue<bool>>(
+      (ref) => BiometricLockController(),
+    );
 
 class BiometricLockController extends StateNotifier<AsyncValue<bool>> {
   BiometricLockController() : super(const AsyncValue.loading()) {
@@ -255,10 +215,15 @@ class _BiometricLockTile extends ConsumerWidget {
           value: enabled,
           onChanged: lockState.isLoading
               ? null
-              : (value) => ref.read(biometricLockProvider.notifier).setEnabled(value),
+              : (value) =>
+                    ref.read(biometricLockProvider.notifier).setEnabled(value),
           title: Text(
             'Biometric lock',
-            style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900),
+            style: BambooFonts.ui(
+              14.5,
+              weight: FontWeight.w600,
+              color: BambooInk.ink900,
+            ),
           ),
           subtitle: Text(
             'Require Face/Touch ID to open the app',
@@ -281,7 +246,8 @@ class _DeleteAccountSection extends ConsumerStatefulWidget {
   const _DeleteAccountSection({required this.profileData});
 
   @override
-  ConsumerState<_DeleteAccountSection> createState() => _DeleteAccountSectionState();
+  ConsumerState<_DeleteAccountSection> createState() =>
+      _DeleteAccountSectionState();
 }
 
 class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
@@ -316,7 +282,10 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
       _error = null;
     });
     try {
-      final api = AccountApi(apiBaseUrl: _accountApiBaseUrl, accessToken: token);
+      final api = AccountApi(
+        apiBaseUrl: _accountApiBaseUrl,
+        accessToken: token,
+      );
       final dueAt = await api.requestDeletion();
       // Deletion is scheduled, not immediate — the account is not gone
       // yet. Sign out locally (same path as the manual "Sign out" button)
@@ -346,7 +315,10 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
       _error = null;
     });
     try {
-      final api = AccountApi(apiBaseUrl: _accountApiBaseUrl, accessToken: token);
+      final api = AccountApi(
+        apiBaseUrl: _accountApiBaseUrl,
+        accessToken: token,
+      );
       await api.cancelDeletion();
       if (!mounted) return;
       setState(() {
@@ -378,14 +350,25 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
         children: [
           Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: BambooInk.clay, size: 20),
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: BambooInk.clay,
+                size: 20,
+              ),
               const SizedBox(width: AppSpace.sm),
-              Text('Delete account', style: BambooFonts.heading(16, color: BambooInk.clay)),
+              Text(
+                'Delete account',
+                style: BambooFonts.heading(16, color: BambooInk.clay),
+              ),
             ],
           ),
           const SizedBox(height: AppSpace.md),
           if (dueAt != null)
-            _ScheduledDeletionState(dueAt: dueAt, submitting: _submitting, onCancel: _cancelDelete)
+            _ScheduledDeletionState(
+              dueAt: dueAt,
+              submitting: _submitting,
+              onCancel: _cancelDelete,
+            )
           else
             _TypedConfirmDeletionForm(
               controller: _confirmController,
@@ -414,7 +397,8 @@ class _TypedConfirmDeletionForm extends StatefulWidget {
   });
 
   @override
-  State<_TypedConfirmDeletionForm> createState() => _TypedConfirmDeletionFormState();
+  State<_TypedConfirmDeletionForm> createState() =>
+      _TypedConfirmDeletionFormState();
 }
 
 class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
@@ -434,7 +418,8 @@ class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
 
   @override
   Widget build(BuildContext context) {
-    final canConfirm = widget.controller.text.trim() == 'DELETE' && !widget.submitting;
+    final canConfirm =
+        widget.controller.text.trim() == 'DELETE' && !widget.submitting;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -448,7 +433,10 @@ class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
         const SizedBox(height: AppSpace.lg),
         TextField(
           controller: widget.controller,
-          decoration: const InputDecoration(labelText: 'Type DELETE to confirm', hintText: 'DELETE'),
+          decoration: const InputDecoration(
+            labelText: 'Type DELETE to confirm',
+            hintText: 'DELETE',
+          ),
           textCapitalization: TextCapitalization.characters,
         ),
         const SizedBox(height: AppSpace.md),
@@ -458,7 +446,9 @@ class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
             style: FilledButton.styleFrom(
               backgroundColor: BambooInk.clay,
               minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
             ),
             onPressed: canConfirm ? widget.onConfirm : null,
@@ -466,7 +456,10 @@ class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Text('Delete my account'),
           ),
@@ -481,7 +474,11 @@ class _ScheduledDeletionState extends StatelessWidget {
   final bool submitting;
   final VoidCallback onCancel;
 
-  const _ScheduledDeletionState({required this.dueAt, required this.submitting, required this.onCancel});
+  const _ScheduledDeletionState({
+    required this.dueAt,
+    required this.submitting,
+    required this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -503,11 +500,17 @@ class _ScheduledDeletionState extends StatelessWidget {
               foregroundColor: BambooInk.clay,
               minimumSize: const Size.fromHeight(52),
               side: const BorderSide(color: BambooInk.clay, width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
             onPressed: submitting ? null : onCancel,
             child: submitting
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Text('Cancel deletion'),
           ),
         ),

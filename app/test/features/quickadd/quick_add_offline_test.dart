@@ -28,6 +28,7 @@ class _OfflineUserCardsRepository extends UserCardsRepository {
     String? rail,
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
+    String? clientMutationId,
   }) async {
     throw ApiException('no connectivity');
   }

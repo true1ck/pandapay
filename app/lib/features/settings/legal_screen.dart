@@ -47,7 +47,10 @@ class LegalScreen extends StatelessWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Legal', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Legal',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
@@ -77,10 +80,9 @@ class LegalScreen extends StatelessWidget {
             'for financial outcomes, missed rewards, fees, or other consequences '
             'arising from decisions made using the app.\n\n'
             '4. Your account\n'
-            'You are responsible for keeping your sign-in access secure. You may '
-            'use the app without an account ("guest mode"); guest data is stored '
-            'only on your device and is lost if the app is uninstalled or the '
-            'device is reset — it cannot be recovered by us.\n\n'
+            'You are responsible for keeping your sign-in access secure. A '
+            'PandaPay account is required to use the app so your cards, '
+            'transactions, and insights remain tied to your account.\n\n'
             '5. Crowdsourced contributions\n'
             'Contributions you submit (e.g. confirming a merchant\'s card-acceptance '
             'or category) may be used, in anonymized form as described in the '
@@ -209,18 +211,30 @@ class LegalScreen extends StatelessWidget {
               side: const BorderSide(color: BambooInk.hairlineOnPaper),
             ),
             child: ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               leading: const Icon(Icons.code_rounded, color: BambooInk.ink900),
               title: Text(
                 'View open-source licences',
-                style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                style: BambooFonts.ui(
+                  14.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
               ),
               subtitle: Text(
                 'Every package this app depends on, and its licence',
                 style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),
-              trailing: const Icon(Icons.chevron_right_rounded, color: BambooInk.ink300),
-              onTap: () => showLicensePage(context: context, applicationName: 'PandaPay'),
+              trailing: const Icon(
+                Icons.chevron_right_rounded,
+                color: BambooInk.ink300,
+              ),
+              onTap: () => showLicensePage(
+                context: context,
+                applicationName: 'PandaPay',
+              ),
             ),
           ),
           const SizedBox(height: AppSpace.xl),

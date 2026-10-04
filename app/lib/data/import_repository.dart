@@ -10,6 +10,20 @@ double? _numOrNull(dynamic v) {
   return v is num ? v.toDouble() : double.tryParse(v as String);
 }
 
+class StatementTransactionInput {
+  final DateTime occurredAt;
+  final Money amount;
+  final String merchantName;
+
+  const StatementTransactionInput({required this.occurredAt, required this.amount, required this.merchantName});
+
+  Map<String, dynamic> toJson() => {
+    'occurredAt': occurredAt.toUtc().toIso8601String(),
+    'amountInr': amount.rupees,
+    'merchantName': merchantName,
+  };
+}
+
 /// Group F (Data Import & Sync) — implementation-plan-group-e-f-g.md §3.
 /// One repository for every F-screen's backend calls, same one-repo-per-
 /// domain-area shape as UserCardsRepository — these routes are all new
@@ -129,6 +143,8 @@ class ImportRepository {
     required int txnCount,
     required int reconciledCount,
     String? issuerFormatId,
+    required String importKey,
+    required List<StatementTransactionInput> transactions,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/statement-imports'),
@@ -142,9 +158,11 @@ class ImportRepository {
         'txnCount': txnCount,
         'reconciledCount': reconciledCount,
         'issuerFormatId': ?issuerFormatId,
+        'importKey': importKey,
+        'transactions': [for (final transaction in transactions) transaction.toJson()],
       }),
     );
-    if (response.statusCode != 201) {
+    if (response.statusCode != 200 && response.statusCode != 201) {
       throw ApiException('POST /statement-imports failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;

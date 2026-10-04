@@ -56,7 +56,8 @@ class ParsedStatementLine {
   final DateTime date;
   final String description;
   final Money amount;
-  const ParsedStatementLine({required this.date, required this.description, required this.amount});
+  final bool isCredit;
+  const ParsedStatementLine({required this.date, required this.description, required this.amount, this.isCredit = false});
 }
 
 class ParsedStatement {
@@ -72,7 +73,8 @@ class ParsedStatement {
 /// credits, matching its own "every detected line treated the same" scope
 /// note in confirmStatementImport's caller).
 final _transactionLine = RegExp(
-  r'^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\s+(.+?)\s+([\d,]+\.\d{2})\s*(?:Dr|Cr|DR|CR)?\s*$',
+  r'^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\s+(.+?)\s+([\d,]+\.\d{2})\s*(Dr|Cr)?\s*$',
+  caseSensitive: false,
 );
 
 final _closingBalanceLine = RegExp(r'closing\s*balance\D*([\d,]+\.\d{2})', caseSensitive: false);
@@ -128,7 +130,12 @@ ParsedStatement parseStatementText(String text) {
     final amount = _parseAmount(match.group(5)!);
     if (date == null || amount == null) continue;
 
-    transactions.add(ParsedStatementLine(date: date, description: match.group(4)!.trim(), amount: amount));
+    transactions.add(ParsedStatementLine(
+      date: date,
+      description: match.group(4)!.trim(),
+      amount: amount,
+      isCredit: match.group(6)?.toLowerCase() == 'cr',
+    ));
   }
 
   return ParsedStatement(transactions: transactions, closingBalance: closingBalance);

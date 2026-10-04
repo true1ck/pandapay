@@ -67,12 +67,16 @@ class _RecordingImportRepository extends ImportRepository {
     required int txnCount,
     required int reconciledCount,
     String? issuerFormatId,
+    required String importKey,
+    required List<StatementTransactionInput> transactions,
   }) async {
     lastConfirmArgs = {
       'userCardId': userCardId,
       'closingBalance': closingBalance,
       'txnCount': txnCount,
       'reconciledCount': reconciledCount,
+      'importKey': importKey,
+      'transactions': transactions,
     };
     return StatementImport.fromJson({
       'id': 'si1',

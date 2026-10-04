@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/import_repository.dart';
 import '../../data/pdf_statement_parser.dart';
 import '../../main.dart' show MoneyText;
 
@@ -123,22 +125,38 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
   Future<void> _confirmImport() async {
     final repo = ref.read(importRepositoryProvider);
     final parsed = _parsed;
-    if (repo == null || _selectedCardId == null || parsed == null) return;
+    final fileBytes = _fileBytes;
+    if (repo == null || _selectedCardId == null || parsed == null || fileBytes == null) return;
     try {
       final dates = parsed.transactions.map((t) => t.date).toList()..sort();
+      final spends = parsed.transactions.where((transaction) => !transaction.isCredit).toList();
+      if (spends.isEmpty) {
+        throw const StatementParseException('This statement contains no debit transactions to import.');
+      }
       await repo.confirmStatementImport(
         userCardId: _selectedCardId!,
         statementFrom: dates.first,
         statementTo: dates.last,
         closingBalance: parsed.closingBalance,
-        txnCount: parsed.transactions.length,
+        txnCount: spends.length,
         // Every heuristically-detected line is treated as reconciled — this
         // screen has no separate "confirm each row" step yet (ui-spec's
         // "list each detected transaction for review" is satisfied by the
         // preview list below, not a per-row accept/reject control).
-        reconciledCount: parsed.transactions.length,
+        reconciledCount: spends.length,
+        importKey: sha256.convert(fileBytes).toString(),
+        transactions: [
+          for (final transaction in spends)
+            StatementTransactionInput(
+              occurredAt: transaction.date,
+              amount: transaction.amount,
+              merchantName: transaction.description,
+            ),
+        ],
       );
       ref.invalidate(statementImportsProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(userCardsProvider);
       if (mounted) setState(() => _step = _Step.done);
     } catch (e) {
       if (mounted) {

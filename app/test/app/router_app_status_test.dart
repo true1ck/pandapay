@@ -24,14 +24,26 @@ class _EmptyCategoryRepository implements CategoryRepository {
   Future<List<SpendCategory>> fetchCategories() async => const [];
 }
 
-Future<void> _pumpApp(WidgetTester tester, {required List<Override> extraOverrides}) async {
-  SharedPreferences.setMockInitialValues({'pandapay_app.onboarding_complete_v1': true});
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  required List<Override> extraOverrides,
+}) async {
+  SharedPreferences.setMockInitialValues({
+    'pandapay_app.onboarding_complete_v1': true,
+  });
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_EmptyCatalogueRepository()),
-        categoryRepositoryProvider.overrideWithValue(_EmptyCategoryRepository()),
+        catalogueRepositoryProvider.overrideWithValue(
+          _EmptyCatalogueRepository(),
+        ),
+        categoryRepositoryProvider.overrideWithValue(
+          _EmptyCategoryRepository(),
+        ),
+        userCardsProvider.overrideWith((ref) async => const []),
         sessionInitProvider.overrideWith((ref) async {}),
+        sessionKeepAliveProvider.overrideWith((ref) {}),
+        accessTokenProvider.overrideWith((ref) => 'test-token'),
         ...extraOverrides,
       ],
       child: Consumer(
@@ -46,12 +58,17 @@ Future<void> _pumpApp(WidgetTester tester, {required List<Override> extraOverrid
 }
 
 void main() {
-  testWidgets('maintenance_mode blocks the app with MaintenanceScreen', (tester) async {
+  testWidgets('maintenance_mode blocks the app with MaintenanceScreen', (
+    tester,
+  ) async {
     await _pumpApp(
       tester,
       extraOverrides: [
         appStatusProvider.overrideWith(
-          (ref) async => const AppStatus(minSupportedVersion: '1.0.0', maintenanceMode: true),
+          (ref) async => const AppStatus(
+            minSupportedVersion: '1.0.0',
+            maintenanceMode: true,
+          ),
         ),
       ],
     );
@@ -60,12 +77,17 @@ void main() {
     expect(find.byType(HomeScreen), findsNothing);
   });
 
-  testWidgets('a too-old app version blocks the app with ForcedUpgradeScreen', (tester) async {
+  testWidgets('a too-old app version blocks the app with ForcedUpgradeScreen', (
+    tester,
+  ) async {
     await _pumpApp(
       tester,
       extraOverrides: [
         appStatusProvider.overrideWith(
-          (ref) async => const AppStatus(minSupportedVersion: '999.0.0', maintenanceMode: false),
+          (ref) async => const AppStatus(
+            minSupportedVersion: '999.0.0',
+            maintenanceMode: false,
+          ),
         ),
         appVersionProvider.overrideWith((ref) async => '1.0.0'),
       ],
@@ -75,28 +97,34 @@ void main() {
     expect(find.byType(HomeScreen), findsNothing);
   });
 
-  testWidgets('a current-enough app version and no maintenance mode reaches Home normally', (tester) async {
+  testWidgets(
+    'a current-enough app version and no maintenance mode reaches Home normally',
+    (tester) async {
+      await _pumpApp(
+        tester,
+        extraOverrides: [
+          appStatusProvider.overrideWith(
+            (ref) async => const AppStatus(
+              minSupportedVersion: '1.0.0',
+              maintenanceMode: false,
+            ),
+          ),
+          appVersionProvider.overrideWith((ref) async => '1.0.0'),
+        ],
+      );
+
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(MaintenanceScreen), findsNothing);
+      expect(find.byType(ForcedUpgradeScreen), findsNothing);
+    },
+  );
+
+  testWidgets('a failed status check (fails open) does not block the app', (
+    tester,
+  ) async {
     await _pumpApp(
       tester,
-      extraOverrides: [
-        appStatusProvider.overrideWith(
-          (ref) async => const AppStatus(minSupportedVersion: '1.0.0', maintenanceMode: false),
-        ),
-        appVersionProvider.overrideWith((ref) async => '1.0.0'),
-      ],
-    );
-
-    expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.byType(MaintenanceScreen), findsNothing);
-    expect(find.byType(ForcedUpgradeScreen), findsNothing);
-  });
-
-  testWidgets('a failed status check (fails open) does not block the app', (tester) async {
-    await _pumpApp(
-      tester,
-      extraOverrides: [
-        appStatusProvider.overrideWith((ref) async => null),
-      ],
+      extraOverrides: [appStatusProvider.overrideWith((ref) async => null)],
     );
 
     expect(find.byType(HomeScreen), findsOneWidget);

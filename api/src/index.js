@@ -10,9 +10,11 @@ const { parseSmsAgainstPatterns, redactSmsShape, senderMatches, parseTransaction
 const importResolvers = require('./import_resolvers');
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
-const { discoverCardsAcrossMessages, discoverCardsInMessage } = require('./card_discovery');
+const { discoverCardsAcrossMessages } = require('./card_discovery');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const rewardMath = require('./reward_math');
+const { AMOUNT_TOLERANCE_INR, MAX_TIME_DISTANCE_MS, bestDuplicate } = require('./transaction_dedup');
+const { emailSourceKey } = require('./source_identity');
 const spendReports = require('./spend_reports');
 const { detectRecurringSeries, annualCost } = require('./recurring');
 const { buildMonthlyReport } = require('./monthly_report');
@@ -1369,77 +1371,6 @@ app.post('/partner-conversions/webhook', async (req, res) => {
 });
 
 /**
- * POST /inbound-emails/webhook — Phase 1: Card Discovery Only
- *
- * Receives forwarded emails via webhook (e.g. from SendGrid/Mailgun),
- * maps the forwarding address to a user, and discovers credit cards mentioned
- * in the email. Does NOT log transactions or store the email body.
- */
-app.post('/inbound-emails/webhook', async (req, res) => {
-  // Shared secret for webhook security
-  const secret = config.partnerWebhookSecret;
-  if (!secret) {
-    console.error('POST /inbound-emails/webhook: PARTNER_WEBHOOK_SECRET is not configured');
-    return res.status(503).json({ error: 'webhook_not_configured' });
-  }
-  const provided = req.get('x-partner-signature') || '';
-  const ok =
-    provided.length === secret.length &&
-    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(secret));
-  if (!ok) return res.status(401).json({ error: 'invalid_signature' });
-
-  try {
-    const { to, subject, text, sender } = req.body || {};
-    
-    // 1. Identify the user
-    const localPart = extractLocalPart(to);
-    if (!localPart) {
-      return res.status(202).json({ ok: true, matched: false, reason: 'invalid_to_address' });
-    }
-
-    // 0037's pandapay.get_profile_by_forwarding_address handles the SECURITY DEFINER lookup
-    const profileRes = await pool.query(
-      `SELECT pandapay.get_profile_by_forwarding_address($1) as profile_id`, 
-      [localPart]
-    );
-    const profileId = profileRes.rows[0]?.profile_id;
-    if (!profileId) {
-      return res.status(202).json({ ok: true, matched: false, reason: 'address_not_found' });
-    }
-
-    // 2. Load the catalogue for discovery
-    const catRes = await pool.query('SELECT * FROM v_card_catalogue_export');
-    const catalogue = catRes.rows;
-
-    // 3. Discover cards in this message
-    const suggestions = discoverCardsInMessage({ subject, body: text, sender }, catalogue);
-    
-    // 4. Add discovered cards to wallet (skip if already exists or low confidence)
-    let addedCount = 0;
-    for (const s of suggestions) {
-      if (s.score < 0.5) continue; // Only confident matches
-      
-      // Attempt insert; ON CONFLICT DO NOTHING ensures we don't duplicate
-      const insertRes = await pool.query(
-        `INSERT INTO user_cards (profile_id, card_product_id)
-         VALUES ($1, $2)
-         ON CONFLICT (profile_id, card_product_id) DO NOTHING
-         RETURNING id`,
-        [profileId, s.cardProductId]
-      );
-      if (insertRes.rowCount > 0) {
-        addedCount++;
-      }
-    }
-
-    res.status(202).json({ ok: true, matched: true, cardsDiscovered: suggestions.length, cardsAdded: addedCount });
-  } catch (err) {
-    console.error('POST /inbound-emails/webhook error', err);
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-/**
  * POST /acceptance-reports — plan Phase 2.1. "Did this card actually work
  * here?", the one dataset in this product that cannot be scraped, bought, or
  * inferred: it only exists because someone was standing at the till.
@@ -2621,12 +2552,53 @@ app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
  * with a `client` already inside a withUserClient(userId, ...) transaction;
  * this function does not open its own.
  */
+async function recordTransactionObservation(client, userId, transactionId, {
+  source, sourceKey, observedAt, externalRef, payloadHash, metadata,
+}) {
+  await client.query(
+    `INSERT INTO transaction_observations
+       (profile_id, transaction_id, source, source_key, observed_at, external_ref, payload_hash, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+     ON CONFLICT (profile_id, source, source_key) WHERE source_key IS NOT NULL
+     DO UPDATE SET transaction_id = EXCLUDED.transaction_id,
+                   observed_at = LEAST(transaction_observations.observed_at, EXCLUDED.observed_at),
+                   external_ref = COALESCE(transaction_observations.external_ref, EXCLUDED.external_ref),
+                   payload_hash = COALESCE(transaction_observations.payload_hash, EXCLUDED.payload_hash)`,
+    [
+      userId,
+      transactionId,
+      source || 'manual',
+      sourceKey || null,
+      observedAt || new Date(),
+      externalRef || null,
+      payloadHash || null,
+      JSON.stringify(metadata || {}),
+    ]
+  );
+}
+
+function clientMutationSourceKey(userId, source, clientMutationId) {
+  return crypto
+    .createHash('sha256')
+    .update(`${userId}\u0000${source}\u0000client-mutation\u0000${clientMutationId}`)
+    .digest('hex');
+}
+
 async function insertTransactionAndUpdateState(client, userId, {
   userCardId, amount, occurred, categoryId, rail, merchantName, note, source,
-  sourceKey, backfill, instrument, entryKind,
+  sourceKey, backfill, instrument, entryKind, observationMetadata,
 }) {
   const resolvedInstrument = instrument || 'credit_card';
   const resolvedEntryKind = entryKind || 'spend';
+  const resolvedSource = source || 'manual';
+
+  // All transaction channels use this helper, so one profile-scoped
+  // transaction lock closes the race where SMS and email arrive together,
+  // both inspect an empty candidate window, and both become active. The lock
+  // lasts only for this database transaction and is independent per user.
+  await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+    `transaction-ingest:${userId}`,
+  ]);
 
   // Older app builds used the SMS receive timestamp for source_key. Inbox
   // reconciliation uses the provider timestamp, which can differ slightly
@@ -2678,11 +2650,11 @@ async function insertTransactionAndUpdateState(client, userId, {
   // index only covers non-null keys.
   const txn = await client.query(
     `INSERT INTO transactions
-       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, note, reward_state, source_key, instrument, entry_kind)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'estimated', $10, $11, $12)
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'estimated', $10, $11, $12, false, $13)
      ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
-     RETURNING id, amount_inr, occurred_at, instrument, entry_kind`,
-    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, categoryId || null, rail || 'unknown', source || 'manual', note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind]
+     RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, state_applied, is_backfill`,
+    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, categoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, backfill === true]
   );
 
   // Zero rows back means the unique index rejected it: this exact message
@@ -2691,8 +2663,27 @@ async function insertTransactionAndUpdateState(client, userId, {
   // the state machine, or a repeat import would still double cap and
   // milestone progress even though it inserted no row.
   if (txn.rowCount === 0) {
-    return { status: 200, duplicate: true, transaction: null };
+    const existing = await client.query(
+      `SELECT id, amount_inr, occurred_at, instrument, entry_kind, source, status, state_applied, is_backfill
+         FROM transactions WHERE profile_id = $1 AND source_key = $2 LIMIT 1`,
+      [userId, sourceKey]
+    );
+    if (!existing.rows[0]) throw new Error('source_key conflict without an existing transaction');
+    await recordTransactionObservation(client, userId, existing.rows[0].id, {
+      source: resolvedSource,
+      sourceKey,
+      observedAt: occurred,
+      metadata: { ...(observationMetadata || {}), exactRetry: true },
+    });
+    return { status: 200, duplicate: true, duplicateKind: 'exact_retry', transaction: existing.rows[0] };
   }
+
+  await recordTransactionObservation(client, userId, txn.rows[0].id, {
+    source: resolvedSource,
+    sourceKey,
+    observedAt: occurred,
+    metadata: observationMetadata,
+  });
 
   // smsextractionimple.md §0.1 D2: a backfilled historical message inserts
   // the transaction but must not touch cap/milestone/fee-waiver state.
@@ -2707,16 +2698,6 @@ async function insertTransactionAndUpdateState(client, userId, {
   // months is a completely ordinary sequence, and it is exactly the
   // cross-channel case D-5 exists to catch. Skipping it here would silence
   // the check precisely where it earns its keep.
-  const stateUpdates = (backfill || !movesCardState)
-    ? {}
-    : await applyTransactionState(client, userId, userCard, {
-        txnId: txn.rows[0].id, userCardId, amount, occurred, categoryId, sign: 1,
-        // merchantName/rail are now part of rule matching (merchant-restricted
-        // and rail-restricted rules), so they have to reach the state
-        // machine rather than stopping at the INSERT above.
-        merchantName, rail,
-      });
-
   // Task D-5 (ui-spec D5 Duplicate Review, §5.8): runs on every insert
   // through this one shared helper, so both POST /transactions (manual)
   // and POST /transactions/from-sms get duplicate detection for free —
@@ -2727,61 +2708,58 @@ async function insertTransactionAndUpdateState(client, userId, {
   // the same day are not a double-import, and flagging them as one would
   // teach the user to ignore the review queue.
   const duplicates = resolvedEntryKind === 'spend'
-      ? await detectDuplicates(client, userId, {
-        newTxnId: txn.rows[0].id, amount, occurred, merchantName,
-        source: source || 'manual', rail: rail || 'unknown',
+    ? await detectDuplicates(client, userId, {
+        newTxnId: txn.rows[0].id,
+        amount,
+        occurred,
+        merchantName,
+        source: resolvedSource,
+        userCardId: movesCardState ? userCardId : null,
+        instrument: resolvedInstrument,
+        entryKind: resolvedEntryKind,
       })
-    : { autoMergeAgainst: null };
+    : { candidateId: null };
 
-  // Auto-merge on a high-confidence match.
-  //
-  // Flagging alone was not enough. Until a human worked the review queue,
-  // BOTH copies of the same swipe stayed `active` — and active means
-  // counted: in spend totals, in cap consumption, in rewards earned, in
-  // every Insights figure. So the exact failure the queue exists to prevent
-  // (one purchase counted twice because it arrived by SMS and by email)
-  // happened anyway for as long as the queue went unread, which for most
-  // people is forever.
-  //
-  // 0.9 means amount, day and merchant name all agree across two different
-  // channels. That is not a coincidence, and treating it as one is the
-  // safer error: the drop is fully reversible from the Duplicate Review
-  // screen, the pairing is recorded rather than hidden, and the surviving
-  // transaction is the one already visible everywhere else in the app.
-  // 0.6 matches (no merchant name on one side) still go to the queue — that
-  // genuinely can be two real purchases of the same amount on the same day.
-  let autoMerged = null;
-  if (duplicates.autoMergeAgainst) {
-    if (!backfill && movesCardState) {
-      await reverseTransactionState(client, userId, userCard, {
-        id: txn.rows[0].id,
-        user_card_id: userCardId,
-        amount_inr: amount,
-        occurred_at: occurred,
-        category_id: categoryId || null,
-        merchant_name: merchantName || null,
-        rail: rail || 'unknown',
-      });
-    }
-    const noteTag = `[merged: duplicate of ${duplicates.autoMergeAgainst}]`;
-    await client.query(
-      `UPDATE transactions SET status = 'ignored', note = $1 WHERE id = $2`,
+  // A probable second observation is retained but suppressed before any
+  // reward/card state is applied. Every Insights query already counts only
+  // status='active', so this establishes the count-once invariant across all
+  // existing consumers without teaching each feature its own dedupe rule.
+  if (duplicates.candidateId) {
+    const noteTag = `[pending duplicate of ${duplicates.duplicateOf}]`;
+    const suppressed = await client.query(
+      `UPDATE transactions SET status = 'ignored', note = $1
+        WHERE id = $2
+        RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, state_applied, is_backfill`,
       [note ? `${noteTag} ${note}` : noteTag, txn.rows[0].id]
     );
-    await client.query(
-      `UPDATE duplicate_candidates
-          SET state = 'resolved', resolution = 'merged', resolved_at = now()
-        WHERE profile_id = $1 AND (txn_a_id = $2 OR txn_b_id = $2)`,
-      [userId, txn.rows[0].id]
-    );
-    autoMerged = duplicates.autoMergeAgainst;
+    return {
+      status: 201,
+      transaction: suppressed.rows[0],
+      duplicate: true,
+      duplicateKind: 'cross_source_candidate',
+      duplicatePending: true,
+      duplicateCandidateId: duplicates.candidateId,
+      duplicateOf: duplicates.duplicateOf,
+      backfilled: backfill === true,
+    };
+  }
+
+  const stateUpdates = (backfill || !movesCardState)
+    ? {}
+    : await applyTransactionState(client, userId, userCard, {
+        txnId: txn.rows[0].id, userCardId, amount, occurred, categoryId, sign: 1,
+        merchantName, rail,
+      });
+
+  if (!backfill && movesCardState) {
+    await client.query(`UPDATE transactions SET state_applied = true WHERE id = $1`, [txn.rows[0].id]);
+    txn.rows[0].state_applied = true;
   }
 
   return {
     status: 201,
     transaction: txn.rows[0],
     backfilled: !!backfill,
-    autoMergedInto: autoMerged,
     ...stateUpdates,
   };
 }
@@ -2811,7 +2789,7 @@ async function insertTransactionAndUpdateState(client, userId, {
  */
 async function importParsedMessage(client, userId, {
   parsed, patternIssuerId, sender, rawText, source, occurred, sourceKey, backfill,
-  explicitUserCardId, explicitCategoryId, rail, vpa, mcc,
+  explicitUserCardId, explicitCategoryId, rail, vpa, mcc, observationMetadata,
 }) {
   // A QR payment can produce either a credit-card alert or a bank-account
   // UPI debit alert. Account-number suffixes are not card last-4 digits and
@@ -2876,6 +2854,7 @@ async function importParsedMessage(client, userId, {
     backfill,
     instrument,
     entryKind,
+    observationMetadata,
   });
 
   return { ...inserted, matchBasis, resolvedCategoryId: categoryId, userCardId };
@@ -2897,63 +2876,39 @@ async function importParsedMessage(client, userId, {
  * once — but is possible if this were ever called twice) is a no-op, not
  * a duplicate duplicate-flag.
  */
-/** Rupee tolerance when comparing two channels' record of one swipe. */
-const DUPLICATE_AMOUNT_TOLERANCE_INR = 1;
-
-/** At or above this score, the pair is merged rather than queued. */
-const DUPLICATE_AUTO_MERGE_SCORE = 0.9;
-
-async function detectDuplicates(client, userId, { newTxnId, amount, occurred, merchantName, source, rail }) {
-  // The amount comparison is a small RANGE, not equality. An SMS reading
-  // "Rs.1,234" and a statement line reading "1234.50" are the same swipe,
-  // and requiring an exact match let that pair through as two transactions.
+async function detectDuplicates(client, userId, {
+  newTxnId, amount, occurred, merchantName, source, userCardId, instrument, entryKind,
+}) {
   const candidates = await client.query(
-    `SELECT id, merchant_name, rail, source FROM transactions
+    `SELECT id, amount_inr, occurred_at, merchant_name, source, user_card_id, instrument, entry_kind
+       FROM transactions
       WHERE profile_id = $1 AND status = 'active' AND id != $2
         AND amount_inr BETWEEN $3::numeric - $6::numeric AND $3::numeric + $6::numeric
-        AND source != $4
-        AND occurred_at BETWEEN $5::timestamptz - interval '1 day' AND $5::timestamptz + interval '1 day'`,
-    [userId, newTxnId, amount, source, occurred, DUPLICATE_AMOUNT_TOLERANCE_INR]
+        AND entry_kind = 'spend'
+        AND occurred_at BETWEEN $4::timestamptz - ($5::bigint * interval '1 millisecond')
+                            AND $4::timestamptz + ($5::bigint * interval '1 millisecond')`,
+    [userId, newTxnId, amount, occurred, MAX_TIME_DISTANCE_MS, AMOUNT_TOLERANCE_INR]
   );
 
-  let autoMergeAgainst = null;
-
-  for (const candidate of candidates.rows) {
-    const bothNamed = merchantName && candidate.merchant_name;
-    // Normalized, not a raw lowercase compare: the same merchant reaches us
-    // as 'SWIGGY*ORDER' from one channel and 'Swiggy' from another, and a
-    // case-only comparison called those different and kept both.
-    const namesMatch =
-      bothNamed &&
-      rewardMath.normalizeMerchant(merchantName) === rewardMath.normalizeMerchant(candidate.merchant_name);
-    if (bothNamed && !namesMatch) continue; // both have a name and they disagree — not a match
-    const sameQrAttempt = rail === 'upi_qr' && candidate.rail === 'upi_qr'
-      && (source === 'sms' || candidate.source === 'sms');
-    const matchScore = namesMatch || sameQrAttempt ? 0.9 : 0.6;
-    const matchReason = namesMatch
-      ? 'Same amount, same day, merchant name matches, different source'
-      : sameQrAttempt
-        ? 'Same amount, same day, same QR rail, SMS reconciles the payment'
-      : 'Same amount, same day, different source (merchant name unavailable on at least one side)';
-
-    const [txnA, txnB] = [newTxnId, candidate.id].sort();
-    await client.query(
-      `INSERT INTO duplicate_candidates (profile_id, txn_a_id, txn_b_id, match_score, match_reason)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (txn_a_id, txn_b_id) DO NOTHING`,
-      [userId, txnA, txnB, matchScore, matchReason]
-    );
-
-    // The caller drops the NEW row against the first high-confidence match:
-    // the older transaction is already visible in Activity, may already be
-    // referenced by an edit or a split, and keeping it makes the outcome
-    // predictable rather than dependent on arrival order.
-    if (matchScore >= DUPLICATE_AUTO_MERGE_SCORE && !autoMergeAgainst) {
-      autoMergeAgainst = candidate.id;
-    }
-  }
-
-  return { autoMergeAgainst };
+  const selected = bestDuplicate(
+    { amount, occurred, merchantName, source, userCardId, instrument, entryKind },
+    candidates.rows,
+  );
+  if (!selected) return { candidateId: null };
+  const [txnA, txnB] = [newTxnId, selected.candidate.id].sort();
+  const inserted = await client.query(
+    `INSERT INTO duplicate_candidates
+       (profile_id, txn_a_id, txn_b_id, match_score, match_reason, suppressed_txn_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (txn_a_id, txn_b_id) DO UPDATE
+       SET match_score = GREATEST(duplicate_candidates.match_score, EXCLUDED.match_score),
+           match_reason = EXCLUDED.match_reason,
+           state = 'pending', resolution = NULL, resolved_at = NULL,
+           suppressed_txn_id = EXCLUDED.suppressed_txn_id
+     RETURNING id`,
+    [userId, txnA, txnB, selected.match.score, selected.match.reason, newTxnId]
+  );
+  return { candidateId: inserted.rows[0].id, duplicateOf: selected.candidate.id };
 }
 
 /**
@@ -3096,9 +3051,9 @@ async function applyTransactionState(client, userId, userCard, {
     const consumedDelta = reward.capConsumedDelta * sign;
     const upserted = await client.query(
       `INSERT INTO cap_states (profile_id, user_card_id, cap_rule_id, period_start, period_end, consumed, cap_value_snapshot)
-       VALUES ($1, $2, $3, $4, $5, GREATEST(0, $6), $7)
+       VALUES ($1, $2, $3, $4, $5, GREATEST(0::numeric, $6::numeric), $7)
        ON CONFLICT (user_card_id, cap_rule_id, period_start)
-       DO UPDATE SET consumed = GREATEST(0, cap_states.consumed + $6), updated_at = now()
+       DO UPDATE SET consumed = GREATEST(0::numeric, cap_states.consumed + $6::numeric), updated_at = now()
        RETURNING cap_rule_id, period_start, period_end, consumed, cap_value_snapshot`,
       [userId, userCardId, governingCap.id, capPeriod.start, capPeriod.end, consumedDelta, governingCap.cap_value]
     );
@@ -3125,9 +3080,9 @@ async function applyTransactionState(client, userId, userCard, {
     });
     const upserted = await client.query(
       `INSERT INTO milestone_states (profile_id, user_card_id, milestone_rule_id, period_start, period_end, qualified_spend)
-       VALUES ($1, $2, $3, $4, $5, GREATEST(0, $6))
+       VALUES ($1, $2, $3, $4, $5, GREATEST(0::numeric, $6::numeric))
        ON CONFLICT (user_card_id, milestone_rule_id, period_start)
-       DO UPDATE SET qualified_spend = GREATEST(0, milestone_states.qualified_spend + $6), updated_at = now()
+       DO UPDATE SET qualified_spend = GREATEST(0::numeric, milestone_states.qualified_spend + $6::numeric), updated_at = now()
        RETURNING milestone_rule_id, period_start, period_end, qualified_spend`,
       [userId, userCardId, milestone.id, start, end, amount * sign]
     );
@@ -3219,9 +3174,9 @@ async function applyTransactionState(client, userId, userCard, {
     const { start, end } = periodBounds(rule.period, occurred, { statementDay: userCard.statement_day });
     const upserted = await client.query(
       `INSERT INTO fee_waiver_states (profile_id, user_card_id, fee_waiver_rule_id, period_start, period_end, qualified_spend)
-       VALUES ($1, $2, $3, $4, $5, GREATEST(0, $6))
+       VALUES ($1, $2, $3, $4, $5, GREATEST(0::numeric, $6::numeric))
        ON CONFLICT (user_card_id, fee_waiver_rule_id, period_start)
-       DO UPDATE SET qualified_spend = GREATEST(0, fee_waiver_states.qualified_spend + $6), updated_at = now()
+       DO UPDATE SET qualified_spend = GREATEST(0::numeric, fee_waiver_states.qualified_spend + $6::numeric), updated_at = now()
        RETURNING id, fee_waiver_rule_id, period_start, period_end, qualified_spend, waived_at`,
       [userId, userCardId, rule.id, start, end, amount * sign]
     );
@@ -3283,7 +3238,7 @@ const TXN_INSTRUMENTS = ['credit_card', 'debit_card', 'cash', 'upi_bank', 'walle
 const TXN_ENTRY_KINDS = ['spend', 'income', 'investment', 'transfer'];
 
 app.post('/transactions', requireAuth, async (req, res) => {
-  const { userCardId, amountInr, occurredAt, categoryId, rail, merchantName, note } = req.body || {};
+  const { userCardId, amountInr, occurredAt, categoryId, rail, merchantName, note, clientMutationId } = req.body || {};
   const instrument = (req.body || {}).instrument || 'credit_card';
   const entryKind = (req.body || {}).entryKind || 'spend';
   const amount = Number(amountInr);
@@ -3308,18 +3263,32 @@ app.post('/transactions', requireAuth, async (req, res) => {
   if (Number.isNaN(occurred.getTime())) {
     return res.status(400).json({ error: 'occurredAt is not a valid date' });
   }
+  if (clientMutationId !== undefined && (
+    typeof clientMutationId !== 'string'
+    || clientMutationId.length < 8
+    || clientMutationId.length > 128
+    || !/^[A-Za-z0-9._:-]+$/.test(clientMutationId)
+  )) {
+    return res.status(400).json({ error: 'clientMutationId must be 8-128 URL-safe characters' });
+  }
 
   try {
     const result = await withUserClient(req.userId, (client) =>
       insertTransactionAndUpdateState(client, req.userId, {
         userCardId: instrument === 'credit_card' ? userCardId : null,
         amount, occurred, categoryId, rail, merchantName, note, source: 'manual',
+        sourceKey: clientMutationId
+          ? clientMutationSourceKey(req.userId, 'manual', clientMutationId)
+          : null,
+        observationMetadata: clientMutationId ? { clientMutation: true } : null,
         instrument, entryKind,
       })
     );
 
-    if (result.status !== 201) return res.status(result.status).json({ error: result.error });
-    res.status(201).json(result);
+    if (result.status !== 200 && result.status !== 201) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    res.status(result.status).json(result);
   } catch (err) {
     console.error('POST /transactions error', err);
     res.status(500).json({ error: 'internal_error' });
@@ -3713,7 +3682,7 @@ app.get('/duplicate-candidates', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const pairs = await client.query(
-        `SELECT id, txn_a_id, txn_b_id, match_score, match_reason, detected_at
+        `SELECT id, txn_a_id, txn_b_id, match_score, match_reason, suppressed_txn_id, detected_at
            FROM duplicate_candidates
           WHERE profile_id = $1 AND state = 'pending'
           ORDER BY detected_at DESC`,
@@ -3770,40 +3739,113 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const pair = await client.query(
-        `SELECT id, txn_a_id, txn_b_id, state FROM duplicate_candidates WHERE id = $1 AND profile_id = $2`,
+        `SELECT id, txn_a_id, txn_b_id, suppressed_txn_id, state
+           FROM duplicate_candidates WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
         [req.params.id, req.userId]
       );
       if (pair.rows.length === 0) return null;
-      const { txn_a_id: txnA, txn_b_id: txnB, state } = pair.rows[0];
+      const {
+        txn_a_id: txnA,
+        txn_b_id: txnB,
+        suppressed_txn_id: suppressedTxnId,
+        state,
+      } = pair.rows[0];
       if (state !== 'pending') return { status: 409, error: `already resolved ('${state}')` };
 
-      if (resolution !== 'kept_both') {
+      const transactionRows = await client.query(
+        `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail,
+                merchant_name, status, note, instrument, entry_kind,
+                state_applied, is_backfill
+           FROM transactions
+          WHERE profile_id = $1 AND id = ANY($2::uuid[])
+          ORDER BY id
+          FOR UPDATE`,
+        [req.userId, [txnA, txnB]]
+      );
+      const byId = new Map(transactionRows.rows.map((row) => [row.id, row]));
+      if (!byId.has(txnA) || !byId.has(txnB)) {
+        return { status: 409, error: 'one of the duplicate transactions no longer exists' };
+      }
+
+      const stripPendingNote = (value) => String(value || '')
+        .replace(/^\[pending duplicate of [0-9a-f-]+\]\s*/i, '')
+        .trim() || null;
+
+      const activateIfSuppressed = async (transactionId) => {
+        if (!transactionId || transactionId !== suppressedTxnId) return;
+        const txn = byId.get(transactionId);
+        if (!txn || txn.status !== 'ignored') return;
+        const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend';
+        if (!txn.is_backfill && movesCardState && txn.state_applied !== true) {
+          const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
+          if (!card) throw new Error('cannot activate duplicate: user card is missing or archived');
+          await applyTransactionState(client, req.userId, card, {
+            txnId: txn.id,
+            userCardId: txn.user_card_id,
+            amount: Number(txn.amount_inr),
+            occurred: txn.occurred_at,
+            categoryId: txn.category_id,
+            merchantName: txn.merchant_name,
+            rail: txn.rail,
+            sign: 1,
+          });
+          txn.state_applied = true;
+        }
+        txn.status = 'active';
+        txn.note = stripPendingNote(txn.note);
+        await client.query(
+          `UPDATE transactions SET status = 'active', note = $1, state_applied = $2 WHERE id = $3`,
+          [txn.note, txn.state_applied === true, txn.id]
+        );
+      };
+
+      const deactivateIfActive = async (transactionId, keptId) => {
+        const txn = byId.get(transactionId);
+        if (!txn || txn.status !== 'active') return;
+        const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend';
+        // Null means a legacy active row written before the marker existed;
+        // preserve the old safe assumption that its state was applied.
+        if (movesCardState && txn.state_applied !== false) {
+          const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
+          if (card) await reverseTransactionState(client, req.userId, card, txn);
+        }
+        const noteTag = `[${resolution}: duplicate of ${keptId}]`;
+        await client.query(
+          `UPDATE transactions SET status = 'ignored', note = $1, state_applied = false WHERE id = $2`,
+          [txn.note ? `${noteTag} ${stripPendingNote(txn.note) || ''}`.trim() : noteTag, txn.id]
+        );
+      };
+
+      if (resolution === 'kept_both') {
+        await activateIfSuppressed(suppressedTxnId);
+      } else {
         if (keepTransactionId !== txnA && keepTransactionId !== txnB) {
           return { status: 400, error: 'keepTransactionId must be one of the pair' };
         }
         const dropId = keepTransactionId === txnA ? txnB : txnA;
-        // rail/merchant_name selected because reverseTransactionState now
-        // matches rules on both — reversing without them would pick a
-        // different rule than the insert did and skew cap state.
-        const dropTxn = await client.query(
-          `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name, status, note
-             FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
-          [dropId, req.userId]
+        await deactivateIfActive(dropId, keepTransactionId);
+        await activateIfSuppressed(keepTransactionId);
+
+        // The surviving canonical row retains every channel observation.
+        // No raw message is copied here; this is provenance reassignment.
+        await client.query(
+          `UPDATE transaction_observations SET transaction_id = $1 WHERE transaction_id = $2`,
+          [keepTransactionId, dropId]
         );
-        if (dropTxn.rows.length > 0 && dropTxn.rows[0].status === 'active') {
-          const txn = dropTxn.rows[0];
-          const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
-          if (card) await reverseTransactionState(client, req.userId, card, txn);
-          const noteTag = `[${resolution}: duplicate of ${keepTransactionId}]`;
-          await client.query(
-            `UPDATE transactions SET status = 'ignored', note = $1 WHERE id = $2`,
-            [txn.note ? `${noteTag} ${txn.note}` : noteTag, dropId]
-          );
-        }
+
+        // A dropped row must not strand another pending review card.
+        await client.query(
+          `UPDATE duplicate_candidates
+              SET state = 'resolved', resolution = 'merged', resolved_at = now(), suppressed_txn_id = NULL
+            WHERE profile_id = $1 AND state = 'pending' AND id <> $2
+              AND (txn_a_id = $3 OR txn_b_id = $3)`,
+          [req.userId, req.params.id, dropId]
+        );
       }
 
       const updated = await client.query(
-        `UPDATE duplicate_candidates SET state = 'resolved', resolution = $1, resolved_at = now()
+        `UPDATE duplicate_candidates
+            SET state = 'resolved', resolution = $1, resolved_at = now(), suppressed_txn_id = NULL
           WHERE id = $2 RETURNING id, state, resolution, resolved_at`,
         [resolution, req.params.id]
       );
@@ -3850,7 +3892,8 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
       // hard to detect after the fact. Locked for the lifetime of this
       // transaction, released on COMMIT/ROLLBACK by withUserClient.
       const existing = await client.query(
-        `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name, status
+        `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name, status,
+                instrument, entry_kind, state_applied, is_backfill
            FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
         [req.params.id, req.userId]
       );
@@ -3862,7 +3905,12 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
 
       const oldCard = await loadUserCardForState(client, req.userId, old.user_card_id);
       if (!oldCard) return { status: 404, error: 'user_card for this transaction not found or archived' };
-      await reverseTransactionState(client, req.userId, oldCard, old);
+      // state_applied=false is authoritative for new suppressed/backfill
+      // rows. Null is a legacy row, for which the pre-migration safe
+      // assumption remains that state was applied.
+      if (old.state_applied !== false) {
+        await reverseTransactionState(client, req.userId, oldCard, old);
+      }
 
       const newValues = {
         userCardId: userCardId ?? old.user_card_id,
@@ -3887,14 +3935,19 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         ]
       );
 
-      const stateUpdates = await applyTransactionState(client, req.userId, newCard, {
-        txnId: old.id, userCardId: newValues.userCardId, amount: newValues.amount,
-        occurred: newValues.occurred, categoryId: newValues.categoryId, sign: 1,
-        // The edited merchant/rail, not the old ones: rule matching reads
-        // both now, so an edit that moves a transaction to a different
-        // merchant has to re-apply against the rule that merchant earns at.
-        merchantName: newValues.merchantName, rail: newValues.rail,
-      });
+      const stateUpdates = old.is_backfill
+        ? {}
+        : await applyTransactionState(client, req.userId, newCard, {
+            txnId: old.id, userCardId: newValues.userCardId, amount: newValues.amount,
+            occurred: newValues.occurred, categoryId: newValues.categoryId, sign: 1,
+            // The edited merchant/rail, not the old ones: rule matching reads
+            // both now, so an edit that moves a transaction to a different
+            // merchant has to re-apply against the rule that merchant earns at.
+            merchantName: newValues.merchantName, rail: newValues.rail,
+          });
+      if (!old.is_backfill) {
+        await client.query(`UPDATE transactions SET state_applied = true WHERE id = $1`, [old.id]);
+      }
 
       return { status: 200, transaction: updated.rows[0], ...stateUpdates };
     });
@@ -4089,7 +4142,8 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const existing = await client.query(
-        `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name, status, note
+        `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name,
+                status, note, instrument, entry_kind, state_applied, is_backfill
            FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
         [req.params.id, req.userId]
       );
@@ -4099,14 +4153,18 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
         return { status: 409, error: `transaction is already '${txn.status}'` };
       }
 
-      const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
-      if (!card) return { status: 404, error: 'user_card for this transaction not found or archived' };
-      await reverseTransactionState(client, req.userId, card, txn);
+      const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend';
+      if (movesCardState && txn.state_applied !== false) {
+        const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
+        if (!card) return { status: 404, error: 'user_card for this transaction not found or archived' };
+        await reverseTransactionState(client, req.userId, card, txn);
+      }
 
       const noteTag = `[ignored: ${reason}]`;
       const newNote = txn.note ? `${noteTag} ${txn.note}` : noteTag;
       const updated = await client.query(
-        `UPDATE transactions SET status = 'ignored', note = $1 WHERE id = $2 RETURNING id, status, note`,
+        `UPDATE transactions SET status = 'ignored', note = $1, state_applied = false
+          WHERE id = $2 RETURNING id, status, note`,
         [newNote, txn.id]
       );
       return { status: 200, transaction: updated.rows[0] };
@@ -6639,7 +6697,7 @@ app.post('/inbound-emails/webhook', async (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
 
-  const { to, from, subject, text } = req.body || {};
+  const { to, from, subject, text, messageId } = req.body || {};
   const localPart = extractLocalPart(to);
   if (!localPart) {
     return res.status(400).json({ error: 'to header did not contain a parseable address' });
@@ -6648,7 +6706,7 @@ app.post('/inbound-emails/webhook', async (req, res) => {
 
   try {
     const patternsResult = await pool.query(
-      `SELECT id, sender_pattern, regex, field_map
+      `SELECT id, issuer_id, sender_pattern, regex, field_map, version
          FROM parser_patterns WHERE channel = 'email' AND is_active = true ORDER BY version DESC`
     );
     const parsed = parseSmsAgainstPatterns(patternsResult.rows, { sender: from, body });
@@ -6709,10 +6767,16 @@ app.post('/inbound-emails/webhook', async (req, res) => {
             occurred,
             // Same identity a re-forwarded copy of this mail would produce,
             // so a provider retry or a user forwarding twice can't double-count.
-            sourceKey: importSourceKey(row.profile_id, from, body),
+            sourceKey: emailSourceKey(row.profile_id, from, subject, body, messageId),
             backfill: false,
+            observationMetadata: {
+              transport: 'forwarded_email',
+              ...(messageId ? {
+                providerMessageIdHash: crypto.createHash('sha256').update(messageId).digest('hex'),
+              } : {}),
+            },
           });
-          if (imported.status === 201 && imported.transaction) {
+          if ((imported.status === 200 || imported.status === 201) && imported.transaction) {
             await client.query(`UPDATE inbound_emails SET produced_txn_id = $1 WHERE id = $2`, [
               imported.transaction.id,
               row.inbound_email_id,
@@ -6871,14 +6935,16 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
         rawText: email.body_text || '',
         source: 'email',
         occurred,
+        sourceKey: emailSourceKey(req.userId, email.sender, email.subject, email.body_text || '', null),
         explicitUserCardId: userCardId,
         explicitCategoryId: categoryId || null,
         rail,
+        observationMetadata: { transport: 'stored_forwarded_email' },
       });
       if (inserted.needsReview) {
         return { status: 200, ...inserted };
       }
-      if (inserted.status !== 201) return inserted;
+      if (inserted.status !== 200 && inserted.status !== 201) return inserted;
 
       await client.query(
         `UPDATE inbound_emails SET produced_txn_id = $1 WHERE id = $2`,
@@ -6886,10 +6952,12 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
       );
       await client.query(`UPDATE transactions SET raw_source_ref = $1 WHERE id = $2`, [email.id, inserted.transaction.id]);
 
-      return { status: 201, ...inserted };
+      return { ...inserted, status: inserted.status };
     });
-    if (result.status !== 201) return res.status(result.status).json({ error: result.error, reason: result.reason });
-    res.status(201).json(result);
+    if (result.status !== 200 && result.status !== 201) {
+      return res.status(result.status).json({ error: result.error, reason: result.reason });
+    }
+    res.status(result.status).json(result);
   } catch (err) {
     console.error('POST /inbound-emails/:id/create-transaction error', err);
     res.status(500).json({ error: 'internal_error' });
@@ -6906,21 +6974,62 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
  * feeds from.
  */
 app.post('/statement-imports', requireAuth, async (req, res) => {
-  const { userCardId, statementFrom, statementTo, closingBalanceInr, pointsPosted, txnCount, reconciledCount, issuerFormatId } =
-    req.body || {};
+  const {
+    userCardId,
+    statementFrom,
+    statementTo,
+    closingBalanceInr,
+    pointsPosted,
+    txnCount,
+    reconciledCount,
+    issuerFormatId,
+    importKey,
+    transactions: structuredTransactions,
+  } = req.body || {};
   if (!userCardId || typeof userCardId !== 'string') {
     return res.status(400).json({ error: 'userCardId is required' });
   }
   if (!statementFrom || !statementTo) {
     return res.status(400).json({ error: 'statementFrom and statementTo are required' });
   }
+  if (structuredTransactions !== undefined && !Array.isArray(structuredTransactions)) {
+    return res.status(400).json({ error: 'transactions must be an array when given' });
+  }
+  if (Array.isArray(structuredTransactions) && structuredTransactions.length > 5000) {
+    return res.status(400).json({ error: 'transactions may not exceed 5000 rows' });
+  }
+  if (Array.isArray(structuredTransactions) && (
+    typeof importKey !== 'string' || !/^[a-f0-9]{64}$/i.test(importKey)
+  )) {
+    return res.status(400).json({ error: 'a SHA-256 importKey is required with transactions' });
+  }
+
+  for (const [index, transaction] of (structuredTransactions || []).entries()) {
+    const amount = Number(transaction && transaction.amountInr);
+    const occurred = new Date(transaction && transaction.occurredAt);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: `transactions[${index}].amountInr must be positive` });
+    }
+    if (Number.isNaN(occurred.getTime())) {
+      return res.status(400).json({ error: `transactions[${index}].occurredAt is invalid` });
+    }
+    if (transaction.merchantName !== undefined && (
+      typeof transaction.merchantName !== 'string' || transaction.merchantName.length > 500
+    )) {
+      return res.status(400).json({ error: `transactions[${index}].merchantName must be at most 500 characters` });
+    }
+  }
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
+    const result = await withUserClient(req.userId, async (client) => {
+      const statementSourceKey = importKey
+        ? clientMutationSourceKey(req.userId, 'statement', importKey)
+        : null;
+      const insertedImport = await client.query(
         `INSERT INTO statement_imports
            (profile_id, user_card_id, statement_from, statement_to, closing_balance_inr,
-            points_posted, txn_count, reconciled_count, issuer_format_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            points_posted, txn_count, reconciled_count, issuer_format_id, source_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
          RETURNING *`,
         [
           req.userId,
@@ -6932,10 +7041,80 @@ app.post('/statement-imports', requireAuth, async (req, res) => {
           txnCount ?? 0,
           reconciledCount ?? 0,
           issuerFormatId ?? null,
+          statementSourceKey,
         ]
-      )
-    );
-    res.status(201).json({ statementImport: result.rows[0] });
+      );
+
+      if (insertedImport.rowCount === 0) {
+        const existing = await client.query(
+          `SELECT * FROM statement_imports WHERE profile_id = $1 AND source_key = $2`,
+          [req.userId, statementSourceKey]
+        );
+        return {
+          status: 200,
+          statementImport: existing.rows[0],
+          duplicate: true,
+          summary: { imported: 0, pendingDuplicates: 0, exactRetries: structuredTransactions.length },
+        };
+      }
+
+      const statementImport = insertedImport.rows[0];
+      let imported = 0;
+      let pendingDuplicates = 0;
+      let exactRetries = 0;
+      for (const [index, transaction] of (structuredTransactions || []).entries()) {
+        const occurred = new Date(transaction.occurredAt);
+        const merchantName = transaction.merchantName?.trim() || null;
+        const categoryId = await importResolvers.resolveCategoryForImport(client, req.userId, {
+          merchantName,
+        });
+        const sourceKey = clientMutationSourceKey(
+          req.userId,
+          'statement',
+          `${importKey}:${index}`,
+        );
+        const outcome = await insertTransactionAndUpdateState(client, req.userId, {
+          userCardId,
+          amount: Number(transaction.amountInr),
+          occurred,
+          categoryId,
+          rail: transaction.rail || 'unknown',
+          merchantName,
+          source: 'statement',
+          sourceKey,
+          backfill: true,
+          observationMetadata: { statementImportId: statementImport.id, line: index },
+        });
+        if (outcome.status !== 200 && outcome.status !== 201) {
+          throw new Error(`statement transaction ${index} failed: ${outcome.error || outcome.status}`);
+        }
+        if (outcome.duplicateKind === 'exact_retry') exactRetries += 1;
+        else {
+          imported += 1;
+          if (outcome.duplicatePending) pendingDuplicates += 1;
+          await client.query(
+            `UPDATE transactions
+                SET statement_import_id = $1, reward_state = 'confirmed', reconciled_at = now()
+              WHERE id = $2`,
+            [statementImport.id, outcome.transaction.id]
+          );
+        }
+      }
+
+      const updatedImport = await client.query(
+        `UPDATE statement_imports
+            SET txn_count = $1, reconciled_count = $2
+          WHERE id = $3
+          RETURNING *`,
+        [structuredTransactions?.length ?? (txnCount ?? 0), imported + exactRetries, statementImport.id]
+      );
+      return {
+        status: 201,
+        statementImport: updatedImport.rows[0],
+        summary: { imported, pendingDuplicates, exactRetries },
+      };
+    });
+    res.status(result.status).json(result);
   } catch (err) {
     console.error('POST /statement-imports error', err);
     res.status(500).json({ error: 'internal_error' });
@@ -7347,6 +7526,7 @@ startImapPoller(
     parseSmsAgainstPatterns,
     importParsedMessage,
     importSourceKey,
+    emailSourceKey,
     parseTransactionDate,
     fetchMessages: fetchRecentMessages,
   },

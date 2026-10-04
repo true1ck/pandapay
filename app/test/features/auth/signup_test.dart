@@ -10,6 +10,40 @@ import 'package:pandapay/data/auth_api.dart';
 /// `phone_number` and links it onto the same users row (authRoutes.js), so the
 /// only gap was the app never sending it.
 void main() {
+  group('AuthApi.requestEmailOtp', () {
+    test('marks the request as sign-up and includes the phone', () async {
+      late Map<String, dynamic> sentBody;
+      final client = MockClient((req) async {
+        sentBody = jsonDecode(req.body) as Map<String, dynamic>;
+        return http.Response('{}', 200);
+      });
+      final api = AuthApi(authBaseUrl: 'http://auth.test', client: client);
+
+      await api.requestEmailOtp(
+        'a@b.com',
+        isSignUp: true,
+        phoneNumber: '+919876543210',
+      );
+
+      expect(sentBody['email'], 'a@b.com');
+      expect(sentBody['is_signup'], isTrue);
+      expect(sentBody['phone_number'], '+919876543210');
+    });
+
+    test('keeps normal sign-in email-only', () async {
+      late Map<String, dynamic> sentBody;
+      final client = MockClient((req) async {
+        sentBody = jsonDecode(req.body) as Map<String, dynamic>;
+        return http.Response('{}', 200);
+      });
+      final api = AuthApi(authBaseUrl: 'http://auth.test', client: client);
+
+      await api.requestEmailOtp('a@b.com');
+
+      expect(sentBody, {'email': 'a@b.com'});
+    });
+  });
+
   group('AuthApi.verifyEmailOtp', () {
     test('sends phone_number when one is supplied', () async {
       late Map<String, dynamic> sentBody;
@@ -53,28 +87,37 @@ void main() {
       expect(sentBody.containsKey('phone_number'), isFalse);
     });
 
-    test('omits phone_number when supplied as an empty/whitespace string',
-        () async {
-      late Map<String, dynamic> sentBody;
-      final client = MockClient((req) async {
-        sentBody = jsonDecode(req.body) as Map<String, dynamic>;
-        return http.Response(
-          jsonEncode({'access_token': 'a', 'refresh_token': 'r'}),
-          200,
+    test(
+      'omits phone_number when supplied as an empty/whitespace string',
+      () async {
+        late Map<String, dynamic> sentBody;
+        final client = MockClient((req) async {
+          sentBody = jsonDecode(req.body) as Map<String, dynamic>;
+          return http.Response(
+            jsonEncode({'access_token': 'a', 'refresh_token': 'r'}),
+            200,
+          );
+        });
+        final api = AuthApi(authBaseUrl: 'http://auth.test', client: client);
+
+        await api.verifyEmailOtp(
+          'a@b.com',
+          '1234',
+          'dev-1',
+          phoneNumber: '   ',
         );
-      });
-      final api = AuthApi(authBaseUrl: 'http://auth.test', client: client);
 
-      await api.verifyEmailOtp('a@b.com', '1234', 'dev-1', phoneNumber: '   ');
-
-      expect(sentBody.containsKey('phone_number'), isFalse);
-    });
+        expect(sentBody.containsKey('phone_number'), isFalse);
+      },
+    );
 
     test('propagates the returned tokens', () async {
-      final client = MockClient((req) async => http.Response(
-            jsonEncode({'access_token': 'acc', 'refresh_token': 'ref'}),
-            200,
-          ));
+      final client = MockClient(
+        (req) async => http.Response(
+          jsonEncode({'access_token': 'acc', 'refresh_token': 'ref'}),
+          200,
+        ),
+      );
       final api = AuthApi(authBaseUrl: 'http://auth.test', client: client);
 
       final tokens = await api.verifyEmailOtp('a@b.com', '1234', 'dev-1');

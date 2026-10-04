@@ -21,6 +21,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     String? rail,
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
+    String? clientMutationId,
   }) async {
     lastLogArgs = {'userCardId': userCardId, 'amount': amount, 'categoryId': categoryId};
     return 'fake-txn-id';

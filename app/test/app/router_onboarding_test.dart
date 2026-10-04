@@ -11,7 +11,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Tasks 4-6: the redirect guard deferred out of Task 3 because its target
-/// screens (Welcome, Account Choice) didn't exist yet. Covers ui-spec.md
+/// screens (Welcome and direct auth entry) didn't exist yet. Covers ui-spec.md
 /// A3's explicit "no nagging later" requirement: onboarding, once completed,
 /// must never resurface — not even by manually navigating back to /welcome.
 class _EmptyCatalogueRepository implements CatalogueRepository {
@@ -24,16 +24,27 @@ class _EmptyCategoryRepository implements CategoryRepository {
   Future<List<SpendCategory>> fetchCategories() async => const [];
 }
 
-Future<void> _pumpApp(WidgetTester tester, {required bool onboardingComplete}) async {
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  required bool onboardingComplete,
+  required bool signedIn,
+}) async {
   SharedPreferences.setMockInitialValues({
     'pandapay_app.onboarding_complete_v1': onboardingComplete,
   });
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_EmptyCatalogueRepository()),
-        categoryRepositoryProvider.overrideWithValue(_EmptyCategoryRepository()),
+        catalogueRepositoryProvider.overrideWithValue(
+          _EmptyCatalogueRepository(),
+        ),
+        categoryRepositoryProvider.overrideWithValue(
+          _EmptyCategoryRepository(),
+        ),
         sessionInitProvider.overrideWith((ref) async {}),
+        accessTokenProvider.overrideWith(
+          (ref) => signedIn ? 'test-token' : null,
+        ),
       ],
       child: Consumer(
         builder: (context, ref, _) => MaterialApp.router(
@@ -49,73 +60,69 @@ Future<void> _pumpApp(WidgetTester tester, {required bool onboardingComplete}) a
 }
 
 void main() {
-  testWidgets('fresh install (onboarding incomplete) lands on Welcome, not Home', (tester) async {
-    await _pumpApp(tester, onboardingComplete: false);
+  testWidgets(
+    'fresh install (onboarding incomplete) lands on Welcome, not Home',
+    (tester) async {
+      await _pumpApp(tester, onboardingComplete: false, signedIn: false);
 
-    expect(find.text('Know which card to use — before you pay.'), findsOneWidget);
-    expect(find.byType(HomeScreen), findsNothing);
-  });
-
-  testWidgets('a device that already finished onboarding goes straight to Home', (tester) async {
-    await _pumpApp(tester, onboardingComplete: true);
-
-    expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.text('Know which card to use — before you pay.'), findsNothing);
-  });
+      expect(
+        find.text('Know which card to use — before you pay.'),
+        findsOneWidget,
+      );
+      expect(find.byType(HomeScreen), findsNothing);
+    },
+  );
 
   testWidgets(
-      'choosing "use without an account" continues through Permissions + Tour to Add Your '
-      'First Card, NOT Home (design 15/27-29 sit between Account Choice and A7; onboarding '
-      'still only completes at the end of A10)', (tester) async {
-    await _pumpApp(tester, onboardingComplete: false);
+    'a completed device without a session is sent to the account gate',
+    (tester) async {
+      await _pumpApp(tester, onboardingComplete: true, signedIn: false);
 
-    await tester.tap(find.text('Get started'));
-    await tester.pumpAndSettle();
-    expect(find.text('Use without an account'), findsOneWidget);
+      expect(
+        find.text('Know which card to use — before you pay.'),
+        findsOneWidget,
+      );
+      expect(find.byType(HomeScreen), findsNothing);
+    },
+  );
 
-    await tester.tap(find.text('Use without an account'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'welcome exposes direct sign-up and sign-in, never guest mode',
+    (tester) async {
+      await _pumpApp(tester, onboardingComplete: false, signedIn: false);
 
-    // Design 15: permissions screen, all-optional, no grant required to
-    // continue.
+      await tester.tap(find.text('Create an account'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNWidgets(2));
+      expect(find.text('How do you want to start?'), findsNothing);
+      expect(find.text('Use without an account'), findsNothing);
+      expect(find.byType(HomeScreen), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a signed-in completed account goes Home and cannot return to Welcome',
+    (tester) async {
+      await _pumpApp(tester, onboardingComplete: true, signedIn: true);
+
+      // Simulate something trying to send the user back to onboarding — e.g.
+      // a stale deep link. The guard must bounce it straight back to Home.
+      final context = tester.element(find.byType(Scaffold).first);
+      GoRouter.of(context).go(AppRoute.welcome);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(
+        find.text('Know which card to use — before you pay.'),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('a signed-in new account starts required setup', (tester) async {
+    await _pumpApp(tester, onboardingComplete: false, signedIn: true);
+
     expect(find.text('Set up a few permissions'), findsOneWidget);
-    await tester.tap(find.text('Continue'));
-    await tester.pumpAndSettle();
-
-    // Design 27-29: the 3-step tour, Skip available every step but this
-    // walks it forward instead to also cover Next.
-    expect(find.text('Your cards already pay you back.'), findsOneWidget);
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-    expect(find.text('Point it at the QR, get an answer.'), findsOneWidget);
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-    expect(find.text('See what you kept, and what slipped.'), findsOneWidget);
-    await tester.tap(find.text('Add my cards'));
-    await tester.pumpAndSettle();
-
-    // Lands on A7 (Add Your First Card), not Home — the empty test
-    // catalogue renders its app-bar default title.
-    expect(find.text('Add your cards'), findsOneWidget);
     expect(find.byType(HomeScreen), findsNothing);
-
-    // Onboarding must NOT be marked complete yet — A10 is now the only
-    // place that happens.
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool('pandapay_app.onboarding_complete_v1'), isNot(isTrue));
-  });
-
-  testWidgets('once onboarding is complete, Welcome is unreachable even by direct navigation',
-      (tester) async {
-    await _pumpApp(tester, onboardingComplete: true);
-
-    // Simulate something trying to send the user back to onboarding — e.g.
-    // a stale deep link. The guard must bounce it straight back to Home.
-    final context = tester.element(find.byType(Scaffold).first);
-    GoRouter.of(context).go(AppRoute.welcome);
-    await tester.pumpAndSettle();
-
-    expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.text('Know which card to use — before you pay.'), findsNothing);
   });
 }

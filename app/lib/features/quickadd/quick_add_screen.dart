@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -71,6 +72,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   TxnEntryKind _entryKind = TxnEntryKind.spend;
   bool _saving = false;
   String? _amountError;
+  String? _pendingClientMutationId;
+  String? _pendingPayloadFingerprint;
+  DateTime? _pendingOccurredAt;
 
   List<String> _recentMerchants = const [];
   List<NearbyMerchantCandidate> _merchantResults = const [];
@@ -239,17 +243,42 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     setState(() => _saving = true);
     final merchantName = _merchantController.text.trim().isEmpty ? null : _merchantController.text.trim();
     final note = _noteController.text.trim().isEmpty ? null : _noteController.text.trim();
+    // Reuse the identity when the same submit is retried after a lost HTTP
+    // response. If the user changes the form, it is a genuinely new mutation.
+    final payloadFingerprint = [
+      _selectedUserCardId,
+      amount,
+      _selectedCategoryId,
+      merchantName,
+      // A blank date means "at first submission", not a new timestamp on
+      // every retry. The actual timestamp is retained below with the ID.
+      _date?.toUtc().toIso8601String(),
+      note,
+      _instrument.wireValue,
+      _entryKind.wireValue,
+    ].join('|');
+    if (_pendingPayloadFingerprint != payloadFingerprint) {
+      _pendingPayloadFingerprint = payloadFingerprint;
+      _pendingClientMutationId = const Uuid().v4();
+      _pendingOccurredAt = occurredAt;
+    }
+    final clientMutationId = _pendingClientMutationId!;
+    final effectiveOccurredAt = _pendingOccurredAt!;
     try {
       final transactionId = await repo.logTransaction(
         userCardId: _instrument == TxnInstrument.creditCard ? _selectedUserCardId : null,
         amount: Money.fromRupees(amount),
         categoryId: _selectedCategoryId,
         merchantName: merchantName,
-        occurredAt: occurredAt,
+        occurredAt: effectiveOccurredAt,
         note: note,
         instrument: _instrument,
         entryKind: _entryKind,
+        clientMutationId: clientMutationId,
       );
+      _pendingClientMutationId = null;
+      _pendingPayloadFingerprint = null;
+      _pendingOccurredAt = null;
       if (_selectedUserCardId != null && _instrument == TxnInstrument.creditCard) {
         await _rememberLastUsedCard(_selectedUserCardId!);
       }
@@ -326,12 +355,15 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         try {
           final outbox = await ref.read(outboxRepositoryProvider.future);
           await outbox.enqueue(
-            userCardId: _selectedUserCardId!,
+            userCardId: _instrument == TxnInstrument.creditCard ? _selectedUserCardId : null,
             amount: Money.fromRupees(amount),
             categoryId: _selectedCategoryId,
             merchantName: merchantName,
-            occurredAt: occurredAt,
+            occurredAt: effectiveOccurredAt,
             note: note,
+            instrument: _instrument,
+            entryKind: _entryKind,
+            clientMutationId: clientMutationId,
           );
           ref.invalidate(pendingOutboxCountProvider);
           if (mounted) {

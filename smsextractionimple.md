@@ -1,6 +1,14 @@
 
 # PandaPay — Implementation Plan: SMS Import and Card Detection
 
+> **Historical plan — not the current source of truth.** For the verified
+> architecture, complete data flow, production status, connected features,
+> privacy behavior, known defects, and operations runbook, see
+> [`docs/sms-feature-architecture.md`](./docs/sms-feature-architecture.md).
+> Several readiness claims below have since regressed or were disproved by
+> inspecting the production database and the packaged `prodRelease` APK on
+> 2026-09-09. Keep this file only as implementation history.
+
 > ## Implementation status — 2026-08-19
 >
 > | Task | Status |

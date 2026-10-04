@@ -39,9 +39,16 @@ Future<void> _pumpApp(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_EmptyCatalogueRepository()),
-        categoryRepositoryProvider.overrideWithValue(_EmptyCategoryRepository()),
+        catalogueRepositoryProvider.overrideWithValue(
+          _EmptyCatalogueRepository(),
+        ),
+        categoryRepositoryProvider.overrideWithValue(
+          _EmptyCategoryRepository(),
+        ),
+        userCardsProvider.overrideWith((ref) async => const []),
         sessionInitProvider.overrideWith((ref) async {}),
+        sessionKeepAliveProvider.overrideWith((ref) {}),
+        accessTokenProvider.overrideWith((ref) => 'test-token'),
       ],
       child: Consumer(
         builder: (context, ref, _) => MaterialApp.router(
@@ -55,42 +62,73 @@ Future<void> _pumpApp(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('initial route renders Home inside the shell with Home highlighted', (tester) async {
-    await _pumpApp(tester);
+  testWidgets(
+    'initial route renders Home inside the shell with Home highlighted',
+    (tester) async {
+      await _pumpApp(tester);
 
-    expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.byKey(const ValueKey('appShellNavBar')), findsOneWidget);
-  });
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byKey(const ValueKey('appShellNavBar')), findsOneWidget);
+    },
+  );
 
-  testWidgets('tapping Wallet navigates to /cards and shows the Wallet screen', (tester) async {
-    await _pumpApp(tester);
+  testWidgets(
+    'tapping Wallet navigates to /cards and shows the Wallet screen',
+    (tester) async {
+      await _pumpApp(tester);
 
-    await tester.tap(find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('Wallet')));
-    await tester.pump();
-    await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('appShellNavBar')),
+          matching: find.text('Wallet'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
 
-    expect(find.byType(MyCardsScreen), findsOneWidget);
-  });
+      expect(find.byType(MyCardsScreen), findsOneWidget);
+    },
+  );
 
-  testWidgets('tapping Insights then You navigates correctly (order-independent)', (tester) async {
-    await _pumpApp(tester);
+  testWidgets(
+    'tapping Insights then You navigates correctly (order-independent)',
+    (tester) async {
+      await _pumpApp(tester);
 
-    await tester.tap(find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('Insights')));
-    await tester.pump();
-    await tester.pump();
-    expect(find.byType(InsightsHubScreen), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('appShellNavBar')),
+          matching: find.text('Insights'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(InsightsHubScreen), findsOneWidget);
 
-    await tester.tap(find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('You')));
-    await tester.pump();
-    await tester.pump();
-    expect(find.byType(AccountScreen), findsOneWidget);
-  });
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('appShellNavBar')),
+          matching: find.text('You'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(AccountScreen), findsOneWidget);
+    },
+  );
 
-  testWidgets('the scan FAB is present on every tab (not just Home)', (tester) async {
+  testWidgets('the scan FAB is present on every tab (not just Home)', (
+    tester,
+  ) async {
     await _pumpApp(tester);
     expect(find.byIcon(Icons.qr_code_scanner_rounded), findsOneWidget);
 
-    await tester.tap(find.descendant(of: find.byKey(const ValueKey('appShellNavBar')), matching: find.text('Wallet')));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('appShellNavBar')),
+        matching: find.text('Wallet'),
+      ),
+    );
     await tester.pump();
     await tester.pump();
     expect(find.byIcon(Icons.qr_code_scanner_rounded), findsOneWidget);

@@ -13,7 +13,6 @@ import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
-import '../auth/login_screen.dart';
 import '../comparison/comparison_view_screen.dart';
 import '../insights/credit_utilization_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
@@ -85,7 +84,6 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final ranked = ref.watch(rankedRecommendationsProvider);
-    final signedIn = ref.watch(accessTokenProvider) != null;
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     final now = ref.watch(clockProvider).now();
 
@@ -110,16 +108,15 @@ class HomeScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
               child: _BrandHeader(greeting: _greetingFor(now)),
             ),
-            if (!signedIn)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(_gutter, AppSpace.lg, _gutter, 0),
-                child: _SignInBanner(),
-              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 0),
               child: Text(
                 'What are you paying for?',
-                style: BambooFonts.heading(24, color: BambooInk.ink900, height: 1.15),
+                style: BambooFonts.heading(
+                  24,
+                  color: BambooInk.ink900,
+                  height: 1.15,
+                ),
               ),
             ),
             // B5's geofence context ("you look like you're at X") reads as
@@ -144,7 +141,9 @@ class HomeScreen extends ConsumerWidget {
                         label: label,
                         icon: icon,
                         selected: selectedCategory == slug,
-                        onTap: () => ref.read(selectedCategoryProvider.notifier).state = slug,
+                        onTap: () =>
+                            ref.read(selectedCategoryProvider.notifier).state =
+                                slug,
                       ),
                     ),
                 ],
@@ -152,7 +151,12 @@ class HomeScreen extends ConsumerWidget {
             ),
             Padding(
               key: tutorialKeys.amountField,
-              padding: const EdgeInsets.fromLTRB(_gutter, AppSpace.lg, _gutter, 0),
+              padding: const EdgeInsets.fromLTRB(
+                _gutter,
+                AppSpace.lg,
+                _gutter,
+                0,
+              ),
               child: const _AmountCard(),
             ),
             const SizedBox(height: AppSpace.sm),
@@ -207,7 +211,10 @@ class _BrandHeader extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(greeting, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+              Text(
+                greeting,
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
               if (hasEarnings)
                 GestureDetector(
                   onTap: () => context.push(AppRoute.monthlySavings),
@@ -220,7 +227,10 @@ class _BrandHeader extends ConsumerWidget {
                         child: MoneyText(
                           summary.rewardsThisMonth,
                           confidence: Confidence.estimated,
-                          style: BambooFonts.heading(17, color: BambooInk.ink900),
+                          style: BambooFonts.heading(
+                            17,
+                            color: BambooInk.ink900,
+                          ),
                           suffix: ' earned',
                           hidePaise: true,
                           // One confidence marker for the pair, on the
@@ -266,79 +276,29 @@ class _StreakPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(AppRadius.pill)),
+      decoration: BoxDecoration(
+        color: BambooInk.slate,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 6,
             height: 6,
-            decoration: const BoxDecoration(color: BambooInk.lime, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: BambooInk.lime,
+              shape: BoxShape.circle,
+            ),
           ),
           const SizedBox(width: 6),
           Text(
             '$days-day streak',
-            style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.lime),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SignInBanner extends StatelessWidget {
-  const _SignInBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [BambooInk.slateRaised, BambooInk.slate],
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), shape: BoxShape.circle),
-            child: const Icon(Icons.person_outline_rounded, color: BambooInk.onSlate, size: 20),
-          ),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "You're browsing as a guest",
-                  style: BambooFonts.ui(14, weight: FontWeight.w600, color: BambooInk.onSlate),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Sign in to track your own cards & spend',
-                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
-                ),
-              ],
+            style: BambooFonts.ui(
+              12,
+              weight: FontWeight.w600,
+              color: BambooInk.lime,
             ),
-          ),
-          const SizedBox(width: AppSpace.sm),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: BambooInk.lime,
-              foregroundColor: BambooInk.slate,
-              minimumSize: const Size(0, 36),
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
-              textStyle: BambooFonts.ui(13, weight: FontWeight.w700),
-            ),
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const Scaffold(body: LoginScreen()))),
-            child: const Text('Sign in'),
           ),
         ],
       ),
@@ -351,7 +311,12 @@ class _CategoryChip extends StatelessWidget {
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
-  const _CategoryChip({required this.label, required this.icon, required this.selected, required this.onTap});
+  const _CategoryChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -364,12 +329,18 @@ class _CategoryChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? BambooInk.slate : BambooInk.paperMuted,
           borderRadius: BorderRadius.circular(999),
-          border: selected ? null : Border.all(color: BambooInk.hairlineOnPaper),
+          border: selected
+              ? null
+              : Border.all(color: BambooInk.hairlineOnPaper),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15, color: selected ? BambooInk.lime : BambooInk.ink500),
+            Icon(
+              icon,
+              size: 15,
+              color: selected ? BambooInk.lime : BambooInk.ink500,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -396,7 +367,8 @@ class _AlertsStrip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userCards = ref.watch(userCardsProvider);
     final catalogue = ref.watch(catalogueProvider);
-    if (!userCards.hasValue || !catalogue.hasValue) return const SizedBox.shrink();
+    if (!userCards.hasValue || !catalogue.hasValue)
+      return const SizedBox.shrink();
 
     final now = ref.watch(clockProvider).now();
     final alerts = computeHomeAlerts(
@@ -407,13 +379,21 @@ class _AlertsStrip extends ConsumerWidget {
     if (alerts.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(HomeScreen._gutter, AppSpace.md, HomeScreen._gutter, 0),
+      padding: const EdgeInsets.fromLTRB(
+        HomeScreen._gutter,
+        AppSpace.md,
+        HomeScreen._gutter,
+        0,
+      ),
       child: Column(
         children: [
           for (final alert in alerts)
             Container(
               margin: const EdgeInsets.only(bottom: AppSpace.xs),
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.md),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.md,
+                vertical: AppSpace.md,
+              ),
               decoration: BoxDecoration(
                 color: BambooInk.warningBg,
                 borderRadius: BorderRadius.circular(18),
@@ -426,14 +406,20 @@ class _AlertsStrip extends ConsumerWidget {
                     width: 20,
                     height: 20,
                     margin: const EdgeInsets.only(top: 1),
-                    decoration: const BoxDecoration(color: BambooInk.clay, shape: BoxShape.circle),
+                    decoration: const BoxDecoration(
+                      color: BambooInk.clay,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                   const SizedBox(width: AppSpace.sm),
                   // Icon + text label together, not color alone, carry the
                   // "this needs attention" signal — a clay-only box would
                   // fail for colorblind users.
                   Expanded(
-                    child: Text(alert.message, style: BambooFonts.ui(13, color: BambooInk.ink900)),
+                    child: Text(
+                      alert.message,
+                      style: BambooFonts.ui(13, color: BambooInk.ink900),
+                    ),
                   ),
                 ],
               ),
@@ -452,14 +438,15 @@ class _AlertsStrip extends ConsumerWidget {
 /// caveat as E3 itself (see creditUtilizationProvider's own doc comment):
 /// "current balance" is a spend-proxy, not a real statement balance, so
 /// this only fires once a card is actually over the 30% guideline, never a
-/// fabricated number. Silent (no banner) for guest mode / cards with no
-/// credit limit entered, same as E3.
+/// fabricated number. Silent for cards with no credit limit entered, same as
+/// E3.
 class _UtilizationWarningBanner extends ConsumerWidget {
   const _UtilizationWarningBanner();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pairs = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+    final pairs =
+        ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
     final utilization = ref.watch(creditUtilizationProvider);
     if (pairs.isEmpty || utilization.isEmpty) return const SizedBox.shrink();
 
@@ -476,19 +463,34 @@ class _UtilizationWarningBanner extends ConsumerWidget {
     if (worst == null || worstResult == null) return const SizedBox.shrink();
 
     final (userCard, product) = worst;
-    final name = userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name;
+    final name = userCard.nickname?.isNotEmpty == true
+        ? userCard.nickname!
+        : product.name;
     final pct = (worstResult.ratio * 100).toStringAsFixed(0);
     final now = ref.watch(clockProvider).now();
-    final due = userCard.dueDay == null ? null : _nextOccurrence(userCard.dueDay!, now);
-    final dueClause = due == null ? 'Paying it down' : 'Paying it down before ${due.day}/${due.month}';
+    final due = userCard.dueDay == null
+        ? null
+        : _nextOccurrence(userCard.dueDay!, now);
+    final dueClause = due == null
+        ? 'Paying it down'
+        : 'Paying it down before ${due.day}/${due.month}';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(HomeScreen._gutter, AppSpace.md, HomeScreen._gutter, 0),
+      padding: const EdgeInsets.fromLTRB(
+        HomeScreen._gutter,
+        AppSpace.md,
+        HomeScreen._gutter,
+        0,
+      ),
       child: GestureDetector(
-        onTap: () =>
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CreditUtilizationScreen())),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CreditUtilizationScreen()),
+        ),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.md),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.md,
+            vertical: AppSpace.md,
+          ),
           decoration: BoxDecoration(
             color: BambooInk.warningBg,
             borderRadius: BorderRadius.circular(18),
@@ -497,7 +499,11 @@ class _UtilizationWarningBanner extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.warning_amber_rounded, size: 18, color: BambooInk.clay),
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 18,
+                color: BambooInk.clay,
+              ),
               const SizedBox(width: AppSpace.sm),
               Expanded(
                 child: Column(
@@ -505,7 +511,11 @@ class _UtilizationWarningBanner extends ConsumerWidget {
                   children: [
                     Text(
                       '$name is $pct% utilised',
-                      style: BambooFonts.ui(13, weight: FontWeight.w700, color: BambooInk.ink900),
+                      style: BambooFonts.ui(
+                        13,
+                        weight: FontWeight.w700,
+                        color: BambooInk.ink900,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -552,7 +562,9 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
   void initState() {
     super.initState();
     final initial = ref.read(enteredAmountProvider);
-    _controller = TextEditingController(text: initial.rupees.toStringAsFixed(0));
+    _controller = TextEditingController(
+      text: initial.rupees.toStringAsFixed(0),
+    );
   }
 
   @override
@@ -590,16 +602,25 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
             children: [
               Text(
                 'How much are you spending?',
-                style: BambooFonts.ui(12.5, weight: FontWeight.w500, color: BambooInk.ink500),
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w500,
+                  color: BambooInk.ink500,
+                ),
               ),
-              Text('Tap to change', style: BambooFonts.ui(12, color: BambooInk.ink300)),
+              Text(
+                'Tap to change',
+                style: BambooFonts.ui(12, color: BambooInk.ink300),
+              ),
             ],
           ),
           const SizedBox(height: 4),
           TextField(
             controller: _controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+            ],
             style: BambooFonts.money(40),
             decoration: InputDecoration(
               // filled: false — without this, the ambient InputDecorationTheme
@@ -619,7 +640,8 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
             onChanged: (value) {
               final parsed = double.tryParse(value);
               if (parsed != null && parsed >= 0) {
-                ref.read(enteredAmountProvider.notifier).state = Money.fromRupees(parsed);
+                ref.read(enteredAmountProvider.notifier).state =
+                    Money.fromRupees(parsed);
               }
             },
           ),
@@ -629,7 +651,9 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
               for (var i = 0; i < _quickAmounts.length; i++)
                 Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(right: i == _quickAmounts.length - 1 ? 0 : 8),
+                    padding: EdgeInsets.only(
+                      right: i == _quickAmounts.length - 1 ? 0 : 8,
+                    ),
                     child: _QuickAmountChip(
                       label: '₹${_quickAmounts[i].toStringAsFixed(0)}',
                       onTap: () => _setAmount(_quickAmounts[i]),
@@ -657,10 +681,17 @@ class _QuickAmountChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 9),
         alignment: Alignment.center,
-        decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(14)),
+        decoration: BoxDecoration(
+          color: BambooInk.paperMuted,
+          borderRadius: BorderRadius.circular(14),
+        ),
         child: Text(
           label,
-          style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink900),
+          style: BambooFonts.ui(
+            13,
+            weight: FontWeight.w600,
+            color: BambooInk.ink900,
+          ),
         ),
       ),
     );
@@ -696,12 +727,15 @@ class _RankedSection extends ConsumerWidget {
           return const EmptyState(
             icon: Icons.credit_card_off_rounded,
             title: 'No cards yet',
-            message: 'Add a card to see personalized reward recommendations here.',
+            message:
+                'Add a card to see personalized reward recommendations here.',
           );
         }
         // ui-spec B1.4: the first non-excluded runner-up after the hero
         // (index 0), if one exists.
-        final backup = recommendations.skip(1).firstWhereOrNull((r) => !r.isExcluded);
+        final backup = recommendations
+            .skip(1)
+            .firstWhereOrNull((r) => !r.isExcluded);
         return Column(
           children: [
             Padding(
@@ -726,7 +760,9 @@ class _RankedSection extends ConsumerWidget {
                 child: _RecommendationCard(
                   recommendations[i],
                   rank: i,
-                  cardAnchorKey: i == 0 ? tutorialKeys.firstRecommendationCard : null,
+                  cardAnchorKey: i == 0
+                      ? tutorialKeys.firstRecommendationCard
+                      : null,
                 ),
               ),
               if (i == 0 && backup != null)
@@ -754,10 +790,17 @@ class _BackupCardRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: BambooInk.paperMuted,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Row(
         children: [
-          const Icon(Icons.swap_horiz_rounded, size: 16, color: BambooInk.ink500),
+          const Icon(
+            Icons.swap_horiz_rounded,
+            size: 16,
+            color: BambooInk.ink500,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text.rich(
@@ -767,7 +810,10 @@ class _BackupCardRow extends StatelessWidget {
                   const TextSpan(text: 'If not accepted: '),
                   TextSpan(
                     text: backup.card.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600, color: BambooInk.ink900),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
                   ),
                 ],
               ),
@@ -776,7 +822,11 @@ class _BackupCardRow extends StatelessWidget {
           MoneyText(
             backup.expectedValue,
             confidence: backup.confidence,
-            style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink900),
+            style: BambooFonts.ui(
+              12.5,
+              weight: FontWeight.w600,
+              color: BambooInk.ink900,
+            ),
           ),
         ],
       ),
@@ -795,10 +845,15 @@ class _RecommendationCard extends ConsumerStatefulWidget {
   // silently re-introduce a per-card state leak on reorder via a
   // different mechanism.
   final Key? cardAnchorKey;
-  const _RecommendationCard(this.recommendation, {required this.rank, this.cardAnchorKey});
+  const _RecommendationCard(
+    this.recommendation, {
+    required this.rank,
+    this.cardAnchorKey,
+  });
 
   @override
-  ConsumerState<_RecommendationCard> createState() => _RecommendationCardState();
+  ConsumerState<_RecommendationCard> createState() =>
+      _RecommendationCardState();
 }
 
 class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
@@ -823,10 +878,16 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
             ? const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+                colors: [
+                  BambooInk.slateRaised,
+                  BambooInk.slate,
+                  BambooInk.slateLow,
+                ],
               )
             : null,
-        color: isHero ? null : (excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper),
+        color: isHero
+            ? null
+            : (excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper),
         borderRadius: BorderRadius.circular(isHero ? 28 : 20),
         border: isHero ? null : Border.all(color: BambooInk.hairlineOnPaper),
         boxShadow: isHero
@@ -858,7 +919,10 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 11,
+                                  vertical: 5,
+                                ),
                                 decoration: BoxDecoration(
                                   color: BambooInk.lime,
                                   borderRadius: BorderRadius.circular(999),
@@ -877,7 +941,10 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                                 Flexible(
                                   child: Text(
                                     _rateLabel(recommendation)!,
-                                    style: BambooFonts.ui(12, color: BambooInk.onSlateMuted),
+                                    style: BambooFonts.ui(
+                                      12,
+                                      color: BambooInk.onSlateMuted,
+                                    ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -887,16 +954,25 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                           const SizedBox(height: 10),
                           Text(
                             recommendation.card.name,
-                            style: BambooFonts.heading(20, color: BambooInk.onSlate),
+                            style: BambooFonts.heading(
+                              20,
+                              color: BambooInk.onSlate,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                           if (recommendation.breakdown != null)
-                            _CapBadge(breakdown: recommendation.breakdown!, onDarkSurface: true),
+                            _CapBadge(
+                              breakdown: recommendation.breakdown!,
+                              onDarkSurface: true,
+                            ),
                         ],
                       )
                     : Text(
                         recommendation.card.name,
-                        style: BambooFonts.heading(17, color: excluded ? BambooInk.ink500 : BambooInk.ink900),
+                        style: BambooFonts.heading(
+                          17,
+                          color: excluded ? BambooInk.ink500 : BambooInk.ink900,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
               ),
@@ -907,20 +983,30 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                     // The pill itself stays small, but the tappable region
                     // is padded out to the 48x48dp minimum touch target so
                     // it's usable, not just visible.
-                    constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
                     child: GestureDetector(
                       // B8 chip requirement: tapping the "override active"
                       // pill takes the user straight to where they can
                       // see/undo it.
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => Navigator.of(
-                        context,
-                      ).push(MaterialPageRoute(builder: (_) => const ManualOverridesScreen())),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ManualOverridesScreen(),
+                        ),
+                      ),
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
-                            color: isHero ? Colors.white.withValues(alpha: 0.16) : BambooInk.paperMuted,
+                            color: isHero
+                                ? Colors.white.withValues(alpha: 0.16)
+                                : BambooInk.paperMuted,
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Row(
@@ -929,7 +1015,9 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                               Icon(
                                 Icons.push_pin_rounded,
                                 size: 12,
-                                color: isHero ? BambooInk.onSlate : BambooInk.ink900,
+                                color: isHero
+                                    ? BambooInk.onSlate
+                                    : BambooInk.ink900,
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -937,7 +1025,9 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                                 style: BambooFonts.ui(
                                   11,
                                   weight: FontWeight.w600,
-                                  color: isHero ? BambooInk.onSlate : BambooInk.ink900,
+                                  color: isHero
+                                      ? BambooInk.onSlate
+                                      : BambooInk.ink900,
                                 ),
                               ),
                             ],
@@ -954,7 +1044,11 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.block_rounded, size: 16, color: BambooInk.ink500),
+                const Icon(
+                  Icons.block_rounded,
+                  size: 16,
+                  color: BambooInk.ink500,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -983,7 +1077,13 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                     padding: const EdgeInsets.only(bottom: 7),
                     child: Row(
                       children: [
-                        Text('back', style: BambooFonts.ui(13, color: BambooInk.onSlateMuted)),
+                        Text(
+                          'back',
+                          style: BambooFonts.ui(
+                            13,
+                            color: BambooInk.onSlateMuted,
+                          ),
+                        ),
                         const SizedBox(width: 6),
                         Icon(
                           recommendation.confidence.isConfirmed
@@ -1012,7 +1112,10 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
             if (recommendation.reasonLines.isNotEmpty) ...[
               Text(
                 '•  ${recommendation.reasonLines.first}',
-                style: BambooFonts.ui(13, color: isHero ? BambooInk.onSlateSubtle : BambooInk.ink500),
+                style: BambooFonts.ui(
+                  13,
+                  color: isHero ? BambooInk.onSlateSubtle : BambooInk.ink500,
+                ),
               ),
               if (recommendation.reasonLines.length > 1) ...[
                 ConstrainedBox(
@@ -1027,7 +1130,9 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              _expanded ? 'Hide the full breakdown' : 'Why this card?',
+                              _expanded
+                                  ? 'Hide the full breakdown'
+                                  : 'Why this card?',
                               style: BambooFonts.ui(
                                 13,
                                 weight: FontWeight.w600,
@@ -1035,7 +1140,9 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                               ),
                             ),
                             Icon(
-                              _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                              _expanded
+                                  ? Icons.expand_less_rounded
+                                  : Icons.expand_more_rounded,
                               size: 18,
                               color: isHero ? BambooInk.lime : BambooInk.jade,
                             ),
@@ -1058,7 +1165,9 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                               '•  $line',
                               style: BambooFonts.ui(
                                 13,
-                                color: isHero ? BambooInk.onSlateSubtle : BambooInk.ink500,
+                                color: isHero
+                                    ? BambooInk.onSlateSubtle
+                                    : BambooInk.ink500,
                               ),
                             ),
                           ),
@@ -1092,10 +1201,13 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                       minimumSize: const Size(0, 44),
                       padding: EdgeInsets.zero,
                       textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                     onPressed: () {
-                      final wallet = ref.read(userCardsProvider).valueOrNull ?? const [];
+                      final wallet =
+                          ref.read(userCardsProvider).valueOrNull ?? const [];
                       final owned = wallet.firstWhereOrNull(
                         (w) => w.cardProductId == widget.recommendation.card.id,
                       );
@@ -1107,9 +1219,12 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                       // Passing the slug straight through crashes
                       // DropdownButton's "exactly one matching item" assert.
                       primaryActionHaptic();
-                      final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
+                      final categories =
+                          ref.read(categoriesProvider).valueOrNull ?? const [];
                       final selectedSlug = ref.read(selectedCategoryProvider);
-                      final categoryId = categories.firstWhereOrNull((c) => c.slug == selectedSlug)?.id;
+                      final categoryId = categories
+                          .firstWhereOrNull((c) => c.slug == selectedSlug)
+                          ?.id;
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => QuickAddScreen(
@@ -1125,16 +1240,20 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                 ),
                 const SizedBox(width: 10),
                 FilledButton(
-                  onPressed: () => Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => const ComparisonViewScreen())),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ComparisonViewScreen(),
+                    ),
+                  ),
                   style: FilledButton.styleFrom(
                     backgroundColor: BambooInk.slateRaised,
                     foregroundColor: BambooInk.lime,
                     minimumSize: const Size(0, 52),
                     padding: const EdgeInsets.symmetric(horizontal: 18),
                     textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   child: const Text('See the math'),
                 ),
@@ -1230,7 +1349,10 @@ class _CapBadge extends StatelessWidget {
     final amber = onDarkSurface ? _amberOnDark : BambooInk.amber;
     final (label, tone) = switch (breakdown.capStatus) {
       CapStatus.reached => ('Cap spent — earning base rate', amber),
-      CapStatus.partiallyConsumed => (breakdown.capNote ?? 'Cap nearly spent', amber),
+      CapStatus.partiallyConsumed => (
+        breakdown.capNote ?? 'Cap nearly spent',
+        amber,
+      ),
       _ => (null, BambooInk.jade),
     };
     if (label == null) return const SizedBox.shrink();

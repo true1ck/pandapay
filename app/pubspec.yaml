@@ -219,6 +219,9 @@ dependencies:
   # transitive dependency; promoted to direct since device_identity.dart
   # now uses it on purpose.
   uuid: ^4.6.0
+  # Stable file/content identities for privacy-safe idempotent imports. Only
+  # the digest is synced; statement PDF bytes remain on-device.
+  crypto: ^3.0.7
   google_sign_in: ^6.2.1
   image: 4.10.1
 flutter:

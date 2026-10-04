@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
-import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../settings/feedback_support_screen.dart';
 import 'account_recovery_screen.dart';
@@ -118,7 +117,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       final identifier = _identifierController.text.trim();
-      await ref.read(authApiProvider).requestEmailOtp(identifier);
+      await ref
+          .read(authApiProvider)
+          .requestEmailOtp(
+            identifier,
+            isSignUp: _isSignUp,
+            phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
+          );
       setState(() => _otpRequested = true);
     } catch (e) {
       setState(() => _error = userFacingErrorMessage(e));
@@ -242,8 +247,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Sign-up uses the light paper/wash palette; log-in keeps the dark slate.
-    final isLight = _isSignUp;
+    // Keep sign-up and sign-in on the same light palette as the rest of the
+    // application. The auth mode changes the copy and flow, not the theme.
+    const isLight = true;
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: isLight
@@ -302,8 +308,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       title: _title,
                       accent: _titleAccent,
                       baseColor: isLight ? BambooInk.ink900 : BambooInk.onSlate,
-                      accentColor:
-                          isLight ? BambooInk.jade : BambooInk.lime,
+                      accentColor: isLight ? BambooInk.jade : BambooInk.lime,
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -372,28 +377,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ],
                     const SizedBox(height: AppSpace.xl),
-                    // G4's "zero login" requirement in practice: AccountScreen
-                    // (this widget's usual host) shows LoginScreen instead of
-                    // its Tools list whenever signed out, so without this link
-                    // Emergency Card Info would be unreachable from the tab
-                    // it's otherwise discoverable from pre-sign-in. Lost-card
-                    // help has to work for someone who's never made an
-                    // account at all, not just someone temporarily signed out.
-                    Center(
-                      child: TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: isLight
-                              ? BambooInk.ink500
-                              : BambooInk.onSlateMuted,
-                        ),
-                        onPressed: () =>
-                            context.push(AppRoute.emergencyCardInfo),
-                        icon: const Icon(Icons.emergency_outlined, size: 16),
-                        label: const Text(
-                          'Lost or stolen card? Get emergency help — no sign-in needed',
-                        ),
-                      ),
-                    ),
+                    // Account creation and sign-in are the only ways into
+                    // the app; there is no public/guest bypass from auth.
                     // A4: the bundled "by continuing you agree..." footer is
                     // gone for sign-up — the three checkboxes in
                     // _IdentifierStep are the real, unbundled consent now.
@@ -466,12 +451,11 @@ class _IdentifierStep extends StatelessWidget {
     required String hint,
     required IconData icon,
   }) {
-    final hintColor =
-        isLight ? BambooInk.ink500 : BambooInk.onSlateMuted;
-    final fillColor =
-        isLight ? BambooInk.paperMuted : BambooInk.slateLow;
-    final borderColor =
-        isLight ? BambooInk.hairlineOnPaper : BambooInk.slateHairline;
+    final hintColor = isLight ? BambooInk.ink500 : BambooInk.onSlateMuted;
+    final fillColor = isLight ? BambooInk.paperMuted : BambooInk.slateLow;
+    final borderColor = isLight
+        ? BambooInk.hairlineOnPaper
+        : BambooInk.slateHairline;
     return InputDecoration(
       hintText: hint,
       hintStyle: BambooFonts.ui(14, color: hintColor),
@@ -496,8 +480,8 @@ class _IdentifierStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labelColor = isLight ? BambooInk.ink300 : BambooInk.onSlateMuted;
-    final bodyColor  = isLight ? BambooInk.ink500 : BambooInk.onSlateMuted;
-    final textColor  = isLight ? BambooInk.ink900 : BambooInk.onSlate;
+    final bodyColor = isLight ? BambooInk.ink500 : BambooInk.onSlateMuted;
+    final textColor = isLight ? BambooInk.ink900 : BambooInk.onSlate;
     final labelStyle = BambooFonts.ui(
       13,
       weight: FontWeight.w600,
@@ -548,11 +532,7 @@ class _IdentifierStep extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.info_outline_rounded,
-              size: 14,
-              color: bodyColor,
-            ),
+            Icon(Icons.info_outline_rounded, size: 14, color: bodyColor),
             const SizedBox(width: AppSpace.xs),
             Expanded(
               child: Text(

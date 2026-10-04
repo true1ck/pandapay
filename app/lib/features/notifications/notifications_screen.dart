@@ -40,25 +40,41 @@ class NotificationsScreen extends ConsumerWidget {
                   children: [
                     IconButton(
                       onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(Icons.arrow_back_rounded, color: BambooInk.ink900),
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: BambooInk.ink900,
+                      ),
                       tooltip: 'Back',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                      constraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
+                      ),
                     ),
                     const SizedBox(width: AppSpace.sm),
                     Expanded(
                       child: Text(
                         'Notifications',
-                        style: BambooFonts.heading(26, weight: FontWeight.w800, color: BambooInk.ink900),
+                        style: BambooFonts.heading(
+                          26,
+                          weight: FontWeight.w800,
+                          color: BambooInk.ink900,
+                        ),
                       ),
                     ),
                     if ((inbox.valueOrNull?.unreadCount ?? 0) > 0)
                       TextButton(
                         onPressed: () => _markAllRead(context, ref),
-                        style: TextButton.styleFrom(foregroundColor: BambooInk.ink300),
+                        style: TextButton.styleFrom(
+                          foregroundColor: BambooInk.ink300,
+                        ),
                         child: Text(
                           'Mark all read',
-                          style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink300),
+                          style: BambooFonts.ui(
+                            12.5,
+                            weight: FontWeight.w600,
+                            color: BambooInk.ink300,
+                          ),
                         ),
                       ),
                   ],
@@ -70,11 +86,11 @@ class NotificationsScreen extends ConsumerWidget {
                         icon: Icons.notifications_none_rounded,
                         title: 'Notifications need an account',
                         message:
-                            'Your inbox syncs with your account, so guest mode has nothing to show. '
-                            'Everything else in the app keeps working.',
+                            'Your inbox syncs with your account. Sign in to view your notifications.',
                       )
                     : inbox.when(
-                        loading: () => const Center(child: CircularProgressIndicator()),
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
                         error: (err, _) => ErrorState(
                           message: userFacingErrorMessage(err),
                           onRetry: () => ref.invalidate(notificationsProvider),
@@ -97,7 +113,9 @@ class NotificationsScreen extends ConsumerWidget {
       await repo.markNotificationsRead();
       ref.invalidate(notificationsProvider);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingErrorMessage(e))),
+      );
     }
   }
 }
@@ -112,15 +130,20 @@ class _InboxList extends ConsumerWidget {
       return const EmptyState(
         icon: Icons.notifications_none_rounded,
         title: 'Nothing yet',
-        message: "Due-date nudges, cap warnings and nearby offers land here. "
+        message:
+            "Due-date nudges, cap warnings and nearby offers land here. "
             "We'll only send what you've left switched on in Notifications settings.",
       );
     }
 
     final now = ref.watch(clockProvider).now();
     final today = DateTime(now.year, now.month, now.day);
-    final todays = items.where((n) => !n.createdAt.toLocal().isBefore(today)).toList();
-    final earlier = items.where((n) => n.createdAt.toLocal().isBefore(today)).toList();
+    final todays = items
+        .where((n) => !n.createdAt.toLocal().isBefore(today))
+        .toList();
+    final earlier = items
+        .where((n) => n.createdAt.toLocal().isBefore(today))
+        .toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
@@ -167,11 +190,12 @@ class _NotificationTile extends ConsumerWidget {
   /// Design 19 tints the icon tile by severity: clay for something that
   /// costs you money if ignored, bamboo for an opportunity, neutral grey for
   /// a record of something that already happened.
-  (Color tile, Color dot) get _severityColors => switch (notification.severity) {
-    'urgent' => (BambooInk.warningBg, BambooInk.clay),
-    'good' => (BambooInk.rankBadgeBg, BambooInk.rankBadgeInk),
-    _ => (BambooInk.paperMuted, BambooInk.ink500),
-  };
+  (Color tile, Color dot) get _severityColors =>
+      switch (notification.severity) {
+        'urgent' => (BambooInk.warningBg, BambooInk.clay),
+        'good' => (BambooInk.rankBadgeBg, BambooInk.rankBadgeInk),
+        _ => (BambooInk.paperMuted, BambooInk.ink500),
+      };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -194,13 +218,23 @@ class _NotificationTile extends ConsumerWidget {
             width: 34,
             height: 34,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: tileColor, borderRadius: BorderRadius.circular(11)),
+            decoration: BoxDecoration(
+              color: tileColor,
+              borderRadius: BorderRadius.circular(11),
+            ),
             child: read
-                ? const Icon(Icons.check_rounded, size: 15, color: BambooInk.ink500)
+                ? const Icon(
+                    Icons.check_rounded,
+                    size: 15,
+                    color: BambooInk.ink500,
+                  )
                 : Container(
                     width: 8,
                     height: 8,
-                    decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      color: dotColor,
+                      shape: BoxShape.circle,
+                    ),
                   ),
           ),
           const SizedBox(width: AppSpace.md),
@@ -210,13 +244,21 @@ class _NotificationTile extends ConsumerWidget {
               children: [
                 Text(
                   notification.title,
-                  style: BambooFonts.ui(14, weight: FontWeight.w600, color: BambooInk.ink900),
+                  style: BambooFonts.ui(
+                    14,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
                 ),
                 if (notification.body != null) ...[
                   const SizedBox(height: 3),
                   Text(
                     notification.body!,
-                    style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.45),
+                    style: BambooFonts.ui(
+                      12.5,
+                      color: BambooInk.ink500,
+                      height: 1.45,
+                    ),
                   ),
                 ],
               ],

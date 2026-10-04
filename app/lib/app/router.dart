@@ -15,7 +15,6 @@ import '../features/activity/duplicate_review_screen.dart';
 import '../features/activity/edit_transaction_screen.dart';
 import '../features/activity/needs_review_screen.dart';
 import '../features/activity/transaction_detail_screen.dart';
-import '../features/auth/guest_migration.dart';
 import '../features/auth/login_screen.dart';
 import '../features/cards/benefit_detail_screen.dart';
 import '../features/cards/benefits_cheat_sheet_screen.dart';
@@ -44,7 +43,6 @@ import '../features/insights/budgets_screen.dart';
 import '../features/insights/grouped_insight_screen.dart';
 import '../features/insights/spend_trends_screen.dart';
 import '../features/insights/subscriptions_screen.dart';
-import '../features/onboarding/account_choice_screen.dart';
 import '../features/onboarding/add_first_card_screen.dart';
 import '../features/onboarding/card_details_setup_screen.dart';
 import '../features/onboarding/permissions_screen.dart';
@@ -57,7 +55,8 @@ import '../features/scan/scan_result_screen.dart';
 import '../features/scan/upi_qr_scanner_screen.dart';
 import '../features/settings/settings_sync.dart';
 import '../features/sync/sync_engine.dart';
-import '../features/settings/account_settings_screen.dart' show biometricLockProvider;
+import '../features/settings/account_settings_screen.dart'
+    show biometricLockProvider;
 import '../features/system/biometric_lock_screen.dart';
 import '../features/system/forced_upgrade_screen.dart';
 import '../features/system/maintenance_screen.dart';
@@ -72,7 +71,6 @@ import 'tutorial_keys.dart';
 abstract final class AppRoute {
   static const splash = '/splash';
   static const welcome = '/welcome';
-  static const accountChoice = '/account-choice';
   static const logIn = '/login';
   static const signUp = '/signup';
   static const home = '/home';
@@ -180,8 +178,8 @@ abstract final class AppRoute {
   static const biometricLock = '/biometric-lock';
 
   /// A7/A9/A10 (implementation-plan's Group A completion): the rest of the
-  /// onboarding chain after Account Choice, per ui-spec's real screen order
-  /// A3 -> A7 -> A9 -> A10 -> A11 -> Home. A8 (Request Unsupported Card) is
+  /// onboarding chain after sign-up, per ui-spec's real screen order
+  /// A4 -> A7 -> A9 -> A10 -> A11 -> Home. A8 (Request Unsupported Card) is
   /// deliberately NOT a registered route here — same "go look at one thing
   /// and come back" reasoning as importHub/toolsHub's own children above:
   /// it's reached by a plain `Navigator.push` from A7 (and, unchanged, from
@@ -190,7 +188,7 @@ abstract final class AppRoute {
   static const cardDetailsSetup = '/onboarding/card-details';
   static const trackingSetup = '/onboarding/tracking-setup';
 
-  /// Design 15/27-29: inserted between Account Choice and Add First Card —
+  /// Design 15/27-29: inserted between sign-up and Add First Card —
   /// see the "First run, once only" sequence in the design README's
   /// Interactions & behavior section (15 -> 27 -> 28 -> 29 -> 30 -> 31).
   static const permissions = '/onboarding/permissions';
@@ -201,7 +199,6 @@ abstract final class AppRoute {
   static const preOnboarding = {
     splash,
     welcome,
-    accountChoice,
     logIn,
     signUp,
     permissions,
@@ -246,20 +243,18 @@ class _RouterRefreshNotifier extends ChangeNotifier {
     ref.listen(biometricLockProvider, (_, _) => notifyListeners());
   }
 }
+
 /// Task 3 shipped the navigation-shell swap alone, deferring the
 /// auth/onboarding redirect guard until its target screens (Welcome,
-/// Account Choice — Tasks 4-6) existed. They do now, so this wires the real
+/// direct auth entry — Tasks 4-6) existed. They do now, so this wires the real
 /// guard:
 ///   1. While session resume or the onboarding flag is still loading, sit on
 ///      /splash — never flash Welcome or Home first and then jump.
 ///   2. Once resolved, onboarding NOT complete -> only [AppRoute.preOnboarding]
 ///      screens are reachable; anything else bounces to /welcome.
-///   3. Onboarding complete -> preOnboarding screens are UNREACHABLE, even by
-///      direct navigation (ui-spec.md A3: "no nagging later" — completing
-///      onboarding once must never resurface it, not even via a stale deep
-///      link). This is deliberately NOT gated on sign-in status: browsing
-///      without an account remains fully supported after onboarding, same
-///      as Home's existing guest-browse behaviour.
+///   3. A valid account session is mandatory. A completed onboarding flag is
+///      not an authentication substitute: after sign-out, stale deep links
+///      and the Home shell always return to the account gate.
 /// The ShellRoute's own Navigator — every hub-of-a-hub screen (Import Hub,
 /// Tools Hub, Travel Mode, Sync & Backup, IMAP connection, etc.) is a plain
 /// Navigator.push/context.push on top of THIS Navigator, not a registered
@@ -300,7 +295,8 @@ class _ShellStackObserver extends NavigatorObserver {
     });
   }
 
-  bool _isImperative(Route<dynamic> route) => route is! ModalRoute || route.settings is! Page;
+  bool _isImperative(Route<dynamic> route) =>
+      route is! ModalRoute || route.settings is! Page;
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
@@ -336,8 +332,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     // and unhelpful ("Exception: ..." dumped as raw text). A stale deep
     // link, a route built for a since-removed screen, or a redirect bug
     // all land here; "go home" is always a safe recovery for any of them.
-    errorBuilder: (context, state) =>
-        AppRouteErrorScreen(error: state.error, onGoHome: () => context.go(AppRoute.home)),
+    errorBuilder: (context, state) => AppRouteErrorScreen(
+      error: state.error,
+      onGoHome: () => context.go(AppRoute.home),
+    ),
     redirect: (context, state) {
       final path = state.uri.path;
 
@@ -354,9 +352,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         if (status.maintenanceMode) {
           return path == AppRoute.maintenance ? null : AppRoute.maintenance;
         }
-        if (path == AppRoute.maintenance) return AppRoute.home; // recovered mid-session
+        if (path == AppRoute.maintenance)
+          return AppRoute.home; // recovered mid-session
         final version = ref.read(appVersionProvider).valueOrNull;
-        if (version != null && isVersionOlderThan(version, status.minSupportedVersion)) {
+        if (version != null &&
+            isVersionOlderThan(version, status.minSupportedVersion)) {
           return path == AppRoute.forceUpgrade ? null : AppRoute.forceUpgrade;
         }
         if (path == AppRoute.forceUpgrade) return AppRoute.home;
@@ -369,14 +369,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         return path == AppRoute.splash ? null : AppRoute.splash;
       }
 
-      // A signed-in session proves onboarding already happened (on this
-      // device or another one) — without this, logging into an existing
-      // account on a fresh install still bounces through the whole
-      // Welcome -> Account Choice -> Add Card funnel, since
-      // onboardingCompleteProvider is a per-device SharedPreferences flag
-      // with no idea the login above it just succeeded.
       final signedIn = ref.read(accessTokenProvider) != null;
-      final complete = (onboarding.valueOrNull ?? false) || signedIn;
+      final complete = onboarding.valueOrNull ?? false;
 
       // Loading just finished. Splash must always hand off to a real
       // destination here — it's never itself a valid resting page once
@@ -385,12 +379,36 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // while still loading; it must NOT also mean "stay on splash forever"
       // once loading is done).
       if (path == AppRoute.splash) {
-        return complete ? AppRoute.home : AppRoute.welcome;
+        if (!signedIn) return AppRoute.welcome;
+        return complete ? AppRoute.home : AppRoute.permissions;
       }
 
+      // Authentication is a hard gate. The only unauthenticated routes are
+      // the account entry points themselves; there is no public guest or
+      // emergency bypass in this build.
+      if (!signedIn) {
+        return {
+              AppRoute.welcome,
+              AppRoute.logIn,
+              AppRoute.signUp,
+            }.contains(path)
+            ? null
+            : AppRoute.welcome;
+      }
+
+      // New accounts must complete setup before entering Home. Returning
+      // accounts with a persisted onboarding flag go straight to the shell.
       if (!complete) {
-        if (path == AppRoute.emergencyCardInfo) return null;
-        return AppRoute.preOnboarding.contains(path) ? null : AppRoute.welcome;
+        const setupRoutes = {
+          AppRoute.logIn,
+          AppRoute.signUp,
+          AppRoute.permissions,
+          AppRoute.tour,
+          AppRoute.addFirstCard,
+          AppRoute.cardDetailsSetup,
+          AppRoute.trackingSetup,
+        };
+        return setupRoutes.contains(path) ? null : AppRoute.permissions;
       }
 
       // Biometric lock — checked only once onboarding is complete (the
@@ -399,27 +417,27 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // "process-lifetime, not persisted" note as biometricUnlockedProvider
       // itself: a fresh cold start always re-locks; this redirect just
       // enforces that by intercepting every route until it flips true.
-      final biometricLockOn = ref.read(biometricLockProvider).valueOrNull ?? false;
+      final biometricLockOn =
+          ref.read(biometricLockProvider).valueOrNull ?? false;
       final biometricUnlocked = ref.read(biometricUnlockedProvider);
       if (biometricLockOn && !biometricUnlocked) {
         return path == AppRoute.biometricLock ? null : AppRoute.biometricLock;
       }
-      if (path == AppRoute.biometricLock) return AppRoute.home; // already unlocked
+      if (path == AppRoute.biometricLock)
+        return AppRoute.home; // already unlocked
 
       return AppRoute.preOnboarding.contains(path) ? AppRoute.home : null;
     },
     routes: [
       GoRoute(
         path: AppRoute.splash,
-        pageBuilder: (context, state) => const NoTransitionPage(child: SplashScreen()),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: SplashScreen()),
       ),
       GoRoute(
         path: AppRoute.welcome,
-        pageBuilder: (context, state) => const NoTransitionPage(child: WelcomeScreen()),
-      ),
-      GoRoute(
-        path: AppRoute.accountChoice,
-        pageBuilder: (context, state) => const NoTransitionPage(child: AccountChoiceScreen()),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: WelcomeScreen()),
       ),
       GoRoute(
         path: AppRoute.logIn,
@@ -433,15 +451,17 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           child: Scaffold(body: LoginScreen(mode: AuthMode.signUp)),
         ),
       ),
-      // Design 15/27-29: permissions + tour, inserted between Account Choice
+      // Design 15/27-29: permissions + tour, inserted after sign-up
       // and Add First Card — same linear-step reasoning as A7/A9/A10 below.
       GoRoute(
         path: AppRoute.permissions,
-        pageBuilder: (context, state) => const NoTransitionPage(child: PermissionsScreen()),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: PermissionsScreen()),
       ),
       GoRoute(
         path: AppRoute.tour,
-        pageBuilder: (context, state) => const NoTransitionPage(child: TourScreen()),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: TourScreen()),
       ),
       // A7/A9/A10: the rest of the onboarding chain, reached via
       // context.go(...) as forward linear steps (not pushed-and-returned
@@ -449,16 +469,21 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // route reasoning this follows.
       GoRoute(
         path: AppRoute.addFirstCard,
-        pageBuilder: (context, state) => const NoTransitionPage(child: AddFirstCardScreen()),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: AddFirstCardScreen()),
       ),
       GoRoute(
         path: AppRoute.cardDetailsSetup,
-        pageBuilder: (context, state) =>
-            NoTransitionPage(child: CardDetailsSetupScreen(userCardIds: state.extra! as List<String>)),
+        pageBuilder: (context, state) => NoTransitionPage(
+          child: CardDetailsSetupScreen(
+            userCardIds: state.extra! as List<String>,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoute.trackingSetup,
-        pageBuilder: (context, state) => const NoTransitionPage(child: TrackingSetupScreen()),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: TrackingSetupScreen()),
       ),
       // Task 7-11: Insights Hub's drill-down screens. Plain pushed routes
       // (AppBar + back button), not part of the ShellRoute below — these are
@@ -501,15 +526,23 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // reproduced bug: opening Needs Review 500'd with a Postgres
       // "invalid input syntax for type uuid" error). Same fix applied to
       // cardDetail's '/cards/:id' vs. its own static siblings above.
-      GoRoute(path: AppRoute.needsReview, builder: (context, state) => const NeedsReviewScreen()),
-      GoRoute(path: AppRoute.duplicateReview, builder: (context, state) => const DuplicateReviewScreen()),
+      GoRoute(
+        path: AppRoute.needsReview,
+        builder: (context, state) => const NeedsReviewScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.duplicateReview,
+        builder: (context, state) => const DuplicateReviewScreen(),
+      ),
       GoRoute(
         path: AppRoute.transactionDetail,
-        builder: (context, state) => TransactionDetailScreen(transactionId: state.pathParameters['id']!),
+        builder: (context, state) =>
+            TransactionDetailScreen(transactionId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/activity/:id/edit',
-        builder: (context, state) => EditTransactionScreen(transactionId: state.pathParameters['id']!),
+        builder: (context, state) =>
+            EditTransactionScreen(transactionId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: AppRoute.creditUtilization,
@@ -556,9 +589,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // These two carry their own Scaffold+AppBar (unlike the tile screens
       // above, which are wrapped here) because both need a floating action
       // button and their own period chips under the title.
-      GoRoute(path: AppRoute.spendTrends, builder: (context, state) => const SpendTrendsScreen()),
-      GoRoute(path: AppRoute.budgets, builder: (context, state) => const BudgetsScreen()),
-      GoRoute(path: AppRoute.subscriptions, builder: (context, state) => const SubscriptionsScreen()),
+      GoRoute(
+        path: AppRoute.spendTrends,
+        builder: (context, state) => const SpendTrendsScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.budgets,
+        builder: (context, state) => const BudgetsScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.subscriptions,
+        builder: (context, state) => const SubscriptionsScreen(),
+      ),
 
       // Grouped insights. The tab bodies are the ORIGINAL screens — each was
       // already a plain body the routes above wrap in a Scaffold, so they
@@ -584,7 +626,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           title: 'Rewards',
           tabs: [
             (label: 'This month', body: MonthlySavingsScreen()),
-            (label: 'Missed', body: MissedOpportunitiesScreen(showChrome: false)),
+            (
+              label: 'Missed',
+              body: MissedOpportunitiesScreen(showChrome: false),
+            ),
             (label: 'By card', body: PortfolioAuditScreen()),
           ],
         ),
@@ -639,13 +684,20 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // (That's exactly what happened here before this fix; see the same
       // bug on the /activity/:id vs. needsReview/duplicateReview routes
       // below, which gets the identical fix.)
-      GoRoute(path: AppRoute.pointsExpiry, builder: (context, state) => const PointsExpiryScreen()),
+      GoRoute(
+        path: AppRoute.pointsExpiry,
+        builder: (context, state) => const PointsExpiryScreen(),
+      ),
       GoRoute(
         path: AppRoute.reportWrongData,
-        builder: (context, state) =>
-            ReportWrongDataScreen(cardProductId: state.uri.queryParameters['cardProductId']!),
+        builder: (context, state) => ReportWrongDataScreen(
+          cardProductId: state.uri.queryParameters['cardProductId']!,
+        ),
       ),
-      GoRoute(path: AppRoute.requestNewCard, builder: (context, state) => const RequestNewCardScreen()),
+      GoRoute(
+        path: AppRoute.requestNewCard,
+        builder: (context, state) => const RequestNewCardScreen(),
+      ),
       // Same static-before-dynamic ordering requirement as pointsExpiry etc.
       // above — must stay before cardDetail ('/cards/:id').
       GoRoute(
@@ -656,42 +708,58 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoute.cardDetail,
         builder: (context, state) => CardDetailScreen(
           userCardId: state.pathParameters['id']!,
-          initialTabIndex: state.uri.queryParameters['tab'] == 'statement' ? 6 : 0,
+          initialTabIndex: state.uri.queryParameters['tab'] == 'statement'
+              ? 6
+              : 0,
         ),
       ),
       GoRoute(
         path: AppRoute.editCard,
-        builder: (context, state) => EditCardScreen(userCardId: state.pathParameters['id']!),
+        builder: (context, state) =>
+            EditCardScreen(userCardId: state.pathParameters['id']!),
       ),
       // F1 Import Hub already builds its own Scaffold+AppBar (its F2-F7
       // children are reached via plain pushed routes from inside it, not
       // more go_router entries — see AppRoute.importHub's doc-comment).
-      GoRoute(path: AppRoute.importHub, builder: (context, state) => const ImportHubScreen()),
+      GoRoute(
+        path: AppRoute.importHub,
+        builder: (context, state) => const ImportHubScreen(),
+      ),
       // Group G — same "already builds its own Scaffold+AppBar" shape as
       // importHub above.
-      GoRoute(path: AppRoute.toolsHub, builder: (context, state) => const ToolsHubScreen()),
-      // G4: reachable with or without a session — see AppRoute.
-      // emergencyCardInfo's own doc-comment for why this is a top-level
-      // route rather than nested under toolsHub's push chain.
-      GoRoute(path: AppRoute.emergencyCardInfo, builder: (context, state) => const EmergencyCardInfoScreen()),
+      GoRoute(
+        path: AppRoute.toolsHub,
+        builder: (context, state) => const ToolsHubScreen(),
+      ),
+      // G4 remains a top-level route so it can be deep-linked from the
+      // signed-in Tools surface, but the redirect guard still requires an
+      // authenticated session for this build.
+      GoRoute(
+        path: AppRoute.emergencyCardInfo,
+        builder: (context, state) => const EmergencyCardInfoScreen(),
+      ),
       // S5/S6: unbypassable full-screen blocks — see the redirect guard
       // above and both AppRoute constants' doc-comments.
       GoRoute(
         path: AppRoute.maintenance,
-        pageBuilder: (context, state) => const NoTransitionPage(child: MaintenanceScreen()),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: MaintenanceScreen()),
       ),
       GoRoute(
         path: AppRoute.forceUpgrade,
-        pageBuilder: (context, state) => const NoTransitionPage(child: ForcedUpgradeScreen()),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: ForcedUpgradeScreen()),
       ),
       GoRoute(
         path: AppRoute.biometricLock,
-        pageBuilder: (context, state) => const NoTransitionPage(child: BiometricLockScreen()),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: BiometricLockScreen()),
       ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         observers: [_ShellStackObserver()],
-        builder: (context, state, child) => _AppShell(location: state.uri.path, child: child),
+        builder: (context, state, child) =>
+            _AppShell(location: state.uri.path, child: child),
         routes: [
           // NoTransitionPage on every tab: a bottom-nav switch should feel
           // instant, the same as the setState-based int-index switch this
@@ -702,19 +770,23 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           // default transition hadn't settled).
           GoRoute(
             path: AppRoute.home,
-            pageBuilder: (context, state) => const NoTransitionPage(child: HomeScreen()),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: HomeScreen()),
           ),
           GoRoute(
             path: AppRoute.cards,
-            pageBuilder: (context, state) => const NoTransitionPage(child: MyCardsScreen()),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: MyCardsScreen()),
           ),
           GoRoute(
             path: AppRoute.insights,
-            pageBuilder: (context, state) => const NoTransitionPage(child: InsightsHubScreen()),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: InsightsHubScreen()),
           ),
           GoRoute(
             path: AppRoute.account,
-            pageBuilder: (context, state) => const NoTransitionPage(child: AccountScreen()),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AccountScreen()),
           ),
         ],
       ),
@@ -754,18 +826,22 @@ class _AppShellState extends ConsumerState<_AppShell> {
   Future<void> _scanToPay() async {
     setState(() => _scanning = true);
     try {
-      final parsed = await Navigator.of(
-        context,
-      ).push<ParsedUpiQr>(MaterialPageRoute(builder: (_) => const UpiQrScannerScreen()));
+      final parsed = await Navigator.of(context).push<ParsedUpiQr>(
+        MaterialPageRoute(builder: (_) => const UpiQrScannerScreen()),
+      );
       if (parsed != null && mounted) {
-        await Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => ScanResultScreen(parsed: parsed)));
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => ScanResultScreen(parsed: parsed)),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not start the scanner. ${userFacingErrorMessage(e)}')),
+          SnackBar(
+            content: Text(
+              'Could not start the scanner. ${userFacingErrorMessage(e)}',
+            ),
+          ),
         );
       }
     } finally {
@@ -784,11 +860,10 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // sessionKeepAliveProvider above.
     ref.watch(cacheLifecycleProvider);
     ref.watch(outboxFlushProvider);
-    // Plan Phase 1.1/1.2: on each sign-in, pull the account's preference
-    // blob down onto this device and hand any guest wallet built before
-    // sign-up to the server. Same "read once from the shell" reasoning.
+    // Plan Phase 1.1: on each sign-in, pull the account's preference blob
+    // down onto this device. Anonymous wallet migration is intentionally
+    // gone because this build does not permit guest sessions.
     ref.watch(settingsSyncLifecycleProvider);
-    ref.watch(guestMigrationLifecycleProvider);
     // Plan Phase 2.2 — the top of the activation funnel. Fired from the
     // shell's initState (see _appOpenedTracked) rather than build, which
     // runs on every tab switch.
@@ -802,26 +877,14 @@ class _AppShellState extends ConsumerState<_AppShell> {
     ref.watch(notificationTriggerLifecycleProvider);
     ref.watch(smsBackgroundFlushProvider);
     ref.watch(smsListenerLifecycleProvider);
-    // Tell the user their guest wallet moved. Quietly relocating someone's
-    // cards is nearly as disconcerting as losing them — and if any card
-    // couldn't be carried over (its product was unpublished in the
-    // meantime), that has to be said out loud rather than left for them to
-    // notice a gap later.
-    ref.listen<GuestMigrationResult?>(lastGuestMigrationProvider, (_, result) {
-      if (result == null || !result.didAnything) return;
-      final moved = result.imported == 1 ? '1 card' : '${result.imported} cards';
-      final message = result.skipped > 0
-          ? '$moved moved to your account · ${result.skipped} couldn\'t be matched'
-          : '$moved moved to your account';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-    });
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     // Task 5: the coach-mark tour only makes sense over Home (that's where
     // every one of its four targets lives) — a user who backs out to
     // another tab mid-tour simply doesn't see it there rather than the
     // overlay trying to follow them to a screen with nothing to point at.
     final showTutorial =
-        widget.location == AppRoute.home && !(ref.watch(tutorialSeenProvider).valueOrNull ?? true);
+        widget.location == AppRoute.home &&
+        !(ref.watch(tutorialSeenProvider).valueOrNull ?? true);
     return Scaffold(
       backgroundColor: BambooInk.paper,
       // No AppBar. Not one of the deck's 32 mockups gives a tab screen a
@@ -867,7 +930,9 @@ class _AppShellState extends ConsumerState<_AppShell> {
                 scanning: _scanning,
                 scanKey: tutorialKeys.scanFab,
                 onSelect: (path) {
-                  _shellNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+                  _shellNavigatorKey.currentState?.popUntil(
+                    (route) => route.isFirst,
+                  );
                   context.go(path);
                 },
                 onScan: _scanning ? null : _scanToPay,
@@ -952,9 +1017,16 @@ class _FloatingNavBar extends StatelessWidget {
                       child: scanning
                           ? const Padding(
                               padding: EdgeInsets.all(15),
-                              child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.slate),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: BambooInk.slate,
+                              ),
                             )
-                          : const Icon(Icons.qr_code_scanner_rounded, color: BambooInk.slate, size: 24),
+                          : const Icon(
+                              Icons.qr_code_scanner_rounded,
+                              color: BambooInk.slate,
+                              size: 24,
+                            ),
                     ),
                   ),
                 ),
@@ -971,7 +1043,9 @@ class _FloatingNavBar extends StatelessWidget {
   Widget _navItem((String, String, IconData) destination) {
     final (path, label, icon) = destination;
     final selected = location == path;
-    final color = selected ? BambooInk.lime : Colors.white.withValues(alpha: 0.74);
+    final color = selected
+        ? BambooInk.lime
+        : Colors.white.withValues(alpha: 0.74);
     return Expanded(
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -987,7 +1061,11 @@ class _FloatingNavBar extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 label,
-                style: BambooFonts.ui(10, weight: selected ? FontWeight.w600 : FontWeight.w500, color: color),
+                style: BambooFonts.ui(
+                  10,
+                  weight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: color,
+                ),
               ),
             ],
           ),

@@ -12,8 +12,8 @@ import '../sms_import/sms_import_screen.dart';
 import 'all_set_screen.dart';
 
 /// ui-spec.md A10 Tracking Setup — the last onboarding step; this is where
-/// onboarding actually completes now (moved from account_choice_screen.dart,
-/// per the plan: A3 -> A7 -> A9 -> A10 -> A11 -> Home). "Set up later" is
+/// onboarding actually completes now (after sign-up,
+/// per the plan: A4 -> A7 -> A9 -> A10 -> A11 -> Home). "Set up later" is
 /// always visible and always enabled — never block onboarding completion on
 /// this, per spec's own edge case.
 class TrackingSetupScreen extends ConsumerStatefulWidget {

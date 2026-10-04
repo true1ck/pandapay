@@ -37,12 +37,14 @@ class _RecordingUserCardsRepository extends UserCardsRepository {
     String? rail,
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
+    String? clientMutationId,
   }) async {
     lastCall = {
       'userCardId': userCardId,
       'amount': amount,
       'instrument': instrument,
       'entryKind': entryKind,
+      'clientMutationId': clientMutationId,
     };
     return 'fake-txn-id';
   }

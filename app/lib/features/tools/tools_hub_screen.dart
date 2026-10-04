@@ -33,15 +33,18 @@ class ToolsHubScreen extends StatelessWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Tools & Travel', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Tools & Travel',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
             Text(
-              'Travel-aware ranking, multi-card planning, and the one screen in this app that always '
-              'works with no sign-in and no signal.',
+              'Travel-aware ranking, multi-card planning, and tools that remain '
+              'useful even when the network is unavailable.',
               style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.4),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -53,58 +56,70 @@ class ToolsHubScreen extends StatelessWidget {
               icon: Icons.add_circle_outline_rounded,
               title: 'Quick add a spend',
               subtitle: 'Log a transaction you made without the app open',
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QuickAddScreen())),
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const QuickAddScreen())),
             ),
             const SizedBox(height: AppSpace.md),
             _ToolTile(
               icon: Icons.search_rounded,
               title: 'Search merchants',
               subtitle: 'Look up a shop or brand and see which card wins there',
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MerchantSearchScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const MerchantSearchScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             _ToolTile(
               icon: Icons.shopping_cart_checkout_rounded,
               title: 'Big-purchase calculator',
-              subtitle: 'Work out the best card and split for a one-off large spend',
-              onTap: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const BigPurchaseCalculatorScreen())),
+              subtitle:
+                  'Work out the best card and split for a one-off large spend',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const BigPurchaseCalculatorScreen(),
+                ),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             _ToolTile(
               icon: Icons.flight_takeoff_rounded,
               title: 'Travel Mode',
-              subtitle: 'Re-rank cards by forex markup, lounge access abroad, travel insurance',
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TravelModeScreen())),
+              subtitle:
+                  'Re-rank cards by forex markup, lounge access abroad, travel insurance',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TravelModeScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             _ToolTile(
               icon: Icons.call_split_rounded,
               title: 'Multi-Card Split Planner',
-              subtitle: 'Divide a big purchase across your cards for maximum rewards',
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SplitPlannerScreen())),
+              subtitle:
+                  'Divide a big purchase across your cards for maximum rewards',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SplitPlannerScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             _ToolTile(
               icon: Icons.calculate_outlined,
               title: 'EMI Advisor',
               subtitle: 'See the real cost of converting a purchase to EMI',
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmiAdvisorScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const EmiAdvisorScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             _ToolTile(
               icon: Icons.emergency_outlined,
               title: 'Emergency Card Info',
-              subtitle: 'Lost-card hotlines — works offline and without signing in',
-              onTap: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const EmergencyCardInfoScreen())),
+              subtitle: 'Lost-card hotlines — works offline',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const EmergencyCardInfoScreen(),
+                ),
+              ),
             ),
           ],
         ),
@@ -119,7 +134,12 @@ class _ToolTile extends StatelessWidget {
   final String subtitle;
   final VoidCallback onTap;
 
-  const _ToolTile({required this.icon, required this.title, required this.subtitle, required this.onTap});
+  const _ToolTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +161,10 @@ class _ToolTile extends StatelessWidget {
             Container(
               width: 40,
               height: 40,
-              decoration: const BoxDecoration(color: BambooInk.slate, shape: BoxShape.circle),
+              decoration: const BoxDecoration(
+                color: BambooInk.slate,
+                shape: BoxShape.circle,
+              ),
               child: Icon(icon, size: 20, color: BambooInk.lime),
             ),
             const SizedBox(width: AppSpace.md),
@@ -149,13 +172,23 @@ class _ToolTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                  Text(
+                    title,
+                    style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  Text(
+                    subtitle,
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink300),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: BambooInk.ink300,
+            ),
           ],
         ),
       ),

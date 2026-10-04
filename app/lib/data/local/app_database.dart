@@ -36,12 +36,15 @@ CREATE TABLE IF NOT EXISTS cached_responses (
 
 CREATE TABLE IF NOT EXISTS transaction_outbox_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_card_id TEXT NOT NULL,
+  user_card_id TEXT,
+  client_mutation_id TEXT,
   amount_paise INTEGER NOT NULL,
   category_id TEXT,
   merchant_name TEXT,
   occurred_at INTEGER,
   note TEXT,
+  instrument TEXT NOT NULL DEFAULT 'credit_card',
+  entry_kind TEXT NOT NULL DEFAULT 'spend',
   created_at INTEGER NOT NULL,
   last_error TEXT
 );
@@ -112,6 +115,79 @@ class AppDatabase {
 
   AppDatabase._(this.db) {
     db.execute(_schema);
+    _ensureOutboxSchema();
+  }
+
+  /// CREATE TABLE IF NOT EXISTS does not update an existing table. Rebuild
+  /// the small outbox once so card-less offline entries (cash, UPI, income,
+  /// transfers) retain the same semantics as their online equivalents.
+  void _ensureOutboxSchema() {
+    final columns = db.select('PRAGMA table_info(transaction_outbox_entries)');
+    final names = columns.map((row) => row['name'] as String).toSet();
+    final userCardColumn = columns.firstWhere((row) => row['name'] == 'user_card_id');
+    final needsRebuild =
+        userCardColumn['notnull'] == 1 ||
+        !names.contains('client_mutation_id') ||
+        !names.contains('instrument') ||
+        !names.contains('entry_kind');
+
+    if (needsRebuild) {
+      db.execute('BEGIN IMMEDIATE');
+      try {
+        db.execute('DROP TABLE IF EXISTS transaction_outbox_entries_new');
+        db.execute('''
+          CREATE TABLE transaction_outbox_entries_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_card_id TEXT,
+            client_mutation_id TEXT,
+            amount_paise INTEGER NOT NULL,
+            category_id TEXT,
+            merchant_name TEXT,
+            occurred_at INTEGER,
+            note TEXT,
+            instrument TEXT NOT NULL DEFAULT 'credit_card',
+            entry_kind TEXT NOT NULL DEFAULT 'spend',
+            created_at INTEGER NOT NULL,
+            last_error TEXT
+          )
+        ''');
+        final mutationExpression = names.contains('client_mutation_id')
+            ? "COALESCE(client_mutation_id, 'legacy-outbox-' || id || '-' || created_at)"
+            : "'legacy-outbox-' || id || '-' || created_at";
+        final instrumentExpression = names.contains('instrument')
+            ? "COALESCE(instrument, 'credit_card')"
+            : "'credit_card'";
+        final entryKindExpression = names.contains('entry_kind') ? "COALESCE(entry_kind, 'spend')" : "'spend'";
+        db.execute('''
+          INSERT INTO transaction_outbox_entries_new
+            (id, user_card_id, client_mutation_id, amount_paise, category_id,
+             merchant_name, occurred_at, note, instrument, entry_kind,
+             created_at, last_error)
+          SELECT id, user_card_id, $mutationExpression, amount_paise,
+                 category_id, merchant_name, occurred_at, note,
+                 $instrumentExpression, $entryKindExpression,
+                 created_at, last_error
+          FROM transaction_outbox_entries
+        ''');
+        db.execute('DROP TABLE transaction_outbox_entries');
+        db.execute('ALTER TABLE transaction_outbox_entries_new RENAME TO transaction_outbox_entries');
+        db.execute('COMMIT');
+      } catch (_) {
+        db.execute('ROLLBACK');
+        rethrow;
+      }
+    }
+
+    // Give every legacy queued write a stable identity before it retries.
+    db.execute(
+      "UPDATE transaction_outbox_entries "
+      "SET client_mutation_id = 'legacy-outbox-' || id || '-' || created_at "
+      "WHERE client_mutation_id IS NULL",
+    );
+    db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_outbox_mutation_id '
+      'ON transaction_outbox_entries (client_mutation_id)',
+    );
   }
 
   /// Tests pass [Database.memory()][sqlite3.openInMemory] directly via the

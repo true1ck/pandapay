@@ -48,10 +48,34 @@ class _FakeUserCardsRepository extends UserCardsRepository {
     String? rail,
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
+    String? clientMutationId,
   }) async => 'fake-txn-id';
 
   @override
   Future<void> ignoreTransaction(String id, {required String reason}) async {}
+}
+
+class _LostResponseUserCardsRepository extends UserCardsRepository {
+  final List<String?> mutationIds = [];
+
+  _LostResponseUserCardsRepository() : super(apiBaseUrl: 'http://localhost', accessToken: 't');
+
+  @override
+  Future<String> logTransaction({
+    String? userCardId,
+    required Money amount,
+    String? categoryId,
+    String? merchantName,
+    DateTime? occurredAt,
+    String? note,
+    TxnInstrument instrument = TxnInstrument.creditCard,
+    TxnEntryKind entryKind = TxnEntryKind.spend,
+    String? clientMutationId,
+  }) async {
+    mutationIds.add(clientMutationId);
+    if (mutationIds.length == 1) throw ApiException('response lost');
+    return 'same-server-transaction';
+  }
 }
 
 /// The Quick Add form is a ListView and, since the "Kind" and "Paid with"
@@ -453,5 +477,56 @@ void main() {
     // Real undo now (POST /transactions/:id/ignore, reason: 'reversal') —
     // no longer the old "can't undo yet" placeholder message.
     expect(find.text('Undone.'), findsOneWidget);
+  });
+
+  testWidgets('retrying an unchanged save reuses its client mutation identity', (tester) async {
+    const card = UserCard(id: 'card-1', cardProductId: 'product-1', cardName: 'Test Card', isDefault: true);
+    final repo = _LostResponseUserCardsRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => const [card]),
+          userCardsRepositoryProvider.overrideWithValue(repo),
+          categoriesProvider.overrideWith((ref) async => const []),
+          merchantSearchRepositoryProvider.overrideWithValue(_EmptyMerchantSearchRepository()),
+          isOnlineProvider.overrideWith((ref) => Stream.value(true)),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const QuickAddScreen()),
+                ),
+                child: const Text('open quick add'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('open quick add'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '250');
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Test Card').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(await _saveButton(tester));
+    await tester.pumpAndSettle();
+    expect(repo.mutationIds, hasLength(1));
+
+    // Let the first attempt's error snackbar clear so it does not cover the
+    // bottom-of-form Save button during the retry.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(await _saveButton(tester));
+    await tester.pumpAndSettle();
+    expect(repo.mutationIds, hasLength(2));
+    expect(repo.mutationIds.first, isNotNull);
+    expect(repo.mutationIds.last, repo.mutationIds.first);
   });
 }

@@ -4,6 +4,11 @@ allprojects {
         // over this network (TLS "bad_record_mac" flakiness) — checked
         // first so a cached hit skips the flaky remote fetch entirely.
         maven { url = uri(System.getProperty("user.home") + "/local-maven-repo") }
+        // Explicit endpoints are more reliable than the short aliases on
+        // this machine's current network path (the aliases intermittently
+        // terminate large TLS downloads with `bad_record_mac`).
+        maven { url = uri("https://maven.google.com") }
+        maven { url = uri("https://repo1.maven.org/maven2") }
         google()
         mavenCentral()
     }

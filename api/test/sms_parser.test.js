@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseSms, parseSmsAgainstPatterns, redactSmsShape } = require('../src/sms_parser');
+const {
+  parseSms,
+  parseSmsAgainstPatterns,
+  parseConservativeBankSpend,
+  redactSmsShape,
+} = require('../src/sms_parser');
 
 // Realistic synthetic (not real customer) Indian bank SMS formats.
 
@@ -133,6 +138,48 @@ test('parseSmsAgainstPatterns with an empty pattern list reports a transaction m
   const result = parseSmsAgainstPatterns([], { sender: 'HDFCBK', body: 'Rs.10 spent' });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'no_transaction_match');
+});
+
+test('conservative fallback parses a card spend when the pattern table is empty', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'VM-NEWBNK',
+    body: 'INR 1,250.50 spent on your credit card ending 7788 at AMAZON PAY on 09-Sep-2026.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'conservative_fallback');
+  assert.equal(result.fields.amountInr, 1250.5);
+  assert.equal(result.fields.last4, '7788');
+  assert.equal(result.fields.merchant, 'AMAZON PAY');
+});
+
+test('conservative fallback rejects OTP, due, refund, failed and non-card account messages', () => {
+  const messages = [
+    'OTP 123456 for INR 500 transaction on your card ending 7788',
+    'Payment due of INR 500 on your credit card ending 7788',
+    'INR 500 refunded to your credit card ending 7788',
+    'INR 500 transaction failed on your credit card ending 7788',
+    'INR 500 debited from your account at AMAZON',
+  ];
+  for (const body of messages) {
+    assert.equal(parseConservativeBankSpend({ sender: 'BANK', body }).ok, false, body);
+  }
+});
+
+test('a specific richer configured pattern wins over an open generic pattern', () => {
+  const open = {
+    id: 'open',
+    sender_pattern: null,
+    regex: 'INR ([0-9]+) spent',
+    field_map: { amount: 1 },
+    version: 99,
+  };
+  const specific = { ...ICICI_PATTERN, version: 1 };
+  const result = parseSmsAgainstPatterns([open, specific], {
+    sender: 'AD-ICICIB',
+    body: 'INR 250 spent on ICICI Bank Card XX7788 at SWIGGY on 05-Aug-26.',
+  });
+  assert.equal(result.patternId, 'p-icici-1');
+  assert.equal(result.fields.merchant, 'SWIGGY');
 });
 
 test('redactSmsShape strips digits to # and collapses letter runs to X, leaving no digits (matches parser_failures CHECK)', () => {

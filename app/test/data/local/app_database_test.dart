@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 void main() {
   late AppDatabase appDb;
@@ -41,5 +42,43 @@ void main() {
     expect(rows.single['user_card_id'], 'uc-1');
     expect(rows.single['amount_paise'], 150000);
     expect(rows.single['category_id'], isNull);
+  });
+
+  test('legacy card-only outbox is upgraded without losing queued writes', () {
+    final legacyDb = sqlite3.openInMemory();
+    legacyDb.execute('''
+      CREATE TABLE transaction_outbox_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_card_id TEXT NOT NULL,
+        amount_paise INTEGER NOT NULL,
+        category_id TEXT,
+        merchant_name TEXT,
+        occurred_at INTEGER,
+        note TEXT,
+        created_at INTEGER NOT NULL,
+        last_error TEXT
+      )
+    ''');
+    legacyDb.execute(
+      'INSERT INTO transaction_outbox_entries '
+      '(user_card_id, amount_paise, created_at) VALUES (?, ?, ?)',
+      ['legacy-card', 9900, 123456],
+    );
+
+    final migrated = AppDatabase.forTesting(legacyDb);
+    addTearDown(migrated.close);
+
+    final columns = migrated.db.select('PRAGMA table_info(transaction_outbox_entries)');
+    final userCardColumn = columns.firstWhere((row) => row['name'] == 'user_card_id');
+    expect(userCardColumn['notnull'], 0);
+    expect(columns.any((row) => row['name'] == 'instrument'), isTrue);
+    expect(columns.any((row) => row['name'] == 'entry_kind'), isTrue);
+
+    final row = migrated.db.select('SELECT * FROM transaction_outbox_entries').single;
+    expect(row['user_card_id'], 'legacy-card');
+    expect(row['amount_paise'], 9900);
+    expect(row['instrument'], 'credit_card');
+    expect(row['entry_kind'], 'spend');
+    expect(row['client_mutation_id'], 'legacy-outbox-1-123456');
   });
 }

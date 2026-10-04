@@ -120,7 +120,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                     if (context.canPop()) {
                       context.pop();
                     } else {
-                      context.go(AppRoute.accountChoice);
+                      context.go(AppRoute.signUp);
                     }
                   },
                   icon: const Icon(Icons.arrow_back_rounded),

@@ -9,7 +9,6 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
-import '../auth/login_screen.dart';
 import '../insights/payments_due_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../referrals/invite_friends_screen.dart';
@@ -23,10 +22,9 @@ import '../tools/tools_hub_screen.dart';
 
 /// Design 05 "You · tools & control", over ui-spec.md's H1 Settings Hub.
 ///
-/// Signed out this shows the guest banner rather than a login wall (ui-spec
-/// A3); signed in it shows the profile row `GET /profile` returns, the
-/// streak card, and then the short list of things design 05 actually puts
-/// on this tab.
+/// The router only exposes this tab to authenticated users. It shows the
+/// profile row `GET /profile` returns, the streak card, and then the short
+/// list of things design 05 actually puts on this tab.
 ///
 /// **Ten settings rows moved off this screen** into [SettingsHubScreen]
 /// (design 20), reached from a single "Settings & security" row. This tab
@@ -47,20 +45,13 @@ class AccountScreen extends ConsumerWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final token = ref.watch(accessTokenProvider);
-
-    // Guest/no-account mode (ui-spec.md A3): Tools and Settings below are
-    // all local-device features (or, like Import & Sync, self-gate their
-    // own remote-only actions) — only the profile header actually needs
-    // a signed-in session, so that's the only part that branches here
-    // instead of blocking the whole screen behind LoginScreen.
-    final profile = token == null
-        ? const AsyncValue<Map<String, dynamic>?>.data(null)
-        : ref.watch(profileProvider);
+    final profile = ref.watch(profileProvider);
     return profile.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) =>
-          ErrorState(message: userFacingErrorMessage(err), onRetry: () => ref.invalidate(profileProvider)),
+      error: (err, _) => ErrorState(
+        message: userFacingErrorMessage(err),
+        onRetry: () => ref.invalidate(profileProvider),
+      ),
       data: (profileData) => AppBackground(
         child: ListView(
           // Status bar above, nav-pill clearance below — see AppShell.
@@ -71,71 +62,10 @@ class AccountScreen extends ConsumerWidget {
             AppShell.navClearance,
           ),
           children: [
-            if (token != null) ...[
-              _ProfileHero(profile: profileData),
-              const SizedBox(height: AppSpace.lg),
-              const _StreakCard(),
-              const SizedBox(height: AppSpace.xxl),
-            ],
-            if (token == null)
-              Container(
-                padding: const EdgeInsets.all(AppSpace.lg),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
-                  ),
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: token == null
-                    ? Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: BambooInk.lime.withValues(alpha: 0.16),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.person_outline_rounded, color: BambooInk.lime, size: 24),
-                          ),
-                          const SizedBox(width: AppSpace.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "You're browsing as a guest",
-                                  style: BambooFonts.heading(15, color: BambooInk.onSlate),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Sign in to sync across devices',
-                                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
-                                ),
-                              ],
-                            ),
-                          ),
-                          FilledButton(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: BambooInk.lime,
-                              foregroundColor: BambooInk.slate,
-                              minimumSize: const Size(0, 36),
-                              padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
-                              textStyle: BambooFonts.ui(13, weight: FontWeight.w700),
-                            ),
-                            onPressed: () => Navigator.of(
-                              context,
-                            ).push(MaterialPageRoute(builder: (_) => const Scaffold(body: LoginScreen()))),
-                            child: const Text('Sign in'),
-                          ),
-                        ],
-                      )
-                    // Signed in is handled above by _ProfileHero (design 05).
-                    : const SizedBox.shrink(),
-              ),
-            if (token == null) const SizedBox(height: AppSpace.xxl),
+            _ProfileHero(profile: profileData),
+            const SizedBox(height: AppSpace.lg),
+            const _StreakCard(),
+            const SizedBox(height: AppSpace.xxl),
             Text(
               'TOOLS',
               style: BambooFonts.ui(
@@ -150,9 +80,11 @@ class AccountScreen extends ConsumerWidget {
             AccountTile(
               icon: Icons.near_me_rounded,
               label: 'Nearby merchants',
-              onTap: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const NearbyMerchantsScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const NearbyMerchantsScreen(),
+                ),
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             // UA-5.3 (Chunk 31): built but never wired into any navigation
@@ -168,8 +100,9 @@ class AccountScreen extends ConsumerWidget {
               icon: Icons.notifications_none_rounded,
               label: 'Notifications',
               badgeCount: ref.watch(unreadNotificationCountProvider),
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             // Design 05 lists "Payments due" pointing at design 13, which is
@@ -180,15 +113,17 @@ class AccountScreen extends ConsumerWidget {
             AccountTile(
               icon: Icons.event_available_outlined,
               label: 'Payments due',
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaymentsDueScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PaymentsDueScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             AccountTile(
               icon: Icons.call_split_rounded,
               label: 'Split planner',
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SplitPlannerScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SplitPlannerScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             // Moved off the Insights grid: this is community/account
@@ -207,27 +142,30 @@ class AccountScreen extends ConsumerWidget {
             AccountTile(
               icon: Icons.card_giftcard_rounded,
               label: 'Invite friends',
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InviteFriendsScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const InviteFriendsScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             AccountTile(
               icon: Icons.flag_outlined,
               label: 'Report an issue',
-              onTap: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const FeedbackSupportScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const FeedbackSupportScreen(),
+                ),
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             // Group G (Tools & Modes) — implementation-plan-group-e-f-g.md §4.
             // G4 Emergency Card Info is ALSO reachable without ever landing on
-            // this screen (LoginScreen has its own direct link) — see
-            // AppRoute.emergencyCardInfo's doc-comment for why.
+            // this screen; it is available from the signed-in Tools surface.
             AccountTile(
               icon: Icons.travel_explore_outlined,
               label: 'Travel & tools',
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ToolsHubScreen())),
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ToolsHubScreen())),
             ),
             const SizedBox(height: AppSpace.xxl),
             Text(
@@ -248,8 +186,9 @@ class AccountScreen extends ConsumerWidget {
             AccountTile(
               icon: Icons.settings_outlined,
               label: 'Settings & security',
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsHubScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SettingsHubScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             _WhatsNewTile(ref: ref),
@@ -271,14 +210,22 @@ class _WhatsNewTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final entries = ref.watch(changelogProvider).valueOrNull ?? const [];
     final lastSeen = ref.watch(lastSeenAppVersionProvider).valueOrNull;
-    final hasUnseen = entries.isNotEmpty && (lastSeen == null || entries.first.appVersion != lastSeen);
+    final hasUnseen =
+        entries.isNotEmpty &&
+        (lastSeen == null || entries.first.appVersion != lastSeen);
     return AccountTile(
       icon: Icons.new_releases_outlined,
       label: "What's New",
       trailing: hasUnseen
-          ? const StatusPill(label: 'New', foreground: BambooInk.slate, background: BambooInk.lime)
+          ? const StatusPill(
+              label: 'New',
+              foreground: BambooInk.slate,
+              background: BambooInk.lime,
+            )
           : null,
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WhatsNewScreen())),
+      onTap: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const WhatsNewScreen())),
     );
   }
 }
@@ -316,7 +263,10 @@ class AccountTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: BambooInk.hairlineOnPaper),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.lg,
+          vertical: AppSpace.md,
+        ),
         child: Row(
           children: [
             Icon(icon, size: 20, color: BambooInk.ink900),
@@ -324,7 +274,11 @@ class AccountTile extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: BambooFonts.ui(14.5, weight: FontWeight.w500, color: BambooInk.ink900),
+                style: BambooFonts.ui(
+                  14.5,
+                  weight: FontWeight.w500,
+                  color: BambooInk.ink900,
+                ),
               ),
             ),
             if (badgeCount > 0) ...[
@@ -336,13 +290,24 @@ class AccountTile extends StatelessWidget {
                 ),
                 child: Text(
                   badgeCount > 99 ? '99+' : '$badgeCount',
-                  style: BambooFonts.ui(11.5, weight: FontWeight.w700, color: BambooInk.lime),
+                  style: BambooFonts.ui(
+                    11.5,
+                    weight: FontWeight.w700,
+                    color: BambooInk.lime,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpace.sm),
             ],
-            if (trailing != null) ...[trailing!, const SizedBox(width: AppSpace.sm)],
-            const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink300),
+            if (trailing != null) ...[
+              trailing!,
+              const SizedBox(width: AppSpace.sm),
+            ],
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: BambooInk.ink300,
+            ),
           ],
         ),
       ),
@@ -372,10 +337,14 @@ class _ProfileHero extends ConsumerWidget {
     final email = (profile?['email'] as String?)?.trim();
     final name = displayName?.isNotEmpty == true
         ? displayName!
-        : (email?.isNotEmpty == true ? email!.split('@').first : 'Your account');
+        : (email?.isNotEmpty == true
+              ? email!.split('@').first
+              : 'Your account');
 
     final createdRaw = profile?['created_at'] as String?;
-    final memberSince = createdRaw == null ? null : DateTime.tryParse(createdRaw)?.year;
+    final memberSince = createdRaw == null
+        ? null
+        : DateTime.tryParse(createdRaw)?.year;
     final subtitleParts = [
       '${cards.length} card${cards.length == 1 ? '' : 's'}',
       if (memberSince != null) 'member since $memberSince',
@@ -383,7 +352,10 @@ class _ProfileHero extends ConsumerWidget {
 
     return Container(
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(30)),
+      decoration: BoxDecoration(
+        color: BambooInk.slate,
+        borderRadius: BorderRadius.circular(30),
+      ),
       child: Stack(
         children: [
           Positioned(
@@ -415,7 +387,11 @@ class _ProfileHero extends ConsumerWidget {
                       ),
                       child: Text(
                         name.characters.first.toUpperCase(),
-                        style: BambooFonts.heading(22, weight: FontWeight.w800, color: BambooInk.slate),
+                        style: BambooFonts.heading(
+                          22,
+                          weight: FontWeight.w800,
+                          color: BambooInk.slate,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -425,13 +401,19 @@ class _ProfileHero extends ConsumerWidget {
                         children: [
                           Text(
                             name,
-                            style: BambooFonts.heading(20, color: BambooInk.onSlate),
+                            style: BambooFonts.heading(
+                              20,
+                              color: BambooInk.onSlate,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 3),
                           Text(
                             subtitleParts.join(' · '),
-                            style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.onSlateMuted,
+                            ),
                           ),
                         ],
                       ),
@@ -452,7 +434,10 @@ class _ProfileHero extends ConsumerWidget {
                             : MoneyText(
                                 summary.rewardsAllTime,
                                 confidence: Confidence.estimated,
-                                style: BambooFonts.heading(18, color: BambooInk.lime),
+                                style: BambooFonts.heading(
+                                  18,
+                                  color: BambooInk.lime,
+                                ),
                                 hidePaise: true,
                                 showConfidenceIcon: false,
                               ),
@@ -466,7 +451,10 @@ class _ProfileHero extends ConsumerWidget {
                             ? null
                             : Text(
                                 pandaRankFor(summary.streakDays),
-                                style: BambooFonts.heading(18, color: BambooInk.onSlate),
+                                style: BambooFonts.heading(
+                                  18,
+                                  color: BambooInk.onSlate,
+                                ),
                               ),
                       ),
                     ),
@@ -493,13 +481,23 @@ class _StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      decoration: BoxDecoration(color: BambooInk.slateRaised, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: BambooInk.slateRaised,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted)),
+          Text(
+            label,
+            style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
+          ),
           const SizedBox(height: 3),
-          value ?? Text('Not yet', style: BambooFonts.heading(18, color: BambooInk.onSlateMuted)),
+          value ??
+              Text(
+                'Not yet',
+                style: BambooFonts.heading(18, color: BambooInk.onSlateMuted),
+              ),
         ],
       ),
     );
@@ -537,14 +535,19 @@ class _StreakCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(homeSummaryProvider).valueOrNull;
-    if (summary == null || summary.streakDays == 0) return const SizedBox.shrink();
+    if (summary == null || summary.streakDays == 0)
+      return const SizedBox.shrink();
 
     final days = summary.streakDays;
     final rank = pandaRankFor(days);
     final next = nextPandaRank(days);
-    final floor = next == null ? days : (next.atDays == 7 ? 0 : next.atDays - 7);
+    final floor = next == null
+        ? days
+        : (next.atDays == 7 ? 0 : next.atDays - 7);
     final ceiling = next?.atDays ?? days;
-    final progress = ceiling == floor ? 1.0 : ((days - floor) / (ceiling - floor)).clamp(0.0, 1.0);
+    final progress = ceiling == floor
+        ? 1.0
+        : ((days - floor) / (ceiling - floor)).clamp(0.0, 1.0);
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
 
     return Container(
@@ -560,10 +563,16 @@ class _StreakCard extends ConsumerWidget {
           Row(
             children: [
               Expanded(
-                child: Text('$days-day streak', style: BambooFonts.heading(16, color: BambooInk.ink900)),
+                child: Text(
+                  '$days-day streak',
+                  style: BambooFonts.heading(16, color: BambooInk.ink900),
+                ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: BambooInk.rankBadgeBg,
                   border: Border.all(color: BambooInk.rankBadgeBorder),
@@ -602,8 +611,14 @@ class _StreakCard extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('$days days', style: BambooFonts.ui(11.5, color: BambooInk.ink500)),
-              Text('$ceiling days', style: BambooFonts.ui(11.5, color: BambooInk.ink500)),
+              Text(
+                '$days days',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
+              Text(
+                '$ceiling days',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
             ],
           ),
         ],

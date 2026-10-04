@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/router.dart';
-import 'package:pandapay/features/onboarding/account_choice_screen.dart';
+import 'package:pandapay/features/auth/login_screen.dart';
 import 'package:pandapay/features/onboarding/welcome_screen.dart';
 
 void main() {
-  testWidgets('the onboarding account-choice screen returns to welcome', (
+  testWidgets('welcome opens account creation directly', (
     tester,
   ) async {
     final router = GoRouter(
@@ -18,8 +18,10 @@ void main() {
           builder: (_, _) => const WelcomeScreen(),
         ),
         GoRoute(
-          path: AppRoute.accountChoice,
-          builder: (_, _) => const AccountChoiceScreen(),
+          path: AppRoute.signUp,
+          builder: (_, _) => const Scaffold(
+            body: LoginScreen(mode: AuthMode.signUp),
+          ),
         ),
       ],
     );
@@ -28,10 +30,11 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(child: MaterialApp.router(routerConfig: router)),
     );
-    await tester.tap(find.text('Get started'));
+    await tester.tap(find.text('Create an account'));
     await tester.pumpAndSettle();
 
-    expect(find.text('How do you want to start?'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.byTooltip('Back'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Back'));

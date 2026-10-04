@@ -6,10 +6,9 @@ import '../../app/design/widgets.dart';
 import '../../app/router.dart';
 
 /// ui-spec.md A2. Headline + three value points + a not-financial-advice
-/// disclaimer present from the very first screen (A2's explicit requirement,
-/// not something bolted on later). "Get Started" -> A3 Account Choice;
-/// "I have an account" -> A5 Log In directly, skipping account choice
-/// entirely since a returning user has already made that decision.
+/// disclaimer present from the very first screen. Create-account and
+/// sign-in actions go directly to their respective auth screens; there is no
+/// intermediate account-choice screen or guest entry point.
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
@@ -141,8 +140,8 @@ class WelcomeScreen extends StatelessWidget {
                             weight: FontWeight.w700,
                           ),
                         ),
-                        onPressed: () => context.push(AppRoute.accountChoice),
-                        child: const Text('Get started'),
+                        onPressed: () => context.push(AppRoute.signUp),
+                        child: const Text('Create an account'),
                       ),
                       const SizedBox(height: AppSpace.sm),
                       OutlinedButton(

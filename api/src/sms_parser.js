@@ -15,6 +15,7 @@
  */
 
 const KNOWN_FIELDS = ['amount', 'merchant', 'last4', 'date', 'instrument', 'reference', 'direction'];
+const MAX_MESSAGE_LENGTH = 20000;
 
 // OTP/security alerts can contain the same words as a transaction alert
 // ("txn", "INR", "card ending") but must never become spending records.
@@ -139,6 +140,9 @@ function parseSms(pattern, sms) {
   if (!sms || typeof sms.body !== 'string' || !sms.body.trim()) {
     return { ok: false, reason: 'empty_body' };
   }
+  if (sms.body.length > MAX_MESSAGE_LENGTH) {
+    return { ok: false, reason: 'body_too_long' };
+  }
   if (isSecurityOrOtpMessage(sms.body)) {
     return { ok: false, reason: 'security_message' };
   }
@@ -236,6 +240,59 @@ function parseSms(pattern, sms) {
  * @param {Array<object>} patterns
  * @param {{body: string, sender?: string}} sms
  */
+function parseConservativeBankSpend(sms) {
+  if (!sms || typeof sms.body !== 'string' || !sms.body.trim()) {
+    return { ok: false, reason: 'empty_body' };
+  }
+  if (sms.body.length > MAX_MESSAGE_LENGTH) {
+    return { ok: false, reason: 'body_too_long' };
+  }
+
+  const body = sms.body.replace(/\s+/g, ' ').trim();
+  const lower = body.toLowerCase();
+
+  // These are opposite/non-spend events or secrets. A generic fallback must
+  // prefer a missed import over turning any of them into spend.
+  if (/\b(otp|one[ -]?time password|verification code|payment due|amount due|minimum due|credited|refund(?:ed)?|reversal|reversed|declined|failed|cancelled)\b/i.test(body)) {
+    return { ok: false, reason: 'non_spend_or_sensitive_message' };
+  }
+  if (!/\b(spent|spend|debited|purchase|purchased|used|transaction)\b/i.test(body)) {
+    return { ok: false, reason: 'no_spend_marker' };
+  }
+  // Current auto-resolution is a credit-card pipeline. Requiring card
+  // evidence prevents an account debit/UPI notification from being assigned
+  // to an unrelated card just because amount and merchant look plausible.
+  if (!/\b(card|credit card)\b/i.test(body)) {
+    return { ok: false, reason: 'no_card_marker' };
+  }
+
+  const currencyAmount = body.match(/(?:₹|\bINR\b|\bRS\.?)(?:\s*:?\s*)([0-9][0-9,]*(?:\.\d{1,2})?)/i);
+  if (!currencyAmount) return { ok: false, reason: 'no_amount_found' };
+  const amountInr = Number(currencyAmount[1].replace(/,/g, ''));
+  if (!Number.isFinite(amountInr) || amountInr <= 0) {
+    return { ok: false, reason: 'unparseable_amount' };
+  }
+
+  const fields = { amountInr, instrument: 'credit_card', entryKind: 'spend' };
+  const last4 = body.match(/(?:ending|end(?:ing)?\s+in|xx+|x{2,}|card\s*(?:no\.?|number)?\s*[*x-]*)\s*([0-9]{4})\b/i);
+  if (last4) fields.last4 = last4[1];
+
+  const merchant = body.match(/\b(?:at|to)\s+([A-Za-z0-9][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|for\s+card)\b|[.;]|$)/i);
+  if (merchant) {
+    const value = merchant[1].trim().replace(/[.,;:-]+$/, '').trim();
+    if (value && !/^(your|card|account|a\/c)$/i.test(value)) fields.merchant = value;
+  }
+
+  return { ok: true, fields, parserKind: 'conservative_fallback' };
+}
+
+function patternPriority(pattern, result) {
+  const mappedFields = Object.keys(result.fields || {}).length;
+  const senderSpecific = pattern.sender_pattern ? 1000 : 0;
+  const version = Number(pattern.version) || 0;
+  return senderSpecific + mappedFields * 100 + version;
+}
+
 function parseSmsAgainstPatterns(patterns, sms) {
   if (isSecurityOrOtpMessage(sms?.body)) {
     return { ok: false, reason: 'security_message' };
@@ -245,13 +302,33 @@ function parseSmsAgainstPatterns(patterns, sms) {
   }
   const configuredPatterns = Array.isArray(patterns) ? patterns : [];
   let lastReason = configuredPatterns.length > 0 ? 'no_regex_match' : 'no_transaction_match';
+  const matches = [];
   for (const pattern of configuredPatterns) {
     const result = parseSms(pattern, sms);
-    if (result.ok) return { ...result, patternId: pattern.id };
+    if (result.ok) {
+      matches.push({
+        ...result,
+        patternId: pattern.id,
+        parserKind: 'configured_pattern',
+        priority: patternPriority(pattern, result),
+      });
+      continue;
+    }
     lastReason = result.reason;
   }
+  if (matches.length > 0) {
+    matches.sort((left, right) => right.priority - left.priority);
+    const { priority: _, ...best } = matches[0];
+    return best;
+  }
+
   const builtin = parseBuiltInUpiDebit(sms);
   if (builtin.ok) return builtin;
+  const fallback = parseConservativeBankSpend(sms);
+  if (fallback.ok) return { ...fallback, patternId: null };
+
+  // Keep the issuer-independent card parser as a final fallback for card
+  // alerts whose wording is outside the conservative generic grammar.
   const cardBuiltin = parseBuiltInCardSpend(sms);
   if (cardBuiltin.ok) return cardBuiltin;
   return { ok: false, reason: lastReason };
@@ -375,6 +452,7 @@ function parseTransactionDate(raw, reference = new Date()) {
 module.exports = {
   parseSms,
   parseSmsAgainstPatterns,
+  parseConservativeBankSpend,
   senderMatches,
   redactSmsShape,
   parseTransactionDate,

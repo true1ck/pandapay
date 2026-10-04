@@ -21,9 +21,16 @@ class _FakeUserCardsRepository extends UserCardsRepository {
     String? rail,
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
+    String? clientMutationId,
   }) async {
     if (shouldFail) throw ApiException('offline');
-    sent.add({'userCardId': userCardId, 'amount': amount});
+    sent.add({
+      'userCardId': userCardId,
+      'amount': amount,
+      'instrument': instrument,
+      'entryKind': entryKind,
+      'clientMutationId': clientMutationId,
+    });
     return 'fake-txn-id';
   }
 }
@@ -45,6 +52,28 @@ void main() {
     expect(items.single.userCardId, 'uc1');
     expect(items.single.amountPaise, Money.fromRupees(150).paise);
     expect(items.single.note, 'coffee');
+    expect(items.single.instrument, TxnInstrument.creditCard);
+    expect(items.single.entryKind, TxnEntryKind.spend);
+    expect(items.single.clientMutationId, isNotEmpty);
+  });
+
+  test('card-less offline entries preserve instrument and entry kind', () async {
+    await outbox.enqueue(
+      amount: Money.fromRupees(5000),
+      instrument: TxnInstrument.upiBank,
+      entryKind: TxnEntryKind.investment,
+    );
+
+    final pending = await outbox.pending();
+    expect(pending.single.userCardId, isNull);
+    expect(pending.single.instrument, TxnInstrument.upiBank);
+    expect(pending.single.entryKind, TxnEntryKind.investment);
+
+    final repo = _FakeUserCardsRepository();
+    await outbox.flush(repo);
+    expect(repo.sent.single['userCardId'], isNull);
+    expect(repo.sent.single['instrument'], TxnInstrument.upiBank);
+    expect(repo.sent.single['entryKind'], TxnEntryKind.investment);
   });
 
   test('flush sends every pending entry and removes it on success', () async {
@@ -57,6 +86,13 @@ void main() {
     expect(sentCount, 2);
     expect(repo.sent, hasLength(2));
     expect(await outbox.pending(), isEmpty);
+  });
+
+  test('flush preserves the original mutation id across retries', () async {
+    await outbox.enqueue(userCardId: 'uc1', amount: Money.fromRupees(100), clientMutationId: 'fixed-mutation-id');
+    final repo = _FakeUserCardsRepository();
+    await outbox.flush(repo);
+    expect(repo.sent.single['clientMutationId'], 'fixed-mutation-id');
   });
 
   test('flush leaves a failing entry queued with lastError set, and still sends the rest', () async {

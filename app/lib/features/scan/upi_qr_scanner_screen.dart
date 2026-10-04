@@ -44,7 +44,10 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
 
   Future<void> _handleRaw(String? raw) async {
     if (raw == null || raw.isEmpty) {
-      setState(() => _hint = "Couldn't read that — steady the camera or clean the lens.");
+      setState(
+        () =>
+            _hint = "Couldn't read that — steady the camera or clean the lens.",
+      );
       return;
     }
     final parsed = parseUpiQrString(raw);
@@ -66,7 +69,9 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked == null) return;
     final capture = await _controller.analyzeImage(picked.path);
-    final raw = capture?.barcodes.isNotEmpty == true ? capture!.barcodes.first.rawValue : null;
+    final raw = capture?.barcodes.isNotEmpty == true
+        ? capture!.barcodes.first.rawValue
+        : null;
     await _handleRaw(raw);
   }
 
@@ -98,7 +103,8 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
             child: MobileScanner(
               controller: _controller,
               onDetect: _onDetect,
-              errorBuilder: (context, error) => _PermissionExplainer(error: error),
+              errorBuilder: (context, error) =>
+                  _PermissionExplainer(error: error),
             ),
           ),
           // The feed is a live photograph; the chrome below needs a floor of
@@ -109,7 +115,11 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xB32B313A), Color(0x332B313A), Color(0xCC2B313A)],
+                  colors: [
+                    Color(0xB32B313A),
+                    Color(0x332B313A),
+                    Color(0xCC2B313A),
+                  ],
                   stops: [0.0, 0.42, 1.0],
                 ),
               ),
@@ -132,11 +142,16 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
                         child: Text(
                           'Tap to Sniff',
                           textAlign: TextAlign.center,
-                          style: BambooFonts.heading(16, color: BambooInk.onSlate),
+                          style: BambooFonts.heading(
+                            16,
+                            color: BambooInk.onSlate,
+                          ),
                         ),
                       ),
                       _ScanChromeButton(
-                        icon: _torchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                        icon: _torchOn
+                            ? Icons.flash_on_rounded
+                            : Icons.flash_off_rounded,
                         tooltip: 'Toggle torch',
                         active: _torchOn,
                         onTap: _toggleTorch,
@@ -156,7 +171,11 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
                     'PandaPay reads the merchant and picks your card before you reach for '
                     'your wallet.',
                     textAlign: TextAlign.center,
-                    style: BambooFonts.ui(14, color: BambooInk.onSlateMuted, height: 1.5),
+                    style: BambooFonts.ui(
+                      14,
+                      color: BambooInk.onSlateMuted,
+                      height: 1.5,
+                    ),
                   ),
                   const Spacer(),
                   if (_hint != null) ...[
@@ -185,15 +204,20 @@ class _UpiQrScannerScreenState extends State<UpiQrScannerScreen> {
                       backgroundColor: BambooInk.lime,
                       foregroundColor: BambooInk.slate,
                       minimumSize: const Size.fromHeight(56),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      textStyle: BambooFonts.heading(17, color: BambooInk.slate),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      textStyle: BambooFonts.heading(
+                        17,
+                        color: BambooInk.slate,
+                      ),
                     ),
                     icon: const Icon(Icons.photo_library_rounded, size: 20),
                     label: const Text('Pick a QR from photos'),
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Works offline · No sign-in needed',
+                    'Works offline after you sign in',
                     textAlign: TextAlign.center,
                     style: BambooFonts.ui(13.5, color: BambooInk.onSlateMuted),
                   ),
@@ -235,7 +259,11 @@ class _ScanChromeButton extends StatelessWidget {
           child: SizedBox(
             width: 38,
             height: 38,
-            child: Icon(icon, size: 19, color: active ? BambooInk.lime : BambooInk.onSlateSubtle),
+            child: Icon(
+              icon,
+              size: 19,
+              color: active ? BambooInk.lime : BambooInk.onSlateSubtle,
+            ),
           ),
         ),
       ),
@@ -275,7 +303,12 @@ class _Reticle extends StatelessWidget {
           _corner(top: _inset, left: _inset, topSide: true, leftSide: true),
           _corner(top: _inset, right: _inset, topSide: true, leftSide: false),
           _corner(bottom: _inset, left: _inset, topSide: false, leftSide: true),
-          _corner(bottom: _inset, right: _inset, topSide: false, leftSide: false),
+          _corner(
+            bottom: _inset,
+            right: _inset,
+            topSide: false,
+            leftSide: false,
+          ),
         ],
       ),
     );
@@ -306,10 +339,18 @@ class _Reticle extends StatelessWidget {
             right: leftSide ? BorderSide.none : side,
           ),
           borderRadius: BorderRadius.only(
-            topLeft: topSide && leftSide ? const Radius.circular(_radius) : Radius.zero,
-            topRight: topSide && !leftSide ? const Radius.circular(_radius) : Radius.zero,
-            bottomLeft: !topSide && leftSide ? const Radius.circular(_radius) : Radius.zero,
-            bottomRight: !topSide && !leftSide ? const Radius.circular(_radius) : Radius.zero,
+            topLeft: topSide && leftSide
+                ? const Radius.circular(_radius)
+                : Radius.zero,
+            topRight: topSide && !leftSide
+                ? const Radius.circular(_radius)
+                : Radius.zero,
+            bottomLeft: !topSide && leftSide
+                ? const Radius.circular(_radius)
+                : Radius.zero,
+            bottomRight: !topSide && !leftSide
+                ? const Radius.circular(_radius)
+                : Radius.zero,
           ),
         ),
       ),
@@ -335,7 +376,11 @@ class _PermissionExplainer extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.no_photography_rounded, color: BambooInk.onSlateMuted, size: 48),
+            const Icon(
+              Icons.no_photography_rounded,
+              color: BambooInk.onSlateMuted,
+              size: 48,
+            ),
             const SizedBox(height: 16),
             Text(
               'Camera access is needed to scan a QR code.',
@@ -348,7 +393,9 @@ class _PermissionExplainer extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: BambooInk.onSlate,
                 side: const BorderSide(color: BambooInk.onSlateMuted),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               child: const Text('Open Settings'),
             ),

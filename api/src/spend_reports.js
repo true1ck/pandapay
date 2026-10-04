@@ -214,7 +214,11 @@ async function spendByCard(client, userId, { start, end }) {
 /** Spend split by the payment instrument detected on the transaction. */
 async function spendByInstrument(client, userId, { start, end }) {
   const result = await client.query(
-    `SELECT COALESCE(NULLIF(t.instrument, ''), 'other') AS instrument,
+    // `instrument` is a Postgres enum. Cast it before comparing with an
+    // empty string: otherwise Postgres tries to cast '' to txn_instrument
+    // before NULLIF can remove it, which turns uncategorized imports into a
+    // 500 for the entire Insights report.
+    `SELECT COALESCE(NULLIF(t.instrument::text, ''), 'other') AS instrument,
             COALESCE(SUM(t.amount_inr), 0) AS total,
             COUNT(*) AS txn_count
        FROM transactions t

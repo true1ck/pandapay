@@ -43,7 +43,15 @@ const INITIAL_LOOKBACK_DAYS = 30;
  * dependency graph.
  */
 async function pollConnection(connection, deps) {
-  const { withUserClient, parseSmsAgainstPatterns, importParsedMessage, importSourceKey, parseTransactionDate, fetchMessages } = deps;
+  const {
+    withUserClient,
+    parseSmsAgainstPatterns,
+    importParsedMessage,
+    importSourceKey,
+    emailSourceKey,
+    parseTransactionDate,
+    fetchMessages,
+  } = deps;
 
   const since = connection.last_poll_at
     ? new Date(connection.last_poll_at)
@@ -69,7 +77,7 @@ async function pollConnection(connection, deps) {
 
   await withUserClient(connection.profile_id, async (client) => {
     const patterns = await client.query(
-      `SELECT id, issuer_id, sender_pattern, regex, field_map
+      `SELECT id, issuer_id, sender_pattern, regex, field_map, version
          FROM parser_patterns WHERE channel = 'email' AND is_active = true ORDER BY version DESC`
     );
 
@@ -102,8 +110,17 @@ async function pollConnection(connection, deps) {
         // again by an overlapping poll window cannot double-count.
         // The overlap is deliberate: `SINCE` has day granularity, so
         // consecutive polls always re-see part of a day.
-        sourceKey: importSourceKey(connection.profile_id, message.sender, message.body),
+        sourceKey: emailSourceKey
+          ? emailSourceKey(
+              connection.profile_id,
+              message.sender,
+              message.subject,
+              message.body,
+              `${connection.id}:${message.uid}`,
+            )
+          : importSourceKey(connection.profile_id, message.sender, message.body, occurred),
         backfill: false,
+        observationMetadata: { transport: 'imap', imapUid: String(message.uid) },
       });
 
       if (outcome.needsReview) needsReview += 1;

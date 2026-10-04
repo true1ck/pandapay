@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/providers.dart';
 import '../account/account_screen.dart' show AccountTile;
+import '../cards/my_cards_screen.dart';
 import '../home_widget/widget_settings_screen.dart';
 import '../import/import_hub_screen.dart';
 import '../sms_import/sms_import_screen.dart';
@@ -62,7 +64,10 @@ class SettingsHubScreen extends ConsumerWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Settings & security', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Settings & security',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: ListView(
@@ -97,6 +102,22 @@ class SettingsHubScreen extends ConsumerWidget {
               // the single most confusing thing on that screen.
               label: 'Notification settings',
               onTap: () => open(const NotificationSettingsScreen()),
+            ),
+            const SizedBox(height: AppSpace.xxl),
+
+            const _GroupHeader('Cards'),
+            AccountTile(
+              icon: Icons.archive_outlined,
+              label: 'Manage archived cards',
+              onTap: () async {
+                ref.read(showArchivedCardsProvider.notifier).state = true;
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const MyCardsScreen()),
+                );
+                if (context.mounted) {
+                  ref.read(showArchivedCardsProvider.notifier).state = false;
+                }
+              },
             ),
             const SizedBox(height: AppSpace.xxl),
 
@@ -151,7 +172,11 @@ class SettingsHubScreen extends ConsumerWidget {
               onTap: () => open(const WhatsNewScreen()),
             ),
             const SizedBox(height: AppSpace.sm),
-            AccountTile(icon: Icons.gavel_outlined, label: 'Legal', onTap: () => open(const LegalScreen())),
+            AccountTile(
+              icon: Icons.gavel_outlined,
+              label: 'Legal',
+              onTap: () => open(const LegalScreen()),
+            ),
             const SizedBox(height: AppSpace.sm),
             AccountTile(
               icon: Icons.feedback_outlined,

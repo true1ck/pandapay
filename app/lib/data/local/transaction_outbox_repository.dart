@@ -1,4 +1,5 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:uuid/uuid.dart';
 
 import '../user_cards_repository.dart';
 import 'app_database.dart';
@@ -7,23 +8,29 @@ import 'app_database.dart';
 /// transaction_outbox_entries columns 1:1 (see app_database.dart).
 class TransactionOutboxEntry {
   final int id;
-  final String userCardId;
+  final String clientMutationId;
+  final String? userCardId;
   final int amountPaise;
   final String? categoryId;
   final String? merchantName;
   final DateTime? occurredAt;
   final String? note;
+  final TxnInstrument instrument;
+  final TxnEntryKind entryKind;
   final DateTime createdAt;
   final String? lastError;
 
   const TransactionOutboxEntry({
     required this.id,
+    required this.clientMutationId,
     required this.userCardId,
     required this.amountPaise,
     this.categoryId,
     this.merchantName,
     this.occurredAt,
     this.note,
+    required this.instrument,
+    required this.entryKind,
     required this.createdAt,
     this.lastError,
   });
@@ -38,26 +45,34 @@ class TransactionOutboxRepository {
   TransactionOutboxRepository(this._appDb);
 
   Future<void> enqueue({
-    required String userCardId,
+    String? userCardId,
     required Money amount,
     String? categoryId,
     String? merchantName,
     DateTime? occurredAt,
     String? note,
+    TxnInstrument instrument = TxnInstrument.creditCard,
+    TxnEntryKind entryKind = TxnEntryKind.spend,
+    String? clientMutationId,
   }) async {
+    final mutationId = clientMutationId ?? const Uuid().v4();
     _appDb.db.execute(
       '''
       INSERT INTO transaction_outbox_entries
-        (user_card_id, amount_paise, category_id, merchant_name, occurred_at, note, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (user_card_id, client_mutation_id, amount_paise, category_id, merchant_name,
+         occurred_at, note, instrument, entry_kind, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       [
         userCardId,
+        mutationId,
         amount.paise,
         categoryId,
         merchantName,
         occurredAt?.millisecondsSinceEpoch,
         note,
+        instrument.wireValue,
+        entryKind.wireValue,
         DateTime.now().millisecondsSinceEpoch,
       ],
     );
@@ -68,14 +83,15 @@ class TransactionOutboxRepository {
     return rows.map((row) {
       return TransactionOutboxEntry(
         id: row['id'] as int,
-        userCardId: row['user_card_id'] as String,
+        clientMutationId: row['client_mutation_id'] as String,
+        userCardId: row['user_card_id'] as String?,
         amountPaise: row['amount_paise'] as int,
         categoryId: row['category_id'] as String?,
         merchantName: row['merchant_name'] as String?,
-        occurredAt: row['occurred_at'] == null
-            ? null
-            : DateTime.fromMillisecondsSinceEpoch(row['occurred_at'] as int),
+        occurredAt: row['occurred_at'] == null ? null : DateTime.fromMillisecondsSinceEpoch(row['occurred_at'] as int),
         note: row['note'] as String?,
+        instrument: TxnInstrument.fromJson(row['instrument'] as String?),
+        entryKind: TxnEntryKind.fromJson(row['entry_kind'] as String?),
         createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
         lastError: row['last_error'] as String?,
       );
@@ -96,6 +112,9 @@ class TransactionOutboxRepository {
           merchantName: entry.merchantName,
           occurredAt: entry.occurredAt,
           note: entry.note,
+          instrument: entry.instrument,
+          entryKind: entry.entryKind,
+          clientMutationId: entry.clientMutationId,
         );
         _appDb.db.execute('DELETE FROM transaction_outbox_entries WHERE id = ?', [entry.id]);
         sent++;

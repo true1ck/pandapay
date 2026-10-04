@@ -78,18 +78,27 @@ class AuthApi {
     );
   }
 
-  /// Email-based sign-in against auth/'s /auth/request-email-otp and
+  /// Email-based sign-in/sign-up against auth/'s /auth/request-email-otp and
   /// /auth/verify-email-otp — the same OTP machinery as phone (2-minute TTL,
   /// bcrypt-hashed, rate-limited), just a different identifier. phone_number
   /// is deliberately omitted from the request body: the backend treats it as
   /// an optional "link this email to an existing phone account" field, and
   /// this app only ever offers Phone or Email as alternatives, never both at
   /// once.
-  Future<void> requestEmailOtp(String email) async {
+  Future<void> requestEmailOtp(
+    String email, {
+    bool isSignUp = false,
+    String? phoneNumber,
+  }) async {
     final response = await _client.post(
       Uri.parse('$authBaseUrl/auth/request-email-otp'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email}),
+      body: jsonEncode({
+        'email': email,
+        if (isSignUp) 'is_signup': true,
+        if (isSignUp && phoneNumber != null && phoneNumber.trim().isNotEmpty)
+          'phone_number': phoneNumber.trim(),
+      }),
     );
     if (response.statusCode != 200) {
       throw ApiException(

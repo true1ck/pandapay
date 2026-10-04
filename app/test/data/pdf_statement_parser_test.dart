@@ -34,9 +34,10 @@ Some footer disclaimer text that is not a transaction.
       expect(result.transactions[1].amount.paise, Money.fromRupees(220.75).paise);
     });
 
-    test('handles a Cr suffix the same as no suffix (debit/credit not yet distinguished)', () {
+    test('marks a Cr suffix as credit so it is not imported as spending', () {
       final result = parseStatementText('10/06/2026  REFUND FROM MERCHANT   199.00 Cr');
       expect(result.transactions.single.amount.paise, Money.fromRupees(199.00).paise);
+      expect(result.transactions.single.isCredit, isTrue);
     });
 
     test('extracts the closing balance from a labeled line', () {
