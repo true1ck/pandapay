@@ -1570,6 +1570,11 @@ class TransactionEntry {
   final String? userCardId;
   final TxnRail rail;
   final TxnInstrument instrument;
+
+  /// Older production API images did not include `instrument` in the detail
+  /// response. Keep that distinction so the UI never guesses "Credit card"
+  /// for a cardless UPI transaction while the API rolls out.
+  final bool instrumentKnown;
   final TxnEntryKind entryKind;
   final String source;
   final String status;
@@ -1605,6 +1610,7 @@ class TransactionEntry {
     this.userCardId,
     this.rail = TxnRail.unknown,
     this.instrument = TxnInstrument.creditCard,
+    this.instrumentKnown = true,
     this.entryKind = TxnEntryKind.spend,
     required this.source,
     required this.status,
@@ -1621,11 +1627,12 @@ class TransactionEntry {
       occurredAt: DateTime.parse(json['occurred_at'] as String),
       merchantName: json['merchant_name'] as String?,
       categoryId: json['category_id'] as String?,
-      categoryName: json['category_name'] as String?,
+      categoryName: _displayCategoryName(json['category_name'] as String?),
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
       userCardId: json['user_card_id'] as String?,
       rail: _parseRail(json['rail'] as String?),
       instrument: TxnInstrument.fromJson(json['instrument'] as String?),
+      instrumentKnown: json['instrument'] != null,
       entryKind: TxnEntryKind.fromJson(json['entry_kind'] as String?),
       source: json['source'] as String? ?? 'manual',
       status: json['status'] as String? ?? 'active',
@@ -1647,6 +1654,17 @@ class TransactionEntry {
       (r) => r.name == camel,
       orElse: () => TxnRail.unknown,
     );
+  }
+
+  static String? _displayCategoryName(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    if (value == null ||
+        value.trim().isEmpty ||
+        normalized == 'uncategorized' ||
+        normalized == 'unclassified') {
+      return 'Other';
+    }
+    return value;
   }
 }
 

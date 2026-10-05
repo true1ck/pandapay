@@ -36,15 +36,22 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Future<void> _pump(WidgetTester tester, {required _FakeUserCardsRepository repo}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  required _FakeUserCardsRepository repo,
+}) async {
   final router = GoRouter(
     initialLocation: '/activity/t1',
     routes: [
       GoRoute(
         path: '/activity/:id',
-        builder: (context, state) => TransactionDetailScreen(transactionId: state.pathParameters['id']!),
+        builder: (context, state) =>
+            TransactionDetailScreen(transactionId: state.pathParameters['id']!),
       ),
-      GoRoute(path: '/activity/:id/edit', builder: (context, state) => const Text('edit screen')),
+      GoRoute(
+        path: '/activity/:id/edit',
+        builder: (context, state) => const Text('edit screen'),
+      ),
     ],
   );
   await tester.pumpWidget(
@@ -57,54 +64,103 @@ Future<void> _pump(WidgetTester tester, {required _FakeUserCardsRepository repo}
 }
 
 void main() {
-  testWidgets('shows merchant, card, category, and source for an active transaction', (tester) async {
-    final repo = _FakeUserCardsRepository(TransactionEntry(
-      id: 't1',
-      amount: Money.fromRupees(750),
-      occurredAt: DateTime(2026, 3, 1),
-      merchantName: 'Corner Store',
-      categoryName: 'Groceries',
-      cardDisplayName: 'My Axis Card',
-      userCardId: 'uc1',
-      source: 'sms',
-      status: 'active',
-    ));
+  testWidgets(
+    'shows merchant, card, category, and source for an active transaction',
+    (tester) async {
+      final repo = _FakeUserCardsRepository(
+        TransactionEntry(
+          id: 't1',
+          amount: Money.fromRupees(750),
+          occurredAt: DateTime(2026, 3, 1),
+          merchantName: 'Corner Store',
+          categoryName: 'Groceries',
+          cardDisplayName: 'My Axis Card',
+          userCardId: 'uc1',
+          source: 'sms',
+          status: 'active',
+        ),
+      );
+      await _pump(tester, repo: repo);
+
+      expect(find.text('Corner Store'), findsOneWidget);
+      expect(find.text('My Axis Card'), findsOneWidget);
+      expect(find.text('Groceries'), findsOneWidget);
+      expect(find.text('SMS'), findsOneWidget);
+      expect(
+        find.text('Mark as ignored (refund / reversal / transfer)'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'an ignored transaction shows the exclusion banner and no ignore action',
+    (tester) async {
+      final repo = _FakeUserCardsRepository(
+        TransactionEntry(
+          id: 't1',
+          amount: Money.fromRupees(750),
+          occurredAt: DateTime(2026, 3, 1),
+          userCardId: 'uc1',
+          source: 'manual',
+          status: 'ignored',
+        ),
+      );
+      await _pump(tester, repo: repo);
+
+      expect(
+        find.textContaining('excluded from caps and rankings'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Mark as ignored (refund / reversal / transfer)'),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('cardless UPI and unknown category are shown honestly', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository(
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(30),
+        occurredAt: DateTime(2026, 10, 5),
+        merchantName: 'Balaji enterprises',
+        rail: TxnRail.upiQr,
+        categoryName: null,
+        cardDisplayName: null,
+        instrumentKnown: false,
+        source: 'sms',
+        status: 'active',
+      ),
+    );
     await _pump(tester, repo: repo);
 
-    expect(find.text('Corner Store'), findsOneWidget);
-    expect(find.text('My Axis Card'), findsOneWidget);
-    expect(find.text('Groceries'), findsOneWidget);
-    expect(find.text('SMS'), findsOneWidget);
-    expect(find.text('Mark as ignored (refund / reversal / transfer)'), findsOneWidget);
+    expect(find.text('UPI / bank account'), findsOneWidget);
+    expect(find.text('Other'), findsOneWidget);
+    expect(find.text('—'), findsNothing);
   });
 
-  testWidgets('an ignored transaction shows the exclusion banner and no ignore action', (tester) async {
-    final repo = _FakeUserCardsRepository(TransactionEntry(
-      id: 't1',
-      amount: Money.fromRupees(750),
-      occurredAt: DateTime(2026, 3, 1),
-      userCardId: 'uc1',
-      source: 'manual',
-      status: 'ignored',
-    ));
+  testWidgets('marking ignored calls the repository with the chosen reason', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository(
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(750),
+        occurredAt: DateTime(2026, 3, 1),
+        userCardId: 'uc1',
+        source: 'manual',
+        status: 'active',
+      ),
+    );
     await _pump(tester, repo: repo);
 
-    expect(find.textContaining('excluded from caps and rankings'), findsOneWidget);
-    expect(find.text('Mark as ignored (refund / reversal / transfer)'), findsNothing);
-  });
-
-  testWidgets('marking ignored calls the repository with the chosen reason', (tester) async {
-    final repo = _FakeUserCardsRepository(TransactionEntry(
-      id: 't1',
-      amount: Money.fromRupees(750),
-      occurredAt: DateTime(2026, 3, 1),
-      userCardId: 'uc1',
-      source: 'manual',
-      status: 'active',
-    ));
-    await _pump(tester, repo: repo);
-
-    await tester.tap(find.text('Mark as ignored (refund / reversal / transfer)'));
+    await tester.tap(
+      find.text('Mark as ignored (refund / reversal / transfer)'),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Refund'));
     await tester.pumpAndSettle();

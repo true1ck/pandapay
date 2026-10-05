@@ -3771,6 +3771,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
       client.query(
         `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
+                t.instrument, t.entry_kind,
                 t.expected_value_inr,
                 cp.name AS card_name, uc.nickname AS card_nickname
            FROM transactions t

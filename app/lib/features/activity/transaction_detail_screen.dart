@@ -45,7 +45,10 @@ class TransactionDetailScreen extends ConsumerWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Transaction', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Transaction',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
         actions: [
           if (txn.valueOrNull?.status == 'active')
             IconButton(
@@ -69,7 +72,10 @@ class TransactionDetailScreen extends ConsumerWidget {
   }
 }
 
-final _transactionProvider = FutureProvider.family<TransactionEntry, String>((ref, id) async {
+final _transactionProvider = FutureProvider.family<TransactionEntry, String>((
+  ref,
+  id,
+) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) throw ApiException('Not signed in');
   return repo.fetchTransaction(id);
@@ -117,7 +123,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       context: context,
       isScrollControlled: true,
       backgroundColor: BambooInk.paper,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (context) => Padding(
         // Lifts the sheet above the keyboard, which otherwise covers the
         // field it exists to expose.
@@ -131,7 +139,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Note', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+            Text(
+              'Note',
+              style: BambooFonts.heading(18, color: BambooInk.ink900),
+            ),
             const SizedBox(height: AppSpace.md),
             TextField(
               controller: controller,
@@ -147,7 +158,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.onSlate,
                 minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
               onPressed: () => Navigator.of(context).pop(controller.text),
               child: const Text('Save'),
@@ -166,14 +179,21 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     final previous = _note;
     setState(() => _note = note.isEmpty ? null : note);
     try {
-      await repo.updateTransactionNote(widget.entry.id, note.isEmpty ? null : note);
+      await repo.updateTransactionNote(
+        widget.entry.id,
+        note.isEmpty ? null : note,
+      );
       ref.invalidate(_transactionProvider(widget.entry.id));
     } catch (e) {
       if (mounted) setState(() => _note = previous);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Couldn't save the note. ${userFacingErrorMessage(e)}")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Couldn't save the note. ${userFacingErrorMessage(e)}",
+            ),
+          ),
+        );
       }
     }
   }
@@ -183,8 +203,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       context: context,
       isScrollControlled: true,
       backgroundColor: BambooInk.paper,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (context) => _SplitSheet(total: widget.entry.amount, initial: _splits),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) =>
+          _SplitSheet(total: widget.entry.amount, initial: _splits),
     );
     if (result == null) return;
 
@@ -195,9 +218,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       if (mounted) setState(() => _splits = saved);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Couldn't save the split. ${userFacingErrorMessage(e)}")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Couldn't save the split. ${userFacingErrorMessage(e)}",
+            ),
+          ),
+        );
       }
     }
   }
@@ -205,16 +232,22 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Future<void> _markIgnored(String reason) async {
     setState(() => _ignoring = true);
     try {
-      await ref.read(userCardsRepositoryProvider)!.ignoreTransaction(widget.entry.id, reason: reason);
+      await ref
+          .read(userCardsRepositoryProvider)!
+          .ignoreTransaction(widget.entry.id, reason: reason);
       ref.invalidate(_transactionProvider(widget.entry.id));
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Marked as ignored.')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Marked as ignored.')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _ignoring = false);
@@ -241,7 +274,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             ),
             for (final r in const ['refund', 'reversal', 'transfer'])
               ListTile(
-                title: Text(_reasonLabel(r), style: BambooFonts.ui(14.5, color: BambooInk.ink900)),
+                title: Text(
+                  _reasonLabel(r),
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                ),
                 onTap: () => Navigator.of(context).pop(r),
               ),
           ],
@@ -277,7 +313,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.visibility_off_outlined, size: 16, color: BambooInk.ink500),
+                const Icon(
+                  Icons.visibility_off_outlined,
+                  size: 16,
+                  color: BambooInk.ink500,
+                ),
                 const SizedBox(width: AppSpace.xs),
                 Expanded(
                   child: Text(
@@ -297,18 +337,28 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 style: BambooFonts.money(26, color: BambooInk.ink900),
               ),
               const SizedBox(height: AppSpace.xs),
-              Text(entry.merchantName ?? 'Spend', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+              Text(
+                entry.merchantName ?? 'Spend',
+                style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+              ),
             ],
           ),
         ),
         const SizedBox(height: AppSpace.xl),
-        _DetailRow(label: 'Card', value: entry.cardDisplayName ?? '—'),
-        _DetailRow(label: 'Category', value: entry.categoryName ?? '—'),
-        _DetailRow(label: 'Date', value: entry.occurredAt.toLocal().toString().split('.').first),
+        _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
+        _DetailRow(label: 'Category', value: entry.categoryName ?? 'Other'),
+        _DetailRow(
+          label: 'Date',
+          value: entry.occurredAt.toLocal().toString().split('.').first,
+        ),
         _DetailRow(label: 'Rail', value: _railLabel(entry.rail)),
         _DetailRow(label: 'Source', value: _sourceLabel(entry.source)),
-        _DetailRow(label: 'Status', value: entry.status[0].toUpperCase() + entry.status.substring(1)),
-        if (_note != null && _note!.isNotEmpty) _DetailRow(label: 'Note', value: _note!),
+        _DetailRow(
+          label: 'Status',
+          value: entry.status[0].toUpperCase() + entry.status.substring(1),
+        ),
+        if (_note != null && _note!.isNotEmpty)
+          _DetailRow(label: 'Note', value: _note!),
         const SizedBox(height: AppSpace.xl),
         // Design 18's two action rows, both now backed by real routes:
         // PATCH /transactions/:id/note and PUT /transactions/:id/splits.
@@ -332,9 +382,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         AccountTile(
           icon: Icons.flag_outlined,
           label: 'Report an issue',
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => ReportTransactionScreen(entry: widget.entry))),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ReportTransactionScreen(entry: widget.entry),
+            ),
+          ),
         ),
         const SizedBox(height: AppSpace.xl),
         if (isActive)
@@ -343,12 +395,18 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               foregroundColor: BambooInk.ink900,
               side: const BorderSide(color: BambooInk.hairlineOnPaper),
               minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
             ),
             onPressed: _ignoring ? null : _showIgnoreSheet,
             icon: _ignoring
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.visibility_off_outlined),
             label: const Text('Mark as ignored (refund / reversal / transfer)'),
           ),
@@ -375,6 +433,28 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     'imported' => 'Imported',
     _ => source,
   };
+
+  static String _cardOrPaymentLabel(TransactionEntry entry) {
+    if (entry.cardDisplayName != null && entry.cardDisplayName!.isNotEmpty) {
+      return entry.cardDisplayName!;
+    }
+    // A UPI bank debit is intentionally cardless. It is not a missing card
+    // and must not be displayed as a blank field or attached to a random
+    // saved credit card.
+    if (entry.instrument == TxnInstrument.upiBank ||
+        (!entry.instrumentKnown && entry.rail == TxnRail.upiQr)) {
+      return 'UPI / bank account';
+    }
+    if (entry.instrument == TxnInstrument.debitCard) {
+      return 'Debit card (unmatched)';
+    }
+    if (entry.instrument == TxnInstrument.creditCard && entry.instrumentKnown) {
+      return 'Credit card (unmatched)';
+    }
+    if (entry.instrument == TxnInstrument.wallet) return 'Wallet';
+    if (entry.instrument == TxnInstrument.cash) return 'Cash';
+    return 'Payment method not matched';
+  }
 }
 
 /// Design 18 "Split this expense" — who owed what out of one payment.
@@ -405,10 +485,14 @@ class _SplitSheetState extends State<_SplitSheet> {
   @override
   void initState() {
     super.initState();
-    final seed = widget.initial.isEmpty ? [const TransactionSplit(amount: Money.zero())] : widget.initial;
+    final seed = widget.initial.isEmpty
+        ? [const TransactionSplit(amount: Money.zero())]
+        : widget.initial;
     _amounts = [
       for (final s in seed)
-        TextEditingController(text: s.amount.isZero ? '' : s.amount.rupees.toStringAsFixed(2)),
+        TextEditingController(
+          text: s.amount.isZero ? '' : s.amount.rupees.toStringAsFixed(2),
+        ),
     ];
     _notes = [for (final s in seed) TextEditingController(text: s.note ?? '')];
   }
@@ -424,7 +508,10 @@ class _SplitSheetState extends State<_SplitSheet> {
     super.dispose();
   }
 
-  double get _enteredTotal => _amounts.fold(0.0, (sum, c) => sum + (double.tryParse(c.text.trim()) ?? 0));
+  double get _enteredTotal => _amounts.fold(
+    0.0,
+    (sum, c) => sum + (double.tryParse(c.text.trim()) ?? 0),
+  );
 
   bool get _overAllocated => (_enteredTotal - widget.total.rupees) > 0.005;
 
@@ -448,7 +535,12 @@ class _SplitSheetState extends State<_SplitSheet> {
       final amount = double.tryParse(_amounts[i].text.trim()) ?? 0;
       if (amount <= 0) continue; // a blank row is not an error, just skipped
       final note = _notes[i].text.trim();
-      splits.add(TransactionSplit(amount: Money.fromRupees(amount), note: note.isEmpty ? null : note));
+      splits.add(
+        TransactionSplit(
+          amount: Money.fromRupees(amount),
+          note: note.isEmpty ? null : note,
+        ),
+      );
     }
     Navigator.of(context).pop(splits);
   }
@@ -468,7 +560,10 @@ class _SplitSheetState extends State<_SplitSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Split this expense', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+            Text(
+              'Split this expense',
+              style: BambooFonts.heading(18, color: BambooInk.ink900),
+            ),
             const SizedBox(height: AppSpace.xs),
             Text(
               'Who owed what out of ${widget.total.format()}. This does not change which '
@@ -486,10 +581,15 @@ class _SplitSheetState extends State<_SplitSheet> {
                       width: 110,
                       child: TextField(
                         controller: _amounts[i],
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         onChanged: (_) => setState(() {}),
                         style: BambooFonts.money(15, color: BambooInk.ink900),
-                        decoration: const InputDecoration(prefixText: '₹ ', hintText: '0'),
+                        decoration: const InputDecoration(
+                          prefixText: '₹ ',
+                          hintText: '0',
+                        ),
                       ),
                     ),
                     const SizedBox(width: AppSpace.sm),
@@ -497,13 +597,19 @@ class _SplitSheetState extends State<_SplitSheet> {
                       child: TextField(
                         controller: _notes[i],
                         style: BambooFonts.ui(14, color: BambooInk.ink900),
-                        decoration: const InputDecoration(hintText: 'Who / what for'),
+                        decoration: const InputDecoration(
+                          hintText: 'Who / what for',
+                        ),
                       ),
                     ),
                     if (_amounts.length > 1)
                       IconButton(
                         tooltip: 'Remove this share',
-                        icon: const Icon(Icons.close_rounded, size: 18, color: BambooInk.ink500),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: BambooInk.ink500,
+                        ),
                         onPressed: () => _removeShare(i),
                       ),
                   ],
@@ -511,7 +617,10 @@ class _SplitSheetState extends State<_SplitSheet> {
               ),
             TextButton.icon(
               onPressed: _amounts.length >= 20 ? null : _addShare,
-              style: TextButton.styleFrom(foregroundColor: BambooInk.ink900, minimumSize: const Size(44, 44)),
+              style: TextButton.styleFrom(
+                foregroundColor: BambooInk.ink900,
+                minimumSize: const Size(44, 44),
+              ),
               icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('Add a share'),
             ),
@@ -532,7 +641,9 @@ class _SplitSheetState extends State<_SplitSheet> {
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.onSlate,
                 minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
               onPressed: _overAllocated ? null : _save,
               child: const Text('Save split'),
@@ -558,10 +669,16 @@ class _DetailRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 90,
-            child: Text(label, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+            child: Text(
+              label,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
           ),
           Expanded(
-            child: Text(value, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+            child: Text(
+              value,
+              style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+            ),
           ),
         ],
       ),
