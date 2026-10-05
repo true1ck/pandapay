@@ -14,18 +14,19 @@ const BUILTIN_CATEGORY_RULES = [
   { slug: 'groceries', priority: 20, patterns: [
     'swiggyinstamart', 'instamart', 'bigbasket', 'blinkit', 'zepto', 'jiomart',
     'dmart', 'reliancefresh', 'moreretail', 'naturebasket', 'supermarket',
-    'grocery', 'groceries', 'spar', 'licious',
+    'grocery', 'groceries', 'spar', 'licious', 'fruits', 'vegetables', 'kirana',
   ] },
 
   { slug: 'dining', priority: 30, patterns: [
     'ubereats', 'swiggy', 'zomato', 'dominos', 'mcdonald', 'starbucks', 'kfc',
     'eazydiner', 'restaurant', 'dining', 'cafe', 'coffee', 'bakery', 'biryani',
-    'pizza', 'burger', 'food', 'abhikshapalace', 'haldiram',
+    'pizza', 'burger', 'food', 'sweets', 'sweetshop', 'mithai', 'confectionery',
+    'abhikshapalace', 'haldiram',
   ] },
 
   { slug: 'online', priority: 40, patterns: [
     'amazon', 'flipkart', 'myntra', 'ajio', 'nykaa', 'meesho', 'tatacliq',
-    'shopsy',
+    'shopsy', 'dresses', 'garments', 'apparel', 'clothing', 'fashion',
   ] },
 
   { slug: 'fuel', priority: 45, patterns: [

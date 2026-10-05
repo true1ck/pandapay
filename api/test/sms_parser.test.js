@@ -265,6 +265,31 @@ test('built-in UPI fallback stops merchant extraction before the source-account 
   assert.equal(result.fields.instrument, 'upi_bank');
 });
 
+test('built-in UPI fallback parses Rs-colon account debit alerts without inventing a card', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'UBIN-BANK',
+    body: 'A/c *8565 Debited for Rs:2.00 on 08-07-2025 12:50:01 by Mob Bk ref no 4987654321 Avl Bal Rs 900.00',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 2);
+  assert.equal(result.fields.instrument, 'upi_bank');
+  assert.equal(result.fields.date, '08-07-2025');
+  assert.equal(result.fields.last4, undefined);
+});
+
+test('built-in UPI fallback stops merchant extraction before parenthesized reference metadata', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'SLICE-BANK',
+    body: 'Rs.293 sent from a/c xx5799 on 18-Jul-26 to ekart (UPI Ref 123456789012)',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 293);
+  assert.equal(result.fields.merchant, 'ekart');
+  assert.equal(result.fields.date, '18-Jul-26');
+});
+
 test('configured patterns cannot misclassify a bank-account UPI alert as a card spend', () => {
   const broadPattern = {
     id: 'p-wrong-instrument',

@@ -21,6 +21,9 @@ test('specific merchant rules win over broad brand rules', () => {
   assert.equal(inferBuiltinCategory('AJIO').slug, 'online');
   assert.equal(inferBuiltinCategory('JioMart').slug, 'groceries');
   assert.equal(inferBuiltinCategory('JioCinema').slug, 'entertainment');
+  assert.equal(inferBuiltinCategory('Gaddemma hadimani fruits').slug, 'groceries');
+  assert.equal(inferBuiltinCategory('SUNDHA BHAVANI SWEETS AND GENE').slug, 'dining');
+  assert.equal(inferBuiltinCategory('Sultan dresses').slug, 'online');
 });
 
 test('UPI handles retain a merchant variant without the handle suffix', () => {
