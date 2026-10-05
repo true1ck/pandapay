@@ -168,12 +168,10 @@ class SmsListenerService {
   ///
   /// Background delivery is registered alongside it via
   /// [smsBackgroundHandler], so an alert arriving while the app is closed
-  /// is queued on disk and uploaded on next resume rather than lost.
   /// is queued on disk and uploaded on next resume rather than lost. It is
-  /// enabled only OUTSIDE the prod flavor: prod strips READ_SMS/RECEIVE_SMS
-  /// at the manifest level for Play Store policy reasons (see [Env.isProd]),
-  /// so asking for background delivery there would register a handler whose
-  /// permission can never be granted.
+  /// enabled in the prod flavor after the user grants SMS access. Play
+  /// distribution still requires the applicable SMS declaration/review for
+  /// financial tracking apps.
   void listenForeground(void Function(String sender, String body, DateTime receivedAt) onSms) {
     _telephony.listenIncomingSms(
       onNewMessage: (SmsMessage message) {

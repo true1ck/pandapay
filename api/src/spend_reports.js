@@ -34,6 +34,90 @@ function addDays(d, n) {
   return out;
 }
 
+// The report API receives the device's IANA timezone. Keep all calendar
+// boundaries in that zone, then hand Postgres UTC instants for its half-open
+// timestamp filters. This matters in India too: a transaction at 00:15 IST is
+// still in the previous UTC day.
+function zonedParts(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    calendar: 'gregory',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts
+    .filter((part) => part.type !== 'literal')
+    .map((part) => [part.type, Number(part.value)]));
+  return values;
+}
+
+function zonedMidnight(year, month, day, timeZone) {
+  const wallClock = Date.UTC(year, month - 1, day);
+  let guess = new Date(wallClock);
+  // Solve UTC = local wall-clock - zone offset. Two passes are enough for
+  // ordinary zones and the extra passes keep this safe across DST changes.
+  for (let i = 0; i < 4; i += 1) {
+    const local = zonedParts(guess, timeZone);
+    const representedWallClock = Date.UTC(
+      local.year,
+      local.month - 1,
+      local.day,
+      local.hour,
+      local.minute,
+      local.second,
+    );
+    const offsetMs = representedWallClock - guess.getTime();
+    const next = new Date(wallClock - offsetMs);
+    if (next.getTime() === guess.getTime()) return next;
+    guess = next;
+  }
+  return guess;
+}
+
+function shiftCalendarDate(parts, days) {
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+}
+
+function periodBoundsInTimeZone(period, anchor, timeZone) {
+  const current = zonedParts(anchor, timeZone);
+  let startDate;
+  let endDate;
+  if (period === 'week') {
+    const day = new Date(Date.UTC(current.year, current.month - 1, current.day));
+    const offset = (day.getUTCDay() + 6) % 7;
+    startDate = shiftCalendarDate(current, -offset);
+    endDate = shiftCalendarDate(startDate, 7);
+  } else if (period === 'month') {
+    startDate = { year: current.year, month: current.month, day: 1 };
+    endDate = current.month === 12
+      ? { year: current.year + 1, month: 1, day: 1 }
+      : { year: current.year, month: current.month + 1, day: 1 };
+  } else if (period === 'quarter') {
+    const startMonth = Math.floor((current.month - 1) / 3) * 3 + 1;
+    startDate = { year: current.year, month: startMonth, day: 1 };
+    const endMonth = startMonth + 3;
+    endDate = endMonth > 12
+      ? { year: current.year + 1, month: endMonth - 12, day: 1 }
+      : { year: current.year, month: endMonth, day: 1 };
+  } else if (period === 'year') {
+    startDate = { year: current.year, month: 1, day: 1 };
+    endDate = { year: current.year + 1, month: 1, day: 1 };
+  } else {
+    throw new Error(`unknown period: ${period}`);
+  }
+  return {
+    start: zonedMidnight(startDate.year, startDate.month, startDate.day, timeZone),
+    end: zonedMidnight(endDate.year, endDate.month, endDate.day, timeZone),
+  };
+}
+
 /**
  * Inclusive start / EXCLUSIVE end for the period containing [anchor].
  *
@@ -41,7 +125,8 @@ function addDays(d, n) {
  * most people's mental "this week" line up, and an ISO week is the least
  * surprising choice when the alternative is picking a day arbitrarily.
  */
-function periodBounds(period, anchor = new Date()) {
+function periodBounds(period, anchor = new Date(), options = {}) {
+  if (options.timeZone) return periodBoundsInTimeZone(period, anchor, options.timeZone);
   const a = startOfDay(anchor);
   switch (period) {
     case 'week': {
@@ -73,12 +158,15 @@ function periodBounds(period, anchor = new Date()) {
 }
 
 /** The period immediately before the one containing [anchor]. */
-function previousPeriodBounds(period, anchor = new Date()) {
-  const current = periodBounds(period, anchor);
+function previousPeriodBounds(period, anchor = new Date(), options = {}) {
+  const current = periodBounds(period, anchor, options);
   // One day before the current period starts is always inside the previous
   // one, for every period length — safer than subtracting a fixed offset,
   // which breaks on month and quarter boundaries of unequal length.
-  return periodBounds(period, addDays(current.start, -1));
+  const previousAnchor = options.timeZone
+    ? new Date(current.start.getTime() - 1)
+    : addDays(current.start, -1);
+  return periodBounds(period, previousAnchor, options);
 }
 
 /**
@@ -137,7 +225,7 @@ async function spendByCategory(client, userId, { start, end }) {
     categorySlug: r.category_slug,
     // Null category is real and common (an import we couldn't classify) —
     // labelled rather than dropped, so the totals always reconcile.
-    categoryName: r.category_name || 'Uncategorized',
+    categoryName: r.category_name || 'Other',
     totalInr: Number(r.total),
     txnCount: Number(r.txn_count),
   }));
@@ -251,31 +339,24 @@ async function spendByInstrument(client, userId, { start, end }) {
  * tests cover `periodBounds` but cannot exercise SQL, which is exactly
  * where the off-by-one lived.
  */
-async function spendSeries(client, userId, period, buckets, anchor = new Date()) {
-  // `date_trunc` and `interval` do NOT share a vocabulary, and conflating
-  // them is a runtime error rather than a compile-time one:
-  // `date_trunc('quarter', ...)` is valid, `'1 quarter'::interval` is not —
-  // Postgres has no quarter interval unit. Using one string for both made
-  // every quarter request a 500. They are separate values now.
-  const truncUnit = period === 'quarter' ? 'quarter' : period === 'year' ? 'year' : period === 'week' ? 'week' : 'month';
+async function spendSeries(client, userId, period, buckets, anchor = new Date(), options = {}) {
+  // Anchor the series on the already-correct local-calendar start. Using
+  // date_trunc(start) here would truncate the UTC instant again and move an
+  // India-local midnight back to the previous UTC day.
   const stepInterval = {
     week: '1 week',
     month: '1 month',
     quarter: '3 months',
     year: '1 year',
   }[period];
-  const { start, end } = periodBounds(period, anchor);
+  const { start } = periodBounds(period, anchor, options);
 
   const result = await client.query(
-    `WITH bounds AS (
-       SELECT date_trunc($2, $5::timestamptz) - (($4::int - 1) * $6::interval) AS series_start,
-              $3::timestamptz AS series_end
-     ),
-     buckets AS (
+    `WITH buckets AS (
        SELECT generate_series(
-         (SELECT series_start FROM bounds),
-         (SELECT series_end FROM bounds) - interval '1 microsecond',
-         $6::interval
+         $3::timestamptz - (($2::int - 1) * $4::interval),
+         $3::timestamptz,
+         $4::interval
        ) AS bucket_start
      )
      SELECT b.bucket_start,
@@ -287,10 +368,10 @@ async function spendSeries(client, userId, period, buckets, anchor = new Date())
          ON t.profile_id = $1
         AND t.status = 'active'
         AND t.occurred_at >= b.bucket_start
-        AND t.occurred_at < b.bucket_start + $6::interval
+        AND t.occurred_at < b.bucket_start + $4::interval
       GROUP BY b.bucket_start
       ORDER BY b.bucket_start`,
-    [userId, truncUnit, end, buckets, start, stepInterval]
+    [userId, buckets, start, stepInterval]
   );
 
   return result.rows.map((r) => ({

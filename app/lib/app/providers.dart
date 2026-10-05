@@ -612,7 +612,10 @@ final spendReportProvider = FutureProvider.family<SpendReport?, SpendPeriod>((
 ) async {
   final repo = ref.watch(spendReportsRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchReport(period: period);
+  return repo.fetchReport(
+    period: period,
+    timeZone: ref.watch(deviceTimeZoneProvider),
+  );
 });
 
 /// The period the Trends screen is currently showing.
@@ -1873,7 +1876,16 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     try {
       await flush();
       await reconcileInbox();
+      // Repair rows imported by older builds: this suppresses only a
+      // high-confidence SMS replay and fills categories for legacy rows.
+      // It is idempotent and keeps the user out of a manual review workflow.
+      final repo = ref.read(userCardsRepositoryProvider);
+      if (repo != null) {
+        await repo.reconcileSmsHistory();
+      }
       await retryExistingNeedsReview();
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(transactionsProvider);
     } finally {
       workInProgress = false;
     }

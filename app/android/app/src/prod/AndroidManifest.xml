@@ -9,8 +9,8 @@
   Play Store policy review is deferred until the product behaviour is
   complete; this manifest must not silently disable the spending feature.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-    <uses-permission android:name="android.permission.READ_SMS" tools:node="remove" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS" tools:node="remove" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- SMS capture remains enabled in this flavor. The user must grant access
+         at runtime; Play distribution still requires the applicable SMS
+         declaration/review for financial tracking apps. -->
 </manifest>

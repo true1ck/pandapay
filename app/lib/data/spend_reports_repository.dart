@@ -223,7 +223,7 @@ class SpendReport {
           .cast<Map<String, dynamic>>()
           .map(
             (e) => SpendBreakdownRow(
-              label: e['categoryName'] as String? ?? 'Uncategorized',
+              label: e['categoryName'] as String? ?? 'Other',
               total: _money(e['totalInr']),
               txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,
               categoryId: e['categoryId'] as String?,
@@ -394,11 +394,13 @@ class SpendReportsRepository {
     SpendPeriod period = SpendPeriod.month,
     DateTime? anchor,
     int buckets = 12,
+    String? timeZone,
   }) async {
     final query = {
       'period': period.wireValue,
       'buckets': '$buckets',
       if (anchor != null) 'anchor': anchor.toIso8601String(),
+      if (timeZone != null && timeZone.isNotEmpty) 'tz': timeZone,
     };
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/spend-report').replace(queryParameters: query),

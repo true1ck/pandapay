@@ -2608,12 +2608,12 @@ async function insertTransactionAndUpdateState(client, userId, {
   // merchant, amount, and accounting day as already handled. This guard is
   // intentionally limited to SMS backfill so two genuine live same-day
   // purchases are never collapsed by a broad heuristic.
-  if (source === 'sms' && backfill && merchantName) {
+  if (['sms', 'sms_bulk'].includes(source) && backfill && merchantName) {
     const legacyDuplicate = await client.query(
       `SELECT id
          FROM transactions
         WHERE profile_id = $1
-          AND source = 'sms'
+          AND source IN ('sms', 'sms_bulk')
           AND amount_inr = $2
           AND instrument = $3
           AND entry_kind = $4
@@ -2864,6 +2864,104 @@ async function importParsedMessage(client, userId, {
   });
 
   return { ...inserted, matchBasis, resolvedCategoryId: categoryId, userCardId };
+}
+
+/**
+ * Repairs rows created by pre-idempotency SMS imports without guessing over
+ * legitimate purchases. This is deliberately a user-scoped, authenticated
+ * operation and is called by the app during its normal inbox reconciliation.
+ *
+ * Two active SMS rows are safe to collapse only when they have the same
+ * amount, normalized merchant, instrument, card, and exact transaction
+ * timestamp, and at least one is a backfill row. That last condition keeps
+ * two genuine live purchases at the same merchant from being silently
+ * merged. The older/live row is retained; a backfill replay is ignored.
+ */
+async function repairSmsHistory(client, userId) {
+  const duplicateRows = await client.query(
+    `WITH groups AS (
+       SELECT amount_inr, instrument, entry_kind, user_card_id, occurred_at,
+              regexp_replace(lower(coalesce(merchant_name, '')), '[^a-z0-9]', '', 'g') AS merchant_key
+         FROM transactions
+        WHERE profile_id = $1
+          AND status = 'active'
+          AND entry_kind = 'spend'
+          AND source IN ('sms', 'sms_bulk')
+          AND merchant_name IS NOT NULL
+        GROUP BY amount_inr, instrument, entry_kind, user_card_id, occurred_at,
+                 regexp_replace(lower(coalesce(merchant_name, '')), '[^a-z0-9]', '', 'g')
+       HAVING count(*) > 1
+          AND count(*) FILTER (WHERE is_backfill) > 0
+     ), ranked AS (
+       SELECT t.id,
+              first_value(t.id) OVER (
+                PARTITION BY t.amount_inr, t.instrument, t.entry_kind,
+                             t.user_card_id, t.occurred_at,
+                             regexp_replace(lower(coalesce(t.merchant_name, '')), '[^a-z0-9]', '', 'g')
+                ORDER BY t.is_backfill ASC, t.created_at ASC, t.id ASC
+              ) AS keep_id
+         FROM transactions t
+         JOIN groups g
+           ON g.amount_inr = t.amount_inr
+          AND g.instrument = t.instrument
+          AND g.entry_kind = t.entry_kind
+          AND g.user_card_id IS NOT DISTINCT FROM t.user_card_id
+          AND g.occurred_at = t.occurred_at
+          AND g.merchant_key = regexp_replace(lower(coalesce(t.merchant_name, '')), '[^a-z0-9]', '', 'g')
+        WHERE t.profile_id = $1
+          AND t.status = 'active'
+          AND t.source IN ('sms', 'sms_bulk')
+     )
+     UPDATE transactions t
+        SET status = 'ignored',
+            note = trim(concat('[automatic SMS replay of ', ranked.keep_id::text, '] ', coalesce(t.note, '')))
+       FROM ranked
+      WHERE t.id = ranked.id
+        AND ranked.id <> ranked.keep_id
+        AND t.status = 'active'
+     RETURNING t.id` ,
+    [userId]
+  );
+
+  const legacyRows = await client.query(
+    `SELECT t.id, t.merchant_name, t.merchant_vpa, t.mcc,
+            t.category_id, sc.slug AS category_slug, sc.name AS category_name
+       FROM transactions t
+       LEFT JOIN spend_categories sc ON sc.id = t.category_id
+      WHERE t.profile_id = $1
+        AND t.status = 'active'
+        AND t.entry_kind = 'spend'
+        AND (
+          t.category_id IS NULL
+          OR lower(coalesce(sc.slug, '')) IN ('uncategorized', 'unclassified')
+          OR lower(coalesce(sc.name, '')) IN ('uncategorized', 'unclassified')
+        )
+      ORDER BY t.occurred_at ASC, t.id ASC
+      LIMIT 1000`,
+    [userId]
+  );
+
+  let reclassified = 0;
+  for (const row of legacyRows.rows) {
+    const categoryId = await importResolvers.resolveCategoryForImport(client, userId, {
+      merchantName: row.merchant_name,
+      vpa: row.merchant_vpa,
+      mcc: row.mcc ? String(row.mcc).trim() : null,
+      messageText: null,
+    });
+    if (!categoryId || categoryId === row.category_id) continue;
+    await client.query(
+      `UPDATE transactions SET category_id = $1 WHERE id = $2 AND profile_id = $3`,
+      [categoryId, row.id, userId]
+    );
+    reclassified += 1;
+  }
+
+  return {
+    duplicateSuppressed: duplicateRows.rowCount,
+    reclassified,
+    remainingLegacyRows: Math.max(0, legacyRows.rowCount - reclassified),
+  };
 }
 
 /**
@@ -3561,6 +3659,22 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
     res.status(200).json(payload);
   } catch (err) {
     console.error('POST /transactions/from-sms/batch error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /transactions/reconcile-sms — repair safe legacy SMS replays and
+ * classify rows imported before merchant-category resolution was enabled.
+ * This is intentionally idempotent and user-scoped; it never inserts a
+ * transaction and it never merges two live purchases without a backfill row.
+ */
+app.post('/transactions/reconcile-sms', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) => repairSmsHistory(client, req.userId));
+    res.json(result);
+  } catch (err) {
+    console.error('POST /transactions/reconcile-sms error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -4475,11 +4589,20 @@ app.get('/spend-report', requireAuth, async (req, res) => {
   if (!Number.isInteger(buckets) || buckets < 1 || buckets > 60) {
     return res.status(400).json({ error: 'buckets must be an integer between 1 and 60' });
   }
+  const requestedTimeZone = typeof req.query.tz === 'string' && req.query.tz.length > 0
+    ? req.query.tz
+    : 'Asia/Kolkata';
 
   try {
     const payload = await withUserClient(req.userId, async (client) => {
-      const current = spendReports.periodBounds(period, anchor);
-      const previous = spendReports.previousPeriodBounds(period, anchor);
+      // Validate against Postgres' timezone catalogue before using the zone
+      // for calendar boundaries. An invalid device setting should degrade to
+      // the product default, not turn the whole Insights screen into a 500.
+      const tzOk = await client.query(`SELECT 1 FROM pg_timezone_names WHERE name = $1`, [requestedTimeZone]);
+      const timeZone = tzOk.rowCount > 0 ? requestedTimeZone : 'Asia/Kolkata';
+      const calendarOptions = { timeZone };
+      const current = spendReports.periodBounds(period, anchor, calendarOptions);
+      const previous = spendReports.previousPeriodBounds(period, anchor, calendarOptions);
 
       const [totals, previousTotals, byCategory, byMerchant, byCard, byInstrument, series] = await Promise.all([
         spendReports.periodTotals(client, req.userId, current),
@@ -4488,11 +4611,12 @@ app.get('/spend-report', requireAuth, async (req, res) => {
         spendReports.spendByMerchant(client, req.userId, current),
         spendReports.spendByCard(client, req.userId, current),
         spendReports.spendByInstrument(client, req.userId, current),
-        spendReports.spendSeries(client, req.userId, period, buckets, anchor),
+        spendReports.spendSeries(client, req.userId, period, buckets, anchor, calendarOptions),
       ]);
 
       return {
         period,
+        timeZone,
         periodStart: current.start,
         periodEnd: current.end,
         previousPeriodStart: previous.start,

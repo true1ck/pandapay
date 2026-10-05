@@ -135,8 +135,12 @@ function audit(fileName) {
     uniqueSourceRows: 0,
     parsedSpendRows: 0,
     parsedSpendRowsAfterSourceDedup: 0,
+    parsedTransferRows: 0,
+    parsedTransferRowsAfterSourceDedup: 0,
     amountTotalInr: 0,
     amountTotalInrAfterSourceDedup: 0,
+    transferTotalInr: 0,
+    transferTotalInrAfterSourceDedup: 0,
     instrumentTotalsInr: {},
     instrumentTotalsInrAfterSourceDedup: {},
     categoryCountsAfterSourceDedup: {},
@@ -180,6 +184,20 @@ function audit(fileName) {
     }
 
     const amount = Number(parsed.fields.amountInr);
+    const entryKind = parsed.fields.entryKind || 'spend';
+    if (entryKind !== 'spend') {
+      // Transfers (especially credit-card bill payments) are valid financial
+      // events but must never inflate consumer spending totals.
+      stats.parsedTransferRows += 1;
+      stats.transferTotalInr = Number((stats.transferTotalInr + amount).toFixed(2));
+      if (!duplicate) {
+        stats.parsedTransferRowsAfterSourceDedup += 1;
+        stats.transferTotalInrAfterSourceDedup = Number(
+          (stats.transferTotalInrAfterSourceDedup + amount).toFixed(2)
+        );
+      }
+      continue;
+    }
     stats.parsedSpendRows += 1;
     stats.amountTotalInr = Number((stats.amountTotalInr + amount).toFixed(2));
     addAmount(stats.instrumentTotalsInr, parsed.fields.instrument || 'unknown', amount);

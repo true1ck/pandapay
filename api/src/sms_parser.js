@@ -94,6 +94,41 @@ function isSuccessfulSpend(body) {
   return /\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b/.test(text);
 }
 
+// Paying a credit-card bill is a movement of money between the user's bank
+// account and the card, not a new merchant purchase. Some issuers phrase the
+// alert as "payment received towards your credit card" and some as an account
+// debit towards the card bill. Only the explicit card-payment direction is
+// accepted here; a normal purchase made *on* a credit card must remain spend.
+function parseBuiltInCardBillPayment(sms) {
+  const body = String(sms?.body || '');
+  if (isSecurityOrOtpMessage(body)) return { ok: false, reason: 'security_message' };
+  const lower = body.toLowerCase();
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_card_bill_payment_match' };
+
+  const towardCard = /\b(?:payment|amount)\b[\s\S]{0,90}\b(?:received|credited)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\bcredit\s+card\b/i.test(body)
+    || /\b(?:payment|paid|debited|debit)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\b(?:your\s+)?credit\s+card(?:\s+bill|\s+account)?\b/i.test(body)
+    || /\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid)\b/i.test(body);
+  if (!towardCard) return { ok: false, reason: 'no_card_bill_payment_match' };
+
+  const last4Match = body.match(/\b(?:credit\s+card|card)\b[\s\S]{0,50}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|last\s*4|no\.?)\D{0,5}(\d{4})\b/i);
+  const instrument = /\b(?:a\/?c\.?|account|savings)\b[\s\S]{0,60}\b(?:debited|debit|paid)\b/i.test(lower)
+    ? 'upi_bank'
+    : 'other';
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: 'builtin_card_bill_payment',
+    fields: {
+      amountInr: Number(amountMatch[1].replace(/,/g, '')),
+      ...(last4Match ? { last4: last4Match[1] } : {}),
+      merchant: 'Credit card bill payment',
+      instrument,
+      entryKind: 'transfer',
+    },
+  };
+}
+
 function parseBuiltInUpiDebit(sms) {
   const body = String(sms?.body || '');
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_builtin_upi_match' };
@@ -344,6 +379,10 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (isSecurityOrOtpMessage(sms?.body)) {
     return { ok: false, reason: 'security_message' };
   }
+  // Run before the generic "credited" rejection: a positive card-payment
+  // receipt is intentionally retained as a non-spend transfer.
+  const billPayment = parseBuiltInCardBillPayment(sms);
+  if (billPayment.ok) return billPayment;
   if (isRejectedTransaction(sms?.body)) {
     return { ok: false, reason: 'not_a_successful_spend' };
   }
@@ -506,6 +545,7 @@ module.exports = {
   parseSms,
   parseSmsAgainstPatterns,
   parseConservativeBankSpend,
+  parseBuiltInCardBillPayment,
   senderMatches,
   redactSmsShape,
   parseTransactionDate,

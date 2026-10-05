@@ -1040,6 +1040,27 @@ class UserCardsRepository {
     );
   }
 
+  /// Repairs safe legacy SMS replays and reclassifies transactions imported
+  /// before merchant-category resolution was enabled. The server operation is
+  /// user-scoped and idempotent; it never inserts a second transaction.
+  Future<SmsReconciliationResult> reconcileSmsHistory() async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/transactions/reconcile-sms'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'POST /transactions/reconcile-sms failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return SmsReconciliationResult(
+      duplicateSuppressed: (json['duplicateSuppressed'] as num?)?.toInt() ?? 0,
+      reclassified: (json['reclassified'] as num?)?.toInt() ?? 0,
+      remainingLegacyRows: (json['remainingLegacyRows'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   /// Task S-1a: the batched form of [logTransactionFromSms], for backup-file
   /// import.
   ///
@@ -1650,6 +1671,18 @@ class SmsImportResult {
     this.duplicate = false,
     this.needsReview = false,
     this.categoryId,
+  });
+}
+
+class SmsReconciliationResult {
+  final int duplicateSuppressed;
+  final int reclassified;
+  final int remainingLegacyRows;
+
+  const SmsReconciliationResult({
+    required this.duplicateSuppressed,
+    required this.reclassified,
+    required this.remainingLegacyRows,
   });
 }
 

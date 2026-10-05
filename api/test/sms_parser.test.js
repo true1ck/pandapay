@@ -187,6 +187,36 @@ test('all parser paths reject card due reminders and non-purchase card alerts', 
   }
 });
 
+test('credit-card bill payment receipts become transfers, not spending', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'PAYMENT OF Rs. 15660.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 8708. Thank you.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'builtin_card_bill_payment');
+  assert.equal(result.fields.amountInr, 15660);
+  assert.equal(result.fields.last4, '8708');
+  assert.equal(result.fields.entryKind, 'transfer');
+});
+
+test('an actual purchase on a credit card remains spend', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Spent Rs 48 at AIRTEL on your HDFC Bank Credit Card ending 8708 on 2026-10-02.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'spend');
+  assert.equal(result.fields.instrument, 'credit_card');
+});
+
+test('autopay reminder without a posted amount creates no transaction', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'SLICE',
+    body: 'Your credit card bill will be debited on 05-10-2026 via autopay from savings account ending 5799.',
+  });
+  assert.equal(result.ok, false);
+});
+
 test('a specific richer configured pattern wins over an open generic pattern', () => {
   const open = {
     id: 'open',

@@ -55,6 +55,26 @@ test('year bounds are the calendar year', () => {
   assert.strictEqual(iso(end), '2027-01-01');
 });
 
+test('timezone-aware month bounds use the device calendar, not UTC', () => {
+  // 00:00 on 2 Oct in India is 18:30 on 1 Oct UTC. A UTC truncation would
+  // incorrectly place this instant in September for the user's calendar.
+  const anchor = new Date('2026-10-01T18:30:00.000Z');
+  const bounds = periodBounds('month', anchor, { timeZone: 'Asia/Kolkata' });
+  assert.strictEqual(bounds.start.toISOString(), '2026-09-30T18:30:00.000Z');
+  assert.strictEqual(bounds.end.toISOString(), '2026-10-31T18:30:00.000Z');
+  assert.strictEqual(
+    previousPeriodBounds('month', anchor, { timeZone: 'Asia/Kolkata' }).end.toISOString(),
+    bounds.start.toISOString(),
+  );
+});
+
+test('timezone-aware week bounds start on Monday in India', () => {
+  // Friday 2 Oct 2026, 00:15 IST.
+  const bounds = periodBounds('week', new Date('2026-10-01T18:45:00.000Z'), { timeZone: 'Asia/Kolkata' });
+  assert.strictEqual(bounds.start.toISOString(), '2026-09-27T18:30:00.000Z');
+  assert.strictEqual(bounds.end.toISOString(), '2026-10-04T18:30:00.000Z');
+});
+
 test('the previous period is the one immediately before, across unequal lengths', () => {
   // The failure mode being guarded: subtracting a fixed offset lands in the
   // wrong month when the months differ in length (March 31 -> Feb 28/29).
