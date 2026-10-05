@@ -33,6 +33,21 @@ function isRejectedTransaction(body) {
   return /\b(?:declined|failed|failure|reversed|reversal|refund(?:ed)?|cancelled|canceled|credited)\b/.test(text);
 }
 
+// These alerts contain an amount and a card number but do not describe a
+// purchase. They must be rejected before configured patterns and before the
+// built-in fallbacks, otherwise a credit-card due reminder becomes spending.
+function isNonTransactionAlert(body) {
+  const text = String(body || '').toLowerCase();
+  return /\b(?:payment|amount|minimum)\s+due\b/.test(text)
+    || /\b(?:statement|bill)\b[\s\S]{0,40}\b(?:generated|ready|available)\b/.test(text)
+    || /\b(?:new\s+)?pin\b[\s\S]{0,40}\b(?:generated|created|set)\b/.test(text)
+    || /\b(?:card|credit\s+card)\b[\s\S]{0,50}\b(?:dispatched|delivered|activated)\b/.test(text)
+    // Card offers often say "Spend ₹15,000, get ₹250" and include the
+    // masked card number. That is an offer condition, not a purchase alert.
+    || /\bspend\s*(?:₹|rs\.?|inr)\s*[\d,]+[\s\S]{0,50}\b(?:get|earn|cashback|reward|voucher)\b/.test(text)
+    || /\b(?:cashback|reward|voucher|offer|eligible|campaign)\b[\s\S]{0,80}\b(?:spend|card)\b/.test(text);
+}
+
 // Bank-account UPI alerts often contain a four-digit account suffix. That
 // suffix is not a card last-4, and a configured pattern must not be allowed to
 // turn the alert into a credit-card transaction just because it mapped one of
@@ -44,9 +59,21 @@ function isBankAccountUpiMessage(body) {
     && !/\b(?:credit|debit)\s+card\b/.test(text);
 }
 
+// An account debit without an explicit UPI rail is not enough evidence of a
+// purchase. It may be a bank transfer, bill payment, cash withdrawal, or a
+// beneficiary transfer. Counting it as consumer spend silently inflates the
+// report, so it is sent to the on-device confirmation queue instead.
+function isAmbiguousAccountDebit(body) {
+  const text = String(body || '').toLowerCase();
+  return isBankAccountUpiMessage(text) && !/\bupi\b/.test(text);
+}
+
 function inferInstrument(body, hasLast4) {
   const text = String(body || '').toLowerCase();
   if (/\bdebit\s+card\b/.test(text)) return 'debit_card';
+  // ATM/cash-withdrawal alerts commonly say only "Card x1234" and identify
+  // the card as DC in the fraud footer. They are not credit-card purchases.
+  if (/\b(?:atm|withdrawn|cash\s+withdrawal)\b/.test(text) && !/\bcredit\s+card\b/.test(text)) return 'debit_card';
   if (/\bcredit\s+card\b/.test(text) || (hasLast4 && /\bcard\b/.test(text))) return 'credit_card';
   if (/\b(?:upi|a\/?c\.?|account)\b/.test(text) && /\b(?:debit(?:ed)?|paid|spent|sent|transferred)\b/.test(text)) return 'upi_bank';
   return null;
@@ -63,6 +90,7 @@ function isSuccessfulSpend(body) {
   const text = String(body || '').toLowerCase();
   if (isSecurityOrOtpMessage(text)) return false;
   if (isRejectedTransaction(text)) return false;
+  if (isNonTransactionAlert(text)) return false;
   return /\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b/.test(text);
 }
 
@@ -319,6 +347,12 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (isRejectedTransaction(sms?.body)) {
     return { ok: false, reason: 'not_a_successful_spend' };
   }
+  if (isNonTransactionAlert(sms?.body)) {
+    return { ok: false, reason: 'not_a_transaction_alert' };
+  }
+  if (isAmbiguousAccountDebit(sms?.body)) {
+    return { ok: false, reason: 'ambiguous_account_debit' };
+  }
   const configuredPatterns = Array.isArray(patterns) ? patterns : [];
   let lastReason = configuredPatterns.length > 0 ? 'no_regex_match' : 'no_transaction_match';
   const matches = [];
@@ -475,5 +509,6 @@ module.exports = {
   senderMatches,
   redactSmsShape,
   parseTransactionDate,
+  isAmbiguousAccountDebit,
   KNOWN_FIELDS,
 };

@@ -175,6 +175,18 @@ test('conservative fallback rejects OTP, due, refund, failed and non-card accoun
   }
 });
 
+test('all parser paths reject card due reminders and non-purchase card alerts', () => {
+  const messages = [
+    'Payment of INR 5590.75 for Axis Bank Credit Card no. XX7105 is due on 02-04-26 with minimum amount due of INR 112. Ignore if paid.',
+    'Statement for your Axis Bank Credit Card no. XX7105 has been generated.',
+    'Your new Flipkart Credit Card no. XX7105 has been dispatched to your address.',
+    'MoneyBack+ xx8708: Spend ₹15000, get ₹250',
+  ];
+  for (const body of messages) {
+    assert.equal(parseSmsAgainstPatterns([], { sender: 'BANK', body }).ok, false, body);
+  }
+});
+
 test('a specific richer configured pattern wins over an open generic pattern', () => {
   const open = {
     id: 'open',
@@ -242,6 +254,17 @@ test('built-in card fallback handles a single-x mask, rupee symbol, and ISO date
   assert.equal(result.fields.date, '2025-08-14');
 });
 
+test('ATM withdrawal alerts are debit-card transactions, not credit-card purchases', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Rs.20000 withdrawn from HDFC Bank Card x8406 at PONDA BR on 2026-03-31:21:23:47 Bal Rs.136232.02 Not You? SMS BLOCK DC 8406',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 20000);
+  assert.equal(result.fields.instrument, 'debit_card');
+  assert.equal(result.fields.last4, '8406');
+});
+
 test('built-in card fallback handles the bare HDFC Card NNNN format and underscore merchant', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'JD-HDFCBK-S',
@@ -265,17 +288,14 @@ test('built-in UPI fallback stops merchant extraction before the source-account 
   assert.equal(result.fields.instrument, 'upi_bank');
 });
 
-test('built-in UPI fallback parses Rs-colon account debit alerts without inventing a card', () => {
+test('account debit without explicit UPI is held for confirmation, not counted as spend', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'UBIN-BANK',
     body: 'A/c *8565 Debited for Rs:2.00 on 08-07-2025 12:50:01 by Mob Bk ref no 4987654321 Avl Bal Rs 900.00',
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.fields.amountInr, 2);
-  assert.equal(result.fields.instrument, 'upi_bank');
-  assert.equal(result.fields.date, '08-07-2025');
-  assert.equal(result.fields.last4, undefined);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'ambiguous_account_debit');
 });
 
 test('built-in UPI fallback stops merchant extraction before parenthesized reference metadata', () => {

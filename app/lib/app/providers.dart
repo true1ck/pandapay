@@ -1733,6 +1733,30 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   const inboxReconciliationKey = 'pandapay_app.sms_inbox_reconciled_at_v1';
   const inboxReconciliationInterval = Duration(minutes: 5);
 
+  Future<void> saveAmbiguousSmsForConfirmation(
+    String sender,
+    String body,
+    DateTime receivedAt,
+    SmsImportResult result,
+  ) async {
+    // Non-transaction alerts are intentionally ignored. An account debit
+    // without explicit UPI evidence is different: it may be a transfer or a
+    // bill payment, so keep it on-device for one confirmation instead of
+    // silently adding it to spending.
+    if (result.parsed || result.reason != 'ambiguous_account_debit') return;
+    await ref.read(needsReviewRepositoryProvider).add(
+      NeedsReviewItem(
+        id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
+        sender: sender,
+        body: body,
+        reason: result.reason,
+        receivedAt: receivedAt,
+      ),
+    );
+    ref.invalidate(needsReviewItemsProvider);
+    ref.invalidate(needsReviewCountProvider);
+  }
+
   Future<void> flush() async {
     final repo = ref.read(userCardsRepositoryProvider);
     // Guest mode has no server to send to; the queue simply waits until
@@ -1749,22 +1773,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           body: body,
           occurredAt: receivedAt,
         );
-        if (!result.parsed) {
-          // Match the foreground behavior. This id stays stable if the app
-          // stops before the background queue is cleared.
-          await ref
-              .read(needsReviewRepositoryProvider)
-              .add(
-                NeedsReviewItem(
-                  id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
-                  sender: sender,
-                  body: body,
-                  reason: result.reason,
-                  receivedAt: receivedAt,
-                ),
-              );
-          ref.invalidate(needsReviewItemsProvider);
-        }
+        await saveAmbiguousSmsForConfirmation(sender, body, receivedAt, result);
         // Every one of these is "dealt with": imported, recognised as
         // already imported, or explicitly ignored as a non-spend. Successful
         // spends are recorded without requiring card attribution. Only a
@@ -1839,11 +1848,17 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
 
     final messages = await SmsListenerService().readInboxSms(limit: 250);
     for (final message in messages) {
-      await repo.logTransactionFromSms(
+      final result = await repo.logTransactionFromSms(
         sender: message.sender,
         body: message.body,
         occurredAt: message.receivedAt,
         backfill: true,
+      );
+      await saveAmbiguousSmsForConfirmation(
+        message.sender,
+        message.body,
+        message.receivedAt,
+        result,
       );
     }
     await prefs.setInt(inboxReconciliationKey, now.millisecondsSinceEpoch);
@@ -1914,12 +1929,25 @@ class SmsAutoImportController {
       return;
     }
     try {
-      await repo.logTransactionFromSms(
+      final result = await repo.logTransactionFromSms(
         userCardId: _userCardIdOverride,
         sender: sender,
         body: body,
         occurredAt: receivedAt,
       );
+      if (!result.parsed && result.reason == 'ambiguous_account_debit') {
+        await _ref.read(needsReviewRepositoryProvider).add(
+          NeedsReviewItem(
+            id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
+            sender: sender,
+            body: body,
+            reason: result.reason,
+            receivedAt: receivedAt,
+          ),
+        );
+        _ref.invalidate(needsReviewItemsProvider);
+        _ref.invalidate(needsReviewCountProvider);
+      }
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(needsReviewCountProvider);
