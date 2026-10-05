@@ -14,7 +14,7 @@
  * extra keys without breaking older parser code.
  */
 
-const KNOWN_FIELDS = ['amount', 'merchant', 'last4', 'date', 'instrument', 'reference', 'direction'];
+const KNOWN_FIELDS = ['amount', 'merchant', 'last4', 'date', 'instrument', 'reference', 'direction', 'mcc'];
 const MAX_MESSAGE_LENGTH = 20000;
 
 // OTP/security alerts can contain the same words as a transaction alert
@@ -52,6 +52,13 @@ function inferInstrument(body, hasLast4) {
   return null;
 }
 
+function extractMcc(body) {
+  const match = String(body || '').match(
+    /\b(?:mcc|merchant\s+category(?:\s+code)?)\s*[:#-]?\s*(\d{4})\b/i
+  );
+  return match ? match[1] : null;
+}
+
 function isSuccessfulSpend(body) {
   const text = String(body || '').toLowerCase();
   if (isSecurityOrOtpMessage(text)) return false;
@@ -77,6 +84,7 @@ function parseBuiltInUpiDebit(sms) {
       ...(merchantMatch ? { merchant: merchantMatch[1].trim() } : {}),
       ...(dateMatch ? { date: dateMatch[1] } : {}),
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
+      ...(extractMcc(body) ? { mcc: extractMcc(body) } : {}),
       instrument,
       entryKind: 'spend',
     },
@@ -105,6 +113,7 @@ function parseBuiltInCardSpend(sms) {
       last4: last4Match[1],
       ...(merchantMatch ? { merchant: merchantMatch[1].trim().replace(/^_+/, '') } : {}),
       ...(dateMatch ? { date: dateMatch[1] } : {}),
+      ...(extractMcc(body) ? { mcc: extractMcc(body) } : {}),
       instrument,
       entryKind: 'spend',
     },
@@ -196,6 +205,10 @@ function parseSms(pattern, sms) {
         return { ok: false, reason: 'unparseable_merchant' };
       }
       fields.merchant = merchant;
+    } else if (fieldName === 'mcc') {
+      const mcc = raw.trim();
+      if (!/^\d{4}$/.test(mcc)) return { ok: false, reason: 'unparseable_mcc' };
+      fields.mcc = mcc;
     } else if (fieldName === 'instrument' || fieldName === 'reference' || fieldName === 'direction') {
       const value = raw.trim();
       if (!value) return { ok: false, reason: `unparseable_${fieldName}` };
@@ -277,11 +290,14 @@ function parseConservativeBankSpend(sms) {
   const last4 = body.match(/(?:ending|end(?:ing)?\s+in|xx+|x{2,}|card\s*(?:no\.?|number)?\s*[*x-]*)\s*([0-9]{4})\b/i);
   if (last4) fields.last4 = last4[1];
 
-  const merchant = body.match(/\b(?:at|to)\s+([A-Za-z0-9][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|for\s+card)\b|[.;]|$)/i);
+  const merchant = body.match(/\b(?:at|to)\s+([A-Za-z0-9_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|for\s+card)\b|[.;]|$)/i);
   if (merchant) {
-    const value = merchant[1].trim().replace(/[.,;:-]+$/, '').trim();
+    const value = merchant[1].trim().replace(/^_+/, '').replace(/[.,;:-]+$/, '').trim();
     if (value && !/^(your|card|account|a\/c)$/i.test(value)) fields.merchant = value;
   }
+
+  const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  if (dateMatch) fields.date = dateMatch[1];
 
   return { ok: true, fields, parserKind: 'conservative_fallback' };
 }

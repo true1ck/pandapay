@@ -1,32 +1,5 @@
 const { normalizeMerchant } = require('./reward_math');
-
-// Conservative fallback hints for common Indian SMS merchant names. These
-// only run after the user's own history and admin-managed rules, so a
-// deliberate correction always wins. Keep the list high-confidence: an
-// uncategorized row is preferable to silently putting a payment in the wrong
-// reward category.
-const BUILTIN_CATEGORY_HINTS = [
-  {
-    slug: 'fuel',
-    patterns: [
-      'fuelstation', 'petrol', 'diesel', 'indianoil', 'iocl',
-      'bharatpetroleum', 'hindustanpetroleum', 'hpcl', 'bpcl',
-      'reliancepetroleum', 'nayara', 'shell', 'jiobp', 'essar',
-    ],
-  },
-  {
-    slug: 'dining',
-    patterns: ['swiggy', 'zomato', 'restaurant', 'dining', 'dominos', 'mcdonald', 'kfc'],
-  },
-  {
-    slug: 'groceries',
-    patterns: ['grocery', 'supermarket', 'bigbasket', 'blinkit', 'zepto', 'dmart', 'jiomart'],
-  },
-  {
-    slug: 'travel',
-    patterns: ['makemytrip', 'goibibo', 'cleartrip', 'irctc', 'airindia', 'indigo', 'uber', 'ola'],
-  },
-];
+const { inferBuiltinCategory } = require('./merchant_category');
 
 /**
  * Resolving the two things a parsed bank message does NOT tell us: which of
@@ -40,12 +13,14 @@ const BUILTIN_CATEGORY_HINTS = [
  * backfilled, and live capture only worked while the app was open and
  * someone was watching.
  *
- * Nothing here GUESSES. Each resolver returns a confident answer or null,
- * and a null routes the message to `needs_review_items` — the table that
- * already exists precisely so imported data is never silently dropped OR
- * silently invented. Attaching a transaction to the wrong card is worse
- * than attaching it to none: it corrupts that card's cap state, its reward
- * total, and every recommendation made against it afterwards.
+ * Nothing here GUESSES a card. The card resolver returns a confident answer
+ * or null; the SMS import path deliberately keeps an unresolved cardless
+ * transaction rather than blocking the user's spending history behind a
+ * review queue. Category resolution is separate: it uses the strongest
+ * available merchant evidence and falls back to the explicit `other`
+ * category when no specific category can be proven. Attaching a transaction
+ * to the wrong card is worse than attaching it to none: it corrupts that
+ * card's cap state, reward total, and recommendations.
  */
 
 /**
@@ -110,44 +85,29 @@ async function resolveUserCardForImport(client, userId, { last4, patternIssuerId
 /**
  * What category a parsed merchant name belongs to.
  *
- * Four sources, best evidence first:
+ * Six sources, best evidence first:
  *
- *   1. The user's OWN past choice for this merchant. If they have already
- *      told us that "SWIGGY*ORDER" is dining — by editing a transaction or
- *      quick-adding one — that is better evidence than any shipped table,
- *      and it means a correction sticks instead of being re-guessed wrong
- *      every month.
- *   2. `merchants` (VPA-keyed, crowdsourced), when the message carried a
+ *   1. `merchants` (VPA-keyed, verified), when the message carried a
  *      VPA and the record is published.
- *   3. `mcc_categories`, when the message carried an MCC. Rare from SMS,
+ *   2. `mcc_categories`, when the message carried an MCC. Rare from SMS,
  *      normal from a statement import.
+ *   3. The user's own non-Other history for this merchant. This stabilizes
+ *      repeated local businesses without allowing an earlier unknown
+ *      fallback to become a permanent misclassification.
  *   4. `merchant_category_rules` — the shipped name-keyed map (0039).
+ *   5. A high-confidence built-in India-focused fallback map.
+ *   6. The explicit `other` category, so a successful spend is never left
+ *      uncategorized merely because its merchant is new.
  *
- * Returns a category id or null. Null means uncategorized, which is honest:
- * the user can set it, and the reward math already treats an unknown
- * category as "no bonus rule matched" rather than assuming one.
+ * Returns a category id or null only when the reference data itself is
+ * unavailable. An unknown merchant resolves to the explicit `other` bucket;
+ * it is better to show honest "Other" than to show an empty category or to
+ * invent a specific category.
  */
-async function resolveCategoryForImport(client, userId, { merchantName, vpa, mcc }) {
+async function resolveCategoryForImport(client, userId, { merchantName, vpa, mcc, messageText }) {
   const normalized = normalizeMerchant(merchantName);
 
-  // 1. The user's own history for this merchant.
-  if (normalized) {
-    const own = await client.query(
-      `SELECT category_id, COUNT(*) AS n
-         FROM transactions
-        WHERE profile_id = $1
-          AND category_id IS NOT NULL
-          AND status = 'active'
-          AND regexp_replace(lower(coalesce(merchant_name, '')), '[^a-z0-9]', '', 'g') = $2
-        GROUP BY category_id
-        ORDER BY n DESC
-        LIMIT 1`,
-      [userId, normalized]
-    );
-    if (own.rows[0]) return own.rows[0].category_id;
-  }
-
-  // 2. Crowdsourced VPA record.
+  // 1. Verified VPA record.
   if (vpa) {
     const merchant = await client.query(
       `SELECT category_id FROM merchants
@@ -157,7 +117,7 @@ async function resolveCategoryForImport(client, userId, { merchantName, vpa, mcc
     if (merchant.rows[0]) return merchant.rows[0].category_id;
   }
 
-  // 3. MCC.
+  // 2. MCC.
   if (mcc && /^[0-9]{4}$/.test(mcc)) {
     const byMcc = await client.query(
       `SELECT category_id FROM mcc_categories WHERE mcc = $1 AND category_id IS NOT NULL`,
@@ -166,7 +126,47 @@ async function resolveCategoryForImport(client, userId, { merchantName, vpa, mcc
     if (byMcc.rows[0]) return byMcc.rows[0].category_id;
   }
 
-  // 4. Shipped name-keyed map. Patterns are stored already-normalized, so
+  // 3. The user's own non-Other history for this VPA. This keeps a personal
+  // merchant stable even when banks vary the display name in their SMS.
+  if (vpa) {
+    const ownVpa = await client.query(
+      `SELECT t.category_id, COUNT(*) AS n
+         FROM transactions t
+         JOIN spend_categories prior_category ON prior_category.id = t.category_id
+        WHERE t.profile_id = $1
+          AND t.merchant_vpa = $2
+          AND prior_category.slug <> 'other'
+          AND t.status = 'active'
+        GROUP BY t.category_id
+        ORDER BY n DESC
+        LIMIT 1`,
+      [userId, vpa]
+    );
+    if (ownVpa.rows[0]) return ownVpa.rows[0].category_id;
+  }
+
+  // 4. The user's own non-Other history for this merchant. A prior fallback
+  // to `Other` is intentionally excluded so it cannot permanently block a
+  // later verified VPA/MCC or merchant-rule match.
+  if (normalized) {
+    const own = await client.query(
+      `SELECT t.category_id, COUNT(*) AS n
+         FROM transactions t
+         JOIN spend_categories prior_category ON prior_category.id = t.category_id
+        WHERE t.profile_id = $1
+          AND t.category_id IS NOT NULL
+          AND prior_category.slug <> 'other'
+          AND t.status = 'active'
+          AND regexp_replace(lower(coalesce(t.merchant_name, '')), '[^a-z0-9]', '', 'g') = $2
+        GROUP BY t.category_id
+        ORDER BY n DESC
+        LIMIT 1`,
+      [userId, normalized]
+    );
+    if (own.rows[0]) return own.rows[0].category_id;
+  }
+
+  // 5. Shipped name-keyed map. Patterns are stored already-normalized, so
   // this is a plain substring test against the normalized merchant, and
   // `priority` is what lets 'amazonpay' (wallet) beat 'amazon' (online).
   if (normalized) {
@@ -179,17 +179,41 @@ async function resolveCategoryForImport(client, userId, { merchantName, vpa, mcc
     );
     if (byName.rows[0]) return byName.rows[0].category_id;
 
-    for (const hint of BUILTIN_CATEGORY_HINTS) {
-      if (!hint.patterns.some((pattern) => normalized.includes(pattern))) continue;
+    const builtinHint = inferBuiltinCategory(merchantName);
+    if (builtinHint) {
       const builtin = await client.query(
         `SELECT id FROM spend_categories WHERE slug = $1 LIMIT 1`,
-        [hint.slug]
+        [builtinHint.slug]
       );
       if (builtin.rows[0]) return builtin.rows[0].id;
     }
   }
 
-  return null;
+  // Some bank templates parse the amount/card/date but omit a merchant
+  // capture even though the merchant is plainly present in the SMS body.
+  // Use the body only for the conservative built-in rules; do not use it for
+  // the user's history, VPA lookup, or admin rules because those require a
+  // real merchant key and must never learn from unrelated bank wording.
+  if (!inferBuiltinCategory(merchantName) && messageText) {
+    const builtinFromBody = inferBuiltinCategory(messageText);
+    if (builtinFromBody) {
+      const builtin = await client.query(
+        `SELECT id FROM spend_categories WHERE slug = $1 LIMIT 1`,
+        [builtinFromBody.slug]
+      );
+      if (builtin.rows[0]) return builtin.rows[0].id;
+    }
+  }
+
+  // Every successful spend belongs somewhere in the reporting taxonomy. Do
+  // not leave a valid transaction with category_id NULL just because its
+  // merchant is a small local business or a new UPI handle. This is a safe
+  // fallback: it does not claim to know the business category, and it keeps
+  // totals exact while allowing future rules/history to improve the label.
+  const other = await client.query(
+    `SELECT id FROM spend_categories WHERE slug = 'other' LIMIT 1`
+  );
+  return other.rows[0]?.id || null;
 }
 
 /**

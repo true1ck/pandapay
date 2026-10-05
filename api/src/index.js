@@ -22,6 +22,7 @@ const { csvDocument } = require('./csv');
 const { startImapPoller, fetchRecentMessages } = require('./imap_poller');
 const { requestLogger, errorHandler } = require('./observability');
 const { importSourceKey } = require('./import_source_key');
+const { extractVpa, extractMcc } = require('./merchant_category');
 
 const app = express();
 app.use(cors());
@@ -2586,7 +2587,7 @@ function clientMutationSourceKey(userId, source, clientMutationId) {
 
 async function insertTransactionAndUpdateState(client, userId, {
   userCardId, amount, occurred, categoryId, rail, merchantName, note, source,
-  sourceKey, backfill, instrument, entryKind, observationMetadata,
+  merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, observationMetadata,
 }) {
   const resolvedInstrument = instrument || 'credit_card';
   const resolvedEntryKind = entryKind || 'spend';
@@ -2650,11 +2651,11 @@ async function insertTransactionAndUpdateState(client, userId, {
   // index only covers non-null keys.
   const txn = await client.query(
     `INSERT INTO transactions
-       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'estimated', $10, $11, $12, false, $13)
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'estimated', $12, $13, $14, false, $15)
      ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
      RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, state_applied, is_backfill`,
-    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, categoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, backfill === true]
+    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, backfill === true]
   );
 
   // Zero rows back means the unique index rejected it: this exact message
@@ -2791,6 +2792,8 @@ async function importParsedMessage(client, userId, {
   parsed, patternIssuerId, sender, rawText, source, occurred, sourceKey, backfill,
   explicitUserCardId, explicitCategoryId, rail, vpa, mcc, observationMetadata,
 }) {
+  const parsedVpa = vpa || extractVpa(parsed.fields.merchant) || extractVpa(rawText);
+  const parsedMcc = mcc || parsed.fields.mcc || extractMcc(rawText);
   // A QR payment can produce either a credit-card alert or a bank-account
   // UPI debit alert. Account-number suffixes are not card last-4 digits and
   // must never be used to attach a cardless bank payment to the wrong card.
@@ -2838,8 +2841,9 @@ async function importParsedMessage(client, userId, {
   const categoryId = explicitCategoryId
     || (await importResolvers.resolveCategoryForImport(client, userId, {
       merchantName: parsed.fields.merchant,
-      vpa,
-      mcc,
+      vpa: parsedVpa,
+      mcc: parsedMcc,
+      messageText: rawText,
     }));
 
   const inserted = await insertTransactionAndUpdateState(client, userId, {
@@ -2849,6 +2853,8 @@ async function importParsedMessage(client, userId, {
     categoryId,
     rail: rail || (instrument === 'upi_bank' || /\bupi\b/i.test(rawText) ? 'upi_qr' : 'unknown'),
     merchantName: parsed.fields.merchant || null,
+    merchantVpa: parsedVpa,
+    mcc: parsedMcc,
     source,
     sourceKey,
     backfill,
@@ -3319,9 +3325,10 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
   // which card the SMS is about — true, but the consequence was that no
   // transaction was ever captured without a human tapping a card for it,
   // one message at a time. src/import_resolvers.js now resolves it from
-  // last4 or from the issuer behind the matched pattern, and files the
-  // message for review when it can't be sure. A caller that DOES know the
-  // card still wins: an explicit id is never second-guessed.
+  // last4 or from the issuer behind the matched pattern. If it cannot be
+  // sure, the spend is still recorded cardlessly so the user never has to
+  // classify each SMS manually. A caller that DOES know the card still wins:
+  // an explicit id is never second-guessed.
   if (userCardId !== undefined && userCardId !== null && typeof userCardId !== 'string') {
     return res.status(400).json({ error: 'userCardId must be a string when given' });
   }

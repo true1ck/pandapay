@@ -1036,6 +1036,7 @@ class UserCardsRepository {
       reason: json['reason'] as String?,
       duplicate: json['duplicate'] == true,
       needsReview: json['needsReview'] == true,
+      categoryId: json['resolvedCategoryId'] as String?,
     );
   }
 
@@ -1637,11 +1638,18 @@ class SmsImportResult {
   /// SMS auto-import does not require this manual outcome.
   final bool needsReview;
 
+  /// The category assigned during the same SMS import transaction. This is
+  /// returned for observability; the server remains the source of truth for
+  /// the category UUID and the transaction row is already persisted before
+  /// the request succeeds.
+  final String? categoryId;
+
   const SmsImportResult({
     required this.parsed,
     this.reason,
     this.duplicate = false,
     this.needsReview = false,
+    this.categoryId,
   });
 }
 

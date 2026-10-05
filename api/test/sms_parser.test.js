@@ -48,6 +48,16 @@ test('successful parse: ICICI-style SMS with alphabetic month in date', () => {
   assert.equal(result.fields.merchant, 'SWIGGY');
 });
 
+test('built-in SMS parsing preserves UPI merchant and MCC metadata', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'UPI',
+    body: 'Rs 650 paid to FOODHUB@upi via UPI on 2026-10-02. MCC: 5812. UPI Ref 1234567890',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.merchant, 'FOODHUB@upi');
+  assert.equal(result.fields.mcc, '5812');
+});
+
 test('malformed/partial match: body missing the "spent on" clause fails cleanly', () => {
   const sms = {
     sender: 'VM-HDFCBK-S',
