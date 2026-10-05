@@ -918,7 +918,9 @@ class UserCardsRepository {
     // A 200 is an exact retry whose first response was lost. The canonical
     // transaction is returned in both cases and must leave the outbox.
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw ApiException('POST /transactions failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /transactions failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['transaction'] as Map<String, dynamic>)['id'] as String;
@@ -1048,6 +1050,13 @@ class UserCardsRepository {
       Uri.parse('$apiBaseUrl/transactions/reconcile-sms'),
       headers: _headers,
     );
+    // Older production API images may still be serving the app while the
+    // backend deployment is rolling out. Reconciliation is an enhancement to
+    // the normal SMS sync, not a reason to fail the entire startup pass; the
+    // next resume will retry once the route exists.
+    if (response.statusCode == 400 || response.statusCode == 404) {
+      return const SmsReconciliationResult.zero();
+    }
     if (response.statusCode != 200) {
       throw ApiException(
         'POST /transactions/reconcile-sms failed: ${response.statusCode} ${response.body}',
@@ -1684,6 +1693,11 @@ class SmsReconciliationResult {
     required this.reclassified,
     required this.remainingLegacyRows,
   });
+
+  const SmsReconciliationResult.zero()
+    : duplicateSuppressed = 0,
+      reclassified = 0,
+      remainingLegacyRows = 0;
 }
 
 /// Task S-1a: one message in a batched backup import.

@@ -1747,15 +1747,17 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     // bill payment, so keep it on-device for one confirmation instead of
     // silently adding it to spending.
     if (result.parsed || result.reason != 'ambiguous_account_debit') return;
-    await ref.read(needsReviewRepositoryProvider).add(
-      NeedsReviewItem(
-        id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
-        sender: sender,
-        body: body,
-        reason: result.reason,
-        receivedAt: receivedAt,
-      ),
-    );
+    await ref
+        .read(needsReviewRepositoryProvider)
+        .add(
+          NeedsReviewItem(
+            id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
+            sender: sender,
+            body: body,
+            reason: result.reason,
+            receivedAt: receivedAt,
+          ),
+        );
     ref.invalidate(needsReviewItemsProvider);
     ref.invalidate(needsReviewCountProvider);
   }
@@ -1868,6 +1870,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     ref.invalidate(userCardsProvider);
     ref.invalidate(transactionsProvider);
     ref.invalidate(needsReviewCountProvider);
+    ref.invalidate(spendReportProvider);
+    ref.invalidate(budgetsProvider);
+    ref.invalidate(recurringReportProvider);
   }
 
   Future<void> flushAndRetry() async {
@@ -1886,6 +1891,13 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       await retryExistingNeedsReview();
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
+      // Reconciliation can change both active-row counts and categories. The
+      // report family must be invalidated too; otherwise an already-open
+      // Spending screen keeps rendering the pre-repair snapshot until the
+      // user manually changes period or pulls to refresh.
+      ref.invalidate(spendReportProvider);
+      ref.invalidate(budgetsProvider);
+      ref.invalidate(recurringReportProvider);
     } finally {
       workInProgress = false;
     }
@@ -1948,21 +1960,26 @@ class SmsAutoImportController {
         occurredAt: receivedAt,
       );
       if (!result.parsed && result.reason == 'ambiguous_account_debit') {
-        await _ref.read(needsReviewRepositoryProvider).add(
-          NeedsReviewItem(
-            id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
-            sender: sender,
-            body: body,
-            reason: result.reason,
-            receivedAt: receivedAt,
-          ),
-        );
+        await _ref
+            .read(needsReviewRepositoryProvider)
+            .add(
+              NeedsReviewItem(
+                id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
+                sender: sender,
+                body: body,
+                reason: result.reason,
+                receivedAt: receivedAt,
+              ),
+            );
         _ref.invalidate(needsReviewItemsProvider);
         _ref.invalidate(needsReviewCountProvider);
       }
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(needsReviewCountProvider);
+      _ref.invalidate(spendReportProvider);
+      _ref.invalidate(budgetsProvider);
+      _ref.invalidate(recurringReportProvider);
     } catch (_) {
       // Never lose a valid alert because auth/network was temporarily down.
       final prefs = await SharedPreferences.getInstance();

@@ -5,6 +5,8 @@ const {
   previousPeriodBounds,
   budgetPeriodBounds,
   periodElapsedFraction,
+  spendByCategory,
+  spendByCard,
   spendByInstrument,
 } = require('../src/spend_reports');
 
@@ -155,6 +157,54 @@ test('payment-method spend rows preserve instrument totals and counts', async ()
     [
       { instrument: 'credit_card', totalInr: 1000, txnCount: 2 },
       { instrument: 'upi_bank', totalInr: 500, txnCount: 1 },
+    ],
+  );
+});
+
+test('legacy Uncategorized rows are presented as the explicit Other bucket', async () => {
+  const client = {
+    query: async (sql, params) => {
+      assert.match(sql, /spend_categories/);
+      assert.deepEqual(params, ['user-1', 'start', 'end']);
+      return {
+        rows: [
+          { category_id: 'legacy', category_slug: 'uncategorized', category_name: 'Uncategorized', total: '2458.00', txn_count: '2' },
+          { category_id: null, category_slug: null, category_name: null, total: '10.00', txn_count: '1' },
+        ],
+      };
+    },
+  };
+
+  assert.deepEqual(
+    await spendByCategory(client, 'user-1', { start: 'start', end: 'end' }),
+    [
+      { categoryId: 'legacy', categorySlug: 'uncategorized', categoryName: 'Other', totalInr: 2458, txnCount: 2 },
+      { categoryId: null, categorySlug: 'other', categoryName: 'Other', totalInr: 10, txnCount: 1 },
+    ],
+  );
+});
+
+test('card breakdown labels unmatched UPI and card rows instead of calling everything cash', async () => {
+  const client = {
+    query: async (sql, params) => {
+      assert.match(sql, /t\.instrument/);
+      assert.deepEqual(params, ['user-1', 'start', 'end']);
+      return {
+        rows: [
+          { user_card_id: null, instrument: 'upi_bank', card_name: null, card_nickname: null, annual_fee_inr: null, total: '500.00', rewards: '0', txn_count: '1' },
+          { user_card_id: null, instrument: 'credit_card', card_name: null, card_nickname: null, annual_fee_inr: null, total: '800.00', rewards: '0', txn_count: '1' },
+          { user_card_id: 'uc-1', instrument: 'credit_card', card_name: 'HDFC Millennia', card_nickname: null, annual_fee_inr: '1000', total: '1000.00', rewards: '20', txn_count: '1' },
+        ],
+      };
+    },
+  };
+
+  assert.deepEqual(
+    await spendByCard(client, 'user-1', { start: 'start', end: 'end' }),
+    [
+      { cardId: null, cardName: 'UPI / bank account', annualFeeInr: null, totalInr: 500, rewardsInr: 0, txnCount: 1, effectiveRatePerRupee: 0 },
+      { cardId: null, cardName: 'Credit card (unmatched)', annualFeeInr: null, totalInr: 800, rewardsInr: 0, txnCount: 1, effectiveRatePerRupee: 0 },
+      { cardId: 'uc-1', cardName: 'HDFC Millennia', annualFeeInr: 1000, totalInr: 1000, rewardsInr: 20, txnCount: 1, effectiveRatePerRupee: 0.02 },
     ],
   );
 });

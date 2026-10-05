@@ -55,44 +55,77 @@ void main() {
   });
 
   group('manual transaction idempotency', () {
-    test('sends a caller-provided mutation id and accepts an exact-retry 200', () async {
-      late Map<String, dynamic> requestBody;
-      final repository = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'token',
-        client: MockClient((request) async {
-          requestBody = jsonDecode(request.body) as Map<String, dynamic>;
-          return http.Response(jsonEncode({
-            'duplicate': true,
-            'transaction': {'id': 'canonical-txn'},
-          }), 200);
-        }),
-      );
+    test(
+      'sends a caller-provided mutation id and accepts an exact-retry 200',
+      () async {
+        late Map<String, dynamic> requestBody;
+        final repository = UserCardsRepository(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'token',
+          client: MockClient((request) async {
+            requestBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return http.Response(
+              jsonEncode({
+                'duplicate': true,
+                'transaction': {'id': 'canonical-txn'},
+              }),
+              200,
+            );
+          }),
+        );
 
-      final id = await repository.logTransaction(
-        userCardId: 'card-1',
-        amount: Money.fromRupees(500),
-        clientMutationId: 'fixed-mutation-id',
-      );
+        final id = await repository.logTransaction(
+          userCardId: 'card-1',
+          amount: Money.fromRupees(500),
+          clientMutationId: 'fixed-mutation-id',
+        );
 
-      expect(id, 'canonical-txn');
-      expect(requestBody['clientMutationId'], 'fixed-mutation-id');
-    });
+        expect(id, 'canonical-txn');
+        expect(requestBody['clientMutationId'], 'fixed-mutation-id');
+      },
+    );
 
-    test('generates a mutation id when a caller does not provide one', () async {
-      late Map<String, dynamic> requestBody;
-      final repository = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'token',
-        client: MockClient((request) async {
-          requestBody = jsonDecode(request.body) as Map<String, dynamic>;
-          return http.Response(jsonEncode({'transaction': {'id': 'new-txn'}}), 201);
-        }),
-      );
+    test(
+      'generates a mutation id when a caller does not provide one',
+      () async {
+        late Map<String, dynamic> requestBody;
+        final repository = UserCardsRepository(
+          apiBaseUrl: 'https://api.test',
+          accessToken: 'token',
+          client: MockClient((request) async {
+            requestBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return http.Response(
+              jsonEncode({
+                'transaction': {'id': 'new-txn'},
+              }),
+              201,
+            );
+          }),
+        );
 
-      await repository.logTransaction(userCardId: 'card-1', amount: Money.fromRupees(500));
+        await repository.logTransaction(
+          userCardId: 'card-1',
+          amount: Money.fromRupees(500),
+        );
 
-      expect(requestBody['clientMutationId'], matches(RegExp(r'^[0-9a-f-]{36}$')));
-    });
+        expect(
+          requestBody['clientMutationId'],
+          matches(RegExp(r'^[0-9a-f-]{36}$')),
+        );
+      },
+    );
+  });
+
+  test('SMS reconciliation tolerates an older API during rollout', () async {
+    final repository = UserCardsRepository(
+      apiBaseUrl: 'https://api.test',
+      accessToken: 'token',
+      client: MockClient((request) async => http.Response('Not found', 404)),
+    );
+
+    final result = await repository.reconcileSmsHistory();
+    expect(result.duplicateSuppressed, 0);
+    expect(result.reclassified, 0);
+    expect(result.remainingLegacyRows, 0);
   });
 }

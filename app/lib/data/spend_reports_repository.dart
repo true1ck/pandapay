@@ -5,7 +5,8 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'api_exception.dart';
 
-double _num(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.parse(v as String));
+double _num(dynamic v) =>
+    v == null ? 0 : (v is num ? v.toDouble() : double.parse(v as String));
 Money _money(dynamic v) => Money.fromRupees(_num(v));
 
 /// The period a spend report covers.
@@ -37,9 +38,17 @@ class EntryKindTotals {
   final int txnCount;
   final Money rewards;
 
-  const EntryKindTotals({required this.total, required this.txnCount, required this.rewards});
+  const EntryKindTotals({
+    required this.total,
+    required this.txnCount,
+    required this.rewards,
+  });
 
-  static const zero = EntryKindTotals(total: Money.zero(), txnCount: 0, rewards: Money.zero());
+  static const zero = EntryKindTotals(
+    total: Money.zero(),
+    txnCount: 0,
+    rewards: Money.zero(),
+  );
 
   factory EntryKindTotals.fromJson(Map<String, dynamic>? json) {
     if (json == null) return zero;
@@ -191,7 +200,8 @@ class SpendReport {
   /// "infinite increase" is worse.
   double? get changeVsPrevious {
     if (previousSpend.total.isZero) return null;
-    return (spend.total.paise - previousSpend.total.paise) / previousSpend.total.paise;
+    return (spend.total.paise - previousSpend.total.paise) /
+        previousSpend.total.paise;
   }
 
   /// Spend at the current pace, extrapolated across the whole period. Null
@@ -206,7 +216,8 @@ class SpendReport {
 
   factory SpendReport.fromJson(Map<String, dynamic> json) {
     final totals = json['totals'] as Map<String, dynamic>? ?? const {};
-    final previousTotals = json['previousTotals'] as Map<String, dynamic>? ?? const {};
+    final previousTotals =
+        json['previousTotals'] as Map<String, dynamic>? ?? const {};
     return SpendReport(
       period: SpendPeriod.values.firstWhere(
         (p) => p.wireValue == json['period'],
@@ -216,14 +227,20 @@ class SpendReport {
       periodEnd: DateTime.parse(json['periodEnd'] as String),
       elapsedFraction: _num(json['elapsedFraction']),
       spend: EntryKindTotals.fromJson(totals['spend'] as Map<String, dynamic>?),
-      income: EntryKindTotals.fromJson(totals['income'] as Map<String, dynamic>?),
-      investment: EntryKindTotals.fromJson(totals['investment'] as Map<String, dynamic>?),
-      previousSpend: EntryKindTotals.fromJson(previousTotals['spend'] as Map<String, dynamic>?),
+      income: EntryKindTotals.fromJson(
+        totals['income'] as Map<String, dynamic>?,
+      ),
+      investment: EntryKindTotals.fromJson(
+        totals['investment'] as Map<String, dynamic>?,
+      ),
+      previousSpend: EntryKindTotals.fromJson(
+        previousTotals['spend'] as Map<String, dynamic>?,
+      ),
       byCategory: ((json['byCategory'] as List?) ?? const [])
           .cast<Map<String, dynamic>>()
           .map(
             (e) => SpendBreakdownRow(
-              label: e['categoryName'] as String? ?? 'Other',
+              label: _displayCategoryName(e['categoryName'] as String?),
               total: _money(e['totalInr']),
               txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,
               categoryId: e['categoryId'] as String?,
@@ -249,7 +266,9 @@ class SpendReport {
               total: _money(e['totalInr']),
               rewards: _money(e['rewardsInr']),
               txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,
-              annualFee: e['annualFeeInr'] == null ? null : _money(e['annualFeeInr']),
+              annualFee: e['annualFeeInr'] == null
+                  ? null
+                  : _money(e['annualFeeInr']),
               effectiveRatePerRupee: e['effectiveRatePerRupee'] == null
                   ? null
                   : _num(e['effectiveRatePerRupee']),
@@ -279,6 +298,17 @@ class SpendReport {
           .toList(),
     );
   }
+}
+
+String _displayCategoryName(String? value) {
+  final normalized = value?.trim().toLowerCase();
+  if (value == null ||
+      value.trim().isEmpty ||
+      normalized == 'uncategorized' ||
+      normalized == 'unclassified') {
+    return 'Other';
+  }
+  return value;
 }
 
 /// What a budget applies to.
@@ -370,7 +400,9 @@ class BudgetStatus {
     periodEnd: DateTime.parse(json['periodEnd'] as String),
     consumedFraction: _num(json['consumedFraction']),
     elapsedFraction: _num(json['elapsedFraction']),
-    projected: json['projectedInr'] == null ? null : _money(json['projectedInr']),
+    projected: json['projectedInr'] == null
+        ? null
+        : _money(json['projectedInr']),
   );
 }
 
@@ -407,15 +439,24 @@ class SpendReportsRepository {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw ApiException('GET /spend-report failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /spend-report failed: ${response.statusCode} ${response.body}',
+      );
     }
-    return SpendReport.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return SpendReport.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<List<BudgetStatus>> fetchBudgets() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/budgets'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/budgets'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /budgets failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /budgets failed: ${response.statusCode} ${response.body}',
+      );
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return ((json['budgets'] as List?) ?? const [])
@@ -443,7 +484,9 @@ class SpendReportsRepository {
       }),
     );
     if (response.statusCode != 201) {
-      throw ApiException('POST /budgets failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /budgets failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -455,26 +498,35 @@ class SpendReportsRepository {
   /// non-ASCII merchant names, and a String round-trip through Dart's
   /// default encoder would drop it.
   Future<List<int>> fetchTransactionsCsv({DateTime? from, DateTime? to}) async {
-    String? day(DateTime? d) =>
-        d == null ? null : '${d.year.toString().padLeft(4, '0')}-'
-            '${d.month.toString().padLeft(2, '0')}-'
-            '${d.day.toString().padLeft(2, '0')}';
+    String? day(DateTime? d) => d == null
+        ? null
+        : '${d.year.toString().padLeft(4, '0')}-'
+              '${d.month.toString().padLeft(2, '0')}-'
+              '${d.day.toString().padLeft(2, '0')}';
     final query = <String, String>{'from': ?day(from), 'to': ?day(to)};
     final response = await _client.get(
-      Uri.parse('$apiBaseUrl/export/transactions.csv')
-          .replace(queryParameters: query.isEmpty ? null : query),
+      Uri.parse(
+        '$apiBaseUrl/export/transactions.csv',
+      ).replace(queryParameters: query.isEmpty ? null : query),
       headers: {'Authorization': 'Bearer $accessToken'},
     );
     if (response.statusCode != 200) {
-      throw ApiException('CSV export failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'CSV export failed: ${response.statusCode} ${response.body}',
+      );
     }
     return response.bodyBytes;
   }
 
   Future<RecurringReport> fetchRecurring() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/recurring'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/recurring'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /recurring failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /recurring failed: ${response.statusCode} ${response.body}',
+      );
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return RecurringReport(
@@ -495,7 +547,9 @@ class SpendReportsRepository {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw ApiException('POST /recurring/dismiss failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /recurring/dismiss failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 
@@ -505,7 +559,9 @@ class SpendReportsRepository {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw ApiException('DELETE /budgets failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'DELETE /budgets failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 }
@@ -557,19 +613,20 @@ class RecurringSeries {
     return 'About every ${(cadenceDays / 7).round()} weeks';
   }
 
-  factory RecurringSeries.fromJson(Map<String, dynamic> json) => RecurringSeries(
-    id: json['id'] as String,
-    displayName: json['displayName'] as String? ?? 'Unknown',
-    typicalAmount: _money(json['typicalAmountInr']),
-    cadenceDays: (json['cadenceDays'] as num?)?.toInt() ?? 30,
-    occurrenceCount: (json['occurrenceCount'] as num?)?.toInt() ?? 0,
-    annualCost: _money(json['annualCostInr']),
-    nextExpectedOn: json['nextExpectedOn'] == null
-        ? null
-        : DateTime.parse(json['nextExpectedOn'] as String),
-    categoryName: json['categoryName'] as String?,
-    cardName: json['cardName'] as String?,
-  );
+  factory RecurringSeries.fromJson(Map<String, dynamic> json) =>
+      RecurringSeries(
+        id: json['id'] as String,
+        displayName: json['displayName'] as String? ?? 'Unknown',
+        typicalAmount: _money(json['typicalAmountInr']),
+        cadenceDays: (json['cadenceDays'] as num?)?.toInt() ?? 30,
+        occurrenceCount: (json['occurrenceCount'] as num?)?.toInt() ?? 0,
+        annualCost: _money(json['annualCostInr']),
+        nextExpectedOn: json['nextExpectedOn'] == null
+            ? null
+            : DateTime.parse(json['nextExpectedOn'] as String),
+        categoryName: json['categoryName'] as String?,
+        cardName: json['cardName'] as String?,
+      );
 }
 
 /// Every detected subscription, plus what they cost together.

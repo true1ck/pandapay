@@ -222,10 +222,16 @@ async function spendByCategory(client, userId, { start, end }) {
   );
   return result.rows.map((r) => ({
     categoryId: r.category_id,
-    categorySlug: r.category_slug,
+    categorySlug: r.category_slug || 'other',
     // Null category is real and common (an import we couldn't classify) —
     // labelled rather than dropped, so the totals always reconcile.
-    categoryName: r.category_name || 'Other',
+    // Older rows may point at a literal `Uncategorized` bucket. That label
+    // is an implementation state, not a useful spending category; surface it
+    // as the explicit catch-all while the reconciliation endpoint backfills
+    // the row to the canonical `other` category.
+    categoryName: ['uncategorized', 'unclassified'].includes(
+      String(r.category_name || '').trim().toLowerCase(),
+    ) ? 'Other' : (r.category_name || 'Other'),
     totalInr: Number(r.total),
     txnCount: Number(r.txn_count),
   }));
@@ -268,6 +274,7 @@ async function spendByMerchant(client, userId, { start, end }, limit = 15) {
 async function spendByCard(client, userId, { start, end }) {
   const result = await client.query(
     `SELECT t.user_card_id,
+            t.instrument,
             cp.name AS card_name, uc.nickname AS card_nickname,
             cp.annual_fee_inr,
             COALESCE(SUM(t.amount_inr), 0) AS total,
@@ -278,7 +285,7 @@ async function spendByCard(client, userId, { start, end }) {
        LEFT JOIN card_products cp ON cp.id = uc.card_product_id
       WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
         AND t.occurred_at >= $2 AND t.occurred_at < $3
-      GROUP BY t.user_card_id, cp.name, uc.nickname, cp.annual_fee_inr
+      GROUP BY t.user_card_id, t.instrument, cp.name, uc.nickname, cp.annual_fee_inr
       ORDER BY total DESC`,
     [userId, start, end]
   );
@@ -287,7 +294,15 @@ async function spendByCard(client, userId, { start, end }) {
     const rewardsInr = Number(r.rewards);
     return {
       cardId: r.user_card_id,
-      cardName: r.card_nickname || r.card_name || 'Cash & other',
+      cardName: r.card_nickname || r.card_name || (r.instrument === 'upi_bank'
+        ? 'UPI / bank account'
+        : r.instrument === 'debit_card'
+          ? 'Debit card (unmatched)'
+          : r.instrument === 'credit_card'
+            ? 'Credit card (unmatched)'
+            : r.instrument === 'wallet'
+              ? 'Wallet'
+              : 'Cash & other'),
       annualFeeInr: r.annual_fee_inr == null ? null : Number(r.annual_fee_inr),
       totalInr,
       rewardsInr,
