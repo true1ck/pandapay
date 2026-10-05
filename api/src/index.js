@@ -2935,6 +2935,11 @@ async function repairSmsHistory(client, userId) {
           t.category_id IS NULL
           OR lower(coalesce(sc.slug, '')) IN ('uncategorized', 'unclassified')
           OR lower(coalesce(sc.name, '')) IN ('uncategorized', 'unclassified')
+          -- Older imports were assigned the generic other bucket before
+          -- merchant rules ran. Revisit that bucket too: a known merchant
+          -- such as Kavlekar Petroleum can now be upgraded to Fuel, while
+          -- genuinely unknown merchants remain Other.
+          OR lower(coalesce(sc.slug, '')) = 'other'
         )
       ORDER BY t.occurred_at ASC, t.id ASC
       LIMIT 1000`,
