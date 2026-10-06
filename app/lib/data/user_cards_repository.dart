@@ -1065,6 +1065,7 @@ class UserCardsRepository {
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return SmsReconciliationResult(
       duplicateSuppressed: (json['duplicateSuppressed'] as num?)?.toInt() ?? 0,
+      linkedCards: (json['linkedCards'] as num?)?.toInt() ?? 0,
       reclassified: (json['reclassified'] as num?)?.toInt() ?? 0,
       remainingLegacyRows: (json['remainingLegacyRows'] as num?)?.toInt() ?? 0,
     );
@@ -1480,12 +1481,17 @@ class UserCardsRepository {
     }
   }
 
-  /// Design 01 header: GET /home-summary. Sends the device's IANA zone so
-  /// the streak buckets on the user's local calendar day, not UTC.
-  Future<HomeSummary?> fetchHomeSummary({String? timeZone}) async {
-    final uri = Uri.parse(
-      '$apiBaseUrl/home-summary',
-    ).replace(queryParameters: timeZone == null ? null : {'tz': timeZone});
+  /// Design 01 header: GET /home-summary. Sends the device's current instant
+  /// and IANA zone so month/streak buckets use the user's calendar, not a
+  /// server clock that may be behind the device.
+  Future<HomeSummary?> fetchHomeSummary({DateTime? anchor, String? timeZone}) async {
+    final query = {
+      if (anchor != null) 'anchor': anchor.toUtc().toIso8601String(),
+      if (timeZone != null && timeZone.isNotEmpty) 'tz': timeZone,
+    };
+    final uri = Uri.parse('$apiBaseUrl/home-summary').replace(
+      queryParameters: query.isEmpty ? null : query,
+    );
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
       throw ApiException(
@@ -1561,6 +1567,9 @@ class TransactionEntry {
   final String? categoryId;
   final String? categoryName;
   final String? cardDisplayName; // nickname if set, else the card's own name
+  /// Last four digits extracted from a card SMS when the saved card is not
+  /// linked yet. This is masked evidence only, never a full card number.
+  final String? cardLast4;
 
   /// Task D-1/D-2/D-3: added alongside the D1 rebuild — `GET /transactions`
   /// already selected `t.source`/`t.note` (Task C-0c) and `t.user_card_id`/
@@ -1607,6 +1616,7 @@ class TransactionEntry {
     this.categoryId,
     this.categoryName,
     this.cardDisplayName,
+    this.cardLast4,
     this.userCardId,
     this.rail = TxnRail.unknown,
     this.instrument = TxnInstrument.creditCard,
@@ -1629,6 +1639,7 @@ class TransactionEntry {
       categoryId: json['category_id'] as String?,
       categoryName: _displayCategoryName(json['category_name'] as String?),
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
+      cardLast4: json['card_last4'] as String?,
       userCardId: json['user_card_id'] as String?,
       rail: _parseRail(json['rail'] as String?),
       instrument: TxnInstrument.fromJson(json['instrument'] as String?),
@@ -1703,17 +1714,20 @@ class SmsImportResult {
 
 class SmsReconciliationResult {
   final int duplicateSuppressed;
+  final int linkedCards;
   final int reclassified;
   final int remainingLegacyRows;
 
   const SmsReconciliationResult({
     required this.duplicateSuppressed,
+    required this.linkedCards,
     required this.reclassified,
     required this.remainingLegacyRows,
   });
 
   const SmsReconciliationResult.zero()
     : duplicateSuppressed = 0,
+      linkedCards = 0,
       reclassified = 0,
       remainingLegacyRows = 0;
 }

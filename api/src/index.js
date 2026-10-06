@@ -2952,6 +2952,76 @@ async function repairSmsHistory(client, userId) {
     [userId]
   );
 
+  // A card can be added after its SMS history was imported. Keep those rows
+  // as card transactions while they are unmatched, then attach them as soon
+  // as the saved card makes the match unambiguous. This repairs attribution
+  // without inventing a card or asking the user to review every message.
+  const cardlessRows = await client.query(
+    `SELECT DISTINCT ON (t.id)
+            t.id, t.instrument, t.entry_kind, t.amount_inr, t.occurred_at,
+            t.category_id, t.merchant_name, t.rail, t.is_backfill,
+            t.state_applied,
+            o.metadata->>'cardLast4' AS card_last4,
+            o.metadata->>'patternIssuerId' AS pattern_issuer_id
+       FROM transactions t
+       JOIN transaction_observations o ON o.transaction_id = t.id
+      WHERE t.profile_id = $1
+        AND t.status = 'active'
+        AND t.source IN ('sms', 'sms_bulk')
+        AND t.entry_kind = 'spend'
+        AND t.instrument IN ('credit_card', 'debit_card')
+        AND t.user_card_id IS NULL
+        AND o.metadata->>'cardLast4' ~ '^[0-9]{4}$'
+      ORDER BY t.id, o.observed_at DESC
+      LIMIT 1000`,
+    [userId]
+  );
+
+  let linkedCards = 0;
+  for (const row of cardlessRows.rows) {
+    const resolved = await importResolvers.resolveUserCardForImport(client, userId, {
+      last4: row.card_last4,
+      patternIssuerId: row.pattern_issuer_id || null,
+    });
+    if (!resolved) continue;
+
+    const linked = await client.query(
+      `UPDATE transactions
+          SET user_card_id = $1
+        WHERE id = $2 AND profile_id = $3 AND user_card_id IS NULL
+      RETURNING id`,
+      [resolved.userCardId, row.id, userId]
+    );
+    if (linked.rowCount === 0) continue;
+    linkedCards += 1;
+
+    // Historical backfills must never change the current card cycle. A live
+    // credit-card spend, however, was intentionally held out of card state
+    // while unmatched, so apply it exactly once after linking it now.
+    if (row.instrument === 'credit_card'
+        && row.entry_kind === 'spend'
+        && !row.is_backfill
+        && row.state_applied !== true) {
+      const card = await loadUserCardForState(client, userId, resolved.userCardId);
+      if (card) {
+        await applyTransactionState(client, userId, card, {
+          txnId: row.id,
+          userCardId: resolved.userCardId,
+          amount: Number(row.amount_inr),
+          occurred: row.occurred_at,
+          categoryId: row.category_id,
+          merchantName: row.merchant_name,
+          rail: row.rail,
+          sign: 1,
+        });
+        await client.query(
+          `UPDATE transactions SET state_applied = true WHERE id = $1 AND profile_id = $2`,
+          [row.id, userId]
+        );
+      }
+    }
+  }
+
   const legacyRows = await client.query(
     `SELECT t.id, t.merchant_name, t.merchant_vpa, t.mcc,
             t.category_id, sc.slug AS category_slug, sc.name AS category_name
@@ -2993,6 +3063,7 @@ async function repairSmsHistory(client, userId) {
 
   return {
     duplicateSuppressed: duplicateRows.rowCount,
+    linkedCards,
     reclassified,
     remainingLegacyRows: Math.max(0, legacyRows.rowCount - reclassified),
   };
@@ -3785,6 +3856,12 @@ app.get('/transactions', requireAuth, async (req, res) => {
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind,
                 t.expected_value_inr,
+                (SELECT o.metadata->>'cardLast4'
+                   FROM transaction_observations o
+                  WHERE o.transaction_id = t.id
+                    AND o.source IN ('sms', 'sms_bulk')
+                  ORDER BY o.observed_at DESC
+                  LIMIT 1) AS card_last4,
                 cp.name AS card_name, uc.nickname AS card_nickname
            FROM transactions t
            LEFT JOIN user_cards uc ON uc.id = t.user_card_id
@@ -3817,6 +3894,12 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind,
                 t.expected_value_inr,
+                (SELECT o.metadata->>'cardLast4'
+                   FROM transaction_observations o
+                  WHERE o.transaction_id = t.id
+                    AND o.source IN ('sms', 'sms_bulk')
+                  ORDER BY o.observed_at DESC
+                  LIMIT 1) AS card_last4,
                 cp.name AS card_name, uc.nickname AS card_nickname
            FROM transactions t
            LEFT JOIN user_cards uc ON uc.id = t.user_card_id
@@ -5359,6 +5442,10 @@ app.post('/notifications', requireAuth, async (req, res) => {
  */
 app.get('/home-summary', requireAuth, async (req, res) => {
   const tz = typeof req.query.tz === 'string' && req.query.tz.length > 0 ? req.query.tz : 'Asia/Kolkata';
+  const anchor = req.query.anchor ? new Date(req.query.anchor) : new Date();
+  if (Number.isNaN(anchor.getTime())) {
+    return res.status(400).json({ error: 'anchor is not a valid date' });
+  }
   try {
     const summary = await withUserClient(req.userId, async (client) => {
       // Validate the timezone against Postgres' own catalogue before
@@ -5371,12 +5458,12 @@ app.get('/home-summary', requireAuth, async (req, res) => {
         `SELECT
            COALESCE(SUM(expected_value_inr), 0) AS all_time,
            COALESCE(SUM(expected_value_inr) FILTER (
-             WHERE occurred_at >= date_trunc('month', (now() AT TIME ZONE $2))
+             WHERE occurred_at >= date_trunc('month', ($2::timestamptz AT TIME ZONE $3)) AT TIME ZONE $3
            ), 0) AS this_month,
            COUNT(*) AS txn_count
          FROM transactions
          WHERE profile_id = $1 AND status = 'active' AND entry_kind = 'spend'`,
-        [req.userId, zone]
+        [req.userId, anchor.toISOString(), zone]
       );
 
       // Streak: number the run of consecutive local days ending at the most
@@ -5399,7 +5486,10 @@ app.get('/home-summary', requireAuth, async (req, res) => {
 
       let streakDays = 0;
       if (streak.rowCount > 0) {
-        const today = await client.query(`SELECT (now() AT TIME ZONE $1)::date AS today`, [zone]);
+        const today = await client.query(
+          `SELECT ($2::timestamptz AT TIME ZONE $1)::date AS today`,
+          [zone, anchor.toISOString()]
+        );
         const gap = Math.round(
           (today.rows[0].today.getTime() - streak.rows[0].last_day.getTime()) / 86400000
         );

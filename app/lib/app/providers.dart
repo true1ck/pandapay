@@ -614,6 +614,10 @@ final spendReportProvider = FutureProvider.family<SpendReport?, SpendPeriod>((
   if (repo == null) return null;
   return repo.fetchReport(
     period: period,
+    // Periods are about the user's device calendar. Sending the device
+    // instant prevents a server clock that is a few hours/days behind from
+    // reporting September when the user is already in October.
+    anchor: DateTime.now().toUtc(),
     timeZone: ref.watch(deviceTimeZoneProvider),
   );
 });
@@ -1122,7 +1126,10 @@ final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((
 final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchHomeSummary(timeZone: ref.watch(deviceTimeZoneProvider));
+  return repo.fetchHomeSummary(
+    anchor: DateTime.now().toUtc(),
+    timeZone: ref.watch(deviceTimeZoneProvider),
+  );
 });
 
 /// Design 19's notification inbox. Empty (not an error) when signed out —

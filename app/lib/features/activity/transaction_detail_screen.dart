@@ -449,7 +449,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       return 'Debit card (unmatched)';
     }
     if (entry.instrument == TxnInstrument.creditCard && entry.instrumentKnown) {
-      return 'Credit card (unmatched)';
+      final last4 = entry.cardLast4;
+      return last4 == null || last4.isEmpty
+          ? 'Credit card (unmatched)'
+          : 'Credit card ending $last4';
     }
     if (entry.instrument == TxnInstrument.wallet) return 'Wallet';
     if (entry.instrument == TxnInstrument.cash) return 'Cash';

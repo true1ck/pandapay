@@ -430,6 +430,8 @@ class _TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final subtitleParts = <String>[
       if (entry.cardDisplayName != null) entry.cardDisplayName!,
+      if (entry.cardDisplayName == null && entry.instrument == TxnInstrument.creditCard)
+        entry.cardLast4 == null ? 'Credit card · unmatched' : 'Credit card ending ${entry.cardLast4}',
       if (entry.categoryName != null) entry.categoryName!,
     ];
     // See account_screen.dart's _AccountTile for why Pressable, not InkWell.
