@@ -124,6 +124,35 @@ void main() {
     expect(find.textContaining('1.00% back on what you spent here'), findsOneWidget);
   });
 
+  testWidgets('shows each credit card as its own spend row', (tester) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 1800,
+        byCard: [
+          CardSpendRow(
+            cardId: 'uc-1',
+            cardName: 'HDFC Millennia',
+            total: Money.fromRupees(1200),
+            rewards: Money.zero,
+            txnCount: 2,
+          ),
+          CardSpendRow(
+            cardId: 'uc-2',
+            cardName: 'Axis Ace',
+            total: Money.fromRupees(600),
+            rewards: Money.zero,
+            txnCount: 1,
+          ),
+        ],
+      ),
+    );
+    expect(find.text('HDFC Millennia'), findsOneWidget);
+    expect(find.text('Axis Ace'), findsOneWidget);
+    expect(find.text('2 transactions'), findsOneWidget);
+    expect(find.text('1 transaction'), findsOneWidget);
+  });
+
   testWidgets('shows detected payment methods separately from card rows', (tester) async {
     await _pump(
       tester,

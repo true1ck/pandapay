@@ -615,6 +615,11 @@ class _CardRow extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 2),
+          Text(
+            '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'}',
+            style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+          ),
           if (rate != null && !row.rewards.isZero) ...[
             const SizedBox(height: 2),
             Text(

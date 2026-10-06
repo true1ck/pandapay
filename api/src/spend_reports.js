@@ -273,19 +273,34 @@ async function spendByMerchant(client, userId, { start, end }, limit = 15) {
  */
 async function spendByCard(client, userId, { start, end }) {
   const result = await client.query(
-    `SELECT t.user_card_id,
-            t.instrument,
-            cp.name AS card_name, uc.nickname AS card_nickname,
-            cp.annual_fee_inr,
-            COALESCE(SUM(t.amount_inr), 0) AS total,
-            COALESCE(SUM(t.expected_value_inr), 0) AS rewards,
+    `WITH transaction_rows AS (
+       SELECT t.user_card_id,
+              t.instrument,
+              cp.name AS card_name, uc.nickname AS card_nickname,
+              cp.annual_fee_inr,
+              t.amount_inr, t.expected_value_inr,
+              CASE WHEN t.user_card_id IS NULL THEN
+                (SELECT o.metadata->>'cardLast4'
+                   FROM transaction_observations o
+                  WHERE o.transaction_id = t.id
+                    AND o.source IN ('sms', 'sms_bulk')
+                  ORDER BY o.observed_at DESC
+                  LIMIT 1)
+              END AS card_last4
+         FROM transactions t
+         LEFT JOIN user_cards uc ON uc.id = t.user_card_id
+         LEFT JOIN card_products cp ON cp.id = uc.card_product_id
+        WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+          AND t.occurred_at >= $2 AND t.occurred_at < $3
+     )
+     SELECT user_card_id, instrument, card_name, card_nickname,
+            annual_fee_inr, card_last4,
+            COALESCE(SUM(amount_inr), 0) AS total,
+            COALESCE(SUM(expected_value_inr), 0) AS rewards,
             COUNT(*) AS txn_count
-       FROM transactions t
-       LEFT JOIN user_cards uc ON uc.id = t.user_card_id
-       LEFT JOIN card_products cp ON cp.id = uc.card_product_id
-      WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
-        AND t.occurred_at >= $2 AND t.occurred_at < $3
-      GROUP BY t.user_card_id, t.instrument, cp.name, uc.nickname, cp.annual_fee_inr
+       FROM transaction_rows
+      GROUP BY user_card_id, instrument, card_name, card_nickname,
+               annual_fee_inr, card_last4
       ORDER BY total DESC`,
     [userId, start, end]
   );
@@ -297,9 +312,9 @@ async function spendByCard(client, userId, { start, end }) {
       cardName: r.card_nickname || r.card_name || (r.instrument === 'upi_bank'
         ? 'UPI / bank account'
         : r.instrument === 'debit_card'
-          ? 'Debit card (unmatched)'
+          ? (r.card_last4 ? `Debit card ending ${r.card_last4} (unlinked)` : 'Debit card (unmatched)')
           : r.instrument === 'credit_card'
-            ? 'Credit card (unmatched)'
+            ? (r.card_last4 ? `Credit card ending ${r.card_last4} (unlinked)` : 'Credit card (unmatched)')
             : r.instrument === 'wallet'
               ? 'Wallet'
               : 'Cash & other'),
@@ -341,20 +356,34 @@ async function spendByInstrument(client, userId, { start, end }) {
 /** Spend split by the resolved card/payment method and category together. */
 async function spendByCardCategory(client, userId, { start, end }) {
   const result = await client.query(
-    `SELECT t.user_card_id,
-            t.instrument,
-            cp.name AS card_name, uc.nickname AS card_nickname,
-            sc.id AS category_id, sc.name AS category_name,
-            COALESCE(SUM(t.amount_inr), 0) AS total,
+    `WITH transaction_rows AS (
+       SELECT t.user_card_id,
+              t.instrument,
+              cp.name AS card_name, uc.nickname AS card_nickname,
+              sc.id AS category_id, sc.name AS category_name,
+              t.amount_inr,
+              CASE WHEN t.user_card_id IS NULL THEN
+                (SELECT o.metadata->>'cardLast4'
+                   FROM transaction_observations o
+                  WHERE o.transaction_id = t.id
+                    AND o.source IN ('sms', 'sms_bulk')
+                  ORDER BY o.observed_at DESC
+                  LIMIT 1)
+              END AS card_last4
+         FROM transactions t
+         LEFT JOIN user_cards uc ON uc.id = t.user_card_id
+         LEFT JOIN card_products cp ON cp.id = uc.card_product_id
+         LEFT JOIN spend_categories sc ON sc.id = t.category_id
+        WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+          AND t.occurred_at >= $2 AND t.occurred_at < $3
+     )
+     SELECT user_card_id, instrument, card_name, card_nickname,
+            category_id, category_name, card_last4,
+            COALESCE(SUM(amount_inr), 0) AS total,
             COUNT(*) AS txn_count
-       FROM transactions t
-       LEFT JOIN user_cards uc ON uc.id = t.user_card_id
-       LEFT JOIN card_products cp ON cp.id = uc.card_product_id
-       LEFT JOIN spend_categories sc ON sc.id = t.category_id
-      WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
-        AND t.occurred_at >= $2 AND t.occurred_at < $3
-      GROUP BY t.user_card_id, t.instrument, cp.name, uc.nickname,
-               sc.id, sc.name
+       FROM transaction_rows
+      GROUP BY user_card_id, instrument, card_name, card_nickname,
+               category_id, category_name, card_last4
       ORDER BY total DESC`,
     [userId, start, end]
   );
@@ -363,9 +392,9 @@ async function spendByCardCategory(client, userId, { start, end }) {
     cardName: r.card_nickname || r.card_name || (r.instrument === 'upi_bank'
       ? 'UPI / bank account'
       : r.instrument === 'debit_card'
-        ? 'Debit card (unmatched)'
+        ? (r.card_last4 ? `Debit card ending ${r.card_last4} (unlinked)` : 'Debit card (unmatched)')
         : r.instrument === 'credit_card'
-          ? 'Credit card (unmatched)'
+          ? (r.card_last4 ? `Credit card ending ${r.card_last4} (unlinked)` : 'Credit card (unmatched)')
           : r.instrument === 'wallet'
             ? 'Wallet'
             : 'Cash & other'),

@@ -193,7 +193,8 @@ test('card breakdown labels unmatched UPI and card rows instead of calling every
       return {
         rows: [
           { user_card_id: null, instrument: 'upi_bank', card_name: null, card_nickname: null, annual_fee_inr: null, total: '500.00', rewards: '0', txn_count: '1' },
-          { user_card_id: null, instrument: 'credit_card', card_name: null, card_nickname: null, annual_fee_inr: null, total: '800.00', rewards: '0', txn_count: '1' },
+          { user_card_id: null, instrument: 'credit_card', card_name: null, card_nickname: null, card_last4: '9080', annual_fee_inr: null, total: '800.00', rewards: '0', txn_count: '1' },
+          { user_card_id: null, instrument: 'credit_card', card_name: null, card_nickname: null, card_last4: '1366', annual_fee_inr: null, total: '200.00', rewards: '0', txn_count: '1' },
           { user_card_id: 'uc-1', instrument: 'credit_card', card_name: 'HDFC Millennia', card_nickname: null, annual_fee_inr: '1000', total: '1000.00', rewards: '20', txn_count: '1' },
         ],
       };
@@ -204,7 +205,8 @@ test('card breakdown labels unmatched UPI and card rows instead of calling every
     await spendByCard(client, 'user-1', { start: 'start', end: 'end' }),
     [
       { cardId: null, cardName: 'UPI / bank account', annualFeeInr: null, totalInr: 500, rewardsInr: 0, txnCount: 1, effectiveRatePerRupee: 0 },
-      { cardId: null, cardName: 'Credit card (unmatched)', annualFeeInr: null, totalInr: 800, rewardsInr: 0, txnCount: 1, effectiveRatePerRupee: 0 },
+      { cardId: null, cardName: 'Credit card ending 9080 (unlinked)', annualFeeInr: null, totalInr: 800, rewardsInr: 0, txnCount: 1, effectiveRatePerRupee: 0 },
+      { cardId: null, cardName: 'Credit card ending 1366 (unlinked)', annualFeeInr: null, totalInr: 200, rewardsInr: 0, txnCount: 1, effectiveRatePerRupee: 0 },
       { cardId: 'uc-1', cardName: 'HDFC Millennia', annualFeeInr: 1000, totalInr: 1000, rewardsInr: 20, txnCount: 1, effectiveRatePerRupee: 0.02 },
     ],
   );
