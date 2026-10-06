@@ -414,3 +414,16 @@ test('synthetic live-SMS matrix auto-parses completed spend alerts and rejects n
   assert.equal(otp.ok, false);
   assert.equal(otp.reason, 'security_message');
 });
+
+test('Slice UPI credit-card alerts remain card transactions, not bank-account UPI', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'VM-SLCBNK-S',
+    body: 'Rs. 80 spent on your credit card xx9080 at Shantesh gurudas gaude on 14-Jul-26 (UPI Ref: 619586155507). Not you? Call 080-4832-9999 - slice',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 80);
+  assert.equal(result.fields.last4, '9080');
+  assert.equal(result.fields.merchant, 'Shantesh gurudas gaude');
+  assert.equal(result.fields.instrument, 'credit_card');
+});

@@ -2638,7 +2638,13 @@ async function insertTransactionAndUpdateState(client, userId, {
   // investments in particular must never accrue cap progress: they aren't
   // spend at all, and counting them would inflate every reward figure on
   // the card they happened to be filed against.
-  const movesCardState = resolvedInstrument === 'credit_card' && resolvedEntryKind === 'spend';
+  // A card alert can be perfectly valid even when the user has not saved
+  // that card yet (or its last four digits are missing). Keep the payment
+  // instrument as credit_card so reports do not silently relabel it as
+  // "Other". Only card-state side effects require a concrete user_card row.
+  const movesCardState = resolvedInstrument === 'credit_card'
+    && resolvedEntryKind === 'spend'
+    && Boolean(userCardId);
 
   const userCard = movesCardState ? await loadUserCardForState(client, userId, userCardId) : null;
   if (movesCardState && !userCard) return { status: 404, error: 'user_card not found' };
@@ -2773,8 +2779,9 @@ async function insertTransactionAndUpdateState(client, userId, {
  * Everything those four used to duplicate — or, worse, not do at all — lives
  * here: resolving which card the message belongs to and resolving what kind of
  * spend it was. A valid spend is always inserted; if a credit-card alert has
- * no unambiguous card match, it is retained as a cardless `other` transaction
- * instead of blocking the user's spending history behind a review queue.
+ * no unambiguous card match, it is retained as a cardless transaction with
+ * its detected payment instrument instead of blocking the user's spending
+ * history behind a review queue.
  *
  * Every import route previously REQUIRED the caller to supply `userCardId`,
  * so no transaction was ever recorded without a person tapping a card for
@@ -2825,11 +2832,11 @@ async function importParsedMessage(client, userId, {
   }
 
   if (instrument === 'credit_card' && !userCardId) {
-    // Do not make the user classify normal spending. A cardless transaction
-    // is still useful for totals, trends, and merchant/category reporting,
-    // while avoiding a dangerous guess against an unrelated card. The
-    // transaction row remains eligible for future card enrichment.
-    instrument = 'other';
+    // Do not make the user classify normal spending and do not erase the
+    // strongest payment-method evidence. A cardless credit-card transaction
+    // is still useful for totals, trends, category reporting, and the
+    // "Credit card (unmatched)" bucket. It can be linked later when the user
+    // adds the card or corrects its last four digits.
     matchBasis = 'unresolved-cardless';
   }
 
@@ -3510,6 +3517,11 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
         explicitUserCardId: userCardId,
         explicitCategoryId: categoryId || null,
         rail,
+        observationMetadata: {
+          transport: 'sms',
+          ...(parsed.fields.last4 ? { cardLast4: parsed.fields.last4 } : {}),
+          ...(patternRow?.issuer_id ? { patternIssuerId: patternRow.issuer_id } : {}),
+        },
       });
 
       if (inserted.needsReview) {
@@ -3635,6 +3647,11 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           explicitUserCardId: userCardId,
           explicitCategoryId: categoryId || null,
           rail,
+          observationMetadata: {
+            transport: 'sms',
+            ...(parsed.fields.last4 ? { cardLast4: parsed.fields.last4 } : {}),
+            ...(patternRow?.issuer_id ? { patternIssuerId: patternRow.issuer_id } : {}),
+          },
         });
 
         if (inserted.needsReview) {
