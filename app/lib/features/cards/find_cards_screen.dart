@@ -414,7 +414,18 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           final local = repo == null ? await ref.read(localUserCardsRepositoryProvider.future) : null;
           for (final c in picked) {
             if (repo != null) {
-              await repo.addCard(c.id);
+              final userCardId = await repo.addCard(
+                c.id,
+                last4: picked.length == 1 && card.last4.isNotEmpty
+                    ? card.last4.first
+                    : null,
+              );
+              if (picked.length == 1 && card.creditLimit != null) {
+                await repo.updateCard(
+                  userCardId,
+                  creditLimitInr: card.creditLimit!.rupees,
+                );
+              }
             } else {
               await local!.addCard(c.id);
             }
@@ -440,7 +451,20 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       final repo = ref.read(userCardsRepositoryProvider);
       final local = repo == null ? await ref.read(localUserCardsRepositoryProvider.future) : null;
       if (repo != null) {
-        await repo.addCard(productId);
+        final userCardId = await repo.addCard(
+          productId,
+          last4: card.last4.isEmpty ? null : card.last4.first,
+        );
+        // A limit discovered in a bank alert is useful immediately, but is
+        // still written through the normal card-edit endpoint so the server
+        // remains the source of truth and the value is visible to
+        // utilization without a second manual setup step.
+        if (card.creditLimit != null) {
+          await repo.updateCard(
+            userCardId,
+            creditLimitInr: card.creditLimit!.rupees,
+          );
+        }
       } else {
         await local!.addCard(productId);
       }
@@ -678,6 +702,13 @@ class _SuggestionCardState extends State<_SuggestionCard> {
             'Found in $sources — ${card.evidence.take(3).join(', ')}',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.45),
           ),
+          if (card.creditLimit != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Detected credit limit ${card.creditLimit!.format(hidePaise: true)} from a bank SMS',
+              style: BambooFonts.ui(12.5, color: BambooInk.jade, height: 1.4),
+            ),
+          ],
           if (hasNetworkChoice && !widget.added) ...[
             const SizedBox(height: AppSpace.md),
             Text(

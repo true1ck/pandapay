@@ -141,7 +141,7 @@ final insightsOverviewProvider = FutureProvider.family<InsightsOverview, Insight
   // The API exposes entry_kind so this remains correct for SMS-imported rows
   // as well as manually logged rows.
   final active = transactions
-      .where((t) => t.status == 'active' && t.entryKind == TxnEntryKind.spend)
+      .where((t) => t.status == 'active' && t.entryKind == TxnEntryKind.spend && t.amount.paise > 0)
       .toList();
   if (active.isEmpty) return InsightsOverview.empty;
 
@@ -160,7 +160,7 @@ final insightsOverviewProvider = FutureProvider.family<InsightsOverview, Insight
     // left out of the earned total and its category bar entirely rather
     // than dragging both down towards zero.
     final reward = txn.rewardValue;
-    if (reward != null) {
+    if (reward != null && !reward.isNegative) {
       earned += reward;
       final categoryLabel = txn.categoryName ?? 'Other';
       byCategory[categoryLabel] = (byCategory[categoryLabel] ?? const Money.zero()) + reward;

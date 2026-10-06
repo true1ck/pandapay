@@ -44,7 +44,8 @@ const BUILTIN_CATEGORY_RULES = [
 
   { slug: 'entertainment', priority: 60, patterns: [
     'netflix', 'hotstar', 'disneyplus', 'spotify', 'bookmyshow', 'sonyliv',
-    'jiocinema', 'primevideo', 'gaana', 'wynk',
+    'jiocinema', 'primevideo', 'amazonprime', 'chatgpt', 'openai', 'youtube',
+    'googleone', 'gaana', 'wynk',
   ] },
 
   { slug: 'health', priority: 70, patterns: [

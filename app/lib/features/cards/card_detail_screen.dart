@@ -14,9 +14,11 @@ import '../../data/spend_reports_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 
-const _assumedGracePeriodDays = 20; // matches billing_float_screen.dart's own assumption
+const _assumedGracePeriodDays =
+    20; // matches billing_float_screen.dart's own assumption
 
-/// C2 Card Detail — tabbed (ui-spec Group C, implementation-plan-group-c-d.md).
+/// C2 Card Detail — one vertically scrollable card report (ui-spec Group C,
+/// implementation-plan-group-c-d.md).
 /// Deep-linkable at /cards/:id. Reads [myCardsWithProductProvider] (not
 /// ownedCardsWithProductProvider) deliberately — a card reached from C1's
 /// archived filter must still resolve here, read-only.
@@ -24,125 +26,207 @@ class CardDetailScreen extends ConsumerWidget {
   final String userCardId;
   final int initialTabIndex;
 
-  const CardDetailScreen({super.key, required this.userCardId, this.initialTabIndex = 0});
+  const CardDetailScreen({
+    super.key,
+    required this.userCardId,
+    this.initialTabIndex = 0,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pairs = ref.watch(myCardsWithProductProvider);
-    return DefaultTabController(
-      length: 7,
-      initialIndex: initialTabIndex < 0
-          ? 0
-          : initialTabIndex > 6
-              ? 6
-              : initialTabIndex,
-      child: Scaffold(
+    return Scaffold(
+      backgroundColor: BambooInk.paper,
+      appBar: AppBar(
         backgroundColor: BambooInk.paper,
-        appBar: AppBar(
-          backgroundColor: BambooInk.paper,
-          foregroundColor: BambooInk.ink900,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          title: Text(
-            pairs.valueOrNull
-                    ?.where((p) => p.$1.id == userCardId)
-                    .map((p) => p.$1.nickname?.isNotEmpty == true ? p.$1.nickname! : p.$2.name)
-                    .firstOrNull ??
-                'Card detail',
-            style: BambooFonts.heading(17, color: BambooInk.ink900),
-          ),
-          actions: [
-            if (pairs.valueOrNull?.any((p) => p.$1.id == userCardId) ?? false) ...[
-              IconButton(
-                tooltip: 'Edit',
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () => context.push('/cards/$userCardId/edit'),
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          pairs.valueOrNull
+                  ?.where((p) => p.$1.id == userCardId)
+                  .map(
+                    (p) => p.$1.nickname?.isNotEmpty == true
+                        ? p.$1.nickname!
+                        : p.$2.name,
+                  )
+                  .firstOrNull ??
+              'Card detail',
+          style: BambooFonts.heading(17, color: BambooInk.ink900),
+        ),
+        actions: [
+          if (pairs.valueOrNull?.any((p) => p.$1.id == userCardId) ??
+              false) ...[
+            IconButton(
+              tooltip: 'Edit',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => context.push('/cards/$userCardId/edit'),
+            ),
+            IconButton(
+              tooltip: 'Report wrong data',
+              icon: const Icon(Icons.flag_outlined),
+              onPressed: () => context.push(
+                '${AppRoute.reportWrongData}?cardProductId=${pairs.requireValue.firstWhere((p) => p.$1.id == userCardId).$2.id}',
               ),
-              IconButton(
-                tooltip: 'Report wrong data',
-                icon: const Icon(Icons.flag_outlined),
-                onPressed: () => context.push(
-                  '${AppRoute.reportWrongData}?cardProductId=${pairs.requireValue.firstWhere((p) => p.$1.id == userCardId).$2.id}',
+            ),
+            // Design 23 Card actions — pause / report lost / default /
+            // remove. Kept off the tab bar below: those six tabs are all
+            // *readings* of the card, these are the things that change it.
+            IconButton(
+              tooltip: 'Card actions',
+              icon: const Icon(Icons.more_horiz_rounded),
+              onPressed: () {
+                final pair = pairs.requireValue.firstWhere(
+                  (p) => p.$1.id == userCardId,
+                );
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        CardActionsScreen(card: pair.$1, product: pair.$2),
+                  ),
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+      body: AppBackground(
+        child: Column(
+          children: [
+            OfflineBanner(
+              gutter: AppSpace.lg,
+              onRetry: () => ref.invalidate(myCardsProvider),
+            ),
+            Expanded(
+              child: pairs.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                  child: SkeletonList(count: 4),
                 ),
-              ),
-              // Design 23 Card actions — pause / report lost / default /
-              // remove. Kept off the tab bar below: those six tabs are all
-              // *readings* of the card, these are the things that change it.
-              IconButton(
-                tooltip: 'Card actions',
-                icon: const Icon(Icons.more_horiz_rounded),
-                onPressed: () {
-                  final pair = pairs.requireValue.firstWhere((p) => p.$1.id == userCardId);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => CardActionsScreen(card: pair.$1, product: pair.$2),
+                error: (err, _) => ErrorState(
+                  message: userFacingErrorMessage(err),
+                  onRetry: () => ref.invalidate(myCardsProvider),
+                ),
+                data: (owned) {
+                  final match = owned
+                      .where((p) => p.$1.id == userCardId)
+                      .firstOrNull;
+                  if (match == null) {
+                    return const ErrorState(
+                      message:
+                          'This card could not be found — it may have been removed.',
+                    );
+                  }
+                  final (userCard, product) = match;
+                  final sections = [
+                    (
+                      label: 'Rewards',
+                      body: _RewardsTab(product: product, embedded: true),
                     ),
+                    (
+                      label: 'Spend',
+                      body: _SpendTab(
+                        userCard: userCard,
+                        product: product,
+                        embedded: true,
+                      ),
+                    ),
+                    (
+                      label: 'Caps',
+                      body: _CapsTab(
+                        userCard: userCard,
+                        product: product,
+                        embedded: true,
+                      ),
+                    ),
+                    (
+                      label: 'Milestones',
+                      body: _MilestonesTab(
+                        userCard: userCard,
+                        product: product,
+                        embedded: true,
+                      ),
+                    ),
+                    (
+                      label: 'Fees',
+                      body: _FeesTab(
+                        userCard: userCard,
+                        product: product,
+                        embedded: true,
+                      ),
+                    ),
+                    (
+                      label: 'Benefits',
+                      body: _BenefitsTab(product: product, embedded: true),
+                    ),
+                    (
+                      label: 'Statement',
+                      body: _StatementTab(userCard: userCard, embedded: true),
+                    ),
+                  ];
+                  final selected = initialTabIndex.clamp(
+                    0,
+                    sections.length - 1,
+                  );
+                  final ordered = [
+                    ...sections.skip(selected),
+                    ...sections.take(selected),
+                  ];
+                  return ListView(
+                    key: const ValueKey('cardDetailScroll'),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpace.lg,
+                      AppSpace.lg,
+                      AppSpace.lg,
+                      AppSpace.xl,
+                    ),
+                    children: [
+                      for (final section in ordered)
+                        _CardDetailSection(
+                          label: section.label,
+                          body: section.body,
+                        ),
+                    ],
                   );
                 },
               ),
-            ],
+            ),
           ],
-          bottom: TabBar(
-            isScrollable: true,
-            labelColor: BambooInk.slate,
-            unselectedLabelColor: BambooInk.ink500,
-            indicatorColor: BambooInk.slate,
-            labelStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
-            unselectedLabelStyle: BambooFonts.ui(13.5, weight: FontWeight.w500),
-            tabs: const [
-              Tab(text: 'Rewards'),
-              // First after Rewards: "what has this card actually done for
-              // me" is the question the other five tabs only answer
-              // indirectly, and it's the one that decides whether the
-              // annual fee is worth paying.
-              Tab(text: 'Spend'),
-              Tab(text: 'Caps'),
-              Tab(text: 'Milestones'),
-              Tab(text: 'Fees'),
-              Tab(text: 'Benefits'),
-              Tab(text: 'Statement'),
-            ],
-          ),
         ),
-        body: AppBackground(
-          child: Column(
-            children: [
-              OfflineBanner(gutter: AppSpace.lg, onRetry: () => ref.invalidate(myCardsProvider)),
-              Expanded(
-                child: pairs.when(
-                  loading: () => const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
-                    child: SkeletonList(count: 4),
-                  ),
-                  error: (err, _) => ErrorState(
-                    message: userFacingErrorMessage(err),
-                    onRetry: () => ref.invalidate(myCardsProvider),
-                  ),
-                  data: (owned) {
-                    final match = owned.where((p) => p.$1.id == userCardId).firstOrNull;
-                    if (match == null) {
-                      return const ErrorState(
-                        message: 'This card could not be found — it may have been removed.',
-                      );
-                    }
-                    final (userCard, product) = match;
-                    return TabBarView(
-                      children: [
-                        _RewardsTab(product: product),
-                        _SpendTab(userCard: userCard, product: product),
-                        _CapsTab(userCard: userCard, product: product),
-                        _MilestonesTab(userCard: userCard, product: product),
-                        _FeesTab(userCard: userCard, product: product),
-                        _BenefitsTab(product: product),
-                        _StatementTab(userCard: userCard),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ],
+      ),
+    );
+  }
+}
+
+class _CardDetailSection extends StatelessWidget {
+  final String label;
+  final Widget body;
+
+  const _CardDetailSection({required this.label, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(
+              left: AppSpace.xs,
+              bottom: AppSpace.sm,
+            ),
+            child: Text(
+              label.toUpperCase(),
+              style: BambooFonts.ui(
+                12,
+                weight: FontWeight.w700,
+                color: BambooInk.ink500,
+              ).copyWith(letterSpacing: 1),
+            ),
           ),
-        ),
+          body,
+        ],
       ),
     );
   }
@@ -163,7 +247,12 @@ class CardDetailScreen extends ConsumerWidget {
 class _SpendTab extends ConsumerWidget {
   final UserCard userCard;
   final CardProduct product;
-  const _SpendTab({required this.userCard, required this.product});
+  final bool embedded;
+  const _SpendTab({
+    required this.userCard,
+    required this.product,
+    this.embedded = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -183,16 +272,20 @@ class _SpendTab extends ConsumerWidget {
           return const EmptyState(
             icon: Icons.lock_outline_rounded,
             title: 'Sign in to see this card\'s spending',
-            message: 'Per-card reports are built from your transaction history, which lives with '
+            message:
+                'Per-card reports are built from your transaction history, which lives with '
                 'your account.',
           );
         }
-        final row = data.byCard.where((c) => c.cardId == userCard.id).firstOrNull;
+        final row = data.byCard
+            .where((c) => c.cardId == userCard.id)
+            .firstOrNull;
         if (row == null || row.total.isZero) {
           return const EmptyState(
             icon: Icons.show_chart_rounded,
             title: 'Nothing on this card this month',
-            message: 'Once spend is logged against this card, you\'ll see what it earned and the '
+            message:
+                'Once spend is logged against this card, you\'ll see what it earned and the '
                 'rate it really paid.',
           );
         }
@@ -207,7 +300,11 @@ class _SpendTab extends ConsumerWidget {
         final annualisedRewards = row.rewards * 12;
 
         return ListView(
-          padding: const EdgeInsets.all(AppSpace.lg),
+          padding: embedded
+              ? EdgeInsets.zero
+              : const EdgeInsets.all(AppSpace.lg),
+          shrinkWrap: embedded,
+          physics: embedded ? const NeverScrollableScrollPhysics() : null,
           children: [
             _SpendStatCard(
               label: 'Spent this month',
@@ -280,7 +377,8 @@ class _SpendStatCard extends StatelessWidget {
 
 class _RewardsTab extends ConsumerWidget {
   final CardProduct product;
-  const _RewardsTab({required this.product});
+  final bool embedded;
+  const _RewardsTab({required this.product, this.embedded = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -296,15 +394,22 @@ class _RewardsTab extends ConsumerWidget {
 
     final rules = List<RewardRule>.from(product.rewardRules)
       ..sort((a, b) => a.priority.compareTo(b.priority));
-    final hasFuelInRules = rules.any((r) =>
-        (fuelCategory != null && r.categoryId == fuelCategory.id) ||
-        r.categoryId == 'fuel');
+    final hasFuelInRules = rules.any(
+      (r) =>
+          (fuelCategory != null && r.categoryId == fuelCategory.id) ||
+          r.categoryId == 'fuel',
+    );
 
     if (rules.isEmpty && product.fuelRule == null) {
-      return const EmptyState(icon: Icons.percent_outlined, title: 'No reward structure on file yet');
+      return const EmptyState(
+        icon: Icons.percent_outlined,
+        title: 'No reward structure on file yet',
+      );
     }
     return ListView(
-      padding: const EdgeInsets.all(AppSpace.lg),
+      padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
+      shrinkWrap: embedded,
+      physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
         if (product.verifiedAt != null)
           Padding(
@@ -319,10 +424,14 @@ class _RewardsTab extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: Builder(
               builder: (context) {
-                final isFuelRule = (fuelCategory != null && rule.categoryId == fuelCategory.id) ||
+                final isFuelRule =
+                    (fuelCategory != null &&
+                        rule.categoryId == fuelCategory.id) ||
                     rule.categoryId == 'fuel';
                 final String rateText;
-                if (isFuelRule && product.fuelRule != null && product.fuelRule!.waiverPercent > 0) {
+                if (isFuelRule &&
+                    product.fuelRule != null &&
+                    product.fuelRule!.waiverPercent > 0) {
                   rateText = rule.rate == 0
                       ? '${_rate(product.fuelRule!.waiverPercent)}% waiver'
                       : '${_rate(rule.rate)}% + ${_rate(product.fuelRule!.waiverPercent)}% waiver';
@@ -345,23 +454,37 @@ class _RewardsTab extends ConsumerWidget {
                           children: [
                             Text(
                               categoryName(rule.categoryId),
-                              style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                              style: BambooFonts.heading(
+                                14.5,
+                                color: BambooInk.ink900,
+                              ),
                             ),
                             if (rule.rail != null) ...[
                               const SizedBox(height: 2),
-                              Text(_railLabel(rule.rail!), style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                              Text(
+                                _railLabel(rule.rail!),
+                                style: BambooFonts.ui(
+                                  12.5,
+                                  color: BambooInk.ink500,
+                                ),
+                              ),
                             ],
                           ],
                         ),
                       ),
-                      Text(rateText, style: BambooFonts.heading(17, color: BambooInk.ink900)),
+                      Text(
+                        rateText,
+                        style: BambooFonts.heading(17, color: BambooInk.ink900),
+                      ),
                     ],
                   ),
                 );
               },
             ),
           ),
-        if (!hasFuelInRules && product.fuelRule != null && product.fuelRule!.waiverPercent > 0)
+        if (!hasFuelInRules &&
+            product.fuelRule != null &&
+            product.fuelRule!.waiverPercent > 0)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: Container(
@@ -379,15 +502,23 @@ class _RewardsTab extends ConsumerWidget {
                       children: [
                         Text(
                           'Fuel',
-                          style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                          style: BambooFonts.heading(
+                            14.5,
+                            color: BambooInk.ink900,
+                          ),
                         ),
                         const SizedBox(height: 2),
-                        Text('Surcharge waiver', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                        Text(
+                          'Surcharge waiver',
+                          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                        ),
                       ],
                     ),
                   ),
-                  Text('${_rate(product.fuelRule!.waiverPercent)}% waiver',
-                      style: BambooFonts.heading(17, color: BambooInk.ink900)),
+                  Text(
+                    '${_rate(product.fuelRule!.waiverPercent)}% waiver',
+                    style: BambooFonts.heading(17, color: BambooInk.ink900),
+                  ),
                 ],
               ),
             ),
@@ -400,7 +531,8 @@ class _RewardsTab extends ConsumerWidget {
       rate == rate.roundToDouble() ? rate.toStringAsFixed(0) : rate.toString();
 
   static String _rateLabel(RewardRule rule) => switch (rule.unit) {
-    RewardUnit.cashbackPercent || RewardUnit.discountPercent => '${_rate(rule.rate)}%',
+    RewardUnit.cashbackPercent ||
+    RewardUnit.discountPercent => '${_rate(rule.rate)}%',
     RewardUnit.pointsPer100 => '${_rate(rule.rate)} pts/₹100',
     RewardUnit.pointsPer150 => '${_rate(rule.rate)} pts/₹150',
     RewardUnit.pointsPer200 => '${_rate(rule.rate)} pts/₹200',
@@ -440,22 +572,33 @@ class _RewardsTab extends ConsumerWidget {
 class _CapsTab extends StatelessWidget {
   final UserCard userCard;
   final CardProduct product;
-  const _CapsTab({required this.userCard, required this.product});
+  final bool embedded;
+  const _CapsTab({
+    required this.userCard,
+    required this.product,
+    this.embedded = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (product.capRules.isEmpty && product.fuelRule == null) {
-      return const EmptyState(icon: Icons.speed_outlined, title: 'No caps on this card');
+      return const EmptyState(
+        icon: Icons.speed_outlined,
+        title: 'No caps on this card',
+      );
     }
     return ListView(
-      padding: const EdgeInsets.all(AppSpace.lg),
+      padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
+      shrinkWrap: embedded,
+      physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
         for (final cap in product.capRules)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.md),
             child: Builder(
               builder: (context) {
-                final consumed = userCard.capConsumed[cap.id] ?? const Money.zero();
+                final consumed =
+                    userCard.capConsumed[cap.id] ?? const Money.zero();
                 final ratio = capRatio(consumed, cap.capValue);
                 final isCount = cap.measure == CapMeasure.txnCount;
                 return Container(
@@ -468,7 +611,13 @@ class _CapsTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(cap.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                      Text(
+                        cap.label,
+                        style: BambooFonts.heading(
+                          14.5,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
                       const SizedBox(height: AppSpace.sm),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -503,7 +652,11 @@ class _CapsTab extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: AppSpace.sm),
               child: Text(
                 'Fuel surcharge waivers',
-                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w700,
+                  color: BambooInk.ink900,
+                ),
               ),
             ),
           ],
@@ -520,7 +673,9 @@ class _CapsTab extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
+                    userCard.nickname?.isNotEmpty == true
+                        ? userCard.nickname!
+                        : product.name,
                     style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                   ),
                   const SizedBox(height: 4),
@@ -552,39 +707,60 @@ class _CapsTab extends StatelessWidget {
 class _MilestonesTab extends StatelessWidget {
   final UserCard userCard;
   final CardProduct product;
-  const _MilestonesTab({required this.userCard, required this.product});
+  final bool embedded;
+  const _MilestonesTab({
+    required this.userCard,
+    required this.product,
+    this.embedded = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (product.milestoneRules.isEmpty) {
-      return const EmptyState(icon: Icons.flag_outlined, title: 'No milestones on this card');
+      return const EmptyState(
+        icon: Icons.flag_outlined,
+        title: 'No milestones on this card',
+      );
     }
     return ListView(
-      padding: const EdgeInsets.all(AppSpace.lg),
+      padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
+      shrinkWrap: embedded,
+      physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
         for (final milestone in product.milestoneRules)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.md),
             child: Builder(
               builder: (context) {
-                final qualified = userCard.milestoneQualifiedSpend[milestone.id] ?? const Money.zero();
-                final remainingPaise = (milestone.thresholdSpend.paise - qualified.paise).clamp(
-                  0,
-                  milestone.thresholdSpend.paise,
-                );
+                final qualified =
+                    userCard.milestoneQualifiedSpend[milestone.id] ??
+                    const Money.zero();
+                final remainingPaise =
+                    (milestone.thresholdSpend.paise - qualified.paise).clamp(
+                      0,
+                      milestone.thresholdSpend.paise,
+                    );
                 final remaining = Money.fromPaise(remainingPaise);
                 final ratio = milestone.thresholdSpend.isZero
                     ? 0.0
                     : capRatio(qualified, milestone.thresholdSpend);
                 final reached = remainingPaise == 0;
                 final periodEnd = userCard.milestonePeriodEnd[milestone.id];
-                final daysLeft = periodEnd == null ? null : daysUntil(periodEnd, DateTime.now());
+                final daysLeft = periodEnd == null
+                    ? null
+                    : daysUntil(periodEnd, DateTime.now());
 
                 return Container(
                   decoration: BoxDecoration(
-                    color: reached ? BambooInk.jade.withValues(alpha: 0.10) : BambooInk.glassFillOnPaper,
+                    color: reached
+                        ? BambooInk.jade.withValues(alpha: 0.10)
+                        : BambooInk.glassFillOnPaper,
                     borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: reached ? BambooInk.jade : BambooInk.hairlineOnPaper),
+                    border: Border.all(
+                      color: reached
+                          ? BambooInk.jade
+                          : BambooInk.hairlineOnPaper,
+                    ),
                   ),
                   padding: const EdgeInsets.all(AppSpace.lg),
                   child: Column(
@@ -595,7 +771,10 @@ class _MilestonesTab extends StatelessWidget {
                           Expanded(
                             child: Text(
                               milestone.label,
-                              style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                              style: BambooFonts.heading(
+                                14.5,
+                                color: BambooInk.ink900,
+                              ),
                             ),
                           ),
                           if (reached)
@@ -623,15 +802,28 @@ class _MilestonesTab extends StatelessWidget {
                         children: [
                           Text(
                             reached ? 'Reached' : '${remaining.format()} to go',
-                            style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                            style: BambooFonts.ui(
+                              12.5,
+                              weight: FontWeight.w700,
+                              color: BambooInk.ink900,
+                            ),
                           ),
                           Row(
                             children: [
-                              Text('Reward ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                              Text(
+                                'Reward ',
+                                style: BambooFonts.ui(
+                                  12.5,
+                                  color: BambooInk.ink500,
+                                ),
+                              ),
                               MoneyText(
                                 milestone.rewardValue,
                                 confidence: Confidence.estimated,
-                                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                                style: BambooFonts.ui(
+                                  12.5,
+                                  color: BambooInk.ink500,
+                                ),
                               ),
                             ],
                           ),
@@ -658,7 +850,12 @@ class _MilestonesTab extends StatelessWidget {
 class _FeesTab extends StatelessWidget {
   final UserCard userCard;
   final CardProduct product;
-  const _FeesTab({required this.userCard, required this.product});
+  final bool embedded;
+  const _FeesTab({
+    required this.userCard,
+    required this.product,
+    this.embedded = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -691,9 +888,15 @@ class _FeesTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   if (product.annualFeeInr == null)
-                    Text('Not recorded for this card', style: BambooFonts.ui(13.5, color: BambooInk.ink500))
+                    Text(
+                      'Not recorded for this card',
+                      style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                    )
                   else if (product.annualFeeInr!.isZero)
-                    Text('Lifetime free', style: BambooFonts.heading(20, color: BambooInk.jade))
+                    Text(
+                      'Lifetime free',
+                      style: BambooFonts.heading(20, color: BambooInk.jade),
+                    )
                   else
                     MoneyText(
                       product.annualFeeInr!,
@@ -719,7 +922,11 @@ class _FeesTab extends StatelessWidget {
                   MoneyText(
                     product.joiningFeeInr!,
                     confidence: Confidence.confirmed,
-                    style: BambooFonts.ui(15, weight: FontWeight.w600, color: BambooInk.ink900),
+                    style: BambooFonts.ui(
+                      15,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
                   ),
                 ],
               ),
@@ -730,15 +937,22 @@ class _FeesTab extends StatelessWidget {
 
     if (userCard.feeWaiverStates.isEmpty) {
       return ListView(
-        padding: const EdgeInsets.all(AppSpace.lg),
+        padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
+        shrinkWrap: embedded,
+        physics: embedded ? const NeverScrollableScrollPhysics() : null,
         children: [
           feeHeader,
-          const EmptyState(icon: Icons.card_giftcard_outlined, title: 'No fee-waiver rule on this card'),
+          const EmptyState(
+            icon: Icons.card_giftcard_outlined,
+            title: 'No fee-waiver rule on this card',
+          ),
         ],
       );
     }
     return ListView(
-      padding: const EdgeInsets.all(AppSpace.lg),
+      padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
+      shrinkWrap: embedded,
+      physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
         feeHeader,
         for (final fw in userCard.feeWaiverStates)
@@ -750,9 +964,15 @@ class _FeesTab extends StatelessWidget {
                 final ratio = capRatio(fw.qualifiedSpend, fw.thresholdSpend);
                 return Container(
                   decoration: BoxDecoration(
-                    color: waived ? BambooInk.jade.withValues(alpha: 0.10) : BambooInk.glassFillOnPaper,
+                    color: waived
+                        ? BambooInk.jade.withValues(alpha: 0.10)
+                        : BambooInk.glassFillOnPaper,
                     borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: waived ? BambooInk.jade : BambooInk.hairlineOnPaper),
+                    border: Border.all(
+                      color: waived
+                          ? BambooInk.jade
+                          : BambooInk.hairlineOnPaper,
+                    ),
                   ),
                   padding: const EdgeInsets.all(AppSpace.lg),
                   child: Column(
@@ -760,11 +980,20 @@ class _FeesTab extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Text('Fee waived at ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                          Text(
+                            'Fee waived at ',
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.ink500,
+                            ),
+                          ),
                           MoneyText(
                             fw.waivesFee,
                             confidence: Confidence.estimated,
-                            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.ink500,
+                            ),
                           ),
                           const Spacer(),
                           if (waived)
@@ -784,7 +1013,9 @@ class _FeesTab extends StatelessWidget {
                             value: ratio,
                             minHeight: 8,
                             backgroundColor: BambooInk.paperMuted,
-                            color: ratio >= 0.9 ? BambooInk.clay : BambooInk.jade,
+                            color: ratio >= 0.9
+                                ? BambooInk.clay
+                                : BambooInk.jade,
                           ),
                         ),
                         const SizedBox(height: AppSpace.sm),
@@ -814,7 +1045,8 @@ class _FeesTab extends StatelessWidget {
 
 class _BenefitsTab extends StatelessWidget {
   final CardProduct product;
-  const _BenefitsTab({required this.product});
+  final bool embedded;
+  const _BenefitsTab({required this.product, this.embedded = false});
 
   @override
   Widget build(BuildContext context) {
@@ -827,7 +1059,8 @@ class _BenefitsTab extends StatelessWidget {
           kind: BenefitKind.fuelSurcharge,
           label:
               '${product.fuelRule!.waiverPercent == product.fuelRule!.waiverPercent.roundToDouble() ? product.fuelRule!.waiverPercent.toStringAsFixed(0) : product.fuelRule!.waiverPercent.toStringAsFixed(2)}% fuel surcharge waiver',
-          description: 'Fuel surcharge waived'
+          description:
+              'Fuel surcharge waived'
               '${product.fuelRule!.minTxn != null ? " on transactions above ${product.fuelRule!.minTxn!.format()}" : ""}'
               '${product.fuelRule!.maxTxn != null ? " up to ${product.fuelRule!.maxTxn!.format()}" : ""}.',
         ),
@@ -839,7 +1072,9 @@ class _BenefitsTab extends StatelessWidget {
       );
     }
     return ListView(
-      padding: const EdgeInsets.all(AppSpace.lg),
+      padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
+      shrinkWrap: embedded,
+      physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
         for (final benefit in benefits)
           Padding(
@@ -854,10 +1089,16 @@ class _BenefitsTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(benefit.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                  Text(
+                    benefit.label,
+                    style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                  ),
                   if (benefit.description != null) ...[
                     const SizedBox(height: 4),
-                    Text(benefit.description!, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+                    Text(
+                      benefit.description!,
+                      style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                    ),
                   ],
                   if (benefit.quotaCount != null) ...[
                     const SizedBox(height: 4),
@@ -877,7 +1118,8 @@ class _BenefitsTab extends StatelessWidget {
 
 class _StatementTab extends StatelessWidget {
   final UserCard userCard;
-  const _StatementTab({required this.userCard});
+  final bool embedded;
+  const _StatementTab({required this.userCard, this.embedded = false});
 
   @override
   Widget build(BuildContext context) {
@@ -885,7 +1127,8 @@ class _StatementTab extends StatelessWidget {
       return const EmptyState(
         icon: Icons.receipt_long_outlined,
         title: 'Statement date not set',
-        message: 'Add a statement day from Edit Card to see your billing cycle and interest-free float here.',
+        message:
+            'Add a statement day from Edit Card to see your billing cycle and interest-free float here.',
       );
     }
     final float = billingCycleFloat(
@@ -893,7 +1136,9 @@ class _StatementTab extends StatelessWidget {
       gracePeriodDays: _assumedGracePeriodDays,
     );
     return ListView(
-      padding: const EdgeInsets.all(AppSpace.lg),
+      padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
+      shrinkWrap: embedded,
+      physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
         Container(
           decoration: BoxDecoration(

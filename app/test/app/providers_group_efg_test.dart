@@ -39,6 +39,17 @@ UserCard _owned(String cardProductId, {Money? creditLimit, Map<String, Money> ca
   );
 }
 
+TransactionEntry _creditSpend(String cardId, double amount) => TransactionEntry(
+  id: 'txn-$amount',
+  amount: Money.fromRupees(amount),
+  occurredAt: DateTime.now(),
+  userCardId: cardId,
+  instrument: TxnInstrument.creditCard,
+  entryKind: TxnEntryKind.spend,
+  source: 'sms',
+  status: 'active',
+);
+
 void main() {
   group('rankedRecommendationsProvider catalogue fallback', () {
     Future<List<Recommendation>> rankForWallet(List<UserCard> wallet) async {
@@ -117,11 +128,13 @@ void main() {
               _owned('a', creditLimit: Money.fromRupees(10000), capConsumed: {'cap1': Money.fromRupees(4000)}),
             ]),
         catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_flatRateCard('a', 2)])),
+        utilizationTransactionsProvider.overrideWith((ref) async => [_creditSpend('uc-a', 4000)]),
       ]);
       addTearDown(container.dispose);
 
       await container.read(userCardsProvider.future);
       await container.read(catalogueProvider.future);
+      await container.read(utilizationTransactionsProvider.future);
 
       final result = container.read(creditUtilizationProvider);
       expect(result.containsKey('uc-a'), isTrue);

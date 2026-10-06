@@ -22,6 +22,7 @@ Future<void> _pump(
   WidgetTester tester, {
   required List<CardProduct> catalogue,
   required List<UserCard> owned,
+  List<TransactionEntry> transactions = const [],
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -30,12 +31,24 @@ Future<void> _pump(
           _FakeCatalogueRepository(catalogue),
         ),
         userCardsProvider.overrideWith((ref) async => owned),
+        utilizationTransactionsProvider.overrideWith((ref) async => transactions),
       ],
       child: const MaterialApp(home: Scaffold(body: CreditUtilizationScreen())),
     ),
   );
   await tester.pumpAndSettle();
 }
+
+TransactionEntry _creditSpend(String cardId, double amount) => TransactionEntry(
+  id: 'txn-$amount',
+  amount: Money.fromRupees(amount),
+  occurredAt: DateTime.now(),
+  userCardId: cardId,
+  instrument: TxnInstrument.creditCard,
+  entryKind: TxnEntryKind.spend,
+  source: 'sms',
+  status: 'active',
+);
 
 void main() {
   testWidgets('shows an empty state when the wallet has no cards', (
@@ -154,7 +167,12 @@ void main() {
       capConsumed: {'cap1': Money.fromRupees(1000)}, // 10%
     );
 
-    await _pump(tester, catalogue: [product], owned: [owned]);
+    await _pump(
+      tester,
+      catalogue: [product],
+      owned: [owned],
+      transactions: [_creditSpend('uc1', 1000)],
+    );
 
     expect(find.text('10%'), findsOneWidget);
     expect(find.textContaining('Above the 30% guideline'), findsNothing);
@@ -177,7 +195,12 @@ void main() {
       capConsumed: {'cap1': Money.fromRupees(5000)}, // 50%
     );
 
-    await _pump(tester, catalogue: [product], owned: [owned]);
+    await _pump(
+      tester,
+      catalogue: [product],
+      owned: [owned],
+      transactions: [_creditSpend('uc1', 5000)],
+    );
 
     expect(find.text('50%'), findsOneWidget);
     expect(find.textContaining('Above the 30% guideline'), findsOneWidget);

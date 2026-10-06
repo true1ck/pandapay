@@ -31,8 +31,12 @@ Future<void> _pump(WidgetTester tester, Widget screen) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_EmptyCatalogueRepository()),
-        categoryRepositoryProvider.overrideWithValue(_EmptyCategoryRepository()),
+        catalogueRepositoryProvider.overrideWithValue(
+          _EmptyCatalogueRepository(),
+        ),
+        categoryRepositoryProvider.overrideWithValue(
+          _EmptyCategoryRepository(),
+        ),
         userCardsProvider.overrideWith((ref) async => const []),
         myCardsProvider.overrideWith((ref) async => const []),
       ],
@@ -43,7 +47,9 @@ Future<void> _pump(WidgetTester tester, Widget screen) async {
 }
 
 void main() {
-  testWidgets('a group shows every tab label and lands on the first', (tester) async {
+  testWidgets('a group shows every tab label and lands on the first', (
+    tester,
+  ) async {
     await _pump(
       tester,
       const GroupedInsightScreen(
@@ -60,10 +66,16 @@ void main() {
     for (final label in const ['This month', 'Missed', 'By card']) {
       expect(find.text(label), findsOneWidget);
     }
-    expect(find.byType(MonthlySavingsScreen), findsOneWidget, reason: 'first tab is the landing view');
+    expect(
+      find.byType(MonthlySavingsScreen),
+      findsOneWidget,
+      reason: 'first tab is the landing view',
+    );
   });
 
-  testWidgets('an embedded screen does not bring a second app bar with it', (tester) async {
+  testWidgets('an embedded screen does not bring a second app bar with it', (
+    tester,
+  ) async {
     // MissedOpportunitiesScreen owns a Scaffold when reached by its own
     // route. Inside a group it must render body-only, or the user sees two
     // stacked headers.
@@ -85,13 +97,16 @@ void main() {
     );
   });
 
-  testWidgets('it still renders its own chrome when reached as a standalone route', (tester) async {
-    // The old routes were kept working, not just kept compiling.
-    await _pump(tester, const MissedOpportunitiesScreen());
+  testWidgets(
+    'it still renders its own chrome when reached as a standalone route',
+    (tester) async {
+      // The old routes were kept working, not just kept compiling.
+      await _pump(tester, const MissedOpportunitiesScreen());
 
-    expect(find.text('Missed opportunities'), findsOneWidget);
-    expect(find.byType(AppBar), findsOneWidget);
-  });
+      expect(find.text('Missed opportunities'), findsOneWidget);
+      expect(find.byType(AppBar), findsOneWidget);
+    },
+  );
 
   testWidgets('switching tab swaps the body', (tester) async {
     await _pump(
@@ -108,5 +123,46 @@ void main() {
     await tester.tap(find.text('By card'));
     await tester.pumpAndSettle();
     expect(find.byType(PortfolioAuditScreen), findsOneWidget);
+  });
+
+  testWidgets('an initial index can deep-link directly to missed rewards', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      const GroupedInsightScreen(
+        title: 'Rewards',
+        initialIndex: 1,
+        tabs: [
+          (label: 'This month', body: MonthlySavingsScreen()),
+          (label: 'Missed', body: MissedOpportunitiesScreen(showChrome: false)),
+          (label: 'By card', body: PortfolioAuditScreen()),
+        ],
+      ),
+    );
+
+    expect(find.text('No missed opportunities in the last 90 days'), findsOneWidget);
+  });
+
+  testWidgets('vertical sections render without a swipeable tab bar', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      const GroupedInsightScreen(
+        title: 'Limits & perks',
+        verticalSections: true,
+        tabs: [
+          (label: 'Caps', body: Text('caps body')),
+          (label: 'Milestones', body: Text('milestones body')),
+        ],
+      ),
+    );
+
+    expect(find.byType(TabBar), findsNothing);
+    expect(find.text('CAPS'), findsOneWidget);
+    expect(find.text('MILESTONES'), findsOneWidget);
+    expect(find.text('caps body'), findsOneWidget);
+    expect(find.text('milestones body'), findsOneWidget);
   });
 }

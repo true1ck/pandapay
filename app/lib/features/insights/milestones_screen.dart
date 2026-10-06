@@ -8,6 +8,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
+import 'grouped_insight_screen.dart';
 
 /// ui-spec.md E4 Milestones. `MilestoneRule` (threshold, reward) and
 /// `UserCard.milestoneQualifiedSpend` (this period's progress — Chunk 17)
@@ -18,7 +19,9 @@ import '../../main.dart' show MoneyText;
 /// function in pandapay_domain next to calculators.dart's other one-off
 /// comparisons, per the plan).
 class MilestonesScreen extends ConsumerWidget {
-  const MilestonesScreen({super.key});
+  final bool embedded;
+
+  const MilestonesScreen({super.key, this.embedded = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,22 +35,29 @@ class MilestonesScreen extends ConsumerWidget {
       data: (owned) {
         final rows = <(UserCard, CardProduct, MilestoneRule)>[
           for (final (userCard, product) in owned)
-            for (final milestone in product.milestoneRules) (userCard, product, milestone),
+            for (final milestone in product.milestoneRules)
+              (userCard, product, milestone),
         ];
         // Task E-0c: nearest-deadline/closest-to-target first, same shared
         // scorer E1/E2 use.
         rows.sort((a, b) {
-          final qualifiedA = a.$1.milestoneQualifiedSpend[a.$3.id] ?? const Money.zero();
-          final qualifiedB = b.$1.milestoneQualifiedSpend[b.$3.id] ?? const Money.zero();
+          final qualifiedA =
+              a.$1.milestoneQualifiedSpend[a.$3.id] ?? const Money.zero();
+          final qualifiedB =
+              b.$1.milestoneQualifiedSpend[b.$3.id] ?? const Money.zero();
           final endA = a.$1.milestonePeriodEnd[a.$3.id];
           final endB = b.$1.milestonePeriodEnd[b.$3.id];
           final scoreA = UrgencyScore(
             ratioConsumed: capRatio(qualifiedA, a.$3.thresholdSpend),
-            daysRemaining: endA == null ? null : daysUntil(endA, DateTime.now()),
+            daysRemaining: endA == null
+                ? null
+                : daysUntil(endA, DateTime.now()),
           );
           final scoreB = UrgencyScore(
             ratioConsumed: capRatio(qualifiedB, b.$3.thresholdSpend),
-            daysRemaining: endB == null ? null : daysUntil(endB, DateTime.now()),
+            daysRemaining: endB == null
+                ? null
+                : daysUntil(endB, DateTime.now()),
           );
           return scoreA.compareTo(scoreB);
         });
@@ -55,19 +65,57 @@ class MilestonesScreen extends ConsumerWidget {
           return const EmptyState(
             icon: Icons.flag_outlined,
             title: 'No milestones to chase',
-            message: 'None of your cards have spend milestones — or you haven\'t added a card yet.',
+            message:
+                'None of your cards have spend milestones — or you haven\'t added a card yet.',
           );
         }
-        return ListView.builder(
-          padding: const EdgeInsets.all(AppSpace.lg),
-          itemCount: rows.length,
-          itemBuilder: (context, index) {
-            final (userCard, product, milestone) = rows[index];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: AppSpace.md),
-              child: _MilestoneTile(userCard: userCard, product: product, milestone: milestone),
-            );
-          },
+        final groups =
+            <
+              String,
+              ({
+                UserCard userCard,
+                CardProduct product,
+                List<MilestoneRule> milestones,
+              })
+            >{};
+        for (final (userCard, product, milestone) in rows) {
+          final group = groups.putIfAbsent(
+            userCard.id,
+            () => (
+              userCard: userCard,
+              product: product,
+              milestones: <MilestoneRule>[],
+            ),
+          );
+          group.milestones.add(milestone);
+        }
+
+        return ListView(
+          padding: embedded
+              ? EdgeInsets.zero
+              : const EdgeInsets.all(AppSpace.lg),
+          shrinkWrap: embedded,
+          physics: embedded ? const NeverScrollableScrollPhysics() : null,
+          children: [
+            for (final group in groups.values)
+              CardCapabilitySection(
+                cardName: group.userCard.nickname?.isNotEmpty == true
+                    ? group.userCard.nickname!
+                    : group.product.name,
+                capabilityLabel:
+                    'milestone${group.milestones.length == 1 ? '' : 's'}',
+                capabilityCount: group.milestones.length,
+                children: [
+                  const CardCapabilitySubheading('Milestones'),
+                  for (final milestone in group.milestones)
+                    _MilestoneTile(
+                      userCard: group.userCard,
+                      product: group.product,
+                      milestone: milestone,
+                    ),
+                ],
+              ),
+          ],
         );
       },
     );
@@ -78,15 +126,18 @@ class _MilestoneTile extends StatelessWidget {
   final UserCard userCard;
   final CardProduct product;
   final MilestoneRule milestone;
-  const _MilestoneTile({required this.userCard, required this.product, required this.milestone});
+  const _MilestoneTile({
+    required this.userCard,
+    required this.product,
+    required this.milestone,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final qualified = userCard.milestoneQualifiedSpend[milestone.id] ?? const Money.zero();
-    final remainingPaise = (milestone.thresholdSpend.paise - qualified.paise).clamp(
-      0,
-      milestone.thresholdSpend.paise,
-    );
+    final qualified =
+        userCard.milestoneQualifiedSpend[milestone.id] ?? const Money.zero();
+    final remainingPaise = (milestone.thresholdSpend.paise - qualified.paise)
+        .clamp(0, milestone.thresholdSpend.paise);
     final remaining = Money.fromPaise(remainingPaise);
     final ratio = milestone.thresholdSpend.isZero
         ? 0.0
@@ -94,14 +145,17 @@ class _MilestoneTile extends StatelessWidget {
     final reached = remainingPaise == 0;
 
     final periodEnd = userCard.milestonePeriodEnd[milestone.id];
-    final daysLeft = periodEnd == null ? null : daysUntil(periodEnd, DateTime.now());
+    final daysLeft = periodEnd == null
+        ? null
+        : daysUntil(periodEnd, DateTime.now());
 
     // "Chasing beats base rate": the milestone's marginal ₹/₹ vs. the
     // card's base reward rate (categoryId == null, lowest priority wins —
     // same rule-selection RecommendationEngine._evaluate uses for "all
     // other spends").
-    final baseRule = product.rewardRules.where((r) => r.categoryId == null).toList()
-      ..sort((a, b) => a.priority.compareTo(b.priority));
+    final baseRule =
+        product.rewardRules.where((r) => r.categoryId == null).toList()
+          ..sort((a, b) => a.priority.compareTo(b.priority));
     MilestoneChase? chase;
     if (!reached && baseRule.isNotEmpty) {
       final baseRate = baseRule.first.unit.effectiveRatePerRupee(
@@ -117,9 +171,13 @@ class _MilestoneTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: reached ? BambooInk.jade.withValues(alpha: 0.10) : BambooInk.glassFillOnPaper,
+        color: reached
+            ? BambooInk.jade.withValues(alpha: 0.10)
+            : BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: reached ? BambooInk.jade : BambooInk.hairlineOnPaper),
+        border: Border.all(
+          color: reached ? BambooInk.jade : BambooInk.hairlineOnPaper,
+        ),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -131,11 +189,9 @@ class _MilestoneTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(milestone.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
-                    const SizedBox(height: 2),
                     Text(
-                      userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                      milestone.label,
+                      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                     ),
                   ],
                 ),
@@ -179,7 +235,10 @@ class _MilestoneTile extends StatelessWidget {
               ),
               Row(
                 children: [
-                  Text('Reward ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  Text(
+                    'Reward ',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                   MoneyText(
                     milestone.rewardValue,
                     confidence: Confidence.estimated,
@@ -192,7 +251,9 @@ class _MilestoneTile extends StatelessWidget {
           if (!reached && daysLeft != null) ...[
             const SizedBox(height: AppSpace.sm),
             Text(
-              daysLeft >= 0 ? '$daysLeft days left this period' : 'Period ended ${-daysLeft} days ago',
+              daysLeft >= 0
+                  ? '$daysLeft days left this period'
+                  : 'Period ended ${-daysLeft} days ago',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],
@@ -205,7 +266,11 @@ class _MilestoneTile extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Chasing this beats your base rate — worth prioritizing this spend here.',
-                    style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.jade),
+                    style: BambooFonts.ui(
+                      12.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.jade,
+                    ),
                   ),
                 ),
               ],

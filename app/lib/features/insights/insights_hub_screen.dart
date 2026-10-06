@@ -481,7 +481,7 @@ class _OverviewSections extends StatelessWidget {
         _MissedAndBest(data: data),
         if (data.topMissed.isNotEmpty) ...[
           const SizedBox(height: AppSpace.xl),
-          _MissedPreview(rows: data.topMissed),
+          _MissedPreview(rows: data.topMissed, totalMissed: data.missed),
         ],
         _MilestoneInReach(milestones: milestones),
       ],
@@ -725,7 +725,12 @@ class _StatTile extends StatelessWidget {
 /// biggest, with the full D6 screen one tap away.
 class _MissedPreview extends StatelessWidget {
   final List<MissedEarning> rows;
-  const _MissedPreview({required this.rows});
+  final Money totalMissed;
+  const _MissedPreview({required this.rows, required this.totalMissed});
+
+  void _openRewardsMissed(BuildContext context) {
+    GoRouter.of(context).push('${AppRoute.rewardsGroup}?tab=missed');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -735,10 +740,30 @@ class _MissedPreview extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text('Missed opportunities', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+              child: InkWell(
+                onTap: () => _openRewardsMissed(context),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Missed opportunities',
+                        style: BambooFonts.heading(17, color: BambooInk.ink900),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Total missed ${totalMissed.format(hidePaise: true)}',
+                        style: BambooFonts.ui(12.5, color: BambooInk.clay),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
             TextButton(
-              onPressed: () => GoRouter.of(context).push(AppRoute.missedOpportunities),
+              onPressed: () => _openRewardsMissed(context),
               style: TextButton.styleFrom(
                 foregroundColor: BambooInk.ink900,
                 minimumSize: const Size(44, 44),

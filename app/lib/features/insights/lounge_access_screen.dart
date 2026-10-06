@@ -7,6 +7,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
+import 'grouped_insight_screen.dart';
 
 /// ui-spec.md E6 Lounge Access. GET/POST /lounge-usage are new this pass
 /// (Task E6) — quota comes from CardBenefit.quotaCount/quotaPeriod
@@ -23,7 +24,9 @@ import '../../data/user_cards_repository.dart';
 /// CapPeriod.statementCycle degrades to calendar-month bounds with a
 /// visible note rather than silently mis-counting.
 class LoungeAccessScreen extends ConsumerWidget {
-  const LoungeAccessScreen({super.key});
+  final bool embedded;
+
+  const LoungeAccessScreen({super.key, this.embedded = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,7 +50,8 @@ class LoungeAccessScreen extends ConsumerWidget {
             final rows = <(UserCard, CardProduct, CardBenefit)>[
               for (final (userCard, product) in owned)
                 for (final b in product.benefits)
-                  if (b.kind == BenefitKind.loungeDomestic || b.kind == BenefitKind.loungeInternational)
+                  if (b.kind == BenefitKind.loungeDomestic ||
+                      b.kind == BenefitKind.loungeInternational)
                     (userCard, product, b),
             ];
             if (rows.isEmpty) {
@@ -58,25 +62,65 @@ class LoungeAccessScreen extends ConsumerWidget {
                     'None of your cards have a lounge-access benefit — or you haven\'t added a card yet.',
               );
             }
-            return ListView.builder(
-              padding: const EdgeInsets.all(AppSpace.lg),
-              itemCount: rows.length,
-              itemBuilder: (context, index) {
-                final (userCard, product, benefit) = rows[index];
-                final windowVisits = visitList
-                    .where((v) => v.userCardId == userCard.id && v.benefitId == benefit.id)
-                    .where((v) => isInCurrentLoungeWindow(v.usedOn, benefit.quotaPeriod))
-                    .length;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.md),
-                  child: _LoungeTile(
-                    userCard: userCard,
-                    product: product,
-                    benefit: benefit,
-                    usedThisWindow: windowVisits,
+            final groups =
+                <
+                  String,
+                  ({
+                    UserCard userCard,
+                    CardProduct product,
+                    List<CardBenefit> benefits,
+                  })
+                >{};
+            for (final (userCard, product, benefit) in rows) {
+              final group = groups.putIfAbsent(
+                userCard.id,
+                () => (
+                  userCard: userCard,
+                  product: product,
+                  benefits: <CardBenefit>[],
+                ),
+              );
+              group.benefits.add(benefit);
+            }
+
+            return ListView(
+              padding: embedded
+                  ? EdgeInsets.zero
+                  : const EdgeInsets.all(AppSpace.lg),
+              shrinkWrap: embedded,
+              physics: embedded ? const NeverScrollableScrollPhysics() : null,
+              children: [
+                for (final group in groups.values)
+                  CardCapabilitySection(
+                    cardName: group.userCard.nickname?.isNotEmpty == true
+                        ? group.userCard.nickname!
+                        : group.product.name,
+                    capabilityLabel:
+                        'lounge benefit${group.benefits.length == 1 ? '' : 's'}',
+                    capabilityCount: group.benefits.length,
+                    children: [
+                      const CardCapabilitySubheading('Lounge access'),
+                      for (final benefit in group.benefits)
+                        _LoungeTile(
+                          userCard: group.userCard,
+                          benefit: benefit,
+                          usedThisWindow: visitList
+                              .where(
+                                (v) =>
+                                    v.userCardId == group.userCard.id &&
+                                    v.benefitId == benefit.id,
+                              )
+                              .where(
+                                (v) => isInCurrentLoungeWindow(
+                                  v.usedOn,
+                                  benefit.quotaPeriod,
+                                ),
+                              )
+                              .length,
+                        ),
+                    ],
                   ),
-                );
-              },
+              ],
             );
           },
         );
@@ -95,13 +139,22 @@ class LoungeAccessScreen extends ConsumerWidget {
     case CapPeriod.calendarMonth:
     case CapPeriod.statementCycle: // degraded — see class doc-comment
     case null:
-      return (DateTime(now.year, now.month, 1), DateTime(now.year, now.month + 1, 1));
+      return (
+        DateTime(now.year, now.month, 1),
+        DateTime(now.year, now.month + 1, 1),
+      );
     case CapPeriod.quarter:
       final qStartMonth = ((now.month - 1) ~/ 3) * 3 + 1;
-      return (DateTime(now.year, qStartMonth, 1), DateTime(now.year, qStartMonth + 3, 1));
+      return (
+        DateTime(now.year, qStartMonth, 1),
+        DateTime(now.year, qStartMonth + 3, 1),
+      );
     case CapPeriod.halfYear:
       final hStartMonth = now.month <= 6 ? 1 : 7;
-      return (DateTime(now.year, hStartMonth, 1), DateTime(now.year, hStartMonth + 6, 1));
+      return (
+        DateTime(now.year, hStartMonth, 1),
+        DateTime(now.year, hStartMonth + 6, 1),
+      );
     case CapPeriod.annual:
       return (DateTime(now.year, 1, 1), DateTime(now.year + 1, 1, 1));
     case CapPeriod.lifetime:
@@ -116,12 +169,10 @@ bool isInCurrentLoungeWindow(DateTime usedOn, CapPeriod? period) {
 
 class _LoungeTile extends ConsumerWidget {
   final UserCard userCard;
-  final CardProduct product;
   final CardBenefit benefit;
   final int usedThisWindow;
   const _LoungeTile({
     required this.userCard,
-    required this.product,
     required this.benefit,
     required this.usedThisWindow,
   });
@@ -131,8 +182,12 @@ class _LoungeTile extends ConsumerWidget {
     final quotaValue = benefit.quotaCount;
     final unlimited = quotaValue == null;
     final quota = quotaValue ?? 0;
-    final remaining = unlimited ? null : (quota - usedThisWindow).clamp(0, quota);
-    final ratio = unlimited ? 0.0 : (quota == 0 ? 0.0 : (usedThisWindow / quota).clamp(0.0, 1.0));
+    final remaining = unlimited
+        ? null
+        : (quota - usedThisWindow).clamp(0, quota);
+    final ratio = unlimited
+        ? 0.0
+        : (quota == 0 ? 0.0 : (usedThisWindow / quota).clamp(0.0, 1.0));
 
     return Container(
       decoration: BoxDecoration(
@@ -150,11 +205,13 @@ class _LoungeTile extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(benefit.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                    Text(
+                      benefit.label,
+                      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                    ),
                     const SizedBox(height: 2),
                     Text(
-                      '${userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name}'
-                      '${benefit.networkProgram != null ? " · ${benefit.networkProgram}" : ""}',
+                      benefit.networkProgram ?? 'Lounge benefit',
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ],
@@ -164,7 +221,8 @@ class _LoungeTile extends ConsumerWidget {
                 style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
                 icon: const Icon(Icons.add_rounded, size: 16),
                 label: const Text('Log visit'),
-                onPressed: () => _showLogVisitSheet(context, ref, userCard, benefit),
+                onPressed: () =>
+                    _showLogVisitSheet(context, ref, userCard, benefit),
               ),
             ],
           ),
@@ -187,11 +245,19 @@ class _LoungeTile extends ConsumerWidget {
             const SizedBox(height: AppSpace.sm),
             Row(
               children: [
-                if (ratio >= 1.0) const Icon(Icons.block_rounded, size: 14, color: BambooInk.clay),
+                if (ratio >= 1.0)
+                  const Icon(
+                    Icons.block_rounded,
+                    size: 14,
+                    color: BambooInk.clay,
+                  ),
                 if (ratio >= 1.0) const SizedBox(width: 4),
                 Text(
                   '$usedThisWindow of $quota used this period ($remaining left)',
-                  style: BambooFonts.ui(12.5, color: ratio >= 1.0 ? BambooInk.clay : BambooInk.ink500),
+                  style: BambooFonts.ui(
+                    12.5,
+                    color: ratio >= 1.0 ? BambooInk.clay : BambooInk.ink500,
+                  ),
                 ),
               ],
             ),
@@ -201,7 +267,12 @@ class _LoungeTile extends ConsumerWidget {
     );
   }
 
-  void _showLogVisitSheet(BuildContext context, WidgetRef ref, UserCard userCard, CardBenefit benefit) {
+  void _showLogVisitSheet(
+    BuildContext context,
+    WidgetRef ref,
+    UserCard userCard,
+    CardBenefit benefit,
+  ) {
     final airportController = TextEditingController();
     DateTime pickedDate = DateTime.now();
     showModalBottomSheet(
@@ -222,7 +293,10 @@ class _LoungeTile extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Log a lounge visit', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+            Text(
+              'Log a lounge visit',
+              style: BambooFonts.heading(17, color: BambooInk.ink900),
+            ),
             const SizedBox(height: AppSpace.md),
             TextField(
               controller: airportController,
@@ -238,11 +312,16 @@ class _LoungeTile extends ConsumerWidget {
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  borderSide: const BorderSide(
+                    color: BambooInk.hairlineOnPaper,
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: BambooInk.slate,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
@@ -252,7 +331,9 @@ class _LoungeTile extends ConsumerWidget {
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.lime,
                 minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
               onPressed: () async {
@@ -263,15 +344,17 @@ class _LoungeTile extends ConsumerWidget {
                     userCardId: userCard.id,
                     benefitId: benefit.id,
                     usedOn: pickedDate,
-                    airport: airportController.text.trim().isEmpty ? null : airportController.text.trim(),
+                    airport: airportController.text.trim().isEmpty
+                        ? null
+                        : airportController.text.trim(),
                   );
                   ref.invalidate(loungeUsageProvider);
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();
                 } catch (e) {
                   if (sheetContext.mounted) {
-                    ScaffoldMessenger.of(
-                      sheetContext,
-                    ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+                    ScaffoldMessenger.of(sheetContext).showSnackBar(
+                      SnackBar(content: Text(userFacingErrorMessage(e))),
+                    );
                   }
                 }
               },

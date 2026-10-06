@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -14,6 +15,7 @@ import '../../data/user_cards_repository.dart';
 import '../scan/scan_card_screen.dart';
 import 'card_picker_screen.dart';
 import 'find_cards_screen.dart';
+import 'autopay_issuer_links.dart';
 
 /// C1 My Cards (ui-spec Group C, implementation-plan-group-c-d.md) —
 /// restyled onto the Bamboo Ink design system (see home_screen.dart's
@@ -524,7 +526,7 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                         style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                       ),
                     ),
-                    _AutopayPill(mode: card.autopayMode),
+                    const _AutopayPill(),
                   ],
                 ),
               ],
@@ -626,14 +628,10 @@ class _UnresolvedCardTile extends StatelessWidget {
 /// Design 02's *"Autopay is off — never lose ₹500 to a late fee again"*
 /// nudge, above the card list.
 ///
-/// Counts only active cards the user has told us are unset. Hidden entirely
-/// once every card has an answer, because the nudge is a prompt to supply
-/// missing information, not a permanent banner — and hidden in guest mode,
-/// where there is no repository to write the answer back to.
+/// PandaPay cannot access or mutate an issuer's autopay mandate. This banner
+/// therefore never calls a local setting "on" or "off" and only offers a
+/// path to the card issuer's official destination.
 ///
-/// The copy deliberately asks rather than asserts: PandaPay cannot observe
-/// a real autopay mandate (see [AutopayMode]), so "we don't know" is the
-/// honest framing, not "your autopay is off".
 class _AutopayNudge extends ConsumerWidget {
   const _AutopayNudge();
 
@@ -643,11 +641,10 @@ class _AutopayNudge extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    final cards = ref.watch(myCardsProvider).valueOrNull ?? const <UserCard>[];
-    final unset = cards
-        .where((c) => !c.isArchived && c.autopayMode == AutopayMode.off)
+    final cards = (ref.watch(myCardsProvider).valueOrNull ?? const <UserCard>[])
+        .where((c) => !c.isArchived)
         .toList(growable: false);
-    if (unset.isEmpty) return const SizedBox.shrink();
+    if (cards.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -676,9 +673,9 @@ class _AutopayNudge extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    unset.length == 1
-                        ? 'Autopay not set on 1 card'
-                        : 'Autopay not set on ${unset.length} cards',
+                    cards.length == 1
+                        ? 'Autopay status not verified on 1 card'
+                        : 'Autopay status not verified on ${cards.length} cards',
                     style: BambooFonts.ui(
                       13,
                       weight: FontWeight.w700,
@@ -687,7 +684,7 @@ class _AutopayNudge extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Tell us and we can warn you before a late fee.',
+                    'PandaPay cannot change bank autopay. Manage it with your issuer.',
                     style: BambooFonts.ui(12.5, color: BambooInk.clayInkMuted),
                   ),
                 ],
@@ -695,13 +692,13 @@ class _AutopayNudge extends ConsumerWidget {
             ),
             const SizedBox(width: AppSpace.sm),
             TextButton(
-              onPressed: () => _showAutopaySheet(context, unset),
+              onPressed: () => _showAutopaySheet(context, cards),
               style: TextButton.styleFrom(
                 foregroundColor: BambooInk.clayInk,
                 minimumSize: const Size(44, 44),
                 textStyle: BambooFonts.ui(13, weight: FontWeight.w700),
               ),
-              child: const Text('Set up'),
+              child: const Text('Manage'),
             ),
           ],
         ),
@@ -710,11 +707,11 @@ class _AutopayNudge extends ConsumerWidget {
   }
 }
 
-/// The sheet behind the nudge's "Set up": one three-way control per card.
+/// Issuer navigation sheet behind the nudge's "Manage" action.
 ///
-/// Three options rather than a switch, for the reason [AutopayMode]
-/// documents — "minimum" and "full" are different enough that collapsing
-/// them would let the app reassure a user who is still paying interest.
+/// This is deliberately read-only. It contains no Off/Minimum/Full control,
+/// because changing a PandaPay value cannot create or change an issuer
+/// mandate.
 Future<void> _showAutopaySheet(BuildContext context, List<UserCard> cards) {
   return showModalBottomSheet<void>(
     context: context,
@@ -731,20 +728,20 @@ Future<void> _showAutopaySheet(BuildContext context, List<UserCard> cards) {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Autopay',
+              'Manage autopay with your issuer',
               style: BambooFonts.heading(20, color: BambooInk.ink900),
             ),
             const SizedBox(height: AppSpace.xs),
             Text(
-              "We can't see your bank's autopay setting — tell us what you've set and "
-              'PandaPay will stop nagging about that card.',
+              'PandaPay does not have access to your bank/card account and will not '
+              'mark autopay as enabled here.',
               style: BambooFonts.ui(13, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.lg),
             Flexible(
               child: ListView(
                 shrinkWrap: true,
-                children: [for (final card in cards) _AutopayRow(card: card)],
+                children: [for (final card in cards) _AutopayIssuerRow(card: card)],
               ),
             ),
           ],
@@ -754,49 +751,13 @@ Future<void> _showAutopaySheet(BuildContext context, List<UserCard> cards) {
   );
 }
 
-class _AutopayRow extends ConsumerStatefulWidget {
+class _AutopayIssuerRow extends StatelessWidget {
   final UserCard card;
-  const _AutopayRow({required this.card});
-
-  @override
-  ConsumerState<_AutopayRow> createState() => _AutopayRowState();
-}
-
-class _AutopayRowState extends ConsumerState<_AutopayRow> {
-  late AutopayMode _mode = widget.card.autopayMode;
-  bool _saving = false;
-
-  Future<void> _set(AutopayMode mode) async {
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null || _saving) return;
-    final previous = _mode;
-    setState(() {
-      _mode = mode;
-      _saving = true;
-    });
-    try {
-      await repo.updateCard(widget.card.id, autopayMode: mode);
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(userCardsProvider);
-    } catch (e) {
-      // Roll the control back rather than leaving it showing a setting the
-      // server never accepted.
-      if (mounted) setState(() => _mode = previous);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Couldn't save. ${userFacingErrorMessage(e)}"),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
+  const _AutopayIssuerRow({required this.card});
 
   @override
   Widget build(BuildContext context) {
-    final card = widget.card;
+    final url = officialAutopayUrl(cardName: card.cardName);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.lg),
       child: Column(
@@ -807,34 +768,46 @@ class _AutopayRowState extends ConsumerState<_AutopayRow> {
             style: BambooFonts.heading(14.5, color: BambooInk.ink900),
           ),
           const SizedBox(height: AppSpace.sm),
-          SegmentedButton<AutopayMode>(
-            style: SegmentedButton.styleFrom(
-              selectedBackgroundColor: BambooInk.slate,
-              selectedForegroundColor: BambooInk.onSlate,
-              foregroundColor: BambooInk.ink500,
-              side: const BorderSide(color: BambooInk.hairlineOnPaper),
-              textStyle: BambooFonts.ui(12.5, weight: FontWeight.w600),
-            ),
-            segments: const [
-              ButtonSegment(value: AutopayMode.off, label: Text('Off')),
-              ButtonSegment(value: AutopayMode.minimum, label: Text('Minimum')),
-              ButtonSegment(value: AutopayMode.full, label: Text('Full')),
-            ],
-            selected: {_mode},
-            onSelectionChanged: _saving ? null : (s) => _set(s.first),
+          Text(
+            'Autopay status: not verified',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
-          if (_mode == AutopayMode.minimum) ...[
-            const SizedBox(height: AppSpace.sm),
+          const SizedBox(height: AppSpace.xs),
+          if (url != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _openIssuerSite(context, url),
+                icon: const Icon(Icons.open_in_new, size: 17),
+                label: const Text('Open official issuer site'),
+                style: TextButton.styleFrom(
+                  foregroundColor: BambooInk.rankBadgeInk,
+                  padding: EdgeInsets.zero,
+                  textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
+                ),
+              ),
+            )
+          else
             Text(
-              'Minimum autopay avoids a late-payment mark, but the rest of the '
-              'balance still carries interest.',
-              style: BambooFonts.ui(12, color: BambooInk.clayInk),
+              'Open your issuer app or its official website to manage it.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
-          ],
         ],
       ),
     );
   }
+}
+
+Future<void> _openIssuerSite(BuildContext context, String url) async {
+  final uri = Uri.parse(url);
+  if (await canLaunchUrl(uri) &&
+      await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    return;
+  }
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Could not open the issuer website.')),
+  );
 }
 
 /// The categories this card pays best on, highest first — design 02's
@@ -886,36 +859,18 @@ List<String> bestUsedFor(
   return result;
 }
 
-/// Design 13's per-card autopay label ("Autopay off" / "Autopay on · full
-/// amount"), sized down to a pill for design 02's card rows.
+/// A deliberately neutral per-card autopay label.
 ///
-/// [AutopayMode.minimum] gets the warning treatment, not the positive one:
-/// it prevents a late-payment mark but leaves the balance revolving at
-/// interest, so styling it like [AutopayMode.full] would tell the user they
-/// were covered when they are about to be charged. See [AutopayMode].
+/// [AutopayMode] is retained for backwards-compatible data parsing, but it is
+/// not issuer evidence. Showing a positive "full" state would be misleading.
 class _AutopayPill extends StatelessWidget {
-  final AutopayMode mode;
-  const _AutopayPill({required this.mode});
+  const _AutopayPill();
 
   @override
   Widget build(BuildContext context) {
-    final (label, ink, fill) = switch (mode) {
-      AutopayMode.full => (
-        'Autopay · full',
-        BambooInk.rankBadgeInk,
-        BambooInk.rankBadgeBg,
-      ),
-      AutopayMode.minimum => (
-        'Autopay · minimum',
-        BambooInk.clayInk,
-        BambooInk.warningBg,
-      ),
-      AutopayMode.off => (
-        'Autopay off',
-        BambooInk.ink500,
-        BambooInk.paperMuted,
-      ),
-    };
+    const label = 'Autopay unverified';
+    const ink = BambooInk.ink500;
+    const fill = BambooInk.paperMuted;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: 3),
       decoration: BoxDecoration(
@@ -1307,14 +1262,14 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
                       ),
                     )
                   : const Icon(Icons.add_rounded, color: BambooInk.lime),
-              label: const Text('Add a card'),
+              label: const Text('Add card manually'),
             ),
             const SizedBox(height: AppSpace.sm),
             TextButton.icon(
               style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
               onPressed: _busy ? null : _scan,
               icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
-              label: const Text('Scan a QR/barcode instead'),
+              label: const Text('Scan card'),
             ),
           ],
         );

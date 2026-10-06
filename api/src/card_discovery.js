@@ -14,6 +14,8 @@
  * card someone doesn't own and then ranking against it.
  */
 
+const { extractCreditLimit } = require('./card_limit_parser');
+
 /**
  * Normalise for comparison: casefold, collapse whitespace, and drop
  * punctuation that varies between issuers' own spellings ("IDFC FIRST" vs
@@ -120,6 +122,7 @@ const TXN_MARKERS = [
   'avl. bal', 'avl lmt', 'available limit', 'outstanding', 'statement',
   'amount due', 'due date', 'min amt due', 'total amount due', 'e-statement',
   'autopay', 'auto pay', 'auto-pay', 'has been credited', 'has been debited',
+  'credit limit', 'total credit limit',
 ];
 
 /** True when the text carries a real transaction/statement signal. */
@@ -285,6 +288,7 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
     }
 
     const last4s = extractLast4(text);
+    const creditLimit = extractCreditLimit(text);
 
     // SMS discovery: a card number in the SAME message is required. A real
     // spend/statement alert always carries "card ending 1234"; a marketing
@@ -322,8 +326,16 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
           existing.score = Math.max(existing.score, hit.score);
           for (const e of hit.evidence) if (!existing.evidence.includes(e)) existing.evidence.push(e);
           for (const l of last4s) if (!existing.last4.includes(l)) existing.last4.push(l);
+          if (existing.creditLimitInr == null && creditLimit) {
+            existing.creditLimitInr = creditLimit.amountInr;
+          }
         } else {
-          byCard.set(hit.cardProductId, { ...hit, messageCount: 1, last4: [...last4s] });
+          byCard.set(hit.cardProductId, {
+            ...hit,
+            messageCount: 1,
+            last4: [...last4s],
+            creditLimitInr: creditLimit?.amountInr ?? null,
+          });
         }
       }
     } else if (isSms) {
@@ -346,6 +358,9 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
             
             if (existing) {
               existing.messageCount += 1;
+              if (existing.creditLimitInr == null && creditLimit) {
+                existing.creditLimitInr = creditLimit.amountInr;
+              }
             } else {
               const nameSuffix = l4 ? ` ending in ${l4}` : '';
               byCard.set(placeholderId, {
@@ -356,7 +371,8 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
                 last4: l4 ? [l4] : [],
                 messageCount: 1,
                 isPlaceholder: true,
-                issuerName: issuer
+                issuerName: issuer,
+                creditLimitInr: creditLimit?.amountInr ?? null,
               });
             }
           }

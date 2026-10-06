@@ -7,6 +7,7 @@ const { withUserClient, pool } = require('./db');
 const { optionalAuth, requireAuth } = require('./auth');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 const { parseSmsAgainstPatterns, redactSmsShape, senderMatches, parseTransactionDate } = require('./sms_parser');
+const { parseSubscriptionMandate } = require('./subscription_parser');
 const importResolvers = require('./import_resolvers');
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
@@ -16,13 +17,97 @@ const rewardMath = require('./reward_math');
 const { AMOUNT_TOLERANCE_INR, MAX_TIME_DISTANCE_MS, bestDuplicate } = require('./transaction_dedup');
 const { emailSourceKey } = require('./source_identity');
 const spendReports = require('./spend_reports');
-const { detectRecurringSeries, annualCost } = require('./recurring');
+const { detectRecurringSeries, annualCost, merchantSeriesKey } = require('./recurring');
 const { buildMonthlyReport } = require('./monthly_report');
 const { csvDocument } = require('./csv');
 const { startImapPoller, fetchRecentMessages } = require('./imap_poller');
 const { requestLogger, errorHandler } = require('./observability');
 const { importSourceKey } = require('./import_source_key');
 const { extractVpa, extractMcc } = require('./merchant_category');
+
+function uniqueSmsPatternIssuerId(patterns, sender) {
+  const issuerIds = new Set(
+    (patterns || [])
+      .filter((pattern) => senderMatches(pattern.sender_pattern, sender))
+      .map((pattern) => pattern.issuer_id)
+      .filter(Boolean),
+  );
+  return issuerIds.size === 1 ? [...issuerIds][0] : null;
+}
+
+/**
+ * Store an explicit mandate signal without turning the mandate-creation SMS
+ * into a spend. The raw body is used only during this request to resolve the
+ * category/card and is never written to the subscription row.
+ */
+async function persistSubscriptionMandate(client, userId, { parsed, body, occurred, patternIssuerId }) {
+  if (!parsed?.ok || !parsed.fields?.merchant) return null;
+  const fields = parsed.fields;
+  const merchantKey = merchantSeriesKey(fields.merchant);
+  if (!merchantKey) return null;
+
+  const card = await importResolvers.resolveUserCardForImport(client, userId, {
+    last4: fields.last4,
+    patternIssuerId,
+  });
+  const categoryId = await importResolvers.resolveCategoryForImport(client, userId, {
+    merchantName: fields.merchant,
+    vpa: fields.vpa || extractVpa(body),
+    mcc: extractMcc(body),
+    messageText: body,
+  });
+
+  const seenOn = new Date(occurred).toISOString().slice(0, 10);
+  const cadenceDays = fields.cadenceDays || 30;
+  const nextExpected = fields.cadenceDays
+    ? new Date(new Date(occurred).getTime() + fields.cadenceDays * 86400000).toISOString().slice(0, 10)
+    : null;
+  const typicalAmount = fields.amountInr || 0;
+  const result = await client.query(
+    `INSERT INTO recurring_series
+       (profile_id, merchant_key, display_name, category_id, user_card_id,
+        payment_method, typical_amount_inr, cadence_days, occurrence_count,
+        first_seen_on, last_seen_on, next_expected_on, detection_source)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9, $9, $10, 'mandate')
+     ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
+       display_name = COALESCE(EXCLUDED.display_name, recurring_series.display_name),
+       category_id = COALESCE(recurring_series.category_id, EXCLUDED.category_id),
+       user_card_id = COALESCE(recurring_series.user_card_id, EXCLUDED.user_card_id),
+       payment_method = COALESCE(EXCLUDED.payment_method, recurring_series.payment_method),
+       typical_amount_inr = CASE
+         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.typical_amount_inr
+         WHEN EXCLUDED.typical_amount_inr > 0 THEN EXCLUDED.typical_amount_inr
+         ELSE recurring_series.typical_amount_inr
+       END,
+       cadence_days = CASE
+         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.cadence_days
+         ELSE EXCLUDED.cadence_days
+       END,
+       last_seen_on = EXCLUDED.last_seen_on,
+       next_expected_on = COALESCE(EXCLUDED.next_expected_on, recurring_series.next_expected_on),
+       detection_source = CASE
+         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.detection_source
+         ELSE 'mandate'
+       END,
+       is_active = true,
+       dismissed_at = NULL,
+       updated_at = now()
+     RETURNING id, detection_source`,
+    [
+      userId,
+      merchantKey,
+      fields.merchant,
+      categoryId,
+      card?.userCardId || null,
+      fields.instrument || null,
+      typicalAmount,
+      cadenceDays,
+      seenOn,
+      nextExpected,
+    ],
+  );
+  return result.rows[0] || null;
+}
 
 const app = express();
 app.use(cors());
@@ -3447,7 +3532,18 @@ const TXN_INSTRUMENTS = ['credit_card', 'debit_card', 'cash', 'upi_bank', 'walle
 const TXN_ENTRY_KINDS = ['spend', 'income', 'investment', 'transfer'];
 
 app.post('/transactions', requireAuth, async (req, res) => {
-  const { userCardId, amountInr, occurredAt, categoryId, rail, merchantName, note, clientMutationId } = req.body || {};
+  const {
+    userCardId,
+    amountInr,
+    occurredAt,
+    categoryId,
+    rail,
+    merchantName,
+    merchantVpa,
+    mcc,
+    note,
+    clientMutationId,
+  } = req.body || {};
   const instrument = (req.body || {}).instrument || 'credit_card';
   const entryKind = (req.body || {}).entryKind || 'spend';
   const amount = Number(amountInr);
@@ -3482,17 +3578,35 @@ app.post('/transactions', requireAuth, async (req, res) => {
   }
 
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      insertTransactionAndUpdateState(client, req.userId, {
+    const result = await withUserClient(req.userId, async (client) => {
+      // QR/manual payments often arrive with a merchant name but without an
+      // explicit category selection. Reuse the same conservative resolver as
+      // SMS import so a known merchant is categorized before rewards and
+      // spending reports are updated. An explicit category still wins.
+      const resolvedCategoryId = categoryId || await importResolvers.resolveCategoryForImport(client, req.userId, {
+        merchantName,
+        vpa: merchantVpa || null,
+        mcc: mcc || null,
+        messageText: null,
+      });
+      return insertTransactionAndUpdateState(client, req.userId, {
         userCardId: instrument === 'credit_card' ? userCardId : null,
-        amount, occurred, categoryId, rail, merchantName, note, source: 'manual',
+        amount,
+        occurred,
+        categoryId: resolvedCategoryId,
+        rail,
+        merchantName,
+        merchantVpa: merchantVpa || null,
+        mcc: mcc || null,
+        note,
+        source: 'manual',
         sourceKey: clientMutationId
           ? clientMutationSourceKey(req.userId, 'manual', clientMutationId)
           : null,
         observationMetadata: clientMutationId ? { clientMutation: true } : null,
         instrument, entryKind,
-      })
-    );
+      });
+    });
 
     if (result.status !== 200 && result.status !== 201) {
       return res.status(result.status).json({ error: result.error });
@@ -3551,6 +3665,25 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
 
       const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
       if (!parsed.ok) {
+        // Limit alerts are not spend transactions, but an explicit credit
+        // limit can still safely complete a card that has no limit yet.
+        const limitSync = await importResolvers.syncCreditLimitFromSms(client, req.userId, {
+          body,
+          patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
+        });
+        const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
+          body,
+          patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
+        });
+        const mandate = parseSubscriptionMandate({ sender, body });
+        const mandateRow = mandate.ok
+          ? await persistSubscriptionMandate(client, req.userId, {
+              parsed: mandate,
+              body,
+              occurred,
+              patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
+            })
+          : null;
         // Through the RPC, not a direct INSERT. `parser_failures` is
         // admin-only under RLS (0011), so the direct insert that used to be
         // here raised "new row violates row-level security policy" for every
@@ -3567,6 +3700,12 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
           status: 200,
           parsed: false,
           reason: parsed.reason,
+          creditLimitDetected: Boolean(limitSync),
+          creditLimitUpdated: Boolean(limitSync?.updated),
+          dueDateDetected: Boolean(dueDaySync),
+          dueDayUpdated: Boolean(dueDaySync?.updated),
+          subscriptionMandateDetected: Boolean(mandateRow),
+          subscriptionMandateId: mandateRow?.id || null,
           parserFailure: { id: failure.rows[0].id },
         };
       }
@@ -3597,6 +3736,11 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       // Sender + body are available even when the caller has no provider
       // timestamp, so replay protection should not disappear in that case.
       const sourceKey = importSourceKey(req.userId, sender, body);
+
+      await importResolvers.syncCreditLimitFromSms(client, req.userId, {
+        body,
+        patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
+      });
 
       const inserted = await importParsedMessage(client, req.userId, {
         parsed,
@@ -3708,11 +3852,36 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
 
         const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
         if (!parsed.ok) {
+          await importResolvers.syncCreditLimitFromSms(client, req.userId, {
+            body,
+            patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
+          });
+          const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
+            body,
+            patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
+          });
+          const mandate = parseSubscriptionMandate({ sender, body });
+          const mandateRow = mandate.ok
+            ? await persistSubscriptionMandate(client, req.userId, {
+                parsed: mandate,
+                body,
+                occurred,
+                patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
+              })
+            : null;
           await client.query(
             `SELECT pandapay.record_parser_failure('sms', $1, $2, $3) AS id`,
             [sender || null, redactSmsShape(body), appVersion || null]
           );
-          results.push({ index: i, outcome: 'unparsed', reason: parsed.reason });
+          results.push({
+            index: i,
+            outcome: 'unparsed',
+            reason: parsed.reason,
+            dueDateDetected: Boolean(dueDaySync),
+            dueDayUpdated: Boolean(dueDaySync?.updated),
+            subscriptionMandateDetected: Boolean(mandateRow),
+            subscriptionMandateId: mandateRow?.id || null,
+          });
           continue;
         }
 
@@ -3724,6 +3893,10 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         }
 
         const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
+        await importResolvers.syncCreditLimitFromSms(client, req.userId, {
+          body,
+          patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
+        });
         // The bank's transaction date is the accounting date. Using the
         // received time here moves backfilled purchases into the wrong
         // week/month whenever a message arrives later than the purchase.
@@ -4535,13 +4708,17 @@ app.get('/monthly-reports', requireAuth, async (req, res) => {
                 expected_value_inr
            FROM transactions
           WHERE profile_id = $1 AND status = 'active' AND entry_kind = 'spend'
+            AND amount_inr > 0
             AND occurred_at >= $2::date AND occurred_at < ($2::date + interval '1 month')
           ORDER BY occurred_at ASC`,
         [req.userId, periodMonth]
       );
 
       const totalSpend = txnRows.rows.reduce((sum, t) => sum + Number(t.amount_inr), 0);
-      const rewardsEarned = txnRows.rows.reduce((sum, t) => sum + Number(t.expected_value_inr || 0), 0);
+      const rewardsEarned = Math.min(
+        totalSpend,
+        Math.max(0, txnRows.rows.reduce((sum, t) => sum + Number(t.expected_value_inr || 0), 0)),
+      );
 
       // The wallet as it stands, with each card's full rule set. Archived
       // cards are excluded, matching every other ranking path.
@@ -5017,7 +5194,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
   try {
     const payload = await withUserClient(req.userId, async (client) => {
       const history = await client.query(
-        `SELECT merchant_name, amount_inr, occurred_at, category_id, user_card_id
+        `SELECT merchant_name, amount_inr, occurred_at, category_id, user_card_id, instrument
            FROM transactions
           WHERE profile_id = $1 AND status = 'active' AND entry_kind = 'spend'
             AND occurred_at >= now() - interval '24 months'
@@ -5038,23 +5215,25 @@ app.get('/recurring', requireAuth, async (req, res) => {
         await client.query(
           `INSERT INTO recurring_series
              (profile_id, merchant_key, display_name, category_id, user_card_id,
-              typical_amount_inr, cadence_days, occurrence_count,
+              payment_method, typical_amount_inr, cadence_days, occurrence_count,
               first_seen_on, last_seen_on, next_expected_on)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
            ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
              display_name = EXCLUDED.display_name,
              category_id = EXCLUDED.category_id,
              user_card_id = EXCLUDED.user_card_id,
+             payment_method = COALESCE(EXCLUDED.payment_method, recurring_series.payment_method),
              typical_amount_inr = EXCLUDED.typical_amount_inr,
              cadence_days = EXCLUDED.cadence_days,
              occurrence_count = EXCLUDED.occurrence_count,
              last_seen_on = EXCLUDED.last_seen_on,
              next_expected_on = EXCLUDED.next_expected_on,
+             detection_source = 'observed',
              is_active = true,
              updated_at = now()`,
           [
             req.userId, s.merchantKey, s.displayName, s.categoryId, s.userCardId,
-            s.typicalAmountInr, s.cadenceDays, s.occurrenceCount,
+            s.paymentMethod || null, s.typicalAmountInr, s.cadenceDays, s.occurrenceCount,
             s.firstSeenOn, s.lastSeenOn, s.nextExpectedOn,
           ]
         );
@@ -5063,7 +5242,8 @@ app.get('/recurring', requireAuth, async (req, res) => {
       const stored = await client.query(
         `SELECT rs.id, rs.merchant_key, rs.display_name, rs.typical_amount_inr,
                 rs.cadence_days, rs.occurrence_count, rs.first_seen_on, rs.last_seen_on,
-                rs.next_expected_on, rs.category_id, rs.user_card_id,
+                rs.next_expected_on, rs.category_id, rs.user_card_id, rs.payment_method,
+                rs.detection_source,
                 sc.name AS category_name, cp.name AS card_name, uc.nickname AS card_nickname
            FROM recurring_series rs
            LEFT JOIN spend_categories sc ON sc.id = rs.category_id
@@ -5086,7 +5266,10 @@ app.get('/recurring', requireAuth, async (req, res) => {
         categoryId: r.category_id,
         categoryName: r.category_name,
         cardId: r.user_card_id,
+        paymentMethod: r.payment_method,
         cardName: r.card_nickname || r.card_name,
+        detectionSource: r.detection_source || 'observed',
+        isMandate: r.detection_source === 'mandate',
         annualCostInr: annualCost({
           typicalAmountInr: Number(r.typical_amount_inr),
           cadenceDays: r.cadence_days,
@@ -5203,6 +5386,9 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
             existing.sources.push(source);
             existing.score = Math.max(existing.score, hit.score);
             existing.messageCount += hit.messageCount;
+            if (existing.creditLimitInr == null && hit.creditLimitInr != null) {
+              existing.creditLimitInr = hit.creditLimitInr;
+            }
           } else {
             merged.set(hit.cardProductId, { ...hit, sources: [source] });
           }

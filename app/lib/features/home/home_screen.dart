@@ -61,6 +61,7 @@ class HomeScreen extends ConsumerWidget {
     ('online', 'Online', Icons.shopping_bag_rounded),
     ('travel', 'Travel', Icons.flight_takeoff_rounded),
     ('bills', 'Bills', Icons.receipt_long_rounded),
+    ('rent', 'Rent', Icons.home_work_rounded),
   ];
 
   static const _gutter = 20.0;

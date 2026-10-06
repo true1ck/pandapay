@@ -709,6 +709,20 @@ final transactionsProvider = FutureProvider<List<TransactionEntry>>((
   return repo.fetchTransactions();
 });
 
+/// Transactions needed by credit utilization. The ordinary activity provider
+/// intentionally keeps its unfiltered call capped at the newest 50 rows; a
+/// utilization calculation must instead fetch the complete recent statement
+/// window so an older purchase cannot disappear merely because more activity
+/// arrived.
+final utilizationTransactionsProvider = FutureProvider<List<TransactionEntry>>((
+  ref,
+) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  if (repo == null) return const [];
+  final now = ref.watch(clockProvider).now();
+  return repo.fetchTransactions(from: DateTime(now.year, now.month - 2, 1));
+});
+
 final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((
   ref,
 ) {
@@ -805,6 +819,7 @@ final outboxFlushProvider = Provider<void>((ref) {
       ref.invalidate(pendingOutboxCountProvider);
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
     }
   });
 });
@@ -903,40 +918,63 @@ final ownedCardsWithProductProvider =
       return AsyncValue.data(pairs);
     });
 
-/// Task G-0 (scoped to what E3 needs): wraps `creditUtilization()` per
-/// owned card that has a [UserCard.creditLimit] set — cards without one are
-/// simply absent from the map, matching E3's "exclude cards with no limit
-/// entered, prompt to add it" requirement rather than defaulting to a
-/// fabricated limit. Recomputes automatically whenever
-/// ownedCardsWithProductProvider changes (a new transaction, a limit being
-/// added), same as every other derived provider in this file.
+/// Task G-0 (scoped to what E3 needs): wraps `creditUtilization()` per owned
+/// card that has a [UserCard.creditLimit] set. The balance input is the
+/// active credit-card spend logged in PandaPay since the current statement
+/// cycle (or the current calendar month when no statement day is known).
+/// It deliberately excludes UPI/debit/cash, transfers, ignored rows, and
+/// cardless transactions. This is still a tracked-spend estimate, not the
+/// issuer's statement balance, but it is now the same transaction ledger the
+/// rest of the app reports instead of reward-cap consumption.
 final creditUtilizationProvider = Provider<Map<String, UtilizationResult>>((
   ref,
 ) {
   final pairs =
       ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+  final transactions =
+      ref.watch(utilizationTransactionsProvider).valueOrNull ?? const [];
+  final now = ref.watch(clockProvider).now();
   final result = <String, UtilizationResult>{};
   for (final (userCard, _) in pairs) {
     final limit = userCard.creditLimit;
     if (limit == null || limit.isZero) continue;
-    // "Current balance" isn't tracked as its own figure anywhere yet (no
-    // statement-balance concept exists client-side) — the best available
-    // proxy is this cycle's spend-measure cap consumption summed across the
-    // card's own cap rules is too narrow (caps are category-specific, not
-    // whole-card). Lacking a real running balance, total points-earning
-    // spend isn't tracked either, so this pass uses the sum of every
-    // spend-measure cap's consumed amount as a lower-bound estimate and
-    // marks the figure as such in the screen (E3's own confidence badge) —
-    // flagged explicitly in the final report rather than silently treated
-    // as an exact balance.
-    final spendProxy = userCard.capConsumed.values.fold<Money>(
-      const Money.zero(),
-      (a, b) => a + b,
-    );
-    result[userCard.id] = creditUtilization(spendProxy, limit);
+    final trackedSpend = _trackedCreditCardSpend(userCard, transactions, now);
+    result[userCard.id] = creditUtilization(trackedSpend, limit);
   }
   return result;
 });
+
+Money _trackedCreditCardSpend(
+  UserCard card,
+  List<TransactionEntry> transactions,
+  DateTime now,
+) {
+  final cycleStart = card.statementDay == null
+      ? DateTime(now.year, now.month, 1)
+      : _previousStatementOccurrence(card.statementDay!, now);
+  var total = const Money.zero();
+  for (final txn in transactions) {
+    if (txn.status != 'active' || txn.userCardId != card.id) continue;
+    if (txn.entryKind != TxnEntryKind.spend ||
+        txn.instrument != TxnInstrument.creditCard ||
+        txn.occurredAt.isBefore(cycleStart)) {
+      continue;
+    }
+    total += txn.amount;
+  }
+  return total;
+}
+
+DateTime _previousStatementOccurrence(int day, DateTime from) {
+  final thisMonth = DateTime(from.year, from.month, _clampDay(from.year, from.month, day));
+  if (!thisMonth.isAfter(from)) return thisMonth;
+  return DateTime(from.year, from.month - 1, _clampDay(from.year, from.month - 1, day));
+}
+
+int _clampDay(int year, int month, int day) {
+  final lastDay = DateTime(year, month + 1, 0).day;
+  return day > lastDay ? lastDay : day;
+}
 
 /// Task G-0 (the rest of it — E3's slice landed in Chunk 36): G2's amount
 /// input. A dedicated provider rather than reusing enteredAmountProvider —
@@ -970,17 +1008,17 @@ final splitPlanProvider = Provider<List<SplitAllocation>>((ref) {
   final wallet = [for (final (uc, _) in pairs) uc];
   final products = [for (final (_, p) in pairs) p];
   final snapshots = _userCardSnapshots(products, wallet);
+  final transactions =
+      ref.watch(utilizationTransactionsProvider).valueOrNull ?? const [];
+  final now = ref.watch(clockProvider).now();
 
   final utilizationCeiling = <String, Money>{};
   for (final (userCard, product) in pairs) {
     final limit = userCard.creditLimit;
     if (limit == null || limit.isZero) continue;
     final threshold = limit * 0.30;
-    final spendProxy = userCard.capConsumed.values.fold<Money>(
-      const Money.zero(),
-      (a, b) => a + b,
-    );
-    final headroom = threshold - spendProxy;
+    final trackedSpend = _trackedCreditCardSpend(userCard, transactions, now);
+    final headroom = threshold - trackedSpend;
     utilizationCeiling[product.id] = headroom.isNegative
         ? const Money.zero()
         : headroom;
@@ -1693,6 +1731,21 @@ final geofenceMonitorServiceProvider = Provider<GeofenceMonitorService>((ref) {
     // _notify() used to call flutter_local_notifications directly, bypassing
     // category_location, quiet hours, and the daily cap entirely.
     gate: ref.watch(notificationGateProvider),
+    recommendationTextBuilder: (match) {
+      final recommendation = ref
+          .read(bestCardForMerchantProvider(match.candidate.categoryId))
+          .valueOrNull;
+      if (recommendation == null || recommendation.isExcluded) return null;
+      final rate = recommendation.effectiveRatePerRupee;
+      if (rate != null && rate > 0) {
+        final percent = rate * 100;
+        final formatted = percent == percent.roundToDouble()
+            ? percent.toStringAsFixed(0)
+            : percent.toStringAsFixed(1);
+        return 'Use ${recommendation.card.name} here · earn $formatted% reward.';
+      }
+      return 'Use ${recommendation.card.name} here · estimated ${recommendation.expectedValue.format(hidePaise: true)} back.';
+    },
   );
   ref.onDispose(() => service.stop());
   return service;
@@ -1798,6 +1851,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       });
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
     } catch (_) {
       // Offline or server down — the queue keeps what it couldn't send.
     }
@@ -1839,6 +1893,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       ref.invalidate(needsReviewCountProvider);
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
     }
   }
 
@@ -1880,6 +1935,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     await prefs.setInt(inboxReconciliationKey, now.millisecondsSinceEpoch);
     ref.invalidate(userCardsProvider);
     ref.invalidate(transactionsProvider);
+    ref.invalidate(utilizationTransactionsProvider);
     ref.invalidate(needsReviewCountProvider);
     ref.invalidate(spendReportProvider);
     ref.invalidate(budgetsProvider);
@@ -1902,6 +1958,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       await retryExistingNeedsReview();
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
       // Reconciliation can change both active-row counts and categories. The
       // report family must be invalidated too; otherwise an already-open
       // Spending screen keeps rendering the pre-repair snapshot until the
@@ -1987,6 +2044,7 @@ class SmsAutoImportController {
       }
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(transactionsProvider);
+      _ref.invalidate(utilizationTransactionsProvider);
       _ref.invalidate(needsReviewCountProvider);
       _ref.invalidate(spendReportProvider);
       _ref.invalidate(budgetsProvider);

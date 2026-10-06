@@ -8,13 +8,16 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
+import 'grouped_insight_screen.dart';
 
 /// ui-spec.md E5 Annual Fee Waivers. Per the plan, mostly assembly:
 /// UserCard.feeWaiverStates was already parsed and shown only as a Cards-tab
 /// badge — this is its own screen over the same already-fetched data.
 /// Days-to-anniversary uses UserCard.anniversaryOn (Task E-0).
 class FeeWaiversScreen extends ConsumerWidget {
-  const FeeWaiversScreen({super.key});
+  final bool embedded;
+
+  const FeeWaiversScreen({super.key, this.embedded = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,7 +37,8 @@ class FeeWaiversScreen extends ConsumerWidget {
           return const EmptyState(
             icon: Icons.card_giftcard_outlined,
             title: 'No fee waivers to track',
-            message: 'None of your cards have an annual-fee waiver rule — or you haven\'t added a card yet.',
+            message:
+                'None of your cards have an annual-fee waiver rule — or you haven\'t added a card yet.',
           );
         }
         // Task E-0c urgency sort: closer-to-threshold and closer-to-deadline
@@ -51,16 +55,49 @@ class FeeWaiversScreen extends ConsumerWidget {
           return scoreA.compareTo(scoreB);
         });
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(AppSpace.lg),
-          itemCount: rows.length,
-          itemBuilder: (context, index) {
-            final (userCard, product, fw) = rows[index];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: AppSpace.md),
-              child: _FeeWaiverTile(userCard: userCard, product: product, fw: fw),
-            );
-          },
+        final groups =
+            <
+              String,
+              ({
+                UserCard userCard,
+                CardProduct product,
+                List<FeeWaiverProgress> waivers,
+              })
+            >{};
+        for (final (userCard, product, fw) in rows) {
+          final group = groups.putIfAbsent(
+            userCard.id,
+            () => (
+              userCard: userCard,
+              product: product,
+              waivers: <FeeWaiverProgress>[],
+            ),
+          );
+          group.waivers.add(fw);
+        }
+
+        return ListView(
+          padding: embedded
+              ? EdgeInsets.zero
+              : const EdgeInsets.all(AppSpace.lg),
+          shrinkWrap: embedded,
+          physics: embedded ? const NeverScrollableScrollPhysics() : null,
+          children: [
+            for (final group in groups.values)
+              CardCapabilitySection(
+                cardName: group.userCard.nickname?.isNotEmpty == true
+                    ? group.userCard.nickname!
+                    : group.product.name,
+                capabilityLabel:
+                    'fee waiver${group.waivers.length == 1 ? '' : 's'}',
+                capabilityCount: group.waivers.length,
+                children: [
+                  const CardCapabilitySubheading('Fee waivers'),
+                  for (final fw in group.waivers)
+                    _FeeWaiverTile(userCard: group.userCard, fw: fw),
+                ],
+              ),
+          ],
         );
       },
     );
@@ -69,9 +106,8 @@ class FeeWaiversScreen extends ConsumerWidget {
 
 class _FeeWaiverTile extends StatelessWidget {
   final UserCard userCard;
-  final CardProduct product;
   final FeeWaiverProgress fw;
-  const _FeeWaiverTile({required this.userCard, required this.product, required this.fw});
+  const _FeeWaiverTile({required this.userCard, required this.fw});
 
   @override
   Widget build(BuildContext context) {
@@ -83,9 +119,13 @@ class _FeeWaiverTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: waived ? BambooInk.jade.withValues(alpha: 0.10) : BambooInk.glassFillOnPaper,
+        color: waived
+            ? BambooInk.jade.withValues(alpha: 0.10)
+            : BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: waived ? BambooInk.jade : BambooInk.hairlineOnPaper),
+        border: Border.all(
+          color: waived ? BambooInk.jade : BambooInk.hairlineOnPaper,
+        ),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
@@ -97,14 +137,12 @@ class _FeeWaiverTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-                      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-                    ),
-                    const SizedBox(height: 2),
                     Row(
                       children: [
-                        Text('Fee waived at ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                        Text(
+                          'Fee waived at ',
+                          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                        ),
                         MoneyText(
                           fw.waivesFee,
                           confidence: Confidence.estimated,
@@ -123,7 +161,11 @@ class _FeeWaiverTile extends StatelessWidget {
                   icon: Icons.check_rounded,
                 )
               else if (ratio >= 0.9)
-                const Icon(Icons.warning_amber_rounded, size: 16, color: BambooInk.amber),
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  size: 16,
+                  color: BambooInk.amber,
+                ),
             ],
           ),
           const SizedBox(height: AppSpace.md),
@@ -148,7 +190,10 @@ class _FeeWaiverTile extends StatelessWidget {
                       confidence: Confidence.estimated,
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
-                    Text(' of ', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    Text(
+                      ' of ',
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
                     MoneyText(
                       fw.thresholdSpend,
                       confidence: Confidence.estimated,

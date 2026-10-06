@@ -611,21 +611,23 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoute.limitsAndPerks,
         builder: (context, state) => const GroupedInsightScreen(
           title: 'Limits & perks',
+          verticalSections: true,
           tabs: [
-            (label: 'Caps', body: CapsScreen()),
-            (label: 'Milestones', body: MilestonesScreen()),
-            (label: 'Fee waivers', body: FeeWaiversScreen()),
+            (label: 'Caps', body: CapsScreen(embedded: true)),
+            (label: 'Milestones', body: MilestonesScreen(embedded: true)),
+            (label: 'Fee waivers', body: FeeWaiversScreen(embedded: true)),
             // A lounge quota is the same shape as a cap — "N visits a year,
             // M used" — so it belongs with the thresholds rather than
             // sitting alone on the grid.
-            (label: 'Lounge', body: LoungeAccessScreen()),
+            (label: 'Lounge', body: LoungeAccessScreen(embedded: true)),
           ],
         ),
       ),
       GoRoute(
         path: AppRoute.rewardsGroup,
-        builder: (context, state) => const GroupedInsightScreen(
+        builder: (context, state) => GroupedInsightScreen(
           title: 'Rewards',
+          initialIndex: state.uri.queryParameters['tab'] == 'missed' ? 1 : 0,
           tabs: [
             (label: 'This month', body: MonthlySavingsScreen()),
             (

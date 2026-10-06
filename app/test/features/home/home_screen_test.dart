@@ -58,6 +58,10 @@ void main() {
     expect(find.text('What are you paying for?'), findsOneWidget);
   });
 
+  test('rent is available as a first-class spending category', () {
+    expect(HomeScreen.categoryLabelFor('rent'), 'Rent');
+  });
+
   testWidgets('an override pill navigates to Manual Overrides on tap', (tester) async {
     final recs = [
       Recommendation(

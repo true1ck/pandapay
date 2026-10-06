@@ -138,3 +138,25 @@ test('a card with no base rate stated earns nothing on the fallback path', () =>
   });
   assert.strictEqual(result.valueInr, 0);
 });
+
+test('negative purchase amounts earn no reward and malformed rates cannot exceed the purchase', () => {
+  const card = { base_reward_unit: 'cashback_percent', base_reward_rate: 500, point_value_inr: 1 };
+  const negative = computeTransactionReward({
+    card,
+    rewardRules: [],
+    capRules: [],
+    capConsumedBefore: 0,
+    ctx: { amount: -100, categoryId: null, merchantName: null, rail: 'swipe' },
+  });
+  const oversized = computeTransactionReward({
+    card,
+    rewardRules: [],
+    capRules: [],
+    capConsumedBefore: 0,
+    ctx: { amount: 100, categoryId: null, merchantName: null, rail: 'swipe' },
+  });
+
+  assert.strictEqual(negative.valueInr, 0);
+  assert.strictEqual(negative.points, 0);
+  assert.strictEqual(oversized.valueInr, 100);
+});

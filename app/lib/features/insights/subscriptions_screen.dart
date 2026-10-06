@@ -57,8 +57,7 @@ class SubscriptionsScreen extends ConsumerWidget {
                 icon: Icons.autorenew_rounded,
                 title: 'No repeating charges found yet',
                 message: 'PandaPay looks for the same merchant charging a similar amount on a '
-                    'regular cycle. It needs at least three of them before it will call '
-                    'something a subscription.',
+                    'regular cycle, and also watches for explicit UPI or card mandate SMS alerts.',
                 onRefresh: () async => ref.invalidate(recurringReportProvider),
               );
             }
@@ -158,18 +157,55 @@ class _SeriesCard extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              MoneyText(
-                series.typicalAmount,
-                confidence: Confidence.estimated,
-                style: BambooFonts.ui(14.5, weight: FontWeight.w700, color: BambooInk.ink900),
-              ),
+              if (series.typicalAmount.paise > 0)
+                MoneyText(
+                  series.typicalAmount,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.ui(14.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                )
+              else
+                Text(
+                  'Amount varies',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
             ],
           ),
           const SizedBox(height: 2),
           Text(
-            '${series.cadenceLabel} · ${series.annualCost.format(hidePaise: true)} a year',
+            series.typicalAmount.paise > 0
+                ? '${series.cadenceLabel} · ${series.annualCost.format(hidePaise: true)} a year'
+                : '${series.cadenceLabel} · amount not stated in the SMS',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
+          if (series.isMandate) ...[
+            const SizedBox(height: 5),
+            Row(
+              children: [
+                const Icon(Icons.verified_outlined, size: 15, color: BambooInk.jade),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    'Mandate detected from SMS · not counted as a spend until a debit arrives',
+                    style: BambooFonts.ui(11.5, color: BambooInk.jade),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (series.categoryName != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Category: ${series.categoryName}',
+              style: BambooFonts.ui(12, color: BambooInk.ink500),
+            ),
+          ],
+          if (series.paymentMethod != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Payment: ${_paymentMethodLabel(series.paymentMethod!)}',
+              style: BambooFonts.ui(12, color: BambooInk.ink500),
+            ),
+          ],
           if (next != null) ...[
             const SizedBox(height: 2),
             Text(
@@ -219,6 +255,21 @@ class _SeriesCard extends ConsumerWidget {
           SnackBar(content: Text(userFacingErrorMessage(e))),
         );
       }
+    }
+  }
+
+  String _paymentMethodLabel(String value) {
+    switch (value) {
+      case 'credit_card':
+        return 'Credit card';
+      case 'debit_card':
+        return 'Debit card';
+      case 'upi_bank':
+        return 'UPI / bank account';
+      case 'wallet':
+        return 'Wallet';
+      default:
+        return value;
     }
   }
 }

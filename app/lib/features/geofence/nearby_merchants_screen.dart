@@ -285,7 +285,17 @@ class _NearbyMerchantTile extends ConsumerWidget {
                   const Icon(Icons.credit_card, size: 18, color: BambooInk.ink900),
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Text('Use ${rec.card.name}', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Use ${rec.card.name}', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+                        if (rec.effectiveRatePerRupee != null && rec.effectiveRatePerRupee! > 0)
+                          Text(
+                            '${_rateLabel(rec.effectiveRatePerRupee!)} reward rate',
+                            style: BambooFonts.ui(11.5, color: BambooInk.jade),
+                          ),
+                      ],
+                    ),
                   ),
                   MoneyText(
                     rec.expectedValue,
@@ -299,5 +309,12 @@ class _NearbyMerchantTile extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  String _rateLabel(double rate) {
+    final percent = rate * 100;
+    return percent == percent.roundToDouble()
+        ? '${percent.toStringAsFixed(0)}%'
+        : '${percent.toStringAsFixed(1)}%';
   }
 }

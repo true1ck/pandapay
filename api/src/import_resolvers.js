@@ -1,5 +1,7 @@
 const { normalizeMerchant } = require('./reward_math');
 const { inferBuiltinCategory } = require('./merchant_category');
+const { extractCreditLimit } = require('./card_limit_parser');
+const { extractDueDate, extractLast4 } = require('./due_date_parser');
 
 /**
  * Resolving the two things a parsed bank message does NOT tell us: which of
@@ -80,6 +82,81 @@ async function resolveUserCardForImport(client, userId, { last4, patternIssuerId
   }
 
   return null;
+}
+
+/**
+ * Fill a missing card limit from an explicit bank SMS.
+ *
+ * This is deliberately additive only: a value entered by the user, or one
+ * already learned from an earlier alert, is never silently overwritten. The
+ * card must also resolve unambiguously by last4/issuer; a limit from an
+ * issuer-wide alert must not be assigned to the wrong card.
+ */
+async function syncCreditLimitFromSms(client, userId, { body, patternIssuerId }) {
+  const detected = extractCreditLimit(body);
+  if (!detected) return null;
+
+  const card = await resolveUserCardForImport(client, userId, {
+    last4: detected.last4,
+    patternIssuerId,
+  });
+  if (!card) {
+    return { detected, updated: false, reason: 'card_not_unambiguous' };
+  }
+
+  const updated = await client.query(
+    `UPDATE user_cards
+        SET credit_limit_inr = $1
+      WHERE id = $2
+        AND profile_id = $3
+        AND is_archived = false
+        AND credit_limit_inr IS NULL
+      RETURNING id`,
+    [detected.amountInr, card.userCardId, userId],
+  );
+
+  return {
+    detected,
+    updated: updated.rowCount > 0,
+    userCardId: card.userCardId,
+    basis: card.basis,
+  };
+}
+
+/**
+ * Learn a card's recurring payment due day from an explicit issuer alert.
+ *
+ * This is additive and conservative: it requires both an explicit due-date
+ * phrase and an unambiguous card match. Existing user-entered data is not
+ * overwritten by a later alert.
+ */
+async function syncDueDayFromSms(client, userId, { body, patternIssuerId }) {
+  const detected = extractDueDate(body);
+  if (!detected) return null;
+
+  const card = await resolveUserCardForImport(client, userId, {
+    last4: extractLast4(body),
+    patternIssuerId,
+  });
+  if (!card) return { detected, updated: false, reason: 'card_not_unambiguous' };
+
+  const updated = await client.query(
+    `UPDATE user_cards
+        SET due_day = $1
+      WHERE id = $2
+        AND profile_id = $3
+        AND is_archived = false
+        AND due_day IS NULL
+      RETURNING id`,
+    [detected.day, card.userCardId, userId],
+  );
+
+  return {
+    detected,
+    updated: updated.rowCount > 0,
+    userCardId: card.userCardId,
+    basis: card.basis,
+  };
 }
 
 /**
@@ -237,4 +314,10 @@ async function fileForReview(client, userId, { source, rawText, sender, parseErr
   return inserted.rows[0].id;
 }
 
-module.exports = { resolveUserCardForImport, resolveCategoryForImport, fileForReview };
+module.exports = {
+  resolveUserCardForImport,
+  syncCreditLimitFromSms,
+  syncDueDayFromSms,
+  resolveCategoryForImport,
+  fileForReview,
+};

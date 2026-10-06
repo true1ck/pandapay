@@ -42,9 +42,9 @@ Future<void> _pumpApp(WidgetTester tester) async {
         userCardsProvider.overrideWith((ref) async => const []),
         userCardsRepositoryProvider.overrideWithValue(null),
         spendReportsRepositoryProvider.overrideWithValue(null),
-        insightsOverviewProvider(InsightsPeriod.thisMonth).overrideWith(
-          (ref) async => InsightsOverview.empty,
-        ),
+        insightsOverviewProvider(
+          InsightsPeriod.thisMonth,
+        ).overrideWith((ref) async => InsightsOverview.empty),
         sessionInitProvider.overrideWith((ref) async {}),
         accessTokenProvider.overrideWith((ref) => 'test-token'),
       ],
@@ -171,12 +171,11 @@ void main() {
     expect(find.text('Spending'), findsOneWidget);
   });
 
-  testWidgets('Limits & perks opens the grouped screen, landing on Caps', (
+  testWidgets('Limits & perks opens as one vertical card-capability view', (
     tester,
   ) async {
-    // Caps is still one tap away — it is the first tab of the group, so the
-    // merge cost no depth for the most-used view while putting milestones,
-    // fee waivers and lounge quotas one tap from it instead of three.
+    // All capability groups are rendered in one vertical scroll so the user
+    // does not need to discover or swipe a hidden tab bar.
     await _openInsights(tester);
 
     await _reveal(tester, 'Limits & perks');
@@ -187,11 +186,16 @@ void main() {
 
     expect(find.byType(CapsScreen), findsOneWidget);
     expect(find.byType(BackButton), findsOneWidget);
-    for (final tab in const ['Caps', 'Milestones', 'Fee waivers', 'Lounge']) {
+    for (final section in const [
+      'CAPS',
+      'MILESTONES',
+      'FEE WAIVERS',
+      'LOUNGE',
+    ]) {
       expect(
-        find.text(tab),
-        findsWidgets,
-        reason: 'the group must expose its siblings as tabs',
+        find.text(section),
+        findsOneWidget,
+        reason: 'the group must expose its sibling sections vertically',
       );
     }
   });

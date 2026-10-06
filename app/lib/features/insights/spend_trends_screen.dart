@@ -13,7 +13,28 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
+import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
+
+/// Rows for the same calendar period as the aggregate report. The report
+/// endpoint remains the source of truth for totals; this companion request
+/// only supplies the transaction-level rows needed by expandable details.
+final spendPeriodTransactionsProvider =
+    FutureProvider.family<List<TransactionEntry>, SpendPeriod>((
+      ref,
+      period,
+    ) async {
+      final repo = ref.watch(userCardsRepositoryProvider);
+      if (repo == null) return const [];
+
+      final report = await ref.watch(spendReportProvider(period).future);
+      if (report == null) return const [];
+
+      return repo.fetchTransactions(
+        from: report.periodStart,
+        to: report.periodEnd.subtract(const Duration(days: 1)),
+      );
+    });
 
 /// Spend Trends — where the money actually went, over time.
 ///
@@ -37,13 +58,17 @@ class SpendTrendsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final period = ref.watch(selectedSpendPeriodProvider);
     final report = ref.watch(spendReportProvider(period));
+    final transactions = ref.watch(spendPeriodTransactionsProvider(period));
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
         backgroundColor: BambooInk.paper,
         elevation: 0,
-        title: Text('Spending', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Spending',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
         actions: [
           // Export the period on screen, not "everything": someone sharing
           // a report with an accountant wants the quarter they're looking
@@ -73,7 +98,8 @@ class SpendTrendsScreen extends ConsumerWidget {
                     return const EmptyState(
                       icon: Icons.lock_outline_rounded,
                       title: 'Sign in to see your spending',
-                      message: 'Spending reports are built from your transaction history, which lives '
+                      message:
+                          'Spending reports are built from your transaction history, which lives '
                           'with your account.',
                     );
                   }
@@ -81,12 +107,22 @@ class SpendTrendsScreen extends ConsumerWidget {
                     return RefreshableEmptyState(
                       icon: Icons.insights_outlined,
                       title: 'Nothing logged ${period.label.toLowerCase()}',
-                      message: 'Add a transaction, or turn on SMS and email import, and this fills in '
+                      message:
+                          'Add a transaction, or turn on SMS and email import, and this fills in '
                           'with where your money went and how that compares to before.',
-                      onRefresh: () async => ref.invalidate(spendReportProvider(period)),
+                      onRefresh: () async =>
+                          ref.invalidate(spendReportProvider(period)),
                     );
                   }
-                  return _ReportBody(report: data, onRefresh: () => ref.invalidate(spendReportProvider(period)));
+                  return _ReportBody(
+                    report: data,
+                    transactions: transactions.valueOrNull ?? const [],
+                    transactionDetailsLoading: transactions.isLoading,
+                    onRefresh: () {
+                      ref.invalidate(spendReportProvider(period));
+                      ref.invalidate(spendPeriodTransactionsProvider(period));
+                    },
+                  );
                 },
               ),
             ),
@@ -104,7 +140,11 @@ class SpendTrendsScreen extends ConsumerWidget {
 /// platforms that is how a file reaches Drive, Mail, WhatsApp or a
 /// spreadsheet app, and it's the same pattern the Savings Report already
 /// uses to share its image.
-Future<void> _exportCsv(BuildContext context, WidgetRef ref, SpendReport report) async {
+Future<void> _exportCsv(
+  BuildContext context,
+  WidgetRef ref,
+  SpendReport report,
+) async {
   final repo = ref.read(spendReportsRepositoryProvider);
   if (repo == null) return;
   final messenger = ScaffoldMessenger.of(context);
@@ -116,12 +156,16 @@ Future<void> _exportCsv(BuildContext context, WidgetRef ref, SpendReport report)
       to: report.periodEnd.subtract(const Duration(days: 1)),
     );
     final dir = await getTemporaryDirectory();
-    final stamp = '${report.periodStart.year}-'
+    final stamp =
+        '${report.periodStart.year}-'
         '${report.periodStart.month.toString().padLeft(2, '0')}';
     final file = File('${dir.path}/pandapay-spending-$stamp.csv');
     await file.writeAsBytes(bytes);
     await SharePlus.instance.share(
-      ShareParams(files: [XFile(file.path)], text: 'My PandaPay spending report'),
+      ShareParams(
+        files: [XFile(file.path)],
+        text: 'My PandaPay spending report',
+      ),
     );
   } catch (e) {
     messenger.showSnackBar(
@@ -138,14 +182,18 @@ class _PeriodSelector extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.lg,
+        vertical: AppSpace.sm,
+      ),
       child: Row(
         children: [
           for (final p in SpendPeriod.values) ...[
             ChoiceChip(
               label: Text(p.label),
               selected: p == selected,
-              onSelected: (_) => ref.read(selectedSpendPeriodProvider.notifier).state = p,
+              onSelected: (_) =>
+                  ref.read(selectedSpendPeriodProvider.notifier).state = p,
               labelStyle: BambooFonts.ui(
                 13,
                 weight: p == selected ? FontWeight.w700 : FontWeight.w500,
@@ -164,17 +212,45 @@ class _PeriodSelector extends ConsumerWidget {
   }
 }
 
-class _ReportBody extends StatelessWidget {
+class _ReportBody extends StatefulWidget {
   final SpendReport report;
+  final List<TransactionEntry> transactions;
+  final bool transactionDetailsLoading;
   final VoidCallback onRefresh;
-  const _ReportBody({required this.report, required this.onRefresh});
+  const _ReportBody({
+    required this.report,
+    required this.transactions,
+    required this.transactionDetailsLoading,
+    required this.onRefresh,
+  });
+
+  @override
+  State<_ReportBody> createState() => _ReportBodyState();
+}
+
+class _ReportBodyState extends State<_ReportBody> {
+  List<TransactionEntry> _transactionsForCategory(SpendBreakdownRow row) {
+    return widget.transactions.where((entry) {
+      if (entry.status != 'active' || entry.entryKind != TxnEntryKind.spend)
+        return false;
+      if (row.categoryId != null) return entry.categoryId == row.categoryId;
+      return (entry.categoryName ?? 'Other').toLowerCase() ==
+          row.label.toLowerCase();
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final report = widget.report;
     return RefreshIndicator(
-      onRefresh: () async => onRefresh(),
+      onRefresh: () async => widget.onRefresh(),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.xl),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          AppSpace.sm,
+          AppSpace.lg,
+          AppSpace.xl,
+        ),
         children: [
           _HeadlineCard(report: report),
           const SizedBox(height: AppSpace.lg),
@@ -182,13 +258,19 @@ class _ReportBody extends StatelessWidget {
             _TrendChart(report: report),
             const SizedBox(height: AppSpace.lg),
           ],
-          if (!report.income.total.isZero || !report.investment.total.isZero) ...[
+          if (!report.income.total.isZero ||
+              !report.investment.total.isZero) ...[
             _FlowCard(report: report),
             const SizedBox(height: AppSpace.lg),
           ],
           _SectionHeader('Where it went'),
           for (final row in report.byCategory)
-            _BreakdownRow(label: row.label, amount: row.total, total: report.spend.total, count: row.txnCount),
+            _ExpandableCategoryRow(
+              row: row,
+              total: report.spend.total,
+              entries: _transactionsForCategory(row),
+              detailsLoading: widget.transactionDetailsLoading,
+            ),
           const SizedBox(height: AppSpace.lg),
           _SectionHeader('Payment method'),
           for (final row in report.byInstrument)
@@ -200,7 +282,8 @@ class _ReportBody extends StatelessWidget {
             ),
           const SizedBox(height: AppSpace.lg),
           _SectionHeader('Which card'),
-          for (final row in report.byCard) _CardRow(row: row, total: report.spend.total),
+          for (final row in report.byCard)
+            _CardRow(row: row, total: report.spend.total),
           const SizedBox(height: AppSpace.lg),
           _SectionHeader('Card spending by category'),
           for (final row in report.byCardCategory)
@@ -213,7 +296,12 @@ class _ReportBody extends StatelessWidget {
           const SizedBox(height: AppSpace.lg),
           _SectionHeader('Top merchants'),
           for (final row in report.byMerchant.take(10))
-            _BreakdownRow(label: row.label, amount: row.total, total: report.spend.total, count: row.txnCount),
+            _BreakdownRow(
+              label: row.label,
+              amount: row.total,
+              total: report.spend.total,
+              count: row.txnCount,
+            ),
           const SizedBox(height: AppSpace.lg),
           // The transaction list is the drill-down from a spend summary, so
           // it lives here rather than as its own tile on a grid of
@@ -223,7 +311,9 @@ class _ReportBody extends StatelessWidget {
               minimumSize: const Size.fromHeight(48),
               foregroundColor: BambooInk.ink900,
               side: const BorderSide(color: BambooInk.hairlineOnPaper),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
             icon: const Icon(Icons.receipt_long_rounded, size: 18),
             label: const Text('See every transaction'),
@@ -274,7 +364,9 @@ class _HeadlineCard extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  change >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                  change >= 0
+                      ? Icons.trending_up_rounded
+                      : Icons.trending_down_rounded,
                   size: 15,
                   // Neither direction is coloured as good or bad. Spending
                   // less isn't automatically a win (it might be a month with
@@ -304,16 +396,26 @@ class _HeadlineCard extends StatelessWidget {
           ],
           if (!report.spend.rewards.isZero) ...[
             const SizedBox(height: AppSpace.md),
-            Container(height: 1, color: BambooInk.onSlateMuted.withValues(alpha: 0.2)),
+            Container(
+              height: 1,
+              color: BambooInk.onSlateMuted.withValues(alpha: 0.2),
+            ),
             const SizedBox(height: AppSpace.md),
             Row(
               children: [
-                Text('Rewards earned', style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
+                Text(
+                  'Rewards earned',
+                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+                ),
                 const Spacer(),
                 MoneyText(
                   report.spend.rewards,
                   confidence: Confidence.estimated,
-                  style: BambooFonts.ui(14, weight: FontWeight.w700, color: BambooInk.lime),
+                  style: BambooFonts.ui(
+                    14,
+                    weight: FontWeight.w700,
+                    color: BambooInk.lime,
+                  ),
                 ),
               ],
             ),
@@ -370,7 +472,11 @@ class _FlowRow extends StatelessWidget {
   final String label;
   final Money amount;
   final bool emphasise;
-  const _FlowRow({required this.label, required this.amount, this.emphasise = false});
+  const _FlowRow({
+    required this.label,
+    required this.amount,
+    this.emphasise = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -410,7 +516,10 @@ class _TrendChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxPaise = report.series.fold<int>(0, (m, p) => p.spend.paise > m ? p.spend.paise : m);
+    final maxPaise = report.series.fold<int>(
+      0,
+      (m, p) => p.spend.paise > m ? p.spend.paise : m,
+    );
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
@@ -422,7 +531,11 @@ class _TrendChart extends StatelessWidget {
         children: [
           Text(
             'Last ${report.series.length} ${_unitLabel(report.period, report.series.length)}',
-            style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+            style: BambooFonts.ui(
+              12.5,
+              weight: FontWeight.w700,
+              color: BambooInk.ink900,
+            ),
           ),
           const SizedBox(height: AppSpace.md),
           SizedBox(
@@ -435,7 +548,8 @@ class _TrendChart extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 2),
                       child: Semantics(
-                        label: '${_barLabel(report.period, report.series[i].periodStart)}: '
+                        label:
+                            '${_barLabel(report.period, report.series[i].periodStart)}: '
                             '${report.series[i].spend.format(hidePaise: true)}',
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.end,
@@ -446,9 +560,14 @@ class _TrendChart extends StatelessWidget {
                               // chart that reads as missing data.
                               height: maxPaise == 0
                                   ? 2
-                                  : (2 + 86 * (report.series[i].spend.paise / maxPaise)),
+                                  : (2 +
+                                        86 *
+                                            (report.series[i].spend.paise /
+                                                maxPaise)),
                               decoration: BoxDecoration(
-                                color: i == report.series.length - 1 ? BambooInk.jade : BambooInk.ink500,
+                                color: i == report.series.length - 1
+                                    ? BambooInk.jade
+                                    : BambooInk.ink500,
                                 borderRadius: BorderRadius.circular(3),
                               ),
                             ),
@@ -490,8 +609,18 @@ class _TrendChart extends StatelessWidget {
   }
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   static String _barLabel(SpendPeriod period, DateTime start) {
@@ -502,8 +631,10 @@ class _TrendChart extends StatelessWidget {
     final localStart = start.toLocal();
     return switch (period) {
       SpendPeriod.week => '${localStart.day} ${_months[localStart.month - 1]}',
-      SpendPeriod.month => '${_months[localStart.month - 1]} ${localStart.year % 100}',
-      SpendPeriod.quarter => 'Q${((localStart.month - 1) ~/ 3) + 1} ${localStart.year % 100}',
+      SpendPeriod.month =>
+        '${_months[localStart.month - 1]} ${localStart.year % 100}',
+      SpendPeriod.quarter =>
+        'Q${((localStart.month - 1) ~/ 3) + 1} ${localStart.year % 100}',
       SpendPeriod.year => '${localStart.year}',
     };
   }
@@ -518,10 +649,258 @@ class _SectionHeader extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: AppSpace.sm),
     child: Text(
       label.toUpperCase(),
-      style: BambooFonts.ui(11.5, weight: FontWeight.w700, color: BambooInk.ink500)
-          .copyWith(letterSpacing: 0.8),
+      style: BambooFonts.ui(
+        11.5,
+        weight: FontWeight.w700,
+        color: BambooInk.ink500,
+      ).copyWith(letterSpacing: 0.8),
     ),
   );
+}
+
+/// A category total that can be opened without leaving the report. The
+/// expanded content is built from the same transaction rows used by Activity,
+/// so merchants, cards, dates and rewards remain traceable to a real payment.
+class _ExpandableCategoryRow extends StatelessWidget {
+  final SpendBreakdownRow row;
+  final Money total;
+  final List<TransactionEntry> entries;
+  final bool detailsLoading;
+
+  const _ExpandableCategoryRow({
+    required this.row,
+    required this.total,
+    required this.entries,
+    required this.detailsLoading,
+  });
+
+  List<MapEntry<String, List<TransactionEntry>>> _merchantGroups() {
+    final grouped = <String, List<TransactionEntry>>{};
+    for (final entry in entries) {
+      final merchant = (entry.merchantName?.trim().isNotEmpty ?? false)
+          ? entry.merchantName!.trim()
+          : 'Unknown merchant';
+      grouped.putIfAbsent(merchant, () => []).add(entry);
+    }
+    final result = grouped.entries.toList()
+      ..sort((a, b) {
+        final aTotal = a.value.fold<int>(
+          0,
+          (sum, entry) => sum + entry.amount.paise,
+        );
+        final bTotal = b.value.fold<int>(
+          0,
+          (sum, entry) => sum + entry.amount.paise,
+        );
+        return bTotal.compareTo(aTotal);
+      });
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = total.isZero
+        ? 0.0
+        : (row.total.paise / total.paise).clamp(0.0, 1.0);
+    final groups = _merchantGroups();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.sm),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          0,
+          AppSpace.md,
+          AppSpace.sm,
+        ),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    row.label,
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Text(
+                  '${(ratio * 100).toStringAsFixed(0)}%',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                MoneyText(
+                  row.total,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.ui(
+                    13.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'} · Tap to see merchants',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              child: LinearProgressIndicator(
+                value: ratio,
+                minHeight: 4,
+                backgroundColor: BambooInk.paperMuted,
+                color: BambooInk.jade,
+              ),
+            ),
+          ],
+        ),
+        children: [
+          if (detailsLoading && entries.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Loading transaction details…'),
+              ),
+            )
+          else if (groups.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Transaction details are not available for this period yet.',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+              ),
+            )
+          else
+            for (final group in groups)
+              _MerchantGroup(merchant: group.key, entries: group.value),
+        ],
+      ),
+    );
+  }
+}
+
+class _MerchantGroup extends StatelessWidget {
+  final String merchant;
+  final List<TransactionEntry> entries;
+
+  const _MerchantGroup({required this.merchant, required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = entries.fold<Money>(
+      const Money.zero(),
+      (sum, entry) => sum + entry.amount,
+    );
+    final rewards = entries.fold<Money>(
+      const Money.zero(),
+      (sum, entry) => sum + (entry.rewardValue ?? const Money.zero()),
+    );
+    final hasRewardData = entries.any((entry) => entry.rewardValue != null);
+    final cards = entries
+        .map((entry) => entry.cardDisplayName ?? _paymentLabel(entry))
+        .toSet()
+        .join(', ');
+    final sorted = [...entries]
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpace.sm),
+      padding: const EdgeInsets.all(AppSpace.sm),
+      decoration: BoxDecoration(
+        color: BambooInk.paperMuted,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  merchant,
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+              ),
+              MoneyText(
+                amount,
+                confidence: Confidence.estimated,
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w700,
+                  color: BambooInk.ink900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${entries.length} ${entries.length == 1 ? 'transaction' : 'transactions'} · $cards',
+            style: BambooFonts.ui(11, color: BambooInk.ink500),
+          ),
+          if (hasRewardData)
+            Text(
+              'Rewards earned ${rewards.format()}',
+              style: BambooFonts.ui(11, color: BambooInk.ink500),
+            ),
+          const SizedBox(height: 2),
+          for (final entry in sorted)
+            Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                title: Text(
+                  '${_shortDate(entry.occurredAt)} · ${_paymentLabel(entry)}',
+                  style: BambooFonts.ui(11.5, color: BambooInk.ink900),
+                ),
+                subtitle: Text(
+                  entry.cardDisplayName ?? entry.instrument.label,
+                  style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+                ),
+                trailing: MoneyText(
+                  entry.amount,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.ui(
+                    11.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+                onTap: () => context.push('/activity/${entry.id}'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _shortDate(DateTime date) {
+    final local = date.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
+  }
+
+  static String _paymentLabel(TransactionEntry entry) {
+    if (entry.cardLast4 != null)
+      return '${entry.instrument.label} ••${entry.cardLast4}';
+    return entry.instrument.label;
+  }
 }
 
 class _BreakdownRow extends StatelessWidget {
@@ -539,7 +918,9 @@ class _BreakdownRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ratio = total.isZero ? 0.0 : (amount.paise / total.paise).clamp(0.0, 1.0);
+    final ratio = total.isZero
+        ? 0.0
+        : (amount.paise / total.paise).clamp(0.0, 1.0);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.md),
       child: Column(
@@ -563,7 +944,11 @@ class _BreakdownRow extends StatelessWidget {
               MoneyText(
                 amount,
                 confidence: Confidence.estimated,
-                style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                style: BambooFonts.ui(
+                  13.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
               ),
             ],
           ),
@@ -596,7 +981,9 @@ class _CardRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ratio = total.isZero ? 0.0 : (row.total.paise / total.paise).clamp(0.0, 1.0);
+    final ratio = total.isZero
+        ? 0.0
+        : (row.total.paise / total.paise).clamp(0.0, 1.0);
     final rate = row.effectiveRatePerRupee;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.md),
@@ -616,7 +1003,11 @@ class _CardRow extends StatelessWidget {
               MoneyText(
                 row.total,
                 confidence: Confidence.estimated,
-                style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                style: BambooFonts.ui(
+                  13.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
               ),
             ],
           ),
@@ -625,14 +1016,14 @@ class _CardRow extends StatelessWidget {
             '${row.txnCount} ${row.txnCount == 1 ? 'transaction' : 'transactions'}',
             style: BambooFonts.ui(11.5, color: BambooInk.ink500),
           ),
-          if (rate != null && !row.rewards.isZero) ...[
-            const SizedBox(height: 2),
-            Text(
-              'Earned ${row.rewards.format(hidePaise: true)} — '
-              '${(rate * 100).toStringAsFixed(2)}% back on what you spent here',
-              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-            ),
-          ],
+          const SizedBox(height: 2),
+          Text(
+            rate != null && !row.rewards.isZero
+                ? 'Rewards earned ${row.rewards.format(hidePaise: true)} — '
+                      '${(rate * 100).toStringAsFixed(2)}% back on what you spent here'
+                : 'Rewards earned ${row.rewards.format(hidePaise: true)}',
+            style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+          ),
           const SizedBox(height: 4),
           ClipRRect(
             borderRadius: BorderRadius.circular(AppRadius.pill),

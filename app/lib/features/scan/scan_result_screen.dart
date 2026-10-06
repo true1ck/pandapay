@@ -11,6 +11,7 @@ import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/override_resolver.dart';
+import '../../data/scanned_merchant_category.dart';
 import '../../data/upi_payment_service.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
@@ -56,8 +57,11 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   /// stuck on "enter an amount" while the field showed a number.
   Money get _amount {
     final parsed = double.tryParse(_amountController.text.trim());
-    return (parsed != null && parsed > 0) ? Money.fromRupees(parsed) : const Money.zero();
+    return (parsed != null && parsed > 0)
+        ? Money.fromRupees(parsed)
+        : const Money.zero();
   }
+
   // "Wasn't accepted" — session-local only re-rank, see scope note above.
   // This is deliberate, not a missing wire-up: POST /acceptance-reports and
   // AcceptanceReportsRepository DO exist and ARE used (payment_sent_screen.dart),
@@ -83,6 +87,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     );
     // Rebuild the ranked list (and clear the red flag) as the user types.
     _amountController.addListener(_onAmountControllerChanged);
+    _merchantController.addListener(_onMerchantControllerChanged);
   }
 
   void _onAmountControllerChanged() {
@@ -91,9 +96,18 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     });
   }
 
+  void _onMerchantControllerChanged() {
+    // A typed merchant name is part of the scan context. Re-run the local
+    // classifier while the user edits it, but never overwrite an explicit
+    // category choice they already made.
+    if (!mounted || _selectedCategoryId != null) return;
+    setState(() {});
+  }
+
   @override
   void dispose() {
     _merchantController.dispose();
+    _merchantController.removeListener(_onMerchantControllerChanged);
     _amountController.removeListener(_onAmountControllerChanged);
     _amountController.dispose();
     _amountFocusNode.dispose();
@@ -115,17 +129,23 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Scan result', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Scan result',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
         actions: [
           IconButton(
             tooltip: 'Compare all cards',
             icon: const Icon(Icons.compare_arrows_rounded),
-            onPressed: () =>
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ComparisonViewScreen())),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ComparisonViewScreen()),
+            ),
           ),
         ],
       ),
-      body: AppBackground(child: _buildBody(catalogue, categories, userCards, overrides, engine)),
+      body: AppBackground(
+        child: _buildBody(catalogue, categories, userCards, overrides, engine),
+      ),
     );
   }
 
@@ -152,10 +172,17 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       return _P2PNotice(vpa: widget.parsed.pa);
     }
 
-    if (catalogue.isLoading || categories.isLoading || userCards.isLoading || overrides.isLoading) {
+    if (catalogue.isLoading ||
+        categories.isLoading ||
+        userCards.isLoading ||
+        overrides.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    final combinedError = catalogue.error ?? categories.error ?? userCards.error ?? overrides.error;
+    final combinedError =
+        catalogue.error ??
+        categories.error ??
+        userCards.error ??
+        overrides.error;
     if (combinedError != null) {
       return ErrorState(message: userFacingErrorMessage(combinedError));
     }
@@ -164,6 +191,13 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final categoryList = categories.requireValue;
     final wallet = userCards.requireValue;
     final overrideList = overrides.requireValue;
+    final inferredCategoryId = categoryIdForScannedMerchant(
+      merchantName: _merchantController.text,
+      vpa: widget.parsed.pa,
+      mcc: widget.parsed.mc,
+      categories: categoryList,
+    );
+    final activeCategoryId = _selectedCategoryId ?? inferredCategoryId;
 
     // ui-spec B1 says "No cards → CTA to add one". B3 has no rule of its own,
     // so: with an empty wallet still rank the whole catalogue (a useful
@@ -173,7 +207,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final walletEmpty = wallet.isEmpty;
     var cards = walletEmpty
         ? allCards
-        : allCards.where((c) => wallet.any((w) => w.cardProductId == c.id)).toList();
+        : allCards
+              .where((c) => wallet.any((w) => w.cardProductId == c.id))
+              .toList();
 
     // No merchant code on the QR: the only card that can pay here is one
     // linkable to UPI (today, per NPCI, that's RuPay credit cards — but the
@@ -193,7 +229,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final overrideProductId = resolveActiveOverrideCardProductId(
       overrides: overrideList,
       wallet: wallet,
-      categoryId: _selectedCategoryId,
+      categoryId: activeCategoryId,
       vpa: widget.parsed.pa,
     );
 
@@ -203,11 +239,13 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // actually be honoured rather than falling through to the base rate.
     final merchantName = widget.parsed.pn;
     final now = DateTime.now();
-    final selectedCategorySlug =
-        categoryList.where((c) => c.id == _selectedCategoryId).firstOrNull?.slug;
+    final selectedCategorySlug = categoryList
+        .where((c) => c.id == activeCategoryId)
+        .firstOrNull
+        ?.slug;
     final upiContext = RecommendationContext(
       amount: _amount,
-      categoryId: _selectedCategoryId,
+      categoryId: activeCategoryId,
       categorySlug: selectedCategorySlug,
       mcc: widget.parsed.mc,
       vpa: widget.parsed.pa,
@@ -217,7 +255,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     );
     final swipeContext = RecommendationContext(
       amount: _amount,
-      categoryId: _selectedCategoryId,
+      categoryId: activeCategoryId,
       categorySlug: selectedCategorySlug,
       mcc: widget.parsed.mc,
       vpa: widget.parsed.pa,
@@ -226,21 +264,27 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       now: now,
     );
 
-    final snapshots = cards.where((c) => !_locallyRejectedCardIds.contains(c.id)).map((c) {
-      final owned = wallet.where((w) => w.cardProductId == c.id).firstOrNull;
-      final capRemaining = owned == null
-          ? const <String, Money>{}
-          : {
-              for (final cap in c.capRules)
-                if (owned.capConsumed.containsKey(cap.id)) cap.id: cap.capValue - owned.capConsumed[cap.id]!,
-            };
-      return CardSnapshot(
-        product: c,
-        capRemaining: capRemaining,
-        milestoneProgress: owned?.milestoneQualifiedSpend ?? const {},
-        forcedOverrideCardId: overrideProductId,
-      );
-    }).toList();
+    final snapshots = cards
+        .where((c) => !_locallyRejectedCardIds.contains(c.id))
+        .map((c) {
+          final owned = wallet
+              .where((w) => w.cardProductId == c.id)
+              .firstOrNull;
+          final capRemaining = owned == null
+              ? const <String, Money>{}
+              : {
+                  for (final cap in c.capRules)
+                    if (owned.capConsumed.containsKey(cap.id))
+                      cap.id: cap.capValue - owned.capConsumed[cap.id]!,
+                };
+          return CardSnapshot(
+            product: c,
+            capRemaining: capRemaining,
+            milestoneProgress: owned?.milestoneQualifiedSpend ?? const {},
+            forcedOverrideCardId: overrideProductId,
+          );
+        })
+        .toList();
 
     final upiRanked = engine.rank(upiContext, snapshots);
     final swipeRanked = engine.rank(swipeContext, snapshots);
@@ -251,7 +295,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // the best owned, eligible card — not in a field detached from it. Null
     // when the wallet is empty (nothing to pay yet; add a card first).
     final amountEntryCardId =
-        (bestUpi != null && wallet.any((w) => w.cardProductId == bestUpi.card.id))
+        (bestUpi != null &&
+            wallet.any((w) => w.cardProductId == bestUpi.card.id))
         ? bestUpi.card.id
         : null;
 
@@ -269,7 +314,11 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.info_outline_rounded, size: 18, color: BambooInk.ink500),
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: BambooInk.ink500,
+                ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: Text(
@@ -290,7 +339,10 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
             labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
             filled: true,
             fillColor: BambooInk.glassFillOnPaper,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
@@ -305,13 +357,13 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           // typing here doesn't need to trigger a rebuild of anything else.
         ),
         const SizedBox(height: AppSpace.sm),
-        // ui-spec B3.2 edge case: no `mc` on the QR -> no category could be
-        // inferred, so the user picks one from the same chip set Home uses.
-        // No VPA->merchant crowdsource lookup here — see this file's header
-        // comment / plan-doc scope-reduction note.
+        // MCC is the strongest signal. When it is absent, the same resolver
+        // uses the QR merchant name and then a meaningful VPA prefix. The
+        // picker remains available as an explicit merchant-context override.
+        // The settled SMS/server resolver still validates the final transaction.
         _CategoryPicker(
           categories: categoryList,
-          selectedId: _selectedCategoryId,
+          selectedId: activeCategoryId,
           onSelected: (id) => setState(() => _selectedCategoryId = id),
         ),
         const SizedBox(height: AppSpace.lg),
@@ -326,7 +378,11 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.info_outline_rounded, size: 18, color: BambooInk.ink500),
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: BambooInk.ink500,
+                ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: Text(
@@ -341,11 +397,16 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         // ui-spec B3.5: UPI-vs-swipe comparison nudge — only shown when
         // swiping would actually earn strictly more than the best UPI
         // option, so it never nags when scan-and-pay is already optimal.
-        if (bestUpi != null && bestSwipe != null && bestSwipe.expectedValue > bestUpi.expectedValue)
+        if (bestUpi != null &&
+            bestSwipe != null &&
+            bestSwipe.expectedValue > bestUpi.expectedValue)
           Container(
             margin: const EdgeInsets.only(bottom: AppSpace.md),
             padding: const EdgeInsets.all(AppSpace.md),
-            decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(16)),
+            decoration: BoxDecoration(
+              color: BambooInk.paperMuted,
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Text(
               'Scan-and-pay earns ${bestUpi.expectedValue.format()} · swiping your ${bestSwipe.card.name} '
               'earns ${bestSwipe.expectedValue.format()} instead.',
@@ -361,7 +422,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               const EmptyState(
                 icon: Icons.block_rounded,
                 title: 'No other cards to try',
-                message: "You've marked every card as not accepted at this merchant.",
+                message:
+                    "You've marked every card as not accepted at this merchant.",
               ),
               const SizedBox(height: AppSpace.md),
               OutlinedButton.icon(
@@ -375,7 +437,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           const EmptyState(
             icon: Icons.credit_card_off_rounded,
             title: 'No cards yet',
-            message: 'Add a card to see personalized reward recommendations here.',
+            message:
+                'Add a card to see personalized reward recommendations here.',
           )
         else
           // A plain ListView(children:) over a stateless per-row widget —
@@ -401,8 +464,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                 amountFocusNode: _amountFocusNode,
                 amountFieldKey: _amountFieldKey,
                 amountError: _amountError,
-                onNotAccepted: () => setState(() => _locallyRejectedCardIds.add(rec.card.id)),
-                onPay: () => _payWith(rec, wallet),
+                onNotAccepted: () =>
+                    setState(() => _locallyRejectedCardIds.add(rec.card.id)),
+                onPay: () => _payWith(rec, wallet, activeCategoryId),
                 onAlwaysUseHere: () => _createOverride(rec, wallet),
                 onAddCard: () => _addCard(rec.card),
               ),
@@ -411,7 +475,11 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     );
   }
 
-  Future<void> _payWith(Recommendation rec, List<UserCard> wallet) async {
+  Future<void> _payWith(
+    Recommendation rec,
+    List<UserCard> wallet,
+    String? categoryId,
+  ) async {
     // A UPI payment needs a real amount. Merchant QRs usually don't carry one
     // (`am` absent), and handing ₹0 to the UPI app just bounces straight back
     // ("minimum amount of ₹1 is required"). Flag the Amount field inline and
@@ -445,8 +513,14 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
             'person. Continue only if ${payee.isEmpty ? 'this payee' : payee} is a shop or merchant.',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes, continue')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Yes, continue'),
+            ),
           ],
         ),
       );
@@ -476,11 +550,15 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // iOS, or Android with nothing enumerable — fall back to the plain
     // scheme launch (OS picks the app, no status comes back).
     if (apps.isEmpty) {
-      await _legacyLaunch(rec, wallet, uriString);
+      await _legacyLaunch(rec, wallet, categoryId, uriString);
       return;
     }
 
-    final chosen = await UpiAppPickerSheet.show(context, apps: apps, cardName: rec.card.name);
+    final chosen = await UpiAppPickerSheet.show(
+      context,
+      apps: apps,
+      cardName: rec.card.name,
+    );
     if (chosen == null || !mounted) return;
 
     // The channel completes on the UPI app's Activity result. If Android
@@ -491,7 +569,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         .pay(upiUri: uriString, packageName: chosen.packageName)
         .timeout(
           const Duration(minutes: 4),
-          onTimeout: () => const UpiPaymentResult(status: UpiPaymentStatus.submitted),
+          onTimeout: () =>
+              const UpiPaymentResult(status: UpiPaymentStatus.submitted),
         );
     if (!mounted) return;
 
@@ -500,30 +579,47 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         // The UPI result is useful UX feedback, but the bank SMS is the
         // authoritative settled spend. Logging here first creates a manual
         // row which can race the SMS and count the same QR payment twice.
-        await _openPaymentSent(rec: rec, wallet: wallet, autoLog: false);
+        await _openPaymentSent(
+          rec: rec,
+          wallet: wallet,
+          categoryId: categoryId,
+          autoLog: false,
+        );
         break;
       case UpiPaymentStatus.submitted:
         // The honest default: the app returned with no conclusive status.
-        await _openPaymentSent(rec: rec, wallet: wallet, autoLog: false);
+        await _openPaymentSent(
+          rec: rec,
+          wallet: wallet,
+          categoryId: categoryId,
+          autoLog: false,
+        );
         break;
       case UpiPaymentStatus.failure:
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Payment failed in ${chosen.name}. Try another UPI app, or a different card.'),
+            content: Text(
+              'Payment failed in ${chosen.name}. Try another UPI app, or a different card.',
+            ),
           ),
         );
         break;
       case UpiPaymentStatus.cancelled:
         break; // user backed out of the UPI app — nothing to report
       case UpiPaymentStatus.noAppsAvailable:
-        await _legacyLaunch(rec, wallet, uriString);
+        await _legacyLaunch(rec, wallet, categoryId, uriString);
         break;
     }
   }
 
   /// Pre-channel behaviour: hand the `upi://` link to the OS and hope. Used
   /// on iOS and whenever no UPI app can be enumerated.
-  Future<void> _legacyLaunch(Recommendation rec, List<UserCard> wallet, String uriString) async {
+  Future<void> _legacyLaunch(
+    Recommendation rec,
+    List<UserCard> wallet,
+    String? categoryId,
+    String uriString,
+  ) async {
     final uri = Uri.parse(uriString);
     final launched = await canLaunchUrl(uri) && await launchUrl(uri);
     if (!mounted) return;
@@ -533,20 +629,32 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       await Clipboard.setData(ClipboardData(text: widget.parsed.pa));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No UPI app found — copied ${widget.parsed.pa} to your clipboard instead.')),
+        SnackBar(
+          content: Text(
+            'No UPI app found — copied ${widget.parsed.pa} to your clipboard instead.',
+          ),
+        ),
       );
       return;
     }
-    await _openPaymentSent(rec: rec, wallet: wallet, autoLog: false);
+    await _openPaymentSent(
+      rec: rec,
+      wallet: wallet,
+      categoryId: categoryId,
+      autoLog: false,
+    );
   }
 
   Future<void> _openPaymentSent({
     required Recommendation rec,
     required List<UserCard> wallet,
+    required String? categoryId,
     required bool autoLog,
   }) async {
     if (!mounted) return;
-    final owned = wallet.where((w) => w.cardProductId == rec.card.id).firstOrNull;
+    final owned = wallet
+        .where((w) => w.cardProductId == rec.card.id)
+        .firstOrNull;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PaymentSentScreen(
@@ -554,7 +662,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           amount: _amount,
           cardName: rec.card.name,
           userCardId: owned?.id,
-          categoryId: _selectedCategoryId,
+          categoryId: categoryId,
+          merchantVpa: widget.parsed.pa,
+          mcc: widget.parsed.mc,
           expectedValue: rec.expectedValue,
           confidence: rec.confidence,
           // Plan Phase 2.1: both needed for the acceptance report that
@@ -570,12 +680,21 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     );
   }
 
-  Future<void> _createOverride(Recommendation rec, List<UserCard> wallet) async {
+  Future<void> _createOverride(
+    Recommendation rec,
+    List<UserCard> wallet,
+  ) async {
     final repo = ref.read(cardOverridesRepositoryProvider);
-    final owned = wallet.where((w) => w.cardProductId == rec.card.id).firstOrNull;
+    final owned = wallet
+        .where((w) => w.cardProductId == rec.card.id)
+        .firstOrNull;
     if (repo == null || owned == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in and add this card to your wallet to create an override.')),
+        const SnackBar(
+          content: Text(
+            'Sign in and add this card to your wallet to create an override.',
+          ),
+        ),
       );
       return;
     }
@@ -584,17 +703,25 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       // scope (see override_resolver.dart's priority doc comment), matching
       // "Always use this card here" meaning "at this exact payee", not this
       // merchant's name (which can vary) or this whole category.
-      await repo.createOverride(userCardId: owned.id, scope: OverrideScope.vpa, vpa: widget.parsed.pa);
+      await repo.createOverride(
+        userCardId: owned.id,
+        scope: OverrideScope.vpa,
+        vpa: widget.parsed.pa,
+      );
       ref.invalidate(cardOverridesProvider);
       ref.invalidate(rankedRecommendationsProvider);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${rec.card.name} will always be suggested here.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${rec.card.name} will always be suggested here.'),
+          ),
+        );
       }
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
       }
     }
   }
@@ -605,7 +732,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   /// row flips to a real "Pay with" on the next rebuild.
   Future<void> _addCard(CardProduct card) async {
     final picked = await Navigator.of(context).push<List<CardProduct>>(
-      MaterialPageRoute(builder: (_) => CardPickerScreen(initialSearch: card.name)),
+      MaterialPageRoute(
+        builder: (_) => CardPickerScreen(initialSearch: card.name),
+      ),
     );
     if (picked == null || picked.isEmpty || !mounted) return;
     final repo = ref.read(userCardsRepositoryProvider);
@@ -624,12 +753,16 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       ref.invalidate(rankedRecommendationsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Added — now suggesting from your wallet.')),
+          const SnackBar(
+            content: Text('Added — now suggesting from your wallet.'),
+          ),
         );
       }
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
       }
     }
   }
@@ -639,7 +772,11 @@ class _CategoryPicker extends StatelessWidget {
   final List<SpendCategory> categories;
   final String? selectedId;
   final ValueChanged<String?> onSelected;
-  const _CategoryPicker({required this.categories, required this.selectedId, required this.onSelected});
+  const _CategoryPicker({
+    required this.categories,
+    required this.selectedId,
+    required this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -659,7 +796,9 @@ class _CategoryPicker extends StatelessWidget {
             selectedColor: BambooInk.slate,
             backgroundColor: BambooInk.paperMuted,
             side: BorderSide.none,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
             onSelected: (_) => onSelected(c.id),
           ),
       ],
@@ -731,7 +870,9 @@ class _ScanResultCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
-        color: hero ? BambooInk.lime : (excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper),
+        color: hero
+            ? BambooInk.lime
+            : (excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper),
         borderRadius: BorderRadius.circular(24),
         border: hero ? null : Border.all(color: BambooInk.hairlineOnPaper),
         boxShadow: hero
@@ -751,8 +892,14 @@ class _ScanResultCard extends StatelessWidget {
             children: [
               if (hero) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(999)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: BambooInk.slate,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                   child: Text(
                     'TAP THIS ONE',
                     style: BambooFonts.ui(
@@ -767,14 +914,19 @@ class _ScanResultCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   recommendation.card.name,
-                  style: BambooFonts.heading(16, color: excluded ? BambooInk.ink500 : BambooInk.ink900),
+                  style: BambooFonts.heading(
+                    16,
+                    color: excluded ? BambooInk.ink500 : BambooInk.ink900,
+                  ),
                 ),
               ),
               if (recommendation.isOverride)
                 StatusPill(
                   label: 'Override',
                   foreground: hero ? BambooInk.slate : BambooInk.ink900,
-                  background: hero ? Colors.white.withValues(alpha: 0.5) : BambooInk.paperMuted,
+                  background: hero
+                      ? Colors.white.withValues(alpha: 0.5)
+                      : BambooInk.paperMuted,
                 ),
             ],
           ),
@@ -789,7 +941,11 @@ class _ScanResultCard extends StatelessWidget {
             // its own RuPay/UPI eligibility logic.
             Row(
               children: [
-                const Icon(Icons.block_rounded, size: 16, color: BambooInk.ink500),
+                const Icon(
+                  Icons.block_rounded,
+                  size: 16,
+                  color: BambooInk.ink500,
+                ),
                 const SizedBox(width: AppSpace.xs),
                 Expanded(
                   child: Text(
@@ -805,7 +961,11 @@ class _ScanResultCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 2),
                 child: Row(
                   children: [
-                    Icon(Icons.qr_code_2_rounded, size: 14, color: hero ? BambooInk.slate : BambooInk.ink500),
+                    Icon(
+                      Icons.qr_code_2_rounded,
+                      size: 14,
+                      color: hero ? BambooInk.slate : BambooInk.ink500,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'RuPay credit card — pays through any UPI app',
@@ -836,23 +996,35 @@ class _ScanResultCard extends StatelessWidget {
                   MoneyText(
                     recommendation.expectedValue,
                     confidence: recommendation.confidence,
-                    style: BambooFonts.money(hero ? 34 : 22, color: BambooInk.ink900),
+                    style: BambooFonts.money(
+                      hero ? 34 : 22,
+                      color: BambooInk.ink900,
+                    ),
                   ),
                   if (recommendation.expectedValue.paise > 0) ...[
                     const SizedBox(width: 6),
-                    Text('back', style: BambooFonts.ui(13, color: BambooInk.ink500)),
+                    Text(
+                      'back',
+                      style: BambooFonts.ui(13, color: BambooInk.ink500),
+                    ),
                   ],
                 ],
               ),
               for (final line in recommendation.reasonLines)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: Text('•  $line', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  child: Text(
+                    '•  $line',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                 ),
             ] else
               Text(
                 'Enter an amount to see your reward',
-                style: BambooFonts.ui(12.5, color: hero ? BambooInk.slate : BambooInk.ink500),
+                style: BambooFonts.ui(
+                  12.5,
+                  color: hero ? BambooInk.slate : BambooInk.ink500,
+                ),
               ),
             const SizedBox(height: AppSpace.sm),
             if (!isOwned)
@@ -864,14 +1036,19 @@ class _ScanResultCard extends StatelessWidget {
                 children: [
                   Text(
                     "You don't have this card yet.",
-                    style: BambooFonts.ui(12.5, color: hero ? BambooInk.slate : BambooInk.ink500),
+                    style: BambooFonts.ui(
+                      12.5,
+                      color: hero ? BambooInk.slate : BambooInk.ink500,
+                    ),
                   ),
                   const SizedBox(height: AppSpace.xs),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: BambooInk.slate,
                       foregroundColor: BambooInk.lime,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                     onPressed: onAddCard,
                     icon: const Icon(Icons.add_card_rounded, size: 18),
@@ -888,24 +1065,36 @@ class _ScanResultCard extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       backgroundColor: BambooInk.slate,
                       foregroundColor: BambooInk.lime,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                     onPressed: onPay,
                     child: Text('Pay with ${recommendation.card.name}'),
                   ),
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: hero ? BambooInk.slate : BambooInk.ink900,
+                      foregroundColor: hero
+                          ? BambooInk.slate
+                          : BambooInk.ink900,
                       side: BorderSide(
-                        color: hero ? BambooInk.slate.withValues(alpha: 0.4) : BambooInk.hairlineOnPaper,
+                        color: hero
+                            ? BambooInk.slate.withValues(alpha: 0.4)
+                            : BambooInk.hairlineOnPaper,
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                     onPressed: onAlwaysUseHere,
                     child: const Text('Always use this card here'),
                   ),
                   TextButton(
-                    style: TextButton.styleFrom(foregroundColor: hero ? BambooInk.slate : BambooInk.ink500),
+                    style: TextButton.styleFrom(
+                      foregroundColor: hero
+                          ? BambooInk.slate
+                          : BambooInk.ink500,
+                    ),
                     onPressed: onNotAccepted,
                     child: const Text("Wasn't accepted"),
                   ),
@@ -949,7 +1138,9 @@ class _OnCardAmountField extends StatelessWidget {
             color: BambooInk.paper,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: hasError ? BambooInk.clay : BambooInk.slate.withValues(alpha: 0.25),
+              color: hasError
+                  ? BambooInk.clay
+                  : BambooInk.slate.withValues(alpha: 0.25),
               width: hasError ? 1.5 : 1,
             ),
           ),
@@ -961,7 +1152,9 @@ class _OnCardAmountField extends StatelessWidget {
                 child: TextField(
                   controller: controller,
                   focusNode: focusNode,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   style: BambooFonts.money(26, color: BambooInk.ink900),
                   cursorColor: BambooInk.slate,
                   decoration: InputDecoration(
@@ -969,7 +1162,10 @@ class _OnCardAmountField extends StatelessWidget {
                     contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     border: InputBorder.none,
                     hintText: 'Amount',
-                    hintStyle: BambooFonts.money(24, color: BambooInk.ink500.withValues(alpha: 0.5)),
+                    hintStyle: BambooFonts.money(
+                      24,
+                      color: BambooInk.ink500.withValues(alpha: 0.5),
+                    ),
                   ),
                   onSubmitted: onSubmitted,
                 ),
@@ -980,7 +1176,10 @@ class _OnCardAmountField extends StatelessWidget {
         if (hasError)
           Padding(
             padding: const EdgeInsets.only(top: 4, left: 4),
-            child: Text(errorText!, style: BambooFonts.ui(12, color: BambooInk.clay)),
+            child: Text(
+              errorText!,
+              style: BambooFonts.ui(12, color: BambooInk.clay),
+            ),
           ),
       ],
     );

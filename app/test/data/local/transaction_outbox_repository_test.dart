@@ -16,6 +16,8 @@ class _FakeUserCardsRepository extends UserCardsRepository {
     required Money amount,
     String? categoryId,
     String? merchantName,
+    String? merchantVpa,
+    String? mcc,
     DateTime? occurredAt,
     String? note,
     String? rail,

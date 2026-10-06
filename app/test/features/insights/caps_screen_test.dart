@@ -17,11 +17,17 @@ class _FakeCatalogueRepository implements CatalogueRepository {
   Future<List<CardProduct>> fetchCatalogue() async => cards;
 }
 
-Future<void> _pump(WidgetTester tester, {required List<CardProduct> catalogue, required List<UserCard> owned}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  required List<CardProduct> catalogue,
+  required List<UserCard> owned,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogue)),
+        catalogueRepositoryProvider.overrideWithValue(
+          _FakeCatalogueRepository(catalogue),
+        ),
         userCardsProvider.overrideWith((ref) async => owned),
       ],
       child: const MaterialApp(home: Scaffold(body: CapsScreen())),
@@ -36,7 +42,9 @@ void main() {
     expect(find.text('No caps to track'), findsOneWidget);
   });
 
-  testWidgets('renders a cap with low consumption in the success colour band', (tester) async {
+  testWidgets('renders a cap with low consumption in the success colour band', (
+    tester,
+  ) async {
     final product = CardProduct(
       id: 'p1',
       name: 'Test Card',
@@ -56,7 +64,9 @@ void main() {
       cardProductId: 'p1',
       cardName: 'Test Card',
       isDefault: false,
-      capConsumed: const {'cap1': Money.fromPaise(50000)}, // ₹500 of ₹5,000 = 10%
+      capConsumed: const {
+        'cap1': Money.fromPaise(50000),
+      }, // ₹500 of ₹5,000 = 10%
     );
 
     await _pump(tester, catalogue: [product], owned: [owned]);
@@ -65,7 +75,9 @@ void main() {
     expect(find.textContaining('left'), findsOneWidget);
   });
 
-  testWidgets('shows a warning icon when consumption crosses 90%', (tester) async {
+  testWidgets('shows a warning icon when consumption crosses 90%', (
+    tester,
+  ) async {
     final product = CardProduct(
       id: 'p1',
       name: 'Test Card',
@@ -93,7 +105,67 @@ void main() {
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
   });
 
-  testWidgets('a txn_count cap renders as a transaction count, not money', (tester) async {
+  testWidgets('groups cap capabilities under their owning card', (
+    tester,
+  ) async {
+    final firstProduct = CardProduct(
+      id: 'p1',
+      name: 'Everyday Card',
+      network: CardNetwork.visa,
+      capRules: const [
+        CapRule(
+          id: 'cap1',
+          label: 'Dining cashback cap',
+          capValue: Money.fromPaise(100000),
+          measure: CapMeasure.rewardValue,
+          period: CapPeriod.calendarMonth,
+        ),
+      ],
+    );
+    final secondProduct = CardProduct(
+      id: 'p2',
+      name: 'Travel Card',
+      network: CardNetwork.rupay,
+      capRules: const [
+        CapRule(
+          id: 'cap2',
+          label: 'Travel cashback cap',
+          capValue: Money.fromPaise(200000),
+          measure: CapMeasure.rewardValue,
+          period: CapPeriod.calendarMonth,
+        ),
+      ],
+    );
+
+    await _pump(
+      tester,
+      catalogue: [firstProduct, secondProduct],
+      owned: [
+        UserCard(
+          id: 'uc1',
+          cardProductId: 'p1',
+          cardName: 'Everyday Card',
+          isDefault: false,
+        ),
+        UserCard(
+          id: 'uc2',
+          cardProductId: 'p2',
+          cardName: 'Travel Card',
+          isDefault: false,
+        ),
+      ],
+    );
+
+    expect(find.text('Everyday Card'), findsOneWidget);
+    expect(find.text('Travel Card'), findsOneWidget);
+    expect(find.text('Dining cashback cap'), findsOneWidget);
+    expect(find.text('Travel cashback cap'), findsOneWidget);
+    expect(find.text('1 capability'), findsNWidgets(2));
+  });
+
+  testWidgets('a txn_count cap renders as a transaction count, not money', (
+    tester,
+  ) async {
     final product = CardProduct(
       id: 'p1',
       name: 'Test Card',

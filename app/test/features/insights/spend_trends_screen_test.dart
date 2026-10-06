@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/insights/spend_trends_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -29,7 +30,11 @@ SpendReport _report({
     txnCount: 12,
     rewards: Money.fromRupees(rewards),
   ),
-  income: EntryKindTotals(total: Money.fromRupees(income), txnCount: income > 0 ? 1 : 0, rewards: const Money.zero()),
+  income: EntryKindTotals(
+    total: Money.fromRupees(income),
+    txnCount: income > 0 ? 1 : 0,
+    rewards: const Money.zero(),
+  ),
   investment: EntryKindTotals(
     total: Money.fromRupees(investment),
     txnCount: investment > 0 ? 1 : 0,
@@ -47,11 +52,18 @@ SpendReport _report({
   series: series,
 );
 
-Future<void> _pump(WidgetTester tester, SpendReport? report) async {
+Future<void> _pump(
+  WidgetTester tester,
+  SpendReport? report, {
+  List<TransactionEntry> transactions = const [],
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         spendReportProvider.overrideWith((ref, period) async => report),
+        spendPeriodTransactionsProvider.overrideWith(
+          (ref, period) async => transactions,
+        ),
       ],
       child: const MaterialApp(home: SpendTrendsScreen()),
     ),
@@ -59,70 +71,119 @@ Future<void> _pump(WidgetTester tester, SpendReport? report) async {
   await tester.pumpAndSettle();
 }
 
+TransactionEntry _detailEntry({
+  required String id,
+  required String merchant,
+  required double amount,
+  required String categoryId,
+  required String categoryName,
+  required DateTime occurredAt,
+  double reward = 0,
+}) => TransactionEntry(
+  id: id,
+  amount: Money.fromRupees(amount),
+  occurredAt: occurredAt,
+  merchantName: merchant,
+  categoryId: categoryId,
+  categoryName: categoryName,
+  cardDisplayName: 'HDFC Millennia',
+  userCardId: 'uc-1',
+  rail: TxnRail.swipe,
+  instrument: TxnInstrument.creditCard,
+  source: 'sms',
+  status: 'active',
+  rewardValue: Money.fromRupees(reward),
+);
+
 void main() {
-  testWidgets('shows the period total and how it compares to the period before', (tester) async {
-    // The comparison is the entire point: "₹42,000" alone says nothing.
-    await _pump(tester, _report(spend: 42000, previousSpend: 35000));
+  testWidgets(
+    'shows the period total and how it compares to the period before',
+    (tester) async {
+      // The comparison is the entire point: "₹42,000" alone says nothing.
+      await _pump(tester, _report(spend: 42000, previousSpend: 35000));
 
-    expect(find.textContaining('42,000'), findsWidgets);
-    expect(find.textContaining('20% more than last month'), findsOneWidget);
-  });
+      expect(find.textContaining('42,000'), findsWidgets);
+      expect(find.textContaining('20% more than last month'), findsOneWidget);
+    },
+  );
 
-  testWidgets('a drop is reported as less, not as a negative increase', (tester) async {
+  testWidgets('a drop is reported as less, not as a negative increase', (
+    tester,
+  ) async {
     await _pump(tester, _report(spend: 28000, previousSpend: 35000));
     expect(find.textContaining('20% less than last month'), findsOneWidget);
   });
 
-  testWidgets('no comparison is shown when the previous period had no spend', (tester) async {
+  testWidgets('no comparison is shown when the previous period had no spend', (
+    tester,
+  ) async {
     // "Up 100%" from zero is arithmetically true and useless to read.
     await _pump(tester, _report(spend: 42000, previousSpend: 0));
     expect(find.textContaining('more than last month'), findsNothing);
     expect(find.textContaining('less than last month'), findsNothing);
   });
 
-  testWidgets('income and investment are shown as their own lines, never folded into spend', (tester) async {
-    // Blending them is the fastest way to make every figure on the screen
-    // wrong: money moved into an SIP is not money spent.
-    await _pump(tester, _report(spend: 42000, income: 90000, investment: 15000));
+  testWidgets(
+    'income and investment are shown as their own lines, never folded into spend',
+    (tester) async {
+      // Blending them is the fastest way to make every figure on the screen
+      // wrong: money moved into an SIP is not money spent.
+      await _pump(
+        tester,
+        _report(spend: 42000, income: 90000, investment: 15000),
+      );
 
-    expect(find.text('Money in'), findsOneWidget);
-    expect(find.text('Spent'), findsOneWidget);
-    expect(find.text('Invested'), findsOneWidget);
-    expect(find.text('Left over'), findsOneWidget);
-  });
+      expect(find.text('Money in'), findsOneWidget);
+      expect(find.text('Spent'), findsOneWidget);
+      expect(find.text('Invested'), findsOneWidget);
+      expect(find.text('Left over'), findsOneWidget);
+    },
+  );
 
-  testWidgets('a period where more went out than came in reads as short, not as a negative', (tester) async {
-    await _pump(tester, _report(spend: 90000, income: 40000));
-    expect(find.text('Short by'), findsOneWidget);
-    expect(find.text('Left over'), findsNothing);
-  });
+  testWidgets(
+    'a period where more went out than came in reads as short, not as a negative',
+    (tester) async {
+      await _pump(tester, _report(spend: 90000, income: 40000));
+      expect(find.text('Short by'), findsOneWidget);
+      expect(find.text('Left over'), findsNothing);
+    },
+  );
 
-  testWidgets('the flow card is hidden entirely when there is no income or investment', (tester) async {
-    // Most users only have card spend; a row of zeroes would be noise.
-    await _pump(tester, _report(spend: 42000));
-    expect(find.text('Money in'), findsNothing);
-  });
+  testWidgets(
+    'the flow card is hidden entirely when there is no income or investment',
+    (tester) async {
+      // Most users only have card spend; a row of zeroes would be noise.
+      await _pump(tester, _report(spend: 42000));
+      expect(find.text('Money in'), findsNothing);
+    },
+  );
 
-  testWidgets('a card row reports the rate it actually paid, not its headline rate', (tester) async {
-    await _pump(
-      tester,
-      _report(
-        spend: 40000,
-        rewards: 400,
-        byCard: [
-          CardSpendRow(
-            cardId: 'uc1',
-            cardName: 'Axis Magnus',
-            total: Money.fromRupees(40000),
-            rewards: Money.fromRupees(400),
-            txnCount: 8,
-            effectiveRatePerRupee: 0.01,
-          ),
-        ],
-      ),
-    );
-    expect(find.textContaining('1.00% back on what you spent here'), findsOneWidget);
-  });
+  testWidgets(
+    'a card row reports the rate it actually paid, not its headline rate',
+    (tester) async {
+      await _pump(
+        tester,
+        _report(
+          spend: 40000,
+          rewards: 400,
+          byCard: [
+            CardSpendRow(
+              cardId: 'uc1',
+              cardName: 'Axis Magnus',
+              total: Money.fromRupees(40000),
+              rewards: Money.fromRupees(400),
+              txnCount: 8,
+              effectiveRatePerRupee: 0.01,
+            ),
+          ],
+        ),
+      );
+      expect(
+        find.textContaining('1.00% back on what you spent here'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('shows each credit card as its own spend row', (tester) async {
     await _pump(
@@ -153,7 +214,60 @@ void main() {
     expect(find.text('1 transaction'), findsOneWidget);
   });
 
-  testWidgets('shows detected payment methods separately from card rows', (tester) async {
+  testWidgets('expands a category into merchants and transaction details', (
+    tester,
+  ) async {
+    final transactions = [
+      _detailEntry(
+        id: 'txn-1',
+        merchant: 'Swiggy',
+        amount: 200,
+        categoryId: 'dining',
+        categoryName: 'Dining',
+        occurredAt: DateTime(2026, 8, 12),
+        reward: 10,
+      ),
+      _detailEntry(
+        id: 'txn-2',
+        merchant: 'Cafe Central',
+        amount: 50,
+        categoryId: 'dining',
+        categoryName: 'Dining',
+        occurredAt: DateTime(2026, 8, 11),
+        reward: 2.5,
+      ),
+    ];
+    await _pump(
+      tester,
+      _report(
+        spend: 250,
+        byCategory: [
+          SpendBreakdownRow(
+            label: 'Dining',
+            total: Money.fromRupees(250),
+            txnCount: 2,
+            categoryId: 'dining',
+          ),
+        ],
+      ),
+      transactions: transactions,
+    );
+
+    expect(find.text('Dining'), findsOneWidget);
+    expect(find.text('Swiggy'), findsNothing);
+
+    await tester.tap(find.text('Dining'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Swiggy'), findsOneWidget);
+    expect(find.text('Cafe Central'), findsOneWidget);
+    expect(find.textContaining('Rewards earned ₹'), findsNWidgets(2));
+    expect(find.textContaining('12/08/2026'), findsOneWidget);
+  });
+
+  testWidgets('shows detected payment methods separately from card rows', (
+    tester,
+  ) async {
     await _pump(
       tester,
       _report(
@@ -178,7 +292,9 @@ void main() {
     expect(find.text('UPI from bank account'), findsOneWidget);
   });
 
-  testWidgets('formats calendar-month trend labels from local period starts', (tester) async {
+  testWidgets('formats calendar-month trend labels from local period starts', (
+    tester,
+  ) async {
     await _pump(
       tester,
       _report(
@@ -203,32 +319,38 @@ void main() {
     expect(find.text('Oct 26'), findsOneWidget);
   });
 
-  testWidgets('an empty period explains what would fill it rather than showing zeroes', (tester) async {
-    await _pump(
-      tester,
-      SpendReport(
-        period: SpendPeriod.month,
-        periodStart: DateTime(2026, 8, 1),
-        periodEnd: DateTime(2026, 9, 1),
-        elapsedFraction: 0.5,
-        spend: EntryKindTotals.zero,
-        income: EntryKindTotals.zero,
-        investment: EntryKindTotals.zero,
-        previousSpend: EntryKindTotals.zero,
-        byCategory: const [],
-        byMerchant: const [],
-        byCard: const [],
-        byInstrument: const [],
-        series: const [],
-      ),
-    );
-    expect(find.textContaining('Nothing logged'), findsOneWidget);
-  });
+  testWidgets(
+    'an empty period explains what would fill it rather than showing zeroes',
+    (tester) async {
+      await _pump(
+        tester,
+        SpendReport(
+          period: SpendPeriod.month,
+          periodStart: DateTime(2026, 8, 1),
+          periodEnd: DateTime(2026, 9, 1),
+          elapsedFraction: 0.5,
+          spend: EntryKindTotals.zero,
+          income: EntryKindTotals.zero,
+          investment: EntryKindTotals.zero,
+          previousSpend: EntryKindTotals.zero,
+          byCategory: const [],
+          byMerchant: const [],
+          byCard: const [],
+          byInstrument: const [],
+          series: const [],
+        ),
+      );
+      expect(find.textContaining('Nothing logged'), findsOneWidget);
+    },
+  );
 
-  testWidgets('guest mode says to sign in rather than showing an empty report', (tester) async {
-    await _pump(tester, null);
-    expect(find.textContaining('Sign in'), findsOneWidget);
-  });
+  testWidgets(
+    'guest mode says to sign in rather than showing an empty report',
+    (tester) async {
+      await _pump(tester, null);
+      expect(find.textContaining('Sign in'), findsOneWidget);
+    },
+  );
 
   testWidgets('switching period refetches for that period', (tester) async {
     final requested = <SpendPeriod>[];

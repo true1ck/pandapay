@@ -150,6 +150,7 @@ class SyncEngine {
   void _invalidateFor(Set<String> entities) {
     if (entities.contains('transactions')) {
       _ref.invalidate(transactionsProvider);
+      _ref.invalidate(utilizationTransactionsProvider);
     }
     if (entities.contains('user_cards')) {
       _ref.invalidate(userCardsProvider);

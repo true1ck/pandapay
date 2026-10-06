@@ -134,10 +134,11 @@ void main() {
 
     testWidgets('words each autopay state differently', (tester) async {
       await pumpDue(tester);
-      // The distinction the three-state enum exists for: "minimum" must not
-      // read like "covered".
-      expect(find.textContaining('the rest carries interest'), findsOneWidget);
-      expect(find.textContaining('Autopay covers the full amount'), findsOneWidget);
+      expect(
+        find.textContaining('Autopay status not verified'),
+        findsNWidgets(3),
+      );
+      expect(find.textContaining('the rest carries interest'), findsNothing);
     });
 
     testWidgets('never presents logged spend as the amount due', (tester) async {

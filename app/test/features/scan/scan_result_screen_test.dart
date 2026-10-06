@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/upi_payment_service.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/scan/scan_result_screen.dart';
@@ -79,6 +80,35 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(TextField, 'DMart Powai'), findsOneWidget);
+  });
+
+  testWidgets('a no-MCC fuel merchant auto-selects Fuel at scan time', (tester) async {
+    const parsed = ParsedUpiQr(
+      pa: 'merchant@okaxis',
+      pn: 'QUALITY FUEL STATION',
+      isLikelyP2P: false,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogueProvider.overrideWith((ref) async => const []),
+          categoriesProvider.overrideWith(
+            (ref) async => const [
+              SpendCategory(id: 'fuel-id', slug: 'fuel', name: 'Fuel'),
+            ],
+          ),
+          userCardsProvider.overrideWith((ref) async => const []),
+          cardOverridesProvider.overrideWith((ref) async => const []),
+        ],
+        child: const MaterialApp(home: ScanResultScreen(parsed: parsed)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final fuelChip = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, 'Fuel'),
+    );
+    expect(fuelChip.selected, isTrue);
   });
 
   testWidgets('a RuPay-only card shows the engine exclusion reason verbatim, greyed', (tester) async {

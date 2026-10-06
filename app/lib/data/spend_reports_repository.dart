@@ -614,6 +614,9 @@ class RecurringSeries {
   final DateTime? nextExpectedOn;
   final String? categoryName;
   final String? cardName;
+  final String? paymentMethod;
+  final String detectionSource;
+  final bool isMandate;
   final Money annualCost;
 
   const RecurringSeries({
@@ -626,6 +629,9 @@ class RecurringSeries {
     this.nextExpectedOn,
     this.categoryName,
     this.cardName,
+    this.paymentMethod,
+    this.detectionSource = 'observed',
+    this.isMandate = false,
   });
 
   /// Plain-language cadence. Approximate on purpose — "about every 5 weeks"
@@ -654,6 +660,9 @@ class RecurringSeries {
             : DateTime.parse(json['nextExpectedOn'] as String),
         categoryName: json['categoryName'] as String?,
         cardName: json['cardName'] as String?,
+        paymentMethod: json['paymentMethod'] as String?,
+        detectionSource: json['detectionSource'] as String? ?? 'observed',
+        isMandate: json['isMandate'] == true || json['detectionSource'] == 'mandate',
       );
 }
 

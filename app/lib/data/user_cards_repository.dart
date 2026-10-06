@@ -9,6 +9,11 @@ import 'api_exception.dart';
 double _num(dynamic v) =>
     v == null ? 0 : (v is num ? v.toDouble() : double.parse(v as String));
 
+Money _nonNegativeMoney(dynamic v) {
+  final value = Money.fromRupees(_num(v));
+  return value.isNegative ? const Money.zero() : value;
+}
+
 /// Chunk 17: the CURRENTLY-ACTIVE period's cap/milestone consumption for
 /// this owned card — a missing entry for a given cap/milestone rule id
 /// means nothing's been logged against it yet this period (full headroom),
@@ -457,13 +462,11 @@ class MonthlyReport {
   factory MonthlyReport.fromJson(Map<String, dynamic> json) {
     return MonthlyReport(
       periodMonth: DateTime.parse(json['period_month'] as String),
-      totalSpend: Money.fromRupees(_num(json['total_spend_inr'])),
-      rewardsEarned: Money.fromRupees(_num(json['rewards_earned_inr'])),
-      baselineSingleCard: Money.fromRupees(
-        _num(json['baseline_single_card_inr']),
-      ),
-      valueMissed: Money.fromRupees(_num(json['value_missed_inr'])),
-      extraEarned: Money.fromRupees(_num(json['extra_earned_inr'])),
+      totalSpend: _nonNegativeMoney(json['total_spend_inr']),
+      rewardsEarned: _nonNegativeMoney(json['rewards_earned_inr']),
+      baselineSingleCard: _nonNegativeMoney(json['baseline_single_card_inr']),
+      valueMissed: _nonNegativeMoney(json['value_missed_inr']),
+      extraEarned: _nonNegativeMoney(json['extra_earned_inr']),
     );
   }
 }
@@ -652,6 +655,7 @@ class DiscoveredCard {
   final List<String> sources; // 'email' and/or 'sms'
   final bool isPlaceholder;
   final String? issuerName;
+  final Money? creditLimit;
 
   const DiscoveredCard({
     required this.cardProductId,
@@ -663,6 +667,7 @@ class DiscoveredCard {
     required this.sources,
     this.isPlaceholder = false,
     this.issuerName,
+    this.creditLimit,
   });
 
   factory DiscoveredCard.fromJson(Map<String, dynamic> json) => DiscoveredCard(
@@ -675,6 +680,9 @@ class DiscoveredCard {
     sources: ((json['sources'] as List?) ?? const []).cast<String>(),
     isPlaceholder: json['isPlaceholder'] as bool? ?? false,
     issuerName: json['issuerName'] as String?,
+    creditLimit: json['creditLimitInr'] == null
+        ? null
+        : Money.fromRupees(_num(json['creditLimitInr'])),
   );
 }
 
@@ -891,6 +899,8 @@ class UserCardsRepository {
     required Money amount,
     String? categoryId,
     String? merchantName,
+    String? merchantVpa,
+    String? mcc,
     DateTime? occurredAt,
     String? note,
     String? rail,
@@ -907,6 +917,8 @@ class UserCardsRepository {
         'amountInr': amount.rupees,
         'categoryId': ?categoryId,
         'merchantName': ?merchantName,
+        'merchantVpa': ?merchantVpa,
+        'mcc': ?mcc,
         'occurredAt': occurredAt?.toIso8601String(),
         'note': ?note,
         'rail': ?rail,
@@ -1484,14 +1496,17 @@ class UserCardsRepository {
   /// Design 01 header: GET /home-summary. Sends the device's current instant
   /// and IANA zone so month/streak buckets use the user's calendar, not a
   /// server clock that may be behind the device.
-  Future<HomeSummary?> fetchHomeSummary({DateTime? anchor, String? timeZone}) async {
+  Future<HomeSummary?> fetchHomeSummary({
+    DateTime? anchor,
+    String? timeZone,
+  }) async {
     final query = {
       if (anchor != null) 'anchor': anchor.toUtc().toIso8601String(),
       if (timeZone != null && timeZone.isNotEmpty) 'tz': timeZone,
     };
-    final uri = Uri.parse('$apiBaseUrl/home-summary').replace(
-      queryParameters: query.isEmpty ? null : query,
-    );
+    final uri = Uri.parse(
+      '$apiBaseUrl/home-summary',
+    ).replace(queryParameters: query.isEmpty ? null : query);
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
       throw ApiException(

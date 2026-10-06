@@ -92,4 +92,31 @@ void main() {
     );
     expect(result.hadBetterOption, isFalse);
   });
+
+  test('comparison values are never negative or larger than the spend', () {
+    final malformed = CardProduct(
+      id: 'malformed',
+      name: 'Malformed rate card',
+      network: CardNetwork.visa,
+      rewardRules: const [
+        RewardRule(id: 'r-malformed', unit: RewardUnit.cashbackPercent, rate: 500),
+      ],
+    );
+
+    final result = compareToOwnedCards(
+      usedCard: malformed,
+      ownedCards: [malformed],
+      amount: Money.fromRupees(100),
+    );
+    expect(result.actualValue, Money.fromRupees(100));
+    expect(result.missedValue, const Money.zero());
+
+    final negative = compareToOwnedCards(
+      usedCard: malformed,
+      ownedCards: [malformed],
+      amount: Money.fromRupees(-100),
+    );
+    expect(negative.actualValue, const Money.zero());
+    expect(negative.missedValue, const Money.zero());
+  });
 }

@@ -30,7 +30,6 @@ class DueDateCalendarScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
       ),
       data: (owned) {
-        final withDates = owned.where((p) => p.$1.statementDay != null || p.$1.dueDay != null).toList();
         if (owned.isEmpty) {
           return const EmptyState(
             icon: Icons.calendar_month_outlined,
@@ -48,23 +47,18 @@ class DueDateCalendarScreen extends ConsumerWidget {
               style: BambooFonts.heading(16, color: BambooInk.ink900),
             ),
             const SizedBox(height: AppSpace.lg),
-            if (withDates.isEmpty)
-              const EmptyState(
-                icon: Icons.event_busy_rounded,
-                title: 'No dates set yet',
-                message: 'None of your cards have a statement or due day entered.',
-              )
-            else
-              for (final (userCard, product) in withDates)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.md),
-                  child: _CardDateTile(
-                    userCard: userCard,
-                    product: product,
-                    reminderOn: reminders.contains(userCard.id),
-                    onToggleReminder: () => ref.read(dueDateRemindersProvider.notifier).toggle(userCard.id),
-                  ),
+            // Show every active card. A missing issuer date is shown as
+            // unknown instead of hiding that card or inventing a date.
+            for (final (userCard, product) in owned)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.md),
+                child: _CardDateTile(
+                  userCard: userCard,
+                  product: product,
+                  reminderOn: reminders.contains(userCard.id),
+                  onToggleReminder: () => ref.read(dueDateRemindersProvider.notifier).toggle(userCard.id),
                 ),
+              ),
           ],
         );
       },
@@ -147,6 +141,10 @@ class _CardDateTile extends StatelessWidget {
               const SizedBox(height: AppSpace.sm),
               _DateRow(icon: Icons.event_outlined, label: 'Payment due', date: nextDue, emphasize: true),
             ],
+            if (nextDue == null) ...[
+              const SizedBox(height: AppSpace.sm),
+              const _MissingDateRow(),
+            ],
           ],
         ),
       ),
@@ -157,6 +155,26 @@ class _CardDateTile extends StatelessWidget {
     var next = DateTime(now.year, now.month, day);
     if (!next.isAfter(now)) next = DateTime(now.year, now.month + 1, day);
     return next;
+  }
+}
+
+class _MissingDateRow extends StatelessWidget {
+  const _MissingDateRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(Icons.event_busy_outlined, size: 16, color: BambooInk.ink500),
+        const SizedBox(width: AppSpace.sm),
+        Expanded(
+          child: Text(
+            'Payment due — issuer date not available',
+            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          ),
+        ),
+      ],
+    );
   }
 }
 

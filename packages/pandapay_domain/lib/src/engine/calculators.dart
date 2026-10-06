@@ -9,11 +9,15 @@ import '../money/money.dart';
 class UtilizationResult {
   final double ratio; // 0.30 == 30%
   final bool overThreshold;
+  /// The tracked spend amount used to calculate [ratio]. This is not an
+  /// issuer statement balance; callers should label it accordingly.
+  final Money currentBalance;
   final Money? splitRecommendationAmount; // how much to move to stay under threshold
 
   const UtilizationResult({
     required this.ratio,
     required this.overThreshold,
+    this.currentBalance = const Money.zero(),
     this.splitRecommendationAmount,
   });
 }
@@ -24,7 +28,11 @@ UtilizationResult creditUtilization(
   double threshold = 0.30,
 }) {
   if (creditLimit.isZero) {
-    return const UtilizationResult(ratio: 0, overThreshold: false);
+    return UtilizationResult(
+      ratio: 0,
+      overThreshold: false,
+      currentBalance: currentBalance,
+    );
   }
   final ratio = currentBalance.paise / creditLimit.paise;
   final overThreshold = ratio > threshold;
@@ -36,6 +44,7 @@ UtilizationResult creditUtilization(
   return UtilizationResult(
     ratio: ratio,
     overThreshold: overThreshold,
+    currentBalance: currentBalance,
     splitRecommendationAmount: splitAmount,
   );
 }

@@ -293,6 +293,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       // and Activity reflect it without a manual pull-to-refresh.
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
       if (mounted) {
         // Captured BEFORE pop() — by the time a user actually taps "Undo"
         // (the snackbar lives ~4s, the pop animation completes in ~300ms),
@@ -324,6 +325,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                   await repo.ignoreTransaction(transactionId, reason: 'reversal');
                   container.invalidate(userCardsProvider);
                   container.invalidate(transactionsProvider);
+                  container.invalidate(utilizationTransactionsProvider);
                   messenger.showSnackBar(const SnackBar(content: Text('Undone.')));
                 } catch (e) {
                   messenger.showSnackBar(

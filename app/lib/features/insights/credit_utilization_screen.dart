@@ -253,6 +253,20 @@ class _UtilizationTile extends StatelessWidget {
           Row(
             children: [
               Text(
+                'Tracked spend this cycle ',
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
+              MoneyText(
+                result.currentBalance,
+                confidence: Confidence.estimated,
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
                 'Limit ',
                 style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),

@@ -18,6 +18,11 @@ enum _ContextState { locating, found, noPermission, noMatch, offlineOrError }
 /// does not add a new location-permission flow, it triggers the same kind
 /// of one-shot read from `initState` instead of a button tap.
 ///
+/// The merchant category is also passed to the existing card-ranking engine.
+/// When the catalogue has enough evidence, this line shows the card and rate
+/// immediately; if the merchant is uncategorized or ranking is still loading,
+/// it only shows the location and never invents a recommendation.
+///
 /// IMPORTANT — permission-nag fix (post-review): Home's route is a plain
 /// `ShellRoute`/`GoRoute` (see `app/lib/app/router.dart`), not a
 /// `StatefulShellRoute.indexedStack`, so `HomeScreen` — and this widget —
@@ -99,15 +104,6 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
           _closest = matches.first;
           _state = _ContextState.found;
         });
-        // A found merchant is the same "geofence guess" ui-spec B1.5 says a
-        // category-chip tap can override (see selectedCategoryProvider
-        // below) — but that provider holds a category *slug* while this
-        // repository only carries a category UUID, and resolving that
-        // mismatch would mean duplicating a slug<->id lookup out of
-        // providers.dart's categoriesProvider that this widget has no
-        // other reason to own. So the context line surfaces the merchant
-        // name for display only in this task; it does not push a re-rank.
-        // Stated scope reduction, not a silent gap.
       }
     } catch (_) {
       if (mounted) setState(() => _state = _ContextState.offlineOrError);
@@ -116,6 +112,9 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
 
   @override
   Widget build(BuildContext context) {
+    final recommendation = _closest == null || _closest!.candidate.categoryId == null
+        ? null
+        : ref.watch(bestCardForMerchantProvider(_closest!.candidate.categoryId)).valueOrNull;
     final (icon, text) = switch (_state) {
       _ContextState.locating => (Icons.my_location_rounded, 'Finding where you are…'),
       _ContextState.found => (
@@ -151,21 +150,47 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.md),
           onTap: _state == _ContextState.locating ? null : () => _locate(auto: false),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 16, color: BambooInk.ink500),
-                const SizedBox(width: AppSpace.xs),
-                Flexible(
-                  child: Text(text, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 16, color: BambooInk.ink500),
+                  const SizedBox(width: AppSpace.xs),
+                  Flexible(
+                    child: Text(text, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  ),
+                ],
+              ),
+              if (_state == _ContextState.found && recommendation != null) ...[
+                const SizedBox(height: 2),
+                Padding(
+                  padding: const EdgeInsets.only(left: 20),
+                  child: Text(
+                    _recommendationText(recommendation),
+                    style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.jade),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
-            ),
+            ],
           ),
         ),
       ),
     );
+  }
+
+  String _recommendationText(Recommendation recommendation) {
+    final rate = recommendation.effectiveRatePerRupee;
+    if (rate != null && rate > 0) {
+      final percent = rate * 100;
+      final formatted = percent == percent.roundToDouble()
+          ? percent.toStringAsFixed(0)
+          : percent.toStringAsFixed(1);
+      return 'Use ${recommendation.card.name} · $formatted% reward';
+    }
+    return 'Use ${recommendation.card.name} · about ${recommendation.expectedValue.format(hidePaise: true)} back';
   }
 }

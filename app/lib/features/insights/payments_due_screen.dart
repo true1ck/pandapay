@@ -38,11 +38,9 @@ class DuePayment {
     required this.loggedThisCycle,
   });
 
-  /// Whether this card is at real risk of a late fee: the user hasn't told
-  /// us autopay covers the full statement. [AutopayMode.minimum] still
-  /// counts as at-risk for interest, but not for a late mark — the screen
-  /// words those two differently.
-  bool get needsAttention => !card.autopayMode.coversFullStatement;
+  /// PandaPay cannot verify an issuer mandate, so every card needs the user
+  /// to check the issuer account before relying on autopay.
+  bool get needsAttention => true;
 }
 
 /// Design 13's list, soonest first.
@@ -270,7 +268,7 @@ class _SoonestCard extends StatelessWidget {
           const SizedBox(height: AppSpace.md),
           const Divider(height: 1, color: BambooInk.slateHairline),
           const SizedBox(height: AppSpace.md),
-          _AutopayLine(mode: card.autopayMode, onSlate: true),
+          const _AutopayLine(onSlate: true),
         ],
       ),
     );
@@ -319,7 +317,7 @@ class _ComingUpRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                _AutopayLine(mode: card.autopayMode, onSlate: false),
+                const _AutopayLine(onSlate: false),
               ],
             ),
           ),
@@ -336,29 +334,18 @@ class _ComingUpRow extends StatelessWidget {
   }
 }
 
-/// The one line that turns the autopay answer into advice. Three states,
-/// worded differently on purpose — see [AutopayMode].
+/// The one line that turns the local autopay note into truthful advice.
+///
+/// Stored [AutopayMode] values are legacy/user-provided data, not issuer
+/// evidence, so this widget must never say that the issuer will pay.
 class _AutopayLine extends StatelessWidget {
-  final AutopayMode mode;
   final bool onSlate;
-  const _AutopayLine({required this.mode, required this.onSlate});
+  const _AutopayLine({required this.onSlate});
 
   @override
   Widget build(BuildContext context) {
-    final (text, color) = switch (mode) {
-      AutopayMode.full => (
-        'Autopay covers the full amount',
-        onSlate ? BambooInk.lime : BambooInk.rankBadgeInk,
-      ),
-      AutopayMode.minimum => (
-        'Autopay pays the minimum — the rest carries interest',
-        onSlate ? BambooInk.onSlateSubtle : BambooInk.clayInk,
-      ),
-      AutopayMode.off => (
-        "Autopay not set — you'll need to pay this yourself",
-        onSlate ? BambooInk.onSlateSubtle : BambooInk.ink500,
-      ),
-    };
+    final text = 'Autopay status not verified — check your issuer app';
+    final color = onSlate ? BambooInk.onSlateSubtle : BambooInk.ink500;
     return Text(text, style: BambooFonts.ui(12.5, color: color));
   }
 }

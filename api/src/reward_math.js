@@ -270,6 +270,12 @@ function computeTransactionReward({ card, rewardRules, capRules, capConsumedBefo
   const pointValue = Number(card.point_value_inr) || 0;
   const empty = { valueInr: 0, points: 0, capConsumedDelta: 0, ruleId: null, capRuleId: null, excluded: false };
 
+  // Spend rewards cannot be negative. Refunds/reversals are represented by
+  // transaction state and sign, not by feeding a negative purchase amount
+  // through the reward calculator. Keeping this guard here protects every
+  // caller, including monthly counterfactuals and live SMS ingestion.
+  if (!Number.isFinite(ctx.amount) || ctx.amount <= 0) return empty;
+
   const cardExcluded = (card.excluded_categories || []).includes(ctx.categoryId);
   if (ctx.categoryId && cardExcluded) {
     return { ...empty, excluded: true };
@@ -282,8 +288,8 @@ function computeTransactionReward({ card, rewardRules, capRules, capConsumedBefo
     const rate = baseRatePerRupee(card);
     return {
       ...empty,
-      valueInr: ctx.amount * rate,
-      points: ctx.amount * basePointsPerRupee(card),
+      valueInr: Math.min(ctx.amount, Math.max(0, ctx.amount * rate)),
+      points: Math.max(0, ctx.amount * basePointsPerRupee(card)),
     };
   }
 
@@ -305,8 +311,8 @@ function computeTransactionReward({ card, rewardRules, capRules, capConsumedBefo
   }
 
   return {
-    valueInr,
-    points,
+    valueInr: Math.min(ctx.amount, Math.max(0, valueInr)),
+    points: Math.max(0, points),
     capConsumedDelta,
     ruleId: rule.id,
     capRuleId: capRule ? capRule.id : null,

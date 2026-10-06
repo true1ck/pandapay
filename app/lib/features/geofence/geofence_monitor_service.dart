@@ -39,6 +39,7 @@ class GeofenceMonitorService {
   final NearbyMerchantsRepository repo;
   final FlutterLocalNotificationsPlugin notifications;
   final NotificationGate? gate;
+  final String? Function(NearbyMerchantMatch match)? recommendationTextBuilder;
   final double radiusMeters;
   final Duration notifyCooldown;
 
@@ -50,6 +51,7 @@ class GeofenceMonitorService {
     required this.repo,
     FlutterLocalNotificationsPlugin? notifications,
     this.gate,
+    this.recommendationTextBuilder,
     this.radiusMeters = 300,
     this.notifyCooldown = const Duration(minutes: 30),
   }) : notifications = notifications ?? FlutterLocalNotificationsPlugin();
@@ -223,7 +225,8 @@ class GeofenceMonitorService {
     final name = match.candidate.displayName ?? 'a merchant you\'ve used before';
     final merchantId = match.candidate.merchantId;
     final title = 'You\'re near $name';
-    const body = 'Open PandaPay to see which card to use here.';
+    final body = recommendationTextBuilder?.call(match) ??
+        'Open PandaPay to see which card to use here.';
 
     if (gate != null) {
       // UA-8.3 (B2): routed through the gate so category_location, quiet

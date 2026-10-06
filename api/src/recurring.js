@@ -150,6 +150,7 @@ function detectRecurringSeries(rows) {
       nextExpectedOn: next,
       categoryId: latest.category_id || null,
       userCardId: latest.user_card_id || null,
+      paymentMethod: latest.instrument || null,
     });
   }
 

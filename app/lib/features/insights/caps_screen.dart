@@ -8,6 +8,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
+import 'grouped_insight_screen.dart';
 
 /// ui-spec.md E2 Caps & Limits ⭐. `CapRule` (the definition — value,
 /// measure, period) and `UserCard.capConsumed` (this period's consumption,
@@ -33,7 +34,9 @@ import '../../main.dart' show MoneyText;
 const _amber = Color(0xFFD97706);
 
 class CapsScreen extends ConsumerWidget {
-  const CapsScreen({super.key});
+  final bool embedded;
+
+  const CapsScreen({super.key, this.embedded = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,43 +55,98 @@ class CapsScreen extends ConsumerWidget {
         rows.sort((a, b) {
           final consumedA = a.$1.capConsumed[a.$3.id] ?? const Money.zero();
           final consumedB = b.$1.capConsumed[b.$3.id] ?? const Money.zero();
-          final scoreA = UrgencyScore(ratioConsumed: capRatio(consumedA, a.$3.capValue));
-          final scoreB = UrgencyScore(ratioConsumed: capRatio(consumedB, b.$3.capValue));
+          final scoreA = UrgencyScore(
+            ratioConsumed: capRatio(consumedA, a.$3.capValue),
+          );
+          final scoreB = UrgencyScore(
+            ratioConsumed: capRatio(consumedB, b.$3.capValue),
+          );
           return scoreA.compareTo(scoreB);
         });
 
         final fuelRows = <(UserCard, CardProduct, FuelSurchargeRule)>[
           for (final (userCard, product) in owned)
-            if (product.fuelRule != null) (userCard, product, product.fuelRule!),
+            if (product.fuelRule != null)
+              (userCard, product, product.fuelRule!),
         ];
 
         if (rows.isEmpty && fuelRows.isEmpty) {
           return const EmptyState(
             icon: Icons.speed_rounded,
             title: 'No caps to track',
-            message: 'None of your cards have spend or reward caps — or you haven\'t added a card yet.',
+            message:
+                'None of your cards have spend or reward caps — or you haven\'t added a card yet.',
           );
         }
+
+        final groups =
+            <
+              String,
+              ({
+                UserCard userCard,
+                CardProduct product,
+                List<CapRule> caps,
+                List<FuelSurchargeRule> fuels,
+              })
+            >{};
+        for (final (userCard, product, cap) in rows) {
+          final group = groups.putIfAbsent(
+            userCard.id,
+            () => (
+              userCard: userCard,
+              product: product,
+              caps: <CapRule>[],
+              fuels: <FuelSurchargeRule>[],
+            ),
+          );
+          group.caps.add(cap);
+        }
+        for (final (userCard, product, fuel) in fuelRows) {
+          final group = groups.putIfAbsent(
+            userCard.id,
+            () => (
+              userCard: userCard,
+              product: product,
+              caps: <CapRule>[],
+              fuels: <FuelSurchargeRule>[],
+            ),
+          );
+          group.fuels.add(fuel);
+        }
+
         return ListView(
-          padding: const EdgeInsets.all(AppSpace.lg),
+          padding: embedded
+              ? EdgeInsets.zero
+              : const EdgeInsets.all(AppSpace.lg),
+          shrinkWrap: embedded,
+          physics: embedded ? const NeverScrollableScrollPhysics() : null,
           children: [
-            for (final (userCard, product, cap) in rows)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.md),
-                child: _CapTile(userCard: userCard, product: product, cap: cap, allOwned: owned),
+            for (final group in groups.values)
+              CardCapabilitySection(
+                cardName: group.userCard.nickname?.isNotEmpty == true
+                    ? group.userCard.nickname!
+                    : group.product.name,
+                capabilityCount: group.caps.length + group.fuels.length,
+                capabilityLabel:
+                    'capabilit${group.caps.length + group.fuels.length == 1 ? 'y' : 'ies'}',
+                children: [
+                  if (group.caps.isNotEmpty) ...[
+                    const CardCapabilitySubheading('Spend & reward caps'),
+                    for (final cap in group.caps)
+                      _CapTile(
+                        userCard: group.userCard,
+                        product: group.product,
+                        cap: cap,
+                        allOwned: owned,
+                      ),
+                  ],
+                  if (group.fuels.isNotEmpty) ...[
+                    const CardCapabilitySubheading('Fuel surcharge waivers'),
+                    for (final fuel in group.fuels)
+                      _FuelSurchargeTile(fuel: fuel),
+                  ],
+                ],
               ),
-            if (fuelRows.isNotEmpty) ...[
-              Text(
-                'Fuel surcharge waivers',
-                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
-              ),
-              const SizedBox(height: AppSpace.sm),
-              for (final (userCard, product, fuel) in fuelRows)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.md),
-                  child: _FuelSurchargeTile(userCard: userCard, product: product, fuel: fuel),
-                ),
-            ],
           ],
         );
       },
@@ -101,14 +159,24 @@ class _CapTile extends StatelessWidget {
   final CardProduct product;
   final CapRule cap;
   final List<(UserCard, CardProduct)> allOwned;
-  const _CapTile({required this.userCard, required this.product, required this.cap, required this.allOwned});
+  const _CapTile({
+    required this.userCard,
+    required this.product,
+    required this.cap,
+    required this.allOwned,
+  });
 
   @override
   Widget build(BuildContext context) {
     final consumed = userCard.capConsumed[cap.id] ?? const Money.zero();
-    final remainingPaise = (cap.capValue.paise - consumed.paise).clamp(0, cap.capValue.paise);
+    final remainingPaise = (cap.capValue.paise - consumed.paise).clamp(
+      0,
+      cap.capValue.paise,
+    );
     final remaining = Money.fromPaise(remainingPaise);
-    final ratio = cap.capValue.isZero ? 0.0 : (consumed.paise / cap.capValue.paise).clamp(0.0, 1.0);
+    final ratio = cap.capValue.isZero
+        ? 0.0
+        : (consumed.paise / cap.capValue.paise).clamp(0.0, 1.0);
 
     final Color barColor;
     final String headline;
@@ -145,17 +213,19 @@ class _CapTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(cap.label, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
-                    const SizedBox(height: 2),
                     Text(
-                      userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                      cap.label,
+                      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                     ),
                   ],
                 ),
               ),
               if (ratio >= 0.9)
-                const Icon(Icons.warning_amber_rounded, size: 16, color: BambooInk.clay)
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  size: 16,
+                  color: BambooInk.clay,
+                )
               else if (ratio >= 0.5)
                 const Icon(Icons.info_outline_rounded, size: 16, color: _amber),
             ],
@@ -176,7 +246,11 @@ class _CapTile extends StatelessWidget {
             children: [
               Text(
                 headline,
-                style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: barColor),
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w700,
+                  color: barColor,
+                ),
               ),
               if (cap.measure != CapMeasure.txnCount)
                 MoneyText(
@@ -193,7 +267,11 @@ class _CapTile extends StatelessWidget {
           ),
           if (ratio >= 0.9) ...[
             const SizedBox(height: AppSpace.sm),
-            _SwitchToSuggestion(currentCard: userCard, cap: cap, allOwned: allOwned),
+            _SwitchToSuggestion(
+              currentCard: userCard,
+              cap: cap,
+              allOwned: allOwned,
+            ),
           ],
         ],
       ),
@@ -211,7 +289,11 @@ class _SwitchToSuggestion extends StatelessWidget {
   final UserCard currentCard;
   final CapRule cap;
   final List<(UserCard, CardProduct)> allOwned;
-  const _SwitchToSuggestion({required this.currentCard, required this.cap, required this.allOwned});
+  const _SwitchToSuggestion({
+    required this.currentCard,
+    required this.cap,
+    required this.allOwned,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -220,10 +302,14 @@ class _SwitchToSuggestion extends StatelessWidget {
     if (others.isEmpty) return const SizedBox.shrink();
 
     const engine = RecommendationEngine();
-    final snapshots = [for (final (_, product) in others) CardSnapshot(product: product)];
+    final snapshots = [
+      for (final (_, product) in others) CardSnapshot(product: product),
+    ];
     final ranked = engine.rank(
       RecommendationContext(
-        amount: const Money.fromPaise(100000), // nominal ₹1,000 — ranking only cares about relative rate
+        amount: const Money.fromPaise(
+          100000,
+        ), // nominal ₹1,000 — ranking only cares about relative rate
         categoryId: cap.categoryId,
         rail: TxnRail.swipe,
         // "Switch to X after this cap" must not name a card whose better
@@ -236,10 +322,16 @@ class _SwitchToSuggestion extends StatelessWidget {
     if (best == null) return const SizedBox.shrink();
 
     final bestOwned = others.firstWhere((p) => p.$2.id == best.card.id);
-    final label = bestOwned.$1.nickname?.isNotEmpty == true ? bestOwned.$1.nickname! : best.card.name;
+    final label = bestOwned.$1.nickname?.isNotEmpty == true
+        ? bestOwned.$1.nickname!
+        : best.card.name;
     return Text(
       'Switch to $label after this cap',
-      style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.jade),
+      style: BambooFonts.ui(
+        12.5,
+        weight: FontWeight.w600,
+        color: BambooInk.jade,
+      ),
     );
   }
 }
@@ -249,10 +341,8 @@ extension _FirstOrNull<T> on Iterable<T> {
 }
 
 class _FuelSurchargeTile extends StatelessWidget {
-  final UserCard userCard;
-  final CardProduct product;
   final FuelSurchargeRule fuel;
-  const _FuelSurchargeTile({required this.userCard, required this.product, required this.fuel});
+  const _FuelSurchargeTile({required this.fuel});
 
   @override
   Widget build(BuildContext context) {
@@ -266,11 +356,6 @@ class _FuelSurchargeTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-          ),
-          const SizedBox(height: 4),
           Text(
             '${fuel.waiverPercent.toStringAsFixed(2)}% surcharge waived'
             '${fuel.minTxn != null ? " on spends above ${fuel.minTxn!.format()}" : ""}'

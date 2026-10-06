@@ -16,6 +16,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     required dynamic amount,
     String? categoryId,
     String? merchantName,
+    String? merchantVpa,
+    String? mcc,
     DateTime? occurredAt,
     String? note,
     String? rail,

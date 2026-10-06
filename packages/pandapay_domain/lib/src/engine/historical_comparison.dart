@@ -43,7 +43,14 @@ class HistoricalCardComparison {
 
   bool get hadBetterOption => betterCard != null;
 
-  Money get missedValue => hadBetterOption ? (betterValue - actualValue) : const Money.zero();
+  Money get missedValue {
+    if (!hadBetterOption) return const Money.zero();
+    final delta = betterValue - actualValue;
+    // This is an opportunity-cost figure, never a debit. Keep the domain
+    // Money type signed for refunds, but do not let a comparison inversion
+    // leak a negative "missed" value into Insights.
+    return delta.isNegative ? const Money.zero() : delta;
+  }
 }
 
 /// The BASE reward rate (category match, no cap/milestone/forex/fuel
@@ -63,13 +70,20 @@ Money baseRateValueFor({
   required Money amount,
   String? categoryId,
 }) {
+  if (amount.isZero || amount.isNegative) return const Money.zero();
   final matching = product.rewardRules.where((r) => r.categoryId == null || r.categoryId == categoryId).toList()
     ..sort((a, b) => a.priority.compareTo(b.priority));
   if (matching.isEmpty) return const Money.zero();
   final rule = matching.first;
   if (rule.unit == RewardUnit.flatPoints) return const Money.zero();
   final rate = rule.unit.effectiveRatePerRupee(rule.rate, pointValueInr: product.pointValueInr);
-  return amount * rate;
+  final value = amount * rate;
+  // A base-rate reward is a portion of the purchase value, not a debt or a
+  // bonus unrelated to the purchase. Catalogue mistakes (for example a
+  // malformed points value/rate) must not produce an impossible reward that
+  // is larger than the spend itself.
+  if (value.isNegative) return const Money.zero();
+  return value > amount ? amount : value;
 }
 
 /// [ownedCards] must include [usedCard] itself (its own base rate is one of

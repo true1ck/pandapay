@@ -12,10 +12,15 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
-import '../../data/user_cards_repository.dart' show MonthlyReport;
+import '../../data/user_cards_repository.dart' show MonthlyReport, TxnEntryKind;
 import '../../main.dart' show MoneyText;
 import '../referrals/invite_friends_screen.dart';
 import 'insights_overview.dart';
+
+/// A reward/opportunity delta is an earned-value figure, not a debit.
+/// [Money] remains signed globally because refunds and reversals are valid
+/// domain values; this helper is only for derived reward comparisons.
+Money nonNegativeRewardValue(Money value) => value.isNegative ? const Money.zero() : value;
 
 /// baseline_single_card / value_missed for the CURRENT month, computed
 /// client-side from the exact same [baseRateValueFor]/[compareToOwnedCards]
@@ -54,7 +59,9 @@ final _monthlyExtrasProvider = FutureProvider.family<_MonthlyExtras, DateTime>((
   final monthStart = DateTime(periodMonth.year, periodMonth.month, 1);
   final monthEnd = DateTime(periodMonth.year, periodMonth.month + 1, 1).subtract(const Duration(days: 1));
   final transactions = await repo.fetchTransactions(from: monthStart, to: monthEnd);
-  final active = transactions.where((t) => t.status == 'active').toList();
+  final active = transactions
+      .where((t) => t.status == 'active' && t.entryKind == TxnEntryKind.spend && t.amount.paise > 0)
+      .toList();
 
   var valueMissed = const Money.zero();
   for (final txn in active) {
@@ -319,8 +326,8 @@ class _RecapCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasComparison = extras?.hasCounterfactual ?? false;
     final savedVsOneCard = hasComparison
-        ? report.rewardsEarned - extras!.baselineSingleCard
-        : report.rewardsEarned;
+        ? nonNegativeRewardValue(report.rewardsEarned - extras!.baselineSingleCard)
+        : nonNegativeRewardValue(report.rewardsEarned);
     final payments = overview?.transactionCount ?? 0;
 
     return Container(

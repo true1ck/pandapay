@@ -194,6 +194,7 @@ void main() {
     expect(find.text('Where it came from'), findsOneWidget);
     expect(find.textContaining('effective'), findsOneWidget);
     expect(find.text('Left on the table'), findsOneWidget);
+    expect(find.textContaining('Total missed'), findsOneWidget);
     expect(find.text('Nothing to report yet'), findsNothing);
   });
 }

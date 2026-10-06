@@ -187,3 +187,25 @@ test('spend on a card that has since left the wallet is skipped, not crashed on'
   const report = buildMonthlyReport({ cards: [remaining], txns, actualTotal: 100, totalSpend: 10000 });
   assert.ok(Number.isFinite(report.valueMissedInr));
 });
+
+test('negative rows and impossible reward values cannot create negative or oversized monthly figures', () => {
+  const cardOne = card('c1', { base: 5 });
+  const txns = [
+    txn('positive', 'c1', 500, '2026-08-02', { expected: 5000 }),
+    txn('refund', 'c1', -4500, '2026-08-03', { expected: -4500 }),
+  ];
+
+  const report = buildMonthlyReport({
+    cards: [cardOne],
+    txns,
+    actualTotal: 5000,
+    totalSpend: 500,
+  });
+
+  assert.strictEqual(report.totalSpendInr, 500);
+  assert.strictEqual(report.rewardsEarnedInr, 500, 'rewards are capped at the positive spend');
+  assert.strictEqual(report.baselineSingleCardInr, 25, 'the negative row is excluded from the baseline');
+  assert.ok(report.valueMissedInr >= 0);
+  assert.ok(report.extraEarnedInr >= 0);
+  assert.ok(report.topMissed.every((row) => row.amountInr > 0 && row.missedInr >= 0));
+});

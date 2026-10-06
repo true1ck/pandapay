@@ -191,13 +191,18 @@ function evaluateOptimal(cards, txns) {
  * Insights show for the same month — those read the same column.
  */
 function buildMonthlyReport({ cards, txns, actualTotal, totalSpend }) {
-  const optimal = evaluateOptimal(cards, txns);
+  const spendTxns = txns.filter((t) => Number(t.amount_inr) > 0);
+  const safeSpend = Math.max(0, Number(totalSpend) || 0);
+  // Stored reward values are estimates, so an old/corrupt row must not make
+  // a report claim more reward than the spend that generated it.
+  const safeActual = Math.min(safeSpend, Math.max(0, Number(actualTotal) || 0));
+  const optimal = evaluateOptimal(cards, spendTxns);
 
   // The best single card, evaluated across the whole month on its own.
   let baseline = 0;
   let baselineCardId = null;
   for (const entry of cards) {
-    const value = evaluateSingleCard(entry, txns);
+    const value = evaluateSingleCard(entry, spendTxns);
     if (baselineCardId === null || value > baseline) {
       baseline = value;
       baselineCardId = entry.card.user_card_id;
@@ -208,15 +213,19 @@ function buildMonthlyReport({ cards, txns, actualTotal, totalSpend }) {
   // approximation can put "optimal" a fraction below "actual"; reporting a
   // negative missed value would read as the app claiming the user did
   // better than perfect.
-  const valueMissed = Math.max(0, optimal.total - actualTotal);
-  const extraEarned = Math.max(0, actualTotal - baseline);
+  const valueMissed = Math.max(0, optimal.total - safeActual);
+  const extraEarned = Math.max(0, safeActual - baseline);
 
   const missedByTxn = new Map(optimal.perTxn.map((p) => [p.transactionId, p]));
-  const topMissed = txns
+  const topMissed = spendTxns
     .map((t) => {
       const best = missedByTxn.get(t.id);
       if (!best) return null;
-      const missed = best.bestValueInr - Number(t.expected_value_inr || 0);
+      const actual = Math.min(
+        Number(t.amount_inr),
+        Math.max(0, Number(t.expected_value_inr || 0)),
+      );
+      const missed = Math.max(0, best.bestValueInr - actual);
       if (missed <= 0.01) return null;
       return {
         transactionId: t.id,
@@ -233,8 +242,8 @@ function buildMonthlyReport({ cards, txns, actualTotal, totalSpend }) {
     .slice(0, 5);
 
   return {
-    totalSpendInr: totalSpend,
-    rewardsEarnedInr: actualTotal,
+    totalSpendInr: safeSpend,
+    rewardsEarnedInr: safeActual,
     baselineSingleCardInr: baseline,
     baselineCardId,
     extraEarnedInr: extraEarned,

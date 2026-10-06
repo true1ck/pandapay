@@ -27,6 +27,8 @@ class PaymentSentScreen extends ConsumerStatefulWidget {
   final String cardName;
   final String? userCardId;
   final String? categoryId;
+  final String? merchantVpa;
+  final String? mcc;
   final Money expectedValue;
   final Confidence confidence;
 
@@ -54,6 +56,8 @@ class PaymentSentScreen extends ConsumerStatefulWidget {
     required this.cardName,
     required this.userCardId,
     required this.categoryId,
+    this.merchantVpa,
+    this.mcc,
     required this.expectedValue,
     required this.confidence,
     required this.vpa,
@@ -101,18 +105,24 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
         rail: 'upi_qr',
         result: result,
       );
-      ref.read(analyticsProvider).track(
-        AnalyticsEvent.acceptanceReportSubmitted,
-        props: {'result': result.wire},
-      );
+      ref
+          .read(analyticsProvider)
+          .track(
+            AnalyticsEvent.acceptanceReportSubmitted,
+            props: {'result': result.wire},
+          );
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Thanks — that helps other cardholders.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Thanks — that helps other cardholders.'),
+          ),
+        );
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.userMessage)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.userMessage)));
       }
     }
   }
@@ -120,7 +130,9 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
   Future<void> _confirmAndLog() async {
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null || widget.userCardId == null) {
-      setState(() => _logged = true); // Guest/no owned card — nothing to log against.
+      setState(
+        () => _logged = true,
+      ); // Guest/no owned card — nothing to log against.
       return;
     }
     setState(() {
@@ -133,14 +145,19 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
         amount: widget.amount,
         categoryId: widget.categoryId,
         merchantName: widget.merchantName,
+        merchantVpa: widget.merchantVpa,
+        mcc: widget.mcc,
         rail: 'upi_qr',
       );
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
-      ref.read(analyticsProvider).track(
-        AnalyticsEvent.transactionLogged,
-        props: const {'source': 'scan'},
-      );
+      ref.invalidate(utilizationTransactionsProvider);
+      ref
+          .read(analyticsProvider)
+          .track(
+            AnalyticsEvent.transactionLogged,
+            props: const {'source': 'scan'},
+          );
       if (mounted) setState(() => _logged = true);
     } catch (e) {
       if (mounted) setState(() => _error = userFacingErrorMessage(e));
@@ -170,73 +187,94 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: const BoxDecoration(color: BambooInk.lime, shape: BoxShape.circle),
-                  child: Icon(
-                    _logged ? Icons.check_rounded : Icons.arrow_outward_rounded,
-                    color: BambooInk.slate,
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(height: AppSpace.lg),
-                Text(
-                  _logged ? 'Logged.' : 'Continue in your UPI app',
-                  style: BambooFonts.heading(26, color: BambooInk.onSlate),
-                ),
-                const SizedBox(height: AppSpace.sm),
-                Text(
-                  _logged
-                      ? 'This spend now counts toward ${widget.cardName}\'s caps, milestones and points.'
-                      : 'Finish paying ${widget.merchantName.isEmpty ? '' : widget.merchantName} there, then wait for your bank SMS. If it does not arrive, log it manually below.',
-                  style: BambooFonts.ui(14, color: BambooInk.onSlateSubtle),
-                ),
-                const SizedBox(height: AppSpace.xxl),
-                Container(
-                  padding: const EdgeInsets.all(AppSpace.lg),
-                  decoration: BoxDecoration(
-                    color: BambooInk.slateRaised,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: BambooInk.slateHairline),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'REWARD IF THIS COMPLETES',
-                        style: BambooFonts.ui(
-                          11,
-                          weight: FontWeight.w600,
-                          color: BambooInk.onSlateMuted,
-                        ).copyWith(letterSpacing: 1.1),
-                      ),
-                      const SizedBox(height: 6),
-                      MoneyText(
-                        widget.expectedValue,
-                        confidence: widget.confidence,
-                        style: BambooFonts.money(36, color: BambooInk.lime),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'with ${widget.cardName}',
-                        style: BambooFonts.ui(13.5, color: BambooInk.onSlateSubtle),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: AppSpace.md),
-                  Text(_error!, style: BambooFonts.ui(13, color: BambooInk.clay)),
-                ],
-                if (_logged && !_acceptanceAnswered) ...[
-                  const SizedBox(height: AppSpace.lg),
-                  _AcceptancePrompt(
-                    cardName: widget.cardName,
-                    onAnswer: _reportAcceptance,
-                    onDismiss: () => setState(() => _acceptanceAnswered = true),
-                  ),
-                ],
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: const BoxDecoration(
+                            color: BambooInk.lime,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _logged
+                                ? Icons.check_rounded
+                                : Icons.arrow_outward_rounded,
+                            color: BambooInk.slate,
+                            size: 32,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpace.lg),
+                        Text(
+                          _logged ? 'Logged.' : 'Continue in your UPI app',
+                          style: BambooFonts.heading(
+                            26,
+                            color: BambooInk.onSlate,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpace.sm),
+                        Text(
+                          _logged
+                              ? 'This spend now counts toward ${widget.cardName}\'s caps, milestones and points.'
+                              : 'Finish paying ${widget.merchantName.isEmpty ? '' : widget.merchantName} there, then wait for your bank SMS. If it does not arrive, log it manually below.',
+                          style: BambooFonts.ui(
+                            14,
+                            color: BambooInk.onSlateSubtle,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpace.xxl),
+                        Container(
+                          padding: const EdgeInsets.all(AppSpace.lg),
+                          decoration: BoxDecoration(
+                            color: BambooInk.slateRaised,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: BambooInk.slateHairline),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'REWARD IF THIS COMPLETES',
+                                style: BambooFonts.ui(
+                                  11,
+                                  weight: FontWeight.w600,
+                                  color: BambooInk.onSlateMuted,
+                                ).copyWith(letterSpacing: 1.1),
+                              ),
+                              const SizedBox(height: 6),
+                              MoneyText(
+                                widget.expectedValue,
+                                confidence: widget.confidence,
+                                style: BambooFonts.money(
+                                  36,
+                                  color: BambooInk.lime,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'with ${widget.cardName}',
+                                style: BambooFonts.ui(
+                                  13.5,
+                                  color: BambooInk.onSlateSubtle,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: AppSpace.md),
+                          Text(
+                            _error!,
+                            style: BambooFonts.ui(13, color: BambooInk.clay),
+                          ),
+                        ],
+                        if (_logged && !_acceptanceAnswered) ...[
+                          const SizedBox(height: AppSpace.lg),
+                          _AcceptancePrompt(
+                            cardName: widget.cardName,
+                            onAnswer: _reportAcceptance,
+                            onDismiss: () =>
+                                setState(() => _acceptanceAnswered = true),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -250,14 +288,19 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                         backgroundColor: BambooInk.lime,
                         foregroundColor: BambooInk.slate,
                         minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
                       onPressed: _logging ? null : _confirmAndLog,
                       child: _logging
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.slate),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: BambooInk.slate,
+                              ),
                             )
                           : const Text("No SMS? Log this spend manually"),
                     ),
@@ -270,17 +313,23 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
                         backgroundColor: BambooInk.lime,
                         foregroundColor: BambooInk.slate,
                         minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
-                      onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+                      onPressed: () =>
+                          Navigator.of(context).popUntil((r) => r.isFirst),
                       child: const Text('Take me Home'),
                     ),
                   ),
                 const SizedBox(height: AppSpace.sm),
                 Center(
                   child: TextButton(
-                    onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
-                    style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateSubtle),
+                    onPressed: () =>
+                        Navigator.of(context).popUntil((r) => r.isFirst),
+                    style: TextButton.styleFrom(
+                      foregroundColor: BambooInk.onSlateSubtle,
+                    ),
                     child: Text(_logged ? 'Done' : "I'll log it later"),
                   ),
                 ),
@@ -331,7 +380,11 @@ class _AcceptancePrompt extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Did $cardName work here?',
-                  style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                  style: BambooFonts.ui(
+                    14.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
                 ),
               ),
               IconButton(
