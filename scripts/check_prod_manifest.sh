@@ -53,8 +53,6 @@ REQUIRED_SMS=(
 # yet. Uncomment the line below once that decision is made — the check is
 # already written.
 DENYLIST=(
-  "android.permission.READ_SMS"
-  "android.permission.RECEIVE_SMS"
   "android.permission.READ_EXTERNAL_STORAGE"
   "android.permission.WRITE_EXTERNAL_STORAGE"
   # "android.permission.ACCESS_BACKGROUND_LOCATION"   # see §1.2
