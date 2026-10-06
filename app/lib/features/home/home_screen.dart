@@ -367,8 +367,9 @@ class _AlertsStrip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userCards = ref.watch(userCardsProvider);
     final catalogue = ref.watch(catalogueProvider);
-    if (!userCards.hasValue || !catalogue.hasValue)
+    if (!userCards.hasValue || !catalogue.hasValue) {
       return const SizedBox.shrink();
+    }
 
     final now = ref.watch(clockProvider).now();
     final alerts = computeHomeAlerts(

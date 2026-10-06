@@ -535,8 +535,9 @@ class _StreakCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(homeSummaryProvider).valueOrNull;
-    if (summary == null || summary.streakDays == 0)
+    if (summary == null || summary.streakDays == 0) {
       return const SizedBox.shrink();
+    }
 
     final days = summary.streakDays;
     final rank = pandaRankFor(days);

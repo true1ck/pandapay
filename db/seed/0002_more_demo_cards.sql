@@ -249,7 +249,7 @@ insert into card_products (
   is_upi_linkable, base_reward_unit, base_reward_rate, point_value_inr, status
 )
 select id, 'idfc-first-select', 'IDFC FIRST Select', 'visa', 'credit', 0, 0,
-       true, 'points_per_150', 3.0, 0.25, 'draft'
+       false, 'points_per_150', 3.0, 0.25, 'draft'
 from issuers where slug = 'idfc'
 on conflict (slug) do nothing;
 

@@ -249,7 +249,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     // Keep sign-up and sign-in on the same light palette as the rest of the
     // application. The auth mode changes the copy and flow, not the theme.
-    const isLight = true;
+    final isLight = Theme.of(context).brightness == Brightness.light;
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: isLight

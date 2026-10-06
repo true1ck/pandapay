@@ -397,8 +397,9 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
   @override
   Widget build(BuildContext context) {
     final card = widget.card;
-    if (card.isUnresolved)
+    if (card.isUnresolved) {
       return _UnresolvedCardTile(busy: _archiving, onRemove: _removeUnresolved);
+    }
     final amount = ref.watch(enteredAmountProvider);
     final badges = <String>[
       if (card.totalPointsEarned > 0)
@@ -629,8 +630,9 @@ class _AutopayNudge extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (ref.watch(userCardsRepositoryProvider) == null)
+    if (ref.watch(userCardsRepositoryProvider) == null) {
       return const SizedBox.shrink();
+    }
 
     final cards = ref.watch(myCardsProvider).valueOrNull ?? const <UserCard>[];
     final unset = cards

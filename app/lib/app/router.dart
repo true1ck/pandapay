@@ -352,8 +352,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         if (status.maintenanceMode) {
           return path == AppRoute.maintenance ? null : AppRoute.maintenance;
         }
-        if (path == AppRoute.maintenance)
+        if (path == AppRoute.maintenance) {
           return AppRoute.home; // recovered mid-session
+        }
         final version = ref.read(appVersionProvider).valueOrNull;
         if (version != null &&
             isVersionOlderThan(version, status.minSupportedVersion)) {
@@ -423,8 +424,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       if (biometricLockOn && !biometricUnlocked) {
         return path == AppRoute.biometricLock ? null : AppRoute.biometricLock;
       }
-      if (path == AppRoute.biometricLock)
+      if (path == AppRoute.biometricLock) {
         return AppRoute.home; // already unlocked
+      }
 
       return AppRoute.preOnboarding.contains(path) ? AppRoute.home : null;
     },
