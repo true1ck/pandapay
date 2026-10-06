@@ -30,7 +30,7 @@ const BUILTIN_CATEGORY_RULES = [
   ] },
 
   { slug: 'fuel', priority: 45, patterns: [
-    'qualityfuelstation', 'kavlekarpetroleum', 'indianoil', 'iocl',
+    'indianoil', 'iocl',
     'bharatpetroleum', 'hindustanpetroleum', 'hpcl', 'bpcl', 'reliancepetroleum',
     'nayara', 'shell', 'jiobp', 'essar', 'petroleum', 'petrol', 'diesel',
     'fuelstation', 'fuel',
