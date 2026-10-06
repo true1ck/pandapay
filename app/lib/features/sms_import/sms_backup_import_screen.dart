@@ -701,6 +701,7 @@ class _GroupCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpace.sm),
           DropdownButtonFormField<String?>(
+            key: ValueKey('sms-group-${group.last4 ?? 'unknown'}'),
             initialValue: group.userCardId,
             isExpanded: true,
             style: BambooFonts.ui(14, color: BambooInk.ink900),

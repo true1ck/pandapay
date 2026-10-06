@@ -70,7 +70,9 @@ Future<void> _pumpApp(
     ),
   );
   if (settleAfter) {
-    await tester.pumpAndSettle();
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
   } else {
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 50));
@@ -167,7 +169,9 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(find.byType(BiometricLockScreen), findsNothing);
 

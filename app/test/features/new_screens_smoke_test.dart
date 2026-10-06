@@ -168,6 +168,8 @@ void main() {
     testWidgets('renders all four groups', (tester) async {
       await _pump(tester, const SettingsHubScreen());
       for (final group in const ['SECURITY', 'NOTIFICATIONS', 'ACCOUNT', 'ABOUT']) {
+        await tester.ensureVisible(find.text(group));
+        await tester.pump(const Duration(milliseconds: 50));
         expect(find.text(group), findsOneWidget, reason: '$group heading should render');
       }
     });

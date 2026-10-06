@@ -104,7 +104,13 @@ const _axis = UserCard(id: 'card-2', cardProductId: 'p2', cardName: 'Axis Ace', 
 /// The review view is a ListView; on a test-sized viewport the import
 /// button sits below the fold, so a bare tap silently misses.
 Future<void> _tapScrolled(WidgetTester tester, Finder finder) async {
-  await tester.ensureVisible(finder);
+  // Resolve the current element before scrolling. Flutter's `last` finder
+  // can be re-evaluated against the overlay while ensureVisible is walking
+  // the scrollable, which made a valid dropdown disappear between the two
+  // lookups on newer Flutter versions.
+  final matches = finder.evaluate().toList(growable: false);
+  expect(matches, isNotEmpty);
+  await tester.ensureVisible(find.byWidget(matches.last.widget));
   await tester.pumpAndSettle();
   await tester.tap(finder);
   await tester.pumpAndSettle();
@@ -178,8 +184,11 @@ void main() {
     );
 
     // Attribute the Axis group (the one carrying `₹`) and import it.
-    await _tapScrolled(tester, find.byType(DropdownButtonFormField<String?>).last);
+    await _tapScrolled(tester, find.byKey(const ValueKey('sms-group-5678')));
     await tester.tap(find.text('Axis Ace').last);
+    await tester.pumpAndSettle();
+    await _tapScrolled(tester, find.byKey(const ValueKey('sms-group-1234')));
+    await tester.tap(find.text('Skip these').last);
     await tester.pumpAndSettle();
     await _tapScrolled(tester, find.textContaining('Import 1 message'));
 
@@ -196,8 +205,11 @@ void main() {
       imports: _RecordingImportRepository(),
     );
 
-    await _tapScrolled(tester, find.byType(DropdownButtonFormField<String?>).first);
+    await _tapScrolled(tester, find.byKey(const ValueKey('sms-group-1234')));
     await tester.tap(find.text('HDFC Millennia').last);
+    await tester.pumpAndSettle();
+    await _tapScrolled(tester, find.byKey(const ValueKey('sms-group-5678')));
+    await tester.tap(find.text('Skip these').last);
     await tester.pumpAndSettle();
     await _tapScrolled(tester, find.textContaining('Import 1 message'));
 
@@ -216,8 +228,11 @@ void main() {
     );
 
     // Attribute only the first group; leave the second on Skip.
-    await _tapScrolled(tester, find.byType(DropdownButtonFormField<String?>).first);
+    await _tapScrolled(tester, find.byKey(const ValueKey('sms-group-1234')));
     await tester.tap(find.text('HDFC Millennia').last);
+    await tester.pumpAndSettle();
+    await _tapScrolled(tester, find.byKey(const ValueKey('sms-group-5678')));
+    await tester.tap(find.text('Skip these').last);
     await tester.pumpAndSettle();
     await _tapScrolled(tester, find.textContaining('Import 1 message'));
 

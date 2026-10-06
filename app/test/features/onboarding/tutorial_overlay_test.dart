@@ -51,7 +51,15 @@ Future<void> _pumpApp(WidgetTester tester, {required bool tutorialSeen}) async {
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  for (var i = 0; i < 6; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
+Future<void> _pumpBriefly(WidgetTester tester) async {
+  for (var i = 0; i < 4; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 void main() {
@@ -78,7 +86,7 @@ void main() {
     await _pumpApp(tester, tutorialSeen: false);
 
     await tester.tap(find.text('Skip tour'));
-    await tester.pumpAndSettle();
+    await _pumpBriefly(tester);
 
     expect(find.text('Type what you\'re about to spend'), findsNothing);
 
@@ -94,12 +102,12 @@ void main() {
       for (var i = 0; i < 3; i++) {
         expect(find.text('Next'), findsOneWidget);
         await tester.tap(find.text('Next'));
-        await tester.pumpAndSettle();
+        await _pumpBriefly(tester);
       }
       // Fourth and final step ends the tour.
       expect(find.text('Done'), findsOneWidget);
       await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
+      await _pumpBriefly(tester);
 
       expect(find.text('Type what you\'re about to spend'), findsNothing);
       final prefs = await SharedPreferences.getInstance();
@@ -121,7 +129,7 @@ void main() {
           matching: find.text('Wallet'),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpBriefly(tester);
 
       expect(find.byType(MyCardsScreen), findsOneWidget);
     },

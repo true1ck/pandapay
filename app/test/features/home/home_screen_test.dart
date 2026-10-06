@@ -247,7 +247,9 @@ void main() {
 
     await tester.ensureVisible(find.text('Pay with this card'));
     await tester.tap(find.text('Pay with this card'));
-    await tester.pumpAndSettle();
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(find.byType(QuickAddScreen), findsOneWidget);
   });

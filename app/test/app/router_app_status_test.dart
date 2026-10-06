@@ -54,7 +54,9 @@ Future<void> _pumpApp(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  for (var i = 0; i < 6; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 void main() {
