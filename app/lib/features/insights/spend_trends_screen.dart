@@ -495,11 +495,16 @@ class _TrendChart extends StatelessWidget {
   ];
 
   static String _barLabel(SpendPeriod period, DateTime start) {
+    // The API serializes India-local calendar midnights as UTC instants
+    // (for example, 2026-10-01 00:00 IST becomes 2026-09-30T18:30Z).
+    // Format in the device timezone or the chart moves every bucket into
+    // the previous calendar day/month even though the totals are correct.
+    final localStart = start.toLocal();
     return switch (period) {
-      SpendPeriod.week => '${start.day} ${_months[start.month - 1]}',
-      SpendPeriod.month => '${_months[start.month - 1]} ${start.year % 100}',
-      SpendPeriod.quarter => 'Q${((start.month - 1) ~/ 3) + 1} ${start.year % 100}',
-      SpendPeriod.year => '${start.year}',
+      SpendPeriod.week => '${localStart.day} ${_months[localStart.month - 1]}',
+      SpendPeriod.month => '${_months[localStart.month - 1]} ${localStart.year % 100}',
+      SpendPeriod.quarter => 'Q${((localStart.month - 1) ~/ 3) + 1} ${localStart.year % 100}',
+      SpendPeriod.year => '${localStart.year}',
     };
   }
 }
