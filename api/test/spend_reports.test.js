@@ -8,6 +8,7 @@ const {
   spendByCategory,
   spendByCard,
   spendByInstrument,
+  spendByCardCategory,
 } = require('../src/spend_reports');
 
 /**
@@ -205,6 +206,62 @@ test('card breakdown labels unmatched UPI and card rows instead of calling every
       { cardId: null, cardName: 'UPI / bank account', annualFeeInr: null, totalInr: 500, rewardsInr: 0, txnCount: 1, effectiveRatePerRupee: 0 },
       { cardId: null, cardName: 'Credit card (unmatched)', annualFeeInr: null, totalInr: 800, rewardsInr: 0, txnCount: 1, effectiveRatePerRupee: 0 },
       { cardId: 'uc-1', cardName: 'HDFC Millennia', annualFeeInr: 1000, totalInr: 1000, rewardsInr: 20, txnCount: 1, effectiveRatePerRupee: 0.02 },
+    ],
+  );
+});
+
+test('card/category breakdown preserves payment method and category together', async () => {
+  const client = {
+    query: async (sql, params) => {
+      assert.match(sql, /sc\.name/);
+      assert.match(sql, /t\.instrument/);
+      assert.deepEqual(params, ['user-1', 'start', 'end']);
+      return {
+        rows: [
+          {
+            user_card_id: 'uc-1',
+            instrument: 'credit_card',
+            card_name: 'HDFC Millennia',
+            card_nickname: null,
+            category_id: 'fuel-id',
+            category_name: 'Fuel',
+            total: '210.00',
+            txn_count: 1,
+          },
+          {
+            user_card_id: null,
+            instrument: 'upi_bank',
+            card_name: null,
+            card_nickname: null,
+            category_id: null,
+            category_name: null,
+            total: '560.18',
+            txn_count: 1,
+          },
+        ],
+      };
+    },
+  };
+
+  assert.deepEqual(
+    await spendByCardCategory(client, 'user-1', { start: 'start', end: 'end' }),
+    [
+      {
+        cardId: 'uc-1',
+        cardName: 'HDFC Millennia',
+        categoryId: 'fuel-id',
+        categoryName: 'Fuel',
+        totalInr: 210,
+        txnCount: 1,
+      },
+      {
+        cardId: null,
+        cardName: 'UPI / bank account',
+        categoryId: null,
+        categoryName: 'Other',
+        totalInr: 560.18,
+        txnCount: 1,
+      },
     ],
   );
 });

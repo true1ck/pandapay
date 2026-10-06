@@ -338,6 +338,46 @@ async function spendByInstrument(client, userId, { start, end }) {
   }));
 }
 
+/** Spend split by the resolved card/payment method and category together. */
+async function spendByCardCategory(client, userId, { start, end }) {
+  const result = await client.query(
+    `SELECT t.user_card_id,
+            t.instrument,
+            cp.name AS card_name, uc.nickname AS card_nickname,
+            sc.id AS category_id, sc.name AS category_name,
+            COALESCE(SUM(t.amount_inr), 0) AS total,
+            COUNT(*) AS txn_count
+       FROM transactions t
+       LEFT JOIN user_cards uc ON uc.id = t.user_card_id
+       LEFT JOIN card_products cp ON cp.id = uc.card_product_id
+       LEFT JOIN spend_categories sc ON sc.id = t.category_id
+      WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+        AND t.occurred_at >= $2 AND t.occurred_at < $3
+      GROUP BY t.user_card_id, t.instrument, cp.name, uc.nickname,
+               sc.id, sc.name
+      ORDER BY total DESC`,
+    [userId, start, end]
+  );
+  return result.rows.map((r) => ({
+    cardId: r.user_card_id,
+    cardName: r.card_nickname || r.card_name || (r.instrument === 'upi_bank'
+      ? 'UPI / bank account'
+      : r.instrument === 'debit_card'
+        ? 'Debit card (unmatched)'
+        : r.instrument === 'credit_card'
+          ? 'Credit card (unmatched)'
+          : r.instrument === 'wallet'
+            ? 'Wallet'
+            : 'Cash & other'),
+    categoryId: r.category_id,
+    categoryName: ['uncategorized', 'unclassified'].includes(
+      String(r.category_name || '').trim().toLowerCase(),
+    ) ? 'Other' : (r.category_name || 'Other'),
+    totalInr: Number(r.total),
+    txnCount: Number(r.txn_count),
+  }));
+}
+
 /**
  * A bucketed series for the trend chart — one point per week/month/quarter
  * going back [buckets] periods, oldest first.
@@ -474,6 +514,7 @@ module.exports = {
   spendByMerchant,
   spendByCard,
   spendByInstrument,
+  spendByCardCategory,
   spendSeries,
   budgetSpend,
   budgetPeriodBounds,

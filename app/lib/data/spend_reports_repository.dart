@@ -135,6 +135,21 @@ class InstrumentSpendRow {
   };
 }
 
+/// Spend split by both the payment method/card and category.
+class CardCategorySpendRow {
+  final String cardName;
+  final String categoryName;
+  final Money total;
+  final int txnCount;
+
+  const CardCategorySpendRow({
+    required this.cardName,
+    required this.categoryName,
+    required this.total,
+    required this.txnCount,
+  });
+}
+
 /// One point on the trend chart.
 class SpendSeriesPoint {
   final DateTime periodStart;
@@ -175,6 +190,7 @@ class SpendReport {
   final List<SpendBreakdownRow> byMerchant;
   final List<CardSpendRow> byCard;
   final List<InstrumentSpendRow> byInstrument;
+  final List<CardCategorySpendRow> byCardCategory;
   final List<SpendSeriesPoint> series;
 
   const SpendReport({
@@ -190,6 +206,7 @@ class SpendReport {
     required this.byMerchant,
     required this.byCard,
     required this.byInstrument,
+    this.byCardCategory = const [],
     required this.series,
   });
 
@@ -280,6 +297,17 @@ class SpendReport {
           .map(
             (e) => InstrumentSpendRow(
               instrument: e['instrument'] as String? ?? 'other',
+              total: _money(e['totalInr']),
+              txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,
+            ),
+          )
+          .toList(),
+      byCardCategory: ((json['byCardCategory'] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()
+          .map(
+            (e) => CardCategorySpendRow(
+              cardName: e['cardName'] as String? ?? 'Cash & other',
+              categoryName: _displayCategoryName(e['categoryName'] as String?),
               total: _money(e['totalInr']),
               txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,
             ),

@@ -202,6 +202,15 @@ class _ReportBody extends StatelessWidget {
           _SectionHeader('Which card'),
           for (final row in report.byCard) _CardRow(row: row, total: report.spend.total),
           const SizedBox(height: AppSpace.lg),
+          _SectionHeader('Card spending by category'),
+          for (final row in report.byCardCategory)
+            _BreakdownRow(
+              label: '${row.cardName} · ${row.categoryName}',
+              amount: row.total,
+              total: report.spend.total,
+              count: row.txnCount,
+            ),
+          const SizedBox(height: AppSpace.lg),
           _SectionHeader('Top merchants'),
           for (final row in report.byMerchant.take(10))
             _BreakdownRow(label: row.label, amount: row.total, total: report.spend.total, count: row.txnCount),
