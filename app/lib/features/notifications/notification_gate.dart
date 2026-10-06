@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/providers.dart'
-    show notificationPreferencesProvider, notificationPreferencesRepositoryProvider, recordAppNotification;
+    show
+        notificationPreferencesProvider,
+        notificationPreferencesRepositoryProvider,
+        recordAppNotification;
 import '../../data/notification_preferences_repository.dart';
 
 /// Userappimplementation_plan.md UA-8.3: "Quiet hours + daily frequency cap
@@ -85,13 +88,16 @@ class NotificationGate {
     return h * 60 + m;
   }
 
-  static bool dailyCapReached(int firedToday, int dailyCap) => firedToday >= dailyCap;
+  static bool dailyCapReached(int firedToday, int dailyCap) =>
+      firedToday >= dailyCap;
 
   Future<void> _ensurePluginInitialized() async {
     if (_pluginInitialized) return;
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosInit = DarwinInitializationSettings();
-    await notifications.initialize(const InitializationSettings(android: androidInit, iOS: iosInit));
+    await notifications.initialize(
+      const InitializationSettings(android: androidInit, iOS: iosInit),
+    );
     _pluginInitialized = true;
   }
 
@@ -120,7 +126,9 @@ class NotificationGate {
     if (merchantId != null && await _merchantMuted(merchantId)) return false;
     if (inQuietHours(prefs, effectiveNow)) return false;
     if (await _alreadyFired(dedupeKey)) return false;
-    if (dailyCapReached(await _todayCount(effectiveNow), prefs.dailyCap)) return false;
+    if (dailyCapReached(await _todayCount(effectiveNow), prefs.dailyCap)) {
+      return false;
+    }
 
     await _markFired(dedupeKey);
     await _incrementTodayCount(effectiveNow);
@@ -146,16 +154,62 @@ class NotificationGate {
       const androidDetails = AndroidNotificationDetails(
         'pandapay_alerts',
         'PandaPay alerts',
-        channelDescription: 'Cap, milestone, bill, and other card alerts you\'ve opted into',
+        channelDescription:
+            'Cap, milestone, bill, and other card alerts you\'ve opted into',
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
       );
-      const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(),
+      );
       await notifications.show(dedupeKey.hashCode, title, body, details);
     } catch (_) {
       // See the comment above.
     }
     return true;
+  }
+
+  /// Shows a notification received from the server while the app is in the
+  /// foreground. It intentionally does not write another inbox row or call
+  /// POST /notifications: the server already created that row before sending
+  /// FCM, and doing so here would create a delivery loop.
+  Future<void> presentRemote({
+    required String category,
+    required String title,
+    required String body,
+    String? dedupeKey,
+    String? deepLink,
+  }) async {
+    final prefs = await ref.read(notificationPreferencesProvider.future);
+    if (prefs == null || !categoryEnabled(prefs, category)) return;
+    if (inQuietHours(prefs, DateTime.now())) return;
+
+    try {
+      await _ensurePluginInitialized();
+      const androidDetails = AndroidNotificationDetails(
+        'pandapay_alerts',
+        'PandaPay alerts',
+        channelDescription:
+            'Cap, milestone, bill, and other card alerts you\'ve opted into',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+      );
+      final details = NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(),
+      );
+      await notifications.show(
+        (dedupeKey ?? '$category:$title').hashCode,
+        title,
+        body,
+        details,
+        payload: deepLink,
+      );
+    } catch (_) {
+      // Remote delivery is still present in the inbox; a platform-channel
+      // failure only means the foreground banner could not be shown.
+    }
   }
 
   Future<bool> _merchantMuted(String merchantId) async {

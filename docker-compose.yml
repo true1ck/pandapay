@@ -154,8 +154,16 @@ services:
       INBOUND_EMAIL_WEBHOOK_SECRET: dev_inbound_secret_change_me
       PARTNER_WEBHOOK_SECRET: dev_partner_secret_change_me
       IMAP_ENCRYPTION_KEY: dev_imap_key_change_me_32_bytes_ok
+      # The lightweight notification service is a separate compose project on
+      # the host during local development. host.docker.internal is the Docker
+      # Desktop route back to it.
+      NOTIFICATION_SERVICE_URL: "${NOTIFICATION_SERVICE_URL:-http://host.docker.internal:3100}"
+      NOTIFICATION_SERVICE_API_KEY: "${NOTIFICATION_SERVICE_API_KEY:-}"
+      NOTIFICATION_SERVICE_TIMEOUT_MS: "${NOTIFICATION_SERVICE_TIMEOUT_MS:-4000}"
     ports:
-      - "4000:4000"
+      # Keep the host port configurable so PandaPay can coexist with a local
+      # Novu API using port 4000 (for example, PANDAPAY_API_HOST_PORT=4001).
+      - "${PANDAPAY_API_HOST_PORT:-4000}:4000"
 
   auth:
     build:

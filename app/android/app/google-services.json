@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "61906687452",
+    "project_id": "notification-fd639",
+    "storage_bucket": "notification-fd639.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:61906687452:android:ba5cf6547e74c772772b19",
+        "android_client_info": {
+          "package_name": "app.pandapay.pandapay"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHtGcem_wScqPS3-GXfftFEW8tbDwmVwY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:61906687452:android:7e44f1e366b19865772b19",
+        "android_client_info": {
+          "package_name": "app.pandapay.pandapay.dev2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHtGcem_wScqPS3-GXfftFEW8tbDwmVwY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:61906687452:android:8b36d3c26a73a94e772b19",
+        "android_client_info": {
+          "package_name": "app.pandapay.pandapay.staging"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHtGcem_wScqPS3-GXfftFEW8tbDwmVwY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

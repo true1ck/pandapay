@@ -105,6 +105,11 @@ dependencies:
   # feature in this file.
   geolocator: ^13.0.2
   flutter_local_notifications: ^18.0.1
+  # Remote FCM delivery is optional until each mobile flavor has its native
+  # Firebase client config. The Dart service fails soft when that config is
+  # absent, preserving the existing inbox/local-notification experience.
+  firebase_core: ^4.1.1
+  firebase_messaging: ^16.0.2
   home_widget: ^0.7.0
   rive: ^0.14.11
   flex_color_scheme: ^8.4.0

@@ -54,4 +54,12 @@ module.exports = {
   inboundEmailWebhookSecret: process.env.INBOUND_EMAIL_WEBHOOK_SECRET || null,
   partnerWebhookSecret: process.env.PARTNER_WEBHOOK_SECRET || null,
   imapEncryptionKey: process.env.IMAP_ENCRYPTION_KEY || null,
+  notificationServiceUrl:
+    process.env.NOTIFICATION_SERVICE_URL || process.env.NOVU_NOTIFICATION_URL || null,
+  notificationServiceApiKey:
+    process.env.NOTIFICATION_SERVICE_API_KEY || process.env.NOVU_NOTIFICATION_API_KEY || null,
+  notificationServiceTimeoutMs: Math.max(
+    1000,
+    Number(process.env.NOTIFICATION_SERVICE_TIMEOUT_MS) || 4000,
+  ),
 };

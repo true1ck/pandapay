@@ -31,6 +31,7 @@ import '../data/local_user_cards_repository.dart';
 import '../data/merchant_search_repository.dart';
 import '../data/needs_review_repository.dart';
 import '../data/notification_preferences_repository.dart';
+import '../data/notification_devices_api.dart';
 import '../data/override_resolver.dart';
 import '../data/partner_apply_repository.dart';
 import '../data/recovery_api.dart';
@@ -46,6 +47,7 @@ import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
 import '../features/notifications/notification_gate.dart';
 import '../features/notifications/notification_triggers.dart';
+import '../features/notifications/push_notification_service.dart';
 import '../features/sms_import/sms_listener_service.dart';
 import '../features/sms_import/sms_background_queue.dart';
 import '../features/settings/settings_sync.dart';
@@ -966,9 +968,17 @@ Money _trackedCreditCardSpend(
 }
 
 DateTime _previousStatementOccurrence(int day, DateTime from) {
-  final thisMonth = DateTime(from.year, from.month, _clampDay(from.year, from.month, day));
+  final thisMonth = DateTime(
+    from.year,
+    from.month,
+    _clampDay(from.year, from.month, day),
+  );
   if (!thisMonth.isAfter(from)) return thisMonth;
-  return DateTime(from.year, from.month - 1, _clampDay(from.year, from.month - 1, day));
+  return DateTime(
+    from.year,
+    from.month - 1,
+    _clampDay(from.year, from.month - 1, day),
+  );
 }
 
 int _clampDay(int year, int month, int day) {
@@ -1717,6 +1727,43 @@ final notificationGateProvider = Provider<NotificationGate>((ref) {
     ref: ref,
     notifications: ref.watch(localNotificationsPluginProvider),
   );
+});
+
+/// The mobile app authenticates to PandaPay, never directly to the private
+/// notification service. This provider is therefore the only place where the
+/// current access token is connected to FCM token registration.
+final notificationDevicesApiProvider = Provider<NotificationDevicesApi?>((ref) {
+  final token = ref.watch(accessTokenProvider);
+  if (token == null) return null;
+  return NotificationDevicesApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+});
+
+/// FCM is additive to the existing inbox and local-notification system. The
+/// service is kept alive by the app shell and restarted after sign-in.
+final pushNotificationServiceProvider = Provider<PushNotificationService?>((
+  ref,
+) {
+  final api = ref.watch(notificationDevicesApiProvider);
+  if (api == null) return null;
+  final service = PushNotificationService(
+    api: api,
+    gate: ref.watch(notificationGateProvider),
+  );
+  ref.onDispose(service.stop);
+  return service;
+});
+
+final pushNotificationLifecycleProvider = Provider<void>((ref) {
+  final service = ref.watch(pushNotificationServiceProvider);
+  if (service == null) return;
+  unawaited(service.start());
+  ref.listen<String?>(accessTokenProvider, (previous, next) {
+    if (next == null) {
+      unawaited(service.stop());
+    } else if (previous == null) {
+      unawaited(service.start());
+    }
+  });
 });
 
 /// Background geofence monitor — one instance for the app's lifetime, kept

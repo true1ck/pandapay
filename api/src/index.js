@@ -24,6 +24,7 @@ const { startImapPoller, fetchRecentMessages } = require('./imap_poller');
 const { requestLogger, errorHandler } = require('./observability');
 const { importSourceKey } = require('./import_source_key');
 const { extractVpa, extractMcc } = require('./merchant_category');
+const notificationService = require('./notification_service');
 
 function uniqueSmsPatternIssuerId(patterns, sender) {
   const issuerIds = new Set(
@@ -1110,6 +1111,36 @@ app.post('/sync/register-device', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('POST /sync/register-device error', err);
     res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /notification-devices — registers the current user's FCM token with
+ * the private notification service. The PandaPay access token is the only
+ * credential the mobile app sends here; the notification-service project key
+ * stays on this API server.
+ */
+app.post('/notification-devices', requireAuth, async (req, res) => {
+  const { token, platform, email, displayName, timezone } = req.body || {};
+  if (typeof token !== 'string' || token.trim().length < 10 || token.length > 4096) {
+    return res.status(400).json({ error: 'A valid FCM token is required' });
+  }
+  if (platform != null && (typeof platform !== 'string' || platform.length > 40)) {
+    return res.status(400).json({ error: 'platform is invalid' });
+  }
+  try {
+    const result = await notificationService.registerDevice({
+      subscriberId: req.userId,
+      token: token.trim(),
+      platform,
+      email,
+      displayName,
+      timezone,
+    });
+    res.status(result.configured ? 201 : 202).json(result);
+  } catch (err) {
+    console.error('POST /notification-devices error', err);
+    res.status(502).json({ error: 'notification_service_unavailable' });
   }
 });
 
@@ -5601,6 +5632,24 @@ app.post('/notifications', requireAuth, async (req, res) => {
     // 204 (not an error) when the user has that category muted — the caller
     // asked for a delivery and got a definitive "not delivered, by choice".
     if (!inserted) return res.status(204).end();
+
+    // The inbox is the source of truth and has already committed. Remote FCM
+    // delivery is best-effort: a temporary notification-service outage must
+    // never turn a successful PandaPay notification into a failed product
+    // action or make the app retry and duplicate the inbox row.
+    if (notificationService.isConfigured()) {
+      notificationService
+        .send({
+          subscriberId: req.userId,
+          title: inserted.title,
+          body: inserted.body,
+          category: inserted.category,
+          severity: inserted.severity,
+          deepLink: inserted.deep_link,
+          dedupeKey: inserted.dedupe_key,
+        })
+        .catch((err) => console.error('remote notification delivery failed', err));
+    }
     res.status(201).json({ notification: inserted });
   } catch (err) {
     console.error('POST /notifications error', err);
