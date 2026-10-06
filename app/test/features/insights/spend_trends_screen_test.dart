@@ -178,6 +178,31 @@ void main() {
     expect(find.text('UPI from bank account'), findsOneWidget);
   });
 
+  testWidgets('formats calendar-month trend labels from local period starts', (tester) async {
+    await _pump(
+      tester,
+      _report(
+        series: [
+          SpendSeriesPoint(
+            periodStart: DateTime(2026, 9, 1),
+            spend: Money.fromRupees(100),
+            rewards: Money.zero,
+            txnCount: 1,
+          ),
+          SpendSeriesPoint(
+            periodStart: DateTime(2026, 10, 1),
+            spend: Money.fromRupees(200),
+            rewards: Money.zero,
+            txnCount: 1,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Sep 26'), findsOneWidget);
+    expect(find.text('Oct 26'), findsOneWidget);
+  });
+
   testWidgets('an empty period explains what would fill it rather than showing zeroes', (tester) async {
     await _pump(
       tester,
