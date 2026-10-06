@@ -2670,19 +2670,41 @@ async function insertTransactionAndUpdateState(client, userId, {
   // the state machine, or a repeat import would still double cap and
   // milestone progress even though it inserted no row.
   if (txn.rowCount === 0) {
+    // The same SMS may have been imported by an older build that downgraded
+    // an unmatched credit-card alert to `other`. The source key correctly
+    // prevents a second ledger row, but returning the stale attribution would
+    // make the bug permanent. Refresh only stronger parser evidence here:
+    // never alter amount/date/merchant and never replace an existing card.
     const existing = await client.query(
-      `SELECT id, amount_inr, occurred_at, instrument, entry_kind, source, status, state_applied, is_backfill
+      `SELECT id
          FROM transactions WHERE profile_id = $1 AND source_key = $2 LIMIT 1`,
       [userId, sourceKey]
     );
     if (!existing.rows[0]) throw new Error('source_key conflict without an existing transaction');
-    await recordTransactionObservation(client, userId, existing.rows[0].id, {
+    const refreshed = await client.query(
+      `UPDATE transactions t
+          SET instrument = CASE
+                WHEN t.instrument::text IN ('other', '')
+                 AND $3::text IN ('credit_card', 'debit_card', 'upi_bank', 'wallet')
+                  THEN $3::txn_instrument
+                ELSE t.instrument
+              END,
+              user_card_id = CASE
+                WHEN t.user_card_id IS NULL AND $4::uuid IS NOT NULL
+                  THEN $4::uuid
+                ELSE t.user_card_id
+              END
+        WHERE t.id = $1 AND t.profile_id = $2
+      RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, state_applied, is_backfill`,
+      [existing.rows[0].id, userId, resolvedInstrument, userCardId || null]
+    );
+    await recordTransactionObservation(client, userId, refreshed.rows[0].id, {
       source: resolvedSource,
       sourceKey,
       observedAt: occurred,
       metadata: { ...(observationMetadata || {}), exactRetry: true },
     });
-    return { status: 200, duplicate: true, duplicateKind: 'exact_retry', transaction: existing.rows[0] };
+    return { status: 200, duplicate: true, duplicateKind: 'exact_retry', transaction: refreshed.rows[0] };
   }
 
   await recordTransactionObservation(client, userId, txn.rows[0].id, {
