@@ -808,6 +808,16 @@ class _AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<_AppShell> {
   bool _scanning = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // The observer is shared by the shell's navigator. Reset the visual
+    // visibility flag when a fresh shell is created (for example after a
+    // restart or a test rebuild) so a stale pushed-route state cannot hide
+    // the tab bar permanently.
+    _shellStackNotEmpty.value = false;
+  }
+
   // Labels match the design doc's own nav copy ("02 Wallet" / "05 You")
   // exactly — routes/AppRoute names stay unchanged since those are wired
   // through go_router paths and tests, not user-visible.

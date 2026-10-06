@@ -729,7 +729,11 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
   } catch (_) {
     final cache = await _cacheOrNull(ref);
     final cached = await cache?.get(_cardOverridesCacheKey);
-    if (cached == null) rethrow;
+    // Overrides are an enhancement to ranking, not a prerequisite for
+    // showing the wallet. If this is the first signed-in request and there is
+    // no cache yet, fail open with the base catalogue instead of replacing
+    // Home with an error state while the API is unavailable.
+    if (cached == null) return const [];
     final body = jsonDecode(cached) as Map<String, dynamic>;
     return (body['overrides'] as List)
         .cast<Map<String, dynamic>>()

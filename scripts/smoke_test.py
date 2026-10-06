@@ -25,6 +25,7 @@ Exits non-zero on the first failure so CI fails loudly.
 """
 
 import argparse
+from datetime import datetime, timezone
 import json
 import re
 import subprocess
@@ -155,9 +156,10 @@ def main():
     uc = j.get("userCard", {}).get("id")
 
     _, before = call(API, "GET", "/home-summary", token=token)
+    occurred_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     code, _ = call(API, "POST", "/transactions",
                    {"userCardId": uc, "amountInr": 2000, "categoryId": rule["category_id"],
-                    "merchantName": "Smoke Merchant", "occurredAt": "2026-08-12T12:00:00Z"},
+                    "merchantName": "Smoke Merchant", "occurredAt": occurred_at},
                    token=token)
     check("POST /transactions", code == 201, f"got {code}")
     _, after = call(API, "GET", "/home-summary", token=token)

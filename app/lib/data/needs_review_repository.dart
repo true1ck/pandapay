@@ -68,7 +68,10 @@ class NeedsReviewRepository {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
     final normalizedSender = item.sender.trim().toLowerCase();
-    final normalizedBody = item.body.trim();
+    // SMS gateways sometimes add indentation/newlines when the same alert is
+    // delivered through two channels. Treat that as the same message while
+    // preserving the original body for display and one-tap resolution.
+    final normalizedBody = _normalizeBody(item.body);
     var duplicate = false;
     final withoutRetry = raw.where((entry) {
       try {
@@ -77,7 +80,7 @@ class NeedsReviewRepository {
         );
         if (existing.id == item.id) return false;
         final sameMessage = existing.sender.trim().toLowerCase() == normalizedSender &&
-            existing.body.trim() == normalizedBody;
+            _normalizeBody(existing.body) == normalizedBody;
         final closeInTime = existing.receivedAt.difference(item.receivedAt).abs() <=
             const Duration(minutes: 5);
         if (sameMessage && closeInTime) duplicate = true;
@@ -85,10 +88,12 @@ class NeedsReviewRepository {
       } catch (_) {
         return true;
       }
-    });
+    }).toList();
     if (duplicate) return;
     await prefs.setStringList(_needsReviewKey, [...withoutRetry, jsonEncode(item.toJson())]);
   }
+
+  String _normalizeBody(String body) => body.trim().replaceAll(RegExp(r'\s+'), ' ');
 
   /// "Not a transaction" dismiss, or a successful one-tap-fill resolution —
   /// either way, the item leaves the queue. Which one happened is the

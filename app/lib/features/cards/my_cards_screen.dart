@@ -475,6 +475,15 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                       tooltip: 'Log a ${amount.format()} spend on this card',
                       onPressed: _logging ? null : _logTransaction,
                     ),
+                  if (!card.isArchived) ...[
+                    const SizedBox(width: AppSpace.xs),
+                    _CardActionButton(
+                      icon: _archiving ? null : Icons.archive_outlined,
+                      loading: _archiving,
+                      tooltip: 'Archive',
+                      onPressed: _archiving ? null : _toggleArchive,
+                    ),
+                  ],
                   if (card.isArchived) ...[
                     const SizedBox(width: AppSpace.xs),
                     _CardActionButton(
