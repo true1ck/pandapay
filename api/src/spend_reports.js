@@ -424,9 +424,14 @@ async function spendByCardCategory(client, userId, { start, end }) {
  * where the off-by-one lived.
  */
 async function spendSeries(client, userId, period, buckets, anchor = new Date(), options = {}) {
-  // Anchor the series on the already-correct local-calendar start. Using
-  // date_trunc(start) here would truncate the UTC instant again and move an
-  // India-local midnight back to the previous UTC day.
+  // Anchor the series on the already-correct local-calendar start. The
+  // database stores that boundary as a UTC instant (for example, midnight
+  // in India is 18:30 UTC on the previous day), so adding a month directly
+  // to the timestamptz is wrong: PostgreSQL walks from Sep 30 to Oct 30,
+  // Nov 30, ... instead of from the first day of each calendar month. That
+  // produces duplicate/missing labels in the chart while the totals still
+  // look plausible. Generate the buckets as local wall-clock timestamps,
+  // then convert each boundary back to timestamptz for the transaction join.
   const stepInterval = {
     week: '1 week',
     month: '1 month',
@@ -434,14 +439,17 @@ async function spendSeries(client, userId, period, buckets, anchor = new Date(),
     year: '1 year',
   }[period];
   const { start } = periodBounds(period, anchor, options);
+  const timeZone = options.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
   const result = await client.query(
     `WITH buckets AS (
-       SELECT generate_series(
-         $3::timestamptz - (($2::int - 1) * $4::interval),
-         $3::timestamptz,
-         $4::interval
-       ) AS bucket_start
+       SELECT local_bucket_start AT TIME ZONE $4 AS bucket_start,
+              (local_bucket_start + $5::interval) AT TIME ZONE $4 AS bucket_end
+         FROM generate_series(
+           ($3::timestamptz AT TIME ZONE $4) - (($2::int - 1) * $5::interval),
+           ($3::timestamptz AT TIME ZONE $4),
+           $5::interval
+         ) AS local_bucket_start
      )
      SELECT b.bucket_start,
             COALESCE(SUM(t.amount_inr) FILTER (WHERE t.entry_kind = 'spend'), 0) AS spend,
@@ -452,10 +460,10 @@ async function spendSeries(client, userId, period, buckets, anchor = new Date(),
          ON t.profile_id = $1
         AND t.status = 'active'
         AND t.occurred_at >= b.bucket_start
-        AND t.occurred_at < b.bucket_start + $4::interval
+        AND t.occurred_at < b.bucket_end
       GROUP BY b.bucket_start
       ORDER BY b.bucket_start`,
-    [userId, buckets, start, stepInterval]
+    [userId, buckets, start, timeZone, stepInterval]
   );
 
   return result.rows.map((r) => ({

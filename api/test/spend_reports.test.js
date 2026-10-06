@@ -9,6 +9,7 @@ const {
   spendByCard,
   spendByInstrument,
   spendByCardCategory,
+  spendSeries,
 } = require('../src/spend_reports');
 
 /**
@@ -132,6 +133,42 @@ test('elapsed fraction is clamped to 0..1 outside the period', () => {
   const bounds = { start: new Date(2026, 7, 1), end: new Date(2026, 8, 1) };
   assert.strictEqual(periodElapsedFraction(bounds, new Date(2026, 6, 1)), 0);
   assert.strictEqual(periodElapsedFraction(bounds, new Date(2026, 9, 1)), 1);
+});
+
+test('trend series keeps calendar-month buckets aligned to the user timezone', async () => {
+  let query;
+  const client = {
+    query: async (sql, params) => {
+      query = { sql, params };
+      return {
+        rows: [
+          {
+            bucket_start: new Date('2025-11-30T18:30:00.000Z'),
+            spend: '0',
+            rewards: '0',
+            txn_count: '0',
+          },
+        ],
+      };
+    },
+  };
+
+  await spendSeries(
+    client,
+    'user-1',
+    'month',
+    12,
+    new Date('2026-10-01T18:30:00.000Z'),
+    { timeZone: 'Asia/Kolkata' },
+  );
+
+  assert.match(query.sql, /AT TIME ZONE \$4/);
+  assert.match(query.sql, /local_bucket_start \+ \$5::interval/);
+  assert.strictEqual(query.params[0], 'user-1');
+  assert.strictEqual(query.params[1], 12);
+  assert.strictEqual(query.params[2].toISOString(), '2026-09-30T18:30:00.000Z');
+  assert.strictEqual(query.params[3], 'Asia/Kolkata');
+  assert.strictEqual(query.params[4], '1 month');
 });
 
 test('an unknown period throws rather than silently defaulting', () => {
