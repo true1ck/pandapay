@@ -319,8 +319,9 @@ String? _businessPartOfVpa(String? vpa) {
   final at = raw.indexOf('@');
   final prefix = at > 0 ? raw.substring(0, at) : raw;
   final normalized = _normalize(prefix);
-  if (normalized.isEmpty || _genericVpaPrefixes.contains(normalized))
+  if (normalized.isEmpty || _genericVpaPrefixes.contains(normalized)) {
     return null;
+  }
   return prefix;
 }
 

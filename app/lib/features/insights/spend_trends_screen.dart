@@ -231,8 +231,9 @@ class _ReportBody extends StatefulWidget {
 class _ReportBodyState extends State<_ReportBody> {
   List<TransactionEntry> _transactionsForCategory(SpendBreakdownRow row) {
     return widget.transactions.where((entry) {
-      if (entry.status != 'active' || entry.entryKind != TxnEntryKind.spend)
+      if (entry.status != 'active' || entry.entryKind != TxnEntryKind.spend) {
         return false;
+      }
       if (row.categoryId != null) return entry.categoryId == row.categoryId;
       return (entry.categoryName ?? 'Other').toLowerCase() ==
           row.label.toLowerCase();
@@ -897,8 +898,9 @@ class _MerchantGroup extends StatelessWidget {
   }
 
   static String _paymentLabel(TransactionEntry entry) {
-    if (entry.cardLast4 != null)
+    if (entry.cardLast4 != null) {
       return '${entry.instrument.label} ••${entry.cardLast4}';
+    }
     return entry.instrument.label;
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../lib/features/cards/autopay_issuer_links.dart';
+import 'package:pandapay/features/cards/autopay_issuer_links.dart';
 
 void main() {
   test('maps HDFC cards to the HDFC official destination', () {
