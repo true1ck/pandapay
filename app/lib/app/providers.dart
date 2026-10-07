@@ -2024,6 +2024,13 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     if (workInProgress) return;
     workInProgress = true;
     try {
+      // Start the receiver from the same authenticated lifecycle pass as the
+      // inbox reconciliation. Previously these were two independent startup
+      // providers: after an update, the listener could register while the
+      // reconciliation pass ran before SMS permission/token restoration had
+      // settled, leaving the app listening but never importing the existing
+      // inbox until a later resume.
+      await ref.read(smsAutoImportProvider).start();
       await flush();
       try {
         await reconcileInbox();
@@ -2098,6 +2105,7 @@ class SmsAutoImportController {
   final SmsListenerService _service;
   bool _registered = false;
   String? _userCardIdOverride;
+  Future<SmsInboxSyncSummary>? _activeInboxSync;
 
   void setCardOverride(String? userCardId) => _userCardIdOverride = userCardId;
 
@@ -2119,6 +2127,26 @@ class SmsAutoImportController {
   Future<SmsInboxSyncSummary> syncExistingInbox({
     int limit = 0,
     DateTime? since,
+  }) async {
+    // The app shell and the explicit SMS screen can both request recovery at
+    // the same time (for example when the user opens Settings while the
+    // post-update startup pass is still running). Share the in-flight work;
+    // never read/upload the inbox twice concurrently.
+    final active = _activeInboxSync;
+    if (active != null) return active;
+
+    final future = _syncExistingInbox(limit: limit, since: since);
+    _activeInboxSync = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_activeInboxSync, future)) _activeInboxSync = null;
+    }
+  }
+
+  Future<SmsInboxSyncSummary> _syncExistingInbox({
+    required int limit,
+    required DateTime? since,
   }) async {
     final repo = _ref.read(userCardsRepositoryProvider);
     if (repo == null) {
@@ -2173,6 +2201,21 @@ class SmsAutoImportController {
         duplicates += result.duplicate;
         ignored += result.unparsed + result.invalid + result.errored;
         needsReview += result.needsReview;
+
+        // Do not hold Spending blank until the entire historical inbox has
+        // finished. A first install/update can contain thousands of SMS;
+        // publish each successful chunk so current-month spends appear as
+        // soon as the first server response lands while older history keeps
+        // importing in the background.
+        if (result.imported > 0 || result.needsReview > 0) {
+          _ref.invalidate(userCardsProvider);
+          _ref.invalidate(transactionsProvider);
+          _ref.invalidate(utilizationTransactionsProvider);
+          _ref.invalidate(needsReviewCountProvider);
+          _ref.invalidate(spendReportProvider);
+          _ref.invalidate(budgetsProvider);
+          _ref.invalidate(recurringReportProvider);
+        }
       }
     }
 
