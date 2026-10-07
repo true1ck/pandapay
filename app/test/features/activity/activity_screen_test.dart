@@ -36,10 +36,12 @@ class _FakeUserCardsRepository implements UserCardsRepository {
       },
     ];
     var result = transactions;
-    if (cardId != null)
+    if (cardId != null) {
       result = result.where((t) => t.userCardId == cardId).toList();
-    if (categoryId != null)
+    }
+    if (categoryId != null) {
       result = result.where((t) => t.categoryId == categoryId).toList();
+    }
     return result;
   }
 

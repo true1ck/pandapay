@@ -108,8 +108,9 @@ class InsightsHubScreen extends ConsumerWidget {
       final score = UrgencyScore(
         ratioConsumed: capRatio(consumed, cap.capValue),
       );
-      if (mostUrgentCap == null || score.compareTo(mostUrgentCap) < 0)
+      if (mostUrgentCap == null || score.compareTo(mostUrgentCap) < 0) {
         mostUrgentCap = score;
+      }
     }
     UrgencyScore? mostUrgentMilestone;
     for (final (userCard, m) in milestoneRows) {
