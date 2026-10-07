@@ -84,7 +84,10 @@ jobs:
           # fails the build. A warning threshold that nobody enforces is how
           # 74 issues accumulated in the first place.
           flutter analyze --fatal-infos
-          flutter test
+          # Several widget suites replace global Riverpod/plugin overrides.
+          # Run the complete suite serially so one test file cannot leak
+          # state into another on a shared test VM.
+          flutter test --concurrency=1
 
       # smsextractionimple.md Task S-2. The prod flavor strips READ_SMS/
       # RECEIVE_SMS, but nothing enforced that it stayed stripped — a plugin
