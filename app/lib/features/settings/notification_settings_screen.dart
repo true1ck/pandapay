@@ -4,7 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart'
-    show accessTokenProvider, notificationPreferencesProvider, notificationPreferencesRepositoryProvider;
+    show
+        accessTokenProvider,
+        notificationDevicesApiProvider,
+        notificationPreferencesProvider,
+        notificationPreferencesRepositoryProvider;
 import '../../data/api_exception.dart';
 import '../../data/notification_preferences_repository.dart';
 
@@ -13,7 +17,9 @@ import '../../data/notification_preferences_repository.dart';
 /// (not here) — notification_gate.dart (Part B) needs the exact same
 /// preferences this screen reads/writes, and providers.dart is where every
 /// other cross-cutting repository provider in this app already lives.
-final _mutedMerchantsProvider = FutureProvider<List<MutedMerchant>>((ref) async {
+final _mutedMerchantsProvider = FutureProvider<List<MutedMerchant>>((
+  ref,
+) async {
   final repo = ref.watch(notificationPreferencesRepositoryProvider);
   if (repo == null) return const [];
   return repo.fetchMutedMerchants();
@@ -39,7 +45,10 @@ class NotificationSettingsScreen extends ConsumerWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Notifications', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Notifications',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         // Every SwitchListTile below relies on the ambient SwitchThemeData
@@ -50,12 +59,18 @@ class NotificationSettingsScreen extends ConsumerWidget {
           data: Theme.of(context).copyWith(
             switchTheme: SwitchThemeData(
               thumbColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.selected) ? BambooInk.lime : Colors.white,
+                (states) => states.contains(WidgetState.selected)
+                    ? BambooInk.lime
+                    : Colors.white,
               ),
               trackColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.selected) ? BambooInk.slate : BambooInk.paperMuted,
+                (states) => states.contains(WidgetState.selected)
+                    ? BambooInk.slate
+                    : BambooInk.paperMuted,
               ),
-              trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+              trackOutlineColor: const WidgetStatePropertyAll(
+                Colors.transparent,
+              ),
             ),
           ),
           child: signedOut
@@ -70,10 +85,23 @@ class NotificationSettingsScreen extends ConsumerWidget {
   }
 }
 
-class _NotificationSettingsBody extends ConsumerWidget {
+class _NotificationSettingsBody extends ConsumerStatefulWidget {
   const _NotificationSettingsBody();
 
-  Future<void> _update(BuildContext context, WidgetRef ref, Map<String, dynamic> changes) async {
+  @override
+  ConsumerState<_NotificationSettingsBody> createState() =>
+      _NotificationSettingsBodyState();
+}
+
+class _NotificationSettingsBodyState
+    extends ConsumerState<_NotificationSettingsBody> {
+  bool _sendingTest = false;
+
+  Future<void> _update(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> changes,
+  ) async {
     final repo = ref.read(notificationPreferencesRepositoryProvider);
     if (repo == null) return;
     try {
@@ -81,13 +109,40 @@ class _NotificationSettingsBody extends ConsumerWidget {
       ref.invalidate(notificationPreferencesProvider);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
     }
   }
 
+  Future<void> _sendTestNotification(BuildContext context) async {
+    final api = ref.read(notificationDevicesApiProvider);
+    if (api == null || _sendingTest) return;
+
+    setState(() => _sendingTest = true);
+    try {
+      await api.sendTestNotification();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Test push accepted — check your device shortly.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _sendingTest = false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final prefsAsync = ref.watch(notificationPreferencesProvider);
 
     return prefsAsync.when(
@@ -106,16 +161,57 @@ class _NotificationSettingsBody extends ConsumerWidget {
         return ListView(
           padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
           children: [
+            _SectionHeader('Test delivery'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+              child: Text(
+                'Send one real push to the devices signed in to this account. The test never targets another user.',
+                style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.lg,
+                AppSpace.md,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _sendingTest
+                      ? null
+                      : () => _sendTestNotification(context),
+                  icon: _sendingTest
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.notifications_active_outlined),
+                  label: Text(
+                    _sendingTest
+                        ? 'Sending test push…'
+                        : 'Send test notification',
+                  ),
+                ),
+              ),
+            ),
+            const Divider(height: AppSpace.xl),
             _SectionHeader('Categories'),
             SwitchListTile(
               title: const Text('Location-based tips'),
-              subtitle: const Text('Nudges when you\'re near a merchant with a better card'),
+              subtitle: const Text(
+                'Nudges when you\'re near a merchant with a better card',
+              ),
               value: prefs.categoryLocation,
               onChanged: (v) => _update(context, ref, {'category_location': v}),
             ),
             SwitchListTile(
               title: const Text('Cap alerts'),
-              subtitle: const Text('When you\'re close to a spend or reward cap'),
+              subtitle: const Text(
+                'When you\'re close to a spend or reward cap',
+              ),
               value: prefs.categoryCaps,
               onChanged: (v) => _update(context, ref, {'category_caps': v}),
             ),
@@ -123,13 +219,17 @@ class _NotificationSettingsBody extends ConsumerWidget {
               title: const Text('Milestones'),
               subtitle: const Text('Progress toward a milestone benefit'),
               value: prefs.categoryMilestones,
-              onChanged: (v) => _update(context, ref, {'category_milestones': v}),
+              onChanged: (v) =>
+                  _update(context, ref, {'category_milestones': v}),
             ),
             SwitchListTile(
               title: const Text('Fee waivers'),
-              subtitle: const Text('Annual fee waiver progress and confirmations'),
+              subtitle: const Text(
+                'Annual fee waiver progress and confirmations',
+              ),
               value: prefs.categoryFeeWaivers,
-              onChanged: (v) => _update(context, ref, {'category_fee_waivers': v}),
+              onChanged: (v) =>
+                  _update(context, ref, {'category_fee_waivers': v}),
             ),
             SwitchListTile(
               title: const Text('Bill due dates'),
@@ -145,37 +245,53 @@ class _NotificationSettingsBody extends ConsumerWidget {
             ),
             SwitchListTile(
               title: const Text('Monthly savings report'),
-              subtitle: const Text('A summary of what your cards earned this month'),
+              subtitle: const Text(
+                'A summary of what your cards earned this month',
+              ),
               value: prefs.categoryMonthlyReport,
-              onChanged: (v) => _update(context, ref, {'category_monthly_report': v}),
+              onChanged: (v) =>
+                  _update(context, ref, {'category_monthly_report': v}),
             ),
             SwitchListTile(
               title: const Text('Needs-review queue'),
-              subtitle: const Text('Transactions PandaPay couldn\'t confidently categorize'),
+              subtitle: const Text(
+                'Transactions PandaPay couldn\'t confidently categorize',
+              ),
               value: prefs.categoryNeedsReview,
-              onChanged: (v) => _update(context, ref, {'category_needs_review': v}),
+              onChanged: (v) =>
+                  _update(context, ref, {'category_needs_review': v}),
             ),
             // Two budget toggles rather than one: the early warning is the
             // useful half, and someone who wants it shouldn't have to
             // accept the after-the-fact one too.
             SwitchListTile(
               title: const Text('Budget running ahead'),
-              subtitle: const Text('When you\'re spending faster than the period is passing'),
+              subtitle: const Text(
+                'When you\'re spending faster than the period is passing',
+              ),
               value: prefs.categoryBudgetWarning,
-              onChanged: (v) => _update(context, ref, {'category_budget_warning': v}),
+              onChanged: (v) =>
+                  _update(context, ref, {'category_budget_warning': v}),
             ),
             SwitchListTile(
               title: const Text('Budget exceeded'),
               subtitle: const Text('When a budget you set has been passed'),
               value: prefs.categoryBudgetExceeded,
-              onChanged: (v) => _update(context, ref, {'category_budget_exceeded': v}),
+              onChanged: (v) =>
+                  _update(context, ref, {'category_budget_exceeded': v}),
             ),
             const Divider(height: AppSpace.xl),
             _SectionHeader('Quiet hours'),
-            _QuietHoursTile(prefs: prefs, onUpdate: (changes) => _update(context, ref, changes)),
+            _QuietHoursTile(
+              prefs: prefs,
+              onUpdate: (changes) => _update(context, ref, changes),
+            ),
             const Divider(height: AppSpace.xl),
             _SectionHeader('Daily notification cap'),
-            _DailyCapTile(prefs: prefs, onUpdate: (changes) => _update(context, ref, changes)),
+            _DailyCapTile(
+              prefs: prefs,
+              onUpdate: (changes) => _update(context, ref, changes),
+            ),
             const Divider(height: AppSpace.xl),
             _SectionHeader('Muted merchants'),
             const _MutedMerchantsList(),
@@ -193,7 +309,12 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.md,
+        AppSpace.lg,
+        AppSpace.sm,
+      ),
       child: Text(
         title.toUpperCase(),
         style: BambooFonts.ui(
@@ -226,13 +347,17 @@ class _QuietHoursTile extends StatelessWidget {
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
 
   Future<void> _pick(BuildContext context, {required bool isStart}) async {
-    final current = isStart ? _parse(prefs.quietHoursStart) : _parse(prefs.quietHoursEnd);
+    final current = isStart
+        ? _parse(prefs.quietHoursStart)
+        : _parse(prefs.quietHoursEnd);
     final picked = await showTimePicker(
       context: context,
       initialTime: current ?? const TimeOfDay(hour: 22, minute: 0),
     );
     if (picked == null) return;
-    onUpdate({isStart ? 'quiet_hours_start' : 'quiet_hours_end': _format(picked)});
+    onUpdate({
+      isStart ? 'quiet_hours_start' : 'quiet_hours_end': _format(picked),
+    });
   }
 
   @override
@@ -268,8 +393,13 @@ class _QuietHoursTile extends StatelessWidget {
               ),
               if (!isOff)
                 TextButton(
-                  style: TextButton.styleFrom(foregroundColor: BambooInk.ink500),
-                  onPressed: () => onUpdate({'quiet_hours_start': null, 'quiet_hours_end': null}),
+                  style: TextButton.styleFrom(
+                    foregroundColor: BambooInk.ink500,
+                  ),
+                  onPressed: () => onUpdate({
+                    'quiet_hours_start': null,
+                    'quiet_hours_end': null,
+                  }),
                   child: const Text('Clear'),
                 ),
             ],
@@ -358,11 +488,17 @@ class _MutedMerchantsList extends ConsumerWidget {
       data: (muted) {
         if (muted.isEmpty) {
           return const Padding(
-            padding: EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.lg),
+            padding: EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              0,
+              AppSpace.lg,
+              AppSpace.lg,
+            ),
             child: EmptyState(
               icon: Icons.volume_off_outlined,
               title: 'No muted merchants yet',
-              message: 'You can mute a place after getting a notification from it.',
+              message:
+                  'You can mute a place after getting a notification from it.',
             ),
           );
         }
@@ -374,16 +510,18 @@ class _MutedMerchantsList extends ConsumerWidget {
                 trailing: TextButton(
                   style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
                   onPressed: () async {
-                    final repo = ref.read(notificationPreferencesRepositoryProvider);
+                    final repo = ref.read(
+                      notificationPreferencesRepositoryProvider,
+                    );
                     if (repo == null) return;
                     try {
                       await repo.unmuteMerchant(m.merchantId);
                       ref.invalidate(_mutedMerchantsProvider);
                     } catch (e) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(userFacingErrorMessage(e))),
+                        );
                       }
                     }
                   },

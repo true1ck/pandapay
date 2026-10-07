@@ -16,6 +16,22 @@ notification service is used only for queued FCM delivery.
 6. The notification service queues FCM delivery through Redis and removes stale
    device tokens when Firebase reports them as invalid.
 
+## Authenticated physical-device self-test
+
+Notification Settings includes **Send test notification**. It calls
+`POST /notifications/test` with the normal PandaPay access token. The API
+derives the recipient from that token and never accepts a user id, subscriber
+id, or device id from the app, so a user can only test their own registered
+devices.
+
+The route waits for the notification service to accept the request and returns
+`202` only then. A `503` means the production API has no notification-service
+configuration, `502` means the provider could not be reached, and `429` means
+the one-minute self-test cooldown is active. A successful `202` confirms
+provider acceptance; Android may still take a short time to display the push,
+and the device must have signed in, obtained an FCM token, granted notification
+permission, and have network access.
+
 ## API configuration
 
 Set these variables in the PandaPay API container. For local Docker Desktop
@@ -54,10 +70,10 @@ After setting the API variables and signing in on a real mobile build:
 1. Allow notifications when prompted.
 2. Check the notification-service dashboard for the PandaPay subscriber and
    device.
-3. Trigger an existing PandaPay event, or create an inbox notification through
-   the authenticated API.
-4. Confirm the inbox row appears in PandaPay and the push appears on the
-   device.
+3. Open Settings → Notifications and tap **Send test notification**.
+4. Confirm the success message and the push appear on the same physical device.
+5. If the API reports `503`, configure the production notification-service URL
+   and project key; the app cannot fix a missing server-side secret.
 
 The API and mobile app remain usable if the notification service is temporarily
 unconfigured or unavailable. Inbox writes are not rolled back because a push

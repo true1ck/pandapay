@@ -56,4 +56,26 @@ class NotificationDevicesApi {
       // 201/202 body after a successful registration.
     }
   }
+
+  /// Requests one real remote push for this signed-in account.
+  ///
+  /// The API deliberately derives the recipient from the bearer token. The
+  /// app never sends a subscriber id, device id, or notification-service key.
+  Future<void> sendTestNotification() async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/notifications/test'),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 202) return;
+
+    final message = response.body.isEmpty
+        ? 'No details returned by the API'
+        : response.body;
+    throw ApiException(
+      'POST /notifications/test failed: ${response.statusCode} $message',
+    );
+  }
 }

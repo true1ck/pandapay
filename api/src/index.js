@@ -25,6 +25,9 @@ const { requestLogger, errorHandler } = require('./observability');
 const { importSourceKey } = require('./import_source_key');
 const { extractVpa, extractMcc } = require('./merchant_category');
 const notificationService = require('./notification_service');
+const { createTestNotificationLimiter } = require('./notification_test');
+
+const testNotificationLimiter = createTestNotificationLimiter();
 
 function uniqueSmsPatternIssuerId(patterns, sender) {
   const issuerIds = new Set(
@@ -1141,6 +1144,57 @@ app.post('/notification-devices', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('POST /notification-devices error', err);
     res.status(502).json({ error: 'notification_service_unavailable' });
+  }
+});
+
+/**
+ * POST /notifications/test — requests one real remote push to the current
+ * user's registered device(s).
+ *
+ * The recipient is always req.userId. No subscriber/device id is accepted
+ * from the request body, so an authenticated user cannot target another
+ * account. Unlike the normal notification route, this waits for the private
+ * provider's response and reports configuration/provider failures honestly;
+ * a 202 means the provider accepted the request, not that Android has already
+ * displayed it.
+ */
+app.post('/notifications/test', requireAuth, async (req, res) => {
+  if (!notificationService.isConfigured()) {
+    return res.status(503).json({
+      error: 'notification_service_not_configured',
+      message: 'Remote push delivery is not configured on the API',
+    });
+  }
+
+  const limit = testNotificationLimiter.check(req.userId);
+  if (!limit.allowed) {
+    res.set('Retry-After', String(limit.retryAfterSeconds));
+    return res.status(429).json({
+      error: 'test_notification_rate_limited',
+      retryAfterSeconds: limit.retryAfterSeconds,
+    });
+  }
+
+  try {
+    const dedupeKey = `pandapay-test:${req.userId}:${crypto.randomUUID()}`;
+    await notificationService.send({
+      subscriberId: req.userId,
+      title: 'PandaPay test notification',
+      body: 'Push notifications are working on this account.',
+      category: 'general',
+      severity: 'info',
+      deepLink: '/notifications',
+      dedupeKey,
+    });
+    testNotificationLimiter.mark(req.userId);
+    return res.status(202).json({
+      ok: true,
+      requested: true,
+      message: 'Push notification accepted for delivery to your registered devices',
+    });
+  } catch (err) {
+    console.error('POST /notifications/test error', err);
+    return res.status(502).json({ error: 'notification_service_unavailable' });
   }
 });
 
