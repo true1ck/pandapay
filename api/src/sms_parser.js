@@ -169,7 +169,13 @@ function parseBuiltInCardSpend(sms) {
   if (instrument !== 'credit_card' && instrument !== 'debit_card') return { ok: false, reason: 'no_builtin_card_match' };
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_builtin_card_match' };
-  const merchantMatch = body.match(/\b(?:at|to|for)\s+([A-Za-z0-9_][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|[.,]|$)/i);
+  // Some issuers put the merchant immediately after the card suffix:
+  // "Card XX9008 on OPENAI *CHATGPT. Avl Limit ...". Prefer that clause,
+  // then fall back to the more common "at MERCHANT" form. The candidate
+  // must begin with a letter so a later customer-care number cannot become
+  // the merchant when the message also contains "to 921...".
+  const merchantMatch = body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 ._&@*'/-]{1,80}?)(?=\s+(?:from|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
+    || body.match(/\b(?:at|to|for)\s+([A-Za-z_][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|[.,]|$)/i);
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   return {
     ok: true,
@@ -356,7 +362,8 @@ function parseConservativeBankSpend(sms) {
   const last4 = body.match(/(?:ending|end(?:ing)?\s+in|xx+|x{2,}|card\s*(?:no\.?|number)?\s*[*x-]*)\s*([0-9]{4})\b/i);
   if (last4) fields.last4 = last4[1];
 
-  const merchant = body.match(/\b(?:at|to)\s+([A-Za-z0-9_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|for\s+card)\b|[.;]|$)/i);
+  const merchant = body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
+    || body.match(/\b(?:at|to)\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block|for\s+card)\b|[.;]|$)/i);
   if (merchant) {
     const value = merchant[1].trim().replace(/^_+/, '').replace(/[.,;:-]+$/, '').trim();
     if (value && !/^(your|card|account|a\/c)$/i.test(value)) fields.merchant = value;

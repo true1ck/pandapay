@@ -35,12 +35,17 @@ class CardMatch {
   final String reason;
   final double overlap;
   final int hits;
+  /// Number of matched tokens that identify the product rather than only its
+  /// issuer. Used to rank candidates when OCR also picked up shared words
+  /// such as "bank" or "credit card".
+  final int productHits;
   const CardMatch({
     required this.product,
     required this.confidence,
     required this.reason,
     this.overlap = 0.0,
     this.hits = 0,
+    this.productHits = 0,
   });
 }
 
@@ -130,13 +135,25 @@ String _normalize(String s) {
   // visible plus marker into the catalogue's separate “Neu Plus” token before
   // punctuation is stripped. This lets the matcher distinguish Plus from
   // Infinity instead of treating both as the same Tata Neu family.
-  final canonical = s.replaceAllMapped(
+  //
+  // The Infinity artwork uses “NEUCARD∞”, and OCR often returns the symbol
+  // either as the Unicode infinity glyph or as a near-brand spelling such as
+  // “Tata Neo”. Canonicalize only the Tata-branded form: a global neo -> neu
+  // rewrite would turn a real Axis Bank Neo card into a false Tata match.
+  var canonical = s.replaceAll('∞', ' infinity ');
+  canonical = canonical.replaceAllMapped(
     RegExp(r'\bneu\s*card\s*\+', caseSensitive: false),
     (_) => 'neu plus',
-  ).replaceAllMapped(
+  );
+  canonical = canonical.replaceAllMapped(
+    RegExp(r'\btata\s+neo(?:\s*card)?\b', caseSensitive: false),
+    (_) => 'tata neu',
+  );
+  canonical = canonical.replaceAllMapped(
     RegExp(r'\bcash\s*back\b', caseSensitive: false),
     (_) => 'cashback',
-  ).replaceAllMapped(
+  );
+  canonical = canonical.replaceAllMapped(
     RegExp(r'\bca(?:sh|sih)\s+b[^a-z0-9\s]*ck\b', caseSensitive: false),
     (_) => 'cashback',
   );
@@ -260,7 +277,9 @@ int _productSpecificHits(String normalizedText, String issuerName, String search
 
 /// Matches [extracted] against [catalogue], returning candidates sorted
 /// best-first. Confidence bands (deliberately conservative — see file doc):
-/// - `high`: network detected AND token overlap >= 0.75
+/// - `high`: explicit product-name evidence with token overlap >= 0.75;
+///   a network match is a useful confirmation but is not required because
+///   many real catalogue rows do not have a readable network logo
 /// - `medium`: at least two product-name tokens and token overlap >= 0.5
 ///   (network match optional boost)
 /// - `low`: a weak multi-token name hit, or network-only match with no name hit
@@ -309,9 +328,11 @@ List<CardMatch> matchCardText(
         continue;
       }
     } else if (hits >= 2 && overlap >= 0.75) {
-      confidence = networkMatches
-          ? MatchConfidence.high
-          : MatchConfidence.medium;
+      // The printed product name is stronger evidence than a logo that ML Kit
+      // may miss or that the catalogue may not know (47 live catalogue rows
+      // currently have an unknown network). Requiring the network here made
+      // otherwise exact card-name scans show as only "possible matches".
+      confidence = MatchConfidence.high;
       reasonParts.add('name match ${(overlap * 100).round()}%');
     } else if (hits >= 2 && overlap >= 0.5) {
       // Require network confirmation for medium on a partial match — without
@@ -338,6 +359,7 @@ List<CardMatch> matchCardText(
         reason: reasonParts.join(', '),
         overlap: overlap,
         hits: hits,
+        productHits: productHits,
       ),
     );
   }
@@ -345,6 +367,8 @@ List<CardMatch> matchCardText(
   results.sort((a, b) {
     final confCmp = b.confidence.index.compareTo(a.confidence.index);
     if (confCmp != 0) return confCmp;
+    final productHitsCmp = b.productHits.compareTo(a.productHits);
+    if (productHitsCmp != 0) return productHitsCmp;
     final overlapCmp = b.overlap.compareTo(a.overlap);
     if (overlapCmp != 0) return overlapCmp;
     return b.hits.compareTo(a.hits);

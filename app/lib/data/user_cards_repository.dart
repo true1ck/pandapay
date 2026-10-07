@@ -33,6 +33,10 @@ class UserCard {
   milestonePeriodEnd; // milestoneRule.id -> this period's deadline (E4)
   final double
   totalPointsEarned; // lifetime, in the reward's own native unit — not an INR Money
+  /// The current starting/estimated balance entered for this card. This is
+  /// intentionally separate from [totalPointsEarned], which also includes
+  /// the points ledger and is therefore not a form value the user entered.
+  final double? pointsBalance;
   final List<FeeWaiverProgress> feeWaiverStates;
 
   /// Task 11 (E7 Billing Cycle Float): day-of-month the statement cuts, and
@@ -97,6 +101,7 @@ class UserCard {
     this.milestoneQualifiedSpend = const {},
     this.milestonePeriodEnd = const {},
     this.totalPointsEarned = 0,
+    this.pointsBalance,
     this.feeWaiverStates = const [],
     this.statementDay,
     this.openedOn,
@@ -139,6 +144,9 @@ class UserCard {
             ),
       },
       totalPointsEarned: _num(json['total_points_earned']),
+      pointsBalance: json['points_balance'] == null
+          ? null
+          : _num(json['points_balance']),
       feeWaiverStates: feeWaiverStates.map(FeeWaiverProgress.fromJson).toList(),
       statementDay: json['statement_day'] as int?,
       openedOn: json['opened_on'] == null
@@ -181,6 +189,7 @@ class UserCard {
     ],
     'fee_waiver_states': feeWaiverStates.map((fw) => fw.toJson()).toList(),
     'total_points_earned': totalPointsEarned,
+    'points_balance': pointsBalance,
     'statement_day': statementDay,
     'opened_on': openedOn?.toIso8601String(),
     'credit_limit_inr': creditLimit?.rupees,
@@ -764,7 +773,7 @@ class UserCardsRepository {
         'nickname': ?nickname,
         'last4': ?last4,
       }),
-    );
+    ).timeout(const Duration(seconds: 60));
     if (response.statusCode != 201) {
       throw ApiException(
         'POST /user-cards failed: ${response.statusCode} ${response.body}',
@@ -926,7 +935,7 @@ class UserCardsRepository {
         'entryKind': entryKind.wireValue,
         'clientMutationId': mutationId,
       }),
-    );
+    ).timeout(const Duration(seconds: 60));
     // A 200 is an exact retry whose first response was lost. The canonical
     // transaction is returned in both cases and must leave the outbox.
     if (response.statusCode != 200 && response.statusCode != 201) {
@@ -1099,7 +1108,8 @@ class UserCardsRepository {
     required List<SmsBatchMessage> messages,
     bool backfill = true,
   }) async {
-    final response = await _client.post(
+    final response = await _client
+        .post(
       Uri.parse('$apiBaseUrl/transactions/from-sms/batch'),
       headers: _headers,
       body: jsonEncode({
@@ -1114,7 +1124,8 @@ class UserCardsRepository {
             },
         ],
       }),
-    );
+    )
+        .timeout(const Duration(seconds: 60));
     if (response.statusCode != 200) {
       throw ApiException(
         'POST /transactions/from-sms/batch failed: ${response.statusCode} ${response.body}',

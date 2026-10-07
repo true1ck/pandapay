@@ -35,22 +35,24 @@ class Env {
     defaultValue: 'dev',
   );
 
-  /// api/'s base URL. Default is api/'s live endpoint.
+  /// api/'s base URL. The safe default is the Android emulator's host alias,
+  /// not production. Production/staging builds must pass an explicit URL via
+  /// the build script so a plain debug build cannot write test data to live.
   static const String apiBaseUrl = String.fromEnvironment(
     'PANDAPAY_API_BASE_URL',
-    defaultValue: 'https://api.pandapath.site',
+    defaultValue: 'http://10.0.2.2:4000',
   );
 
-  /// auth/'s base URL. Default is auth/'s live endpoint.
+  /// auth/'s base URL. See [apiBaseUrl] for why this defaults locally.
   static const String authBaseUrl = String.fromEnvironment(
     'PANDAPAY_AUTH_BASE_URL',
-    defaultValue: 'https://auth.pandapath.site',
+    defaultValue: 'http://10.0.2.2:3210',
   );
 
   /// Hosted legal pages (Terms, Privacy Policy).
   static const String legalBaseUrl = String.fromEnvironment(
     'PANDAPAY_LEGAL_BASE_URL',
-    defaultValue: 'https://api.pandapath.site/legal/',
+    defaultValue: 'http://10.0.2.2:4000/legal/',
   );
 
   /// iOS OAuth 2.0 client id for the on-device Gmail "1-Tap Auto Find" flow
@@ -107,6 +109,12 @@ class Env {
     // "Undefined name 'Image'" out of dart:ui, which is a confusing failure
     // a long way from its cause.
     const isRelease = bool.fromEnvironment('dart.vm.product');
+    if (isRelease && environment == AppEnvironment.dev) {
+      throw StateError(
+        'Release build was compiled with PANDAPAY_ENV=dev. Use the build '
+        'script to select staging or prod and pass explicit backend URLs.',
+      );
+    }
     if (isRelease && pointsAtLocalhost) {
       throw StateError(
         'Release build was compiled without --dart-define=PANDAPAY_API_BASE_URL / '

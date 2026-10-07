@@ -6,7 +6,7 @@ const { extractVpa } = require('./merchant_category');
 // approved, or confirmed.
 const LIFECYCLE = /\b(?:created|registered|activated|approved|confirmed|enabled|set\s+up|initiated|accepted)\b/i;
 const MANDATE = /\b(?:e[-\s]?mandate|emandate|standing\s+instruction|recurring\s+(?:payment|debit)|subscription|auto[-\s]?pay|autopay)\b/i;
-const NEGATIVE = /\b(?:otp|verification\s+code|payment\s+due|amount\s+due|minimum\s+due|declined|failed|reversed|refund(?:ed)?)\b/i;
+const NEGATIVE = /\b(?:otp|verification\s+code|payment\s+due|amount\s+due|minimum\s+due|declined|failed|reversed|refund(?:ed)?|cancel(?:led|ed)?|revoked|stopped)\b/i;
 
 function numberAfterCurrency(body) {
   const match = String(body || '').match(

@@ -1406,6 +1406,15 @@ final appVersionProvider = FutureProvider<String>((ref) async {
   return info.version;
 });
 
+/// Identity of the installed build, including the Android build number. SMS
+/// reconciliation uses this rather than a permanent boolean: an app update
+/// must get one fresh inbox pass even when the previous version already
+/// reconciled this device.
+final appBuildIdentityProvider = FutureProvider<String>((ref) async {
+  final info = await PackageInfo.fromPlatform();
+  return '${info.version}+${info.buildNumber}';
+});
+
 /// UA-0.3 offline cache (GAP_ANALYSIS.md §2, plan
 /// docs/superpowers/plans/2026-08-08-offline-first-local-cache.md). Not a
 /// relational mirror of the Supabase schema — a raw-JSON-blob cache backed
@@ -1844,7 +1853,6 @@ final notificationTriggerLifecycleProvider = Provider<void>((ref) {
 /// resume while offline loses nothing.
 final smsBackgroundFlushProvider = Provider<void>((ref) {
   var workInProgress = false;
-  const inboxReconciliationKey = 'pandapay_app.sms_inbox_reconciled_at_v1';
   const inboxReconciliationInterval = Duration(minutes: 5);
 
   Future<void> saveAmbiguousSmsForConfirmation(
@@ -1879,7 +1887,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     // there is one rather than being discarded.
     if (repo == null) return;
     try {
-      await SmsListenerService().flushBackgroundQueue((
+      final handled = await SmsListenerService().flushBackgroundQueue((
         sender,
         body,
         receivedAt,
@@ -1899,6 +1907,13 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
+      // Refresh Spending immediately after a queue upload. If a later inbox
+      // reconciliation request times out, an open report must not stay stale.
+      if (handled > 0) {
+        ref.invalidate(spendReportProvider);
+        ref.invalidate(budgetsProvider);
+        ref.invalidate(recurringReportProvider);
+      }
     } catch (_) {
       // Offline or server down — the queue keeps what it couldn't send.
     }
@@ -1952,10 +1967,24 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   /// server source key makes re-reading recent rows safe, while `backfill`
   /// prevents old inbox history from changing current reward-cycle state.
   Future<void> reconcileInbox() async {
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null) return;
+    if (ref.read(userCardsRepositoryProvider) == null) return;
 
     final prefs = await SharedPreferences.getInstance();
+    String buildIdentity;
+    try {
+      buildIdentity = await ref.read(appBuildIdentityProvider.future);
+    } catch (_) {
+      // A platform-info failure must not prevent SMS capture. `unknown` is
+      // deliberately retryable: a later launch that can read PackageInfo
+      // will use the real build key and perform the full pass.
+      buildIdentity = 'unknown';
+    }
+    final safeBuildIdentity = buildIdentity.replaceAll(
+      RegExp(r'[^A-Za-z0-9._+-]'),
+      '_',
+    );
+    final inboxReconciliationKey =
+        'pandapay_app.sms_inbox_reconciled_at_v3_$safeBuildIdentity';
     final now = DateTime.now();
     final lastRunMillis = prefs.getInt(inboxReconciliationKey);
     if (lastRunMillis != null &&
@@ -1964,21 +1993,23 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       return;
     }
 
-    final messages = await SmsListenerService().readInboxSms(limit: 250);
-    for (final message in messages) {
-      final result = await repo.logTransactionFromSms(
-        sender: message.sender,
-        body: message.body,
-        occurredAt: message.receivedAt,
-        backfill: true,
-      );
-      await saveAmbiguousSmsForConfirmation(
-        message.sender,
-        message.body,
-        message.receivedAt,
-        result,
-      );
-    }
+    // Reuse the same bounded batch path as the explicit SMS screen. In
+    // particular, do not force these messages through `backfill: true`: a
+    // live SMS received while the app was paused must still update the
+    // current month's card/reward state when reconciliation catches it.
+    // The first run after this version is installed is a complete recovery
+    // pass so a new user does not see only the newest alerts. Later resume
+    // passes query by date from the previous successful scan, with a small
+    // overlap that covers clock skew/offline handover. The server source key
+    // makes that overlap idempotent.
+    await ref.read(smsAutoImportProvider).syncExistingInbox(
+      limit: 0,
+      since: lastRunMillis == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(lastRunMillis).subtract(
+              const Duration(days: 2),
+            ),
+    );
     await prefs.setInt(inboxReconciliationKey, now.millisecondsSinceEpoch);
     ref.invalidate(userCardsProvider);
     ref.invalidate(transactionsProvider);
@@ -1994,7 +2025,12 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     workInProgress = true;
     try {
       await flush();
-      await reconcileInbox();
+      try {
+        await reconcileInbox();
+      } catch (_) {
+        // A provider/permission/network failure must not abort the remaining
+        // queue retry and must not surface as an unhandled lifecycle error.
+      }
       // Repair rows imported by older builds: this suppresses only a
       // high-confidence SMS replay and fills categories for legacy rows.
       // It is idempotent and keeps the user out of a manual review workflow.
@@ -2039,6 +2075,22 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
 /// was only started from SmsImportScreen, which meant QR payments made from
 /// Home/Scan were never captured unless the user had opened that screen and
 /// tapped "Start listening" first.
+class SmsInboxSyncSummary {
+  final int scanned;
+  final int imported;
+  final int duplicates;
+  final int ignored;
+  final int needsReview;
+
+  const SmsInboxSyncSummary({
+    required this.scanned,
+    required this.imported,
+    required this.duplicates,
+    required this.ignored,
+    this.needsReview = 0,
+  });
+}
+
 class SmsAutoImportController {
   SmsAutoImportController(this._ref) : _service = SmsListenerService();
 
@@ -2055,6 +2107,91 @@ class SmsAutoImportController {
       unawaited(_handle(sender, body, receivedAt));
     });
     _registered = true;
+  }
+
+  /// Reads the existing on-device inbox once when the user starts SMS
+  /// tracking. The receiver only handles future messages; without this pass a
+  /// newly-installed app appears to do nothing until the next bank alert.
+  ///
+  /// The server's source key makes this safe to repeat: messages already
+  /// imported by the app shell or a previous scan are reported as duplicates,
+  /// not inserted again.
+  Future<SmsInboxSyncSummary> syncExistingInbox({
+    int limit = 0,
+    DateTime? since,
+  }) async {
+    final repo = _ref.read(userCardsRepositoryProvider);
+    if (repo == null) {
+      return const SmsInboxSyncSummary(
+        scanned: 0,
+        imported: 0,
+        duplicates: 0,
+        ignored: 0,
+      );
+    }
+
+    final messages = await _service.readInboxSms(limit: limit, since: since);
+    var imported = 0;
+    var duplicates = 0;
+    var ignored = 0;
+    var needsReview = 0;
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+
+    // Import in bounded requests. Current-month messages are live cycle
+    // activity; older messages remain history and must not inflate current
+    // caps/rewards.
+    for (final backfill in [false, true]) {
+      final selected = messages.where((message) {
+        final messageMonth = DateTime(
+          message.receivedAt.year,
+          message.receivedAt.month,
+        );
+        final isCurrentMonth = messageMonth == currentMonth;
+        return backfill ? !isCurrentMonth : isCurrentMonth;
+      }).toList();
+
+      for (var start = 0; start < selected.length; start += 200) {
+        // Yield between chunks so a large first-install/update recovery pass
+        // does not monopolise Flutter's frame/input loop.
+        await Future<void>.delayed(Duration.zero);
+        final end = (start + 200).clamp(0, selected.length);
+        final chunk = selected.sublist(start, end);
+        final result = await repo.logTransactionsFromSmsBatch(
+          messages: [
+            for (final message in chunk)
+              SmsBatchMessage(
+                userCardId: _userCardIdOverride,
+                sender: message.sender,
+                body: message.body,
+                occurredAt: message.receivedAt,
+              ),
+          ],
+          backfill: backfill,
+        );
+        imported += result.imported;
+        duplicates += result.duplicate;
+        ignored += result.unparsed + result.invalid + result.errored;
+        needsReview += result.needsReview;
+      }
+    }
+
+    if (messages.isNotEmpty) {
+      _ref.invalidate(userCardsProvider);
+      _ref.invalidate(transactionsProvider);
+      _ref.invalidate(utilizationTransactionsProvider);
+      _ref.invalidate(needsReviewCountProvider);
+      _ref.invalidate(spendReportProvider);
+      _ref.invalidate(budgetsProvider);
+      _ref.invalidate(recurringReportProvider);
+    }
+    return SmsInboxSyncSummary(
+      scanned: messages.length,
+      imported: imported,
+      duplicates: duplicates,
+      ignored: ignored,
+      needsReview: needsReview,
+    );
   }
 
   Future<void> _handle(String sender, String body, DateTime receivedAt) async {

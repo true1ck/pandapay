@@ -162,6 +162,20 @@ test('conservative fallback parses a card spend when the pattern table is empty'
   assert.equal(result.fields.merchant, 'AMAZON PAY');
 });
 
+test('ICICI card alerts keep the merchant and do not capture the later support number', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'JX-ICICIT-S',
+    body: 'INR 1,999.00 spent using ICICI Bank Card XX9008 on 01-Oct-26 on OPENAI *CHATGPT. Avl Limit: INR 5,23,661.68. If not you, call 18002662/SMS BLOCK 9008 to 9215676766.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'conservative_fallback');
+  assert.equal(result.fields.amountInr, 1999);
+  assert.equal(result.fields.instrument, 'credit_card');
+  assert.equal(result.fields.last4, '9008');
+  assert.equal(result.fields.merchant, 'OPENAI *CHATGPT');
+  assert.equal(result.fields.date, '01-Oct-26');
+});
+
 test('conservative fallback rejects OTP, due, refund, failed and non-card account messages', () => {
   const messages = [
     'OTP 123456 for INR 500 transaction on your card ending 7788',

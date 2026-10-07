@@ -104,6 +104,10 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   List<CardMatch> _matches = const [];
   bool _resultIsFromOcr = false;
   File? _capturedImageFile;
+  /// The image currently shown behind the result panel. Camera captures are
+  /// temporary files; gallery images belong to the user and are never deleted
+  /// by this screen.
+  File? _previewImageFile;
 
   /// Bumped every time we drop our hold on the camera (lifecycle change,
   /// mode switch, screen dispose). An in-flight [_initCamera] captures the
@@ -275,6 +279,7 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
       if (!mounted) return;
       setState(() {
         _capturedImageFile = File(file!.path);
+        _previewImageFile = _capturedImageFile;
       });
       final extracted = await recognizer.recognizeText(file.path);
       if (!mounted) return;
@@ -341,6 +346,10 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
         _lastExtracted = extracted;
         _resultIsFromOcr = mode == _ScanMode.ocr;
         _matches = matchCardText(extracted, widget.catalogue);
+        // Keep the uploaded card visible while the user verifies the match.
+        // Unlike [_capturedImageFile], this is the user's gallery file and is
+        // intentionally not deleted when the screen is closed.
+        if (mode == _ScanMode.ocr) _previewImageFile = File(path!);
       });
     } catch (_) {
       if (mounted) {
@@ -389,6 +398,7 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
     setState(() {
       _lastExtracted = null;
       _matches = const [];
+      _previewImageFile = null;
       if (_capturedImageFile != null) {
         unawaited(_capturedImageFile!.delete().catchError((_) => _capturedImageFile!));
         _capturedImageFile = null;
@@ -450,7 +460,7 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
                       // After capture: keep the frozen frame visible with the
                       // guide overlay intact and a success badge on top.
                       captured: _lastExtracted != null,
-                      capturedImageFile: _capturedImageFile,
+                      previewImageFile: _previewImageFile,
                       onCapture: _capture,
                     )
                   : _lastExtracted != null
@@ -535,9 +545,10 @@ class _OcrView extends StatefulWidget {
   /// True once OCR has returned a result — keeps the frozen camera frame
   /// visible (rather than going black) and overlays a success badge.
   final bool captured;
-  /// The image file taken by the camera. Rendered directly to avoid Android
-  /// blacking out the preview texture buffer when takePicture is called.
-  final File? capturedImageFile;
+  /// The image to keep visible behind the result panel. This can be a camera
+  /// capture or a gallery upload. Rendering the file directly also avoids
+  /// Android clearing the camera texture after a capture or picker return.
+  final File? previewImageFile;
   final VoidCallback onCapture;
 
   const _OcrView({
@@ -546,7 +557,7 @@ class _OcrView extends StatefulWidget {
     required this.error,
     required this.capturing,
     required this.captured,
-    this.capturedImageFile,
+    this.previewImageFile,
     required this.onCapture,
   });
 
@@ -585,6 +596,14 @@ class _OcrViewState extends State<_OcrView> with SingleTickerProviderStateMixin 
       );
     }
     final controller = widget.controller;
+    // A gallery picker tears down the camera while OCR runs. Once OCR has
+    // returned, the uploaded image is the complete preview source; requiring
+    // a camera controller here used to leave this area on a black spinner.
+    if (widget.previewImageFile != null) {
+      return _buildResultView(
+        Image.file(widget.previewImageFile!, fit: BoxFit.cover),
+      );
+    }
     if (controller == null || widget.initFuture == null) {
       return const Center(child: CircularProgressIndicator(color: BambooInk.lime));
     }
@@ -595,77 +614,75 @@ class _OcrViewState extends State<_OcrView> with SingleTickerProviderStateMixin 
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator(color: BambooInk.lime));
         }
-        return Stack(
-          children: [
-            // Keep the frozen camera frame visible at all times — after capture
-            // the plugin freezes the feed naturally, but on some Androids the
-            // texture buffer clears to black, so we render the captured file
-            // if we have one.
-            Positioned.fill(
-              child: widget.capturedImageFile != null
-                  ? Image.file(widget.capturedImageFile!, fit: BoxFit.cover)
-                  : _AspectPreservingCameraPreview(controller),
-            ),
-            // Guide overlay: static (pulse = 0) once captured so it reads as
-            // a freeze-frame rather than a live view.
-            Positioned.fill(
-              child: IgnorePointer(
-                child: widget.captured
-                    ? CustomPaint(
-                        painter: const CardGuidePainter(pulse: 0),
-                        size: Size.infinite,
-                      )
-                    : AnimatedBuilder(
-                        animation: _pulseController,
-                        builder: (context, _) => CustomPaint(
-                          painter: CardGuidePainter(pulse: _pulseController.value),
-                          size: Size.infinite,
-                        ),
-                      ),
-              ),
-            ),
-            // Success badge — replaces the capture button once we have a result.
-            if (widget.captured)
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: Center(
-                    child: Icon(
-                      Icons.check_circle_rounded,
-                      size: 56,
-                      color: BambooInk.lime,
-                    ),
-                  ),
-                ),
-              )
-            else
-              Positioned(
-                bottom: 20,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: GestureDetector(
-                    onTap: widget.capturing ? null : widget.onCapture,
-                    child: Container(
-                      width: 68,
-                      height: 68,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        border: Border.all(color: BambooInk.lime, width: 3),
-                      ),
-                      child: widget.capturing
-                          ? const Padding(
-                              padding: EdgeInsets.all(20),
-                              child: CircularProgressIndicator(strokeWidth: 3, color: BambooInk.slate),
-                            )
-                          : null,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        );
+        return _buildResultView(_AspectPreservingCameraPreview(controller));
       },
+    );
+  }
+
+  Widget _buildResultView(Widget background) {
+    return Stack(
+      children: [
+        Positioned.fill(child: background),
+        // Guide overlay: static once a result exists so the image reads as a
+        // freeze-frame rather than a live view.
+        Positioned.fill(
+          child: IgnorePointer(
+            child: widget.captured
+                ? CustomPaint(
+                    painter: const CardGuidePainter(pulse: 0),
+                    size: Size.infinite,
+                  )
+                : AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, _) => CustomPaint(
+                      painter: CardGuidePainter(pulse: _pulseController.value),
+                      size: Size.infinite,
+                    ),
+                  ),
+          ),
+        ),
+        if (widget.captured)
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: Center(
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  size: 56,
+                  color: BambooInk.lime,
+                ),
+              ),
+            ),
+          )
+        else
+          Positioned(
+            bottom: 20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: widget.capturing ? null : widget.onCapture,
+                child: Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(color: BambooInk.lime, width: 3),
+                  ),
+                  child: widget.capturing
+                      ? const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: BambooInk.slate,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -200,6 +200,24 @@ void main() {
     expect(limitField.controller!.text, '50000');
   });
 
+  testWidgets('pre-fills current points balance, not lifetime points earned', (tester) async {
+    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+    final owned = [
+      UserCard(
+        id: 'uc1',
+        cardProductId: 'p1',
+        cardName: 'Test Card',
+        isDefault: false,
+        totalPointsEarned: 9122,
+        pointsBalance: 2122,
+      ),
+    ];
+    await _pump(tester, catalogue: [product], owned: owned, repo: _RecordingUserCardsRepository());
+
+    final pointsField = tester.widget<TextField>(find.widgetWithText(TextField, 'Current points balance'));
+    expect(pointsField.controller!.text, '2122');
+  });
+
   testWidgets('Save sends the edited nickname to the repository and pops', (tester) async {
     final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
     final owned = [

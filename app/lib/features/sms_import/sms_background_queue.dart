@@ -66,6 +66,10 @@ class SmsBackgroundQueue {
   /// a theoretical rather than a practical race — and losing one SMS
   /// degrades to the pre-existing behaviour of not capturing it at all.
   static Future<void> enqueue(SharedPreferences prefs, QueuedSms message) async {
+    // The background SMS callback and the foreground app use different Dart
+    // isolates. SharedPreferences caches values per isolate, so reload before
+    // every read-modify-write to avoid overwriting a freshly queued SMS.
+    await prefs.reload();
     final existing = read(prefs);
     existing.add(message);
     final trimmed = existing.length > maxQueued

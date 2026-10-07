@@ -52,10 +52,10 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
     _initialized = true;
     _nicknameController.text = card.nickname ?? '';
     if (card.creditLimit != null) _creditLimitController.text = card.creditLimit!.rupees.toStringAsFixed(0);
-    _pointsBalanceController.text = card.totalPointsEarned > 0
-        ? card.totalPointsEarned.toStringAsFixed(0)
-        : '';
-    _originalPointsBalance = card.totalPointsEarned;
+    // totalPointsEarned is a lifetime calculated total. The editable field is
+    // the raw current/starting balance stored on user_cards.
+    _pointsBalanceController.text = card.pointsBalance?.toStringAsFixed(0) ?? '';
+    _originalPointsBalance = card.pointsBalance;
     _statementDay = card.statementDay;
     _dueDay = card.dueDay;
     _last4Controller.text = card.last4 ?? '';

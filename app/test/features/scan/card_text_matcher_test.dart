@@ -66,9 +66,36 @@ void main() {
           catalogue,
         );
         final sbiMatch = matches.firstWhere((m) => m.product.id == 'c2');
-        expect(sbiMatch.confidence, MatchConfidence.medium);
+        expect(sbiMatch.confidence, MatchConfidence.high);
       },
     );
+
+    test('exact product text wins when issuer words are shared', () {
+      final matches = matchCardText(
+        const ExtractedCardText('TATA NEUCARD+ HDFC BANK RUPAY PLATINUM'),
+        [
+          _product(
+            'tata-neu-plus',
+            'Tata Neu Plus HDFC Bank Credit Card',
+            CardNetwork.rupay,
+          ),
+          _product(
+            'axis-aura',
+            'Axis Bank Aura Credit Card',
+            CardNetwork.visa,
+          ),
+          _product(
+            'axis-rewards',
+            'Axis Bank REWARDS Credit Card',
+            CardNetwork.unknown,
+          ),
+        ],
+      );
+
+      expect(matches.first.product.id, 'tata-neu-plus');
+      expect(matches.first.confidence, MatchConfidence.high);
+      expect(matches.first.productHits, greaterThan(1));
+    });
 
     test('no candidates returned when text matches nothing at all', () {
       final matches = matchCardText(
@@ -147,6 +174,66 @@ void main() {
       expect(matches.first.product.id, plus.id);
       expect(matches.first.confidence, MatchConfidence.high);
       expect(matches.where((m) => m.product.id == platinum.id), isEmpty);
+    });
+
+    test('uses the NEUCARD infinity mark to prefer Tata Neu Infinity', () {
+      final plus = _product(
+        'tata-neu-plus-hdfc',
+        'Tata Neu Plus HDFC Bank Credit Card',
+        CardNetwork.rupay,
+      );
+      final infinity = _product(
+        'tata-neu-infinity-hdfc',
+        'Tata Neu Infinity HDFC Bank Credit Card',
+        CardNetwork.rupay,
+      );
+
+      final matches = matchCardText(
+        const ExtractedCardText('TATA NEUCARD∞ HDFC BANK RuPay'),
+        [plus, infinity],
+      );
+
+      expect(matches.first.product.id, infinity.id);
+      expect(matches.first.confidence, MatchConfidence.high);
+    });
+
+    test('tolerates the common Tata Neo OCR/spoken-name variant', () {
+      final tataNeu = _product(
+        'tata-neu-infinity-hdfc',
+        'Tata Neu Infinity HDFC Bank Credit Card',
+        CardNetwork.rupay,
+      );
+
+      final matches = matchCardText(
+        const ExtractedCardText('TATA NEO INFINITY HDFC BANK RuPay'),
+        [tataNeu],
+      );
+
+      expect(matches, isNotEmpty);
+      expect(matches.first.product.id, tataNeu.id);
+      expect(matches.first.confidence, MatchConfidence.high);
+    });
+
+    test('does not rewrite the unrelated Axis Bank Neo card', () {
+      final axisNeo = _product(
+        'axis-neo',
+        'Axis Bank Neo Credit Card',
+        CardNetwork.visa,
+        issuerName: 'Axis Bank',
+      );
+      final tataNeu = _product(
+        'tata-neu-infinity-hdfc',
+        'Tata Neu Infinity HDFC Bank Credit Card',
+        CardNetwork.rupay,
+      );
+
+      final matches = matchCardText(
+        const ExtractedCardText('AXIS BANK NEO VISA'),
+        [axisNeo, tataNeu],
+      );
+
+      expect(matches.first.product.id, axisNeo.id);
+      expect(matches.where((m) => m.product.id == tataNeu.id), isEmpty);
     });
 
     test('normalizes the stylized Cashback logo lockup', () {

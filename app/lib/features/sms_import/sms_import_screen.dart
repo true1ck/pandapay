@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -33,11 +35,38 @@ class SmsImportScreen extends ConsumerStatefulWidget {
 
 class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
   final _service = SmsListenerService();
+  late final AppLifecycleListener _lifecycleListener;
   bool _permissionGranted = false;
   bool _requesting = false;
   bool _listening = false;
+  bool _syncingInbox = false;
   String? _selectedCardId;
+  String? _syncMessage;
+  String? _error;
   final List<String> _recentLog = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // Permission may have been granted before this screen was opened, or in
+    // Android Settings while the screen was already mounted. Reading the
+    // current OS state here keeps the live-import controls truthful instead
+    // of leaving the user on a dead-looking permission prompt.
+    _lifecycleListener = AppLifecycleListener(onResume: _refreshPermission);
+    unawaited(_refreshPermission());
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refreshPermission() async {
+    final granted = await _service.hasPermissions();
+    if (!mounted || granted == _permissionGranted) return;
+    setState(() => _permissionGranted = granted);
+  }
 
   /// F4: an explicit consent/declaration step now runs before the OS
   /// permission dialog (previously this went straight to
@@ -67,10 +96,39 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
   }
 
   Future<void> _startListening() async {
+    if (_syncingInbox) return;
+    setState(() {
+      _syncingInbox = true;
+      _error = null;
+      _syncMessage = null;
+    });
     final controller = ref.read(smsAutoImportProvider);
-    controller.setCardOverride(_selectedCardId);
-    await controller.start();
-    setState(() => _listening = true);
+    try {
+      // Permission can be revoked in Android Settings while this page is
+      // open. Do not show a false "Listening" state in that case.
+      if (!await _service.hasPermissions()) {
+        throw StateError('SMS permission is no longer granted. Enable it in Android Settings and try again.');
+      }
+      controller.setCardOverride(_selectedCardId);
+      await controller.start();
+      final summary = await controller.syncExistingInbox();
+      if (!mounted) return;
+      setState(() {
+        _listening = true;
+        _syncingInbox = false;
+        _syncMessage = summary.scanned == 0
+            ? 'No transaction SMS found in the device inbox.'
+            : 'Scanned ${summary.scanned} SMS · ${summary.imported} new spends · '
+                '${summary.duplicates} already tracked'
+                '${summary.needsReview == 0 ? '' : ' · ${summary.needsReview} need review'}';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _syncingInbox = false;
+        _error = 'Could not scan existing SMS. $e';
+      });
+    }
   }
 
   @override
@@ -197,8 +255,14 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  onPressed: _startListening,
-                  child: const Text('Start listening'),
+                  onPressed: _syncingInbox ? null : _startListening,
+                  child: _syncingInbox
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Start listening and scan existing SMS'),
                 ),
               if (_listening)
                 Text(
@@ -208,6 +272,20 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                     color: BambooInk.ink500,
                   ).copyWith(fontStyle: FontStyle.italic),
                 ),
+              if (_syncMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _syncMessage!,
+                  style: BambooFonts.ui(12.5, color: BambooInk.jade),
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _error!,
+                  style: BambooFonts.ui(12.5, color: BambooInk.clay),
+                ),
+              ],
               const SizedBox(height: 16),
               Expanded(
                 child: ListView(

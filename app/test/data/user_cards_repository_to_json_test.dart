@@ -14,6 +14,7 @@ void main() {
       milestoneQualifiedSpend: {'m1': Money.fromRupees(5000)},
       milestonePeriodEnd: {'m1': DateTime.utc(2026, 6, 30)},
       totalPointsEarned: 1234.5,
+      pointsBalance: 2122,
       feeWaiverStates: [
         FeeWaiverProgress(
           feeWaiverRuleId: 'fw1',
@@ -42,6 +43,7 @@ void main() {
     expect(roundTripped.milestoneQualifiedSpend['m1']!.paise, Money.fromRupees(5000).paise);
     expect(roundTripped.milestonePeriodEnd['m1'], DateTime.utc(2026, 6, 30));
     expect(roundTripped.totalPointsEarned, 1234.5);
+    expect(roundTripped.pointsBalance, 2122);
     expect(roundTripped.feeWaiverStates.single.feeWaiverRuleId, 'fw1');
     expect(roundTripped.feeWaiverStates.single.waivedAt, DateTime.utc(2026, 3, 1));
     expect(roundTripped.feeWaiverStates.single.periodEnd, DateTime.utc(2026, 12, 31));

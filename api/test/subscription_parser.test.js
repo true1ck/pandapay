@@ -36,3 +36,11 @@ test('does not guess a merchant from an unrelated mandate notice', () => {
   });
   assert.equal(result.ok, false);
 });
+
+test('does not treat a cancelled UPI mandate as a subscription', () => {
+  const result = parseSubscriptionMandate({
+    body: 'Your UPI-Mandate is successfully cancelled towards OpenAI LLC for 1999.00 from A/c No.XXXXXXXX8648. UMN:df897d943114d6183eb-b0262e63efe2@ybl -SBI',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'non_mandate_alert');
+});

@@ -70,15 +70,28 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
 /// READ_SMS query) so callers deal in plain (sender, body) pairs, not
 /// platform-channel details.
 class InboxSms {
+  /// Android's provider row id, retained for local diagnostics and
+  /// provider-level de-duplication. The server identity remains sender+body
+  /// so a live broadcast and inbox replay stay idempotent.
+  final int? id;
   final String sender;
   final String body;
   final DateTime receivedAt;
 
   const InboxSms({
+    this.id,
     required this.sender,
     required this.body,
     required this.receivedAt,
   });
+}
+
+class SmsInboxReadException implements Exception {
+  final Object cause;
+  const SmsInboxReadException(this.cause);
+
+  @override
+  String toString() => 'Unable to read the Android SMS inbox: $cause';
 }
 
 class SmsListenerService {
@@ -122,22 +135,36 @@ class SmsListenerService {
   Future<bool> openSettings() => openAppSettings();
 
   /// Queries the on-device SMS inbox (most recent first) and returns only
-  /// messages worth sending to the server parser. The original sender and
-  /// provider timestamp are retained so the API's source key stays stable
-  /// across a live broadcast and a later reconciliation pass.
-  Future<List<InboxSms>> readInboxSms({int limit = 500}) async {
+  /// messages worth sending to the server parser. When [since] is provided,
+  /// Android applies the date filter in the provider query instead of making
+  /// the app load the whole inbox and discard old rows afterwards.
+  ///
+  /// The original sender and provider timestamp are retained so the API's
+  /// source key stays stable across a live broadcast and a later
+  /// reconciliation pass.
+  Future<List<InboxSms>> readInboxSms({
+    int limit = 500,
+    DateTime? since,
+  }) async {
     try {
+      final filter = since == null
+          ? null
+          : SmsFilter.where(SmsColumn.DATE).greaterThanOrEqualTo(
+              since.millisecondsSinceEpoch.toString(),
+            );
       final messages = await _telephony.getInboxSms(
-        columns: const [SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
+        columns: const [SmsColumn.ID, SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
+        filter: filter,
         sortOrder: [OrderBy(SmsColumn.DATE, sort: Sort.DESC)],
       );
-      return messages
+      final filtered = messages
           .map((m) {
             final sender = m.address;
             final body = m.body;
             final date = m.date;
             if (sender == null || body == null || date == null) return null;
             return InboxSms(
+              id: m.id,
               sender: sender,
               body: body,
               receivedAt: DateTime.fromMillisecondsSinceEpoch(date),
@@ -145,10 +172,10 @@ class SmsListenerService {
           })
           .whereType<InboxSms>()
           .where((m) => looksLikeTransactionSms(m.body))
-          .take(limit)
           .toList();
-    } catch (_) {
-      return [];
+      return limit > 0 ? filtered.take(limit).toList() : filtered;
+    } catch (error) {
+      throw SmsInboxReadException(error);
     }
   }
 
@@ -207,6 +234,9 @@ class SmsListenerService {
     SharedPreferences? prefs,
   }) async {
     final store = prefs ?? await SharedPreferences.getInstance();
+    // The queue is written by the telephony callback's background isolate.
+    // SharedPreferences keeps an isolate-local cache; reload before reading.
+    await store.reload();
     final queued = SmsBackgroundQueue.read(store);
     if (queued.isEmpty) return 0;
 

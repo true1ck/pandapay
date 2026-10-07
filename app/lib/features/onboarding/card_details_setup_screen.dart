@@ -58,8 +58,11 @@ class _CardDetailsSetupScreenState
     _nicknameController.text = card.nickname?.isNotEmpty == true
         ? card.nickname!
         : card.cardName;
-    _creditLimitController.text = '';
-    _pointsBalanceController.text = '';
+    // These values may already have been learned from bank SMS during card
+    // discovery/import. Keep them editable, but do not make the user type
+    // them again.
+    _creditLimitController.text = card.creditLimit?.rupees.toStringAsFixed(0) ?? '';
+    _pointsBalanceController.text = card.pointsBalance?.toStringAsFixed(0) ?? '';
     _statementDay = card.statementDay;
     _dueDay = card.dueDay;
   }

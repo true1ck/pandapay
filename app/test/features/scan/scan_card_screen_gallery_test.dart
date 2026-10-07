@@ -70,6 +70,10 @@ void main() {
     expect(find.text('Detected card'), findsOneWidget);
     expect(find.text('HDFC Millennia'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Use this'), findsOneWidget);
+    // The uploaded card remains visible behind the result panel instead of
+    // falling back to the camera-init spinner after the picker tears down the
+    // camera controller.
+    expect(find.byType(Image), findsOneWidget);
     // OCR of a physical card face is never echoed back verbatim.
     expect(find.text('Scanned text'), findsNothing);
   });

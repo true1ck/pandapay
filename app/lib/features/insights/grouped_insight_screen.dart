@@ -170,7 +170,10 @@ class CardCapabilitySection extends StatelessWidget {
         child: Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
-            initiallyExpanded: true,
+            // Keep the category page compact: the first level answers
+            // "which cards have this benefit?" and the card row expands to
+            // reveal that card's individual rules/capabilities.
+            initiallyExpanded: false,
             tilePadding: const EdgeInsets.symmetric(
               horizontal: AppSpace.lg,
               vertical: AppSpace.xs,
