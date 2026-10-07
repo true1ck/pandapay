@@ -37,5 +37,23 @@ class NotificationDevicesApi {
         'POST /notification-devices failed: ${response.statusCode} ${response.body}',
       );
     }
+
+    // A 202 is intentionally used by the API when the optional external
+    // notification service is not configured. That response is not a
+    // registration success, so do not silently swallow it on the device.
+    // The caller can retry after connectivity/service configuration returns.
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map && body['registered'] == false) {
+        throw ApiException(
+          'POST /notification-devices was accepted but not registered: ${response.body}',
+        );
+      }
+    } on ApiException {
+      rethrow;
+    } on FormatException {
+      // Keep compatibility with older API deployments that returned an empty
+      // 201/202 body after a successful registration.
+    }
   }
 }

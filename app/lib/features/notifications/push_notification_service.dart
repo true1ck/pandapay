@@ -31,6 +31,11 @@ class PushNotificationService {
 
   StreamSubscription<String>? _tokenSubscription;
   StreamSubscription<RemoteMessage>? _messageSubscription;
+  Timer? _registrationRetryTimer;
+  Timer? _startupRetryTimer;
+  String? _lastToken;
+  int _registrationRetryAttempt = 0;
+  int _startupRetryAttempt = 0;
   bool _started = false;
 
   PushNotificationService({required this.api, required this.gate});
@@ -51,23 +56,62 @@ class PushNotificationService {
       _tokenSubscription = messaging.onTokenRefresh.listen(_registerToken);
       final token = await messaging.getToken();
       if (token != null && token.isNotEmpty) await _registerToken(token);
+      _startupRetryAttempt = 0;
     } catch (error) {
       // Native Firebase configuration is environment-specific. A missing
       // google-services.json/GoogleService-Info.plist must not break login or
       // the existing local notification feature.
       debugPrint('PandaPay push notifications unavailable: $error');
-      await stop();
+      // Do not leave a logged-in device permanently unregistered after a
+      // transient Firebase/Google Play Services startup failure. Keep the
+      // existing app usable and retry in the background.
+      await _tokenSubscription?.cancel();
+      await _messageSubscription?.cancel();
+      _tokenSubscription = null;
+      _messageSubscription = null;
+      _started = false;
+      _scheduleStartupRetry();
     }
   }
 
   Future<void> _registerToken(String token) async {
+    _lastToken = token;
+    _registrationRetryTimer?.cancel();
+    _registrationRetryTimer = null;
     try {
       await api.register(token: token, platform: _platformName());
+      _registrationRetryAttempt = 0;
     } catch (error) {
       // A later token refresh or next sign-in retries registration. Push
       // delivery is additive and must not block the user's financial actions.
       debugPrint('PandaPay FCM token registration failed: $error');
+      _scheduleRegistrationRetry();
     }
+  }
+
+  void _scheduleRegistrationRetry() {
+    if (!_started || _lastToken == null || _registrationRetryTimer != null) {
+      return;
+    }
+    final exponent = _registrationRetryAttempt.clamp(0, 5).toInt();
+    final seconds = (5 * (1 << exponent)).clamp(5, 120).toInt();
+    _registrationRetryAttempt++;
+    _registrationRetryTimer = Timer(Duration(seconds: seconds), () {
+      _registrationRetryTimer = null;
+      final token = _lastToken;
+      if (token != null && _started) unawaited(_registerToken(token));
+    });
+  }
+
+  void _scheduleStartupRetry() {
+    if (_startupRetryTimer != null) return;
+    final exponent = _startupRetryAttempt.clamp(0, 5).toInt();
+    final seconds = (10 * (1 << exponent)).clamp(10, 300).toInt();
+    _startupRetryAttempt++;
+    _startupRetryTimer = Timer(Duration(seconds: seconds), () {
+      _startupRetryTimer = null;
+      unawaited(start());
+    });
   }
 
   Future<void> _showForeground(RemoteMessage message) async {
@@ -84,10 +128,17 @@ class PushNotificationService {
   }
 
   Future<void> stop() async {
+    _registrationRetryTimer?.cancel();
+    _startupRetryTimer?.cancel();
     await _tokenSubscription?.cancel();
     await _messageSubscription?.cancel();
     _tokenSubscription = null;
     _messageSubscription = null;
+    _registrationRetryTimer = null;
+    _startupRetryTimer = null;
+    _lastToken = null;
+    _registrationRetryAttempt = 0;
+    _startupRetryAttempt = 0;
     _started = false;
   }
 
