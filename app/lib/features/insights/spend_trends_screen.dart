@@ -104,12 +104,8 @@ class SpendTrendsScreen extends ConsumerWidget {
                     );
                   }
                   if (data.spend.txnCount == 0 && data.income.txnCount == 0) {
-                    return RefreshableEmptyState(
-                      icon: Icons.insights_outlined,
-                      title: 'Nothing logged ${period.label.toLowerCase()}',
-                      message:
-                          'Add a transaction, or turn on SMS and email import, and this fills in '
-                          'with where your money went and how that compares to before.',
+                    return _NoSpendingReportState(
+                      period: period,
                       onRefresh: () async =>
                           ref.invalidate(spendReportProvider(period)),
                     );
@@ -128,6 +124,72 @@ class SpendTrendsScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _NoSpendingReportState extends StatelessWidget {
+  final SpendPeriod period;
+  final Future<void> Function() onRefresh;
+
+  const _NoSpendingReportState({required this.period, required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          AppSpace.xl,
+          AppSpace.lg,
+          AppSpace.xl,
+        ),
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  BambooInk.slateRaised,
+                  BambooInk.slate,
+                  BambooInk.slateLow,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${period.label} spending',
+                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+                ),
+                const SizedBox(height: AppSpace.xs),
+                MoneyText(
+                  const Money.zero(),
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.money(30, color: BambooInk.lime),
+                ),
+                const SizedBox(height: AppSpace.md),
+                Text(
+                  'No spending recorded',
+                  style: BambooFonts.heading(16, color: BambooInk.onSlate),
+                ),
+                const SizedBox(height: AppSpace.xs),
+                Text(
+                  'Bill payments, transfers, refunds, and reversals are excluded from spending. '
+                  'Purchases will appear here after SMS import completes.',
+                  style: BambooFonts.ui(13, color: BambooInk.onSlateMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4053,6 +4053,37 @@ app.post('/transactions/reconcile-sms', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /transactions/sms-import-state — the small amount of server state the
+ * Android inbox reconciler needs to detect a server-side data reset. The
+ * client keeps its last successful inbox checkpoint locally; comparing this
+ * count lets it recover with a full inbox scan when the account's imported
+ * SMS observations were deleted, without rescanning the entire inbox on
+ * every normal launch.
+ */
+app.get('/transactions/sms-import-state', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT COUNT(*)::int AS sms_observation_count,
+                MAX(o.observed_at) AS latest_sms_observed_at
+           FROM transaction_observations o
+          WHERE o.profile_id = $1
+            AND o.source IN ('sms', 'sms_bulk')`,
+        [req.userId],
+      ),
+    );
+    const row = result.rows[0] ?? {};
+    res.json({
+      smsObservationCount: Number(row.sms_observation_count ?? 0),
+      latestSmsObservedAt: row.latest_sms_observed_at ?? null,
+    });
+  } catch (err) {
+    console.error('GET /transactions/sms-import-state error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * GET /transactions?from=&to=&cardId=&categoryId=&source=&q=&limit= — E10/E11/D1's shared gap
  * (implementation-plan-group-e-f-g.md: "third consumer of the same missing
  * query param — build it once"). All three are optional; omitting them

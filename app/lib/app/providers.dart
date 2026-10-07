@@ -2022,9 +2022,41 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     );
     final inboxReconciliationKey =
         'pandapay_app.sms_inbox_reconciled_at_v3_$safeBuildIdentity';
+    final serverObservationCountKey =
+        'pandapay_app.sms_server_observation_count_v1_$safeBuildIdentity';
     final now = DateTime.now();
     final lastRunMillis = prefs.getInt(inboxReconciliationKey);
-    if (lastRunMillis != null &&
+
+    // A server-side cleanup/reset must not strand the device behind its old
+    // local checkpoint. Once a prior positive count drops, recover from the
+    // complete on-device inbox; source keys keep that replay idempotent.
+    var forceFullScan = lastRunMillis == null;
+    final previousServerCount = prefs.getInt(serverObservationCountKey);
+    try {
+      final serverState = await ref
+          .read(userCardsRepositoryProvider)!
+          .fetchSmsImportState();
+      final currentServerCount = serverState.smsObservationCount;
+      if (previousServerCount != null &&
+          previousServerCount > 0 &&
+          currentServerCount != null &&
+          currentServerCount < previousServerCount) {
+        forceFullScan = true;
+      }
+      if (currentServerCount != null) {
+        await prefs.setInt(serverObservationCountKey, currentServerCount);
+      }
+    } catch (_) {
+      // Import must continue when the optional checkpoint endpoint is
+      // temporarily unavailable. The date-bounded path remains safe and the
+      // next launch will retry the reset check.
+    }
+
+    // The lightweight checkpoint query above is allowed on every launch so a
+    // server-side cleanup is noticed immediately. Normal launches still use
+    // the five-minute inbox interval and do not reread the device inbox.
+    if (!forceFullScan &&
+        lastRunMillis != null &&
         now.difference(DateTime.fromMillisecondsSinceEpoch(lastRunMillis)) <
             inboxReconciliationInterval) {
       return;
@@ -2043,13 +2075,24 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         .read(smsAutoImportProvider)
         .syncExistingInbox(
           limit: 0,
-          since: lastRunMillis == null
+          since: forceFullScan
               ? null
               : DateTime.fromMillisecondsSinceEpoch(
-                  lastRunMillis,
+                  lastRunMillis!,
                 ).subtract(const Duration(days: 2)),
         );
     await prefs.setInt(inboxReconciliationKey, now.millisecondsSinceEpoch);
+    try {
+      final serverState = await ref
+          .read(userCardsRepositoryProvider)!
+          .fetchSmsImportState();
+      final currentServerCount = serverState.smsObservationCount;
+      if (currentServerCount != null) {
+        await prefs.setInt(serverObservationCountKey, currentServerCount);
+      }
+    } catch (_) {
+      // The next reconciliation will refresh the checkpoint.
+    }
     ref.invalidate(userCardsProvider);
     ref.invalidate(transactionsProvider);
     ref.invalidate(utilizationTransactionsProvider);

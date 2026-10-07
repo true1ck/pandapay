@@ -128,4 +128,39 @@ void main() {
     expect(result.reclassified, 0);
     expect(result.remainingLegacyRows, 0);
   });
+
+  test('reads the server SMS checkpoint used for reset recovery', () async {
+    final repository = UserCardsRepository(
+      apiBaseUrl: 'https://api.test',
+      accessToken: 'token',
+      client: MockClient((request) async {
+        expect(request.url.path, '/transactions/sms-import-state');
+        return http.Response(
+          jsonEncode({
+            'smsObservationCount': 12,
+            'latestSmsObservedAt': '2026-10-07T04:30:00.000Z',
+          }),
+          200,
+        );
+      }),
+    );
+
+    final state = await repository.fetchSmsImportState();
+    expect(state.smsObservationCount, 12);
+    expect(
+      state.latestSmsObservedAt,
+      DateTime.parse('2026-10-07T04:30:00.000Z'),
+    );
+  });
+
+  test('tolerates an older API without the SMS checkpoint route', () async {
+    final repository = UserCardsRepository(
+      apiBaseUrl: 'https://api.test',
+      accessToken: 'token',
+      client: MockClient((request) async => http.Response('Not found', 404)),
+    );
+
+    final state = await repository.fetchSmsImportState();
+    expect(state.smsObservationCount, isNull);
+  });
 }

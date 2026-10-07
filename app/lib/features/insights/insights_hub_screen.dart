@@ -63,13 +63,15 @@ class InsightsHubScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final owned = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+    final owned =
+        ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
     // The two review queues are ACTIONS, not insights, so they no longer
     // take up two permanent tiles in the grid. They appear as a single row
     // above it, and only when there is actually something to do — a queue
     // that is empty most of the time does not deserve standing real estate.
     final needsReviewCount = ref.watch(needsReviewCountProvider);
-    final duplicateCount = ref.watch(duplicateCandidatesProvider).valueOrNull?.length ?? 0;
+    final duplicateCount =
+        ref.watch(duplicateCandidatesProvider).valueOrNull?.length ?? 0;
 
     // A budget that needs attention is the one thing on this hub worth
     // saying before the user taps anything, so it rides on the tile itself.
@@ -77,8 +79,8 @@ class InsightsHubScreen extends ConsumerWidget {
     final budgetHeadline = flaggedBudgets.isEmpty
         ? null
         : flaggedBudgets.first.isOver
-            ? 'Over on ${flaggedBudgets.first.label}'
-            : 'Ahead of pace';
+        ? 'Over on ${flaggedBudgets.first.label}'
+        : 'Ahead of pace';
 
     // Shown on the tile because the annual figure is the whole point: a
     // ₹649 monthly charge doesn't feel like much, and ₹7,788 a year does.
@@ -103,18 +105,23 @@ class InsightsHubScreen extends ConsumerWidget {
     UrgencyScore? mostUrgentCap;
     for (final (userCard, cap) in capRows) {
       final consumed = userCard.capConsumed[cap.id] ?? const Money.zero();
-      final score = UrgencyScore(ratioConsumed: capRatio(consumed, cap.capValue));
-      if (mostUrgentCap == null || score.compareTo(mostUrgentCap) < 0) mostUrgentCap = score;
+      final score = UrgencyScore(
+        ratioConsumed: capRatio(consumed, cap.capValue),
+      );
+      if (mostUrgentCap == null || score.compareTo(mostUrgentCap) < 0)
+        mostUrgentCap = score;
     }
     UrgencyScore? mostUrgentMilestone;
     for (final (userCard, m) in milestoneRows) {
-      final qualified = userCard.milestoneQualifiedSpend[m.id] ?? const Money.zero();
+      final qualified =
+          userCard.milestoneQualifiedSpend[m.id] ?? const Money.zero();
       final end = userCard.milestonePeriodEnd[m.id];
       final score = UrgencyScore(
         ratioConsumed: capRatio(qualified, m.thresholdSpend),
         daysRemaining: end == null ? null : daysUntil(end, DateTime.now()),
       );
-      if (mostUrgentMilestone == null || score.compareTo(mostUrgentMilestone) < 0) {
+      if (mostUrgentMilestone == null ||
+          score.compareTo(mostUrgentMilestone) < 0) {
         mostUrgentMilestone = score;
       }
     }
@@ -124,7 +131,8 @@ class InsightsHubScreen extends ConsumerWidget {
         ratioConsumed: capRatio(fw.qualifiedSpend, fw.thresholdSpend),
         daysRemaining: daysUntil(fw.periodEnd, DateTime.now()),
       );
-      if (mostUrgentFeeWaiver == null || score.compareTo(mostUrgentFeeWaiver) < 0) {
+      if (mostUrgentFeeWaiver == null ||
+          score.compareTo(mostUrgentFeeWaiver) < 0) {
         mostUrgentFeeWaiver = score;
       }
     }
@@ -149,14 +157,23 @@ class InsightsHubScreen extends ConsumerWidget {
         // Sorted by whichever of its tabs is most urgent — a cap about to
         // run out should pull the tile up the grid even though the tile now
         // covers milestones and fee waivers too.
-        [mostUrgentCap, mostUrgentMilestone, mostUrgentFeeWaiver]
-                .nonNulls
-                .fold<UrgencyScore?>(null, (a, b) => a == null || b.compareTo(a) < 0 ? b : a) ??
+        [
+              mostUrgentCap,
+              mostUrgentMilestone,
+              mostUrgentFeeWaiver,
+            ].nonNulls.fold<UrgencyScore?>(
+              null,
+              (a, b) => a == null || b.compareTo(a) < 0 ? b : a,
+            ) ??
             UrgencyScore(),
         _InsightTile(
           icon: Icons.speed_rounded,
           label: 'Limits & perks',
-          headline: _limitsHeadline(capRows.length, milestoneRows.length, feeWaiverRows.length),
+          headline: _limitsHeadline(
+            capRows.length,
+            milestoneRows.length,
+            feeWaiverRows.length,
+          ),
           onTap: () => context.push(AppRoute.limitsAndPerks),
         ),
       ),
@@ -198,7 +215,10 @@ class InsightsHubScreen extends ConsumerWidget {
       ),
     ];
 
-    final tiles = [for (final (_, tile) in urgentTiles) tile, ...unorderedTiles];
+    final tiles = [
+      for (final (_, tile) in urgentTiles) tile,
+      ...unorderedTiles,
+    ];
     final period = ref.watch(insightsPeriodProvider);
     final overview = ref.watch(insightsOverviewProvider(period));
 
@@ -219,11 +239,18 @@ class InsightsHubScreen extends ConsumerWidget {
         children: [
           Text(
             'Insights',
-            style: BambooFonts.heading(28, weight: FontWeight.w800, color: BambooInk.ink900),
+            style: BambooFonts.heading(
+              28,
+              weight: FontWeight.w800,
+              color: BambooInk.ink900,
+            ),
           ),
           const SizedBox(height: AppSpace.md),
           const _PeriodChips(),
-          OfflineBanner(gutter: 0, onRetry: () => ref.invalidate(insightsOverviewProvider(period))),
+          OfflineBanner(
+            gutter: 0,
+            onRetry: () => ref.invalidate(insightsOverviewProvider(period)),
+          ),
           const SizedBox(height: AppSpace.lg),
           overview.when(
             loading: () => const SkeletonList(count: 3),
@@ -231,11 +258,15 @@ class InsightsHubScreen extends ConsumerWidget {
               message: userFacingErrorMessage(err),
               onRetry: () => ref.invalidate(insightsOverviewProvider(period)),
             ),
-            data: (data) => _OverviewSections(data: data, milestones: milestoneRows),
+            data: (data) =>
+                _OverviewSections(data: data, milestones: milestoneRows),
           ),
           const SizedBox(height: AppSpace.xxl),
           if (needsReviewCount > 0 || duplicateCount > 0) ...[
-            _ReviewRow(needsReview: needsReviewCount, duplicates: duplicateCount),
+            _ReviewRow(
+              needsReview: needsReviewCount,
+              duplicates: duplicateCount,
+            ),
             const SizedBox(height: AppSpace.xl),
           ],
           // The tile grid the whole screen used to be. Design 04 puts real
@@ -295,15 +326,27 @@ class _ActivityLink extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
           child: Row(
             children: [
-              const Icon(Icons.receipt_long_rounded, size: 18, color: BambooInk.ink500),
+              const Icon(
+                Icons.receipt_long_rounded,
+                size: 18,
+                color: BambooInk.ink500,
+              ),
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Text(
                   'See every transaction',
-                  style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                  style: BambooFonts.ui(
+                    13.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink500),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: BambooInk.ink500,
+              ),
             ],
           ),
         ),
@@ -334,15 +377,20 @@ class _ReviewRow extends StatelessWidget {
         if (needsReview > 0)
           _ReviewTile(
             icon: Icons.mark_email_unread_outlined,
-            label: needsReview == 1 ? '1 message needs review' : '$needsReview messages need review',
+            label: needsReview == 1
+                ? '1 message needs review'
+                : '$needsReview messages need review',
             detail: 'We couldn\'t tell which card these belong to.',
             onTap: () => context.push(AppRoute.needsReview),
           ),
-        if (needsReview > 0 && duplicates > 0) const SizedBox(height: AppSpace.sm),
+        if (needsReview > 0 && duplicates > 0)
+          const SizedBox(height: AppSpace.sm),
         if (duplicates > 0)
           _ReviewTile(
             icon: Icons.content_copy_outlined,
-            label: duplicates == 1 ? '1 possible duplicate' : '$duplicates possible duplicates',
+            label: duplicates == 1
+                ? '1 possible duplicate'
+                : '$duplicates possible duplicates',
             detail: 'Same amount and day from two different sources.',
             onTap: () => context.push(AppRoute.duplicateReview),
           ),
@@ -384,14 +432,25 @@ class _ReviewTile extends StatelessWidget {
                   children: [
                     Text(
                       label,
-                      style: BambooFonts.ui(13.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                      style: BambooFonts.ui(
+                        13.5,
+                        weight: FontWeight.w700,
+                        color: BambooInk.ink900,
+                      ),
                     ),
                     const SizedBox(height: 2),
-                    Text(detail, style: BambooFonts.ui(12, color: BambooInk.ink500)),
+                    Text(
+                      detail,
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink500),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: BambooInk.ink500,
+              ),
             ],
           ),
         ),
@@ -419,7 +478,8 @@ class _PeriodChips extends ConsumerWidget {
               padding: const EdgeInsets.only(right: AppSpace.sm),
               child: Pressable(
                 enforceMinTarget: false,
-                onTap: () => ref.read(insightsPeriodProvider.notifier).state = period,
+                onTap: () =>
+                    ref.read(insightsPeriodProvider.notifier).state = period,
                 semanticLabel: period.label,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
@@ -427,10 +487,14 @@ class _PeriodChips extends ConsumerWidget {
                   alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
                   decoration: BoxDecoration(
-                    color: period == selected ? BambooInk.slate : BambooInk.glassFillOnPaper,
+                    color: period == selected
+                        ? BambooInk.slate
+                        : BambooInk.glassFillOnPaper,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                     border: Border.all(
-                      color: period == selected ? BambooInk.slate : BambooInk.hairlineOnPaper,
+                      color: period == selected
+                          ? BambooInk.slate
+                          : BambooInk.hairlineOnPaper,
                     ),
                   ),
                   child: Text(
@@ -438,7 +502,9 @@ class _PeriodChips extends ConsumerWidget {
                     style: BambooFonts.ui(
                       13.5,
                       weight: FontWeight.w600,
-                      color: period == selected ? BambooInk.onSlate : BambooInk.ink900,
+                      color: period == selected
+                          ? BambooInk.onSlate
+                          : BambooInk.ink900,
                     ),
                   ),
                 ),
@@ -462,10 +528,11 @@ class _OverviewSections extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (data.transactionCount == 0) {
-      return const EmptyState(
-        icon: Icons.insights_outlined,
-        title: 'Nothing to report yet',
-        message: 'Log a payment and this fills in with what you earned and what you left behind.',
+      return const _NoSpendingOverviewState(
+        title: 'No spending recorded for this period',
+        message:
+            'Credit-card bill payments, transfers, refunds, and reversals are not spending. '
+            'Eligible purchases will appear here with their rewards and missed opportunities.',
       );
     }
 
@@ -485,6 +552,50 @@ class _OverviewSections extends StatelessWidget {
         ],
         _MilestoneInReach(milestones: milestones),
       ],
+    );
+  }
+}
+
+class _NoSpendingOverviewState extends StatelessWidget {
+  final String title;
+  final String message;
+
+  const _NoSpendingOverviewState({required this.title, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+        ),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Rewards earned',
+            style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          MoneyText(
+            const Money.zero(),
+            confidence: Confidence.estimated,
+            style: BambooFonts.money(30, color: BambooInk.lime),
+          ),
+          const SizedBox(height: AppSpace.md),
+          Text(title, style: BambooFonts.heading(16, color: BambooInk.onSlate)),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            message,
+            style: BambooFonts.ui(13, color: BambooInk.onSlateMuted),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -532,16 +643,25 @@ class _EarnedHero extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Row(
             children: [
-              Text('on ', style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle)),
+              Text(
+                'on ',
+                style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle),
+              ),
               MoneyText(
                 data.spend,
                 confidence: Confidence.confirmed,
-                style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.onSlateSubtle),
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.onSlateSubtle,
+                ),
                 hidePaise: true,
                 showConfidenceIcon: false,
               ),
               Text(
-                rate == null ? ' of spend' : ' of spend · ${rate.toStringAsFixed(1)}% effective',
+                rate == null
+                    ? ' of spend'
+                    : ' of spend · ${rate.toStringAsFixed(1)}% effective',
                 style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle),
               ),
             ],
@@ -574,7 +694,10 @@ class _CategoryBars extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Where it came from', style: BambooFonts.heading(15, color: BambooInk.ink900)),
+          Text(
+            'Where it came from',
+            style: BambooFonts.heading(15, color: BambooInk.ink900),
+          ),
           const SizedBox(height: AppSpace.md),
           for (final category in top) ...[
             Semantics(
@@ -586,7 +709,10 @@ class _CategoryBars extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(category.label, style: BambooFonts.ui(13, color: BambooInk.ink900)),
+                          child: Text(
+                            category.label,
+                            style: BambooFonts.ui(13, color: BambooInk.ink900),
+                          ),
                         ),
                         MoneyText(
                           category.earned,
@@ -601,10 +727,14 @@ class _CategoryBars extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                       child: LinearProgressIndicator(
-                        value: maxPaise == 0 ? 0 : category.earned.paise / maxPaise,
+                        value: maxPaise == 0
+                            ? 0
+                            : category.earned.paise / maxPaise,
                         minHeight: 6,
                         backgroundColor: BambooInk.paperMuted,
-                        valueColor: const AlwaysStoppedAnimation(BambooInk.slate),
+                        valueColor: const AlwaysStoppedAnimation(
+                          BambooInk.slate,
+                        ),
                       ),
                     ),
                   ],
@@ -701,7 +831,11 @@ class _StatTile extends StatelessWidget {
         children: [
           Text(
             label,
-            style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.ink500),
+            style: BambooFonts.ui(
+              12,
+              weight: FontWeight.w600,
+              color: BambooInk.ink500,
+            ),
           ),
           const SizedBox(height: AppSpace.sm),
           if (value == null)
@@ -791,8 +925,14 @@ class _MissedPreview extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          row.entry.merchantName ?? row.entry.categoryName ?? 'Payment',
-                          style: BambooFonts.ui(14, weight: FontWeight.w600, color: BambooInk.ink900),
+                          row.entry.merchantName ??
+                              row.entry.categoryName ??
+                              'Payment',
+                          style: BambooFonts.ui(
+                            14,
+                            weight: FontWeight.w600,
+                            color: BambooInk.ink900,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -833,7 +973,8 @@ class _MilestoneInReach extends StatelessWidget {
   Widget build(BuildContext context) {
     (UserCard, MilestoneRule, Money, double)? closest;
     for (final (userCard, rule) in milestones) {
-      final qualified = userCard.milestoneQualifiedSpend[rule.id] ?? const Money.zero();
+      final qualified =
+          userCard.milestoneQualifiedSpend[rule.id] ?? const Money.zero();
       if (rule.thresholdSpend.paise <= 0) continue;
       final progress = qualified.paise / rule.thresholdSpend.paise;
       if (progress >= 1.0) continue; // already earned — not "in reach"
@@ -859,7 +1000,11 @@ class _MilestoneInReach extends StatelessWidget {
           children: [
             Text(
               'Milestone in reach',
-              style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.rankBadgeInk),
+              style: BambooFonts.ui(
+                12,
+                weight: FontWeight.w700,
+                color: BambooInk.rankBadgeInk,
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             Row(
@@ -904,7 +1049,12 @@ class _InsightTile extends StatelessWidget {
   final String? headline;
   final VoidCallback onTap;
 
-  const _InsightTile({required this.icon, required this.label, required this.headline, required this.onTap});
+  const _InsightTile({
+    required this.icon,
+    required this.label,
+    required this.headline,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -935,16 +1085,25 @@ class _InsightTile extends StatelessWidget {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                color: BambooInk.slate,
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Icon(icon, color: BambooInk.lime, size: 20),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: BambooFonts.heading(14, color: BambooInk.ink900)),
+                Text(
+                  label,
+                  style: BambooFonts.heading(14, color: BambooInk.ink900),
+                ),
                 if (headline != null) ...[
                   const SizedBox(height: 2),
-                  Text(headline!, style: BambooFonts.ui(12, color: BambooInk.ink500)),
+                  Text(
+                    headline!,
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
                 ],
               ],
             ),

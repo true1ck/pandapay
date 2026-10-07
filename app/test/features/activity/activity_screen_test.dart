@@ -26,11 +26,20 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     String? query,
   }) async {
     lastFetchArgs = [
-      {'from': from, 'to': to, 'cardId': cardId, 'categoryId': categoryId, 'source': source, 'query': query},
+      {
+        'from': from,
+        'to': to,
+        'cardId': cardId,
+        'categoryId': categoryId,
+        'source': source,
+        'query': query,
+      },
     ];
     var result = transactions;
-    if (cardId != null) result = result.where((t) => t.userCardId == cardId).toList();
-    if (categoryId != null) result = result.where((t) => t.categoryId == categoryId).toList();
+    if (cardId != null)
+      result = result.where((t) => t.userCardId == cardId).toList();
+    if (categoryId != null)
+      result = result.where((t) => t.categoryId == categoryId).toList();
     return result;
   }
 
@@ -46,6 +55,7 @@ TransactionEntry _txn({
   String? categoryId,
   String? categoryName,
   String userCardId = 'uc1',
+  TxnEntryKind entryKind = TxnEntryKind.spend,
 }) {
   return TransactionEntry(
     id: id,
@@ -55,17 +65,29 @@ TransactionEntry _txn({
     categoryId: categoryId,
     categoryName: categoryName,
     userCardId: userCardId,
+    entryKind: entryKind,
     source: 'manual',
     status: 'active',
   );
 }
 
-Future<void> _pump(WidgetTester tester, {required _FakeUserCardsRepository repo, required List<UserCard> cards}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  required _FakeUserCardsRepository repo,
+  required List<UserCard> cards,
+}) async {
   final router = GoRouter(
     initialLocation: '/',
     routes: [
-      GoRoute(path: '/', builder: (context, state) => const Scaffold(body: ActivityScreen())),
-      GoRoute(path: '/activity/:id', builder: (context, state) => Text('detail ${state.pathParameters['id']}')),
+      GoRoute(
+        path: '/',
+        builder: (context, state) => const Scaffold(body: ActivityScreen()),
+      ),
+      GoRoute(
+        path: '/activity/:id',
+        builder: (context, state) =>
+            Text('detail ${state.pathParameters['id']}'),
+      ),
     ],
   );
   await tester.pumpWidget(
@@ -84,16 +106,34 @@ Future<void> _pump(WidgetTester tester, {required _FakeUserCardsRepository repo,
 }
 
 void main() {
-  testWidgets('shows an empty state when there are no transactions', (tester) async {
-    await _pump(tester, repo: _FakeUserCardsRepository(const []), cards: const []);
+  testWidgets('shows an empty state when there are no transactions', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(const []),
+      cards: const [],
+    );
     expect(find.text('No activity yet'), findsOneWidget);
   });
 
-  testWidgets('groups transactions by day and shows a spend summary', (tester) async {
+  testWidgets('groups transactions by day and shows a spend summary', (
+    tester,
+  ) async {
     final now = DateTime.now();
     final repo = _FakeUserCardsRepository([
-      _txn(id: 't1', amount: Money.fromRupees(500), occurredAt: now, merchantName: 'Today Shop'),
-      _txn(id: 't2', amount: Money.fromRupees(300), occurredAt: now.subtract(const Duration(days: 1)), merchantName: 'Yesterday Shop'),
+      _txn(
+        id: 't1',
+        amount: Money.fromRupees(500),
+        occurredAt: now,
+        merchantName: 'Today Shop',
+      ),
+      _txn(
+        id: 't2',
+        amount: Money.fromRupees(300),
+        occurredAt: now.subtract(const Duration(days: 1)),
+        merchantName: 'Yesterday Shop',
+      ),
     ]);
     await _pump(tester, repo: repo, cards: const []);
 
@@ -104,9 +144,37 @@ void main() {
     expect(find.text('2 transactions'), findsOneWidget);
   });
 
-  testWidgets('tapping a transaction navigates to its detail route', (tester) async {
+  testWidgets('does not count a credit-card bill payment as spending', (
+    tester,
+  ) async {
     final repo = _FakeUserCardsRepository([
-      _txn(id: 't1', amount: Money.fromRupees(500), occurredAt: DateTime.now(), merchantName: 'Tap Me'),
+      _txn(
+        id: 'bill',
+        amount: Money.fromRupees(10148),
+        occurredAt: DateTime.now(),
+        merchantName: 'Credit card bill payment',
+        entryKind: TxnEntryKind.transfer,
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    expect(find.text('Credit card bill payment'), findsOneWidget);
+    expect(find.text('No spending'), findsOneWidget);
+    // The transfer amount remains visible on its Activity row; the summary
+    // is the part that must not count it as spending.
+    expect(find.text('₹10,148.00'), findsOneWidget);
+  });
+
+  testWidgets('tapping a transaction navigates to its detail route', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 't1',
+        amount: Money.fromRupees(500),
+        occurredAt: DateTime.now(),
+        merchantName: 'Tap Me',
+      ),
     ]);
     await _pump(tester, repo: repo, cards: const []);
 
@@ -116,35 +184,55 @@ void main() {
     expect(find.text('detail t1'), findsOneWidget);
   });
 
-  testWidgets('typing in the search box sends the query to the server, debounced', (tester) async {
-    final repo = _FakeUserCardsRepository([
-      _txn(id: 't1', amount: Money.fromRupees(500), occurredAt: DateTime.now(), merchantName: 'Zepto'),
-    ]);
-    await _pump(tester, repo: repo, cards: const []);
+  testWidgets(
+    'typing in the search box sends the query to the server, debounced',
+    (tester) async {
+      final repo = _FakeUserCardsRepository([
+        _txn(
+          id: 't1',
+          amount: Money.fromRupees(500),
+          occurredAt: DateTime.now(),
+          merchantName: 'Zepto',
+        ),
+      ]);
+      await _pump(tester, repo: repo, cards: const []);
 
-    repo.lastFetchArgs = null;
-    await tester.enterText(find.byType(TextField).first, 'zep');
+      repo.lastFetchArgs = null;
+      await tester.enterText(find.byType(TextField).first, 'zep');
 
-    // Nothing yet: the whole point of the debounce is that a burst of
-    // keystrokes is not a burst of ILIKE scans.
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(repo.lastFetchArgs, isNull, reason: 'should not refetch mid-typing');
+      // Nothing yet: the whole point of the debounce is that a burst of
+      // keystrokes is not a burst of ILIKE scans.
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        repo.lastFetchArgs,
+        isNull,
+        reason: 'should not refetch mid-typing',
+      );
 
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pumpAndSettle();
-    expect(repo.lastFetchArgs!.first['query'], 'zep');
-  });
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(repo.lastFetchArgs!.first['query'], 'zep');
+    },
+  );
 
-  testWidgets('a blank search is no filter at all, not a match-everything query', (tester) async {
-    final repo = _FakeUserCardsRepository([
-      _txn(id: 't1', amount: Money.fromRupees(500), occurredAt: DateTime.now(), merchantName: 'Zepto'),
-    ]);
-    await _pump(tester, repo: repo, cards: const []);
+  testWidgets(
+    'a blank search is no filter at all, not a match-everything query',
+    (tester) async {
+      final repo = _FakeUserCardsRepository([
+        _txn(
+          id: 't1',
+          amount: Money.fromRupees(500),
+          occurredAt: DateTime.now(),
+          merchantName: 'Zepto',
+        ),
+      ]);
+      await _pump(tester, repo: repo, cards: const []);
 
-    await tester.enterText(find.byType(TextField).first, '   ');
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, '   ');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
 
-    expect(repo.lastFetchArgs!.first['query'], isNull);
-  });
+      expect(repo.lastFetchArgs!.first['query'], isNull);
+    },
+  );
 }

@@ -765,15 +765,17 @@ class UserCardsRepository {
     String? nickname,
     String? last4,
   }) async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/user-cards'),
-      headers: _headers,
-      body: jsonEncode({
-        'cardProductId': cardProductId,
-        'nickname': ?nickname,
-        'last4': ?last4,
-      }),
-    ).timeout(const Duration(seconds: 60));
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/user-cards'),
+          headers: _headers,
+          body: jsonEncode({
+            'cardProductId': cardProductId,
+            'nickname': ?nickname,
+            'last4': ?last4,
+          }),
+        )
+        .timeout(const Duration(seconds: 60));
     if (response.statusCode != 201) {
       throw ApiException(
         'POST /user-cards failed: ${response.statusCode} ${response.body}',
@@ -918,24 +920,26 @@ class UserCardsRepository {
     String? clientMutationId,
   }) async {
     final mutationId = clientMutationId ?? const Uuid().v4();
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/transactions'),
-      headers: _headers,
-      body: jsonEncode({
-        'userCardId': ?userCardId,
-        'amountInr': amount.rupees,
-        'categoryId': ?categoryId,
-        'merchantName': ?merchantName,
-        'merchantVpa': ?merchantVpa,
-        'mcc': ?mcc,
-        'occurredAt': occurredAt?.toIso8601String(),
-        'note': ?note,
-        'rail': ?rail,
-        'instrument': instrument.wireValue,
-        'entryKind': entryKind.wireValue,
-        'clientMutationId': mutationId,
-      }),
-    ).timeout(const Duration(seconds: 60));
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/transactions'),
+          headers: _headers,
+          body: jsonEncode({
+            'userCardId': ?userCardId,
+            'amountInr': amount.rupees,
+            'categoryId': ?categoryId,
+            'merchantName': ?merchantName,
+            'merchantVpa': ?merchantVpa,
+            'mcc': ?mcc,
+            'occurredAt': occurredAt?.toIso8601String(),
+            'note': ?note,
+            'rail': ?rail,
+            'instrument': instrument.wireValue,
+            'entryKind': entryKind.wireValue,
+            'clientMutationId': mutationId,
+          }),
+        )
+        .timeout(const Duration(seconds: 60));
     // A 200 is an exact retry whose first response was lost. The canonical
     // transaction is returned in both cases and must leave the outbox.
     if (response.statusCode != 200 && response.statusCode != 201) {
@@ -1092,6 +1096,36 @@ class UserCardsRepository {
     );
   }
 
+  /// Returns the server-side SMS observation count used by the background
+  /// inbox reconciler to detect an account reset. This is deliberately a
+  /// count, not message content: the device remains the source of truth for
+  /// the inbox and the API only tells it whether its local checkpoint is no
+  /// longer represented on the server.
+  Future<SmsImportState> fetchSmsImportState() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/transactions/sms-import-state'),
+      headers: _headers,
+    );
+    if (response.statusCode == 404) {
+      // Older production API images may still be serving the app while this
+      // recovery route rolls out. Keep the existing date-checkpoint behavior
+      // until the next launch rather than making SMS import fail closed.
+      return const SmsImportState.unavailable();
+    }
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /transactions/sms-import-state failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return SmsImportState(
+      smsObservationCount: (json['smsObservationCount'] as num?)?.toInt() ?? 0,
+      latestSmsObservedAt: json['latestSmsObservedAt'] == null
+          ? null
+          : DateTime.parse(json['latestSmsObservedAt'] as String),
+    );
+  }
+
   /// Task S-1a: the batched form of [logTransactionFromSms], for backup-file
   /// import.
   ///
@@ -1110,21 +1144,21 @@ class UserCardsRepository {
   }) async {
     final response = await _client
         .post(
-      Uri.parse('$apiBaseUrl/transactions/from-sms/batch'),
-      headers: _headers,
-      body: jsonEncode({
-        'backfill': backfill,
-        'messages': [
-          for (final m in messages)
-            {
-              'userCardId': ?m.userCardId,
-              'sender': m.sender,
-              'body': m.body,
-              'occurredAt': m.occurredAt.toUtc().toIso8601String(),
-            },
-        ],
-      }),
-    )
+          Uri.parse('$apiBaseUrl/transactions/from-sms/batch'),
+          headers: _headers,
+          body: jsonEncode({
+            'backfill': backfill,
+            'messages': [
+              for (final m in messages)
+                {
+                  'userCardId': ?m.userCardId,
+                  'sender': m.sender,
+                  'body': m.body,
+                  'occurredAt': m.occurredAt.toUtc().toIso8601String(),
+                },
+            ],
+          }),
+        )
         .timeout(const Duration(seconds: 60));
     if (response.statusCode != 200) {
       throw ApiException(
@@ -1736,6 +1770,21 @@ class SmsImportResult {
     this.needsReview = false,
     this.categoryId,
   });
+}
+
+/// The server-side checkpoint for device SMS reconciliation.
+class SmsImportState {
+  final int? smsObservationCount;
+  final DateTime? latestSmsObservedAt;
+
+  const SmsImportState({
+    required this.smsObservationCount,
+    this.latestSmsObservedAt,
+  });
+
+  const SmsImportState.unavailable()
+    : smsObservationCount = null,
+      latestSmsObservedAt = null;
 }
 
 class SmsReconciliationResult {

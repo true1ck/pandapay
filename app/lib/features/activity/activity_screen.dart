@@ -47,7 +47,12 @@ class ActivityScreen extends ConsumerWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              AppSpace.lg,
+              AppSpace.lg,
+              0,
+            ),
             child: Column(
               children: [
                 const _SearchField(),
@@ -56,7 +61,10 @@ class ActivityScreen extends ConsumerWidget {
               ],
             ),
           ),
-          OfflineBanner(gutter: AppSpace.lg, onRetry: () => ref.invalidate(_filteredTransactionsProvider)),
+          OfflineBanner(
+            gutter: AppSpace.lg,
+            onRetry: () => ref.invalidate(_filteredTransactionsProvider),
+          ),
           Expanded(
             child: transactions.when(
               // See my_cards_screen.dart for why a list-shaped skeleton
@@ -73,30 +81,52 @@ class ActivityScreen extends ConsumerWidget {
                 if (entries.isEmpty) {
                   return EmptyState(
                     icon: Icons.receipt_long_outlined,
-                    title: filter.isActive ? 'No activity matches these filters' : 'No activity yet',
-                    message: filter.isActive ? null : 'Spend you log from the Cards tab shows up here.',
+                    title: filter.isActive
+                        ? 'No activity matches these filters'
+                        : 'No activity yet',
+                    message: filter.isActive
+                        ? null
+                        : 'Spend you log from the Cards tab shows up here.',
                   );
                 }
                 final grouped = _groupByDay(entries);
-                final totalSpend = entries.fold<Money>(const Money.zero(), (a, e) => a + e.amount);
+                final spendEntries = entries.where(_isSpendEntry).toList();
+                final totalSpend = spendEntries.fold<Money>(
+                  const Money.zero(),
+                  (a, e) => a + e.amount,
+                );
 
                 return ListView(
-                  padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 0),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpace.lg,
+                    AppSpace.lg,
+                    AppSpace.lg,
+                    0,
+                  ),
                   children: [
-                    _SummaryCard(totalSpend: totalSpend, count: entries.length),
+                    _SummaryCard(
+                      totalSpend: totalSpend,
+                      count: spendEntries.length,
+                    ),
                     const SizedBox(height: AppSpace.lg),
                     for (final group in grouped) ...[
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpace.sm),
                         child: Text(
                           _dayLabel(group.day),
-                          style: BambooFonts.heading(13, color: BambooInk.ink500),
+                          style: BambooFonts.heading(
+                            13,
+                            color: BambooInk.ink500,
+                          ),
                         ),
                       ),
                       for (final entry in group.entries)
                         Padding(
                           padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                          child: _TransactionTile(entry, onTap: () => context.push('/activity/${entry.id}')),
+                          child: _TransactionTile(
+                            entry,
+                            onTap: () => context.push('/activity/${entry.id}'),
+                          ),
                         ),
                       const SizedBox(height: AppSpace.sm),
                     ],
@@ -113,7 +143,11 @@ class ActivityScreen extends ConsumerWidget {
   static List<_DayGroup> _groupByDay(List<TransactionEntry> entries) {
     final byDay = <DateTime, List<TransactionEntry>>{};
     for (final e in entries) {
-      final day = DateTime(e.occurredAt.year, e.occurredAt.month, e.occurredAt.day);
+      final day = DateTime(
+        e.occurredAt.year,
+        e.occurredAt.month,
+        e.occurredAt.day,
+      );
       byDay.putIfAbsent(day, () => []).add(e);
     }
     final days = byDay.keys.toList()..sort((a, b) => b.compareTo(a));
@@ -126,9 +160,27 @@ class ActivityScreen extends ConsumerWidget {
     final diff = today.difference(day).inDays;
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${day.day} ${months[day.month - 1]} ${day.year}';
   }
+
+  static bool _isSpendEntry(TransactionEntry entry) =>
+      entry.status == 'active' &&
+      entry.entryKind == TxnEntryKind.spend &&
+      entry.amount.paise > 0;
 }
 
 class _DayGroup {
@@ -153,7 +205,13 @@ class ActivityFilter {
   /// transactions.
   final String? query;
 
-  const ActivityFilter({this.cardId, this.categoryId, this.from, this.to, this.query});
+  const ActivityFilter({
+    this.cardId,
+    this.categoryId,
+    this.from,
+    this.to,
+    this.query,
+  });
 
   bool get isActive =>
       cardId != null ||
@@ -179,9 +237,13 @@ class ActivityFilter {
   }
 }
 
-final _activityFilterProvider = StateProvider<ActivityFilter>((ref) => const ActivityFilter());
+final _activityFilterProvider = StateProvider<ActivityFilter>(
+  (ref) => const ActivityFilter(),
+);
 
-final _filteredTransactionsProvider = FutureProvider<List<TransactionEntry>>((ref) async {
+final _filteredTransactionsProvider = FutureProvider<List<TransactionEntry>>((
+  ref,
+) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   final filter = ref.watch(_activityFilterProvider);
@@ -221,7 +283,9 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
       final trimmed = value.trim();
       ref
           .read(_activityFilterProvider.notifier)
-          .update((f) => f.copyWith(query: () => trimmed.isEmpty ? null : trimmed));
+          .update(
+            (f) => f.copyWith(query: () => trimmed.isEmpty ? null : trimmed),
+          );
     });
     // Rebuild for the clear button's visibility, which shouldn't wait on
     // the debounce.
@@ -231,7 +295,9 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
   void _clear() {
     _debounce?.cancel();
     _controller.clear();
-    ref.read(_activityFilterProvider.notifier).update((f) => f.copyWith(query: () => null));
+    ref
+        .read(_activityFilterProvider.notifier)
+        .update((f) => f.copyWith(query: () => null));
     setState(() {});
   }
 
@@ -244,12 +310,20 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
       decoration: InputDecoration(
         hintText: 'Search merchant or note',
-        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: BambooInk.ink500),
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          size: 20,
+          color: BambooInk.ink500,
+        ),
         suffixIcon: _controller.text.isEmpty
             ? null
             : IconButton(
                 tooltip: 'Clear search',
-                icon: const Icon(Icons.close_rounded, size: 18, color: BambooInk.ink500),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: BambooInk.ink500,
+                ),
                 onPressed: _clear,
               ),
         isDense: true,
@@ -275,7 +349,11 @@ class _FilterRow extends ConsumerWidget {
           _FilterChipButton(
             label: filter.cardId == null
                 ? 'Card'
-                : (cards.where((c) => c.id == filter.cardId).firstOrNull?.nickname ?? 'Card'),
+                : (cards
+                          .where((c) => c.id == filter.cardId)
+                          .firstOrNull
+                          ?.nickname ??
+                      'Card'),
             active: filter.cardId != null,
             onTap: () async {
               final picked = await showModalBottomSheet<String?>(
@@ -286,20 +364,29 @@ class _FilterRow extends ConsumerWidget {
                     const ListTile(title: Text('All cards')),
                     for (final c in cards)
                       ListTile(
-                        title: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                        title: Text(
+                          c.nickname?.isNotEmpty == true
+                              ? c.nickname!
+                              : c.cardName,
+                        ),
                         onTap: () => Navigator.of(context).pop(c.id),
                       ),
                   ],
                 ),
               );
-              ref.read(_activityFilterProvider.notifier).state = filter.copyWith(cardId: () => picked);
+              ref.read(_activityFilterProvider.notifier).state = filter
+                  .copyWith(cardId: () => picked);
             },
           ),
           const SizedBox(width: AppSpace.xs),
           _FilterChipButton(
             label: filter.categoryId == null
                 ? 'Category'
-                : (categories.where((c) => c.id == filter.categoryId).firstOrNull?.name ?? 'Category'),
+                : (categories
+                          .where((c) => c.id == filter.categoryId)
+                          .firstOrNull
+                          ?.name ??
+                      'Category'),
             active: filter.categoryId != null,
             onTap: () async {
               final picked = await showModalBottomSheet<String?>(
@@ -309,11 +396,15 @@ class _FilterRow extends ConsumerWidget {
                   children: [
                     const ListTile(title: Text('All categories')),
                     for (final c in categories)
-                      ListTile(title: Text(c.name), onTap: () => Navigator.of(context).pop(c.id)),
+                      ListTile(
+                        title: Text(c.name),
+                        onTap: () => Navigator.of(context).pop(c.id),
+                      ),
                   ],
                 ),
               );
-              ref.read(_activityFilterProvider.notifier).state = filter.copyWith(categoryId: () => picked);
+              ref.read(_activityFilterProvider.notifier).state = filter
+                  .copyWith(categoryId: () => picked);
             },
           ),
           const SizedBox(width: AppSpace.xs),
@@ -325,17 +416,17 @@ class _FilterRow extends ConsumerWidget {
             onTap: () async {
               final range = await showDateRangePicker(
                 context: context,
-                firstDate: DateTime.now().subtract(const Duration(days: 365 * 3)),
+                firstDate: DateTime.now().subtract(
+                  const Duration(days: 365 * 3),
+                ),
                 lastDate: DateTime.now(),
                 initialDateRange: filter.from != null && filter.to != null
                     ? DateTimeRange(start: filter.from!, end: filter.to!)
                     : null,
               );
               if (range != null) {
-                ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
-                  from: () => range.start,
-                  to: () => range.end,
-                );
+                ref.read(_activityFilterProvider.notifier).state = filter
+                    .copyWith(from: () => range.start, to: () => range.end);
               }
             },
           ),
@@ -344,7 +435,8 @@ class _FilterRow extends ConsumerWidget {
             _FilterChipButton(
               label: 'Clear',
               active: false,
-              onTap: () => ref.read(_activityFilterProvider.notifier).state = const ActivityFilter(),
+              onTap: () => ref.read(_activityFilterProvider.notifier).state =
+                  const ActivityFilter(),
             ),
           ],
         ],
@@ -357,7 +449,11 @@ class _FilterChipButton extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback onTap;
-  const _FilterChipButton({required this.label, required this.active, required this.onTap});
+  const _FilterChipButton({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -402,7 +498,10 @@ class _SummaryCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Spend', style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
+              Text(
+                'Spend',
+                style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+              ),
               const SizedBox(height: 2),
               MoneyText(
                 totalSpend,
@@ -412,7 +511,9 @@ class _SummaryCard extends StatelessWidget {
             ],
           ),
           Text(
-            '$count transaction${count == 1 ? '' : 's'}',
+            count == 0
+                ? 'No spending'
+                : '$count transaction${count == 1 ? '' : 's'}',
             style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
           ),
         ],
@@ -430,8 +531,11 @@ class _TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final subtitleParts = <String>[
       if (entry.cardDisplayName != null) entry.cardDisplayName!,
-      if (entry.cardDisplayName == null && entry.instrument == TxnInstrument.creditCard)
-        entry.cardLast4 == null ? 'Credit card · unmatched' : 'Credit card ending ${entry.cardLast4}',
+      if (entry.cardDisplayName == null &&
+          entry.instrument == TxnInstrument.creditCard)
+        entry.cardLast4 == null
+            ? 'Credit card · unmatched'
+            : 'Credit card ending ${entry.cardLast4}',
       if (entry.categoryName != null) entry.categoryName!,
     ];
     // See account_screen.dart's _AccountTile for why Pressable, not InkWell.
@@ -449,8 +553,15 @@ class _TransactionTile extends StatelessWidget {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.shopping_bag_outlined, size: 18, color: BambooInk.ink900),
+              decoration: BoxDecoration(
+                color: BambooInk.paperMuted,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.shopping_bag_outlined,
+                size: 18,
+                color: BambooInk.ink900,
+              ),
             ),
             const SizedBox(width: AppSpace.md),
             Expanded(
@@ -464,7 +575,10 @@ class _TransactionTile extends StatelessWidget {
                   ),
                   if (subtitleParts.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text(subtitleParts.join(' · '), style: BambooFonts.ui(12, color: BambooInk.ink500)),
+                    Text(
+                      subtitleParts.join(' · '),
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
                   ],
                 ],
               ),

@@ -319,30 +319,30 @@ void main() {
     expect(find.text('Oct 26'), findsOneWidget);
   });
 
-  testWidgets(
-    'an empty period explains what would fill it rather than showing zeroes',
-    (tester) async {
-      await _pump(
-        tester,
-        SpendReport(
-          period: SpendPeriod.month,
-          periodStart: DateTime(2026, 8, 1),
-          periodEnd: DateTime(2026, 9, 1),
-          elapsedFraction: 0.5,
-          spend: EntryKindTotals.zero,
-          income: EntryKindTotals.zero,
-          investment: EntryKindTotals.zero,
-          previousSpend: EntryKindTotals.zero,
-          byCategory: const [],
-          byMerchant: const [],
-          byCard: const [],
-          byInstrument: const [],
-          series: const [],
-        ),
-      );
-      expect(find.textContaining('Nothing logged'), findsOneWidget);
-    },
-  );
+  testWidgets('an empty period shows an explicit zero-spending state', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      SpendReport(
+        period: SpendPeriod.month,
+        periodStart: DateTime(2026, 8, 1),
+        periodEnd: DateTime(2026, 9, 1),
+        elapsedFraction: 0.5,
+        spend: EntryKindTotals.zero,
+        income: EntryKindTotals.zero,
+        investment: EntryKindTotals.zero,
+        previousSpend: EntryKindTotals.zero,
+        byCategory: const [],
+        byMerchant: const [],
+        byCard: const [],
+        byInstrument: const [],
+        series: const [],
+      ),
+    );
+    expect(find.text('No spending recorded'), findsOneWidget);
+    expect(find.text('₹0.00'), findsOneWidget);
+  });
 
   testWidgets(
     'guest mode says to sign in rather than showing an empty report',
