@@ -35,6 +35,7 @@ class CardMatch {
   final String reason;
   final double overlap;
   final int hits;
+
   /// Number of matched tokens that identify the product rather than only its
   /// issuer. Used to rank candidates when OCR also picked up shared words
   /// such as "bank" or "credit card".
@@ -177,7 +178,9 @@ bool _fuzzyTokenMatch(String normalizedText, String token) {
   final candidates = <String>{...words};
   final wordList = words.toList();
   for (var i = 0; i < wordList.length; i++) {
-    candidates.add(wordList[i] + (i + 1 < wordList.length ? wordList[i + 1] : ''));
+    candidates.add(
+      wordList[i] + (i + 1 < wordList.length ? wordList[i + 1] : ''),
+    );
     if (i + 2 < wordList.length) {
       candidates.add(wordList[i] + wordList[i + 1] + wordList[i + 2]);
     }
@@ -239,6 +242,46 @@ String _searchableProductName(CardProduct product) => [
   return (overlap: hits / tokens.length, hits: hits);
 }
 
+bool _hasRawExactProductToken(
+  String rawText,
+  String productName,
+  String issuerName,
+) {
+  // Fuzzy OCR corrections are useful for finding the right candidate, but a
+  // fully fuzzy match is not enough for the highest confidence band. Keep
+  // the raw text (before Tata/Cashback aliases are canonicalised) as the
+  // evidence check so a visibly noisy read remains a user-verifiable medium
+  // match rather than looking certain.
+  final raw = rawText
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  final issuerTokens = _normalize(
+    issuerName,
+  ).split(' ').where((t) => t.isNotEmpty).toSet();
+  var tokens = _normalize(productName)
+      .split(' ')
+      .where(
+        (t) =>
+            t.length >= 2 &&
+            !_genericCardWords.contains(t) &&
+            !{'credit', 'card', 'debit', 'prepaid'}.contains(t) &&
+            !issuerTokens.contains(t),
+      )
+      .toList();
+  // When the catalogue row has no separate issuer field, the first name
+  // token is commonly the issuer (for example, "SBI Cashback"). It must not
+  // turn a noisy read of the issuer into high-confidence product evidence.
+  if (issuerTokens.isEmpty && tokens.length > 1) {
+    tokens = tokens.skip(1).toList();
+  }
+  return tokens.any(
+    (token) =>
+        RegExp(r'(^|\s)' + RegExp.escape(token) + r'($|\s)').hasMatch(raw),
+  );
+}
+
 int _identityTokenHits(String normalizedText, String productName) {
   final ignoreWords = {'credit', 'card', 'debit', 'prepaid'};
   final tokens = _normalize(productName)
@@ -256,12 +299,15 @@ int _identityTokenHits(String normalizedText, String productName) {
 /// Returns how many product-specific tokens (name tokens NOT in the issuer
 /// name) match in [normalizedText]. An issuer-only match (e.g. only "sbi")
 /// means every card from that issuer would score the same — result is arbitrary.
-int _productSpecificHits(String normalizedText, String issuerName, String searchableName) {
+int _productSpecificHits(
+  String normalizedText,
+  String issuerName,
+  String searchableName,
+) {
   final ignoreWords = {'credit', 'card', 'debit', 'prepaid'};
-  final issuerTokens = _normalize(issuerName)
-      .split(' ')
-      .where((t) => t.isNotEmpty)
-      .toSet();
+  final issuerTokens = _normalize(
+    issuerName,
+  ).split(' ').where((t) => t.isNotEmpty).toSet();
   final tokens = _normalize(searchableName)
       .split(' ')
       .where(
@@ -299,7 +345,16 @@ List<CardMatch> matchCardText(
     final overlap = score.overlap;
     final hits = score.hits;
     final identityHits = _identityTokenHits(normalizedText, searchableName);
-    final productHits = _productSpecificHits(normalizedText, issuerName, searchableName);
+    final productHits = _productSpecificHits(
+      normalizedText,
+      issuerName,
+      searchableName,
+    );
+    final hasRawExactProductToken = _hasRawExactProductToken(
+      extracted.rawText,
+      searchableName,
+      issuerName,
+    );
     final networkMatches = network != null && network == product.network;
 
     MatchConfidence confidence;
@@ -327,17 +382,22 @@ List<CardMatch> matchCardText(
       } else {
         continue;
       }
-    } else if (hits >= 2 && overlap >= 0.75) {
+    } else if (hits >= 2 && overlap >= 0.75 && hasRawExactProductToken) {
       // The printed product name is stronger evidence than a logo that ML Kit
       // may miss or that the catalogue may not know (47 live catalogue rows
       // currently have an unknown network). Requiring the network here made
       // otherwise exact card-name scans show as only "possible matches".
       confidence = MatchConfidence.high;
       reasonParts.add('name match ${(overlap * 100).round()}%');
+    } else if (hits >= 2 && overlap >= 0.75) {
+      confidence = MatchConfidence.medium;
+      reasonParts.add('fuzzy name match ${(overlap * 100).round()}%');
     } else if (hits >= 2 && overlap >= 0.5) {
       // Require network confirmation for medium on a partial match — without
       // it the 50% bar is too easy to hit with overlapping issuer tokens.
-      confidence = networkMatches ? MatchConfidence.medium : MatchConfidence.low;
+      confidence = networkMatches
+          ? MatchConfidence.medium
+          : MatchConfidence.low;
       reasonParts.add('partial name match ${(overlap * 100).round()}%');
     } else if (hits >= 2 && overlap >= 0.25) {
       confidence = MatchConfidence.low;

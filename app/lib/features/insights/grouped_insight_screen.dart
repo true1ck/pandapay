@@ -46,8 +46,8 @@ class GroupedInsightScreen extends StatelessWidget {
     final safeInitialIndex = initialIndex < 0
         ? 0
         : initialIndex >= tabs.length
-            ? tabs.length - 1
-            : initialIndex;
+        ? tabs.length - 1
+        : initialIndex;
     return DefaultTabController(
       length: tabs.length,
       initialIndex: safeInitialIndex,
@@ -170,10 +170,11 @@ class CardCapabilitySection extends StatelessWidget {
         child: Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
-            // Keep the category page compact: the first level answers
-            // "which cards have this benefit?" and the card row expands to
-            // reveal that card's individual rules/capabilities.
-            initiallyExpanded: false,
+            // Keep each category card immediately useful: the first level
+            // answers "which cards have this benefit?" while the expanded
+            // default keeps the card's individual rules visible without an
+            // extra tap. Users can still collapse a card to reduce clutter.
+            initiallyExpanded: true,
             tilePadding: const EdgeInsets.symmetric(
               horizontal: AppSpace.lg,
               vertical: AppSpace.xs,
