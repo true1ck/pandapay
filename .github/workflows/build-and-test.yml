@@ -75,15 +75,22 @@ jobs:
           dart pub get
           dart test
 
-      - name: App analyze and test
+      - name: App dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: App analyze
         working-directory: app
         run: |
-          flutter pub get
           # `--fatal-infos` deliberately: the app is at zero issues as of this
           # workflow landing, and the only way it stays there is if a new one
           # fails the build. A warning threshold that nobody enforces is how
           # 74 issues accumulated in the first place.
           flutter analyze --fatal-infos
+
+      - name: App test
+        working-directory: app
+        run: |
           # Several widget suites replace global Riverpod/plugin overrides.
           # Run the complete suite serially so one test file cannot leak
           # state into another on a shared test VM.
