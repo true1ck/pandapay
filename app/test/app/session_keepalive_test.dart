@@ -26,6 +26,38 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'does not restore a stale startup token when refresh is rejected',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'pandapay_app.access_token': 'stale-access',
+        'pandapay_app.refresh_token': 'revoked-refresh',
+      });
+
+      final client = MockClient(
+        (req) async =>
+            http.Response(jsonEncode({'error': 'Invalid refresh token'}), 401),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+          authApiProvider.overrideWithValue(
+            AuthApi(authBaseUrl: 'http://auth.test', client: client),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(sessionInitProvider.future);
+
+      expect(container.read(accessTokenProvider), isNull);
+      final store = await container.read(tokenStoreProvider.future);
+      expect(store.accessToken, isNull);
+      expect(store.refreshToken, isNull);
+    },
+  );
+
   test('rotates the access token on the interval, well inside the 15m TTL', () {
     fakeAsync((async) {
       SharedPreferences.setMockInitialValues({
@@ -140,7 +172,7 @@ void main() {
     });
   });
 
-  test('keeps the session when the refresh token is rejected', () {
+  test('clears the session when the refresh token is rejected', () {
     fakeAsync((async) {
       SharedPreferences.setMockInitialValues({
         'pandapay_app.access_token': 'initial-access',
@@ -175,8 +207,9 @@ void main() {
 
       async.elapse(const Duration(minutes: 11));
 
-      expect(container.read(accessTokenProvider), 'initial-access');
-      expect(capturedStore?.refreshToken, 'initial-refresh');
+      expect(container.read(accessTokenProvider), isNull);
+      expect(capturedStore?.accessToken, isNull);
+      expect(capturedStore?.refreshToken, isNull);
     });
   });
 

@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/acceptance_reports_repository.dart';
 import '../data/analytics.dart';
 import '../data/app_status_repository.dart';
+import '../data/api_exception.dart';
 import '../data/auth_api.dart';
 import '../data/card_feedback_repository.dart';
 import '../data/card_overrides_repository.dart';
@@ -334,15 +335,21 @@ final userSettingsApiProvider = Provider<UserSettingsApi?>((ref) {
 
 /// Same pattern as console/lib/app/providers.dart's sessionInitProvider:
 /// resolve a stored refresh token through auth/'s real POST /auth/refresh
-/// on startup. Credentials are never cleared here: signing out is an explicit
-/// user action, not a consequence of a refresh failure.
+/// on startup. Temporary refresh failures preserve the cached session, while
+/// a definitive 401/403 clears unrecoverable credentials and returns to login.
 final sessionInitProvider = FutureProvider<void>((ref) async {
   final store = await ref.watch(tokenStoreProvider.future);
-  if (store.accessToken != null) {
-    ref.read(accessTokenProvider.notifier).state = store.accessToken;
-  }
   final refreshToken = store.refreshToken;
-  if (refreshToken == null) return;
+  final storedAccessToken = store.accessToken;
+  if (refreshToken == null) {
+    // A legacy/partially-written session may contain only an access token.
+    // Keep it available for the normal offline-cache path; there is no
+    // refresh request we can make until the user signs in again.
+    if (storedAccessToken != null) {
+      ref.read(accessTokenProvider.notifier).state = storedAccessToken;
+    }
+    return;
+  }
 
   final authApi = ref.read(authApiProvider);
   try {
@@ -352,10 +359,28 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
       refreshToken: tokens.refreshToken,
     );
     ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
-  } catch (_) {
-    // Keep the current credentials. Only manual sign-out clears them.
+  } catch (error) {
+    if (_isRejectedCredentialRefresh(error)) {
+      // A 401/403 from /auth/refresh means this device's session is no
+      // longer recoverable (revoked, rotated elsewhere, or expired). Keeping
+      // the old access token makes the app appear signed in while every
+      // private API call fails with 401 — exactly the broken Spending state
+      // seen after an app update. Clear only credentials; the SMS inbox and
+      // local retry queue remain intact and will be imported after login.
+      await store.clear();
+      ref.read(accessTokenProvider.notifier).state = null;
+    } else if (storedAccessToken != null) {
+      // Network/5xx failures are temporary. Keep the last access token so
+      // cached data and the next keep-alive retry remain usable.
+      ref.read(accessTokenProvider.notifier).state = storedAccessToken;
+    }
   }
 });
+
+bool _isRejectedCredentialRefresh(Object error) {
+  if (error is! ApiException) return false;
+  return RegExp(r'\b(401|403)\b').hasMatch(error.debugMessage);
+}
 
 /// Keeps a signed-in session alive for as long as the app stays open, not
 /// just at startup. sessionInitProvider above only ever calls /auth/refresh
@@ -365,8 +390,9 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
 /// every API call while accessTokenProvider still held the now-dead token
 /// — "signed in" on screen, broken underneath. This re-reads the CURRENT
 /// refresh token from storage (not a captured value) every 10 minutes,
-/// comfortably inside the 15-minute TTL. Refresh failures leave the current
-/// session intact; only manual sign-out clears credentials.
+/// comfortably inside the 15-minute TTL. Temporary refresh failures leave
+/// the current session intact; a definitive 401/403 clears credentials and
+/// returns the user to login.
 /// Read once from `_AppShell` in main.dart so it runs for the app's whole
 /// lifetime regardless of which tab is showing.
 /// How often to proactively rotate the access token. Must stay comfortably
@@ -386,21 +412,32 @@ final sessionKeepAliveProvider = Provider<void>((ref) {
       return; // avoid rotating one-time tokens concurrently
     }
     refreshInProgress = true;
+    TokenStore? store;
 
     try {
-      final store = await ref.read(tokenStoreProvider.future);
-      final refreshToken = store.refreshToken;
+      final currentStore = await ref.read(tokenStoreProvider.future);
+      store = currentStore;
+      final refreshToken = currentStore.refreshToken;
       if (refreshToken == null) return;
 
       final tokens = await ref.read(authApiProvider).refresh(refreshToken);
       if (ref.read(accessTokenProvider) != currentToken) return;
-      await store.save(
+      await currentStore.save(
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       );
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
-    } catch (_) {
-      // Never sign out automatically. The next timer tick retries.
+    } catch (error) {
+      if (_isRejectedCredentialRefresh(error)) {
+        // Do not leave an expired session looking healthy forever. The inbox
+        // stays untouched; after the user signs in, the SMS lifecycle listener
+        // retries the queued and historical messages automatically.
+        await store?.clear();
+        if (ref.read(accessTokenProvider) == currentToken) {
+          ref.read(accessTokenProvider.notifier).state = null;
+        }
+      }
+      // Network/5xx failures remain recoverable; the next timer tick retries.
     } finally {
       refreshInProgress = false;
     }
@@ -2002,14 +2039,16 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     // passes query by date from the previous successful scan, with a small
     // overlap that covers clock skew/offline handover. The server source key
     // makes that overlap idempotent.
-    await ref.read(smsAutoImportProvider).syncExistingInbox(
-      limit: 0,
-      since: lastRunMillis == null
-          ? null
-          : DateTime.fromMillisecondsSinceEpoch(lastRunMillis).subtract(
-              const Duration(days: 2),
-            ),
-    );
+    await ref
+        .read(smsAutoImportProvider)
+        .syncExistingInbox(
+          limit: 0,
+          since: lastRunMillis == null
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(
+                  lastRunMillis,
+                ).subtract(const Duration(days: 2)),
+        );
     await prefs.setInt(inboxReconciliationKey, now.millisecondsSinceEpoch);
     ref.invalidate(userCardsProvider);
     ref.invalidate(transactionsProvider);
