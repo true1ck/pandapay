@@ -2031,6 +2031,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     // local checkpoint. Once a prior positive count drops, recover from the
     // complete on-device inbox; source keys keep that replay idempotent.
     var forceFullScan = lastRunMillis == null;
+    var serverResetDetected = false;
     final previousServerCount = prefs.getInt(serverObservationCountKey);
     try {
       final serverState = await ref
@@ -2042,8 +2043,12 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           currentServerCount != null &&
           currentServerCount < previousServerCount) {
         forceFullScan = true;
+        serverResetDetected = true;
       }
-      if (currentServerCount != null) {
+      // Keep the old positive checkpoint until a forced recovery succeeds.
+      // Otherwise a transient network failure during that recovery would
+      // turn the reset into a normal incremental scan on the next launch.
+      if (currentServerCount != null && !serverResetDetected) {
         await prefs.setInt(serverObservationCountKey, currentServerCount);
       }
     } catch (_) {
