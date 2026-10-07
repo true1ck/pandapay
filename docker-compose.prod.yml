@@ -58,8 +58,12 @@ services:
       INBOUND_EMAIL_WEBHOOK_SECRET: "${INBOUND_EMAIL_WEBHOOK_SECRET:?}"
       PARTNER_WEBHOOK_SECRET: "${PARTNER_WEBHOOK_SECRET:?}"
       IMAP_ENCRYPTION_KEY: "${IMAP_ENCRYPTION_KEY:?}"
-      NOTIFICATION_SERVICE_URL: "${NOTIFICATION_SERVICE_URL:?}"
-      NOTIFICATION_SERVICE_API_KEY: "${NOTIFICATION_SERVICE_API_KEY:?}"
+      # Remote push delivery is optional at the API layer. Keep these empty
+      # until the private notification provider is configured; the API then
+      # exposes the notification routes and reports a truthful 503 instead of
+      # preventing the entire production API from starting.
+      NOTIFICATION_SERVICE_URL: "${NOTIFICATION_SERVICE_URL:-}"
+      NOTIFICATION_SERVICE_API_KEY: "${NOTIFICATION_SERVICE_API_KEY:-}"
       NOTIFICATION_SERVICE_TIMEOUT_MS: "${NOTIFICATION_SERVICE_TIMEOUT_MS:-4000}"
     ports:
       - "127.0.0.1:4000:4000"
