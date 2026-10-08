@@ -294,8 +294,8 @@ test('creates a valid push workflow through the deployed v1 workflow endpoint wh
     assert.equal(workflowBody.__source, 'editor');
     assert.equal(workflowBody.steps[0].type, 'push');
     assert.equal(workflowBody.steps[0].name, 'PandaPay push notification');
-    assert.equal(workflowBody.steps[0].title, '{{payload.title}}');
-    assert.equal(workflowBody.steps[0].content, '{{payload.body}}');
+    assert.equal(workflowBody.steps[0].controlValues.subject, '{{payload.title}}');
+    assert.equal(workflowBody.steps[0].controlValues.body, '{{payload.body}}');
   } finally {
     global.fetch = originalFetch;
     if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;

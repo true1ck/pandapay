@@ -171,8 +171,10 @@ async function ensureWorkflow() {
           active: true,
           name: WORKFLOW_NAME,
           type: 'push',
-          title: '{{payload.title}}',
-          content: '{{payload.body}}',
+          controlValues: {
+            subject: '{{payload.title}}',
+            body: '{{payload.body}}',
+          },
         },
       ],
     };
