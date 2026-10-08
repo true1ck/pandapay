@@ -14,14 +14,8 @@ const crypto = require('node:crypto');
 
 const config = require('./config');
 
-// Keep provider identifiers configurable so one Novu deployment can serve
-// multiple PandaPay applications without changing source code.
-const WORKFLOW_IDENTIFIER = config.notificationServiceWorkflowIdentifier;
-const WORKFLOW_NAME = config.notificationServiceWorkflowName;
 const REQUEST_TIMEOUT_MS = config.notificationServiceTimeoutMs;
 const PROVIDER_RETRY_DELAY_MS = 100;
-
-let workflowReadyPromise = null;
 
 function isConfigured() {
   if (!config.notificationServiceUrl || !config.notificationServiceApiKey) return false;
@@ -39,11 +33,8 @@ function serviceUrl(path) {
 
 function headers() {
   return {
-    Authorization: `ApiKey ${config.notificationServiceApiKey}`,
-    // The deployed multi-application notification service authenticates
-    // project-scoped requests with this explicit header. Keep Authorization
-    // too for compatibility with standard Novu deployments.
-    'x-project-key': config.notificationServiceApiKey,
+    'X-App-Id': config.notificationServiceAppId,
+    'X-Api-Key': config.notificationServiceApiKey,
     'Content-Type': 'application/json',
   };
 }
@@ -66,7 +57,7 @@ async function request(path, options = {}) {
         signal: controller.signal,
       });
       if (response.status === 401 || response.status === 403) {
-        const error = new Error('Notification provider rejected the configured API key');
+        const error = new Error('Notification provider rejected the configured API credentials');
         error.code = 'notification_service_auth_failed';
         error.providerStatus = response.status;
         error.cause = await readError(response);
@@ -123,195 +114,58 @@ async function readJson(response) {
   return response.json().catch(() => null);
 }
 
-function listItems(payload, keys = []) {
-  if (Array.isArray(payload)) return payload;
-  for (const key of keys) {
-    if (Array.isArray(payload?.[key])) return payload[key];
-    if (Array.isArray(payload?.data?.[key])) return payload.data[key];
-  }
-  if (Array.isArray(payload?.data)) return payload.data;
-  return [];
-}
-
-function isWorkflowForIdentifier(workflow) {
-  if (!workflow || typeof workflow !== 'object') return false;
-  if ([workflow.identifier, workflow.slug, workflow.workflowId].includes(WORKFLOW_IDENTIFIER)) {
-    return true;
-  }
-  return Array.isArray(workflow.triggers)
-    && workflow.triggers.some((trigger) => trigger?.identifier === WORKFLOW_IDENTIFIER);
-}
-
-function isUsablePushWorkflow(workflow) {
-  // Some provider adapters return only workflow metadata from the list
-  // endpoint. In that case, leave the existing workflow alone and let the
-  // trigger call report any provider-side problem. When steps are present,
-  // validate the exact V2 push controls that the provider executes.
-  if (!Array.isArray(workflow?.steps)) return true;
-  return workflow.steps.some((step) => (
-    step?.type === 'push'
-      && typeof step?.controlValues?.subject === 'string'
-      && typeof step?.controlValues?.body === 'string'
-  ));
-}
-
-async function findWorkflow() {
-  const response = await request('/v1/workflows');
-  if (!response.ok) {
-    throw new Error(`Notification workflow list failed: ${await readError(response)}`);
-  }
-  const payload = await readJson(response);
-  return listItems(payload, ['workflows']).find(isWorkflowForIdentifier) || null;
-}
-
-async function ensureWorkflow() {
-  if (workflowReadyPromise) return workflowReadyPromise;
-
-  workflowReadyPromise = (async () => {
-    const existing = await findWorkflow();
-    if (existing && isUsablePushWorkflow(existing)) return;
-
-    const workflow = {
-      name: WORKFLOW_NAME,
-      workflowId: WORKFLOW_IDENTIFIER,
-      __source: 'editor',
-      description: 'Generic FCM notification bridge for PandaPay inbox events.',
-      active: true,
-      triggers: [
-        { type: 'event', identifier: WORKFLOW_IDENTIFIER, variables: [] },
-      ],
-      steps: [
-        {
-          active: true,
-          name: WORKFLOW_NAME,
-          type: 'push',
-          controlValues: {
-            subject: '{{payload.title}}',
-            body: '{{payload.body}}',
-          },
-        },
-      ],
-    };
-    if (process.env.NOTIFICATION_SERVICE_WORKFLOW_GROUP_ID) {
-      workflow.notificationGroupId = process.env.NOTIFICATION_SERVICE_WORKFLOW_GROUP_ID;
-    }
-    const workflowId = existing
-      && (existing.id || existing._id || existing.workflowId || existing.slug || WORKFLOW_IDENTIFIER);
-    const requestOptions = {
-      method: existing ? 'PUT' : 'POST',
-      headers: { 'Idempotency-Key': idempotencyKey('workflow', WORKFLOW_IDENTIFIER) },
-      body: JSON.stringify(existing
-        ? {
-          name: workflow.name,
-          description: workflow.description,
-          active: workflow.active,
-          workflowId: existing.workflowId || WORKFLOW_IDENTIFIER,
-          preferences: existing.preferences || { user: null },
-          steps: workflow.steps,
-        }
-        : workflow),
-    };
-    const created = await request(
-      existing ? `/v1/workflows/${encodeURIComponent(workflowId)}` : '/v1/workflows',
-      requestOptions,
-    );
-    // A second API instance can create the workflow at the same time. A 409
-    // means the desired workflow already exists, so it is safe to continue.
-    if (!created.ok && created.status !== 409) {
-      throw new Error(`Notification workflow creation failed: ${await readError(created)}`);
-    }
-    if (!existing && created.status === 409 && !(await findWorkflow())) {
-      throw new Error('Notification workflow already exists but could not be found');
-    }
-  })();
-
-  try {
-    await workflowReadyPromise;
-  } catch (error) {
-    // A transient provider failure should be retried by the next request,
-    // rather than leaving a rejected promise cached for the process lifetime.
-    workflowReadyPromise = null;
-    throw error;
-  }
-}
-
 async function registerDevice({ subscriberId, token, platform, email, displayName, timezone }) {
   if (!isConfigured()) return { configured: false, registered: false };
   if (!subscriberId || !token) throw new Error('subscriberId and token are required');
 
-  const nameParts = typeof displayName === 'string'
-    ? displayName.trim().split(/\s+/).filter(Boolean)
-    : [];
-  const response = await request(`/v1/subscribers/${encodeURIComponent(subscriberId)}`, {
-    method: 'PUT',
-    headers: { 'Idempotency-Key': idempotencyKey('subscriber', subscriberId) },
+  const normalizedPlatform = String(platform || 'ANDROID').toUpperCase();
+  const providerPlatform = ['ANDROID', 'IOS', 'WEB'].includes(normalizedPlatform)
+    ? normalizedPlatform
+    : 'ANDROID';
+  const deviceId = `pandapay:${subscriberId}:${providerPlatform}`;
+  const response = await request('/v1/devices', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey('device', `${subscriberId}:${providerPlatform}`) },
     body: JSON.stringify({
-      subscriberId,
-      firstName: nameParts[0] || null,
-      lastName: nameParts.slice(1).join(' ') || null,
-      email: email || null,
-      timezone: timezone || null,
-      data: { platform: platform || 'unknown' },
+      user_id: subscriberId,
+      device_id: deviceId,
+      platform: providerPlatform,
+      target_type: 'TOKEN',
+      target_value: token,
     }),
   });
   if (!response.ok) {
     throw new Error(`Notification device registration failed: ${await readError(response)}`);
-  }
-
-  // The deployed notification service exposes PUT for credentials. Keep the
-  // device token in the dedicated credentials endpoint rather than embedding
-  // it in the subscriber upsert, so subscriber profile updates cannot erase
-  // push credentials accidentally.
-  const credentials = await request(`/v1/subscribers/${encodeURIComponent(subscriberId)}/credentials`, {
-    method: 'PUT',
-    headers: { 'Idempotency-Key': idempotencyKey('device', `${subscriberId}:${token}`) },
-    body: JSON.stringify({
-      providerId: 'fcm',
-      ...(config.notificationServiceFcmIntegrationIdentifier
-        ? { integrationIdentifier: config.notificationServiceFcmIntegrationIdentifier }
-        : {}),
-      credentials: { deviceTokens: [token] },
-    }),
-  });
-  if (!credentials.ok) {
-    throw new Error(`Notification device credential registration failed: ${await readError(credentials)}`);
   }
   return { configured: true, registered: true };
 }
 
 async function send({ subscriberId, title, body, category, severity, deepLink, dedupeKey }) {
   if (!isConfigured()) return { configured: false, status: 'disabled' };
-  await ensureWorkflow();
-  const response = await request('/v1/events/trigger', {
+  const response = await request('/v1/notifications', {
     method: 'POST',
     headers: dedupeKey ? { 'Idempotency-Key': dedupeKey } : undefined,
     body: JSON.stringify({
-      // Novu's trigger contract uses workflowId. Keep the identifier stable
-      // across all PandaPay notification events so the provider can route the
-      // event to the configured workflow. The v1 API calls this field `name`;
-      // workflowId is retained for the deployed project adapter's compatibility.
-      name: WORKFLOW_IDENTIFIER,
-      workflowId: WORKFLOW_IDENTIFIER,
-      to: { subscriberId },
-      payload: {
+      user_id: subscriberId,
+      type: 'PANDAPAY_PUSH',
+      title,
+      body: body || '',
+      data: {
         title,
         body: body || '',
         category,
         severity: severity || 'info',
         deepLink: deepLink || '',
       },
-      transactionId: dedupeKey || undefined,
+      idempotency_key: dedupeKey || undefined,
     }),
   });
   if (!response.ok) {
     throw new Error(`Notification delivery request failed: ${await readError(response)}`);
   }
   const result = await readJson(response) || { status: 'accepted' };
-  // The provider can accept a syntactically valid trigger even when the
-  // subscriber has no registered FCM device. That is not delivery and must
-  // not be reported as a successful test notification.
   if (result?.status === 'no_devices') {
-    const error = new Error('Notification provider has no registered devices for this subscriber');
+    const error = new Error('Notification provider has no registered devices for this user');
     error.code = 'notification_no_devices';
     throw error;
   }
@@ -321,28 +175,7 @@ async function send({ subscriberId, title, body, category, severity, deepLink, d
 /** Send one announcement to every registered notification-service subscriber. */
 async function sendBroadcast({ title, body, category, severity, deepLink, dedupeKey }) {
   if (!isConfigured()) return { configured: false, status: 'disabled' };
-  await ensureWorkflow();
-  const response = await request('/v1/events/trigger/broadcast', {
-    method: 'POST',
-    headers: dedupeKey ? { 'Idempotency-Key': dedupeKey } : undefined,
-    body: JSON.stringify({
-      // Novu's v1 broadcast contract also calls the workflow identifier `name`.
-      name: WORKFLOW_IDENTIFIER,
-      workflowId: WORKFLOW_IDENTIFIER,
-      payload: {
-        title,
-        body: body || '',
-        category,
-        severity: severity || 'info',
-        deepLink: deepLink || '',
-      },
-      transactionId: dedupeKey || undefined,
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`Notification broadcast request failed: ${await readError(response)}`);
-  }
-  return (await readJson(response)) || { status: 'accepted' };
+  throw new Error('Notification broadcast is not supported by the deployed notification service');
 }
 
 module.exports = { isConfigured, registerDevice, send, sendBroadcast };
