@@ -160,7 +160,7 @@ async function ensureWorkflow() {
     const workflow = {
       name: WORKFLOW_NAME,
       workflowId: WORKFLOW_IDENTIFIER,
-      identifier: WORKFLOW_IDENTIFIER,
+      __source: 'editor',
       description: 'Generic FCM notification bridge for PandaPay inbox events.',
       active: true,
       triggers: [
@@ -169,12 +169,10 @@ async function ensureWorkflow() {
       steps: [
         {
           active: true,
-          template: {
-            name: WORKFLOW_NAME,
-            type: 'push',
-            title: '{{payload.title}}',
-            content: '{{payload.body}}',
-          },
+          name: WORKFLOW_NAME,
+          type: 'push',
+          title: '{{payload.title}}',
+          content: '{{payload.body}}',
         },
       ],
     };
@@ -259,7 +257,9 @@ async function send({ subscriberId, title, body, category, severity, deepLink, d
     body: JSON.stringify({
       // Novu's trigger contract uses workflowId. Keep the identifier stable
       // across all PandaPay notification events so the provider can route the
-      // event to the configured workflow.
+      // event to the configured workflow. The v1 API calls this field `name`;
+      // workflowId is retained for the deployed project adapter's compatibility.
+      name: WORKFLOW_IDENTIFIER,
       workflowId: WORKFLOW_IDENTIFIER,
       to: { subscriberId },
       payload: {
@@ -295,6 +295,8 @@ async function sendBroadcast({ title, body, category, severity, deepLink, dedupe
     method: 'POST',
     headers: dedupeKey ? { 'Idempotency-Key': dedupeKey } : undefined,
     body: JSON.stringify({
+      // Novu's v1 broadcast contract also calls the workflow identifier `name`.
+      name: WORKFLOW_IDENTIFIER,
       workflowId: WORKFLOW_IDENTIFIER,
       payload: {
         title,

@@ -82,8 +82,8 @@ test('send returns a queued provider response', async () => {
     );
     const trigger = requests.find(({ url }) => url.endsWith('/v1/events/trigger'));
     assert.ok(trigger);
+    assert.equal(JSON.parse(trigger.options.body).name, 'pandapay-push-notification');
     assert.equal(JSON.parse(trigger.options.body).workflowId, 'pandapay-push-notification');
-    assert.equal(JSON.parse(trigger.options.body).name, undefined);
   } finally {
     global.fetch = originalFetch;
     if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
@@ -242,7 +242,7 @@ test('sendBroadcast uses the provider fan-out endpoint and idempotency key', asy
     assert.ok(broadcast);
     assert.equal(broadcast.options.headers['Idempotency-Key'], 'broadcast-1');
     assert.equal(JSON.parse(broadcast.options.body).workflowId, 'pandapay-push-notification');
-    assert.equal(JSON.parse(broadcast.options.body).name, undefined);
+    assert.equal(JSON.parse(broadcast.options.body).name, 'pandapay-push-notification');
   } finally {
     global.fetch = originalFetch;
     if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
@@ -289,12 +289,13 @@ test('creates a valid push workflow through the deployed v1 workflow endpoint wh
     assert.ok(workflow);
     const workflowBody = JSON.parse(workflow.options.body);
     assert.equal(workflowBody.workflowId, 'pandapay-push-notification');
-    assert.equal(workflowBody.identifier, 'pandapay-push-notification');
+    assert.equal(workflowBody.name, 'PandaPay push notification');
     assert.equal(workflowBody.triggers[0].identifier, 'pandapay-push-notification');
-    assert.equal(workflowBody.steps[0].template.type, 'push');
-    assert.equal(workflowBody.steps[0].template.name, 'PandaPay push notification');
-    assert.equal(workflowBody.steps[0].template.title, '{{payload.title}}');
-    assert.equal(workflowBody.steps[0].template.content, '{{payload.body}}');
+    assert.equal(workflowBody.__source, 'editor');
+    assert.equal(workflowBody.steps[0].type, 'push');
+    assert.equal(workflowBody.steps[0].name, 'PandaPay push notification');
+    assert.equal(workflowBody.steps[0].title, '{{payload.title}}');
+    assert.equal(workflowBody.steps[0].content, '{{payload.body}}');
   } finally {
     global.fetch = originalFetch;
     if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
