@@ -66,7 +66,13 @@ function extractDueDate(body) {
 
   const patterns = [
     new RegExp(`\\b(?:payment|amount|minimum|bill|total)?\\s*(?:is\\s+)?due\\s*(?:date\\s*)?(?:is|on|by|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
-    new RegExp(`\\bdue\\s+date\\s*(?:is|on|by|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
+    // Many issuers do not use the words "due date". They instruct the
+    // customer to pay/keep/arrange the amount by a date instead. Restrict
+    // this to payment-intent verbs so an ordinary transaction date cannot be
+    // mistaken for a due date.
+    new RegExp(`\\b(?:please\\s+)?(?:pay|keep|maintain|arrange|settle|clear|make\\s+(?:the\\s+)?payment)\\b[\\s\\S]{0,120}?\\b(?:on\\s+or\\s+before|on\\/before|latest\\s+by|by|before)\\s+(?:the\\s+)?(?:date\\s*)?(?:is\\s*)?(${DATE_TOKEN})`, 'i'),
+    new RegExp(`\\b(?:payment|amount|minimum|bill|total)\\b[\\s\\S]{0,100}?\\b(?:must|should|needs?\\s+to|is)(?:\\s+to)?\\s+(?:be\\s+)?(?:paid|made|cleared|settled)\\s+(?:on\\s+or\\s+before|by|before|on)\\s+(${DATE_TOKEN})`, 'i'),
+    new RegExp(`\\blast\\s+date\\s+(?:for\\s+)?(?:payment|paying|pay)\\s*(?:is|on|by|:)\\s*(${DATE_TOKEN})`, 'i'),
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);

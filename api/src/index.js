@@ -3804,14 +3804,15 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       );
 
       const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
+      const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
+      const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
+        body,
+        patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
+      });
       if (!parsed.ok) {
         // Limit alerts are not spend transactions, but an explicit credit
         // limit can still safely complete a card that has no limit yet.
         const limitSync = await importResolvers.syncCreditLimitFromSms(client, req.userId, {
-          body,
-          patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
-        });
-        const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
           body,
           patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
         });
@@ -3865,7 +3866,6 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       // occasionally the next morning; filing it under the moment the
       // device happened to forward it puts spend in the wrong week and, at
       // a month boundary, the wrong month.
-      const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
       const parsedDate = parseTransactionDate(parsed.fields.date, occurred);
       // The request timestamp is the SMS-received time and is used for the
       // accounting date only when the bank's own date cannot be parsed. The
@@ -3905,17 +3905,37 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
         // Parsed fine, but we can't say which card it belongs to. Filed for
         // the user to confirm rather than rejected — the old 400 threw away
         // a perfectly good transaction because one field was unknown.
-        return { status: 200, ...inserted, patternId: parsed.patternId };
+        return {
+          status: 200,
+          ...inserted,
+          patternId: parsed.patternId,
+          dueDateDetected: Boolean(dueDaySync),
+          dueDayUpdated: Boolean(dueDaySync?.updated),
+        };
       }
 
       if (inserted.status === 200 && inserted.duplicate) {
         // Already imported. Reported as its own outcome rather than folded
         // into `parsed: true`, so the client can tell the user "42 already
         // imported, skipped" instead of counting them again.
-        return { status: 200, parsed: true, duplicate: true, patternId: parsed.patternId };
+        return {
+          status: 200,
+          parsed: true,
+          duplicate: true,
+          patternId: parsed.patternId,
+          dueDateDetected: Boolean(dueDaySync),
+          dueDayUpdated: Boolean(dueDaySync?.updated),
+        };
       }
       if (inserted.status !== 201) return inserted;
-      return { status: 201, parsed: true, patternId: parsed.patternId, ...inserted };
+      return {
+        status: 201,
+        parsed: true,
+        patternId: parsed.patternId,
+        dueDateDetected: Boolean(dueDaySync),
+        dueDayUpdated: Boolean(dueDaySync?.updated),
+        ...inserted,
+      };
     });
 
     if (result.status !== 201 && result.status !== 200) {
@@ -3991,12 +4011,13 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         }
 
         const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
+        const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
+        const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
+          body,
+          patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
+        });
         if (!parsed.ok) {
           await importResolvers.syncCreditLimitFromSms(client, req.userId, {
-            body,
-            patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
-          });
-          const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
             body,
             patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
           });
@@ -4032,7 +4053,6 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           );
         }
 
-        const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
         await importResolvers.syncCreditLimitFromSms(client, req.userId, {
           body,
           patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
@@ -4061,13 +4081,36 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         });
 
         if (inserted.needsReview) {
-          results.push({ index: i, outcome: 'needs_review', needsReviewItemId: inserted.needsReviewItemId });
+          results.push({
+            index: i,
+            outcome: 'needs_review',
+            needsReviewItemId: inserted.needsReviewItemId,
+            dueDateDetected: Boolean(dueDaySync),
+            dueDayUpdated: Boolean(dueDaySync?.updated),
+          });
         } else if (inserted.status === 200 && inserted.duplicate) {
-          results.push({ index: i, outcome: 'duplicate' });
+          results.push({
+            index: i,
+            outcome: 'duplicate',
+            dueDateDetected: Boolean(dueDaySync),
+            dueDayUpdated: Boolean(dueDaySync?.updated),
+          });
         } else if (inserted.status === 201) {
-          results.push({ index: i, outcome: 'imported', transactionId: inserted.transaction.id });
+          results.push({
+            index: i,
+            outcome: 'imported',
+            transactionId: inserted.transaction.id,
+            dueDateDetected: Boolean(dueDaySync),
+            dueDayUpdated: Boolean(dueDaySync?.updated),
+          });
         } else {
-          results.push({ index: i, outcome: 'error', reason: inserted.error });
+          results.push({
+            index: i,
+            outcome: 'error',
+            reason: inserted.error,
+            dueDateDetected: Boolean(dueDaySync),
+            dueDayUpdated: Boolean(dueDaySync?.updated),
+          });
         }
       }
 
