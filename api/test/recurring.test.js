@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { detectRecurringSeries, annualCost } = require('../src/recurring');
+const { detectRecurringSeries, annualCost, isUsableSubscriptionName } = require('../src/recurring');
 
 /**
  * Subscription detection is deliberately conservative, and these tests are
@@ -113,6 +113,19 @@ test('charges with no merchant name are never grouped', () => {
     txn('', 499, '2026-06-30'),
   ];
   assert.strictEqual(detectRecurringSeries(rows).length, 0);
+});
+
+test('placeholder names from mandate alerts are never treated as merchants', () => {
+  const rows = [
+    ...monthly('7308080808', 2000, '2026-05-01', 3),
+    ...monthly('31/12/2035', 1850, '2026-05-01', 3),
+    ...monthly('MONTHLY', 1649, '2026-05-01', 3),
+  ];
+  assert.equal(detectRecurringSeries(rows).length, 0);
+  assert.equal(isUsableSubscriptionName('OpenAI'), true);
+  assert.equal(isUsableSubscriptionName('7308080808'), false);
+  assert.equal(isUsableSubscriptionName('31/12/2035'), false);
+  assert.equal(isUsableSubscriptionName('MONTHLY'), false);
 });
 
 test('merchant name formatting differences are one series, not several', () => {

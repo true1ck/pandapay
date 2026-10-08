@@ -11,12 +11,13 @@ import 'package:pandapay/features/insights/subscriptions_screen.dart';
 /// "nothing here" and "nothing here YET" look identical.
 ///
 /// Subscriptions only appear once a third matching charge has been
-/// detected, so the empty state is a waiting room, not a dead end. Found on
-/// a real device: after the third charge landed, the screen kept saying "no
-/// repeating charges" because the empty state had no RefreshIndicator and
-/// the provider stayed cached until the user navigated away and back.
+/// detected, so the empty state is a waiting room, not a dead end. The empty
+/// state must stay refreshable when the report has no confirmed service with
+/// a reliable renewal date.
 void main() {
-  testWidgets('the subscriptions empty state can be pulled to refresh', (tester) async {
+  testWidgets('the subscriptions empty state can be pulled to refresh', (
+    tester,
+  ) async {
     var fetches = 0;
     await tester.pumpWidget(
       ProviderScope(
@@ -31,15 +32,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('No repeating charges'), findsOneWidget);
+    expect(find.textContaining('No confirmed subscriptions'), findsOneWidget);
     expect(
       find.byType(RefreshableEmptyState),
       findsOneWidget,
-      reason: 'a plain EmptyState is not scrollable, so a pull gesture would never register',
+      reason:
+          'a plain EmptyState is not scrollable, so a pull gesture would never register',
     );
     expect(fetches, 1);
 
-    await tester.fling(find.byType(RefreshableEmptyState), const Offset(0, 320), 1000);
+    await tester.fling(
+      find.byType(RefreshableEmptyState),
+      const Offset(0, 320),
+      1000,
+    );
     await tester.pumpAndSettle();
 
     expect(fetches, greaterThan(1), reason: 'the pull must actually refetch');

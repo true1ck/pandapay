@@ -38,6 +38,49 @@ const MIN_CADENCE_DAYS = 6;
 const MAX_CADENCE_DAYS = 400;
 
 /**
+ * A bank alert can put a date, account number, or cadence label after
+ * "for". Those values are not merchant names, even when the rest of the
+ * message looks like a mandate confirmation. Keep this check shared by the
+ * SMS parser, detector, and API read path so old false-positive rows are not
+ * shown while the database is being repaired naturally.
+ */
+function isUsableSubscriptionName(name) {
+  const value = String(name || '').replace(/\s+/g, ' ').trim();
+  if (value.length < 2 || value.length > 100) return false;
+  if (!/[A-Za-z]{2,}/.test(value)) return false;
+
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (
+    /^(?:daily|weekly|fortnightly|monthly|quarterly|half yearly|yearly|annual)(?:\s+(?:payment|charge|debit|subscription|mandate|autopay|plan))?$/.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+  if (/^(?:account|bank|upi|vpa|mandate|instruction|reference|ref|unknown)$/.test(normalized)) {
+    return false;
+  }
+  return true;
+}
+
+/** Only rows with enough data to show a truthful renewal card are public. */
+function isDisplayableSubscriptionRecord(record) {
+  const name = record?.displayName ?? record?.display_name;
+  const amount = Number(record?.typicalAmountInr ?? record?.typical_amount_inr);
+  const cadence = Number(record?.cadenceDays ?? record?.cadence_days);
+  const next = record?.nextExpectedOn ?? record?.next_expected_on;
+  return (
+    isUsableSubscriptionName(name) &&
+    Number.isFinite(amount) &&
+    amount > 0 &&
+    Number.isInteger(cadence) &&
+    cadence >= MIN_CADENCE_DAYS &&
+    cadence <= MAX_CADENCE_DAYS &&
+    Boolean(next)
+  );
+}
+
+/**
  * The key two charges must share to be considered the same subscription.
  *
  * Deliberately NOT `normalizeMerchant` on its own. That function strips to
@@ -93,6 +136,7 @@ function daysBetween(a, b) {
 function detectRecurringSeries(rows) {
   const byMerchant = new Map();
   for (const row of rows) {
+    if (!isUsableSubscriptionName(row.merchant_name)) continue;
     const key = merchantSeriesKey(row.merchant_name);
     // A charge with no merchant name can't be grouped with anything — two
     // unnamed ₹499 charges are not evidence of a subscription.
@@ -173,6 +217,8 @@ module.exports = {
   detectRecurringSeries,
   merchantSeriesKey,
   annualCost,
+  isUsableSubscriptionName,
+  isDisplayableSubscriptionRecord,
   MIN_OCCURRENCES,
   AMOUNT_TOLERANCE,
   CADENCE_TOLERANCE,

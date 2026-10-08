@@ -44,3 +44,13 @@ test('does not treat a cancelled UPI mandate as a subscription', () => {
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'non_mandate_alert');
 });
+
+test('rejects dates, account numbers, and cadence labels as merchants', () => {
+  for (const merchant of ['7308080808', '31/12/2035', 'MONTHLY']) {
+    const result = parseSubscriptionMandate({
+      body: `UPI AutoPay mandate for ${merchant} has been created. Amount Rs. 1,649 every month.`,
+    });
+    assert.equal(result.ok, false, merchant);
+    assert.equal(result.reason, 'mandate_merchant_invalid', merchant);
+  }
+});

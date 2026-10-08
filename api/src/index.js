@@ -17,7 +17,12 @@ const rewardMath = require('./reward_math');
 const { AMOUNT_TOLERANCE_INR, MAX_TIME_DISTANCE_MS, bestDuplicate } = require('./transaction_dedup');
 const { emailSourceKey } = require('./source_identity');
 const spendReports = require('./spend_reports');
-const { detectRecurringSeries, annualCost, merchantSeriesKey } = require('./recurring');
+const {
+  detectRecurringSeries,
+  annualCost,
+  merchantSeriesKey,
+  isDisplayableSubscriptionRecord,
+} = require('./recurring');
 const { buildMonthlyReport } = require('./monthly_report');
 const { csvDocument } = require('./csv');
 const { startImapPoller, fetchRecentMessages } = require('./imap_poller');
@@ -5420,7 +5425,12 @@ app.get('/recurring', requireAuth, async (req, res) => {
         [req.userId]
       );
 
-      const series = stored.rows.map((r) => ({
+      // The parser used to accept dates, account numbers, and labels such as
+      // "MONTHLY" as merchants. Ignore those legacy rows at the read
+      // boundary as well as fixing new ingestion, so an existing account is
+      // corrected without a destructive migration.
+      const validRows = stored.rows.filter(isDisplayableSubscriptionRecord);
+      const series = validRows.map((r) => ({
         id: r.id,
         displayName: r.display_name,
         typicalAmountInr: Number(r.typical_amount_inr),

@@ -1,4 +1,5 @@
 const { extractVpa } = require('./merchant_category');
+const { isUsableSubscriptionName } = require('./recurring');
 
 // This parser is intentionally narrower than the spend parser. A word such
 // as "autopay" in a bill reminder is not proof that a subscription exists;
@@ -61,6 +62,9 @@ function parseSubscriptionMandate(sms) {
 
   const merchant = merchantFromBody(body);
   if (!merchant) return { ok: false, reason: 'mandate_merchant_missing' };
+  if (!isUsableSubscriptionName(merchant)) {
+    return { ok: false, reason: 'mandate_merchant_invalid' };
+  }
 
   const lower = body.toLowerCase();
   const instrument = /\b(?:upi|vpa|e[-\s]?mandate|emandate)\b/.test(lower)

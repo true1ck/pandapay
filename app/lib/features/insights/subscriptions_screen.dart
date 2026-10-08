@@ -9,6 +9,25 @@ import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
 import '../../main.dart' show MoneyText;
 
+bool _isDisplayableSubscription(RecurringSeries series) {
+  final name = series.displayName.trim();
+  if (name.length < 2 || !RegExp(r'[A-Za-z]{2,}').hasMatch(name)) {
+    return false;
+  }
+  if (series.typicalAmount.paise <= 0 || series.nextExpectedOn == null) {
+    return false;
+  }
+
+  final normalized = name
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .trim();
+  return !RegExp(
+    r'^(daily|weekly|fortnightly|monthly|quarterly|half yearly|yearly|annual)\s*'
+    r'(payment|charge|debit|subscription|mandate|autopay|plan)?$',
+  ).hasMatch(normalized);
+}
+
 /// Subscriptions — the charges that repeat, found in the user's own history.
 ///
 /// Detected rather than declared. Asking someone to list their
@@ -31,7 +50,10 @@ class SubscriptionsScreen extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: BambooInk.paper,
         elevation: 0,
-        title: Text('Subscriptions', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Subscriptions',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: report.when(
@@ -45,38 +67,45 @@ class SubscriptionsScreen extends ConsumerWidget {
               return const EmptyState(
                 icon: Icons.lock_outline_rounded,
                 title: 'Sign in to find your subscriptions',
-                message: 'Recurring charges are found in your transaction history, which lives '
+                message:
+                    'Recurring charges are found in your transaction history, which lives '
                     'with your account.',
               );
             }
-            if (data.series.isEmpty) {
+            final subscriptions = data.series
+                .where(_isDisplayableSubscription)
+                .toList(growable: false);
+            if (subscriptions.isEmpty) {
               // Refreshable, not a dead end: this screen only fills in once
               // a third matching charge lands, so "nothing yet" is the
               // state a user most wants to retry from.
               return RefreshableEmptyState(
                 icon: Icons.autorenew_rounded,
-                title: 'No repeating charges found yet',
-                message: 'PandaPay looks for the same merchant charging a similar amount on a '
-                    'regular cycle, and also watches for explicit UPI or card mandate SMS alerts.',
+                title: 'No confirmed subscriptions found yet',
+                message:
+                    'PandaPay shows a service only when it has a real merchant name, '
+                    'amount, and a predictable renewal date.',
                 onRefresh: () async => ref.invalidate(recurringReportProvider),
               );
             }
+            final totalAnnual = subscriptions.fold(
+              const Money.zero(),
+              (total, subscription) => total + subscription.annualCost,
+            );
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(recurringReportProvider),
               child: ListView(
                 padding: const EdgeInsets.all(AppSpace.lg),
                 children: [
-                  _TotalCard(report: data),
+                  _TotalCard(series: subscriptions, totalAnnual: totalAnnual),
                   const SizedBox(height: AppSpace.lg),
-                  for (final s in data.series) ...[
+                  for (final s in subscriptions) ...[
                     _SeriesCard(series: s),
                     const SizedBox(height: AppSpace.md),
                   ],
                   const SizedBox(height: AppSpace.sm),
                   Text(
-                    'Found by looking for the same merchant charging a similar amount on a '
-                    'regular cycle. If something here isn\'t a subscription, dismiss it and it '
-                    'won\'t come back.',
+                    'Only confirmed services with a renewal date are shown.',
                     style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                   ),
                 ],
@@ -90,12 +119,13 @@ class SubscriptionsScreen extends ConsumerWidget {
 }
 
 class _TotalCard extends StatelessWidget {
-  final RecurringReport report;
-  const _TotalCard({required this.report});
+  final List<RecurringSeries> series;
+  final Money totalAnnual;
+  const _TotalCard({required this.series, required this.totalAnnual});
 
   @override
   Widget build(BuildContext context) {
-    final monthly = Money.fromPaise((report.totalAnnual.paise / 12).round());
+    final monthly = Money.fromPaise((totalAnnual.paise / 12).round());
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
@@ -106,16 +136,19 @@ class _TotalCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${report.series.length} repeating charge${report.series.length == 1 ? '' : 's'}',
+            '${series.length} subscription${series.length == 1 ? '' : 's'}',
             style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
           ),
           const SizedBox(height: 4),
           MoneyText(
-            report.totalAnnual,
+            totalAnnual,
             confidence: Confidence.estimated,
             style: BambooFonts.money(30, color: BambooInk.onSlate),
           ),
-          Text('a year', style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
+          Text(
+            'a year',
+            style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+          ),
           const SizedBox(height: 6),
           Text(
             'About ${monthly.format(hidePaise: true)} a month',
@@ -127,17 +160,27 @@ class _TotalCard extends StatelessWidget {
   }
 }
 
-class _SeriesCard extends ConsumerWidget {
+class _SeriesCard extends StatelessWidget {
   final RecurringSeries series;
   const _SeriesCard({required this.series});
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final next = series.nextExpectedOn;
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -153,7 +196,11 @@ class _SeriesCard extends ConsumerWidget {
               Expanded(
                 child: Text(
                   series.displayName,
-                  style: BambooFonts.ui(14.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                  style: BambooFonts.ui(
+                    14.5,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -161,7 +208,11 @@ class _SeriesCard extends ConsumerWidget {
                 MoneyText(
                   series.typicalAmount,
                   confidence: Confidence.estimated,
-                  style: BambooFonts.ui(14.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                  style: BambooFonts.ui(
+                    14.5,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
                 )
               else
                 Text(
@@ -177,99 +228,15 @@ class _SeriesCard extends ConsumerWidget {
                 : '${series.cadenceLabel} · amount not stated in the SMS',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
-          if (series.isMandate) ...[
-            const SizedBox(height: 5),
-            Row(
-              children: [
-                const Icon(Icons.verified_outlined, size: 15, color: BambooInk.jade),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    'Mandate detected from SMS · not counted as a spend until a debit arrives',
-                    style: BambooFonts.ui(11.5, color: BambooInk.jade),
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (series.categoryName != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              'Category: ${series.categoryName}',
-              style: BambooFonts.ui(12, color: BambooInk.ink500),
-            ),
-          ],
-          if (series.paymentMethod != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              'Payment: ${_paymentMethodLabel(series.paymentMethod!)}',
-              style: BambooFonts.ui(12, color: BambooInk.ink500),
-            ),
-          ],
           if (next != null) ...[
             const SizedBox(height: 2),
             Text(
-              // "Expected", never "due": this is a prediction from an
-              // observed pattern, not a bill the app has been told about.
-              'Next expected around ${next.day} ${_months[next.month - 1]}',
+              'Renews around ${next.day} ${_months[next.month - 1]} ${next.year}',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],
-          if (series.cardName != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              'Usually on ${series.cardName}',
-              style: BambooFonts.ui(12, color: BambooInk.ink500),
-            ),
-          ],
-          const SizedBox(height: AppSpace.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 32),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: () => _dismiss(context, ref),
-              child: Text(
-                'Not a subscription',
-                style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink500),
-              ),
-            ),
-          ),
         ],
       ),
     );
-  }
-
-  Future<void> _dismiss(BuildContext context, WidgetRef ref) async {
-    final repo = ref.read(spendReportsRepositoryProvider);
-    if (repo == null) return;
-    try {
-      await repo.dismissRecurring(series.id);
-      ref.invalidate(recurringReportProvider);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingErrorMessage(e))),
-        );
-      }
-    }
-  }
-
-  String _paymentMethodLabel(String value) {
-    switch (value) {
-      case 'credit_card':
-        return 'Credit card';
-      case 'debit_card':
-        return 'Debit card';
-      case 'upi_bank':
-        return 'UPI / bank account';
-      case 'wallet':
-        return 'Wallet';
-      default:
-        return value;
-    }
   }
 }
