@@ -12,8 +12,17 @@
 
 const config = require('./config');
 
-const WORKFLOW_IDENTIFIER = 'pandapay-notification';
+// Keep this identifier separate from the first draft workflow. The provider
+// derives the v1 trigger identifier from the workflow name, so changing the
+// name/identifier together also avoids reusing a malformed workflow created by
+// an older adapter version.
+const WORKFLOW_IDENTIFIER = 'pandapay-push-notification';
+const WORKFLOW_NAME = 'PandaPay push notification';
+const WORKFLOW_GROUP_NAME = 'PandaPay';
 const REQUEST_TIMEOUT_MS = config.notificationServiceTimeoutMs;
+
+let notificationGroupId = null;
+let workflowReadyPromise = null;
 
 function isConfigured() {
   return Boolean(config.notificationServiceUrl && config.notificationServiceApiKey);
@@ -49,39 +58,92 @@ async function readError(response) {
   return `${response.status} ${body.slice(0, 500)}`.trim();
 }
 
-async function ensureWorkflow() {
-  const existing = await request(`/v1/workflows/${WORKFLOW_IDENTIFIER}`);
-  if (existing.ok) return;
-  if (existing.status !== 404) {
-    throw new Error(`Notification workflow lookup failed: ${await readError(existing)}`);
+async function readJson(response) {
+  return response.json().catch(() => null);
+}
+
+async function ensureNotificationGroup() {
+  if (notificationGroupId) return notificationGroupId;
+
+  const listed = await request('/v1/notification-groups');
+  if (!listed.ok) {
+    throw new Error(`Notification group lookup failed: ${await readError(listed)}`);
   }
 
-  const created = await request('/v1/workflows', {
+  const listedPayload = await readJson(listed);
+  const groups = Array.isArray(listedPayload?.data)
+    ? listedPayload.data
+    : Array.isArray(listedPayload)
+      ? listedPayload
+      : [];
+  const existing = groups.find((group) => group?.name === WORKFLOW_GROUP_NAME);
+  const existingId = existing?._id || existing?.id;
+  if (existingId) {
+    notificationGroupId = existingId;
+    return notificationGroupId;
+  }
+
+  const created = await request('/v1/notification-groups', {
     method: 'POST',
-    body: JSON.stringify({
-      identifier: WORKFLOW_IDENTIFIER,
-      name: 'PandaPay notification',
-      description: 'Generic FCM notification bridge for PandaPay inbox events.',
-      active: true,
-      steps: [
-        {
-          template: {
-            title: '{{payload.title}}',
-            body: '{{payload.body}}',
-            data: {
-              category: '{{payload.category}}',
-              severity: '{{payload.severity}}',
-              deepLink: '{{payload.deepLink}}',
+    body: JSON.stringify({ name: WORKFLOW_GROUP_NAME }),
+  });
+  if (!created.ok) {
+    throw new Error(`Notification group creation failed: ${await readError(created)}`);
+  }
+
+  const createdPayload = await readJson(created);
+  const createdId = createdPayload?.data?._id || createdPayload?.data?.id;
+  if (!createdId) {
+    throw new Error('Notification group creation returned no group id');
+  }
+  notificationGroupId = createdId;
+  return notificationGroupId;
+}
+
+async function ensureWorkflow() {
+  if (workflowReadyPromise) return workflowReadyPromise;
+
+  workflowReadyPromise = (async () => {
+    const existing = await request(`/v1/workflows/${WORKFLOW_IDENTIFIER}`);
+    if (existing.ok) return;
+    if (existing.status !== 404) {
+      throw new Error(`Notification workflow lookup failed: ${await readError(existing)}`);
+    }
+
+    const groupId = await ensureNotificationGroup();
+    const created = await request('/v1/workflows', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: WORKFLOW_NAME,
+        notificationGroupId: groupId,
+        description: 'Generic FCM notification bridge for PandaPay inbox events.',
+        active: true,
+        steps: [
+          {
+            active: true,
+            template: {
+              type: 'PUSH',
+              title: '{{payload.title}}',
+              content: '{{payload.body}}',
             },
           },
-        },
-      ],
-    }),
-  });
-  // A second API instance can create the workflow at the same time. A 409
-  // means the desired workflow already exists, so it is safe to continue.
-  if (!created.ok && created.status !== 409) {
-    throw new Error(`Notification workflow creation failed: ${await readError(created)}`);
+        ],
+      }),
+    });
+    // A second API instance can create the workflow at the same time. A 409
+    // means the desired workflow already exists, so it is safe to continue.
+    if (!created.ok && created.status !== 409) {
+      throw new Error(`Notification workflow creation failed: ${await readError(created)}`);
+    }
+  })();
+
+  try {
+    await workflowReadyPromise;
+  } catch (error) {
+    // A transient provider failure should be retried by the next request,
+    // rather than leaving a rejected promise cached for the process lifetime.
+    workflowReadyPromise = null;
+    throw error;
   }
 }
 
@@ -101,11 +163,25 @@ async function registerDevice({ subscriberId, token, platform, email, displayNam
       email: email || null,
       timezone: timezone || null,
       data: { platform: platform || 'unknown' },
-      channels: [{ providerId: 'fcm', credentials: { deviceTokens: [token] } }],
     }),
   });
   if (!response.ok) {
     throw new Error(`Notification device registration failed: ${await readError(response)}`);
+  }
+
+  // PATCH is the provider's idempotent append-credentials endpoint. Using it
+  // instead of embedding channels in the deprecated subscriber upsert keeps
+  // multiple phones for one account registered and avoids replacing an
+  // already-registered device token.
+  const credentials = await request(`/v1/subscribers/${encodeURIComponent(subscriberId)}/credentials`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      providerId: 'fcm',
+      credentials: { deviceTokens: [token] },
+    }),
+  });
+  if (!credentials.ok) {
+    throw new Error(`Notification device credential registration failed: ${await readError(credentials)}`);
   }
   return { configured: true, registered: true };
 }

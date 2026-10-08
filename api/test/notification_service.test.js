@@ -31,7 +31,7 @@ test('send rejects provider responses with no registered devices', async () => {
   process.env.NOTIFICATION_SERVICE_URL = 'http://notifications.test';
   process.env.NOTIFICATION_SERVICE_API_KEY = 'test-key';
   global.fetch = async (url) => {
-    if (url.endsWith('/v1/workflows/pandapay-notification')) {
+    if (url.endsWith('/v1/workflows/pandapay-push-notification')) {
       return new Response('', { status: 200 });
     }
     return new Response(JSON.stringify({ status: 'no_devices', queued: 0 }), {
@@ -64,7 +64,7 @@ test('send returns a queued provider response', async () => {
   process.env.NOTIFICATION_SERVICE_URL = 'http://notifications.test';
   process.env.NOTIFICATION_SERVICE_API_KEY = 'test-key';
   global.fetch = async (url) => {
-    if (url.endsWith('/v1/workflows/pandapay-notification')) {
+    if (url.endsWith('/v1/workflows/pandapay-push-notification')) {
       return new Response('', { status: 200 });
     }
     return new Response(JSON.stringify({ status: 'processed', queued: 1 }), {
@@ -98,7 +98,7 @@ test('sendBroadcast uses the provider fan-out endpoint and idempotency key', asy
   const requests = [];
   global.fetch = async (url, options = {}) => {
     requests.push({ url, options });
-    if (url.endsWith('/v1/workflows/pandapay-notification')) {
+    if (url.endsWith('/v1/workflows/pandapay-push-notification')) {
       return new Response('', { status: 200 });
     }
     return new Response(JSON.stringify({ status: 'processed', transactionId: 'broadcast-1' }), {
@@ -119,7 +119,109 @@ test('sendBroadcast uses the provider fan-out endpoint and idempotency key', asy
     const broadcast = requests.find(({ url }) => url.endsWith('/v1/events/trigger/broadcast'));
     assert.ok(broadcast);
     assert.equal(broadcast.options.headers['Idempotency-Key'], 'broadcast-1');
-    assert.equal(JSON.parse(broadcast.options.body).name, 'pandapay-notification');
+    assert.equal(JSON.parse(broadcast.options.body).name, 'pandapay-push-notification');
+  } finally {
+    global.fetch = originalFetch;
+    if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
+    else process.env.NOTIFICATION_SERVICE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.NOTIFICATION_SERVICE_API_KEY;
+    else process.env.NOTIFICATION_SERVICE_API_KEY = previousKey;
+    restoreTestConfig(previous);
+  }
+});
+
+test('creates a valid push workflow and notification group when missing', async () => {
+  const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
+  const previousKey = process.env.NOTIFICATION_SERVICE_API_KEY;
+  const previous = {};
+  setTestConfig(previous);
+  process.env.NOTIFICATION_SERVICE_URL = 'http://notifications.test';
+  process.env.NOTIFICATION_SERVICE_API_KEY = 'test-key';
+  const requests = [];
+  global.fetch = async (url, options = {}) => {
+    requests.push({ url, options });
+    if (url.endsWith('/v1/workflows/pandapay-push-notification')) {
+      return new Response('', { status: 404 });
+    }
+    if (url.endsWith('/v1/notification-groups') && (!options.method || options.method === 'GET')) {
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (url.endsWith('/v1/notification-groups') && options.method === 'POST') {
+      return new Response(JSON.stringify({ data: { _id: 'group-1' } }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (url.endsWith('/v1/workflows')) {
+      return new Response(JSON.stringify({ data: { identifier: 'pandapay-push-notification' } }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ status: 'processed' }), {
+      status: 201,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const service = loadService();
+    await service.send({ subscriberId: 'user-1', title: 'Test', body: 'Body' });
+    const workflow = requests.find(({ url, options }) =>
+      url.endsWith('/v1/workflows') && options.method === 'POST');
+    assert.ok(workflow);
+    const workflowBody = JSON.parse(workflow.options.body);
+    assert.equal(workflowBody.notificationGroupId, 'group-1');
+    assert.equal(workflowBody.steps[0].template.type, 'PUSH');
+    assert.equal(workflowBody.steps[0].template.title, '{{payload.title}}');
+    assert.equal(workflowBody.steps[0].template.content, '{{payload.body}}');
+  } finally {
+    global.fetch = originalFetch;
+    if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
+    else process.env.NOTIFICATION_SERVICE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.NOTIFICATION_SERVICE_API_KEY;
+    else process.env.NOTIFICATION_SERVICE_API_KEY = previousKey;
+    restoreTestConfig(previous);
+  }
+});
+
+test('registerDevice appends the FCM token without replacing other devices', async () => {
+  const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
+  const previousKey = process.env.NOTIFICATION_SERVICE_API_KEY;
+  const previous = {};
+  setTestConfig(previous);
+  process.env.NOTIFICATION_SERVICE_URL = 'http://notifications.test';
+  process.env.NOTIFICATION_SERVICE_API_KEY = 'test-key';
+  const requests = [];
+  global.fetch = async (url, options = {}) => {
+    requests.push({ url, options });
+    return new Response(JSON.stringify({ data: { subscriberId: 'user-1' } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const service = loadService();
+    await service.registerDevice({
+      subscriberId: 'user-1',
+      token: 'fcm-token-1',
+      platform: 'android',
+      email: 'user@example.com',
+      displayName: 'Test User',
+      timezone: 'Asia/Kolkata',
+    });
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].options.method, 'PUT');
+    assert.equal(requests[1].url, 'http://notifications.test/v1/subscribers/user-1/credentials');
+    assert.equal(requests[1].options.method, 'PATCH');
+    assert.deepEqual(JSON.parse(requests[1].options.body), {
+      providerId: 'fcm',
+      credentials: { deviceTokens: ['fcm-token-1'] },
+    });
   } finally {
     global.fetch = originalFetch;
     if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
