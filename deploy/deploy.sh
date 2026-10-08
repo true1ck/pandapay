@@ -21,8 +21,10 @@
 #   See db/seed/0005_publish_demo_cards.sql.
 # - It never runs db/seed/. Those are demo fixtures with approximate reward
 #   rates; SEED_DEMO_DATA must stay false here.
-# - It never touches .env. Secrets live only on the host and are gitignored,
-#   so `git reset --hard` below leaves them alone.
+# - It never replaces .env. Secrets live only on the host and are gitignored,
+#   so `git reset --hard` below leaves them alone. The CI workflow may pass
+#   the notification-provider variables explicitly; only those two keys are
+#   upserted below, never the whole file.
 set -euo pipefail
 
 SHA="${1:?usage: deploy.sh <commit-sha>}"
@@ -35,6 +37,45 @@ cd "$APP_DIR"
 
 echo "==> Preflight: .env must exist (it is gitignored and host-only)"
 test -s .env || { echo "FATAL: $APP_DIR/.env missing — refusing to deploy"; exit 1; }
+
+# The notification provider is a server-side integration. Keep its project
+# key out of the repository and the mobile app, but make the auto-deploy path
+# able to provision the two host-only values from GitHub environment secrets.
+# This is deliberately an allow-list: no other host secret can be changed by
+# the deployment workflow.
+upsert_env_value() {
+  local key="$1"
+  local value="$2"
+  local tmp=".env.tmp.$$"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { replaced = 0 }
+    index($0, key "=") == 1 {
+      print key "=" value
+      replaced = 1
+      next
+    }
+    { print }
+    END {
+      if (!replaced) print key "=" value
+    }
+  ' .env > "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" .env
+}
+
+if [ -n "${NOTIFICATION_SERVICE_URL:-}" ] || [ -n "${NOTIFICATION_SERVICE_API_KEY:-}" ]; then
+  [ -n "${NOTIFICATION_SERVICE_URL:-}" ] || {
+    echo "FATAL: NOTIFICATION_SERVICE_URL was not supplied"
+    exit 1
+  }
+  [ -n "${NOTIFICATION_SERVICE_API_KEY:-}" ] || {
+    echo "FATAL: NOTIFICATION_SERVICE_API_KEY was not supplied"
+    exit 1
+  }
+  upsert_env_value NOTIFICATION_SERVICE_URL "$NOTIFICATION_SERVICE_URL"
+  upsert_env_value NOTIFICATION_SERVICE_API_KEY "$NOTIFICATION_SERVICE_API_KEY"
+  echo "    notification provider configuration updated"
+fi
 
 echo "==> Backing up the database before migrating"
 mkdir -p "$BACKUP_DIR"

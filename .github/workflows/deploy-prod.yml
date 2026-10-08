@@ -83,9 +83,17 @@ jobs:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}
           SHA: ${{ steps.sha.outputs.sha }}
+          NOTIFICATION_SERVICE_URL: ${{ secrets.NOTIFICATION_SERVICE_URL }}
+          NOTIFICATION_SERVICE_API_KEY: ${{ secrets.NOTIFICATION_SERVICE_API_KEY }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
-            "bash -s -- $SHA" < deploy/deploy.sh
+          test -n "$NOTIFICATION_SERVICE_URL"
+          test -n "$NOTIFICATION_SERVICE_API_KEY"
+          {
+            printf 'export NOTIFICATION_SERVICE_URL=%q\n' "$NOTIFICATION_SERVICE_URL"
+            printf 'export NOTIFICATION_SERVICE_API_KEY=%q\n' "$NOTIFICATION_SERVICE_API_KEY"
+            cat deploy/deploy.sh
+          } | ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
+            "bash -s -- $SHA"
 
       - name: Verify production is healthy
         env:
