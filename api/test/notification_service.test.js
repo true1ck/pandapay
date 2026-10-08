@@ -306,6 +306,49 @@ test('creates a valid push workflow through the deployed v1 workflow endpoint wh
   }
 });
 
+test('repairs an existing workflow with legacy push controls', async () => {
+  const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
+  const previousKey = process.env.NOTIFICATION_SERVICE_API_KEY;
+  const previous = {};
+  setTestConfig(previous);
+  process.env.NOTIFICATION_SERVICE_URL = 'http://notifications.test';
+  process.env.NOTIFICATION_SERVICE_API_KEY = 'test-key';
+  const requests = [];
+  global.fetch = async (url, options = {}) => {
+    requests.push({ url, options });
+    if (url.endsWith('/v1/workflows') && (!options.method || options.method === 'GET')) {
+      return new Response(JSON.stringify({ data: [{
+        id: 'workflow-internal-id',
+        workflowId: 'pandapay-push-notification',
+        steps: [{ type: 'push', title: '{{payload.title}}', content: '{{payload.body}}' }],
+      }] }), { status: 200 });
+    }
+    if (url.endsWith('/v1/workflows/workflow-internal-id') && options.method === 'PUT') {
+      return new Response(JSON.stringify({ data: { workflowId: 'pandapay-push-notification' } }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ status: 'processed', queued: 1 }), { status: 201 });
+  };
+
+  try {
+    const service = loadService();
+    await service.send({ subscriberId: 'user-1', title: 'Test', body: 'Body' });
+    const update = requests.find(({ url, options }) => (
+      url.endsWith('/v1/workflows/workflow-internal-id') && options.method === 'PUT'
+    ));
+    assert.ok(update);
+    const body = JSON.parse(update.options.body);
+    assert.equal(body.steps[0].controlValues.subject, '{{payload.title}}');
+    assert.equal(body.steps[0].controlValues.body, '{{payload.body}}');
+  } finally {
+    global.fetch = originalFetch;
+    if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
+    else process.env.NOTIFICATION_SERVICE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.NOTIFICATION_SERVICE_API_KEY;
+    else process.env.NOTIFICATION_SERVICE_API_KEY = previousKey;
+    restoreTestConfig(previous);
+  }
+});
+
 test('registerDevice uses the deployed PUT credentials endpoint', async () => {
   const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
   const previousKey = process.env.NOTIFICATION_SERVICE_API_KEY;

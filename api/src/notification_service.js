@@ -142,6 +142,19 @@ function isWorkflowForIdentifier(workflow) {
     && workflow.triggers.some((trigger) => trigger?.identifier === WORKFLOW_IDENTIFIER);
 }
 
+function isUsablePushWorkflow(workflow) {
+  // Some provider adapters return only workflow metadata from the list
+  // endpoint. In that case, leave the existing workflow alone and let the
+  // trigger call report any provider-side problem. When steps are present,
+  // validate the exact V2 push controls that the provider executes.
+  if (!Array.isArray(workflow?.steps)) return true;
+  return workflow.steps.some((step) => (
+    step?.type === 'push'
+      && typeof step?.controlValues?.subject === 'string'
+      && typeof step?.controlValues?.body === 'string'
+  ));
+}
+
 async function findWorkflow() {
   const response = await request('/v1/workflows');
   if (!response.ok) {
@@ -155,7 +168,8 @@ async function ensureWorkflow() {
   if (workflowReadyPromise) return workflowReadyPromise;
 
   workflowReadyPromise = (async () => {
-    if (await findWorkflow()) return;
+    const existing = await findWorkflow();
+    if (existing && isUsablePushWorkflow(existing)) return;
 
     const workflow = {
       name: WORKFLOW_NAME,
@@ -181,17 +195,32 @@ async function ensureWorkflow() {
     if (process.env.NOTIFICATION_SERVICE_WORKFLOW_GROUP_ID) {
       workflow.notificationGroupId = process.env.NOTIFICATION_SERVICE_WORKFLOW_GROUP_ID;
     }
-    const created = await request('/v1/workflows', {
-      method: 'POST',
+    const workflowId = existing
+      && (existing.id || existing._id || existing.workflowId || existing.slug || WORKFLOW_IDENTIFIER);
+    const requestOptions = {
+      method: existing ? 'PUT' : 'POST',
       headers: { 'Idempotency-Key': idempotencyKey('workflow', WORKFLOW_IDENTIFIER) },
-      body: JSON.stringify(workflow),
-    });
+      body: JSON.stringify(existing
+        ? {
+          name: workflow.name,
+          description: workflow.description,
+          active: workflow.active,
+          workflowId: existing.workflowId || WORKFLOW_IDENTIFIER,
+          preferences: existing.preferences || { user: null },
+          steps: workflow.steps,
+        }
+        : workflow),
+    };
+    const created = await request(
+      existing ? `/v1/workflows/${encodeURIComponent(workflowId)}` : '/v1/workflows',
+      requestOptions,
+    );
     // A second API instance can create the workflow at the same time. A 409
     // means the desired workflow already exists, so it is safe to continue.
     if (!created.ok && created.status !== 409) {
       throw new Error(`Notification workflow creation failed: ${await readError(created)}`);
     }
-    if (created.status === 409 && !(await findWorkflow())) {
+    if (!existing && created.status === 409 && !(await findWorkflow())) {
       throw new Error('Notification workflow already exists but could not be found');
     }
   })();
