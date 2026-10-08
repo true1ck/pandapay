@@ -1529,6 +1529,10 @@ class UserCardsRepository {
         'severity': severity,
         'deepLink': deepLink,
         'dedupeKey': dedupeKey,
+        // NotificationGate displays this event locally. Remote push is an
+        // explicit server-side action, otherwise one event becomes two banners
+        // after FCM is configured.
+        'sendRemote': false,
       }),
     );
     if (response.statusCode != 201 && response.statusCode != 204) {

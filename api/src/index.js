@@ -1140,7 +1140,13 @@ app.post('/notification-devices', requireAuth, async (req, res) => {
       displayName,
       timezone,
     });
-    res.status(result.configured ? 201 : 202).json(result);
+    if (!result.configured) {
+      return res.status(503).json({
+        error: 'notification_service_not_configured',
+        message: 'Remote push delivery is not configured on the API',
+      });
+    }
+    res.status(201).json(result);
   } catch (err) {
     console.error('POST /notification-devices error', err);
     res.status(502).json({ error: 'notification_service_unavailable' });
@@ -1194,6 +1200,12 @@ app.post('/notifications/test', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('POST /notifications/test error', err);
+    if (err?.code === 'notification_no_devices') {
+      return res.status(409).json({
+        error: 'notification_device_not_registered',
+        message: 'No registered push device was found for this account',
+      });
+    }
     return res.status(502).json({ error: 'notification_service_unavailable' });
   }
 });
@@ -5666,9 +5678,12 @@ app.post('/notifications/read', requireAuth, async (req, res) => {
  * reappear if the preference is turned back on later.
  */
 app.post('/notifications', requireAuth, async (req, res) => {
-  const { category, severity, title, body, deepLink, dedupeKey } = req.body || {};
+  const { category, severity, title, body, deepLink, dedupeKey, sendRemote = false } = req.body || {};
   if (!category || !title) {
     return res.status(400).json({ error: 'category and title are required' });
+  }
+  if (typeof sendRemote !== 'boolean') {
+    return res.status(400).json({ error: 'sendRemote must be boolean' });
   }
   // 'streak' and 'card_added' have no preference column — they're in-app
   // consequences of the user's own action, not push-style interruptions.
@@ -5722,7 +5737,7 @@ app.post('/notifications', requireAuth, async (req, res) => {
     // delivery is best-effort: a temporary notification-service outage must
     // never turn a successful PandaPay notification into a failed product
     // action or make the app retry and duplicate the inbox row.
-    if (notificationService.isConfigured()) {
+    if (sendRemote && notificationService.isConfigured()) {
       notificationService
         .send({
           subscriberId: req.userId,
@@ -5739,6 +5754,63 @@ app.post('/notifications', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('POST /notifications error', err);
     res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /admin/notifications/broadcast — queues one push announcement for all
+ * registered notification-service subscribers. Normal users can only write
+ * their own inbox row; only an authenticated PandaPay admin can fan out.
+ */
+app.post('/admin/notifications/broadcast', requireAdmin, async (req, res) => {
+  const {
+    category = 'general',
+    severity = 'info',
+    title,
+    body = '',
+    deepLink = '/notifications',
+    dedupeKey,
+  } = req.body || {};
+  if (typeof title !== 'string' || title.trim().length < 1 || title.length > 160) {
+    return res.status(400).json({ error: 'title is required and must be at most 160 characters' });
+  }
+  if (typeof body !== 'string' || body.length > 2000) {
+    return res.status(400).json({ error: 'body must be at most 2000 characters' });
+  }
+  if (typeof category !== 'string' || category.length > 60) {
+    return res.status(400).json({ error: 'category is invalid' });
+  }
+  if (typeof severity !== 'string' || severity.length > 20) {
+    return res.status(400).json({ error: 'severity is invalid' });
+  }
+  if (!notificationService.isConfigured()) {
+    return res.status(503).json({
+      error: 'notification_service_not_configured',
+      message: 'Remote push delivery is not configured on the API',
+    });
+  }
+
+  const idempotencyKey = typeof dedupeKey === 'string' && dedupeKey.trim()
+    ? dedupeKey.trim().slice(0, 200)
+    : `pandapay-broadcast:${crypto.randomUUID()}`;
+  try {
+    const result = await notificationService.sendBroadcast({
+      title: title.trim(),
+      body,
+      category,
+      severity,
+      deepLink,
+      dedupeKey: idempotencyKey,
+    });
+    return res.status(202).json({
+      ok: true,
+      requested: true,
+      message: 'Global push notification accepted for delivery to registered devices',
+      transactionId: result?.transactionId || idempotencyKey,
+    });
+  } catch (err) {
+    console.error('POST /admin/notifications/broadcast error', err);
+    return res.status(502).json({ error: 'notification_service_unavailable' });
   }
 });
 

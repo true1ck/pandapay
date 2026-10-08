@@ -486,6 +486,9 @@ async function budgetSpend(client, userId, budget, { start, end }) {
     `profile_id = $1`,
     `status = 'active'`,
     `entry_kind = 'spend'`,
+    // Keep reports safe for databases created before the positive-amount
+    // constraint was deployed.
+    `amount_inr > 0`,
     `occurred_at >= $2`,
     `occurred_at < $3`,
   ];

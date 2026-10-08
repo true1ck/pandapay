@@ -23,20 +23,40 @@ import '../insights/payments_due_screen.dart' show paymentsDueProvider;
 /// geofencing's own "does not survive force-kill/reboot" note.
 class NotificationTriggerRunner {
   final Ref ref;
-  const NotificationTriggerRunner(this.ref);
+  bool _running = false;
+  bool _rerunRequested = false;
+
+  NotificationTriggerRunner(this.ref);
 
   Future<void> runAll() async {
-    // Independent try/catches: one failing check (e.g. a transient error
-    // reading a provider that hasn't resolved yet) must never block the
-    // other six.
-    await _tryRun(_checkCaps);
-    await _tryRun(_checkMilestones);
-    await _tryRun(_checkFeeWaivers);
-    await _tryRun(_checkBillsDue);
-    await _tryRun(_checkPointsExpiry);
-    await _tryRun(_checkMonthlyReport);
-    await _tryRun(_checkNeedsReview);
-    await _tryRun(_checkBudgets);
+    // SMS reconciliation invalidates several providers at once and can also
+    // coincide with an app-resume callback. Do not let overlapping sweeps
+    // observe different generations of the same report and race to deliver
+    // two notifications.
+    if (_running) {
+      _rerunRequested = true;
+      return;
+    }
+    _running = true;
+    try {
+      // Independent try/catches: one failing check (e.g. a transient error
+      // reading a provider that hasn't resolved yet) must never block the
+      // other six.
+      await _tryRun(_checkCaps);
+      await _tryRun(_checkMilestones);
+      await _tryRun(_checkFeeWaivers);
+      await _tryRun(_checkBillsDue);
+      await _tryRun(_checkPointsExpiry);
+      await _tryRun(_checkMonthlyReport);
+      await _tryRun(_checkNeedsReview);
+      await _tryRun(_checkBudgets);
+    } finally {
+      _running = false;
+      if (_rerunRequested) {
+        _rerunRequested = false;
+        await runAll();
+      }
+    }
   }
 
   Future<void> _tryRun(Future<void> Function() check) async {
@@ -92,7 +112,8 @@ class NotificationTriggerRunner {
           body: reached
               ? 'You\'ve used up this period\'s "${cap.label}" cap — extra spend here won\'t earn the bonus rate.'
               : 'You\'ve used ${(ratio * 100).round()}% of $name\'s "${cap.label}" cap this period.',
-          dedupeKey: 'cap:${userCard.id}:${cap.id}:$bucket:${reached ? 'reached' : 'warning'}',
+          dedupeKey:
+              'cap:${userCard.id}:${cap.id}:$bucket:${reached ? 'reached' : 'warning'}',
         );
       }
     }
@@ -104,13 +125,17 @@ class NotificationTriggerRunner {
     final gate = ref.read(notificationGateProvider);
     for (final (userCard, product) in owned) {
       for (final milestone in product.milestoneRules) {
-        final progress = userCard.milestoneQualifiedSpend[milestone.id] ?? const Money.zero();
+        final progress =
+            userCard.milestoneQualifiedSpend[milestone.id] ??
+            const Money.zero();
         final ratio = capRatio(progress, milestone.thresholdSpend);
         if (ratio < 0.8) continue;
         final name = _displayName(userCard.nickname, product.name);
         final completed = ratio >= 1.0;
         final periodEnd = userCard.milestonePeriodEnd[milestone.id];
-        final bucket = periodEnd == null ? 'nodeadline' : periodEnd.toIso8601String().substring(0, 10);
+        final bucket = periodEnd == null
+            ? 'nodeadline'
+            : periodEnd.toIso8601String().substring(0, 10);
         await gate.fire(
           category: 'milestones',
           title: completed
@@ -119,7 +144,8 @@ class NotificationTriggerRunner {
           body: completed
               ? 'You\'ve unlocked ${milestone.rewardValue.format()}.'
               : '${(ratio * 100).round()}% of the way to ${milestone.rewardValue.format()} on $name.',
-          dedupeKey: 'milestone:${userCard.id}:${milestone.id}:$bucket:${completed ? 'completed' : 'warning'}',
+          dedupeKey:
+              'milestone:${userCard.id}:${milestone.id}:$bucket:${completed ? 'completed' : 'warning'}',
         );
       }
     }
@@ -144,7 +170,8 @@ class NotificationTriggerRunner {
           body:
               'You\'ve spent ${(ratio * 100).round()}% of what\'s needed to waive '
               '${fw.waivesFee.format()} — keep going before the period ends.',
-          dedupeKey: 'fee_waiver:${userCard.id}:${fw.feeWaiverRuleId}:${fw.periodEnd.toIso8601String().substring(0, 10)}',
+          dedupeKey:
+              'fee_waiver:${userCard.id}:${fw.feeWaiverRuleId}:${fw.periodEnd.toIso8601String().substring(0, 10)}',
         );
       }
     }
@@ -157,15 +184,20 @@ class NotificationTriggerRunner {
     for (final row in due) {
       // Same daysUntilDue <= 5 "urgent" window PaymentsDueScreen's hero
       // card already uses; only for cards autopay doesn't fully cover.
-      if (row.daysUntilDue > 5 || row.daysUntilDue < 0 || !row.needsAttention) continue;
+      if (row.daysUntilDue > 5 || row.daysUntilDue < 0 || !row.needsAttention) {
+        continue;
+      }
       final name = _displayName(row.card.nickname, row.card.cardName);
       await gate.fire(
         category: 'bills',
-        title: row.daysUntilDue == 0 ? '$name payment due today' : '$name payment due in ${row.daysUntilDue} days',
+        title: row.daysUntilDue == 0
+            ? '$name payment due today'
+            : '$name payment due in ${row.daysUntilDue} days',
         body:
             'You\'ve logged ${row.loggedThisCycle.format()} on this card this cycle — '
             'your issuer\'s statement may be higher.',
-        dedupeKey: 'bill_due:${row.card.id}:${row.dueOn.toIso8601String().substring(0, 10)}',
+        dedupeKey:
+            'bill_due:${row.card.id}:${row.dueOn.toIso8601String().substring(0, 10)}',
       );
     }
   }
@@ -189,15 +221,19 @@ class NotificationTriggerRunner {
       await gate.fire(
         category: 'expiry',
         title: '$name points expiring soon',
-        body: '${nearest.deltaPoints.toStringAsFixed(0)} points expire in $days days.',
-        dedupeKey: 'points_expiry:${userCard.id}:${nearest.expiresOn!.toIso8601String().substring(0, 10)}',
+        body:
+            '${nearest.deltaPoints.toStringAsFixed(0)} points expire in $days days.',
+        dedupeKey:
+            'points_expiry:${userCard.id}:${nearest.expiresOn!.toIso8601String().substring(0, 10)}',
       );
     }
   }
 
   Future<void> _checkMonthlyReport() async {
     final report = ref.read(currentMonthlyReportProvider).valueOrNull;
-    if (report == null || report.totalSpend.isZero) return; // nothing worth telling the user about yet
+    if (report == null || report.totalSpend.isZero) {
+      return; // nothing worth telling the user about yet
+    }
     final gate = ref.read(notificationGateProvider);
     final monthLabel = DateFormat('MMMM yyyy').format(report.periodMonth);
     await gate.fire(
@@ -206,7 +242,8 @@ class NotificationTriggerRunner {
       body: report.extraEarned.isZero || report.extraEarned.isNegative
           ? 'See how your cards performed this month.'
           : 'You earned an extra ${report.extraEarned.format()} by using the right card.',
-      dedupeKey: 'monthly_report:${report.periodMonth.year}-${report.periodMonth.month}',
+      dedupeKey:
+          'monthly_report:${report.periodMonth.year}-${report.periodMonth.month}',
     );
   }
 
@@ -216,8 +253,11 @@ class NotificationTriggerRunner {
     final gate = ref.read(notificationGateProvider);
     await gate.fire(
       category: 'needs_review',
-      title: count == 1 ? '1 transaction needs review' : '$count transactions need review',
-      body: 'A message didn\'t match automatically — check Needs Review to fill it in.',
+      title: count == 1
+          ? '1 transaction needs review'
+          : '$count transactions need review',
+      body:
+          'A message didn\'t match automatically — check Needs Review to fill it in.',
       // Keyed by the count itself so a growing queue notifies again as it
       // grows, not just once ever — see the class doc-comment for why
       // there's no earlier/later comparison available to do this more
@@ -240,17 +280,27 @@ class NotificationTriggerRunner {
   /// warning and one over-budget alert rather than the same message every
   /// time the app is opened.
   Future<void> _checkBudgets() async {
-    final flagged = ref.read(budgetsNeedingAttentionProvider);
+    // valueOrNull can expose the previous value while an invalidated
+    // FutureProvider is loading. Await the current request so a fresh SMS
+    // sync cannot immediately trigger a push containing an old total.
+    final budgets = await ref.read(budgetsProvider.future);
+    final flagged = budgets.where((b) => b.isOver || b.isOffPace).toList()
+      ..sort((a, b) {
+        if (a.isOver != b.isOver) return a.isOver ? -1 : 1;
+        return b.consumedFraction.compareTo(a.consumedFraction);
+      });
     if (flagged.isEmpty) return;
     final gate = ref.read(notificationGateProvider);
 
     for (final budget in flagged) {
-      final periodKey = '${budget.periodStart.year}-${budget.periodStart.month}-${budget.periodStart.day}';
+      final periodKey =
+          '${budget.periodStart.year}-${budget.periodStart.month}-${budget.periodStart.day}';
       if (budget.isOver) {
         await gate.fire(
           category: 'budget_exceeded',
           title: 'Over budget on ${budget.label}',
-          body: 'You\'ve spent ${budget.spent.format(hidePaise: true)} of your '
+          body:
+              'You\'ve spent ${budget.spent.format(hidePaise: true)} of your '
               '${budget.amount.format(hidePaise: true)} ${budget.period.label.toLowerCase()} budget.',
           dedupeKey: 'budget_over:${budget.id}:$periodKey',
         );
@@ -258,7 +308,8 @@ class NotificationTriggerRunner {
         await gate.fire(
           category: 'budget_warning',
           title: 'Running ahead on ${budget.label}',
-          body: '${(budget.consumedFraction * 100).toStringAsFixed(0)}% of your budget is gone with '
+          body:
+              '${(budget.consumedFraction * 100).toStringAsFixed(0)}% of your budget is gone with '
               '${(100 - budget.elapsedFraction * 100).toStringAsFixed(0)}% of the period left.',
           dedupeKey: 'budget_pace:${budget.id}:$periodKey',
         );

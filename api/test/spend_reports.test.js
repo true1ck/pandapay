@@ -4,6 +4,7 @@ const {
   periodBounds,
   previousPeriodBounds,
   budgetPeriodBounds,
+  budgetSpend,
   periodElapsedFraction,
   spendByCategory,
   spendByCard,
@@ -117,6 +118,28 @@ test('monthly/quarterly/yearly budgets use calendar periods', () => {
   assert.strictEqual(iso(budgetPeriodBounds({ period: 'monthly', starts_on: '2026-01-01' }, now).start), '2026-08-01');
   assert.strictEqual(iso(budgetPeriodBounds({ period: 'quarterly', starts_on: '2026-01-01' }, now).start), '2026-07-01');
   assert.strictEqual(iso(budgetPeriodBounds({ period: 'yearly', starts_on: '2026-01-01' }, now).start), '2026-01-01');
+});
+
+test('budget spend defensively excludes non-positive legacy rows', async () => {
+  let sql;
+  const client = {
+    query: async (statement, params) => {
+      sql = statement;
+      assert.deepEqual(params, ['user-1', 'start', 'end']);
+      return { rows: [{ total: '100.00', txn_count: '1' }] };
+    },
+  };
+
+  assert.deepEqual(
+    await budgetSpend(
+      client,
+      'user-1',
+      { scope: 'overall' },
+      { start: 'start', end: 'end' },
+    ),
+    { spentInr: 100, txnCount: 1 },
+  );
+  assert.match(sql, /amount_inr > 0/);
 });
 
 test('elapsed fraction is what makes a budget percentage mean anything', () => {

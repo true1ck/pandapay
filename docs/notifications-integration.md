@@ -11,8 +11,10 @@ notification service is used only for queued FCM delivery.
 3. Flutter sends that token to POST /notification-devices.
 4. PandaPay API registers the token as the subscriber whose id is the JWT
    sub. The notification-service project key never reaches Flutter.
-5. Existing POST /notifications writes the PandaPay inbox row and best-effort
-   triggers the private pandapay-notification workflow.
+5. Existing POST /notifications writes the PandaPay inbox row. App-triggered
+   events also show a local OS alert; they do not remotely send a second FCM
+   alert. Remote delivery is explicit through the self-test or an admin
+   broadcast, so one event cannot produce duplicate banners.
 6. The notification service queues FCM delivery through Redis and removes stale
    device tokens when Firebase reports them as invalid.
 
@@ -31,6 +33,14 @@ the one-minute self-test cooldown is active. A successful `202` confirms
 provider acceptance; Android may still take a short time to display the push,
 and the device must have signed in, obtained an FCM token, granted notification
 permission, and have network access.
+
+## Global announcements
+
+An authenticated PandaPay admin can call `POST /admin/notifications/broadcast`
+with `title`, optional `body`, `category`, `severity`, and `deepLink`. The API
+uses Novu's `/v1/events/trigger/broadcast` endpoint to fan out through the
+configured workflow to every registered subscriber/device. The mobile app
+cannot call this route, and the Novu project key never leaves the API server.
 
 ## API configuration
 

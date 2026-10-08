@@ -115,6 +115,7 @@ async function send({ subscriberId, title, body, category, severity, deepLink, d
   await ensureWorkflow();
   const response = await request('/v1/events/trigger', {
     method: 'POST',
+    headers: dedupeKey ? { 'Idempotency-Key': dedupeKey } : undefined,
     body: JSON.stringify({
       name: WORKFLOW_IDENTIFIER,
       to: { subscriberId },
@@ -131,7 +132,41 @@ async function send({ subscriberId, title, body, category, severity, deepLink, d
   if (!response.ok) {
     throw new Error(`Notification delivery request failed: ${await readError(response)}`);
   }
+  const result = await response.json();
+  // The provider can accept a syntactically valid trigger even when the
+  // subscriber has no registered FCM device. That is not delivery and must
+  // not be reported as a successful test notification.
+  if (result?.status === 'no_devices') {
+    const error = new Error('Notification provider has no registered devices for this subscriber');
+    error.code = 'notification_no_devices';
+    throw error;
+  }
+  return result;
+}
+
+/** Send one announcement to every registered notification-service subscriber. */
+async function sendBroadcast({ title, body, category, severity, deepLink, dedupeKey }) {
+  if (!isConfigured()) return { configured: false, status: 'disabled' };
+  await ensureWorkflow();
+  const response = await request('/v1/events/trigger/broadcast', {
+    method: 'POST',
+    headers: dedupeKey ? { 'Idempotency-Key': dedupeKey } : undefined,
+    body: JSON.stringify({
+      name: WORKFLOW_IDENTIFIER,
+      payload: {
+        title,
+        body: body || '',
+        category,
+        severity: severity || 'info',
+        deepLink: deepLink || '',
+      },
+      transactionId: dedupeKey || undefined,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Notification broadcast request failed: ${await readError(response)}`);
+  }
   return response.json();
 }
 
-module.exports = { isConfigured, registerDevice, send };
+module.exports = { isConfigured, registerDevice, send, sendBroadcast };

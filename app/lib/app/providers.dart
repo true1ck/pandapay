@@ -15,6 +15,7 @@ import '../data/analytics.dart';
 import '../data/app_status_repository.dart';
 import '../data/api_exception.dart';
 import '../data/auth_api.dart';
+import '../data/authenticated_http_client.dart';
 import '../data/card_feedback_repository.dart';
 import '../data/card_overrides_repository.dart';
 import '../data/card_requests_api.dart';
@@ -75,6 +76,48 @@ final authApiProvider = Provider<AuthApi>(
   (ref) => AuthApi(authBaseUrl: _authBaseUrl),
 );
 
+/// One shared retrying client for all authenticated repositories. Keeping the
+/// refresh coordination here prevents a screen with several report requests
+/// from firing several refresh-token rotations at once after resume.
+final authenticatedHttpClientProvider = Provider<AuthenticatedHttpClient>((
+  ref,
+) {
+  final client = AuthenticatedHttpClient(
+    refreshAccessToken: () async {
+      final store = await ref.read(tokenStoreProvider.future);
+      final refreshToken = store.refreshToken;
+      final tokenBeforeRefresh = ref.read(accessTokenProvider);
+      if (refreshToken == null) return null;
+
+      try {
+        final tokens = await ref.read(authApiProvider).refresh(refreshToken);
+        // A newer login/refresh won the race while this request was away.
+        // Never overwrite that newer session with an older response.
+        if (ref.read(accessTokenProvider) != tokenBeforeRefresh) {
+          return ref.read(accessTokenProvider);
+        }
+        await store.save(
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        );
+        ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
+        return tokens.accessToken;
+      } catch (error) {
+        if (_isRejectedCredentialRefresh(error) &&
+            ref.read(accessTokenProvider) == tokenBeforeRefresh) {
+          await store.clear();
+          ref.read(accessTokenProvider.notifier).state = null;
+        }
+        // The original API 401 is replayed to the repository. It can then
+        // surface a truthful auth error instead of hiding a network problem.
+        return null;
+      }
+    },
+  );
+  ref.onDispose(client.close);
+  return client;
+});
+
 final tokenStoreProvider = FutureProvider<TokenStore>(
   (ref) => TokenStore.load(),
 );
@@ -103,7 +146,11 @@ final biometricUnlockedProvider = StateProvider<bool>((ref) => false);
 final profileApiProvider = Provider<ProfileApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return ProfileApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return ProfileApi(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// A8/C8 Request Unsupported Card. Same null-when-signed-out shape as every
@@ -111,7 +158,11 @@ final profileApiProvider = Provider<ProfileApi?>((ref) {
 final cardRequestsApiProvider = Provider<CardRequestsApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return CardRequestsApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return CardRequestsApi(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// A4/H4 consent writes (DPDP §8.2). Same null-when-signed-out shape as
@@ -119,7 +170,11 @@ final cardRequestsApiProvider = Provider<CardRequestsApi?>((ref) {
 final consentsApiProvider = Provider<ConsentsApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return ConsentsApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return ConsentsApi(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// Plan Phase 2.3 — attributed outbound "Apply" links. Null when signed out:
@@ -127,7 +182,11 @@ final consentsApiProvider = Provider<ConsentsApi?>((ref) {
 final partnerApplyRepositoryProvider = Provider<PartnerApplyRepository?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return PartnerApplyRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return PartnerApplyRepository(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// New-card-acquisition recommender's data input. Null when signed out: a
@@ -138,7 +197,11 @@ final spendByCategoryRepositoryProvider = Provider<SpendByCategoryRepository?>((
 ) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return SpendByCategoryRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return SpendByCategoryRepository(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// Trailing-12-month category totals — empty (not an error) when signed
@@ -222,6 +285,7 @@ final acceptanceReportsRepositoryProvider =
       return AcceptanceReportsRepository(
         apiBaseUrl: _apiBaseUrl,
         accessToken: token,
+        client: ref.read(authenticatedHttpClientProvider),
       );
     });
 
@@ -285,7 +349,11 @@ final analyticsLifecycleProvider = Provider<void>((ref) {
 final syncApiProvider = Provider<SyncApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return SyncApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return SyncApi(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 final syncQueueProvider = FutureProvider<SyncQueue>((ref) async {
@@ -304,7 +372,11 @@ final pendingSyncCountProvider = FutureProvider<int>((ref) async {
 final recoveryApiProvider = Provider<RecoveryApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return RecoveryApi(authBaseUrl: _authBaseUrl, accessToken: token);
+  return RecoveryApi(
+    authBaseUrl: _authBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 final recoveryStatusProvider = FutureProvider.autoDispose<RecoveryStatus?>((
@@ -320,7 +392,11 @@ final recoveryStatusProvider = FutureProvider.autoDispose<RecoveryStatus?>((
 final devicesApiProvider = Provider<DevicesApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return DevicesApi(authBaseUrl: _authBaseUrl, accessToken: token);
+  return DevicesApi(
+    authBaseUrl: _authBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// Plan Phase 1.1 — account-level preference sync (migration 0028). Same
@@ -330,13 +406,54 @@ final devicesApiProvider = Provider<DevicesApi?>((ref) {
 final userSettingsApiProvider = Provider<UserSettingsApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return UserSettingsApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return UserSettingsApi(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// Same pattern as console/lib/app/providers.dart's sessionInitProvider:
 /// resolve a stored refresh token through auth/'s real POST /auth/refresh
 /// on startup. Temporary refresh failures preserve the cached session, while
 /// a definitive 401/403 clears unrecoverable credentials and returns to login.
+bool _isExpiredAccessToken(String token) {
+  try {
+    final parts = token.split('.');
+    if (parts.length != 3) return false;
+    final payload =
+        jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))))
+            as Map<String, dynamic>;
+    final expiry = (payload['exp'] as num?)?.toInt();
+    if (expiry == null) return false;
+    // Treat a token as expired slightly early so a request is not started in
+    // the small window where it can expire while travelling to the API.
+    return DateTime.now().millisecondsSinceEpoch >= (expiry * 1000) - 30000;
+  } catch (_) {
+    // Opaque tokens are still accepted; the API remains the source of truth.
+    return false;
+  }
+}
+
+Future<AuthTokens> _refreshWithTransientRetry(
+  AuthApi api,
+  String refreshToken,
+) async {
+  Object? lastError;
+  StackTrace? lastStack;
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await api.refresh(refreshToken);
+    } catch (error, stack) {
+      if (_isRejectedCredentialRefresh(error) || attempt == 2) rethrow;
+      lastError = error;
+      lastStack = stack;
+      await Future<void>.delayed(Duration(milliseconds: 250 * (attempt + 1)));
+    }
+  }
+  Error.throwWithStackTrace(lastError!, lastStack!);
+}
+
 final sessionInitProvider = FutureProvider<void>((ref) async {
   final store = await ref.watch(tokenStoreProvider.future);
   final refreshToken = store.refreshToken;
@@ -353,7 +470,7 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
 
   final authApi = ref.read(authApiProvider);
   try {
-    final tokens = await authApi.refresh(refreshToken);
+    final tokens = await _refreshWithTransientRetry(authApi, refreshToken);
     await store.save(
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
@@ -369,10 +486,16 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
       // local retry queue remain intact and will be imported after login.
       await store.clear();
       ref.read(accessTokenProvider.notifier).state = null;
-    } else if (storedAccessToken != null) {
+    } else if (storedAccessToken != null &&
+        !_isExpiredAccessToken(storedAccessToken)) {
       // Network/5xx failures are temporary. Keep the last access token so
       // cached data and the next keep-alive retry remain usable.
       ref.read(accessTokenProvider.notifier).state = storedAccessToken;
+    } else {
+      // Do not publish a known-expired token. That state made every report
+      // provider render "Missing or invalid access token" after a transient
+      // startup network failure until the user force-closed the app.
+      ref.read(accessTokenProvider.notifier).state = null;
     }
   }
 });
@@ -399,7 +522,7 @@ bool _isRejectedCredentialRefresh(Object error) {
 /// below auth/'s JWT_ACCESS_TTL (15m by default) — overridable so tests can
 /// drive the timer without waiting in real time.
 final sessionRefreshIntervalProvider = Provider<Duration>(
-  (ref) => const Duration(minutes: 10),
+  (ref) => const Duration(minutes: 5),
 );
 
 final sessionKeepAliveProvider = Provider<void>((ref) {
@@ -420,7 +543,10 @@ final sessionKeepAliveProvider = Provider<void>((ref) {
       final refreshToken = currentStore.refreshToken;
       if (refreshToken == null) return;
 
-      final tokens = await ref.read(authApiProvider).refresh(refreshToken);
+      final tokens = await _refreshWithTransientRetry(
+        ref.read(authApiProvider),
+        refreshToken,
+      );
       if (ref.read(accessTokenProvider) != currentToken) return;
       await currentStore.save(
         accessToken: tokens.accessToken,
@@ -448,12 +574,20 @@ final sessionKeepAliveProvider = Provider<void>((ref) {
     if (next != null) {
       timer = Timer.periodic(
         ref.read(sessionRefreshIntervalProvider),
-        (_) => tick(),
+        (_) => unawaited(tick()),
       );
     }
   }, fireImmediately: true);
 
-  ref.onDispose(() => timer?.cancel());
+  final lifecycle = AppLifecycleListener(
+    // Android may pause Dart timers while the process is backgrounded. Refresh
+    // immediately on resume instead of waiting for the next five-minute tick.
+    onResume: () => unawaited(tick()),
+  );
+  ref.onDispose(() {
+    timer?.cancel();
+    lifecycle.dispose();
+  });
 });
 
 /// Tasks 4-6: whether the first-run onboarding flow (Welcome -> Account
@@ -621,13 +755,21 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
 final cardFeedbackRepositoryProvider = Provider<CardFeedbackRepository?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return CardFeedbackRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return CardFeedbackRepository(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return UserCardsRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return UserCardsRepository(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// Spend trends and budgets. Null in guest mode, like every other
@@ -636,7 +778,11 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
 final spendReportsRepositoryProvider = Provider<SpendReportsRepository?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return SpendReportsRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return SpendReportsRepository(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// The Trends screen's data, for the selected period.
@@ -767,7 +913,11 @@ final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((
 ) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return CardOverridesRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return CardOverridesRepository(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// B8 — every override rule the signed-in user owns (enabled or disabled).
@@ -1286,6 +1436,7 @@ final notificationPreferencesRepositoryProvider =
       return NotificationPreferencesRepository(
         apiBaseUrl: _apiBaseUrl,
         accessToken: token,
+        client: ref.read(authenticatedHttpClientProvider),
       );
     });
 
@@ -1333,7 +1484,11 @@ final contributionsOptInProvider = Provider<bool>((ref) {
 final importRepositoryProvider = Provider<ImportRepository?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return ImportRepository(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return ImportRepository(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// F3: this profile's forwarding address, or null if never issued.
@@ -1781,7 +1936,11 @@ final notificationGateProvider = Provider<NotificationGate>((ref) {
 final notificationDevicesApiProvider = Provider<NotificationDevicesApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return NotificationDevicesApi(apiBaseUrl: _apiBaseUrl, accessToken: token);
+  return NotificationDevicesApi(
+    apiBaseUrl: _apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 /// FCM is additive to the existing inbox and local-notification system. The
@@ -1890,6 +2049,7 @@ final notificationTriggerLifecycleProvider = Provider<void>((ref) {
 /// resume while offline loses nothing.
 final smsBackgroundFlushProvider = Provider<void>((ref) {
   var workInProgress = false;
+  var rerunRequested = false;
   const inboxReconciliationInterval = Duration(minutes: 5);
 
   Future<void> saveAmbiguousSmsForConfirmation(
@@ -2108,41 +2268,50 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   }
 
   Future<void> flushAndRetry() async {
-    if (workInProgress) return;
+    if (workInProgress) {
+      // Startup, auth restoration, and resume may all request the same pass.
+      // Coalesce those requests instead of silently dropping the one that
+      // arrived while the first pass was still waiting on the API.
+      rerunRequested = true;
+      return;
+    }
     workInProgress = true;
     try {
-      // Start the receiver from the same authenticated lifecycle pass as the
-      // inbox reconciliation. Previously these were two independent startup
-      // providers: after an update, the listener could register while the
-      // reconciliation pass ran before SMS permission/token restoration had
-      // settled, leaving the app listening but never importing the existing
-      // inbox until a later resume.
-      await ref.read(smsAutoImportProvider).start();
-      await flush();
-      try {
-        await reconcileInbox();
-      } catch (_) {
-        // A provider/permission/network failure must not abort the remaining
-        // queue retry and must not surface as an unhandled lifecycle error.
-      }
-      // Repair rows imported by older builds: this suppresses only a
-      // high-confidence SMS replay and fills categories for legacy rows.
-      // It is idempotent and keeps the user out of a manual review workflow.
-      final repo = ref.read(userCardsRepositoryProvider);
-      if (repo != null) {
-        await repo.reconcileSmsHistory();
-      }
-      await retryExistingNeedsReview();
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
-      // Reconciliation can change both active-row counts and categories. The
-      // report family must be invalidated too; otherwise an already-open
-      // Spending screen keeps rendering the pre-repair snapshot until the
-      // user manually changes period or pulls to refresh.
-      ref.invalidate(spendReportProvider);
-      ref.invalidate(budgetsProvider);
-      ref.invalidate(recurringReportProvider);
+      do {
+        rerunRequested = false;
+        // Start the receiver from the same authenticated lifecycle pass as the
+        // inbox reconciliation. Previously these were two independent startup
+        // providers: after an update, the listener could register while the
+        // reconciliation pass ran before SMS permission/token restoration had
+        // settled, leaving the app listening but never importing the existing
+        // inbox until a later resume.
+        await ref.read(smsAutoImportProvider).start();
+        await flush();
+        try {
+          await reconcileInbox();
+        } catch (_) {
+          // A provider/permission/network failure must not abort the remaining
+          // queue retry and must not surface as an unhandled lifecycle error.
+        }
+        // Repair rows imported by older builds: this suppresses only a
+        // high-confidence SMS replay and fills categories for legacy rows.
+        // It is idempotent and keeps the user out of a manual review workflow.
+        final repo = ref.read(userCardsRepositoryProvider);
+        if (repo != null) {
+          await repo.reconcileSmsHistory();
+        }
+        await retryExistingNeedsReview();
+        ref.invalidate(userCardsProvider);
+        ref.invalidate(transactionsProvider);
+        ref.invalidate(utilizationTransactionsProvider);
+        // Reconciliation can change both active-row counts and categories. The
+        // report family must be invalidated too; otherwise an already-open
+        // Spending screen keeps rendering the pre-repair snapshot until the
+        // user manually changes period or pulls to refresh.
+        ref.invalidate(spendReportProvider);
+        ref.invalidate(budgetsProvider);
+        ref.invalidate(recurringReportProvider);
+      } while (rerunRequested);
     } finally {
       workInProgress = false;
     }
@@ -2288,21 +2457,20 @@ class SmsAutoImportController {
         duplicates += result.duplicate;
         ignored += result.unparsed + result.invalid + result.errored;
         needsReview += result.needsReview;
+      }
 
-        // Do not hold Spending blank until the entire historical inbox has
-        // finished. A first install/update can contain thousands of SMS;
-        // publish each successful chunk so current-month spends appear as
-        // soon as the first server response lands while older history keeps
-        // importing in the background.
-        if (result.imported > 0 || result.needsReview > 0) {
-          _ref.invalidate(userCardsProvider);
-          _ref.invalidate(transactionsProvider);
-          _ref.invalidate(utilizationTransactionsProvider);
-          _ref.invalidate(needsReviewCountProvider);
-          _ref.invalidate(spendReportProvider);
-          _ref.invalidate(budgetsProvider);
-          _ref.invalidate(recurringReportProvider);
-        }
+      // Publish the live/current-month result once, then import older history
+      // without repeatedly rebuilding Insights/Spending. Invalidating the
+      // whole report graph for every 200-message batch caused a refresh storm
+      // on first install/update and was a credible source of Android ANRs.
+      if (!backfill && (imported > 0 || needsReview > 0)) {
+        _ref.invalidate(userCardsProvider);
+        _ref.invalidate(transactionsProvider);
+        _ref.invalidate(utilizationTransactionsProvider);
+        _ref.invalidate(needsReviewCountProvider);
+        _ref.invalidate(spendReportProvider);
+        _ref.invalidate(budgetsProvider);
+        _ref.invalidate(recurringReportProvider);
       }
     }
 
