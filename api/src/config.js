@@ -64,8 +64,6 @@ module.exports = {
     || process.env.NOVU_NOTIFICATION_API_KEY
     || process.env.NOVU_API_KEY
     || null,
-  notificationServiceAppId:
-    process.env.NOTIFICATION_SERVICE_APP_ID || 'PANDAPAY',
   notificationServiceFcmIntegrationIdentifier:
     process.env.NOTIFICATION_SERVICE_FCM_INTEGRATION_IDENTIFIER || null,
   notificationServiceWorkflowIdentifier:

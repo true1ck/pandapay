@@ -14,8 +14,12 @@ const crypto = require('node:crypto');
 
 const config = require('./config');
 
+const WORKFLOW_IDENTIFIER = config.notificationServiceWorkflowIdentifier;
+const WORKFLOW_NAME = config.notificationServiceWorkflowName;
 const REQUEST_TIMEOUT_MS = config.notificationServiceTimeoutMs;
 const PROVIDER_RETRY_DELAY_MS = 100;
+
+let workflowReadyPromise = null;
 
 function isConfigured() {
   if (!config.notificationServiceUrl || !config.notificationServiceApiKey) return false;
@@ -33,8 +37,8 @@ function serviceUrl(path) {
 
 function headers() {
   return {
-    'X-App-Id': config.notificationServiceAppId,
-    'X-Api-Key': config.notificationServiceApiKey,
+    Authorization: `ApiKey ${config.notificationServiceApiKey}`,
+    'x-project-key': config.notificationServiceApiKey,
     'Content-Type': 'application/json',
   };
 }
@@ -114,50 +118,142 @@ async function readJson(response) {
   return response.json().catch(() => null);
 }
 
+function listItems(payload, keys = []) {
+  if (Array.isArray(payload)) return payload;
+  for (const key of keys) {
+    if (Array.isArray(payload?.[key])) return payload[key];
+    if (Array.isArray(payload?.data?.[key])) return payload.data[key];
+  }
+  return Array.isArray(payload?.data) ? payload.data : [];
+}
+
+function isWorkflowForIdentifier(workflow) {
+  return [workflow?.identifier, workflow?.slug, workflow?.workflowId].includes(WORKFLOW_IDENTIFIER)
+    || workflow?.triggers?.some?.((trigger) => trigger?.identifier === WORKFLOW_IDENTIFIER);
+}
+
+function isUsablePushWorkflow(workflow) {
+  const step = workflow?.steps?.[0];
+  return Boolean(
+    step?.template
+      && typeof step.template.title === 'string'
+      && typeof step.template.body === 'string',
+  );
+}
+
+async function findWorkflow() {
+  const response = await request('/v1/workflows');
+  if (!response.ok) throw new Error(`Notification workflow list failed: ${await readError(response)}`);
+  const payload = await readJson(response);
+  return listItems(payload, ['workflows']).find(isWorkflowForIdentifier) || null;
+}
+
+async function ensureWorkflow() {
+  if (workflowReadyPromise) return workflowReadyPromise;
+
+  workflowReadyPromise = (async () => {
+    const existing = await findWorkflow();
+    const workflow = {
+      identifier: WORKFLOW_IDENTIFIER,
+      name: WORKFLOW_NAME,
+      description: 'Generic FCM notification bridge for PandaPay inbox events.',
+      active: true,
+      steps: [{
+        template: {
+          title: '{{payload.title}}',
+          body: '{{payload.body}}',
+        },
+      }],
+    };
+
+    if (existing && isUsablePushWorkflow(existing)) return;
+
+    const response = await request(
+      existing ? `/v1/workflows/${encodeURIComponent(WORKFLOW_IDENTIFIER)}` : '/v1/workflows',
+      {
+        method: existing ? 'PUT' : 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey('workflow', WORKFLOW_IDENTIFIER) },
+        body: JSON.stringify(existing ? {
+          name: workflow.name,
+          description: workflow.description,
+          active: workflow.active,
+          steps: workflow.steps,
+        } : workflow),
+      },
+    );
+    if (!response.ok && response.status !== 409) {
+      throw new Error(`Notification workflow ${existing ? 'update' : 'creation'} failed: ${await readError(response)}`);
+    }
+    if (!existing && response.status === 409 && !(await findWorkflow())) {
+      throw new Error('Notification workflow already exists but could not be found');
+    }
+  })();
+
+  try {
+    await workflowReadyPromise;
+  } catch (error) {
+    workflowReadyPromise = null;
+    throw error;
+  }
+}
+
 async function registerDevice({ subscriberId, token, platform, email, displayName, timezone }) {
   if (!isConfigured()) return { configured: false, registered: false };
   if (!subscriberId || !token) throw new Error('subscriberId and token are required');
 
-  const normalizedPlatform = String(platform || 'ANDROID').toUpperCase();
-  const providerPlatform = ['ANDROID', 'IOS', 'WEB'].includes(normalizedPlatform)
-    ? normalizedPlatform
-    : 'ANDROID';
-  const deviceId = `pandapay:${subscriberId}:${providerPlatform}`;
-  const response = await request('/v1/devices', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey('device', `${subscriberId}:${providerPlatform}`) },
+  const nameParts = typeof displayName === 'string'
+    ? displayName.trim().split(/\s+/).filter(Boolean)
+    : [];
+  const subscriberResponse = await request(`/v1/subscribers/${encodeURIComponent(subscriberId)}`, {
+    method: 'PUT',
+    headers: { 'Idempotency-Key': idempotencyKey('subscriber', subscriberId) },
     body: JSON.stringify({
-      user_id: subscriberId,
-      device_id: deviceId,
-      platform: providerPlatform,
-      target_type: 'TOKEN',
-      target_value: token,
+      subscriberId,
+      firstName: nameParts[0] || null,
+      lastName: nameParts.slice(1).join(' ') || null,
+      email: email || null,
+      timezone: timezone || null,
+      data: { platform: platform || 'unknown' },
     }),
   });
-  if (!response.ok) {
-    throw new Error(`Notification device registration failed: ${await readError(response)}`);
+  if (!subscriberResponse.ok) {
+    throw new Error(`Notification subscriber registration failed: ${await readError(subscriberResponse)}`);
+  }
+
+  const credentialsResponse = await request(`/v1/subscribers/${encodeURIComponent(subscriberId)}/credentials`, {
+    method: 'PUT',
+    headers: { 'Idempotency-Key': idempotencyKey('device', `${subscriberId}:${token}`) },
+    body: JSON.stringify({
+      providerId: 'fcm',
+      ...(config.notificationServiceFcmIntegrationIdentifier
+        ? { integrationIdentifier: config.notificationServiceFcmIntegrationIdentifier }
+        : {}),
+      credentials: { deviceTokens: [token] },
+    }),
+  });
+  if (!credentialsResponse.ok) {
+    throw new Error(`Notification device credential registration failed: ${await readError(credentialsResponse)}`);
   }
   return { configured: true, registered: true };
 }
 
 async function send({ subscriberId, title, body, category, severity, deepLink, dedupeKey }) {
   if (!isConfigured()) return { configured: false, status: 'disabled' };
-  const response = await request('/v1/notifications', {
+  await ensureWorkflow();
+  const response = await request('/v1/events/trigger', {
     method: 'POST',
     headers: dedupeKey ? { 'Idempotency-Key': dedupeKey } : undefined,
     body: JSON.stringify({
-      user_id: subscriberId,
-      type: 'PANDAPAY_PUSH',
-      title,
-      body: body || '',
-      data: {
+      name: WORKFLOW_IDENTIFIER,
+      to: { subscriberId },
+      payload: {
         title,
         body: body || '',
         category,
         severity: severity || 'info',
         deepLink: deepLink || '',
       },
-      idempotency_key: dedupeKey || undefined,
+      transactionId: dedupeKey || undefined,
     }),
   });
   if (!response.ok) {
@@ -175,7 +271,26 @@ async function send({ subscriberId, title, body, category, severity, deepLink, d
 /** Send one announcement to every registered notification-service subscriber. */
 async function sendBroadcast({ title, body, category, severity, deepLink, dedupeKey }) {
   if (!isConfigured()) return { configured: false, status: 'disabled' };
-  throw new Error('Notification broadcast is not supported by the deployed notification service');
+  await ensureWorkflow();
+  const response = await request('/v1/events/trigger/broadcast', {
+    method: 'POST',
+    headers: dedupeKey ? { 'Idempotency-Key': dedupeKey } : undefined,
+    body: JSON.stringify({
+      name: WORKFLOW_IDENTIFIER,
+      payload: {
+        title,
+        body: body || '',
+        category,
+        severity: severity || 'info',
+        deepLink: deepLink || '',
+      },
+      transactionId: dedupeKey || undefined,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Notification broadcast request failed: ${await readError(response)}`);
+  }
+  return (await readJson(response)) || { status: 'accepted' };
 }
 
 module.exports = { isConfigured, registerDevice, send, sendBroadcast };

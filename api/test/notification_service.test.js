@@ -72,13 +72,13 @@ test('send returns a queued provider response', async () => {
     await assert.doesNotReject(
       service.send({ subscriberId: 'user-1', title: 'Test', body: 'Body' }),
     );
-    const notification = requests.find(({ url }) => url.endsWith('/v1/notifications'));
+    const notification = requests.find(({ url }) => url.endsWith('/v1/events/trigger'));
     assert.ok(notification);
     const body = JSON.parse(notification.options.body);
-    assert.equal(body.user_id, 'user-1');
-    assert.equal(body.type, 'PANDAPAY_PUSH');
-    assert.equal(body.title, 'Test');
-    assert.equal(body.body, 'Body');
+    assert.equal(body.name, 'pandapay-push-notification');
+    assert.deepEqual(body.to, { subscriberId: 'user-1' });
+    assert.equal(body.payload.title, 'Test');
+    assert.equal(body.payload.body, 'Body');
   } finally {
     global.fetch = originalFetch;
     if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
@@ -100,7 +100,7 @@ test('send retries a transient provider response with the same idempotency key',
   const requests = [];
   global.fetch = async (url, options = {}) => {
     requests.push({ url, options });
-    if (url.endsWith('/v1/notifications')) {
+    if (url.endsWith('/v1/events/trigger')) {
       triggerAttempts += 1;
       if (triggerAttempts === 1) return new Response('', { status: 503 });
       return new Response(JSON.stringify({ status: 'processed', queued: 1 }), {
@@ -119,7 +119,7 @@ test('send retries a transient provider response with the same idempotency key',
       body: 'Body',
       dedupeKey: 'test-retry-1',
     });
-    const triggerRequests = requests.filter(({ url }) => url.endsWith('/v1/notifications'));
+    const triggerRequests = requests.filter(({ url }) => url.endsWith('/v1/events/trigger'));
     assert.equal(triggerRequests.length, 2);
     assert.equal(
       triggerRequests[0].options.headers['Idempotency-Key'],
@@ -197,7 +197,7 @@ test('surfaces provider authentication failures without retrying', async () => {
   }
 });
 
-test.skip('sendBroadcast uses the provider fan-out endpoint and idempotency key', async () => {
+test('sendBroadcast uses the provider fan-out endpoint and idempotency key', async () => {
   const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
   const previousKey = process.env.NOTIFICATION_SERVICE_API_KEY;
   const previous = {};
@@ -208,7 +208,7 @@ test.skip('sendBroadcast uses the provider fan-out endpoint and idempotency key'
   global.fetch = async (url, options = {}) => {
     requests.push({ url, options });
     if (url.endsWith('/v1/workflows') && (!options.method || options.method === 'GET')) {
-      return new Response(JSON.stringify({ data: [{ identifier: 'pandapay-push-notification' }] }), { status: 200 });
+      return new Response(JSON.stringify({ data: [{ identifier: 'pandapay-push-notification', steps: [{ template: { title: 't', body: 'b' } }] }] }), { status: 200 });
     }
     return new Response(JSON.stringify({ status: 'processed', transactionId: 'broadcast-1' }), {
       status: 201,
@@ -228,7 +228,6 @@ test.skip('sendBroadcast uses the provider fan-out endpoint and idempotency key'
     const broadcast = requests.find(({ url }) => url.endsWith('/v1/events/trigger/broadcast'));
     assert.ok(broadcast);
     assert.equal(broadcast.options.headers['Idempotency-Key'], 'broadcast-1');
-    assert.equal(JSON.parse(broadcast.options.body).workflowId, 'pandapay-push-notification');
     assert.equal(JSON.parse(broadcast.options.body).name, 'pandapay-push-notification');
   } finally {
     global.fetch = originalFetch;
@@ -240,7 +239,7 @@ test.skip('sendBroadcast uses the provider fan-out endpoint and idempotency key'
   }
 });
 
-test.skip('creates a valid push workflow through the deployed v1 workflow endpoint when missing', async () => {
+test('creates a valid push workflow through the deployed v1 workflow endpoint when missing', async () => {
   const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
   const previousKey = process.env.NOTIFICATION_SERVICE_API_KEY;
   const previous = {};
@@ -275,14 +274,10 @@ test.skip('creates a valid push workflow through the deployed v1 workflow endpoi
       url.endsWith('/v1/workflows') && options.method === 'POST');
     assert.ok(workflow);
     const workflowBody = JSON.parse(workflow.options.body);
-    assert.equal(workflowBody.workflowId, 'pandapay-push-notification');
+    assert.equal(workflowBody.identifier, 'pandapay-push-notification');
     assert.equal(workflowBody.name, 'PandaPay push notification');
-    assert.equal(workflowBody.triggers[0].identifier, 'pandapay-push-notification');
-    assert.equal(workflowBody.__source, 'editor');
-    assert.equal(workflowBody.steps[0].type, 'push');
-    assert.equal(workflowBody.steps[0].name, 'PandaPay push notification');
-    assert.equal(workflowBody.steps[0].controlValues.subject, '{{payload.title}}');
-    assert.equal(workflowBody.steps[0].controlValues.body, '{{payload.body}}');
+    assert.equal(workflowBody.steps[0].template.title, '{{payload.title}}');
+    assert.equal(workflowBody.steps[0].template.body, '{{payload.body}}');
   } finally {
     global.fetch = originalFetch;
     if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
@@ -293,7 +288,7 @@ test.skip('creates a valid push workflow through the deployed v1 workflow endpoi
   }
 });
 
-test.skip('repairs an existing workflow with legacy push controls', async () => {
+test('repairs an existing workflow with legacy push controls', async () => {
   const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
   const previousKey = process.env.NOTIFICATION_SERVICE_API_KEY;
   const previous = {};
@@ -305,12 +300,11 @@ test.skip('repairs an existing workflow with legacy push controls', async () => 
     requests.push({ url, options });
     if (url.endsWith('/v1/workflows') && (!options.method || options.method === 'GET')) {
       return new Response(JSON.stringify({ data: [{
-        id: 'workflow-internal-id',
-        workflowId: 'pandapay-push-notification',
+        identifier: 'pandapay-push-notification',
         steps: [{ type: 'push', title: '{{payload.title}}', content: '{{payload.body}}' }],
       }] }), { status: 200 });
     }
-    if (url.endsWith('/v1/workflows/workflow-internal-id') && options.method === 'PUT') {
+    if (url.endsWith('/v1/workflows/pandapay-push-notification') && options.method === 'PUT') {
       return new Response(JSON.stringify({ data: { workflowId: 'pandapay-push-notification' } }), { status: 200 });
     }
     return new Response(JSON.stringify({ status: 'processed', queued: 1 }), { status: 201 });
@@ -320,12 +314,12 @@ test.skip('repairs an existing workflow with legacy push controls', async () => 
     const service = loadService();
     await service.send({ subscriberId: 'user-1', title: 'Test', body: 'Body' });
     const update = requests.find(({ url, options }) => (
-      url.endsWith('/v1/workflows/workflow-internal-id') && options.method === 'PUT'
+      url.endsWith('/v1/workflows/pandapay-push-notification') && options.method === 'PUT'
     ));
     assert.ok(update);
     const body = JSON.parse(update.options.body);
-    assert.equal(body.steps[0].controlValues.subject, '{{payload.title}}');
-    assert.equal(body.steps[0].controlValues.body, '{{payload.body}}');
+    assert.equal(body.steps[0].template.title, '{{payload.title}}');
+    assert.equal(body.steps[0].template.body, '{{payload.body}}');
   } finally {
     global.fetch = originalFetch;
     if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
@@ -336,7 +330,7 @@ test.skip('repairs an existing workflow with legacy push controls', async () => 
   }
 });
 
-test('registerDevice uses the deployed device endpoint', async () => {
+test('registerDevice uses the deployed PUT credentials endpoint', async () => {
   const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
   const previousKey = process.env.NOTIFICATION_SERVICE_API_KEY;
   const previous = {};
@@ -362,15 +356,13 @@ test('registerDevice uses the deployed device endpoint', async () => {
       displayName: 'Test User',
       timezone: 'Asia/Kolkata',
     });
-    assert.equal(requests.length, 1);
-    assert.equal(requests[0].url, 'http://notifications.test/v1/devices');
-    assert.equal(requests[0].options.method, 'POST');
-    assert.deepEqual(JSON.parse(requests[0].options.body), {
-      user_id: 'user-1',
-      device_id: 'pandapay:user-1:ANDROID',
-      platform: 'ANDROID',
-      target_type: 'TOKEN',
-      target_value: 'fcm-token-1',
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].options.method, 'PUT');
+    assert.equal(requests[1].url, 'http://notifications.test/v1/subscribers/user-1/credentials');
+    assert.equal(requests[1].options.method, 'PUT');
+    assert.deepEqual(JSON.parse(requests[1].options.body), {
+      providerId: 'fcm',
+      credentials: { deviceTokens: ['fcm-token-1'] },
     });
   } finally {
     global.fetch = originalFetch;
