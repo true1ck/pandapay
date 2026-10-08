@@ -10,22 +10,27 @@
  * and local-notification behaviour and simply skips remote delivery.
  */
 
+const crypto = require('node:crypto');
+
 const config = require('./config');
 
-// Keep this identifier separate from the first draft workflow. The provider
-// derives the v1 trigger identifier from the workflow name, so changing the
-// name/identifier together also avoids reusing a malformed workflow created by
-// an older adapter version.
-const WORKFLOW_IDENTIFIER = 'pandapay-push-notification';
-const WORKFLOW_NAME = 'PandaPay push notification';
-const WORKFLOW_GROUP_NAME = 'PandaPay';
+// Keep provider identifiers configurable so one Novu deployment can serve
+// multiple PandaPay applications without changing source code.
+const WORKFLOW_IDENTIFIER = config.notificationServiceWorkflowIdentifier;
+const WORKFLOW_NAME = config.notificationServiceWorkflowName;
 const REQUEST_TIMEOUT_MS = config.notificationServiceTimeoutMs;
+const PROVIDER_RETRY_DELAY_MS = 100;
 
-let notificationGroupId = null;
 let workflowReadyPromise = null;
 
 function isConfigured() {
-  return Boolean(config.notificationServiceUrl && config.notificationServiceApiKey);
+  if (!config.notificationServiceUrl || !config.notificationServiceApiKey) return false;
+  try {
+    const url = new URL(config.notificationServiceUrl);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
 }
 
 function serviceUrl(path) {
@@ -35,22 +40,78 @@ function serviceUrl(path) {
 function headers() {
   return {
     Authorization: `ApiKey ${config.notificationServiceApiKey}`,
+    // The deployed multi-application notification service authenticates
+    // project-scoped requests with this explicit header. Keep Authorization
+    // too for compatibility with standard Novu deployments.
+    'x-project-key': config.notificationServiceApiKey,
     'Content-Type': 'application/json',
   };
 }
 
 async function request(path, options = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    return await fetch(serviceUrl(path), {
-      ...options,
-      headers: { ...headers(), ...(options.headers || {}) },
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
+  const method = String(options.method || 'GET').toUpperCase();
+  const requestHeaders = { ...headers(), ...(options.headers || {}) };
+  // Every write issued by PandaPay has a stable idempotency key. This makes
+  // a single retry safe even when the provider accepted the request but the
+  // response was lost to a timeout.
+  const canRetry = Boolean(requestHeaders['Idempotency-Key']);
+
+  for (let attempt = 0; ; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(serviceUrl(path), {
+        ...options,
+        headers: requestHeaders,
+        signal: controller.signal,
+      });
+      if (response.status === 401 || response.status === 403) {
+        const error = new Error('Notification provider rejected the configured API key');
+        error.code = 'notification_service_auth_failed';
+        error.providerStatus = response.status;
+        error.cause = await readError(response);
+        throw error;
+      }
+      if (canRetry && attempt === 0 && isRetryableStatus(response.status)) {
+        await delay(PROVIDER_RETRY_DELAY_MS);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      if (error?.code === 'notification_service_auth_failed') {
+        throw error;
+      }
+      if (!canRetry || attempt > 0) {
+        const timeout = error?.name === 'AbortError';
+        const wrapped = new Error(
+          timeout
+            ? 'Notification provider request timed out'
+            : 'Notification provider request failed',
+        );
+        wrapped.code = timeout
+          ? 'notification_service_timeout'
+          : 'notification_service_unavailable';
+        wrapped.cause = error;
+        throw wrapped;
+      }
+      await delay(PROVIDER_RETRY_DELAY_MS);
+    } finally {
+      clearTimeout(timer);
+    }
   }
+}
+
+function isRetryableStatus(status) {
+  return [408, 425, 429, 500, 502, 503, 504].includes(status);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function idempotencyKey(prefix, value) {
+  const digest = crypto.createHash('sha256').update(String(value)).digest('hex');
+  return `pandapay-${prefix}-${digest.slice(0, 32)}`;
 }
 
 async function readError(response) {
@@ -62,78 +123,76 @@ async function readJson(response) {
   return response.json().catch(() => null);
 }
 
-async function ensureNotificationGroup() {
-  if (notificationGroupId) return notificationGroupId;
-
-  const listed = await request('/v1/notification-groups');
-  if (!listed.ok) {
-    throw new Error(`Notification group lookup failed: ${await readError(listed)}`);
+function listItems(payload, keys = []) {
+  if (Array.isArray(payload)) return payload;
+  for (const key of keys) {
+    if (Array.isArray(payload?.[key])) return payload[key];
+    if (Array.isArray(payload?.data?.[key])) return payload.data[key];
   }
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
 
-  const listedPayload = await readJson(listed);
-  const groups = Array.isArray(listedPayload?.data)
-    ? listedPayload.data
-    : Array.isArray(listedPayload)
-      ? listedPayload
-      : [];
-  const existing = groups.find((group) => group?.name === WORKFLOW_GROUP_NAME);
-  const existingId = existing?._id || existing?.id;
-  if (existingId) {
-    notificationGroupId = existingId;
-    return notificationGroupId;
+function isWorkflowForIdentifier(workflow) {
+  if (!workflow || typeof workflow !== 'object') return false;
+  if ([workflow.identifier, workflow.slug, workflow.workflowId].includes(WORKFLOW_IDENTIFIER)) {
+    return true;
   }
+  return Array.isArray(workflow.triggers)
+    && workflow.triggers.some((trigger) => trigger?.identifier === WORKFLOW_IDENTIFIER);
+}
 
-  const created = await request('/v1/notification-groups', {
-    method: 'POST',
-    body: JSON.stringify({ name: WORKFLOW_GROUP_NAME }),
-  });
-  if (!created.ok) {
-    throw new Error(`Notification group creation failed: ${await readError(created)}`);
+async function findWorkflow() {
+  const response = await request('/v1/workflows');
+  if (!response.ok) {
+    throw new Error(`Notification workflow list failed: ${await readError(response)}`);
   }
-
-  const createdPayload = await readJson(created);
-  const createdId = createdPayload?.data?._id || createdPayload?.data?.id;
-  if (!createdId) {
-    throw new Error('Notification group creation returned no group id');
-  }
-  notificationGroupId = createdId;
-  return notificationGroupId;
+  const payload = await readJson(response);
+  return listItems(payload, ['workflows']).find(isWorkflowForIdentifier) || null;
 }
 
 async function ensureWorkflow() {
   if (workflowReadyPromise) return workflowReadyPromise;
 
   workflowReadyPromise = (async () => {
-    const existing = await request(`/v1/workflows/${WORKFLOW_IDENTIFIER}`);
-    if (existing.ok) return;
-    if (existing.status !== 404) {
-      throw new Error(`Notification workflow lookup failed: ${await readError(existing)}`);
-    }
+    if (await findWorkflow()) return;
 
-    const groupId = await ensureNotificationGroup();
+    const workflow = {
+      name: WORKFLOW_NAME,
+      workflowId: WORKFLOW_IDENTIFIER,
+      identifier: WORKFLOW_IDENTIFIER,
+      description: 'Generic FCM notification bridge for PandaPay inbox events.',
+      active: true,
+      triggers: [
+        { type: 'event', identifier: WORKFLOW_IDENTIFIER, variables: [] },
+      ],
+      steps: [
+        {
+          active: true,
+          template: {
+            name: WORKFLOW_NAME,
+            type: 'push',
+            title: '{{payload.title}}',
+            content: '{{payload.body}}',
+          },
+        },
+      ],
+    };
+    if (process.env.NOTIFICATION_SERVICE_WORKFLOW_GROUP_ID) {
+      workflow.notificationGroupId = process.env.NOTIFICATION_SERVICE_WORKFLOW_GROUP_ID;
+    }
     const created = await request('/v1/workflows', {
       method: 'POST',
-      body: JSON.stringify({
-        name: WORKFLOW_NAME,
-        notificationGroupId: groupId,
-        description: 'Generic FCM notification bridge for PandaPay inbox events.',
-        active: true,
-        steps: [
-          {
-            active: true,
-            template: {
-              type: 'PUSH',
-              title: '{{payload.title}}',
-              content: '{{payload.body}}',
-            },
-          },
-        ],
-      }),
+      headers: { 'Idempotency-Key': idempotencyKey('workflow', WORKFLOW_IDENTIFIER) },
+      body: JSON.stringify(workflow),
     });
     // A second API instance can create the workflow at the same time. A 409
     // means the desired workflow already exists, so it is safe to continue.
     if (!created.ok && created.status !== 409) {
       throw new Error(`Notification workflow creation failed: ${await readError(created)}`);
+    }
+    if (created.status === 409 && !(await findWorkflow())) {
+      throw new Error('Notification workflow already exists but could not be found');
     }
   })();
 
@@ -156,6 +215,7 @@ async function registerDevice({ subscriberId, token, platform, email, displayNam
     : [];
   const response = await request(`/v1/subscribers/${encodeURIComponent(subscriberId)}`, {
     method: 'PUT',
+    headers: { 'Idempotency-Key': idempotencyKey('subscriber', subscriberId) },
     body: JSON.stringify({
       subscriberId,
       firstName: nameParts[0] || null,
@@ -169,14 +229,18 @@ async function registerDevice({ subscriberId, token, platform, email, displayNam
     throw new Error(`Notification device registration failed: ${await readError(response)}`);
   }
 
-  // PATCH is the provider's idempotent append-credentials endpoint. Using it
-  // instead of embedding channels in the deprecated subscriber upsert keeps
-  // multiple phones for one account registered and avoids replacing an
-  // already-registered device token.
+  // The deployed notification service exposes PUT for credentials. Keep the
+  // device token in the dedicated credentials endpoint rather than embedding
+  // it in the subscriber upsert, so subscriber profile updates cannot erase
+  // push credentials accidentally.
   const credentials = await request(`/v1/subscribers/${encodeURIComponent(subscriberId)}/credentials`, {
-    method: 'PATCH',
+    method: 'PUT',
+    headers: { 'Idempotency-Key': idempotencyKey('device', `${subscriberId}:${token}`) },
     body: JSON.stringify({
       providerId: 'fcm',
+      ...(config.notificationServiceFcmIntegrationIdentifier
+        ? { integrationIdentifier: config.notificationServiceFcmIntegrationIdentifier }
+        : {}),
       credentials: { deviceTokens: [token] },
     }),
   });
@@ -193,7 +257,10 @@ async function send({ subscriberId, title, body, category, severity, deepLink, d
     method: 'POST',
     headers: dedupeKey ? { 'Idempotency-Key': dedupeKey } : undefined,
     body: JSON.stringify({
-      name: WORKFLOW_IDENTIFIER,
+      // Novu's trigger contract uses workflowId. Keep the identifier stable
+      // across all PandaPay notification events so the provider can route the
+      // event to the configured workflow.
+      workflowId: WORKFLOW_IDENTIFIER,
       to: { subscriberId },
       payload: {
         title,
@@ -208,7 +275,7 @@ async function send({ subscriberId, title, body, category, severity, deepLink, d
   if (!response.ok) {
     throw new Error(`Notification delivery request failed: ${await readError(response)}`);
   }
-  const result = await response.json();
+  const result = await readJson(response) || { status: 'accepted' };
   // The provider can accept a syntactically valid trigger even when the
   // subscriber has no registered FCM device. That is not delivery and must
   // not be reported as a successful test notification.
@@ -228,7 +295,7 @@ async function sendBroadcast({ title, body, category, severity, deepLink, dedupe
     method: 'POST',
     headers: dedupeKey ? { 'Idempotency-Key': dedupeKey } : undefined,
     body: JSON.stringify({
-      name: WORKFLOW_IDENTIFIER,
+      workflowId: WORKFLOW_IDENTIFIER,
       payload: {
         title,
         body: body || '',
@@ -242,7 +309,7 @@ async function sendBroadcast({ title, body, category, severity, deepLink, dedupe
   if (!response.ok) {
     throw new Error(`Notification broadcast request failed: ${await readError(response)}`);
   }
-  return response.json();
+  return (await readJson(response)) || { status: 'accepted' };
 }
 
 module.exports = { isConfigured, registerDevice, send, sendBroadcast };

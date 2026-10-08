@@ -1149,7 +1149,24 @@ app.post('/notification-devices', requireAuth, async (req, res) => {
     res.status(201).json(result);
   } catch (err) {
     console.error('POST /notification-devices error', err);
-    res.status(502).json({ error: 'notification_service_unavailable' });
+    if (err?.code === 'notification_service_timeout') {
+      return res.status(504).json({
+        error: 'notification_service_timeout',
+        message: 'The notification provider did not respond in time. Registration will retry automatically.',
+      });
+    }
+    if (err?.code === 'notification_service_auth_failed') {
+      return res.status(503).json({
+        error: 'notification_service_auth_failed',
+        message: 'The notification provider rejected the API key configured on the PandaPay server.',
+      });
+    }
+    res.status(502).json({
+      error: err?.code === 'notification_service_unavailable'
+        ? 'notification_service_unavailable'
+        : 'notification_service_error',
+      message: 'The notification provider could not register this device. Registration will retry automatically.',
+    });
   }
 });
 
@@ -1206,7 +1223,22 @@ app.post('/notifications/test', requireAuth, async (req, res) => {
         message: 'No registered push device was found for this account',
       });
     }
-    return res.status(502).json({ error: 'notification_service_unavailable' });
+    if (err?.code === 'notification_service_timeout') {
+      return res.status(504).json({
+        error: 'notification_service_timeout',
+        message: 'The notification provider did not respond in time. Try again shortly.',
+      });
+    }
+    if (err?.code === 'notification_service_auth_failed') {
+      return res.status(503).json({
+        error: 'notification_service_auth_failed',
+        message: 'The notification provider rejected the API key configured on the PandaPay server.',
+      });
+    }
+    return res.status(502).json({
+      error: 'notification_service_unavailable',
+      message: 'The notification provider could not accept the test notification.',
+    });
   }
 });
 
@@ -2126,6 +2158,12 @@ app.post('/user-cards', requireAuth, async (req, res) => {
          RETURNING id, card_product_id, nickname, last4, is_default, sort_order, created_at`,
         [req.userId, cardProductId, nickname || null, last4 || null]
       );
+      // SMS history may have arrived before the user added this card. Repair
+      // attribution in the same transaction so Spending stops showing the
+      // matching suffix as "unlinked" immediately after card creation.
+      if (inserted.rows.length > 0) {
+        await repairSmsHistory(client, req.userId);
+      }
       return inserted.rows[0];
     });
 
@@ -5810,6 +5848,12 @@ app.post('/admin/notifications/broadcast', requireAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error('POST /admin/notifications/broadcast error', err);
+    if (err?.code === 'notification_service_auth_failed') {
+      return res.status(503).json({
+        error: 'notification_service_auth_failed',
+        message: 'The notification provider rejected the API key configured on the PandaPay server.',
+      });
+    }
     return res.status(502).json({ error: 'notification_service_unavailable' });
   }
 });

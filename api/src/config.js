@@ -55,11 +55,31 @@ module.exports = {
   partnerWebhookSecret: process.env.PARTNER_WEBHOOK_SECRET || null,
   imapEncryptionKey: process.env.IMAP_ENCRYPTION_KEY || null,
   notificationServiceUrl:
-    process.env.NOTIFICATION_SERVICE_URL || process.env.NOVU_NOTIFICATION_URL || null,
+    process.env.NOTIFICATION_SERVICE_URL
+    || process.env.NOVU_NOTIFICATION_URL
+    || process.env.NOVU_API_URL
+    || null,
   notificationServiceApiKey:
-    process.env.NOTIFICATION_SERVICE_API_KEY || process.env.NOVU_NOTIFICATION_API_KEY || null,
+    process.env.NOTIFICATION_SERVICE_API_KEY
+    || process.env.NOVU_NOTIFICATION_API_KEY
+    || process.env.NOVU_API_KEY
+    || null,
+  notificationServiceFcmIntegrationIdentifier:
+    process.env.NOTIFICATION_SERVICE_FCM_INTEGRATION_IDENTIFIER || null,
+  notificationServiceWorkflowIdentifier:
+    process.env.NOTIFICATION_SERVICE_WORKFLOW_IDENTIFIER || 'pandapay-push-notification',
+  notificationServiceWorkflowName:
+    process.env.NOTIFICATION_SERVICE_WORKFLOW_NAME || 'PandaPay push notification',
   notificationServiceTimeoutMs: Math.max(
     1000,
     Number(process.env.NOTIFICATION_SERVICE_TIMEOUT_MS) || 4000,
+  ),
+  // A user-scoped report must fail cleanly rather than holding a pooled
+  // connection forever when the database is overloaded or a query plan
+  // regresses. Routes turn this into a normal 500 and the client can use its
+  // cached snapshot/retry affordance.
+  dbStatementTimeoutMs: Math.max(
+    1000,
+    Number(process.env.DB_STATEMENT_TIMEOUT_MS) || 15000,
   ),
 };
