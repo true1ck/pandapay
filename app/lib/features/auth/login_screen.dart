@@ -23,12 +23,10 @@ const currentPolicyVersion = '2026-08-07';
 /// separate required fields, never an either/or toggle, so a returning user
 /// isn't left implying one substitutes for the other. The two modes differ
 /// only in what happens with the phone number once OTP verification
-/// succeeds: [signUp] links it to the new account, while [logIn] sends it as
-/// an account-match value. auth/ validates that a returning user's phone is
-/// either the same account phone or absent; it rejects a mismatch instead of
-/// overwriting another phone. This lets older email-only accounts complete
-/// their phone linkage and makes SMS-based transaction detection work after
-/// the next login.
+/// succeeds: [signUp] links it to the new account; [logIn] uses the existing
+/// email OTP session and leaves the account's stored phone linkage untouched.
+/// This preserves sign-in for older accounts whose stored phone may be in a
+/// legacy format while still collecting the phone field on the form.
 enum AuthMode { signUp, logIn }
 
 /// UA-3: OTP sign-in/sign-up against the real auth/ service.
@@ -50,8 +48,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _identifierController = TextEditingController();
 
   /// Both modes collect this now (design 06). Sign-up links it to the new
-  /// account; log-in sends it to auth/ for a safe account match — see
-  /// [AuthMode]'s own doc comment for the mismatch protection.
+  /// account; log-in validates its form locally but does not rewrite the
+  /// account's existing phone linkage.
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
 
@@ -120,7 +118,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .requestEmailOtp(
             identifier,
             isSignUp: _isSignUp,
-            phoneNumber: _phoneController.text.trim(),
+            phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
           );
       setState(() => _otpRequested = true);
     } catch (e) {
@@ -164,9 +162,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         identifier,
         code,
         deviceId,
-        // auth/ validates the phone against the existing account on login and
-        // links it when an older email-only account has no phone yet.
-        phoneNumber: _phoneController.text.trim(),
+        // Only sign-up links the phone. Returning-user login is authorized by
+        // the email OTP and keeps the existing account linkage unchanged.
+        phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
       );
 
       final store = await ref.read(tokenStoreProvider.future);
@@ -176,14 +174,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
 
-      // Persist what we just verified so design 22's Email & phone screen and
-      // the product profile have the same account identifiers. The auth
-      // service remains the authority for validating the phone.
+      // Persist the phone only for sign-up. Returning-user login must not
+      // rewrite or revalidate legacy phone formatting.
       await ref
           .read(profileApiProvider)!
           .ensureProfile(
             email: identifier,
-            phoneNumber: _phoneController.text.trim(),
+            phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
           );
 
       // A4: record the three purpose-specific consents now that a profile
@@ -427,8 +424,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 /// The identifier step — design 06: always TWO required fields, email (which
-/// receives the code) and phone, never a toggle between them. Both paths send
-/// the phone to auth/; returning-user mismatches are rejected server-side.
+/// receives the code) and phone, never a toggle between them. Sign-up links
+/// the phone; returning-user login uses the email OTP without changing linkage.
 class _IdentifierStep extends StatelessWidget {
   final bool isSignUp;
   final bool isLight;
@@ -521,8 +518,8 @@ class _IdentifierStep extends StatelessWidget {
         Text('Phone number', style: labelStyle),
         const SizedBox(height: 2),
         Text(
-          // Both paths use this phone for account matching and SMS transaction
-          // detection; auth/ rejects a mismatch for returning users.
+          // Sign-up uses this phone for SMS transaction detection. Login keeps
+          // the existing account phone linkage unchanged.
           isSignUp
               ? 'Used to detect card transactions from your bank SMS.'
               : 'The phone number on your account.',
