@@ -76,6 +76,21 @@ function normalizePhone(phone) {
   return p; // fallback
 }
 
+// Compare a phone value read from the database with a phone supplied by the
+// client. Stored values may be encrypted or legacy plaintext, and the client
+// may provide either 10 digits or an E.164 +91 value.
+function phoneValuesMatch(storedPhone, suppliedPhone) {
+  if (typeof storedPhone !== 'string' || !storedPhone.trim() || !suppliedPhone) {
+    return false;
+  }
+
+  const normalizedSupplied = normalizePhone(suppliedPhone);
+  const decryptedStored = decryptPhoneNumber(storedPhone);
+  return [storedPhone, decryptedStored].some((value) => {
+    return typeof value === 'string' && normalizePhone(value) === normalizedSupplied;
+  });
+}
+
 // helper: validate phone number format
 function isValidPhoneNumber(phone) {
   // E.164 format: + followed by 1-15 digits
@@ -741,6 +756,7 @@ router.post(
       const result = await executeOtpRequestWithTiming(async () => {
         const { email, phone_number, is_signup } = req.body;
         const normalizedEmail = email.trim().toLowerCase();
+        const normalizedPhone = phone_number ? normalizePhone(phone_number) : null;
 
         const enumerationCheck = await detectAndLogEnumeration(clientIp, normalizedEmail, req.headers['user-agent'], 'email');
 
@@ -758,8 +774,8 @@ router.post(
         }
         
         // Ensure email and phone aren't linked to different accounts before sending OTP
-        if (phone_number) {
-          const phoneSearchParams = preparePhoneSearchParams(phone_number);
+        if (normalizedPhone) {
+          const phoneSearchParams = preparePhoneSearchParams(normalizedPhone);
           const usersResult = await db.query(
             `SELECT id, email, phone_number FROM users WHERE email = $1 OR phone_number = $2 OR phone_number = $3`,
             [normalizedEmail, phoneSearchParams[0], phoneSearchParams[1]]
@@ -768,7 +784,7 @@ router.post(
           
           if (users && users.length > 0) {
             const sameEmailUser = users.find(u => u.email === normalizedEmail);
-            const samePhoneUser = users.find(u => u.phone_number === phoneSearchParams[0] || u.phone_number === phoneSearchParams[1]);
+            const samePhoneUser = users.find(u => phoneValuesMatch(u.phone_number, normalizedPhone));
 
             if (is_signup === true || is_signup === 'true') {
               // If signing up, these must NOT exist
@@ -777,7 +793,7 @@ router.post(
               }
             } else {
               // If logging in, they MUST match if they both exist on an account
-              if (sameEmailUser && sameEmailUser.phone_number && sameEmailUser.phone_number !== phoneSearchParams[0] && sameEmailUser.phone_number !== phoneSearchParams[1]) {
+              if (sameEmailUser && sameEmailUser.phone_number && !phoneValuesMatch(sameEmailUser.phone_number, normalizedPhone)) {
                 return { error: 'This email is registered with a different phone number.', status: 409 };
               }
 
@@ -846,7 +862,7 @@ router.post(
       // not treat a missing phone as a phone mismatch, and do not overwrite a
       // previously verified phone with NULL during recovery.
       const normalizedPhone = typeof phone_number === 'string' && phone_number.trim()
-        ? phone_number.trim()
+        ? normalizePhone(phone_number)
         : null;
       const hasPhone = Boolean(normalizedPhone);
       // Only encrypt phone number if one was actually supplied and we need to
@@ -912,11 +928,7 @@ router.post(
           // Encrypted phone values use a random IV, so a newly encrypted copy
           // is not byte-for-byte equal to the stored value. Compare the
           // decrypted value as well as the legacy encrypted/plaintext forms.
-          const storedPhone = user.phone_number ? decryptPhoneNumber(user.phone_number) : null;
-          if (user.phone_number
-            && user.phone_number !== phoneSearchParams[0]
-            && user.phone_number !== phoneSearchParams[1]
-            && storedPhone !== normalizedPhone) {
+          if (user.phone_number && !phoneValuesMatch(user.phone_number, normalizedPhone)) {
             return res.status(409).json({ error: 'This email is registered with a different phone number.' });
           }
           await db.query(`UPDATE users SET is_email_verified = TRUE, phone_number = $2 WHERE id = $1`, [user.id, encryptedPhone]);
