@@ -58,6 +58,51 @@ void main() {
     },
   );
 
+  test(
+    'keeps the session during a temporary startup failure even if access expired',
+    () async {
+      final header = base64Url
+          .encode(utf8.encode(jsonEncode({'alg': 'none', 'typ': 'JWT'})))
+          .replaceAll('=', '');
+      final payload = base64Url
+          .encode(
+            utf8.encode(
+              jsonEncode({
+                'exp': (DateTime.now().millisecondsSinceEpoch ~/ 1000) - 60,
+              }),
+            ),
+          )
+          .replaceAll('=', '');
+      final expiredAccess = '$header.$payload.signature';
+
+      SharedPreferences.setMockInitialValues({
+        'pandapay_app.access_token': expiredAccess,
+        'pandapay_app.refresh_token': 'still-recoverable-refresh',
+      });
+
+      final client = MockClient(
+        (req) async =>
+            http.Response(jsonEncode({'error': 'temporary failure'}), 503),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+          authApiProvider.overrideWithValue(
+            AuthApi(authBaseUrl: 'http://auth.test', client: client),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(sessionInitProvider.future);
+
+      expect(container.read(accessTokenProvider), expiredAccess);
+      final store = await container.read(tokenStoreProvider.future);
+      expect(store.refreshToken, 'still-recoverable-refresh');
+    },
+  );
+
   test('rotates the access token on the interval, well inside the 15m TTL', () {
     fakeAsync((async) {
       SharedPreferences.setMockInitialValues({

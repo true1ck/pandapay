@@ -36,6 +36,7 @@ class PushNotificationService {
   String? _lastToken;
   int _registrationRetryAttempt = 0;
   int _startupRetryAttempt = 0;
+  int _lifecycleGeneration = 0;
   bool _started = false;
 
   PushNotificationService({required this.api, required this.gate});
@@ -43,10 +44,25 @@ class PushNotificationService {
   Future<void> start() async {
     if (_started) return;
     _started = true;
+    final generation = ++_lifecycleGeneration;
     try {
       await Firebase.initializeApp();
+      if (!_started || generation != _lifecycleGeneration) return;
       final messaging = FirebaseMessaging.instance;
+      // Keep Firebase auto-init explicit. This matters on a fresh install or
+      // after an app update where the platform may not have created an FCM
+      // token by the time the first authenticated shell is rendered.
+      await messaging.setAutoInitEnabled(true);
       await messaging.requestPermission(alert: true, badge: true, sound: true);
+      // On iOS, foreground FCM messages are otherwise delivered to Dart but
+      // not presented by the OS. Android uses the local notification gate
+      // below for foreground delivery; this call is harmless there.
+      await messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      if (!_started || generation != _lifecycleGeneration) return;
       FirebaseMessaging.onBackgroundMessage(
         pandaPayFirebaseMessagingBackgroundHandler,
       );
@@ -55,7 +71,26 @@ class PushNotificationService {
       );
       _tokenSubscription = messaging.onTokenRefresh.listen(_registerToken);
       final token = await messaging.getToken();
-      if (token != null && token.isNotEmpty) await _registerToken(token);
+      if (!_started || generation != _lifecycleGeneration) return;
+      if (token == null || token.isEmpty) {
+        // getToken() can legitimately be empty during the first few seconds
+        // after install/update while Google Play Services finishes setup.
+        // Tear down this attempt so the bounded startup retry can recreate
+        // the Firebase listeners and try token acquisition again.
+        debugPrint('PandaPay FCM token is not ready; scheduling startup retry');
+        await _tokenSubscription?.cancel();
+        await _messageSubscription?.cancel();
+        _tokenSubscription = null;
+        _messageSubscription = null;
+        _started = false;
+        _scheduleStartupRetry();
+        return;
+      }
+      // Never log the token itself: it is a device credential. This marker
+      // makes it possible to verify token acquisition from a release APK's
+      // logcat without exposing the credential.
+      debugPrint('PandaPay FCM token acquired');
+      await _registerToken(token);
       _startupRetryAttempt = 0;
     } catch (error) {
       // Native Firebase configuration is environment-specific. A missing
@@ -75,12 +110,14 @@ class PushNotificationService {
   }
 
   Future<void> _registerToken(String token) async {
+    if (!_started || token.isEmpty) return;
     _lastToken = token;
     _registrationRetryTimer?.cancel();
     _registrationRetryTimer = null;
     try {
       await api.register(token: token, platform: _platformName());
       _registrationRetryAttempt = 0;
+      debugPrint('PandaPay FCM device registration accepted');
     } catch (error) {
       // A later token refresh or next sign-in retries registration. Push
       // delivery is additive and must not block the user's financial actions.
@@ -128,6 +165,7 @@ class PushNotificationService {
   }
 
   Future<void> stop() async {
+    _lifecycleGeneration++;
     _registrationRetryTimer?.cancel();
     _startupRetryTimer?.cancel();
     await _tokenSubscription?.cancel();

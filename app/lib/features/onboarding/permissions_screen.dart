@@ -23,30 +23,53 @@ class PermissionsScreen extends ConsumerStatefulWidget {
   ConsumerState<PermissionsScreen> createState() => _PermissionsScreenState();
 }
 
-class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
+class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
+    with WidgetsBindingObserver {
   // Personal-use builds declare SMS permissions in every flavor. Play Store
   // policy handling is intentionally deferred until the feature is complete.
   bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
   bool? _smsGranted;
+  bool _smsPermanentlyDenied = false;
   bool? _notificationsGranted;
   bool? _locationGranted;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkInitialStatuses();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Android permission settings are changed outside Flutter. Refresh the
+      // row when the user returns so SMS does not remain stuck on "Enable".
+      _checkInitialStatuses();
+    }
   }
 
   Future<void> _checkInitialStatuses() async {
     if (_isAndroid) {
       final smsStatus = await Permission.sms.status;
-      if (mounted) setState(() => _smsGranted = smsStatus.isGranted);
+      if (mounted) {
+        setState(() {
+          _smsGranted = smsStatus.isGranted;
+          _smsPermanentlyDenied = smsStatus.isPermanentlyDenied;
+        });
+      }
     }
-    
+
     final notifStatus = await Permission.notification.status;
     if (mounted) setState(() => _notificationsGranted = notifStatus.isGranted);
-    
+
     final locStatus = await Permission.locationWhenInUse.status;
     if (mounted) setState(() => _locationGranted = locStatus.isGranted);
   }
@@ -63,18 +86,20 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
   // so treating a request failure as gently as a request decline is
   // consistent, not a downgrade.
   Future<void> _requestSms() async {
-    bool granted = false;
     try {
       final status = await Permission.sms.status;
       if (status.isPermanentlyDenied) {
         await openAppSettings();
       } else {
-        granted = await SmsListenerService().requestPermissions();
+        await SmsListenerService().requestPermissions();
       }
     } catch (_) {
-      // fall through to "not granted"
+      // The next lifecycle/status refresh will show the current OS state.
     }
-    if (mounted) setState(() => _smsGranted = granted);
+    // Read the status again immediately for normal runtime prompts. If the
+    // user was sent to Settings, didChangeAppLifecycleState will refresh it
+    // again when they return.
+    await _checkInitialStatuses();
   }
 
   Future<void> _requestNotifications() async {
@@ -147,6 +172,9 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                             'Automatically finds your cards and logs spends from your bank\'s SMS, 100% on-device. '
                             'We never see full card numbers.',
                         granted: _smsGranted,
+                        actionLabel: _smsPermanentlyDenied
+                            ? 'Open settings'
+                            : 'Enable',
                         onRequest: _requestSms,
                       ),
                     if (_isAndroid) const SizedBox(height: AppSpace.md),
@@ -197,6 +225,7 @@ class _PermissionRow extends StatelessWidget {
   final String title;
   final String reason;
   final bool? granted;
+  final String actionLabel;
   final VoidCallback onRequest;
 
   const _PermissionRow({
@@ -204,6 +233,7 @@ class _PermissionRow extends StatelessWidget {
     required this.title,
     required this.reason,
     required this.granted,
+    this.actionLabel = 'Enable',
     required this.onRequest,
   });
 
@@ -265,7 +295,7 @@ class _PermissionRow extends StatelessWidget {
                 ),
               ),
               onPressed: onRequest,
-              child: const Text('Enable'),
+              child: Text(actionLabel),
             ),
         ],
       ),

@@ -10,7 +10,8 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_discovery_engine.dart';
-import '../../data/user_cards_repository.dart' show CardDiscoveryResult, DiscoveredCard;
+import '../../data/user_cards_repository.dart'
+    show CardDiscoveryResult, DiscoveredCard;
 import '../import/email_forwarding_screen.dart';
 import '../import/gmail_connect_screen.dart';
 import '../import/gmail_connect_service.dart';
@@ -65,7 +66,9 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       _error = null;
     });
     try {
-      var bodies = customBodies != null ? List<String>.from(customBodies) : List<String>.from(widget.smsBodies);
+      var bodies = customBodies != null
+          ? List<String>.from(customBodies)
+          : List<String>.from(widget.smsBodies);
       if (bodies.isEmpty && _isAndroid) {
         const smsService = SmsListenerService();
         var hasPerm = await smsService.hasPermissions();
@@ -94,7 +97,9 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       } else {
         // Guest mode / on-device matching against local catalogue
         final catalogue = await ref.read(catalogueProvider.future);
-        final localRepo = await ref.read(localUserCardsRepositoryProvider.future);
+        final localRepo = await ref.read(
+          localUserCardsRepositoryProvider.future,
+        );
         final owned = await localRepo.fetchUserCards(catalogue: catalogue);
         final ownedIds = owned.map((c) => c.cardProductId).toSet();
 
@@ -129,7 +134,9 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     // First: a fresh connect via the pre-consent screen. If Gmail is already
     // connected on this device, try a silent token and skip straight to the
     // scan; otherwise walk the user through the explanation + Google picker.
-    String? accessToken = await ref.read(gmailConnectControllerProvider.notifier).silentToken();
+    String? accessToken = await ref
+        .read(gmailConnectControllerProvider.notifier)
+        .silentToken();
     if (accessToken == null) {
       if (!mounted) return;
       accessToken = await Navigator.of(context).push<String>(
@@ -191,7 +198,6 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     }
   }
 
-
   Future<void> _requestAndScanSms() async {
     setState(() {
       _scanning = true;
@@ -211,7 +217,9 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           return;
         }
       }
-      final permanentlyDenied = hasPerm ? false : await smsService.isPermanentlyDenied();
+      final permanentlyDenied = hasPerm
+          ? false
+          : await smsService.isPermanentlyDenied();
       if (mounted) setState(() => _smsPermanentlyDenied = permanentlyDenied);
       if (!mounted) return;
       if (permanentlyDenied) {
@@ -268,13 +276,13 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
 
   Future<void> _openCardPicker() async {
     final picked = await Navigator.of(context).push<List<CardProduct>>(
-      MaterialPageRoute(
-        builder: (_) => const CardPickerScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const CardPickerScreen()),
     );
     if (picked != null && picked.isNotEmpty && mounted) {
       final repo = ref.read(userCardsRepositoryProvider);
-      final local = repo == null ? await ref.read(localUserCardsRepositoryProvider.future) : null;
+      final local = repo == null
+          ? await ref.read(localUserCardsRepositoryProvider.future)
+          : null;
       for (final card in picked) {
         if (repo != null) {
           await repo.addCard(card.id);
@@ -283,15 +291,41 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         }
         _added.add(card.id);
       }
+      await _reconcileAfterCardAdded();
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
       setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added ${picked.length} card${picked.length == 1 ? '' : 's'} to wallet.')),
+          SnackBar(
+            content: Text(
+              'Added ${picked.length} card${picked.length == 1 ? '' : 's'} to wallet.',
+            ),
+          ),
         );
       }
     }
+  }
+
+  /// A transaction may have been imported before its matching card was added.
+  /// Relink that history immediately instead of waiting for the next app
+  /// resume or the background reconciliation interval.
+  Future<void> _reconcileAfterCardAdded() async {
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo != null) {
+      try {
+        await repo.reconcileSmsHistory();
+      } catch (_) {
+        // Card creation succeeded; a transient repair failure is safe because
+        // the normal startup/resume reconciliation will retry it.
+      }
+    }
+    ref.invalidate(myCardsProvider);
+    ref.invalidate(userCardsProvider);
+    ref.invalidate(transactionsProvider);
+    ref.invalidate(utilizationTransactionsProvider);
+    ref.invalidate(needsReviewCountProvider);
+    ref.invalidate(spendReportProvider);
   }
 
   void _showOtherOptionsSheet() {
@@ -332,14 +366,25 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
                     color: BambooInk.paperMuted,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.picture_as_pdf_outlined, color: BambooInk.slate),
+                  child: const Icon(
+                    Icons.picture_as_pdf_outlined,
+                    color: BambooInk.slate,
+                  ),
                 ),
-                title: Text('Import bank statement PDF', style: BambooFonts.heading(15, color: BambooInk.ink900)),
-                subtitle: Text('Parses password-protected statements locally on-device', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                title: Text(
+                  'Import bank statement PDF',
+                  style: BambooFonts.heading(15, color: BambooInk.ink900),
+                ),
+                subtitle: Text(
+                  'Parses password-protected statements locally on-device',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
                 onTap: () {
                   Navigator.of(sheetCtx).pop();
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const StatementPdfImportScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const StatementPdfImportScreen(),
+                    ),
                   );
                 },
               ),
@@ -353,14 +398,25 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
                     color: BambooInk.paperMuted,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.upload_file_outlined, color: BambooInk.slate),
+                  child: const Icon(
+                    Icons.upload_file_outlined,
+                    color: BambooInk.slate,
+                  ),
                 ),
-                title: Text('Import SMS backup file', style: BambooFonts.heading(15, color: BambooInk.ink900)),
-                subtitle: Text('Import XML backup from SMS Backup & Restore', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                title: Text(
+                  'Import SMS backup file',
+                  style: BambooFonts.heading(15, color: BambooInk.ink900),
+                ),
+                subtitle: Text(
+                  'Import XML backup from SMS Backup & Restore',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
                 onTap: () {
                   Navigator.of(sheetCtx).pop();
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SmsBackupImportScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const SmsBackupImportScreen(),
+                    ),
                   );
                 },
               ),
@@ -374,14 +430,25 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
                     color: BambooInk.paperMuted,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.forward_to_inbox_rounded, color: BambooInk.slate),
+                  child: const Icon(
+                    Icons.forward_to_inbox_rounded,
+                    color: BambooInk.slate,
+                  ),
                 ),
-                title: Text('Set up email forwarding', style: BambooFonts.heading(15, color: BambooInk.ink900)),
-                subtitle: Text('Forward bank emails automatically for continuous sync', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                title: Text(
+                  'Set up email forwarding',
+                  style: BambooFonts.heading(15, color: BambooInk.ink900),
+                ),
+                subtitle: Text(
+                  'Forward bank emails automatically for continuous sync',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
                 onTap: () {
                   Navigator.of(sheetCtx).pop();
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const EmailForwardingScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const EmailForwardingScreen(),
+                    ),
                   );
                 },
               ),
@@ -411,7 +478,9 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         final messenger = ScaffoldMessenger.of(context);
         try {
           final repo = ref.read(userCardsRepositoryProvider);
-          final local = repo == null ? await ref.read(localUserCardsRepositoryProvider.future) : null;
+          final local = repo == null
+              ? await ref.read(localUserCardsRepositoryProvider.future)
+              : null;
           for (final c in picked) {
             if (repo != null) {
               final userCardId = await repo.addCard(
@@ -430,12 +499,21 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
               await local!.addCard(c.id);
             }
           }
-          if (mounted) setState(() => _added.add(card.cardProductId)); // Mark the placeholder as added
-          ref.invalidate(myCardsProvider);
-          ref.invalidate(userCardsProvider);
-          messenger.showSnackBar(SnackBar(content: Text('Added ${picked.length} card(s) to wallet.')));
+          await _reconcileAfterCardAdded();
+          if (mounted) {
+            setState(
+              () => _added.add(card.cardProductId),
+            ); // Mark the placeholder as added
+          }
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('Added ${picked.length} card(s) to wallet.'),
+            ),
+          );
         } catch (e) {
-          messenger.showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+          messenger.showSnackBar(
+            SnackBar(content: Text(userFacingErrorMessage(e))),
+          );
         } finally {
           if (mounted) setState(() => _adding = false);
         }
@@ -449,7 +527,9 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     final displayName = variant?.name ?? card.name;
     try {
       final repo = ref.read(userCardsRepositoryProvider);
-      final local = repo == null ? await ref.read(localUserCardsRepositoryProvider.future) : null;
+      final local = repo == null
+          ? await ref.read(localUserCardsRepositoryProvider.future)
+          : null;
       if (repo != null) {
         final userCardId = await repo.addCard(
           productId,
@@ -468,8 +548,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       } else {
         await local!.addCard(productId);
       }
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(userCardsProvider);
+      await _reconcileAfterCardAdded();
       // Design 19's own worked example: "Axis Ace added · Found
       // automatically from a bank SMS". dedupeKey keeps a re-add from
       // stacking duplicates in the inbox.
@@ -477,14 +556,19 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         ref,
         category: 'card_added',
         title: '$displayName added',
-        body: 'Found automatically in ${card.sources.contains('email') ? 'your bank email' : 'your SMS'}.',
+        body:
+            'Found automatically in ${card.sources.contains('email') ? 'your bank email' : 'your SMS'}.',
         severity: 'good',
         dedupeKey: 'card_added:$productId',
       );
       if (mounted) setState(() => _added.add(card.cardProductId));
-      messenger.showSnackBar(SnackBar(content: Text('$displayName added to your wallet.')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('$displayName added to your wallet.')),
+      );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingErrorMessage(e))),
+      );
     } finally {
       if (mounted) setState(() => _adding = false);
     }
@@ -499,7 +583,10 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Find my cards', style: BambooFonts.heading(19, color: BambooInk.ink900)),
+        title: Text(
+          'Find my cards',
+          style: BambooFonts.heading(19, color: BambooInk.ink900),
+        ),
         actions: [
           IconButton(
             tooltip: 'Scan again',
@@ -513,7 +600,8 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   }
 
   Widget _body() {
-    final catalogue = ref.watch(catalogueProvider).valueOrNull ?? const <CardProduct>[];
+    final catalogue =
+        ref.watch(catalogueProvider).valueOrNull ?? const <CardProduct>[];
     if (_scanning && _result == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -597,12 +685,15 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     final seenFamilies = <String>{};
     final out = <DiscoveredCard>[];
     for (final s in suggestions) {
-      final matched = catalogue.where((c) => c.id == s.cardProductId).firstOrNull;
+      final matched = catalogue
+          .where((c) => c.id == s.cardProductId)
+          .firstOrNull;
       if (matched == null || matched.issuerName == null) {
         out.add(s);
         continue;
       }
-      final key = '${matched.issuerName}|${networkAgnosticCardName(matched.name)}';
+      final key =
+          '${matched.issuerName}|${networkAgnosticCardName(matched.name)}';
       if (seenFamilies.add(key)) out.add(s);
     }
     return out;
@@ -612,7 +703,10 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   /// the suggestion card can offer a network chooser. Empty (nothing to
   /// choose) for placeholders, an unresolved match, or a card that only
   /// exists on one network in the catalogue.
-  List<CardProduct> _variantsFor(DiscoveredCard s, List<CardProduct> catalogue) {
+  List<CardProduct> _variantsFor(
+    DiscoveredCard s,
+    List<CardProduct> catalogue,
+  ) {
     if (s.isPlaceholder || catalogue.isEmpty) return const [];
     final matched = catalogue.where((c) => c.id == s.cardProductId).firstOrNull;
     if (matched == null) return const [];
@@ -622,7 +716,8 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
 
   String _scannedSummary(CardDiscoveryResult r) {
     final parts = <String>[
-      if (r.emailsScanned > 0) '${r.emailsScanned} bank email${r.emailsScanned == 1 ? '' : 's'}',
+      if (r.emailsScanned > 0)
+        '${r.emailsScanned} bank email${r.emailsScanned == 1 ? '' : 's'}',
       if (r.smsScanned > 0) '${r.smsScanned} SMS',
     ];
     return parts.isEmpty ? 'nothing' : parts.join(' and ');
@@ -691,7 +786,11 @@ class _SuggestionCardState extends State<_SuggestionCard> {
               if (card.last4.isNotEmpty)
                 Text(
                   '•••• ${card.last4.first}',
-                  style: BambooFonts.heading(13, color: BambooInk.ink300, letterSpacing: 1),
+                  style: BambooFonts.heading(
+                    13,
+                    color: BambooInk.ink300,
+                    letterSpacing: 1,
+                  ),
                 ),
             ],
           ),
@@ -713,7 +812,11 @@ class _SuggestionCardState extends State<_SuggestionCard> {
             const SizedBox(height: AppSpace.md),
             Text(
               "Pick your card's network",
-              style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink900),
+              style: BambooFonts.ui(
+                12.5,
+                weight: FontWeight.w600,
+                color: BambooInk.ink900,
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             Wrap(
@@ -725,14 +828,20 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                     labelStyle: BambooFonts.ui(
                       13,
                       weight: FontWeight.w600,
-                      color: _picked?.id == v.id ? BambooInk.onSlate : BambooInk.ink900,
+                      color: _picked?.id == v.id
+                          ? BambooInk.onSlate
+                          : BambooInk.ink900,
                     ),
                     selected: _picked?.id == v.id,
                     selectedColor: BambooInk.slate,
                     backgroundColor: BambooInk.paperMuted,
                     side: BorderSide.none,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                    onSelected: widget.busy ? null : (_) => setState(() => _picked = v),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    onSelected: widget.busy
+                        ? null
+                        : (_) => setState(() => _picked = v),
                   ),
               ],
             ),
@@ -741,11 +850,19 @@ class _SuggestionCardState extends State<_SuggestionCard> {
           if (widget.added)
             Row(
               children: [
-                const Icon(Icons.check_circle_rounded, size: 18, color: BambooInk.jade),
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 18,
+                  color: BambooInk.jade,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   'Added to your wallet',
-                  style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.jade),
+                  style: BambooFonts.ui(
+                    13,
+                    weight: FontWeight.w600,
+                    color: BambooInk.jade,
+                  ),
                 ),
               ],
             )
@@ -758,15 +875,19 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.lime,
                 minimumSize: const Size.fromHeight(44),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
               ),
               child: Text(
                 card.isPlaceholder
-                    ? 'Select your ${card.issuerName ?? 'Bank'} Card'
+                    ? (card.issuerName == null
+                          ? 'Select matching card'
+                          : 'Select your ${card.issuerName} Card')
                     : hasNetworkChoice
-                        ? 'Yes, I have this card'
-                        : 'Yes, I have ${card.name}',
+                    ? 'Yes, I have this card'
+                    : 'Yes, I have ${card.name}',
               ),
             ),
             if (needsNetworkPick) ...[
@@ -901,7 +1022,9 @@ class _DiscoveryActionButtons extends StatelessWidget {
             backgroundColor: BambooInk.slate,
             foregroundColor: BambooInk.lime,
             minimumSize: const Size.fromHeight(50),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
           ),
           icon: const Icon(Icons.mail_outline_rounded, size: 20),
@@ -919,11 +1042,15 @@ class _DiscoveryActionButtons extends StatelessWidget {
               foregroundColor: BambooInk.slate,
               side: const BorderSide(color: BambooInk.ink300),
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               textStyle: BambooFonts.ui(14, weight: FontWeight.w600),
             ),
             icon: Icon(
-              smsPermanentlyDenied ? Icons.settings_outlined : Icons.sms_outlined,
+              smsPermanentlyDenied
+                  ? Icons.settings_outlined
+                  : Icons.sms_outlined,
               size: 18,
             ),
             label: Text(
@@ -944,7 +1071,9 @@ class _DiscoveryActionButtons extends StatelessWidget {
             foregroundColor: BambooInk.slate,
             side: const BorderSide(color: BambooInk.ink300),
             minimumSize: const Size.fromHeight(48),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             textStyle: BambooFonts.ui(14, weight: FontWeight.w600),
           ),
           icon: const Icon(Icons.add_card_rounded, size: 18),
@@ -956,10 +1085,18 @@ class _DiscoveryActionButtons extends StatelessWidget {
         // Secondary options text button
         TextButton.icon(
           onPressed: onOtherOptions,
-          icon: const Icon(Icons.more_horiz_rounded, size: 18, color: BambooInk.ink500),
+          icon: const Icon(
+            Icons.more_horiz_rounded,
+            size: 18,
+            color: BambooInk.ink500,
+          ),
           label: Text(
             'PDF Statement · SMS Backup · Email Forwarding',
-            style: BambooFonts.ui(12.5, color: BambooInk.ink500, weight: FontWeight.w500),
+            style: BambooFonts.ui(
+              12.5,
+              color: BambooInk.ink500,
+              weight: FontWeight.w500,
+            ),
           ),
         ),
       ],
@@ -973,4 +1110,3 @@ extension _FirstOrNull<T> on Iterable<T> {
     return it.moveNext() ? it.current : null;
   }
 }
-

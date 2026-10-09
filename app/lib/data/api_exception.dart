@@ -11,6 +11,15 @@ class ApiException implements Exception {
   ApiException(this.debugMessage, {String? userMessage})
     : userMessage = userMessage ?? friendlyMessageFrom(debugMessage);
 
+  /// The repositories include the HTTP status in their debug message. Keep
+  /// this parsed here so cache-aware readers can distinguish a temporary
+  /// network/server failure from an authentication failure. In particular,
+  /// cached data must never be shown after the API has rejected the session.
+  int? get statusCode {
+    final match = RegExp(r':\s(\d{3})\b').firstMatch(debugMessage);
+    return match == null ? null : int.tryParse(match.group(1)!);
+  }
+
   @override
   String toString() => debugMessage;
 

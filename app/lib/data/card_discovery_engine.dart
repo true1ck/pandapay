@@ -51,7 +51,7 @@ class LocalCardDiscoveryEngine {
     'credited',
     'account',
     'acct',
-    'alert'
+    'alert',
   };
 
   /// Normalise for comparison: casefold, collapse whitespace, and drop
@@ -66,10 +66,9 @@ class LocalCardDiscoveryEngine {
 
   /// Significant tokens of a card/issuer name (after stopwords).
   static List<String> significantTokens(String name) {
-    return normalise(name)
-        .split(' ')
-        .where((t) => t.length > 1 && !stopwords.contains(t))
-        .toList();
+    return normalise(
+      name,
+    ).split(' ').where((t) => t.length > 1 && !stopwords.contains(t)).toList();
   }
 
   /// A bank-account reference and its trailing digits — "A/c XX1797",
@@ -107,29 +106,90 @@ class LocalCardDiscoveryEngine {
   /// card the bank sells. SMS discovery ignores these outright.
   /// Mirrors PROMO_MARKERS in api/src/card_discovery.js.
   static const List<String> promoMarkers = [
-    'apply now', 'apply today', 'pre-approved', 'pre approved', 'preapproved',
-    'lifetime free', 'ltf', 'no joining fee', 'no annual fee',
-    'joining fee waived', 'annual fee waived', 'exclusive offer',
-    'special offer', 'limited period', 'limited time', 'click here', 'hurry',
-    't&c apply', 't & c apply', 'tnc apply', 'offer ends', 'offer valid',
-    'get it now', 'avail now', 'you are eligible', "you're eligible",
-    'you re eligible', 'eligible for', 'now eligible', 'congratulations',
-    'know more', 'unlock', 'upgrade to', 'upgrade your', '0% interest',
-    'no cost emi', 'emi offer', 'instant loan', 'personal loan', 'redeem now',
-    'points expiring', 'expiring soon', 'bit.ly', 'tinyurl', 'http://',
-    'https://', 'www.',
+    'apply now',
+    'apply today',
+    'pre-approved',
+    'pre approved',
+    'preapproved',
+    'lifetime free',
+    'ltf',
+    'no joining fee',
+    'no annual fee',
+    'joining fee waived',
+    'annual fee waived',
+    'exclusive offer',
+    'special offer',
+    'limited period',
+    'limited time',
+    'click here',
+    'hurry',
+    't&c apply',
+    't & c apply',
+    'tnc apply',
+    'offer ends',
+    'offer valid',
+    'get it now',
+    'avail now',
+    'you are eligible',
+    "you're eligible",
+    'you re eligible',
+    'eligible for',
+    'now eligible',
+    'congratulations',
+    'know more',
+    'unlock',
+    'upgrade to',
+    'upgrade your',
+    '0% interest',
+    'no cost emi',
+    'emi offer',
+    'instant loan',
+    'personal loan',
+    'redeem now',
+    'points expiring',
+    'expiring soon',
+    'bit.ly',
+    'tinyurl',
+    'http://',
+    'https://',
+    'www.',
   ];
 
   /// Transaction / statement markers — the SMS shapes a card the user
   /// actually holds produces. Mirrors TXN_MARKERS in card_discovery.js.
   static const List<String> txnMarkers = [
-    'spent', 'debited', 'credited', 'charged', 'txn', 'transaction',
-    'purchase of', 'purchase at', ' paid ', 'used at', 'used for', 'withdrawn',
-    'payment of', 'payment received', 'received on your', 'avl bal',
-    'available balance', 'avl. bal', 'avl lmt', 'available limit',
-    'outstanding', 'statement', 'amount due', 'due date', 'min amt due',
-    'total amount due', 'e-statement', 'autopay', 'auto pay', 'auto-pay',
-    'has been credited', 'has been debited',
+    'spent',
+    'debited',
+    'credited',
+    'charged',
+    'txn',
+    'transaction',
+    'purchase of',
+    'purchase at',
+    ' paid ',
+    'used at',
+    'used for',
+    'withdrawn',
+    'payment of',
+    'payment received',
+    'received on your',
+    'avl bal',
+    'available balance',
+    'avl. bal',
+    'avl lmt',
+    'available limit',
+    'outstanding',
+    'statement',
+    'amount due',
+    'due date',
+    'min amt due',
+    'total amount due',
+    'e-statement',
+    'autopay',
+    'auto pay',
+    'auto-pay',
+    'has been credited',
+    'has been debited',
   ];
 
   static bool looksPromotionalSms(String text) {
@@ -148,19 +208,50 @@ class LocalCardDiscoveryEngine {
   /// clear credit-card signal (some issuers word credit-card alerts as
   /// "debited from"). Mirrors DEBIT_ACCOUNT_MARKERS in api/src/card_discovery.js.
   static const List<String> debitAccountMarkers = [
-    'debit card', 'a/c', 'ac no', 'acct', 'account no', 'from a/c', 'to a/c',
-    'savings a/c', 'salary a/c', 'imps', 'neft', 'atm', 'upi/', 'by upi',
-    'vpa', 'withdrawn from', 'withdrawn rs', 'block dc', ' dc ', 'account ending',
-    'deducted from', 'deposited in',
+    'debit card',
+    'a/c',
+    'ac no',
+    'acct',
+    'account no',
+    'from a/c',
+    'to a/c',
+    'savings a/c',
+    'salary a/c',
+    'imps',
+    'neft',
+    'atm',
+    'upi/',
+    'by upi',
+    'vpa',
+    'withdrawn from',
+    'withdrawn rs',
+    'block dc',
+    ' dc ',
+    'account ending',
+    'deducted from',
+    'deposited in',
   ];
 
   /// Credit-card-specific markers. Their presence overrides the debit filter
   /// above. Mirrors CREDIT_CARD_MARKERS in api/src/card_discovery.js.
   static const List<String> creditCardMarkers = [
-    'credit card', 'avl lmt', 'available limit', 'avl. limit', 'credit limit',
-    'outstanding', 'statement', 'min amt due', 'minimum amount due',
-    'total amount due', 'amount due', 'cc bill', 'card bill', 'block cc',
-    ' cc ', 'card ending with', 'available credit',
+    'credit card',
+    'avl lmt',
+    'available limit',
+    'avl. limit',
+    'credit limit',
+    'outstanding',
+    'statement',
+    'min amt due',
+    'minimum amount due',
+    'total amount due',
+    'amount due',
+    'cc bill',
+    'card bill',
+    'block cc',
+    ' cc ',
+    'card ending with',
+    'available credit',
   ];
 
   static bool looksDebitAccountSms(String text) {
@@ -180,7 +271,11 @@ class LocalCardDiscoveryEngine {
     String? sender,
     required List<CardProduct> catalogue,
   }) {
-    final combined = [subject, body, sender].where((s) => s != null && s.isNotEmpty).join(' ');
+    final combined = [
+      subject,
+      body,
+      sender,
+    ].where((s) => s != null && s.isNotEmpty).join(' ');
     final haystack = normalise(combined);
     if (haystack.isEmpty) return const [];
 
@@ -189,18 +284,24 @@ class LocalCardDiscoveryEngine {
 
     for (final card in catalogue) {
       final nameTokens = significantTokens(card.name);
-      
+
       final fullName = normalise(card.name);
       final exact = fullName.isNotEmpty && haystack.contains(fullName);
 
       if (nameTokens.isEmpty && !exact) continue;
 
-      final matchedNameTokens = nameTokens.where((t) => haystackWords.contains(t)).toList();
+      final matchedNameTokens = nameTokens
+          .where((t) => haystackWords.contains(t))
+          .toList();
 
       final issuerTokens = significantTokens(card.issuerName ?? '');
-      final issuerHit = issuerTokens.isNotEmpty && issuerTokens.every((t) => haystack.contains(t));
+      final issuerHit =
+          issuerTokens.isNotEmpty &&
+          issuerTokens.every((t) => haystack.contains(t));
 
-      final distinguishing = matchedNameTokens.where((t) => !issuerTokens.contains(t)).toList();
+      final distinguishing = matchedNameTokens
+          .where((t) => !issuerTokens.contains(t))
+          .toList();
       if (!exact && !(issuerHit && distinguishing.isNotEmpty)) continue;
 
       final evidence = exact
@@ -212,7 +313,13 @@ class LocalCardDiscoveryEngine {
       // (0.5, 1.0]. Ties are broken by messageCount downstream.
       final score = exact
           ? 2.0
-          : 0.5 + 0.5 * (distinguishing.length / (nameTokens.length - issuerTokens.length).clamp(1, 999));
+          : 0.5 +
+                0.5 *
+                    (distinguishing.length /
+                        (nameTokens.length - issuerTokens.length).clamp(
+                          1,
+                          999,
+                        ));
 
       results.add(
         DiscoveredCard(
@@ -250,7 +357,7 @@ class LocalCardDiscoveryEngine {
     bool isSms = false,
   }) {
     final byCard = <String, DiscoveredCard>{};
-    
+
     final issuers = catalogue
         .map((c) => c.issuerName)
         .whereType<String>()
@@ -283,7 +390,8 @@ class LocalCardDiscoveryEngine {
       // SMS only: a card match is believable only when it rides on a real
       // transaction/statement alert, never a marketing blast that names the
       // bank's whole product line. Email is sender-verified upstream.
-      if (isSms && (looksPromotionalSms(body) || !looksTransactionalSms(body))) {
+      if (isSms &&
+          (looksPromotionalSms(body) || !looksTransactionalSms(body))) {
         continue;
       }
 
@@ -299,10 +407,15 @@ class LocalCardDiscoveryEngine {
 
       // SMS only: trust CONFIDENT matches (score >= 1.0). Email keeps partial
       // issuer+token matches so a card SMS never saw can still be surfaced.
-      final confidentHits = isSms ? hits.where((h) => h.score >= 1.0).toList() : hits;
+      final confidentHits = isSms
+          ? hits.where((h) => h.score >= 1.0).toList()
+          : hits;
 
       if (confidentHits.isNotEmpty) {
-        final maxScore = confidentHits.fold<double>(0, (max, h) => h.score > max ? h.score : max);
+        final maxScore = confidentHits.fold<double>(
+          0,
+          (max, h) => h.score > max ? h.score : max,
+        );
         var topHits = confidentHits.where((h) => h.score == maxScore).toList();
 
         // A message that names a card *family* without pinning one product
@@ -315,6 +428,7 @@ class LocalCardDiscoveryEngine {
             final rest = h.evidence.skip(1).toList()..sort();
             return '${normalise(h.evidence.isEmpty ? '' : h.evidence.first)}|${rest.join(',')}';
           }
+
           final distinct = topHits.map(signature).toSet();
           if (distinct.length > 1) continue;
           topHits = [topHits.first];
@@ -360,42 +474,77 @@ class LocalCardDiscoveryEngine {
 
         // No exact match. Fallback to generating Placeholder cards based on Issuer.
         final haystack = normalise(body);
-        for (final issuer in issuers) {
+        final matchingIssuers = issuers
+            .where((issuer) => haystack.contains(normalise(issuer)))
+            .toList();
+
+        // Some bank alerts identify only "your credit card XX9080". We
+        // cannot infer the catalogue product, but we can preserve the suffix
+        // as a generic placeholder for the user to choose from.
+        if (matchingIssuers.isEmpty && last4s.isNotEmpty) {
+          for (final l4 in last4s) {
+            final placeholderId = 'placeholder_card_$l4';
+            final existing = byCard[placeholderId];
+            if (existing != null) {
+              byCard[placeholderId] = DiscoveredCard(
+                cardProductId: existing.cardProductId,
+                name: existing.name,
+                score: existing.score,
+                evidence: existing.evidence,
+                last4: existing.last4,
+                messageCount: existing.messageCount + 1,
+                sources: const ['sms'],
+                isPlaceholder: true,
+              );
+            } else {
+              byCard[placeholderId] = DiscoveredCard(
+                cardProductId: placeholderId,
+                name: 'Credit card ending in $l4',
+                score: 0.1,
+                evidence: ['Transaction matched card ending in $l4'],
+                last4: [l4],
+                messageCount: 1,
+                sources: const ['sms'],
+                isPlaceholder: true,
+              );
+            }
+          }
+        }
+
+        for (final issuer in matchingIssuers) {
           final normIssuer = normalise(issuer);
-          if (haystack.contains(normIssuer)) {
-            final l4sToUse = last4s.isEmpty ? [''] : last4s;
-            for (final l4 in l4sToUse) {
-              // Skip a card this issuer was seen debiting an account for.
-              if (debitPoisoned.contains('$normIssuer|$l4')) continue;
-              final placeholderId = 'placeholder_${normIssuer}_$l4';
-              final existing = byCard[placeholderId];
-              
-              if (existing != null) {
-                byCard[placeholderId] = DiscoveredCard(
-                  cardProductId: existing.cardProductId,
-                  name: existing.name,
-                  score: 0.1,
-                  evidence: existing.evidence,
-                  last4: existing.last4,
-                  messageCount: existing.messageCount + 1,
-                  sources: const ['sms'],
-                  isPlaceholder: true,
-                  issuerName: issuer,
-                );
-              } else {
-                final nameSuffix = l4.isNotEmpty ? ' ending in $l4' : '';
-                byCard[placeholderId] = DiscoveredCard(
-                  cardProductId: placeholderId,
-                  name: '$issuer Card$nameSuffix',
-                  score: 0.1,
-                  evidence: ['Transaction matched $issuer'],
-                  last4: l4.isNotEmpty ? [l4] : const [],
-                  messageCount: 1,
-                  sources: const ['sms'],
-                  isPlaceholder: true,
-                  issuerName: issuer,
-                );
-              }
+          final l4sToUse = last4s.isEmpty ? [''] : last4s;
+          for (final l4 in l4sToUse) {
+            // Skip a card this issuer was seen debiting an account for.
+            if (debitPoisoned.contains('$normIssuer|$l4')) continue;
+            final placeholderId = 'placeholder_${normIssuer}_$l4';
+            final existing = byCard[placeholderId];
+
+            if (existing != null) {
+              byCard[placeholderId] = DiscoveredCard(
+                cardProductId: existing.cardProductId,
+                name: existing.name,
+                score: existing.score,
+                evidence: existing.evidence,
+                last4: existing.last4,
+                messageCount: existing.messageCount + 1,
+                sources: const ['sms'],
+                isPlaceholder: true,
+                issuerName: issuer,
+              );
+            } else {
+              final nameSuffix = l4.isNotEmpty ? ' ending in $l4' : '';
+              byCard[placeholderId] = DiscoveredCard(
+                cardProductId: placeholderId,
+                name: '$issuer Card$nameSuffix',
+                score: 0.1,
+                evidence: ['Transaction matched $issuer'],
+                last4: l4.isNotEmpty ? [l4] : const [],
+                messageCount: 1,
+                sources: const ['sms'],
+                isPlaceholder: true,
+                issuerName: issuer,
+              );
             }
           }
         }
@@ -408,7 +557,8 @@ class LocalCardDiscoveryEngine {
     // ask the user to identify a card we already identified. Drop it.
     final issuerById = <String, String>{
       for (final c in catalogue)
-        if (c.issuerName != null && c.issuerName!.isNotEmpty) c.id: c.issuerName!,
+        if (c.issuerName != null && c.issuerName!.isNotEmpty)
+          c.id: c.issuerName!,
     };
     final realKeys = <String>{};
     for (final s in byCard.values) {
@@ -418,9 +568,13 @@ class LocalCardDiscoveryEngine {
         realKeys.add('$iss|$l');
       }
     }
-    byCard.removeWhere((_, s) =>
-        s.isPlaceholder &&
-        s.last4.any((l) => realKeys.contains('${normalise(s.issuerName ?? '')}|$l')));
+    byCard.removeWhere(
+      (_, s) =>
+          s.isPlaceholder &&
+          s.last4.any(
+            (l) => realKeys.contains('${normalise(s.issuerName ?? '')}|$l'),
+          ),
+    );
 
     final suggestions = byCard.values.toList()
       ..sort((a, b) {

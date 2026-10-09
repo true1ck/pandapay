@@ -80,11 +80,9 @@ class AuthApi {
 
   /// Email-based sign-in/sign-up against auth/'s /auth/request-email-otp and
   /// /auth/verify-email-otp — the same OTP machinery as phone (2-minute TTL,
-  /// bcrypt-hashed, rate-limited), just a different identifier. phone_number
-  /// is deliberately omitted from the request body: the backend treats it as
-  /// an optional "link this email to an existing phone account" field, and
-  /// this app only ever offers Phone or Email as alternatives, never both at
-  /// once.
+  /// bcrypt-hashed, rate-limited), just a different identifier. When present,
+  /// phone_number is sent on both flows: auth/ links it for a new account and
+  /// safely matches/repairs an older email-only account on sign-in.
   Future<void> requestEmailOtp(
     String email, {
     bool isSignUp = false,
@@ -96,7 +94,7 @@ class AuthApi {
       body: jsonEncode({
         'email': email,
         if (isSignUp) 'is_signup': true,
-        if (isSignUp && phoneNumber != null && phoneNumber.trim().isNotEmpty)
+        if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
           'phone_number': phoneNumber.trim(),
       }),
     );
@@ -107,9 +105,7 @@ class AuthApi {
     }
   }
 
-  /// [phoneNumber] is optional and only sent at SIGN-UP, where we collect both
-  /// identifiers so the account has a phone on file for SMS-based transaction
-  /// detection (UA-5.3) even though the OTP itself goes to the email. auth/'s
+  /// [phoneNumber] is optional and sent when the form collected it. auth/'s
   /// verify-email-otp links the two onto one users row and rejects the case
   /// where they already belong to different accounts. The key is omitted
   /// entirely when absent — sending an explicit null would fail that route's

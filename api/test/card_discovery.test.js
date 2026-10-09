@@ -268,6 +268,18 @@ test('a real transaction alert with a card number IS discovered', () => {
   assert.deepEqual(merged[0].last4, ['7105']);
 });
 
+test('a suffix-only credit-card alert surfaces a generic placeholder', () => {
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Rs 400 spent on your credit card XX9080 at Eternal on 01-Oct-26' }],
+    SMS_CATALOGUE,
+    true
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].isPlaceholder, true);
+  assert.equal(merged[0].cardProductId, 'placeholder_card_9080');
+  assert.deepEqual(merged[0].last4, ['9080']);
+});
+
 test('a card number disambiguates a same-family match', () => {
   const merged = discoverCardsAcrossMessages(
     [{ body: 'Spent Rs 900 on Tata Neu Infinity HDFC Bank Credit Card XX4477' }],

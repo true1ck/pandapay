@@ -22,9 +22,18 @@ enum InsightsPeriod {
   (DateTime, DateTime) range(DateTime now) {
     final startOfThisMonth = DateTime(now.year, now.month);
     return switch (this) {
-      InsightsPeriod.thisMonth => (startOfThisMonth, DateTime(now.year, now.month + 1)),
-      InsightsPeriod.lastMonth => (DateTime(now.year, now.month - 1), startOfThisMonth),
-      InsightsPeriod.last3Months => (DateTime(now.year, now.month - 2), DateTime(now.year, now.month + 1)),
+      InsightsPeriod.thisMonth => (
+        startOfThisMonth,
+        DateTime(now.year, now.month + 1),
+      ),
+      InsightsPeriod.lastMonth => (
+        DateTime(now.year, now.month - 1),
+        startOfThisMonth,
+      ),
+      InsightsPeriod.last3Months => (
+        DateTime(now.year, now.month - 2),
+        DateTime(now.year, now.month + 1),
+      ),
     };
   }
 }
@@ -44,7 +53,11 @@ class MissedEarning {
   final TransactionEntry entry;
   final CardProduct betterCard;
   final Money missed;
-  const MissedEarning({required this.entry, required this.betterCard, required this.missed});
+  const MissedEarning({
+    required this.entry,
+    required this.betterCard,
+    required this.missed,
+  });
 }
 
 /// Everything design 04 Insights puts on screen, computed once.
@@ -114,7 +127,8 @@ class InsightsOverview {
 
   /// The category that earned the most, or null when nothing has been
   /// categorised yet. [byCategory] is sorted, so this is just its head.
-  CategoryEarning? get bestCategory => byCategory.isEmpty ? null : byCategory.first;
+  CategoryEarning? get bestCategory =>
+      byCategory.isEmpty ? null : byCategory.first;
 
   /// The card that earned the most — design 32's "Best card" tile.
   CategoryEarning? get bestCard => byCard.isEmpty ? null : byCard.first;
@@ -124,95 +138,127 @@ class InsightsOverview {
 /// period, this resolves to [InsightsOverview.empty] rather than an error —
 /// "you haven't spent anything this month" is a real answer, and the screen
 /// renders its own empty state from the zero counts.
-final insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPeriod>((ref, period) async {
-  final repo = ref.watch(userCardsRepositoryProvider);
-  if (repo == null) return InsightsOverview.empty;
+final insightsOverviewProvider =
+    FutureProvider.family<InsightsOverview, InsightsPeriod>((
+      ref,
+      period,
+    ) async {
+      final repo = ref.watch(userCardsRepositoryProvider);
+      if (repo == null) return InsightsOverview.empty;
 
-  final now = ref.watch(clockProvider).now();
-  final (from, to) = period.range(now);
+      final now = ref.watch(clockProvider).now();
+      final (from, to) = period.range(now);
 
-  final pairs = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
-  final productsByUserCardId = {for (final (uc, p) in pairs) uc.id: p};
-  final allProducts = [for (final (_, p) in pairs) p];
+      final pairs =
+          ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+      final productsByUserCardId = {for (final (uc, p) in pairs) uc.id: p};
+      final allProducts = [for (final (_, p) in pairs) p];
 
-  final transactions = await repo.fetchTransactions(from: from, to: to);
-  // Insights is a spending/rewards view. Keep income, investments and
-  // transfers out of both the spend total and the reward/card comparisons.
-  // The API exposes entry_kind so this remains correct for SMS-imported rows
-  // as well as manually logged rows.
-  final active = transactions
-      .where((t) => t.status == 'active' && t.entryKind == TxnEntryKind.spend && t.amount.paise > 0)
-      .toList();
-  if (active.isEmpty) return InsightsOverview.empty;
+      final transactions = await loadTransactionsWithOfflineCache(
+        ref,
+        repo: repo,
+        cacheKey:
+            'insights_transactions:${period.name}:${from.toIso8601String()}:${to.toIso8601String()}',
+        from: from,
+        to: to,
+      );
+      // Insights is a spending/rewards view. Keep income, investments and
+      // transfers out of both the spend total and the reward/card comparisons.
+      // The API exposes entry_kind so this remains correct for SMS-imported rows
+      // as well as manually logged rows.
+      final active = transactions
+          .where(
+            (t) =>
+                t.status == 'active' &&
+                t.entryKind == TxnEntryKind.spend &&
+                t.amount.paise > 0,
+          )
+          .toList();
+      if (active.isEmpty) return InsightsOverview.empty;
 
-  var earned = const Money.zero();
-  var spend = const Money.zero();
-  var missed = const Money.zero();
-  var missedCount = 0;
-  final byCategory = <String, Money>{};
-  final byCard = <String, Money>{};
-  final missedRows = <MissedEarning>[];
+      var earned = const Money.zero();
+      var spend = const Money.zero();
+      var missed = const Money.zero();
+      var missedCount = 0;
+      final byCategory = <String, Money>{};
+      final byCard = <String, Money>{};
+      final missedRows = <MissedEarning>[];
 
-  for (final txn in active) {
-    spend += txn.amount;
+      for (final txn in active) {
+        spend += txn.amount;
 
-    // Null reward means "not known", not "earned nothing" — such a row is
-    // left out of the earned total and its category bar entirely rather
-    // than dragging both down towards zero.
-    final reward = txn.rewardValue;
-    if (reward != null && !reward.isNegative) {
-      earned += reward;
-      final categoryLabel = txn.categoryName ?? 'Other';
-      byCategory[categoryLabel] = (byCategory[categoryLabel] ?? const Money.zero()) + reward;
-      final cardLabel = txn.cardDisplayName;
-      if (cardLabel != null) {
-        byCard[cardLabel] = (byCard[cardLabel] ?? const Money.zero()) + reward;
+        // Null reward means "not known", not "earned nothing" — such a row is
+        // left out of the earned total and its category bar entirely rather
+        // than dragging both down towards zero.
+        final reward = txn.rewardValue;
+        if (reward != null && !reward.isNegative) {
+          earned += reward;
+          final categoryLabel = txn.categoryName ?? 'Other';
+          byCategory[categoryLabel] =
+              (byCategory[categoryLabel] ?? const Money.zero()) + reward;
+          final cardLabel = txn.cardDisplayName;
+          if (cardLabel != null) {
+            byCard[cardLabel] =
+                (byCard[cardLabel] ?? const Money.zero()) + reward;
+          }
+        }
+
+        // Needs at least two owned cards to mean anything — with one card there
+        // was nothing else to have chosen. Same guard D6 Missed Opportunities
+        // applies.
+        if (allProducts.length < 2) {
+          continue;
+        }
+        if (txn.userCardId == null) {
+          continue;
+        }
+        final usedProduct = productsByUserCardId[txn.userCardId!];
+        if (usedProduct == null) {
+          continue; // card since archived — nothing to compare against
+        }
+
+        final comparison = compareToOwnedCards(
+          usedCard: usedProduct,
+          ownedCards: allProducts,
+          amount: txn.amount,
+          categoryId: txn.categoryId,
+        );
+        if (!comparison.hadBetterOption) continue;
+        missed += comparison.missedValue;
+        missedCount++;
+        missedRows.add(
+          MissedEarning(
+            entry: txn,
+            betterCard: comparison.betterCard!,
+            missed: comparison.missedValue,
+          ),
+        );
       }
-    }
 
-    // Needs at least two owned cards to mean anything — with one card there
-    // was nothing else to have chosen. Same guard D6 Missed Opportunities
-    // applies.
-    if (allProducts.length < 2) continue;
-    if (txn.userCardId == null) continue;
-    final usedProduct = productsByUserCardId[txn.userCardId!];
-    if (usedProduct == null) continue; // card since archived — nothing to compare against
+      List<CategoryEarning> ranked(Map<String, Money> totals) => [
+        for (final entry in totals.entries)
+          CategoryEarning(label: entry.key, earned: entry.value),
+      ]..sort((a, b) => b.earned.paise.compareTo(a.earned.paise));
 
-    final comparison = compareToOwnedCards(
-      usedCard: usedProduct,
-      ownedCards: allProducts,
-      amount: txn.amount,
-      categoryId: txn.categoryId,
-    );
-    if (!comparison.hadBetterOption) continue;
-    missed += comparison.missedValue;
-    missedCount++;
-    missedRows.add(
-      MissedEarning(entry: txn, betterCard: comparison.betterCard!, missed: comparison.missedValue),
-    );
-  }
+      final categories = ranked(byCategory);
+      final cards = ranked(byCard);
 
-  List<CategoryEarning> ranked(Map<String, Money> totals) =>
-      [for (final entry in totals.entries) CategoryEarning(label: entry.key, earned: entry.value)]
-        ..sort((a, b) => b.earned.paise.compareTo(a.earned.paise));
+      missedRows.sort((a, b) => b.missed.paise.compareTo(a.missed.paise));
 
-  final categories = ranked(byCategory);
-  final cards = ranked(byCard);
-
-  missedRows.sort((a, b) => b.missed.paise.compareTo(a.missed.paise));
-
-  return InsightsOverview(
-    earned: earned,
-    spend: spend,
-    missed: missed,
-    missedCount: missedCount,
-    transactionCount: active.length,
-    byCategory: categories,
-    byCard: cards,
-    topMissed: missedRows.take(3).toList(),
-  );
-});
+      return InsightsOverview(
+        earned: earned,
+        spend: spend,
+        missed: missed,
+        missedCount: missedCount,
+        transactionCount: active.length,
+        byCategory: categories,
+        byCard: cards,
+        topMissed: missedRows.take(3).toList(),
+      );
+    });
 
 /// Which period chip is selected. A plain [StateProvider] like Home's own
 /// category selection — session state, not persisted.
-final insightsPeriodProvider = StateProvider<InsightsPeriod>((ref) => InsightsPeriod.thisMonth);
+final insightsPeriodProvider = StateProvider<InsightsPeriod>(
+  (ref) => InsightsPeriod.thisMonth,
+);

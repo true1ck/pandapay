@@ -23,14 +23,12 @@ const currentPolicyVersion = '2026-08-07';
 /// separate required fields, never an either/or toggle, so a returning user
 /// isn't left implying one substitutes for the other. The two modes differ
 /// only in what happens with the phone number once OTP verification
-/// succeeds: [signUp] links it to the new account (so SMS-based transaction
-/// detection, UA-5.3, works from day one); [logIn] does NOT send it to the
-/// backend at all — there is no "verify phone matches this account" call in
-/// auth/'s actual API, so silently linking/overwriting a returning user's
-/// phone from an unverified login-time text field would be a real account-
-/// integrity risk. It's still collected and format-validated because the
-/// design requires the field to exist and be filled, just never wired to a
-/// write.
+/// succeeds: [signUp] links it to the new account, while [logIn] sends it as
+/// an account-match value. auth/ validates that a returning user's phone is
+/// either the same account phone or absent; it rejects a mismatch instead of
+/// overwriting another phone. This lets older email-only accounts complete
+/// their phone linkage and makes SMS-based transaction detection work after
+/// the next login.
 enum AuthMode { signUp, logIn }
 
 /// UA-3: OTP sign-in/sign-up against the real auth/ service.
@@ -52,8 +50,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _identifierController = TextEditingController();
 
   /// Both modes collect this now (design 06). Sign-up links it to the new
-  /// account; log-in validates its format but never sends it anywhere — see
-  /// [AuthMode]'s own doc comment for why.
+  /// account; log-in sends it to auth/ for a safe account match — see
+  /// [AuthMode]'s own doc comment for the mismatch protection.
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
 
@@ -122,11 +120,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .requestEmailOtp(
             identifier,
             isSignUp: _isSignUp,
-            phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
+            phoneNumber: _phoneController.text.trim(),
           );
       setState(() => _otpRequested = true);
     } catch (e) {
-      setState(() => _error = userFacingErrorMessage(e));
+      // The auth service deliberately rejects a second request while the
+      // first code is still valid. That is not a dead end: the code already
+      // in the user's inbox is the one they should enter. Move straight to
+      // the verification step instead of leaving them on a form whose only
+      // action is guaranteed to fail again.
+      final activeOtp =
+          e is ApiException &&
+          e.statusCode == 429 &&
+          e.userMessage.toLowerCase().contains('otp') &&
+          e.userMessage.toLowerCase().contains('active');
+      if (activeOtp) {
+        setState(() {
+          _otpRequested = true;
+          _error = 'A code was already sent. Enter that code below.';
+        });
+      } else {
+        setState(() => _error = userFacingErrorMessage(e));
+      }
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -149,9 +164,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         identifier,
         code,
         deviceId,
-        // Only sign-up has a phone to link; log-in leaves the account's
-        // existing linkage untouched — see AuthMode's doc comment.
-        phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
+        // auth/ validates the phone against the existing account on login and
+        // links it when an older email-only account has no phone yet.
+        phoneNumber: _phoneController.text.trim(),
       );
 
       final store = await ref.read(tokenStoreProvider.future);
@@ -161,14 +176,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
 
-      // Persist what we just verified so design 22's Email & phone screen
-      // has something real to show. Only sign-up sends the phone — see
-      // AuthMode's doc comment for why log-in never writes it.
+      // Persist what we just verified so design 22's Email & phone screen and
+      // the product profile have the same account identifiers. The auth
+      // service remains the authority for validating the phone.
       await ref
           .read(profileApiProvider)!
           .ensureProfile(
             email: identifier,
-            phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
+            phoneNumber: _phoneController.text.trim(),
           );
 
       // A4: record the three purpose-specific consents now that a profile
@@ -412,9 +427,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 /// The identifier step — design 06: always TWO required fields, email (which
-/// receives the code) and phone, never a toggle between them. Sign-up links
-/// the phone to the new account; log-in collects and validates it but never
-/// sends it anywhere (see AuthMode's doc comment).
+/// receives the code) and phone, never a toggle between them. Both paths send
+/// the phone to auth/; returning-user mismatches are rejected server-side.
 class _IdentifierStep extends StatelessWidget {
   final bool isSignUp;
   final bool isLight;
@@ -507,9 +521,8 @@ class _IdentifierStep extends StatelessWidget {
         Text('Phone number', style: labelStyle),
         const SizedBox(height: 2),
         Text(
-          // Sign-up genuinely wires this phone into SMS transaction
-          // detection; log-in only validates its format (see AuthMode's doc
-          // comment) — the copy says so rather than implying otherwise.
+          // Both paths use this phone for account matching and SMS transaction
+          // detection; auth/ rejects a mismatch for returning users.
           isSignUp
               ? 'Used to detect card transactions from your bank SMS.'
               : 'The phone number on your account.',
@@ -679,6 +692,7 @@ class _OtpStep extends StatelessWidget {
         const SizedBox(height: AppSpace.sm),
         TextField(
           controller: controller,
+          autofocus: true,
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.oneTimeCode],

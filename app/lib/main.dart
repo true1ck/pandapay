@@ -7,6 +7,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'app/design/app_theme.dart';
 import 'app/env.dart';
 import 'app/error_handling.dart';
+import 'app/providers.dart';
 import 'app/router.dart';
 import 'features/settings/appearance_providers.dart';
 
@@ -95,6 +96,12 @@ class PandaPayApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final textScale = ref.watch(textScaleProvider);
+    // Keep push registration attached to the application root. The service
+    // is still gated by the authenticated access token, but it must not wait
+    // for a particular tab/shell route to finish rendering after a cold
+    // launch or an app update. This closes the small session-restore race in
+    // which the token was available while the shell was still transitioning.
+    ref.watch(pushNotificationLifecycleProvider);
     return MaterialApp.router(
       title: 'PandaPay',
       theme: AppTheme.light(),

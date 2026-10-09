@@ -24,103 +24,177 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  Widget wrap({required List<Override> overrides}) {
+  Widget wrap({
+    required List<Override> overrides,
+    AuthMode mode = AuthMode.signUp,
+  }) {
     // router.dart wraps LoginScreen in a Scaffold for real (see its own
     // GoRoute for AppRoute.signUp) — LoginScreen itself is a bare Container,
     // so TextField/CheckboxListTile need that same Material ancestor here.
     return ProviderScope(
       overrides: overrides,
-      child: const MaterialApp(home: Scaffold(body: LoginScreen(mode: AuthMode.signUp))),
+      child: MaterialApp(
+        home: Scaffold(body: LoginScreen(mode: mode)),
+      ),
     );
   }
 
-  testWidgets('Send code is a no-op and shows a validation message when Terms is unchecked',
-      (tester) async {
-    var otpRequested = false;
-    final authApi = AuthApi(
-      authBaseUrl: 'http://auth.test',
-      client: MockClient((req) async {
-        otpRequested = true;
-        return http.Response('{}', 200);
-      }),
-    );
-
-    await tester.pumpWidget(wrap(overrides: [authApiProvider.overrideWithValue(authApi)]));
-
-    await tester.enterText(find.byType(TextField).at(0), 'newuser@example.com');
-    await tester.enterText(find.byType(TextField).at(1), '9876543210');
-    // Terms checkbox left unchecked deliberately.
-    await tester.ensureVisible(find.text('Send code'));
-    await tester.tap(find.text('Send code'));
-    await tester.pumpAndSettle();
-
-    expect(otpRequested, isFalse);
-    expect(find.textContaining('accept the Terms'), findsOneWidget);
-  });
-
-  testWidgets('a successful sign-up writes one POST /consents call per purpose', (tester) async {
-    final otpClient = MockClient((req) async {
-      if (req.url.path.contains('request-email-otp')) return http.Response('{}', 200);
-      if (req.url.path.contains('verify-email-otp')) {
-        return http.Response(
-          jsonEncode({'access_token': 'tok-abc', 'refresh_token': 'ref-abc'}),
-          200,
-        );
-      }
-      return http.Response('not found', 404);
-    });
-    final authApi = AuthApi(authBaseUrl: 'http://auth.test', client: otpClient);
-
-    final profileClient = MockClient((req) async {
-      return http.Response(
-        jsonEncode({
-          'profile': {'id': 'profile-new', 'display_name': null},
+  testWidgets(
+    'an active OTP opens the code field instead of trapping the user on Send code',
+    (tester) async {
+      final authApi = AuthApi(
+        authBaseUrl: 'http://auth.test',
+        client: MockClient((req) async {
+          return http.Response(
+            jsonEncode({
+              'success': false,
+              'message':
+                  'An OTP is already active. Please wait a moment before requesting a new one.',
+            }),
+            429,
+          );
         }),
-        201,
       );
-    });
 
-    final consentCalls = <Map<String, dynamic>>[];
-    final consentsClient = MockClient((req) async {
-      consentCalls.add(jsonDecode(req.body) as Map<String, dynamic>);
-      return http.Response('{"consent":{}}', 201);
-    });
+      await tester.pumpWidget(
+        wrap(
+          mode: AuthMode.logIn,
+          overrides: [authApiProvider.overrideWithValue(authApi)],
+        ),
+      );
+      await tester.enterText(find.byType(TextField).at(0), 'sujay@example.com');
+      await tester.enterText(find.byType(TextField).at(1), '9876543210');
+      await tester.tap(find.text('Send code'));
+      await tester.pumpAndSettle();
 
-    await tester.pumpWidget(wrap(overrides: [
-      authApiProvider.overrideWithValue(authApi),
-      profileApiProvider.overrideWithValue(
-        ProfileApi(apiBaseUrl: 'http://api.test', accessToken: 'tok-abc', client: profileClient),
-      ),
-      consentsApiProvider.overrideWithValue(
-        ConsentsApi(apiBaseUrl: 'http://api.test', accessToken: 'tok-abc', client: consentsClient),
-      ),
-    ]));
+      expect(find.text('Verification code'), findsOneWidget);
+      expect(
+        find.text('A code was already sent. Enter that code below.'),
+        findsOneWidget,
+      );
+      expect(find.text('Verify & continue'), findsOneWidget);
+    },
+  );
 
-    await tester.enterText(find.byType(TextField).at(0), 'newuser@example.com');
-    await tester.enterText(find.byType(TextField).at(1), '9876543210');
-    await tester.ensureVisible(find.byType(CheckboxListTile).at(0));
-    await tester.tap(find.byType(CheckboxListTile).at(0)); // required Terms
-    await tester.pump();
-    await tester.ensureVisible(find.text('Send code'));
-    await tester.tap(find.text('Send code'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'Send code is a no-op and shows a validation message when Terms is unchecked',
+    (tester) async {
+      var otpRequested = false;
+      final authApi = AuthApi(
+        authBaseUrl: 'http://auth.test',
+        client: MockClient((req) async {
+          otpRequested = true;
+          return http.Response('{}', 200);
+        }),
+      );
 
-    // OTP step now showing.
-    expect(find.text('Verification code'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).first, '1234');
-    await tester.tap(find.text('Verify & continue'));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        wrap(overrides: [authApiProvider.overrideWithValue(authApi)]),
+      );
 
-    expect(consentCalls.length, 3);
-    final purposes = consentCalls.map((c) => c['purpose']).toSet();
-    expect(purposes, {'terms', 'crowdsource', 'marketing'});
+      await tester.enterText(
+        find.byType(TextField).at(0),
+        'newuser@example.com',
+      );
+      await tester.enterText(find.byType(TextField).at(1), '9876543210');
+      // Terms checkbox left unchecked deliberately.
+      await tester.ensureVisible(find.text('Send code'));
+      await tester.tap(find.text('Send code'));
+      await tester.pumpAndSettle();
 
-    final terms = consentCalls.firstWhere((c) => c['purpose'] == 'terms');
-    expect(terms['granted'], isTrue);
-    expect(terms['sourceScreen'], 'A4');
+      expect(otpRequested, isFalse);
+      expect(find.textContaining('accept the Terms'), findsOneWidget);
+    },
+  );
 
-    // Crowdsource/marketing were left unchecked in this test.
-    final crowdsource = consentCalls.firstWhere((c) => c['purpose'] == 'crowdsource');
-    expect(crowdsource['granted'], isFalse);
-  });
+  testWidgets(
+    'a successful sign-up writes one POST /consents call per purpose',
+    (tester) async {
+      final otpClient = MockClient((req) async {
+        if (req.url.path.contains('request-email-otp')) {
+          return http.Response('{}', 200);
+        }
+        if (req.url.path.contains('verify-email-otp')) {
+          return http.Response(
+            jsonEncode({'access_token': 'tok-abc', 'refresh_token': 'ref-abc'}),
+            200,
+          );
+        }
+        return http.Response('not found', 404);
+      });
+      final authApi = AuthApi(
+        authBaseUrl: 'http://auth.test',
+        client: otpClient,
+      );
+
+      final profileClient = MockClient((req) async {
+        return http.Response(
+          jsonEncode({
+            'profile': {'id': 'profile-new', 'display_name': null},
+          }),
+          201,
+        );
+      });
+
+      final consentCalls = <Map<String, dynamic>>[];
+      final consentsClient = MockClient((req) async {
+        consentCalls.add(jsonDecode(req.body) as Map<String, dynamic>);
+        return http.Response('{"consent":{}}', 201);
+      });
+
+      await tester.pumpWidget(
+        wrap(
+          overrides: [
+            authApiProvider.overrideWithValue(authApi),
+            profileApiProvider.overrideWithValue(
+              ProfileApi(
+                apiBaseUrl: 'http://api.test',
+                accessToken: 'tok-abc',
+                client: profileClient,
+              ),
+            ),
+            consentsApiProvider.overrideWithValue(
+              ConsentsApi(
+                apiBaseUrl: 'http://api.test',
+                accessToken: 'tok-abc',
+                client: consentsClient,
+              ),
+            ),
+          ],
+        ),
+      );
+
+      await tester.enterText(
+        find.byType(TextField).at(0),
+        'newuser@example.com',
+      );
+      await tester.enterText(find.byType(TextField).at(1), '9876543210');
+      await tester.ensureVisible(find.byType(CheckboxListTile).at(0));
+      await tester.tap(find.byType(CheckboxListTile).at(0)); // required Terms
+      await tester.pump();
+      await tester.ensureVisible(find.text('Send code'));
+      await tester.tap(find.text('Send code'));
+      await tester.pumpAndSettle();
+
+      // OTP step now showing.
+      expect(find.text('Verification code'), findsOneWidget);
+      await tester.enterText(find.byType(TextField).first, '1234');
+      await tester.tap(find.text('Verify & continue'));
+      await tester.pumpAndSettle();
+
+      expect(consentCalls.length, 3);
+      final purposes = consentCalls.map((c) => c['purpose']).toSet();
+      expect(purposes, {'terms', 'crowdsource', 'marketing'});
+
+      final terms = consentCalls.firstWhere((c) => c['purpose'] == 'terms');
+      expect(terms['granted'], isTrue);
+      expect(terms['sourceScreen'], 'A4');
+
+      // Crowdsource/marketing were left unchecked in this test.
+      final crowdsource = consentCalls.firstWhere(
+        (c) => c['purpose'] == 'crowdsource',
+      );
+      expect(crowdsource['granted'], isFalse);
+    },
+  );
 }

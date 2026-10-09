@@ -456,6 +456,25 @@ class SpendReportsRepository {
     int buckets = 12,
     String? timeZone,
   }) async {
+    return SpendReport.fromJson(
+      await fetchReportJson(
+        period: period,
+        anchor: anchor,
+        buckets: buckets,
+        timeZone: timeZone,
+      ),
+    );
+  }
+
+  /// Fetches the exact aggregate response before domain parsing. The
+  /// app-level offline cache stores this JSON, so a later cold launch can
+  /// render the same report without downloading all transactions again.
+  Future<Map<String, dynamic>> fetchReportJson({
+    SpendPeriod period = SpendPeriod.month,
+    DateTime? anchor,
+    int buckets = 12,
+    String? timeZone,
+  }) async {
     final query = {
       'period': period.wireValue,
       'buckets': '$buckets',
@@ -471,9 +490,7 @@ class SpendReportsRepository {
         'GET /spend-report failed: ${response.statusCode} ${response.body}',
       );
     }
-    return SpendReport.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   Future<List<BudgetStatus>> fetchBudgets() async {
@@ -662,7 +679,8 @@ class RecurringSeries {
         cardName: json['cardName'] as String?,
         paymentMethod: json['paymentMethod'] as String?,
         detectionSource: json['detectionSource'] as String? ?? 'observed',
-        isMandate: json['isMandate'] == true || json['detectionSource'] == 'mandate',
+        isMandate:
+            json['isMandate'] == true || json['detectionSource'] == 'mandate',
       );
 }
 

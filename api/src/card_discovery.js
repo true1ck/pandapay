@@ -346,35 +346,68 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
 
       // Fallback for SMS: generate placeholders if no exact match found
       const haystack = normalise([message?.subject, message?.body].filter(Boolean).join(' '));
-      for (const issuer of issuers) {
-        const normIssuer = normalise(issuer);
-        if (haystack.includes(normIssuer)) {
-          const l4sToUse = last4s.length === 0 ? [''] : last4s;
-          for (const l4 of l4sToUse) {
-            // Skip a card this issuer was seen debiting an account for.
-            if (debitPoisoned.has(`${normIssuer}|${l4}`)) continue;
-            const placeholderId = `placeholder_${normIssuer}_${l4}`;
-            const existing = byCard.get(placeholderId);
-            
-            if (existing) {
-              existing.messageCount += 1;
-              if (existing.creditLimitInr == null && creditLimit) {
-                existing.creditLimitInr = creditLimit.amountInr;
-              }
-            } else {
-              const nameSuffix = l4 ? ` ending in ${l4}` : '';
-              byCard.set(placeholderId, {
-                cardProductId: placeholderId,
-                name: `${issuer} Card${nameSuffix}`,
-                score: 0.1,
-                evidence: [`Transaction matched ${issuer}`],
-                last4: l4 ? [l4] : [],
-                messageCount: 1,
-                isPlaceholder: true,
-                issuerName: issuer,
-                creditLimitInr: creditLimit?.amountInr ?? null,
-              });
+      const matchingIssuers = [...issuers].filter((issuer) =>
+        haystack.includes(normalise(issuer))
+      );
+
+      // Some banks identify a physical credit card only as "your credit card
+      // XX9080". There is no safe catalogue product to infer from that text,
+      // but the suffix is still useful evidence: surface one generic card
+      // placeholder so the user can select the matching catalogue product.
+      // This is deliberately used only when no issuer is present, otherwise
+      // the issuer-specific placeholder below is more helpful.
+      if (matchingIssuers.length === 0 && last4s.length > 0) {
+        for (const l4 of last4s) {
+          const placeholderId = `placeholder_card_${l4}`;
+          const existing = byCard.get(placeholderId);
+          if (existing) {
+            existing.messageCount += 1;
+            if (existing.creditLimitInr == null && creditLimit) {
+              existing.creditLimitInr = creditLimit.amountInr;
             }
+          } else {
+            byCard.set(placeholderId, {
+              cardProductId: placeholderId,
+              name: `Credit card ending in ${l4}`,
+              score: 0.1,
+              evidence: [`Transaction matched card ending in ${l4}`],
+              last4: [l4],
+              messageCount: 1,
+              isPlaceholder: true,
+              issuerName: null,
+              creditLimitInr: creditLimit?.amountInr ?? null,
+            });
+          }
+        }
+      }
+
+      for (const issuer of matchingIssuers) {
+        const normIssuer = normalise(issuer);
+        const l4sToUse = last4s.length === 0 ? [''] : last4s;
+        for (const l4 of l4sToUse) {
+          // Skip a card this issuer was seen debiting an account for.
+          if (debitPoisoned.has(`${normIssuer}|${l4}`)) continue;
+          const placeholderId = `placeholder_${normIssuer}_${l4}`;
+          const existing = byCard.get(placeholderId);
+
+          if (existing) {
+            existing.messageCount += 1;
+            if (existing.creditLimitInr == null && creditLimit) {
+              existing.creditLimitInr = creditLimit.amountInr;
+            }
+          } else {
+            const nameSuffix = l4 ? ` ending in ${l4}` : '';
+            byCard.set(placeholderId, {
+              cardProductId: placeholderId,
+              name: `${issuer} Card${nameSuffix}`,
+              score: 0.1,
+              evidence: [`Transaction matched ${issuer}`],
+              last4: l4 ? [l4] : [],
+              messageCount: 1,
+              isPlaceholder: true,
+              issuerName: issuer,
+              creditLimitInr: creditLimit?.amountInr ?? null,
+            });
           }
         }
       }

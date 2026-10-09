@@ -21,6 +21,13 @@ void main() {
     expect(await cache.get('catalogue'), '{"cards":[]}');
   });
 
+  test('read returns the body and a durable fetched timestamp', () async {
+    await cache.put('insights:user-1:this-month', '{"transactions":[]}');
+    final entry = await cache.read('insights:user-1:this-month');
+    expect(entry?.rawJson, '{"transactions":[]}');
+    expect(entry?.fetchedAt, isNotNull);
+  });
+
   test('put overwrites a previous value for the same key', () async {
     await cache.put('catalogue', 'first');
     await cache.put('catalogue', 'second');

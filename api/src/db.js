@@ -21,6 +21,14 @@ async function withUserClient(userId, fn) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Keep every request bounded at the database too. Without a statement
+    // deadline a stalled report query can keep the HTTP request, transaction,
+    // and pool connection alive indefinitely, which is exactly the failure
+    // mode that presents as an endless skeleton on mobile.
+    await client.query(
+      "SELECT set_config('statement_timeout', $1, true)",
+      [`${config.dbStatementTimeoutMs}ms`],
+    );
     if (userId) {
       await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
     }

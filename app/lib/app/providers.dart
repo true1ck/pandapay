@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -134,6 +135,21 @@ final localDeviceIdProvider = FutureProvider<String>(
 /// by sessionInitProvider from a stored refresh token; login_screen.dart
 /// persists both tokens on a fresh OTP sign-in.
 final accessTokenProvider = StateProvider<String?>((ref) => null);
+
+/// Namespaces persisted response snapshots by account. The SQLite file is
+/// shared by the install, so a logout followed by another login must never
+/// allow the second account to read the first account's cards, transactions,
+/// or Insights report while offline.
+final cacheNamespaceProvider = Provider<String>((ref) {
+  return _cacheNamespaceForToken(ref.watch(accessTokenProvider));
+});
+
+String _cacheNamespaceForToken(String? token) {
+  if (token == null) return 'signed-out';
+  final subject = _jwtSubject(token);
+  if (subject != null && subject.isNotEmpty) return 'user:$subject';
+  return 'session:${sha256.convert(utf8.encode(token)).toString()}';
+}
 
 /// Whether this app PROCESS has already passed biometric_lock_screen.dart's
 /// challenge. Deliberately plain in-memory state, never persisted — a
@@ -417,21 +433,16 @@ final userSettingsApiProvider = Provider<UserSettingsApi?>((ref) {
 /// resolve a stored refresh token through auth/'s real POST /auth/refresh
 /// on startup. Temporary refresh failures preserve the cached session, while
 /// a definitive 401/403 clears unrecoverable credentials and returns to login.
-bool _isExpiredAccessToken(String token) {
+String? _jwtSubject(String token) {
   try {
     final parts = token.split('.');
-    if (parts.length != 3) return false;
+    if (parts.length != 3) return null;
     final payload =
         jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))))
             as Map<String, dynamic>;
-    final expiry = (payload['exp'] as num?)?.toInt();
-    if (expiry == null) return false;
-    // Treat a token as expired slightly early so a request is not started in
-    // the small window where it can expire while travelling to the API.
-    return DateTime.now().millisecondsSinceEpoch >= (expiry * 1000) - 30000;
+    return payload['sub'] as String?;
   } catch (_) {
-    // Opaque tokens are still accepted; the API remains the source of truth.
-    return false;
+    return null;
   }
 }
 
@@ -486,15 +497,18 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
       // local retry queue remain intact and will be imported after login.
       await store.clear();
       ref.read(accessTokenProvider.notifier).state = null;
-    } else if (storedAccessToken != null &&
-        !_isExpiredAccessToken(storedAccessToken)) {
-      // Network/5xx failures are temporary. Keep the last access token so
-      // cached data and the next keep-alive retry remain usable.
+    } else if (storedAccessToken != null) {
+      // Network/5xx failures are temporary. Keep the last access token even
+      // when it has expired: the refresh token may still recover the session
+      // on the next retry. Clearing it here would make go_router send a
+      // returning user to Welcome solely because the device was briefly
+      // offline during startup. Authenticated requests retry refresh through
+      // AuthenticatedHttpClient; a definitive 401/403 still clears the
+      // credentials above.
       ref.read(accessTokenProvider.notifier).state = storedAccessToken;
     } else {
-      // Do not publish a known-expired token. That state made every report
-      // provider render "Missing or invalid access token" after a transient
-      // startup network failure until the user force-closed the app.
+      // There is no cached credential to preserve, so the router can safely
+      // show the unauthenticated entry point.
       ref.read(accessTokenProvider.notifier).state = null;
     }
   }
@@ -502,7 +516,8 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
 
 bool _isRejectedCredentialRefresh(Object error) {
   if (error is! ApiException) return false;
-  return RegExp(r'\b(401|403)\b').hasMatch(error.debugMessage);
+  final statusCode = error.statusCode;
+  return statusCode == 401 || statusCode == 403;
 }
 
 /// Keeps a signed-in session alive for as long as the app stays open, not
@@ -797,14 +812,44 @@ final spendReportProvider = FutureProvider.family<SpendReport?, SpendPeriod>((
 ) async {
   final repo = ref.watch(spendReportsRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchReport(
-    period: period,
-    // Periods are about the user's device calendar. Sending the device
-    // instant prevents a server clock that is a few hours/days behind from
-    // reporting September when the user is already in October.
-    anchor: DateTime.now().toUtc(),
-    timeZone: ref.watch(deviceTimeZoneProvider),
+  final anchor = DateTime.now().toUtc();
+  final timeZone = ref.watch(deviceTimeZoneProvider);
+  final bucket = _spendReportBucket(period, DateTime.now());
+  final key = _scopedCacheKey(
+    ref,
+    '$_spendReportCacheKey:${period.wireValue}:${_cacheDate(bucket)}:$timeZone',
   );
+  final cache = await _cacheOrNull(ref);
+  try {
+    final raw = await repo.fetchReportJson(
+      period: period,
+      // Periods are about the user's device calendar. Sending the device
+      // instant prevents a server clock that is a few hours/days behind from
+      // reporting September when the user is already in October.
+      anchor: anchor,
+      timeZone: timeZone,
+    );
+    try {
+      await cache?.put(key, jsonEncode(raw));
+    } catch (_) {
+      // A disk/cache failure must never make a successful report unusable.
+    }
+    return SpendReport.fromJson(raw);
+  } catch (error) {
+    if (!_canUseStaleCache(error)) rethrow;
+    final cached = await _readCacheOrNull(cache, key);
+    if (cached == null) rethrow;
+    try {
+      return SpendReport.fromJson(
+        jsonDecode(cached.rawJson) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      try {
+        await cache?.clear(key);
+      } catch (_) {}
+      rethrow;
+    }
+  }
 });
 
 /// The period the Trends screen is currently showing.
@@ -865,16 +910,22 @@ final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
     return local.fetchUserCards(catalogue: catalogue);
   }
   try {
-    final cards = await repo.fetchUserCards();
+    final cards = await repo.fetchUserCards().timeout(_homeRequestTimeout);
     final cache = await _cacheOrNull(ref);
-    await cache?.put(
-      _userCardsCacheKey,
-      jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
-    );
+    try {
+      await cache?.put(
+        _scopedCacheKey(ref, _userCardsCacheKey),
+        jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
+      );
+    } catch (_) {
+      // A local-database write must never turn a successful wallet fetch into
+      // an error. The next successful fetch will repair the snapshot.
+    }
     return cards;
-  } catch (_) {
+  } catch (error) {
+    if (!_canUseStaleCache(error)) rethrow;
     final cache = await _cacheOrNull(ref);
-    final cached = await cache?.get(_userCardsCacheKey);
+    final cached = await cache?.get(_scopedCacheKey(ref, _userCardsCacheKey));
     if (cached == null) rethrow;
     final body = jsonDecode(cached) as Map<String, dynamic>;
     return (body['userCards'] as List)
@@ -891,7 +942,11 @@ final transactionsProvider = FutureProvider<List<TransactionEntry>>((
 ) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchTransactions();
+  return loadTransactionsWithOfflineCache(
+    ref,
+    repo: repo,
+    cacheKey: '$_transactionsCacheKey:all',
+  );
 });
 
 /// Transactions needed by credit utilization. The ordinary activity provider
@@ -905,7 +960,13 @@ final utilizationTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   final now = ref.watch(clockProvider).now();
-  return repo.fetchTransactions(from: DateTime(now.year, now.month - 2, 1));
+  final from = DateTime(now.year, now.month - 2, 1);
+  return loadTransactionsWithOfflineCache(
+    ref,
+    repo: repo,
+    cacheKey: '$_transactionsCacheKey:utilization:${_cacheDate(from)}',
+    from: from,
+  );
 });
 
 final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((
@@ -926,16 +987,24 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
   final repo = ref.watch(cardOverridesRepositoryProvider);
   if (repo == null) return const [];
   try {
-    final overrides = await repo.fetchOverrides();
+    final overrides = await repo.fetchOverrides().timeout(_homeRequestTimeout);
     final cache = await _cacheOrNull(ref);
-    await cache?.put(
-      _cardOverridesCacheKey,
-      jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
-    );
+    try {
+      await cache?.put(
+        _scopedCacheKey(ref, _cardOverridesCacheKey),
+        jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
+      );
+    } catch (_) {
+      // A local-database write must never turn a successful override fetch
+      // into an error. The next successful fetch will repair the snapshot.
+    }
     return overrides;
-  } catch (_) {
+  } catch (error) {
+    if (!_canUseStaleCache(error)) rethrow;
     final cache = await _cacheOrNull(ref);
-    final cached = await cache?.get(_cardOverridesCacheKey);
+    final cached = await cache?.get(
+      _scopedCacheKey(ref, _cardOverridesCacheKey),
+    );
     // Overrides are an enhancement to ranking, not a prerequisite for
     // showing the wallet. If this is the first signed-in request and there is
     // no cache yet, fail open with the base catalogue instead of replacing
@@ -958,8 +1027,9 @@ final cacheLifecycleProvider = Provider<void>((ref) {
   ref.listen<String?>(accessTokenProvider, (previous, next) async {
     if (previous != null && next == null) {
       final cache = await _cacheOrNull(ref);
-      await cache?.clear(_userCardsCacheKey);
-      await cache?.clear(_cardOverridesCacheKey);
+      final namespace = _cacheNamespaceForToken(previous);
+      await cache?.clear('$namespace:$_userCardsCacheKey');
+      await cache?.clear('$namespace:$_cardOverridesCacheKey');
     }
   });
 });
@@ -1625,6 +1695,17 @@ final responseCacheProvider = FutureProvider<ResponseCache>((ref) async {
   return ResponseCache(await ref.watch(appDatabaseProvider.future));
 });
 
+String _scopedCacheKey(Ref ref, String key) =>
+    '${ref.watch(cacheNamespaceProvider)}:$key';
+
+/// Do not replace an authenticated user's data with a cached snapshot when
+/// the server explicitly rejected the session. Network timeouts, offline
+/// sockets, and transient 5xx responses are safe stale-data fallbacks; 401
+/// and 403 are not.
+bool _canUseStaleCache(Object error) =>
+    error is! ApiException ||
+    (error.statusCode != 401 && error.statusCode != 403);
+
 /// The cache is always best-effort — every offline-cache-aware provider
 /// below calls this instead of watching responseCacheProvider directly, so
 /// a local-DB init failure (an unavailable platform channel in a plain
@@ -1633,6 +1714,17 @@ final responseCacheProvider = FutureProvider<ResponseCache>((ref) async {
 Future<ResponseCache?> _cacheOrNull(Ref ref) async {
   try {
     return await ref.watch(responseCacheProvider.future);
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<CachedResponse?> _readCacheOrNull(
+  ResponseCache? cache,
+  String key,
+) async {
+  try {
+    return await cache?.read(key);
   } catch (_) {
     return null;
   }
@@ -1653,7 +1745,9 @@ final lastSyncedAtProvider = FutureProvider<DateTime?>((ref) async {
   final cache = await _cacheOrNull(ref);
   if (cache == null) return null;
   try {
-    return await cache.lastFetchedAt();
+    return await cache.lastFetchedAt(
+      keyPrefix: '${ref.watch(cacheNamespaceProvider)}:',
+    );
   } catch (_) {
     return null;
   }
@@ -1663,6 +1757,88 @@ const _catalogueCacheKey = 'catalogue';
 const _categoriesCacheKey = 'categories';
 const _userCardsCacheKey = 'user_cards';
 const _cardOverridesCacheKey = 'card_overrides';
+// Home is a decision surface, not a background report. A socket that never
+// completes must become a cache/fallback/error state instead of leaving the
+// recommendation section in AsyncLoading forever.
+const _homeRequestTimeout = Duration(seconds: 15);
+const _spendReportCacheKey = 'spend_report';
+const _transactionsCacheKey = 'transactions';
+
+String _cacheDate(DateTime value) => value.toIso8601String();
+
+DateTime _spendReportBucket(SpendPeriod period, DateTime now) {
+  switch (period) {
+    case SpendPeriod.week:
+      return DateTime(now.year, now.month, now.day - (now.weekday - 1));
+    case SpendPeriod.month:
+      return DateTime(now.year, now.month);
+    case SpendPeriod.quarter:
+      final firstMonth = ((now.month - 1) ~/ 3) * 3 + 1;
+      return DateTime(now.year, firstMonth);
+    case SpendPeriod.year:
+      return DateTime(now.year);
+  }
+}
+
+/// Shared stale-safe transaction loader for Activity, Insights, and the
+/// period detail rows in Spending. The server remains authoritative, but a
+/// successful response is persisted before it is rendered so a cold offline
+/// launch still has a truthful last-known view.
+Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
+  Ref ref, {
+  required UserCardsRepository repo,
+  required String cacheKey,
+  DateTime? from,
+  DateTime? to,
+  String? cardId,
+  String? categoryId,
+  String? source,
+  String? query,
+}) async {
+  final key = _scopedCacheKey(ref, cacheKey);
+  final cache = await _cacheOrNull(ref);
+  try {
+    final transactions = await repo.fetchTransactions(
+      from: from,
+      to: to,
+      cardId: cardId,
+      categoryId: categoryId,
+      source: source,
+      query: query,
+    );
+    try {
+      await cache?.put(
+        key,
+        jsonEncode({
+          'transactions': transactions
+              .map((transaction) => transaction.toJson())
+              .toList(),
+        }),
+      );
+    } catch (_) {
+      // A cache write must never turn a successful online read into an error.
+    }
+    return transactions;
+  } catch (error) {
+    if (!_canUseStaleCache(error)) rethrow;
+    final cached = await _readCacheOrNull(cache, key);
+    if (cached == null) rethrow;
+    try {
+      final body = jsonDecode(cached.rawJson) as Map<String, dynamic>;
+      return (body['transactions'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(TransactionEntry.fromJson)
+          .toList();
+    } catch (_) {
+      // A partial/corrupt local row should be discarded rather than trapping
+      // every future request in the same parse failure.
+      try {
+        await cache?.clear(key);
+      } catch (_) {}
+      rethrow;
+    }
+  }
+}
 
 /// UA-0.3 offline step: live fetch first, caching the raw response on
 /// success; on ANY fetch failure, falls back to the last cached response
@@ -1717,22 +1893,37 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
   try {
     final categories = await ref
         .watch(categoryRepositoryProvider)
-        .fetchCategories();
+        .fetchCategories()
+        .timeout(_homeRequestTimeout);
     final cache = await _cacheOrNull(ref);
-    await cache?.put(
-      _categoriesCacheKey,
-      jsonEncode({'categories': categories.map((c) => c.toJson()).toList()}),
-    );
+    try {
+      await cache?.put(
+        _categoriesCacheKey,
+        jsonEncode({'categories': categories.map((c) => c.toJson()).toList()}),
+      );
+    } catch (_) {
+      // A cache write must never keep the Home recommendation state pending.
+    }
     return categories;
   } catch (_) {
-    final cache = await _cacheOrNull(ref);
-    final cached = await cache?.get(_categoriesCacheKey);
-    if (cached == null) rethrow;
-    final body = jsonDecode(cached) as Map<String, dynamic>;
-    return (body['categories'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(SpendCategory.fromJson)
-        .toList();
+    try {
+      final cache = await _cacheOrNull(ref);
+      final cached = await cache?.get(_categoriesCacheKey);
+      if (cached != null) {
+        final body = jsonDecode(cached) as Map<String, dynamic>;
+        return (body['categories'] as List)
+            .cast<Map<String, dynamic>>()
+            .map(SpendCategory.fromJson)
+            .toList();
+      }
+    } catch (_) {
+      // Fall through to the category-less ranking path below.
+    }
+
+    // Category ids improve the ranking but are not required to produce a
+    // truthful base-rate recommendation. The engine safely falls back to
+    // catch-all card rules until the next refresh can load the ids.
+    return const [];
   }
 });
 
@@ -1795,30 +1986,39 @@ final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>
     final selectedSlug = ref.watch(selectedCategoryProvider);
     final engine = ref.watch(recommendationEngineProvider);
 
-    if (catalogue.isLoading ||
-        categories.isLoading ||
-        userCards.isLoading ||
-        overrides.isLoading) {
+    // Riverpod keeps the previous value on an AsyncValue while a provider is
+    // being refreshed. Do not throw that value away just because one of the
+    // dependencies is temporarily loading: Home can continue to show the
+    // last known recommendations while the refresh completes. Returning a
+    // fresh loading state here made SMS reconciliation, wallet sync, and
+    // auth/session refreshes replace a stable Home section with a spinner.
+    final allCards = catalogue.valueOrNull;
+    // Category ids and overrides enrich the verdict, but neither is required
+    // to render a safe base-rate recommendation. They may be loading after a
+    // cold start or recovering from a transient API failure; do not make the
+    // whole Home section wait for either optional dependency.
+    final categoryList = categories.valueOrNull ?? const <SpendCategory>[];
+    final wallet = userCards.valueOrNull;
+    final overrideList = overrides.valueOrNull ?? const <CardOverride>[];
+    final combinedError = catalogue.error ?? userCards.error;
+
+    // No previous value exists on the first load. In that case preserve the
+    // normal loading/error states; during a refresh, the valueOrNull checks
+    // below are satisfied and the stale data path remains usable.
+    if (allCards == null || wallet == null) {
+      if (combinedError != null) {
+        return AsyncValue.error(
+          combinedError,
+          catalogue.stackTrace ??
+              userCards.stackTrace ??
+              categories.stackTrace ??
+              overrides.stackTrace ??
+              StackTrace.current,
+        );
+      }
       return const AsyncValue.loading();
     }
-    final combinedError =
-        catalogue.error ??
-        categories.error ??
-        userCards.error ??
-        overrides.error;
-    if (combinedError != null) {
-      return AsyncValue.error(
-        combinedError,
-        catalogue.stackTrace ??
-            categories.stackTrace ??
-            userCards.stackTrace ??
-            overrides.stackTrace!,
-      );
-    }
 
-    final allCards = catalogue.requireValue;
-    final categoryList = categories.requireValue;
-    final wallet = userCards.requireValue;
     final categoryId = categoryList
         .firstWhereOrNull((c) => c.slug == selectedSlug)
         ?.id;
@@ -1833,7 +2033,7 @@ final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>
     // (no merchant/vpa yet, that's B3's scan-result context), so vpa/
     // merchantName are omitted here on purpose.
     final overrideProductId = resolveActiveOverrideCardProductId(
-      overrides: overrides.requireValue,
+      overrides: overrideList,
       wallet: wallet,
       categoryId: categoryId,
     );

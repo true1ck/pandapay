@@ -17,18 +17,39 @@ class _FakeCatalogueRepository implements CatalogueRepository {
   Future<List<CardProduct>> fetchCatalogue() async => cards;
 }
 
-CardProduct _flatRateCard(String id, double ratePercent, {ForexRule? forexRule}) {
+class _FailingCategoryRepository implements CategoryRepository {
+  @override
+  Future<List<SpendCategory>> fetchCategories() async {
+    throw StateError('categories unavailable');
+  }
+}
+
+CardProduct _flatRateCard(
+  String id,
+  double ratePercent, {
+  ForexRule? forexRule,
+}) {
   return CardProduct(
     id: id,
     name: 'Card $id',
     network: CardNetwork.rupay,
     isUpiLinkable: true,
-    rewardRules: [RewardRule(id: '$id-rule', unit: RewardUnit.cashbackPercent, rate: ratePercent)],
+    rewardRules: [
+      RewardRule(
+        id: '$id-rule',
+        unit: RewardUnit.cashbackPercent,
+        rate: ratePercent,
+      ),
+    ],
     forexRule: forexRule,
   );
 }
 
-UserCard _owned(String cardProductId, {Money? creditLimit, Map<String, Money> capConsumed = const {}}) {
+UserCard _owned(
+  String cardProductId, {
+  Money? creditLimit,
+  Map<String, Money> capConsumed = const {},
+}) {
   return UserCard(
     id: 'uc-$cardProductId',
     cardProductId: cardProductId,
@@ -51,15 +72,65 @@ TransactionEntry _creditSpend(String cardId, double amount) => TransactionEntry(
 );
 
 void main() {
+  test('category loading fails open so Home cannot spin forever', () async {
+    final container = ProviderContainer(
+      overrides: [
+        categoryRepositoryProvider.overrideWithValue(
+          _FailingCategoryRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(await container.read(categoriesProvider.future), isEmpty);
+  });
+
+  test(
+    'Home ranks core data while optional enrichments are still loading',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          catalogueProvider.overrideWith(
+            (ref) async => [_flatRateCard('home-card', 2)],
+          ),
+          userCardsProvider.overrideWith((ref) async => const []),
+          categoriesProvider.overrideWith((ref) async {
+            await Future<void>.delayed(const Duration(days: 1));
+            return const [];
+          }),
+          cardOverridesProvider.overrideWith((ref) async {
+            await Future<void>.delayed(const Duration(days: 1));
+            return const [];
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(rankedRecommendationsProvider);
+      await Future<void>.delayed(Duration.zero);
+
+      final ranked = container.read(rankedRecommendationsProvider);
+      expect(ranked, isA<AsyncData<List<Recommendation>>>());
+      expect(ranked.requireValue.single.card.id, 'home-card');
+    },
+  );
+
   group('rankedRecommendationsProvider catalogue fallback', () {
     Future<List<Recommendation>> rankForWallet(List<UserCard> wallet) async {
-      final cards = List.generate(4, (index) => _flatRateCard('card-$index', index + 1.0));
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => wallet),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(cards)),
-        categoriesProvider.overrideWith((ref) async => const []),
-        cardOverridesProvider.overrideWith((ref) async => const []),
-      ]);
+      final cards = List.generate(
+        4,
+        (index) => _flatRateCard('card-$index', index + 1.0),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => wallet),
+          catalogueRepositoryProvider.overrideWithValue(
+            _FakeCatalogueRepository(cards),
+          ),
+          categoriesProvider.overrideWith((ref) async => const []),
+          cardOverridesProvider.overrideWith((ref) async => const []),
+        ],
+      );
       addTearDown(container.dispose);
 
       await container.read(userCardsProvider.future);
@@ -73,7 +144,11 @@ void main() {
       final recommendations = await rankForWallet(const []);
 
       expect(recommendations, hasLength(3));
-      expect(recommendations.map((r) => r.card.id), ['card-3', 'card-2', 'card-1']);
+      expect(recommendations.map((r) => r.card.id), [
+        'card-3',
+        'card-2',
+        'card-1',
+      ]);
     });
 
     test('keeps every card from the user wallet in the ranking', () async {
@@ -85,7 +160,12 @@ void main() {
       ]);
 
       expect(recommendations, hasLength(4));
-      expect(recommendations.map((r) => r.card.id).toSet(), {'card-0', 'card-1', 'card-2', 'card-3'});
+      expect(recommendations.map((r) => r.card.id).toSet(), {
+        'card-0',
+        'card-1',
+        'card-2',
+        'card-3',
+      });
     });
   });
 
@@ -96,24 +176,35 @@ void main() {
       expect(container.read(travelModeProvider), isFalse);
     });
 
-    test('flipping it updates rankedRecommendationsProvider\'s RecommendationContext', () {
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => const []),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_flatRateCard('a', 2)])),
-      ]);
-      addTearDown(container.dispose);
+    test(
+      'flipping it updates rankedRecommendationsProvider\'s RecommendationContext',
+      () {
+        final container = ProviderContainer(
+          overrides: [
+            userCardsProvider.overrideWith((ref) async => const []),
+            catalogueRepositoryProvider.overrideWithValue(
+              _FakeCatalogueRepository([_flatRateCard('a', 2)]),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
 
-      container.read(travelModeProvider.notifier).state = true;
-      expect(container.read(travelModeProvider), isTrue);
-    });
+        container.read(travelModeProvider.notifier).state = true;
+        expect(container.read(travelModeProvider), isTrue);
+      },
+    );
   });
 
   group('creditUtilizationProvider', () {
     test('is empty when no owned card has a credit limit set', () async {
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => [_owned('a')]),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_flatRateCard('a', 2)])),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => [_owned('a')]),
+          catalogueRepositoryProvider.overrideWithValue(
+            _FakeCatalogueRepository([_flatRateCard('a', 2)]),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       await container.read(userCardsProvider.future);
@@ -122,46 +213,77 @@ void main() {
       expect(container.read(creditUtilizationProvider), isEmpty);
     });
 
-    test('computes utilization keyed by UserCard.id for cards with a limit', () async {
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => [
-              _owned('a', creditLimit: Money.fromRupees(10000), capConsumed: {'cap1': Money.fromRupees(4000)}),
-            ]),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_flatRateCard('a', 2)])),
-        utilizationTransactionsProvider.overrideWith((ref) async => [_creditSpend('uc-a', 4000)]),
-      ]);
-      addTearDown(container.dispose);
+    test(
+      'computes utilization keyed by UserCard.id for cards with a limit',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            userCardsProvider.overrideWith(
+              (ref) async => [
+                _owned(
+                  'a',
+                  creditLimit: Money.fromRupees(10000),
+                  capConsumed: {'cap1': Money.fromRupees(4000)},
+                ),
+              ],
+            ),
+            catalogueRepositoryProvider.overrideWithValue(
+              _FakeCatalogueRepository([_flatRateCard('a', 2)]),
+            ),
+            utilizationTransactionsProvider.overrideWith(
+              (ref) async => [_creditSpend('uc-a', 4000)],
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
 
-      await container.read(userCardsProvider.future);
-      await container.read(catalogueProvider.future);
-      await container.read(utilizationTransactionsProvider.future);
+        await container.read(userCardsProvider.future);
+        await container.read(catalogueProvider.future);
+        await container.read(utilizationTransactionsProvider.future);
 
-      final result = container.read(creditUtilizationProvider);
-      expect(result.containsKey('uc-a'), isTrue);
-      expect(result['uc-a']!.ratio, closeTo(0.4, 0.0001));
-      expect(result['uc-a']!.overThreshold, isTrue); // 40% > the 30% default threshold
-    });
+        final result = container.read(creditUtilizationProvider);
+        expect(result.containsKey('uc-a'), isTrue);
+        expect(result['uc-a']!.ratio, closeTo(0.4, 0.0001));
+        expect(
+          result['uc-a']!.overThreshold,
+          isTrue,
+        ); // 40% > the 30% default threshold
+      },
+    );
 
-    test('a zero credit limit is treated the same as no limit (excluded, not a divide-by-zero card)', () async {
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => [_owned('a', creditLimit: const Money.zero())]),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_flatRateCard('a', 2)])),
-      ]);
-      addTearDown(container.dispose);
+    test(
+      'a zero credit limit is treated the same as no limit (excluded, not a divide-by-zero card)',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            userCardsProvider.overrideWith(
+              (ref) async => [_owned('a', creditLimit: const Money.zero())],
+            ),
+            catalogueRepositoryProvider.overrideWithValue(
+              _FakeCatalogueRepository([_flatRateCard('a', 2)]),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
 
-      await container.read(userCardsProvider.future);
-      await container.read(catalogueProvider.future);
+        await container.read(userCardsProvider.future);
+        await container.read(catalogueProvider.future);
 
-      expect(container.read(creditUtilizationProvider), isEmpty);
-    });
+        expect(container.read(creditUtilizationProvider), isEmpty);
+      },
+    );
   });
 
   group('splitPlanProvider', () {
     test('is empty when no amount has been entered yet', () async {
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => [_owned('a')]),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_flatRateCard('a', 2)])),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => [_owned('a')]),
+          catalogueRepositoryProvider.overrideWithValue(
+            _FakeCatalogueRepository([_flatRateCard('a', 2)]),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       await container.read(userCardsProvider.future);
@@ -170,97 +292,134 @@ void main() {
       expect(container.read(splitPlanProvider), isEmpty);
     });
 
-    test('is empty when the wallet is empty, even with an amount entered', () async {
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => const []),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(const [])),
-      ]);
-      addTearDown(container.dispose);
+    test(
+      'is empty when the wallet is empty, even with an amount entered',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            userCardsProvider.overrideWith((ref) async => const []),
+            catalogueRepositoryProvider.overrideWithValue(
+              _FakeCatalogueRepository(const []),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
 
-      await container.read(userCardsProvider.future);
-      await container.read(catalogueProvider.future);
-      container.read(splitPlannerAmountProvider.notifier).state = Money.fromRupees(1000);
+        await container.read(userCardsProvider.future);
+        await container.read(catalogueProvider.future);
+        container.read(splitPlannerAmountProvider.notifier).state =
+            Money.fromRupees(1000);
 
-      expect(container.read(splitPlanProvider), isEmpty);
-    });
+        expect(container.read(splitPlanProvider), isEmpty);
+      },
+    );
 
     test('allocates the full amount across a single owned card', () async {
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => [_owned('a')]),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_flatRateCard('a', 2)])),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => [_owned('a')]),
+          catalogueRepositoryProvider.overrideWithValue(
+            _FakeCatalogueRepository([_flatRateCard('a', 2)]),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       await container.read(userCardsProvider.future);
       await container.read(catalogueProvider.future);
-      container.read(splitPlannerAmountProvider.notifier).state = Money.fromRupees(1000);
+      container.read(splitPlannerAmountProvider.notifier).state =
+          Money.fromRupees(1000);
 
       final plan = container.read(splitPlanProvider);
       expect(plan, isNotEmpty);
-      final total = plan.fold<Money>(const Money.zero(), (a, b) => a + b.amount);
+      final total = plan.fold<Money>(
+        const Money.zero(),
+        (a, b) => a + b.amount,
+      );
       expect(total, Money.fromRupees(1000));
     });
   });
 
   group('emiAdviceProvider', () {
     test('returns null for a non-positive principal', () async {
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => [_owned('a')]),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_flatRateCard('a', 2)])),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => [_owned('a')]),
+          catalogueRepositoryProvider.overrideWithValue(
+            _FakeCatalogueRepository([_flatRateCard('a', 2)]),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       await container.read(userCardsProvider.future);
       await container.read(catalogueProvider.future);
 
-      final advice = container.read(emiAdviceProvider((
-        cardProductId: 'a',
-        principalRupees: 0,
-        tenureMonths: 6,
-        annualInterestRatePercent: 15,
-      )));
+      final advice = container.read(
+        emiAdviceProvider((
+          cardProductId: 'a',
+          principalRupees: 0,
+          tenureMonths: 6,
+          annualInterestRatePercent: 15,
+        )),
+      );
       expect(advice, isNull);
     });
 
     test('returns null when the card id is not in the owned wallet', () async {
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => [_owned('a')]),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_flatRateCard('a', 2)])),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => [_owned('a')]),
+          catalogueRepositoryProvider.overrideWithValue(
+            _FakeCatalogueRepository([_flatRateCard('a', 2)]),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       await container.read(userCardsProvider.future);
       await container.read(catalogueProvider.future);
 
-      final advice = container.read(emiAdviceProvider((
-        cardProductId: 'not-owned',
-        principalRupees: 5000,
-        tenureMonths: 6,
-        annualInterestRatePercent: 15,
-      )));
+      final advice = container.read(
+        emiAdviceProvider((
+          cardProductId: 'not-owned',
+          principalRupees: 5000,
+          tenureMonths: 6,
+          annualInterestRatePercent: 15,
+        )),
+      );
       expect(advice, isNull);
     });
 
-    test('returns real EMI advice with forgone rewards computed off the card\'s own rate', () async {
-      final container = ProviderContainer(overrides: [
-        userCardsProvider.overrideWith((ref) async => [_owned('a')]),
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([_flatRateCard('a', 2)])),
-      ]);
-      addTearDown(container.dispose);
+    test(
+      'returns real EMI advice with forgone rewards computed off the card\'s own rate',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            userCardsProvider.overrideWith((ref) async => [_owned('a')]),
+            catalogueRepositoryProvider.overrideWithValue(
+              _FakeCatalogueRepository([_flatRateCard('a', 2)]),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
 
-      await container.read(userCardsProvider.future);
-      await container.read(catalogueProvider.future);
+        await container.read(userCardsProvider.future);
+        await container.read(catalogueProvider.future);
 
-      final advice = container.read(emiAdviceProvider((
-        cardProductId: 'a',
-        principalRupees: 12000,
-        tenureMonths: 12,
-        annualInterestRatePercent: 15,
-      )));
-      expect(advice, isNotNull);
-      // 2% of 12000 = 240, the forgone-rewards figure baked into effectiveCost.
-      expect(advice!.forfeitedRewards, Money.fromRupees(240));
-      expect(advice.totalInterest.paise, greaterThan(0));
-    });
+        final advice = container.read(
+          emiAdviceProvider((
+            cardProductId: 'a',
+            principalRupees: 12000,
+            tenureMonths: 12,
+            annualInterestRatePercent: 15,
+          )),
+        );
+        expect(advice, isNotNull);
+        // 2% of 12000 = 240, the forgone-rewards figure baked into effectiveCost.
+        expect(advice!.forfeitedRewards, Money.fromRupees(240));
+        expect(advice.totalInterest.paise, greaterThan(0));
+      },
+    );
   });
 }

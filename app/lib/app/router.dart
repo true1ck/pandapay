@@ -889,7 +889,6 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // points-expiry/monthly-report/needs-review notifications. Same "read
     // once from the shell" reasoning as everything else on this list.
     ref.watch(notificationTriggerLifecycleProvider);
-    ref.watch(pushNotificationLifecycleProvider);
     ref.watch(smsBackgroundFlushProvider);
     ref.watch(smsListenerLifecycleProvider);
     final tutorialKeys = ref.watch(tutorialKeysProvider);

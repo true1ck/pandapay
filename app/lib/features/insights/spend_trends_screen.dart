@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
@@ -30,7 +31,11 @@ final spendPeriodTransactionsProvider =
       final report = await ref.watch(spendReportProvider(period).future);
       if (report == null) return const [];
 
-      return repo.fetchTransactions(
+      return loadTransactionsWithOfflineCache(
+        ref,
+        repo: repo,
+        cacheKey:
+            'spend_detail:${period.wireValue}:${report.periodStart.toIso8601String()}:${report.periodEnd.toIso8601String()}',
         from: report.periodStart,
         to: report.periodEnd.subtract(const Duration(days: 1)),
       );
@@ -86,6 +91,13 @@ class SpendTrendsScreen extends ConsumerWidget {
         child: Column(
           children: [
             _PeriodSelector(selected: period),
+            OfflineBanner(
+              gutter: AppSpace.lg,
+              onRetry: () {
+                ref.invalidate(spendReportProvider(period));
+                ref.invalidate(spendPeriodTransactionsProvider(period));
+              },
+            ),
             Expanded(
               child: report.when(
                 loading: () => const Center(child: CircularProgressIndicator()),

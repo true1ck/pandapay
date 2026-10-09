@@ -42,6 +42,19 @@ void main() {
 
       expect(sentBody, {'email': 'a@b.com'});
     });
+
+    test('includes the phone for returning-account matching', () async {
+      late Map<String, dynamic> sentBody;
+      final client = MockClient((req) async {
+        sentBody = jsonDecode(req.body) as Map<String, dynamic>;
+        return http.Response('{}', 200);
+      });
+      final api = AuthApi(authBaseUrl: 'http://auth.test', client: client);
+
+      await api.requestEmailOtp('a@b.com', phoneNumber: '+919876543210');
+
+      expect(sentBody, {'email': 'a@b.com', 'phone_number': '+919876543210'});
+    });
   });
 
   group('AuthApi.verifyEmailOtp', () {

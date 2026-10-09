@@ -165,6 +165,7 @@ class HomeScreen extends ConsumerWidget {
               gutter: _gutter,
               onRetry: () {
                 ref.invalidate(catalogueProvider);
+                ref.invalidate(categoriesProvider);
                 ref.invalidate(userCardsProvider);
                 ref.invalidate(cardOverridesProvider);
               },
@@ -203,63 +204,113 @@ class _BrandHeader extends ConsumerWidget {
     final summary = ref.watch(homeSummaryProvider).valueOrNull;
     final hasEarnings = summary != null && summary.transactionCount > 0;
 
+    final earnings = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(greeting, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+        if (hasEarnings)
+          GestureDetector(
+            onTap: () => context.push(AppRoute.monthlySavings),
+            behavior: HitTestBehavior.opaque,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                MoneyText(
+                  key: const ValueKey('home-monthly-rewards'),
+                  summary.rewardsThisMonth,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.heading(17, color: BambooInk.ink900),
+                  suffix: ' earned',
+                  hidePaise: true,
+                  showConfidenceIcon: false,
+                ),
+                const SizedBox(height: 2),
+                MoneyText(
+                  key: const ValueKey('home-all-time-rewards'),
+                  summary.rewardsAllTime,
+                  confidence: Confidence.estimated,
+                  style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                  suffix: ' all-time ›',
+                  hidePaise: true,
+                  showConfidenceIcon: false,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+
+    final streakDays = summary?.streakDays ?? 0;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const PandaMark(size: 42),
         const SizedBox(width: AppSpace.md),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                greeting,
-                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-              ),
-              if (hasEarnings)
-                GestureDetector(
-                  onTap: () => context.push(AppRoute.monthlySavings),
-                  behavior: HitTestBehavior.opaque,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Flexible(
-                        child: MoneyText(
-                          summary.rewardsThisMonth,
-                          confidence: Confidence.estimated,
-                          style: BambooFonts.heading(
-                            17,
-                            color: BambooInk.ink900,
+          child: streakDays == 0
+              ? earnings
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            greeting,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.ink500,
+                            ),
                           ),
-                          suffix: ' earned',
-                          hidePaise: true,
-                          // One confidence marker for the pair, on the
-                          // all-time figure — not two on one 42pt row.
-                          showConfidenceIcon: false,
+                        ),
+                        const SizedBox(width: AppSpace.sm),
+                        _StreakPill(days: streakDays),
+                      ],
+                    ),
+                    if (hasEarnings)
+                      GestureDetector(
+                        onTap: () => context.push(AppRoute.monthlySavings),
+                        behavior: HitTestBehavior.opaque,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            MoneyText(
+                              key: const ValueKey('home-monthly-rewards'),
+                              summary.rewardsThisMonth,
+                              confidence: Confidence.estimated,
+                              style: BambooFonts.heading(
+                                17,
+                                color: BambooInk.ink900,
+                              ),
+                              suffix: ' earned',
+                              hidePaise: true,
+                              showConfidenceIcon: false,
+                            ),
+                            const SizedBox(height: 2),
+                            MoneyText(
+                              key: const ValueKey('home-all-time-rewards'),
+                              summary.rewardsAllTime,
+                              confidence: Confidence.estimated,
+                              style: BambooFonts.ui(
+                                11.5,
+                                color: BambooInk.ink500,
+                              ),
+                              suffix: ' all-time ›',
+                              hidePaise: true,
+                              showConfidenceIcon: false,
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 7),
-                      Flexible(
-                        child: MoneyText(
-                          summary.rewardsAllTime,
-                          confidence: Confidence.estimated,
-                          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                          suffix: ' all-time ›',
-                          hidePaise: true,
-                          showConfidenceIcon: false,
-                        ),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-            ],
-          ),
         ),
-        if (summary != null && summary.streakDays > 0) ...[
-          const SizedBox(width: AppSpace.sm),
-          _StreakPill(days: summary.streakDays),
-        ],
       ],
     );
   }
@@ -602,17 +653,27 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'How much are you spending?',
-                style: BambooFonts.ui(
-                  12.5,
-                  weight: FontWeight.w500,
-                  color: BambooInk.ink500,
+              Flexible(
+                child: Text(
+                  'How much are you spending?',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w500,
+                    color: BambooInk.ink500,
+                  ),
                 ),
               ),
-              Text(
-                'Tap to change',
-                style: BambooFonts.ui(12, color: BambooInk.ink300),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Tap to change',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: BambooFonts.ui(12, color: BambooInk.ink300),
+                ),
               ),
             ],
           ),

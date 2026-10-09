@@ -6,6 +6,12 @@ import 'package:uuid/uuid.dart';
 
 import 'api_exception.dart';
 
+// A report screen must never remain in a loading state because a mobile
+// socket or the API has stopped making progress. Callers that support stale
+// reads (Insights, Activity, and Spending) can then fall back to their local
+// snapshot; direct callers render a bounded error with retry.
+const _transactionRequestTimeout = Duration(seconds: 15);
+
 double _num(dynamic v) =>
     v == null ? 0 : (v is num ? v.toDouble() : double.parse(v as String));
 
@@ -1218,7 +1224,9 @@ class UserCardsRepository {
     final uri = Uri.parse(
       '$apiBaseUrl/transactions',
     ).replace(queryParameters: params.isEmpty ? null : params);
-    final response = await _client.get(uri, headers: _headers);
+    final response = await _client
+        .get(uri, headers: _headers)
+        .timeout(_transactionRequestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'GET /transactions failed: ${response.statusCode} ${response.body}',
@@ -1691,6 +1699,41 @@ class TransactionEntry {
     this.note,
     this.rewardValue,
   });
+
+  /// Local snapshot form. This intentionally mirrors only the fields needed
+  /// by [fromJson]; it is not a write payload and must never be sent back to
+  /// the API as a transaction mutation.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'amount_inr': amount.rupees,
+    'occurred_at': occurredAt.toIso8601String(),
+    'merchant_name': merchantName,
+    'category_id': categoryId,
+    'category_name': categoryName,
+    'card_name': cardDisplayName,
+    'card_nickname': null,
+    'card_last4': cardLast4,
+    'user_card_id': userCardId,
+    'rail': instrumentKnown ? _railToJson(rail) : null,
+    'instrument': instrumentKnown ? instrument.wireValue : null,
+    'entry_kind': entryKind.wireValue,
+    'source': source,
+    'status': status,
+    'note': note,
+    'expected_value_inr': rewardValue?.rupees,
+  };
+
+  static String _railToJson(TxnRail rail) {
+    final buffer = StringBuffer();
+    for (final char in rail.name.split('')) {
+      if (char == char.toUpperCase() && char != char.toLowerCase()) {
+        buffer.write('_${char.toLowerCase()}');
+      } else {
+        buffer.write(char);
+      }
+    }
+    return buffer.toString();
+  }
 
   factory TransactionEntry.fromJson(Map<String, dynamic> json) {
     final nickname = json['card_nickname'] as String?;
