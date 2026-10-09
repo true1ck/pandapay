@@ -938,18 +938,41 @@ final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
     final catalogue = await ref.watch(catalogueProvider.future);
     return local.fetchUserCards(catalogue: catalogue);
   }
+  return _loadUserCardsWithOfflineCache(ref, repo);
+});
+
+Future<List<UserCard>> _loadUserCardsWithOfflineCache(
+  Ref ref,
+  UserCardsRepository repo, {
+  bool includeArchived = false,
+}) async {
   final cache = await _cacheOrNull(ref);
-  final cacheKey = _scopedCacheKey(ref, _userCardsCacheKey);
+  final cacheKey = _scopedCacheKey(
+    ref,
+    includeArchived ? _userCardsWithArchivedCacheKey : _userCardsCacheKey,
+  );
   final cached = await cache?.get(cacheKey);
-  if (_isKnownOffline() && cached != null) {
+
+  List<UserCard> decodeCached() {
+    if (cached == null) throw StateError('No cached user cards available');
     final body = jsonDecode(cached) as Map<String, dynamic>;
     return (body['userCards'] as List)
         .cast<Map<String, dynamic>>()
         .map(UserCard.fromJson)
         .toList();
   }
+
+  List<UserCard> visibleCards(Iterable<UserCard> cards) =>
+      cards.where((card) => card.isArchived == includeArchived).toList();
+
+  if (_isKnownOffline() && cached != null) {
+    return visibleCards(decodeCached());
+  }
+
   try {
-    final cards = await repo.fetchUserCards().timeout(_homeRequestTimeout);
+    final cards = await repo
+        .fetchUserCards(includeArchived: includeArchived)
+        .timeout(_homeRequestTimeout);
     try {
       await cache?.put(
         cacheKey,
@@ -959,17 +982,12 @@ final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
       // A local-database write must never turn a successful wallet fetch into
       // an error. The next successful fetch will repair the snapshot.
     }
-    return cards;
+    return visibleCards(cards);
   } catch (error) {
-    if (!_canUseStaleCache(error)) rethrow;
-    if (cached == null) rethrow;
-    final body = jsonDecode(cached) as Map<String, dynamic>;
-    return (body['userCards'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(UserCard.fromJson)
-        .toList();
+    if (!_canUseStaleCache(error) || cached == null) rethrow;
+    return visibleCards(decodeCached());
   }
-});
+}
 
 /// UA-3+ (Chunk 18): the Activity tab's data — empty (not an error) when
 /// signed out, same reasoning as userCardsProvider above.
@@ -1065,6 +1083,7 @@ final cacheLifecycleProvider = Provider<void>((ref) {
       final cache = await _cacheOrNull(ref);
       final namespace = previous;
       await cache?.clear('$namespace:$_userCardsCacheKey');
+      await cache?.clear('$namespace:$_userCardsWithArchivedCacheKey');
       await cache?.clear('$namespace:$_cardOverridesCacheKey');
     }
   });
@@ -1154,8 +1173,11 @@ final myCardsProvider = FutureProvider<List<UserCard>>((ref) async {
     );
     return cards.where((card) => card.isArchived == includeArchived).toList();
   }
-  final cards = await repo.fetchUserCards(includeArchived: includeArchived);
-  return cards.where((card) => card.isArchived == includeArchived).toList();
+  return _loadUserCardsWithOfflineCache(
+    ref,
+    repo,
+    includeArchived: includeArchived,
+  );
 });
 
 /// Task C-1/C-2: same join as ownedCardsWithProductProvider, but sourced
@@ -1838,6 +1860,7 @@ final lastSyncedAtProvider = FutureProvider<DateTime?>((ref) async {
 const _catalogueCacheKey = 'catalogue';
 const _categoriesCacheKey = 'categories';
 const _userCardsCacheKey = 'user_cards';
+const _userCardsWithArchivedCacheKey = 'user_cards_with_archived';
 const _cardOverridesCacheKey = 'card_overrides';
 // Home is a decision surface, not a background report. A socket that never
 // completes must become a cache/fallback/error state instead of leaving the
