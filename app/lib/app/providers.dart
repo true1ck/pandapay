@@ -83,37 +83,14 @@ final authApiProvider = Provider<AuthApi>(
 final authenticatedHttpClientProvider = Provider<AuthenticatedHttpClient>((
   ref,
 ) {
+  final refreshCoordinator = ref.read(sessionRefreshCoordinatorProvider);
   final client = AuthenticatedHttpClient(
     refreshAccessToken: () async {
-      final store = await ref.read(tokenStoreProvider.future);
-      final refreshToken = store.refreshToken;
-      final tokenBeforeRefresh = ref.read(accessTokenProvider);
-      if (refreshToken == null) return null;
-
-      try {
-        final tokens = await ref.read(authApiProvider).refresh(refreshToken);
-        // A newer login/refresh won the race while this request was away.
-        // Never overwrite that newer session with an older response.
-        if (ref.read(accessTokenProvider) != tokenBeforeRefresh) {
-          return ref.read(accessTokenProvider);
-        }
-        await store.save(
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-        );
-        ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
-        return tokens.accessToken;
-      } catch (error) {
-        if (_isRejectedCredentialRefresh(error) &&
-            ref.read(accessTokenProvider) == tokenBeforeRefresh) {
-          await store.clear();
-          ref.read(accessTokenProvider.notifier).state = null;
-        }
-        // The original API 401 is replayed to the repository. It can then
-        // surface a truthful auth error instead of hiding a network problem.
-        return null;
-      }
+      return refreshCoordinator.refresh();
     },
+    currentAccessToken: () => ref.read(accessTokenProvider),
+    refreshAccessTokenForToken: (rejectedAccessToken) =>
+        refreshCoordinator.refresh(expectedAccessToken: rejectedAccessToken),
   );
   ref.onDispose(client.close);
   return client;
@@ -136,6 +113,22 @@ final localDeviceIdProvider = FutureProvider<String>(
 /// persists both tokens on a fresh OTP sign-in.
 final accessTokenProvider = StateProvider<String?>((ref) => null);
 
+/// All refresh entry points in the app share this coordinator.  The auth
+/// service rotates refresh tokens as one-time credentials; separate locks in
+/// the HTTP client and lifecycle keep-alive can otherwise race after resume,
+/// make the server see the same token twice, and revoke the whole device
+/// family.  A single in-flight future also means a burst of 401s produces one
+/// refresh request and all callers reuse its result.
+final sessionRefreshCoordinatorProvider = Provider<SessionRefreshCoordinator>(
+  (ref) => SessionRefreshCoordinator(
+    loadStore: () => ref.read(tokenStoreProvider.future),
+    authApi: ref.read(authApiProvider),
+    readAccessToken: () => ref.read(accessTokenProvider),
+    writeAccessToken: (token) =>
+        ref.read(accessTokenProvider.notifier).state = token,
+  ),
+);
+
 /// Namespaces persisted response snapshots by account. The SQLite file is
 /// shared by the install, so a logout followed by another login must never
 /// allow the second account to read the first account's cards, transactions,
@@ -151,6 +144,14 @@ String _cacheNamespaceForToken(String? token) {
   return 'session:${sha256.convert(utf8.encode(token)).toString()}';
 }
 
+/// Reads the current token without making every authenticated repository
+/// rebuild when a healthy session rotates its access token. The namespace
+/// still changes on login/logout, so account boundaries remain reactive.
+String? _stableSessionToken(Ref ref) {
+  ref.watch(cacheNamespaceProvider);
+  return ref.read(accessTokenProvider);
+}
+
 /// Whether this app PROCESS has already passed biometric_lock_screen.dart's
 /// challenge. Deliberately plain in-memory state, never persisted — a
 /// fresh cold start must always re-lock when the toggle
@@ -160,7 +161,7 @@ String _cacheNamespaceForToken(String? token) {
 final biometricUnlockedProvider = StateProvider<bool>((ref) => false);
 
 final profileApiProvider = Provider<ProfileApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return ProfileApi(
     apiBaseUrl: _apiBaseUrl,
@@ -172,7 +173,7 @@ final profileApiProvider = Provider<ProfileApi?>((ref) {
 /// A8/C8 Request Unsupported Card. Same null-when-signed-out shape as every
 /// other repository provider in this file.
 final cardRequestsApiProvider = Provider<CardRequestsApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return CardRequestsApi(
     apiBaseUrl: _apiBaseUrl,
@@ -184,7 +185,7 @@ final cardRequestsApiProvider = Provider<CardRequestsApi?>((ref) {
 /// A4/H4 consent writes (DPDP §8.2). Same null-when-signed-out shape as
 /// every other repository provider in this file.
 final consentsApiProvider = Provider<ConsentsApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return ConsentsApi(
     apiBaseUrl: _apiBaseUrl,
@@ -196,7 +197,7 @@ final consentsApiProvider = Provider<ConsentsApi?>((ref) {
 /// Plan Phase 2.3 — attributed outbound "Apply" links. Null when signed out:
 /// a click has to belong to a profile for the attribution to mean anything.
 final partnerApplyRepositoryProvider = Provider<PartnerApplyRepository?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return PartnerApplyRepository(
     apiBaseUrl: _apiBaseUrl,
@@ -211,7 +212,7 @@ final partnerApplyRepositoryProvider = Provider<PartnerApplyRepository?>((ref) {
 final spendByCategoryRepositoryProvider = Provider<SpendByCategoryRepository?>((
   ref,
 ) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return SpendByCategoryRepository(
     apiBaseUrl: _apiBaseUrl,
@@ -296,7 +297,7 @@ final acquisitionCandidatesProvider =
 /// to consult, and `submit_acceptance_report()` refuses without one.
 final acceptanceReportsRepositoryProvider =
     Provider<AcceptanceReportsRepository?>((ref) {
-      final token = ref.watch(accessTokenProvider);
+      final token = _stableSessionToken(ref);
       if (token == null) return null;
       return AcceptanceReportsRepository(
         apiBaseUrl: _apiBaseUrl,
@@ -363,7 +364,7 @@ final analyticsLifecycleProvider = Provider<void>((ref) {
 
 /// Plan Phase 4 — multi-device sync transport and local change queue.
 final syncApiProvider = Provider<SyncApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return SyncApi(
     apiBaseUrl: _apiBaseUrl,
@@ -386,7 +387,7 @@ final pendingSyncCountProvider = FutureProvider<int>((ref) async {
 /// Plan Phase 1.3 — whether this account has a second way in. Points at
 /// `authBaseUrl`: `users.is_email_verified` is the auth service's column.
 final recoveryApiProvider = Provider<RecoveryApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return RecoveryApi(
     authBaseUrl: _authBaseUrl,
@@ -406,7 +407,7 @@ final recoveryStatusProvider = FutureProvider.autoDispose<RecoveryStatus?>((
 /// Plan Phase 1.4 — linked-device management. Points at `authBaseUrl`, not
 /// `apiBaseUrl`: `user_devices` is the auth service's own table.
 final devicesApiProvider = Provider<DevicesApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return DevicesApi(
     authBaseUrl: _authBaseUrl,
@@ -420,7 +421,7 @@ final devicesApiProvider = Provider<DevicesApi?>((ref) {
 /// is also what makes `SettingsSync` a no-op for a guest: there is no account
 /// for their preferences to follow, so they stay device-local.
 final userSettingsApiProvider = Provider<UserSettingsApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return UserSettingsApi(
     apiBaseUrl: _apiBaseUrl,
@@ -465,6 +466,80 @@ Future<AuthTokens> _refreshWithTransientRetry(
   Error.throwWithStackTrace(lastError!, lastStack!);
 }
 
+class SessionRefreshCoordinator {
+  final Future<TokenStore> Function() loadStore;
+  final AuthApi authApi;
+  final String? Function() readAccessToken;
+  final void Function(String?) writeAccessToken;
+
+  Future<String?>? _refreshInProgress;
+
+  SessionRefreshCoordinator({
+    required this.loadStore,
+    required this.authApi,
+    required this.readAccessToken,
+    required this.writeAccessToken,
+  });
+
+  Future<String?> refresh({String? expectedAccessToken}) {
+    final current = readAccessToken();
+    // A different refresh path already won. The request that received a 401
+    // can safely retry with the winning token and must not rotate again.
+    if (expectedAccessToken != null &&
+        current != null &&
+        current != expectedAccessToken) {
+      return Future<String?>.value(current);
+    }
+
+    final active = _refreshInProgress;
+    if (active != null) return active;
+
+    final future = _refresh(expectedAccessToken: expectedAccessToken);
+    _refreshInProgress = future;
+    return future.whenComplete(() {
+      if (identical(_refreshInProgress, future)) {
+        _refreshInProgress = null;
+      }
+    });
+  }
+
+  Future<String?> _refresh({String? expectedAccessToken}) async {
+    final store = await loadStore();
+    final refreshToken = store.refreshToken;
+    if (refreshToken == null || refreshToken.isEmpty) {
+      return readAccessToken();
+    }
+    final accessTokenBeforeRefresh = readAccessToken();
+
+    try {
+      final tokens = await _refreshWithTransientRetry(authApi, refreshToken);
+      // A fresh login or another coordinator invocation may have won while
+      // the network request was in flight. Never overwrite that session.
+      if (readAccessToken() != accessTokenBeforeRefresh &&
+          readAccessToken() != null) {
+        return readAccessToken();
+      }
+      await store.save(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      );
+      writeAccessToken(tokens.accessToken);
+      return tokens.accessToken;
+    } catch (error) {
+      if (_isRejectedCredentialRefresh(error) &&
+          readAccessToken() == accessTokenBeforeRefresh &&
+          store.refreshToken == refreshToken) {
+        await store.clear();
+        writeAccessToken(null);
+      }
+      // Network/5xx errors are recoverable. Keep the last known credentials
+      // so cached screens remain usable and the next lifecycle/API retry can
+      // recover without forcing a login.
+      return null;
+    }
+  }
+}
+
 final sessionInitProvider = FutureProvider<void>((ref) async {
   final store = await ref.watch(tokenStoreProvider.future);
   final refreshToken = store.refreshToken;
@@ -479,38 +554,13 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
     return;
   }
 
-  final authApi = ref.read(authApiProvider);
-  try {
-    final tokens = await _refreshWithTransientRetry(authApi, refreshToken);
-    await store.save(
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-    );
-    ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
-  } catch (error) {
-    if (_isRejectedCredentialRefresh(error)) {
-      // A 401/403 from /auth/refresh means this device's session is no
-      // longer recoverable (revoked, rotated elsewhere, or expired). Keeping
-      // the old access token makes the app appear signed in while every
-      // private API call fails with 401 — exactly the broken Spending state
-      // seen after an app update. Clear only credentials; the SMS inbox and
-      // local retry queue remain intact and will be imported after login.
-      await store.clear();
-      ref.read(accessTokenProvider.notifier).state = null;
-    } else if (storedAccessToken != null) {
-      // Network/5xx failures are temporary. Keep the last access token even
-      // when it has expired: the refresh token may still recover the session
-      // on the next retry. Clearing it here would make go_router send a
-      // returning user to Welcome solely because the device was briefly
-      // offline during startup. Authenticated requests retry refresh through
-      // AuthenticatedHttpClient; a definitive 401/403 still clears the
-      // credentials above.
-      ref.read(accessTokenProvider.notifier).state = storedAccessToken;
-    } else {
-      // There is no cached credential to preserve, so the router can safely
-      // show the unauthenticated entry point.
-      ref.read(accessTokenProvider.notifier).state = null;
-    }
+  final refreshed = await ref.read(sessionRefreshCoordinatorProvider).refresh();
+  if (refreshed == null &&
+      storedAccessToken != null &&
+      store.accessToken != null) {
+    // Temporary startup failures keep the last access token available for
+    // local cache reads; a rejected refresh has already cleared both values.
+    ref.read(accessTokenProvider.notifier).state = storedAccessToken;
   }
 });
 
@@ -542,46 +592,15 @@ final sessionRefreshIntervalProvider = Provider<Duration>(
 
 final sessionKeepAliveProvider = Provider<void>((ref) {
   Timer? timer;
-  var refreshInProgress = false;
 
   Future<void> tick() async {
     final currentToken = ref.read(accessTokenProvider);
-    if (currentToken == null || refreshInProgress) {
+    if (currentToken == null) {
       return; // avoid rotating one-time tokens concurrently
     }
-    refreshInProgress = true;
-    TokenStore? store;
-
-    try {
-      final currentStore = await ref.read(tokenStoreProvider.future);
-      store = currentStore;
-      final refreshToken = currentStore.refreshToken;
-      if (refreshToken == null) return;
-
-      final tokens = await _refreshWithTransientRetry(
-        ref.read(authApiProvider),
-        refreshToken,
-      );
-      if (ref.read(accessTokenProvider) != currentToken) return;
-      await currentStore.save(
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      );
-      ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
-    } catch (error) {
-      if (_isRejectedCredentialRefresh(error)) {
-        // Do not leave an expired session looking healthy forever. The inbox
-        // stays untouched; after the user signs in, the SMS lifecycle listener
-        // retries the queued and historical messages automatically.
-        await store?.clear();
-        if (ref.read(accessTokenProvider) == currentToken) {
-          ref.read(accessTokenProvider.notifier).state = null;
-        }
-      }
-      // Network/5xx failures remain recoverable; the next timer tick retries.
-    } finally {
-      refreshInProgress = false;
-    }
+    await ref
+        .read(sessionRefreshCoordinatorProvider)
+        .refresh(expectedAccessToken: currentToken);
   }
 
   ref.listen<String?>(accessTokenProvider, (previous, next) {
@@ -768,7 +787,7 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
 /// using (profile_id = pandapay.uid())`), so there's no meaningful
 /// signed-out path to support.
 final cardFeedbackRepositoryProvider = Provider<CardFeedbackRepository?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return CardFeedbackRepository(
     apiBaseUrl: _apiBaseUrl,
@@ -778,7 +797,7 @@ final cardFeedbackRepositoryProvider = Provider<CardFeedbackRepository?>((ref) {
 });
 
 final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return UserCardsRepository(
     apiBaseUrl: _apiBaseUrl,
@@ -791,7 +810,7 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
 /// server-backed repository here: both read `transactions`, which is
 /// owner-scoped and has no local-only counterpart.
 final spendReportsRepositoryProvider = Provider<SpendReportsRepository?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return SpendReportsRepository(
     apiBaseUrl: _apiBaseUrl,
@@ -820,6 +839,12 @@ final spendReportProvider = FutureProvider.family<SpendReport?, SpendPeriod>((
     '$_spendReportCacheKey:${period.wireValue}:${_cacheDate(bucket)}:$timeZone',
   );
   final cache = await _cacheOrNull(ref);
+  final cached = await _readCacheOrNull(cache, key);
+  if (_isKnownOffline() && cached != null) {
+    return SpendReport.fromJson(
+      jsonDecode(cached.rawJson) as Map<String, dynamic>,
+    );
+  }
   try {
     final raw = await repo.fetchReportJson(
       period: period,
@@ -837,7 +862,6 @@ final spendReportProvider = FutureProvider.family<SpendReport?, SpendPeriod>((
     return SpendReport.fromJson(raw);
   } catch (error) {
     if (!_canUseStaleCache(error)) rethrow;
-    final cached = await _readCacheOrNull(cache, key);
     if (cached == null) rethrow;
     try {
       return SpendReport.fromJson(
@@ -909,12 +933,21 @@ final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
     final catalogue = await ref.watch(catalogueProvider.future);
     return local.fetchUserCards(catalogue: catalogue);
   }
+  final cache = await _cacheOrNull(ref);
+  final cacheKey = _scopedCacheKey(ref, _userCardsCacheKey);
+  final cached = await cache?.get(cacheKey);
+  if (_isKnownOffline() && cached != null) {
+    final body = jsonDecode(cached) as Map<String, dynamic>;
+    return (body['userCards'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(UserCard.fromJson)
+        .toList();
+  }
   try {
     final cards = await repo.fetchUserCards().timeout(_homeRequestTimeout);
-    final cache = await _cacheOrNull(ref);
     try {
       await cache?.put(
-        _scopedCacheKey(ref, _userCardsCacheKey),
+        cacheKey,
         jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
       );
     } catch (_) {
@@ -924,8 +957,6 @@ final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
     return cards;
   } catch (error) {
     if (!_canUseStaleCache(error)) rethrow;
-    final cache = await _cacheOrNull(ref);
-    final cached = await cache?.get(_scopedCacheKey(ref, _userCardsCacheKey));
     if (cached == null) rethrow;
     final body = jsonDecode(cached) as Map<String, dynamic>;
     return (body['userCards'] as List)
@@ -972,7 +1003,7 @@ final utilizationTransactionsProvider = FutureProvider<List<TransactionEntry>>((
 final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((
   ref,
 ) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return CardOverridesRepository(
     apiBaseUrl: _apiBaseUrl,
@@ -1044,7 +1075,11 @@ bool connectivityResultToIsOnline(List<ConnectivityResult> results) {
 }
 
 final isOnlineProvider = StreamProvider<bool>((ref) {
-  return Connectivity().onConnectivityChanged.map(connectivityResultToIsOnline);
+  return Connectivity().onConnectivityChanged.map((results) {
+    final online = connectivityResultToIsOnline(results);
+    _lastKnownOffline = !online;
+    return online;
+  });
 });
 
 final outboxRepositoryProvider = FutureProvider<TransactionOutboxRepository>((
@@ -1127,20 +1162,22 @@ final myCardsWithProductProvider =
       final userCards = ref.watch(myCardsProvider);
       final catalogue = ref.watch(catalogueProvider);
 
-      if (userCards.isLoading || catalogue.isLoading) {
+      final userCardList = userCards.valueOrNull;
+      final catalogueList = catalogue.valueOrNull;
+      if (userCardList == null || catalogueList == null) {
+        final combinedError = userCards.error ?? catalogue.error;
+        if (combinedError != null) {
+          return AsyncValue.error(
+            combinedError,
+            userCards.stackTrace ?? catalogue.stackTrace ?? StackTrace.current,
+          );
+        }
         return const AsyncValue.loading();
       }
-      final combinedError = userCards.error ?? catalogue.error;
-      if (combinedError != null) {
-        return AsyncValue.error(
-          combinedError,
-          userCards.stackTrace ?? catalogue.stackTrace!,
-        );
-      }
 
-      final products = {for (final p in catalogue.requireValue) p.id: p};
+      final products = {for (final p in catalogueList) p.id: p};
       final pairs = [
-        for (final uc in userCards.requireValue)
+        for (final uc in userCardList)
           if (products[uc.cardProductId] case final product?) (uc, product),
       ];
       return AsyncValue.data(pairs);
@@ -1158,20 +1195,22 @@ final ownedCardsWithProductProvider =
       final userCards = ref.watch(userCardsProvider);
       final catalogue = ref.watch(catalogueProvider);
 
-      if (userCards.isLoading || catalogue.isLoading) {
+      final userCardList = userCards.valueOrNull;
+      final catalogueList = catalogue.valueOrNull;
+      if (userCardList == null || catalogueList == null) {
+        final combinedError = userCards.error ?? catalogue.error;
+        if (combinedError != null) {
+          return AsyncValue.error(
+            combinedError,
+            userCards.stackTrace ?? catalogue.stackTrace ?? StackTrace.current,
+          );
+        }
         return const AsyncValue.loading();
       }
-      final combinedError = userCards.error ?? catalogue.error;
-      if (combinedError != null) {
-        return AsyncValue.error(
-          combinedError,
-          userCards.stackTrace ?? catalogue.stackTrace!,
-        );
-      }
 
-      final products = {for (final p in catalogue.requireValue) p.id: p};
+      final products = {for (final p in catalogueList) p.id: p};
       final pairs = [
-        for (final uc in userCards.requireValue)
+        for (final uc in userCardList)
           if (products[uc.cardProductId] case final product?) (uc, product),
       ];
       return AsyncValue.data(pairs);
@@ -1431,10 +1470,44 @@ final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((
 final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchHomeSummary(
-    anchor: DateTime.now().toUtc(),
-    timeZone: ref.watch(deviceTimeZoneProvider),
-  );
+  final key = _scopedCacheKey(ref, 'home_summary');
+  final cache = await _cacheOrNull(ref);
+  final cached = await _readCacheOrNull(cache, key);
+  if (_isKnownOffline() && cached != null) {
+    return HomeSummary.fromJson(
+      jsonDecode(cached.rawJson) as Map<String, dynamic>,
+    );
+  }
+  try {
+    final summary = await repo
+        .fetchHomeSummary(
+          anchor: DateTime.now().toUtc(),
+          timeZone: ref.watch(deviceTimeZoneProvider),
+        )
+        .timeout(_homeRequestTimeout);
+    if (summary != null) {
+      try {
+        await cache?.put(
+          key,
+          jsonEncode({
+            'rewardsThisMonthInr': summary.rewardsThisMonth.rupees,
+            'rewardsAllTimeInr': summary.rewardsAllTime.rupees,
+            'transactionCount': summary.transactionCount,
+            'streakDays': summary.streakDays,
+          }),
+        );
+      } catch (_) {
+        // A cache write must never make a successful header unusable.
+      }
+    }
+    return summary;
+  } catch (error) {
+    if (!_canUseStaleCache(error)) rethrow;
+    if (cached == null) rethrow;
+    return HomeSummary.fromJson(
+      jsonDecode(cached.rawJson) as Map<String, dynamic>,
+    );
+  }
 });
 
 /// Design 19's notification inbox. Empty (not an error) when signed out —
@@ -1501,7 +1574,7 @@ final unreadNotificationCountProvider = Provider<int>((ref) {
 /// second copy of them.
 final notificationPreferencesRepositoryProvider =
     Provider<NotificationPreferencesRepository?>((ref) {
-      final token = ref.watch(accessTokenProvider);
+      final token = _stableSessionToken(ref);
       if (token == null) return null;
       return NotificationPreferencesRepository(
         apiBaseUrl: _apiBaseUrl,
@@ -1552,7 +1625,7 @@ final contributionsOptInProvider = Provider<bool>((ref) {
 /// Group F (Data Import & Sync) — implementation-plan-group-e-f-g.md §3.
 /// Same null-when-signed-out shape as userCardsRepositoryProvider above.
 final importRepositoryProvider = Provider<ImportRepository?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return ImportRepository(
     apiBaseUrl: _apiBaseUrl,
@@ -1706,6 +1779,10 @@ bool _canUseStaleCache(Object error) =>
     error is! ApiException ||
     (error.statusCode != 401 && error.statusCode != 403);
 
+bool _lastKnownOffline = false;
+
+bool _isKnownOffline() => _lastKnownOffline;
+
 /// The cache is always best-effort — every offline-cache-aware provider
 /// below calls this instead of watching responseCacheProvider directly, so
 /// a local-DB init failure (an unavailable platform channel in a plain
@@ -1797,6 +1874,24 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
 }) async {
   final key = _scopedCacheKey(ref, cacheKey);
   final cache = await _cacheOrNull(ref);
+  final cached = await _readCacheOrNull(cache, key);
+
+  Future<List<TransactionEntry>> decodeCached() async {
+    if (cached == null) {
+      throw StateError('No cached transactions available');
+    }
+    final body = jsonDecode(cached.rawJson) as Map<String, dynamic>;
+    return (body['transactions'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(TransactionEntry.fromJson)
+        .toList();
+  }
+
+  // Interface loss is a known offline state. Use the local snapshot
+  // immediately instead of waiting for a mobile socket timeout.
+  if (_isKnownOffline() && cached != null) {
+    return decodeCached();
+  }
   try {
     final transactions = await repo.fetchTransactions(
       from: from,
@@ -1821,14 +1916,9 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     return transactions;
   } catch (error) {
     if (!_canUseStaleCache(error)) rethrow;
-    final cached = await _readCacheOrNull(cache, key);
     if (cached == null) rethrow;
     try {
-      final body = jsonDecode(cached.rawJson) as Map<String, dynamic>;
-      return (body['transactions'] as List)
-          .cast<Map<String, dynamic>>()
-          .map(TransactionEntry.fromJson)
-          .toList();
+      return await decodeCached();
     } catch (_) {
       // A partial/corrupt local row should be discarded rather than trapping
       // every future request in the same parse failure.
@@ -1846,13 +1936,25 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
 /// fallback on a genuine failure — a successful-but-empty catalogue is
 /// never treated as "fetch failed."
 final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
+  final cache = await _cacheOrNull(ref);
+  final cached = await cache?.get(_catalogueCacheKey);
+  if (_isKnownOffline() && cached != null) {
+    try {
+      final body = jsonDecode(cached) as Map<String, dynamic>;
+      return (body['cards'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(CardProductJson.fromJson)
+          .toList();
+    } catch (_) {
+      // Fall through to the bundled catalogue below.
+    }
+  }
   try {
     final cards = await ref
         .watch(catalogueRepositoryProvider)
         .fetchCatalogue()
         .timeout(const Duration(seconds: 15));
     if (cards.isNotEmpty) {
-      final cache = await _cacheOrNull(ref);
       await cache?.put(
         _catalogueCacheKey,
         jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}),
@@ -1862,8 +1964,6 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
   } catch (_) {}
 
   try {
-    final cache = await _cacheOrNull(ref);
-    final cached = await cache?.get(_catalogueCacheKey);
     if (cached != null) {
       final body = jsonDecode(cached) as Map<String, dynamic>;
       final cards = (body['cards'] as List)
@@ -1890,12 +1990,22 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
 });
 
 final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
+  final cache = await _cacheOrNull(ref);
+  final cached = await cache?.get(_categoriesCacheKey);
+  if (_isKnownOffline() && cached != null) {
+    try {
+      final body = jsonDecode(cached) as Map<String, dynamic>;
+      return (body['categories'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(SpendCategory.fromJson)
+          .toList();
+    } catch (_) {}
+  }
   try {
     final categories = await ref
         .watch(categoryRepositoryProvider)
         .fetchCategories()
         .timeout(_homeRequestTimeout);
-    final cache = await _cacheOrNull(ref);
     try {
       await cache?.put(
         _categoriesCacheKey,
@@ -1907,8 +2017,6 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
     return categories;
   } catch (_) {
     try {
-      final cache = await _cacheOrNull(ref);
-      final cached = await cache?.get(_categoriesCacheKey);
       if (cached != null) {
         final body = jsonDecode(cached) as Map<String, dynamic>;
         return (body['categories'] as List)
@@ -2134,7 +2242,7 @@ final notificationGateProvider = Provider<NotificationGate>((ref) {
 /// notification service. This provider is therefore the only place where the
 /// current access token is connected to FCM token registration.
 final notificationDevicesApiProvider = Provider<NotificationDevicesApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
+  final token = _stableSessionToken(ref);
   if (token == null) return null;
   return NotificationDevicesApi(
     apiBaseUrl: _apiBaseUrl,
@@ -2278,11 +2386,11 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     ref.invalidate(needsReviewCountProvider);
   }
 
-  Future<void> flush() async {
+  Future<int> flush() async {
     final repo = ref.read(userCardsRepositoryProvider);
     // Guest mode has no server to send to; the queue simply waits until
     // there is one rather than being discarded.
-    if (repo == null) return;
+    if (repo == null) return 0;
     try {
       final handled = await SmsListenerService().flushBackgroundQueue((
         sender,
@@ -2301,18 +2409,20 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         // network or server failure (which throws) leaves it queued.
         return true;
       });
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(transactionsProvider);
-      ref.invalidate(utilizationTransactionsProvider);
       // Refresh Spending immediately after a queue upload. If a later inbox
       // reconciliation request times out, an open report must not stay stale.
       if (handled > 0) {
+        ref.invalidate(userCardsProvider);
+        ref.invalidate(transactionsProvider);
+        ref.invalidate(utilizationTransactionsProvider);
         ref.invalidate(spendReportProvider);
         ref.invalidate(budgetsProvider);
         ref.invalidate(recurringReportProvider);
       }
+      return handled;
     } catch (_) {
       // Offline or server down — the queue keeps what it couldn't send.
+      return 0;
     }
   }
 
@@ -2363,8 +2473,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   /// not deliver the third-party SMS_RECEIVED callback consistently. The
   /// server source key makes re-reading recent rows safe, while `backfill`
   /// prevents old inbox history from changing current reward-cycle state.
-  Future<void> reconcileInbox() async {
-    if (ref.read(userCardsRepositoryProvider) == null) return;
+  Future<bool> reconcileInbox() async {
+    if (ref.read(userCardsRepositoryProvider) == null) return false;
 
     final prefs = await SharedPreferences.getInstance();
     String buildIdentity;
@@ -2424,7 +2534,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         lastRunMillis != null &&
         now.difference(DateTime.fromMillisecondsSinceEpoch(lastRunMillis)) <
             inboxReconciliationInterval) {
-      return;
+      return false;
     }
 
     // Reuse the same bounded batch path as the explicit SMS screen. In
@@ -2436,7 +2546,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     // passes query by date from the previous successful scan, with a small
     // overlap that covers clock skew/offline handover. The server source key
     // makes that overlap idempotent.
-    await ref
+    final summary = await ref
         .read(smsAutoImportProvider)
         .syncExistingInbox(
           limit: 0,
@@ -2458,13 +2568,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     } catch (_) {
       // The next reconciliation will refresh the checkpoint.
     }
-    ref.invalidate(userCardsProvider);
-    ref.invalidate(transactionsProvider);
-    ref.invalidate(utilizationTransactionsProvider);
-    ref.invalidate(needsReviewCountProvider);
-    ref.invalidate(spendReportProvider);
-    ref.invalidate(budgetsProvider);
-    ref.invalidate(recurringReportProvider);
+    return summary.imported > 0 || summary.needsReview > 0;
   }
 
   Future<void> flushAndRetry() async {
@@ -2486,31 +2590,48 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         // settled, leaving the app listening but never importing the existing
         // inbox until a later resume.
         await ref.read(smsAutoImportProvider).start();
-        await flush();
+        var changed = await flush() > 0;
         try {
-          await reconcileInbox();
+          changed = await reconcileInbox() || changed;
         } catch (_) {
           // A provider/permission/network failure must not abort the remaining
           // queue retry and must not surface as an unhandled lifecycle error.
         }
         // Repair rows imported by older builds: this suppresses only a
         // high-confidence SMS replay and fills categories for legacy rows.
-        // It is idempotent and keeps the user out of a manual review workflow.
+        // It is idempotent, but still a server request, so throttle it rather
+        // than repeating it on every foreground transition.
         final repo = ref.read(userCardsRepositoryProvider);
-        if (repo != null) {
-          await repo.reconcileSmsHistory();
+        final prefs = await SharedPreferences.getInstance();
+        final repairKey =
+            'pandapay_app.sms_history_repaired_at_v1_${ref.read(cacheNamespaceProvider)}';
+        final lastRepair = prefs.getInt(repairKey);
+        final repairDue =
+            lastRepair == null ||
+            DateTime.now().difference(
+                  DateTime.fromMillisecondsSinceEpoch(lastRepair),
+                ) >=
+                const Duration(minutes: 5);
+        if (repo != null && repairDue) {
+          final repaired = await repo.reconcileSmsHistory();
+          await prefs.setInt(repairKey, DateTime.now().millisecondsSinceEpoch);
+          changed =
+              repaired.duplicateSuppressed > 0 ||
+              repaired.linkedCards > 0 ||
+              repaired.reclassified > 0 ||
+              changed;
         }
         await retryExistingNeedsReview();
-        ref.invalidate(userCardsProvider);
-        ref.invalidate(transactionsProvider);
-        ref.invalidate(utilizationTransactionsProvider);
-        // Reconciliation can change both active-row counts and categories. The
-        // report family must be invalidated too; otherwise an already-open
-        // Spending screen keeps rendering the pre-repair snapshot until the
-        // user manually changes period or pulls to refresh.
-        ref.invalidate(spendReportProvider);
-        ref.invalidate(budgetsProvider);
-        ref.invalidate(recurringReportProvider);
+        if (changed) {
+          ref.invalidate(userCardsProvider);
+          ref.invalidate(transactionsProvider);
+          ref.invalidate(utilizationTransactionsProvider);
+          // Reconciliation can change active-row counts and categories, so
+          // refresh dependent reports once after a real change only.
+          ref.invalidate(spendReportProvider);
+          ref.invalidate(budgetsProvider);
+          ref.invalidate(recurringReportProvider);
+        }
       } while (rerunRequested);
     } finally {
       workInProgress = false;
@@ -2521,8 +2642,10 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   // while there is no repository yet, so retry again as soon as the token is
   // restored instead of leaving valid SMS spends stranded in the old local
   // review queue.
-  ref.listen<String?>(accessTokenProvider, (previous, next) {
-    if (next != null && next != previous) unawaited(flushAndRetry());
+  ref.listen<String>(cacheNamespaceProvider, (previous, next) {
+    if (next != 'signed-out' && next != previous) {
+      unawaited(flushAndRetry());
+    }
   });
 
   final listener = AppLifecycleListener(
@@ -2658,23 +2781,12 @@ class SmsAutoImportController {
         ignored += result.unparsed + result.invalid + result.errored;
         needsReview += result.needsReview;
       }
-
-      // Publish the live/current-month result once, then import older history
-      // without repeatedly rebuilding Insights/Spending. Invalidating the
-      // whole report graph for every 200-message batch caused a refresh storm
-      // on first install/update and was a credible source of Android ANRs.
-      if (!backfill && (imported > 0 || needsReview > 0)) {
-        _ref.invalidate(userCardsProvider);
-        _ref.invalidate(transactionsProvider);
-        _ref.invalidate(utilizationTransactionsProvider);
-        _ref.invalidate(needsReviewCountProvider);
-        _ref.invalidate(spendReportProvider);
-        _ref.invalidate(budgetsProvider);
-        _ref.invalidate(recurringReportProvider);
-      }
     }
 
-    if (messages.isNotEmpty) {
+    // Publish once after the complete bounded pass. Re-reading the inbox can
+    // find messages the server already knows; that is not a data change and
+    // must not trigger a full-screen refresh.
+    if (imported > 0 || needsReview > 0) {
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(utilizationTransactionsProvider);

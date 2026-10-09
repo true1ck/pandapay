@@ -48,6 +48,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   CardDiscoveryResult? _result;
   bool _scanning = false;
   bool _adding = false;
+  int _scanGeneration = 0;
   String? _error;
   bool _smsPermanentlyDenied = false;
   final _added = <String>{};
@@ -61,6 +62,8 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   }
 
   Future<void> _scan({List<String>? customBodies}) async {
+    if (!mounted) return;
+    final generation = ++_scanGeneration;
     setState(() {
       _scanning = true;
       _error = null;
@@ -78,6 +81,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         if (hasPerm) {
           _smsPermanentlyDenied = false;
           final readBodies = await smsService.readInboxSmsBodies();
+          if (!mounted || generation != _scanGeneration) return;
           if (readBodies.isNotEmpty) {
             bodies = readBodies;
           }
@@ -92,11 +96,26 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         final subset = bodies.length > 500
             ? bodies.sublist(bodies.length - 500)
             : bodies;
-        final result = await repo.discoverCards(smsBodies: subset);
-        if (mounted) setState(() => _result = result);
+        try {
+          final result = await repo
+              .discoverCards(smsBodies: subset)
+              .timeout(const Duration(seconds: 20));
+          if (mounted && generation == _scanGeneration) {
+            setState(() => _result = result);
+          }
+        } catch (_) {
+          // The SMS scan is local-first. A slow/cold API must not turn a
+          // device-side card discovery into a blank or crashing screen.
+          if (bodies.isEmpty) rethrow;
+          final localResult = await _discoverLocally(bodies);
+          if (mounted && generation == _scanGeneration) {
+            setState(() => _result = localResult);
+          }
+        }
       } else {
         // Guest mode / on-device matching against local catalogue
         final catalogue = await ref.read(catalogueProvider.future);
+        if (!mounted || generation != _scanGeneration) return;
         final localRepo = await ref.read(
           localUserCardsRepositoryProvider.future,
         );
@@ -113,7 +132,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
             .where((s) => !ownedIds.contains(s.cardProductId))
             .toList();
 
-        if (mounted) {
+        if (mounted && generation == _scanGeneration) {
           setState(() {
             _result = CardDiscoveryResult(
               suggestions: filteredSuggestions,
@@ -126,8 +145,29 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = userFacingErrorMessage(e));
     } finally {
-      if (mounted) setState(() => _scanning = false);
+      if (mounted && generation == _scanGeneration) {
+        setState(() => _scanning = false);
+      }
     }
+  }
+
+  Future<CardDiscoveryResult> _discoverLocally(List<String> bodies) async {
+    final catalogue = await ref.read(catalogueProvider.future);
+    final localRepo = await ref.read(localUserCardsRepositoryProvider.future);
+    final owned = await localRepo.fetchUserCards(catalogue: catalogue);
+    final ownedIds = owned.map((c) => c.cardProductId).toSet();
+    final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+      smsBodies: bodies,
+      catalogue: catalogue,
+      isSms: true,
+    );
+    return CardDiscoveryResult(
+      suggestions: result.suggestions
+          .where((s) => !ownedIds.contains(s.cardProductId))
+          .toList(),
+      emailsScanned: 0,
+      smsScanned: bodies.length,
+    );
   }
 
   Future<void> _scanGmail() async {
@@ -143,7 +183,9 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         MaterialPageRoute(builder: (_) => const GmailConnectScreen()),
       );
     }
-    if (accessToken == null || accessToken.isEmpty) return; // cancelled
+    if (accessToken == null || accessToken.isEmpty || !mounted) {
+      return; // cancelled or the screen was closed during account selection
+    }
 
     setState(() {
       _scanning = true;
@@ -151,6 +193,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     });
     try {
       final catalogue = await ref.read(catalogueProvider.future);
+      if (!mounted) return;
       final gmailService = ref.read(gmailDiscoveryServiceProvider);
 
       final discovery = await gmailService.scanGmailForCards(
@@ -199,6 +242,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   }
 
   Future<void> _requestAndScanSms() async {
+    if (!mounted) return;
     setState(() {
       _scanning = true;
       _error = null;
@@ -212,6 +256,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       if (hasPerm) {
         _smsPermanentlyDenied = false;
         final readBodies = await smsService.readInboxSmsBodies();
+        if (!mounted) return;
         if (readBodies.isNotEmpty) {
           await _scan(customBodies: readBodies);
           return;
@@ -245,6 +290,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   /// Android has stopped showing the runtime prompt for SMS. Offer a jump to
   /// the OS settings page — the only place the user can re-grant it now.
   Future<void> _promptOpenSmsSettings() async {
+    if (!mounted) return;
     final go = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -284,6 +330,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           ? await ref.read(localUserCardsRepositoryProvider.future)
           : null;
       for (final card in picked) {
+        if (!mounted) return;
         if (repo != null) {
           await repo.addCard(card.id);
         } else {
@@ -292,18 +339,17 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         _added.add(card.id);
       }
       await _reconcileAfterCardAdded();
+      if (!mounted) return;
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
       setState(() {});
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Added ${picked.length} card${picked.length == 1 ? '' : 's'} to wallet.',
-            ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Added ${picked.length} card${picked.length == 1 ? '' : 's'} to wallet.',
           ),
-        );
-      }
+        ),
+      );
     }
   }
 
@@ -482,6 +528,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
               ? await ref.read(localUserCardsRepositoryProvider.future)
               : null;
           for (final c in picked) {
+            if (!mounted) return;
             if (repo != null) {
               final userCardId = await repo.addCard(
                 c.id,
@@ -500,20 +547,21 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
             }
           }
           await _reconcileAfterCardAdded();
-          if (mounted) {
-            setState(
-              () => _added.add(card.cardProductId),
-            ); // Mark the placeholder as added
-          }
+          if (!mounted) return;
+          setState(
+            () => _added.add(card.cardProductId),
+          ); // Mark the placeholder as added
           messenger.showSnackBar(
             SnackBar(
               content: Text('Added ${picked.length} card(s) to wallet.'),
             ),
           );
         } catch (e) {
-          messenger.showSnackBar(
-            SnackBar(content: Text(userFacingErrorMessage(e))),
-          );
+          if (mounted) {
+            messenger.showSnackBar(
+              SnackBar(content: Text(userFacingErrorMessage(e))),
+            );
+          }
         } finally {
           if (mounted) setState(() => _adding = false);
         }
@@ -521,6 +569,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       return;
     }
 
+    if (!mounted) return;
     setState(() => _adding = true);
     final messenger = ScaffoldMessenger.of(context);
     final productId = variant?.id ?? card.cardProductId;
@@ -549,6 +598,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         await local!.addCard(productId);
       }
       await _reconcileAfterCardAdded();
+      if (!mounted) return;
       // Design 19's own worked example: "Axis Ace added · Found
       // automatically from a bank SMS". dedupeKey keeps a re-add from
       // stacking duplicates in the inbox.
@@ -561,14 +611,16 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         severity: 'good',
         dedupeKey: 'card_added:$productId',
       );
-      if (mounted) setState(() => _added.add(card.cardProductId));
+      setState(() => _added.add(card.cardProductId));
       messenger.showSnackBar(
         SnackBar(content: Text('$displayName added to your wallet.')),
       );
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(userFacingErrorMessage(e))),
-      );
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(userFacingErrorMessage(e))),
+        );
+      }
     } finally {
       if (mounted) setState(() => _adding = false);
     }
