@@ -216,7 +216,10 @@ abstract final class AppRoute {
 class _RouterRefreshNotifier extends ChangeNotifier {
   _RouterRefreshNotifier(Ref ref) {
     ref.listen(sessionInitProvider, (_, _) => notifyListeners());
-    ref.listen(accessTokenProvider, (_, _) => notifyListeners());
+    // Redirects only care whether the account changed, not whether a healthy
+    // session rotated its short-lived access token. Listening to the raw token
+    // made GoRouter re-evaluate the whole shell every refresh interval.
+    ref.listen(cacheNamespaceProvider, (_, _) => notifyListeners());
     ref.listen(onboardingCompleteProvider, (_, _) => notifyListeners());
     // S5/S6 — re-evaluate redirect once the status/version checks resolve,
     // and again any time appStatusProvider is invalidated (e.g.

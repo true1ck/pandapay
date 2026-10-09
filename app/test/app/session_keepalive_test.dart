@@ -26,6 +26,36 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('access-token rotation keeps the account namespace stable', () async {
+    String tokenFor(String accessToken, String subject) {
+      final header = base64Url
+          .encode(utf8.encode(jsonEncode({'alg': 'none', 'typ': 'JWT'})))
+          .replaceAll('=', '');
+      final payload = base64Url
+          .encode(utf8.encode(jsonEncode({'sub': subject})))
+          .replaceAll('=', '');
+      return '$header.$payload.$accessToken';
+    }
+
+    final firstToken = tokenFor('first', 'user-1');
+    final rotatedToken = tokenFor('rotated', 'user-1');
+    final changes = <String>[];
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.listen<String>(
+      cacheNamespaceProvider,
+      (_, next) => changes.add(next),
+      fireImmediately: true,
+    );
+
+    container.read(accessTokenProvider.notifier).state = firstToken;
+    container.read(accessTokenProvider.notifier).state = rotatedToken;
+    await Future<void>.delayed(Duration.zero);
+
+    expect(changes, ['signed-out', 'user:user-1']);
+    expect(container.read(cacheNamespaceProvider), 'user:user-1');
+  });
+
   test(
     'does not restore a stale startup token when refresh is rejected',
     () async {

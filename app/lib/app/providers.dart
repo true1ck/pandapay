@@ -134,7 +134,12 @@ final sessionRefreshCoordinatorProvider = Provider<SessionRefreshCoordinator>(
 /// allow the second account to read the first account's cards, transactions,
 /// or Insights report while offline.
 final cacheNamespaceProvider = Provider<String>((ref) {
-  return _cacheNamespaceForToken(ref.watch(accessTokenProvider));
+  // Token rotation must not look like an account change. `select` compares
+  // the derived namespace, so the router and authenticated repositories stay
+  // alive while the access token is refreshed underneath them.
+  return ref.watch(
+    accessTokenProvider.select((token) => _cacheNamespaceForToken(token)),
+  );
 });
 
 String _cacheNamespaceForToken(String? token) {
@@ -353,10 +358,10 @@ final analyticsLifecycleProvider = Provider<void>((ref) {
   );
   ref.onDispose(listener.dispose);
 
-  ref.listen<String?>(accessTokenProvider, (previous, next) {
+  ref.listen<String>(cacheNamespaceProvider, (previous, next) {
     // Flush on sign-out too, so events buffered before it aren't attributed
     // to whoever signs in next on the same device.
-    if (previous != null && next == null) {
+    if (previous != 'signed-out' && next == 'signed-out') {
       analytics.flush();
     }
   });
@@ -603,9 +608,9 @@ final sessionKeepAliveProvider = Provider<void>((ref) {
         .refresh(expectedAccessToken: currentToken);
   }
 
-  ref.listen<String?>(accessTokenProvider, (previous, next) {
+  ref.listen<String>(cacheNamespaceProvider, (previous, next) {
     timer?.cancel();
-    if (next != null) {
+    if (next != 'signed-out') {
       timer = Timer.periodic(
         ref.read(sessionRefreshIntervalProvider),
         (_) => unawaited(tick()),
@@ -1055,10 +1060,10 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
 /// SharedPreferences last-used-card key. catalogue/categories are public
 /// and deliberately NOT cleared here.
 final cacheLifecycleProvider = Provider<void>((ref) {
-  ref.listen<String?>(accessTokenProvider, (previous, next) async {
-    if (previous != null && next == null) {
+  ref.listen<String>(cacheNamespaceProvider, (previous, next) async {
+    if (previous != 'signed-out' && next == 'signed-out') {
       final cache = await _cacheOrNull(ref);
-      final namespace = _cacheNamespaceForToken(previous);
+      final namespace = previous;
       await cache?.clear('$namespace:$_userCardsCacheKey');
       await cache?.clear('$namespace:$_cardOverridesCacheKey');
     }
@@ -2270,10 +2275,10 @@ final pushNotificationLifecycleProvider = Provider<void>((ref) {
   final service = ref.watch(pushNotificationServiceProvider);
   if (service == null) return;
   unawaited(service.start());
-  ref.listen<String?>(accessTokenProvider, (previous, next) {
-    if (next == null) {
+  ref.listen<String>(cacheNamespaceProvider, (previous, next) {
+    if (next == 'signed-out') {
       unawaited(service.stop());
-    } else if (previous == null) {
+    } else if (previous == 'signed-out') {
       unawaited(service.start());
     }
   });

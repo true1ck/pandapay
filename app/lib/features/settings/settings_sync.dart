@@ -76,9 +76,7 @@ const kSyncedPrefs = <SyncedPref>[
 ///   as a sign-out privacy concern in `providers.dart`.
 /// - anything in `cached_responses` / `transaction_outbox_entries` — those are
 ///   a cache and a pending-write queue, not preferences.
-const kDeliberatelyDeviceLocalPrefs = <String>[
-  'settings_biometric_lock_v1',
-];
+const kDeliberatelyDeviceLocalPrefs = <String>['settings_biometric_lock_v1'];
 
 class SettingsSync {
   final Ref _ref;
@@ -159,7 +157,11 @@ class SettingsSync {
   /// only come from a newer app version having stored something this build
   /// doesn't understand, and a preference blob must never be able to crash an
   /// older client on sign-in.
-  Future<bool> _writeLocal(SharedPreferences prefs, SyncedPref pref, Object remote) async {
+  Future<bool> _writeLocal(
+    SharedPreferences prefs,
+    SyncedPref pref,
+    Object remote,
+  ) async {
     switch (pref.type) {
       case SyncedPrefType.boolean:
         if (remote is! bool || prefs.getBool(pref.key) == remote) return false;
@@ -172,7 +174,9 @@ class SettingsSync {
         await prefs.setDouble(pref.key, value);
         return true;
       case SyncedPrefType.string:
-        if (remote is! String || prefs.getString(pref.key) == remote) return false;
+        if (remote is! String || prefs.getString(pref.key) == remote) {
+          return false;
+        }
         await prefs.setString(pref.key, remote);
         return true;
       case SyncedPrefType.stringList:
@@ -183,7 +187,8 @@ class SettingsSync {
         // (`DueDateRemindersController` stores `Set<String>.toList()`), so a
         // different ordering is the same preference and must not count as a
         // change that invalidates providers.
-        if (current != null && current.toSet().difference(value.toSet()).isEmpty &&
+        if (current != null &&
+            current.toSet().difference(value.toSet()).isEmpty &&
             value.toSet().difference(current.toSet()).isEmpty) {
           return false;
         }
@@ -219,8 +224,8 @@ final settingsSyncProvider = Provider<SettingsSync>(SettingsSync.new);
 /// The `previous == null && next != null` guard is what keeps it to actual
 /// sign-ins rather than every rotation.
 final settingsSyncLifecycleProvider = Provider<void>((ref) {
-  ref.listen<String?>(accessTokenProvider, (previous, next) async {
-    if (previous != null || next == null) return;
+  ref.listen<String>(cacheNamespaceProvider, (previous, next) async {
+    if (previous != 'signed-out' || next == 'signed-out') return;
     try {
       final applied = await ref.read(settingsSyncProvider).pullAndApply();
       if (applied.isEmpty) return;

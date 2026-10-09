@@ -36,7 +36,12 @@ class SyncResult {
     required this.ranToCompletion,
   });
 
-  static const idle = SyncResult(pushed: 0, pulled: 0, conflicts: 0, ranToCompletion: true);
+  static const idle = SyncResult(
+    pushed: 0,
+    pulled: 0,
+    conflicts: 0,
+    ranToCompletion: true,
+  );
 }
 
 class SyncEngine {
@@ -86,7 +91,12 @@ class SyncEngine {
     } catch (_) {
       // Offline, or the server is unreachable. Everything the user did is
       // still in the local queue; the next trigger tries again.
-      return const SyncResult(pushed: 0, pulled: 0, conflicts: 0, ranToCompletion: false);
+      return const SyncResult(
+        pushed: 0,
+        pulled: 0,
+        conflicts: 0,
+        ranToCompletion: false,
+      );
     } finally {
       _running = false;
     }
@@ -115,7 +125,11 @@ class SyncEngine {
     return applied;
   }
 
-  Future<(int, int)> _pullAndApply(SyncApi api, SyncQueue queue, String deviceId) async {
+  Future<(int, int)> _pullAndApply(
+    SyncApi api,
+    SyncQueue queue,
+    String deviceId,
+  ) async {
     var totalPulled = 0;
     var totalConflicts = 0;
     var since = queue.lastServerSeq;
@@ -183,11 +197,11 @@ final unacknowledgedConflictsProvider = StateProvider<int>((ref) => 0);
 /// would be the right addition when one device needs to learn about another's
 /// change immediately, which no screen currently requires.
 final syncLifecycleProvider = Provider<void>((ref) {
-  ref.listen<String?>(accessTokenProvider, (previous, next) async {
-    if (previous == null && next != null) {
+  ref.listen<String>(cacheNamespaceProvider, (previous, next) async {
+    if (previous == 'signed-out' && next != 'signed-out') {
       await ref.read(syncEngineProvider).sync();
     }
-    if (previous != null && next == null) {
+    if (previous != 'signed-out' && next == 'signed-out') {
       // Sign-out: the queue and cursor belong to the account that just left.
       final queue = await ref.read(syncQueueProvider.future);
       queue.clear();
@@ -195,7 +209,8 @@ final syncLifecycleProvider = Provider<void>((ref) {
   });
 
   ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) async {
-    final cameOnline = previous?.valueOrNull == false && next.valueOrNull == true;
+    final cameOnline =
+        previous?.valueOrNull == false && next.valueOrNull == true;
     if (cameOnline) {
       await ref.read(syncEngineProvider).sync();
     }
