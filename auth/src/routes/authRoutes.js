@@ -842,8 +842,17 @@ router.post(
     try {
       const { email, phone_number, code, device_id, device_info } = req.body;
       const normalizedEmail = email.trim().toLowerCase();
-      // Only encrypt phone number if we are storing it securely
-      const encryptedPhone = encryptPhoneNumber(phone_number);
+      // Email-only recovery is intentionally supported by the mobile app. Do
+      // not treat a missing phone as a phone mismatch, and do not overwrite a
+      // previously verified phone with NULL during recovery.
+      const normalizedPhone = typeof phone_number === 'string' && phone_number.trim()
+        ? phone_number.trim()
+        : null;
+      const hasPhone = Boolean(normalizedPhone);
+      // Only encrypt phone number if one was actually supplied and we need to
+      // link/update it. Calling the helper with undefined is harmless when
+      // encryption is disabled, but makes the recovery branch ambiguous.
+      const encryptedPhone = hasPhone ? encryptPhoneNumber(normalizedPhone) : null;
       
       const verificationResult = await executeOtpVerifyWithTiming(async () => {
         // CRITICAL FIX: verifyOtp() resolves to an object — {ok: true} or
@@ -879,12 +888,13 @@ router.post(
         [normalizedEmail]
       );
       
-      const phoneSearchParams = preparePhoneSearchParams(phone_number);
-      const foundByPhone = await db.query(
-        `SELECT id, email, phone_number, name, role, COALESCE(token_version, 1) as token_version
-         FROM users WHERE (phone_number = $1 OR phone_number = $2) AND deleted = FALSE`,
-        phoneSearchParams
-      );
+      const foundByPhone = hasPhone
+        ? await db.query(
+            `SELECT id, email, phone_number, name, role, COALESCE(token_version, 1) as token_version
+             FROM users WHERE (phone_number = $1 OR phone_number = $2) AND deleted = FALSE`,
+            preparePhoneSearchParams(normalizedPhone)
+          )
+        : { rows: [] };
 
       if (foundByEmail.rows.length > 0 && foundByPhone.rows.length > 0) {
         if (foundByEmail.rows[0].id !== foundByPhone.rows[0].id) {
@@ -895,13 +905,26 @@ router.post(
         await db.query(`UPDATE users SET is_email_verified = TRUE WHERE id = $1`, [user.id]);
       } else if (foundByEmail.rows.length > 0) {
         user = foundByEmail.rows[0];
-        // User exists with this email, but not this phone. Is another phone already set?
-        // Note: decrypt the phone in DB or just compare with encrypted and unencrypted.
-        // It's safer to check if phone_number is simply present.
-        if (user.phone_number && user.phone_number !== phoneSearchParams[0] && user.phone_number !== phoneSearchParams[1]) {
-          return res.status(409).json({ error: 'This email is registered with a different phone number.' });
+        if (hasPhone) {
+          // A phone supplied by normal login/sign-up must still match the
+          // phone already linked to this email.
+          const phoneSearchParams = preparePhoneSearchParams(normalizedPhone);
+          // Encrypted phone values use a random IV, so a newly encrypted copy
+          // is not byte-for-byte equal to the stored value. Compare the
+          // decrypted value as well as the legacy encrypted/plaintext forms.
+          const storedPhone = user.phone_number ? decryptPhoneNumber(user.phone_number) : null;
+          if (user.phone_number
+            && user.phone_number !== phoneSearchParams[0]
+            && user.phone_number !== phoneSearchParams[1]
+            && storedPhone !== normalizedPhone) {
+            return res.status(409).json({ error: 'This email is registered with a different phone number.' });
+          }
+          await db.query(`UPDATE users SET is_email_verified = TRUE, phone_number = $2 WHERE id = $1`, [user.id, encryptedPhone]);
+        } else {
+          // Account recovery verifies ownership of the email and keeps the
+          // existing phone number intact.
+          await db.query(`UPDATE users SET is_email_verified = TRUE WHERE id = $1`, [user.id]);
         }
-        await db.query(`UPDATE users SET is_email_verified = TRUE, phone_number = $2 WHERE id = $1`, [user.id, encryptedPhone]);
       } else if (foundByPhone.rows.length > 0) {
         user = foundByPhone.rows[0];
         // User exists with this phone, but not this email. Is another email already set?
@@ -910,6 +933,12 @@ router.post(
         }
         await db.query(`UPDATE users SET is_email_verified = TRUE, email = $2 WHERE id = $1`, [user.id, normalizedEmail]);
       } else {
+        // Recovery must never create a new account just because the email was
+        // not found. New accounts require the normal sign-up flow with a
+        // phone number.
+        if (!hasPhone) {
+          return res.status(404).json({ error: 'Account not found. Please use sign up first.' });
+        }
         const newUserResult = await db.query(
           `INSERT INTO users (email, phone_number, language, timezone, is_email_verified)
            VALUES ($1, $2, $3, $4, TRUE)
