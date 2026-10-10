@@ -86,15 +86,36 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
   // so treating a request failure as gently as a request decline is
   // consistent, not a downgrade.
   Future<void> _requestSms() async {
+    var openSettings = false;
     try {
       final status = await Permission.sms.status;
-      if (status.isPermanentlyDenied) {
-        await openAppSettings();
-      } else {
-        await SmsListenerService().requestPermissions();
+      if (!status.isGranted) {
+        if (status.isPermanentlyDenied) {
+          openSettings = true;
+        } else {
+          final granted = await SmsListenerService().requestPermissions();
+          if (!granted) {
+            // Some Android versions/OEM builds report a previously dismissed
+            // SMS dialog as plain `denied`, even though they will not show the
+            // dialog again. In that state the user can only recover the grant
+            // from the app's system settings. Mark the row accordingly instead
+            // of leaving an Enable button that appears to do nothing.
+            openSettings = true;
+          }
+        }
       }
     } catch (_) {
-      // The next lifecycle/status refresh will show the current OS state.
+      // A malformed/blocked runtime request is also recoverable through the
+      // system settings page, so do not strand the user on a dead Enable
+      // button.
+      openSettings = true;
+    }
+
+    if (openSettings) {
+      if (mounted) {
+        setState(() => _smsPermanentlyDenied = true);
+      }
+      await openAppSettings();
     }
     // Read the status again immediately for normal runtime prompts. If the
     // user was sent to Settings, didChangeAppLifecycleState will refresh it
