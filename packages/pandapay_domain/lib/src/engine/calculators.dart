@@ -9,10 +9,12 @@ import '../money/money.dart';
 class UtilizationResult {
   final double ratio; // 0.30 == 30%
   final bool overThreshold;
+
   /// The tracked spend amount used to calculate [ratio]. This is not an
   /// issuer statement balance; callers should label it accordingly.
   final Money currentBalance;
-  final Money? splitRecommendationAmount; // how much to move to stay under threshold
+  final Money?
+  splitRecommendationAmount; // how much to move to stay under threshold
 
   const UtilizationResult({
     required this.ratio,
@@ -55,7 +57,11 @@ class SplitAllocation {
   final Money amount;
   final Money expectedValue;
 
-  const SplitAllocation({required this.card, required this.amount, required this.expectedValue});
+  const SplitAllocation({
+    required this.card,
+    required this.amount,
+    required this.expectedValue,
+  });
 }
 
 /// UA-2.4.2 / G2 — Multi-card split optimizer. Greedy fill by marginal ₹/₹:
@@ -73,7 +79,8 @@ class SplitOptimizer {
     Money totalAmount,
     RecommendationContext baseContext,
     List<CardSnapshot> cards, {
-    Map<String, Money>? utilizationCeiling, // card.id -> max additional spend before 30%
+    Map<String, Money>?
+    utilizationCeiling, // card.id -> max additional spend before 30%
     int stepCount = 20,
   }) {
     if (cards.isEmpty || totalAmount.isZero) return const [];
@@ -81,13 +88,16 @@ class SplitOptimizer {
     final stepSize = Money.fromPaise((totalAmount.paise / stepCount).round());
     final remainingCeiling = {
       for (final s in cards)
-        s.product.id: utilizationCeiling?[s.product.id] ?? const Money.fromPaise(1 << 50),
+        s.product.id:
+            utilizationCeiling?[s.product.id] ?? const Money.fromPaise(1 << 50),
     };
     final allocated = {for (final s in cards) s.product.id: const Money.zero()};
 
     Money placed = const Money.zero();
     while (placed < totalAmount) {
-      final stepAmount = (totalAmount - placed) < stepSize ? (totalAmount - placed) : stepSize;
+      final stepAmount = (totalAmount - placed) < stepSize
+          ? (totalAmount - placed)
+          : stepSize;
       if (stepAmount.isZero) break;
 
       // Rank cards for this marginal chunk with each card's *already allocated*
@@ -95,35 +105,38 @@ class SplitOptimizer {
       final marginal = <String, Money>{};
       for (final snapshot in cards) {
         final consumedSoFar = allocated[snapshot.product.id]!;
-        final adjustedSnapshot = _withReducedCaps(snapshot, consumedSoFar);
-        final rec = engine
-            .rank(
-              RecommendationContext(
-                amount: stepAmount,
-                categoryId: baseContext.categoryId,
-                mcc: baseContext.mcc,
-                vpa: baseContext.vpa,
-                rail: baseContext.rail,
-                isP2P: baseContext.isP2P,
-                travelMode: baseContext.travelMode,
-                // Propagated, not dropped: a merchant-restricted or expired
-                // rule must be evaluated identically on every marginal
-                // step, or the split plan optimises against a rate the
-                // card would not actually pay.
-                merchantName: baseContext.merchantName,
-                now: baseContext.now,
-              ),
-              [adjustedSnapshot],
-            )
-            .first;
+        final adjustedSnapshot = _withReducedCaps(
+          snapshot,
+          consumedSoFar,
+          baseContext,
+        );
+        final rec = engine.rank(
+          RecommendationContext(
+            amount: stepAmount,
+            categoryId: baseContext.categoryId,
+            mcc: baseContext.mcc,
+            vpa: baseContext.vpa,
+            rail: baseContext.rail,
+            isP2P: baseContext.isP2P,
+            travelMode: baseContext.travelMode,
+            // Propagated, not dropped: a merchant-restricted or expired
+            // rule must be evaluated identically on every marginal
+            // step, or the split plan optimises against a rate the
+            // card would not actually pay.
+            merchantName: baseContext.merchantName,
+            now: baseContext.now,
+          ),
+          [adjustedSnapshot],
+        ).first;
         if (rec.isExcluded) continue;
         if (remainingCeiling[snapshot.product.id]!.isZero) continue;
         marginal[snapshot.product.id] = rec.expectedValue;
       }
       if (marginal.isEmpty) break; // nothing eligible for more spend
 
-      final bestCardId =
-          marginal.entries.reduce((a, b) => a.value.paise >= b.value.paise ? a : b).key;
+      final bestCardId = marginal.entries
+          .reduce((a, b) => a.value.paise >= b.value.paise ? a : b)
+          .key;
       allocated[bestCardId] = allocated[bestCardId]! + stepAmount;
       remainingCeiling[bestCardId] = remainingCeiling[bestCardId]! - stepAmount;
       placed += stepAmount;
@@ -133,32 +146,114 @@ class SplitOptimizer {
     for (final snapshot in cards) {
       final amount = allocated[snapshot.product.id]!;
       if (amount.isZero) continue;
-      final adjustedSnapshot = _withReducedCaps(snapshot, const Money.zero());
-      final rec = engine
-          .rank(
-            RecommendationContext(
-              amount: amount,
-              categoryId: baseContext.categoryId,
-              rail: baseContext.rail,
-              travelMode: baseContext.travelMode,
-              merchantName: baseContext.merchantName,
-              now: baseContext.now,
-            ),
-            [adjustedSnapshot],
-          )
-          .first;
-      result.add(SplitAllocation(card: snapshot.product, amount: amount, expectedValue: rec.expectedValue));
+      final adjustedSnapshot = _withReducedCaps(
+        snapshot,
+        const Money.zero(),
+        baseContext,
+      );
+      final rec = engine.rank(
+        RecommendationContext(
+          amount: amount,
+          categoryId: baseContext.categoryId,
+          categorySlug: baseContext.categorySlug,
+          mcc: baseContext.mcc,
+          vpa: baseContext.vpa,
+          rail: baseContext.rail,
+          isP2P: baseContext.isP2P,
+          travelMode: baseContext.travelMode,
+          merchantName: baseContext.merchantName,
+          now: baseContext.now,
+        ),
+        [adjustedSnapshot],
+      ).first;
+      result.add(
+        SplitAllocation(
+          card: snapshot.product,
+          amount: amount,
+          expectedValue: rec.expectedValue,
+        ),
+      );
     }
     return result;
   }
 
-  CardSnapshot _withReducedCaps(CardSnapshot snapshot, Money consumed) {
+  CardSnapshot _withReducedCaps(
+    CardSnapshot snapshot,
+    Money consumed,
+    RecommendationContext baseContext,
+  ) {
     if (consumed.isZero) return snapshot;
-    final reduced = <String, Money>{};
-    for (final entry in snapshot.capRemaining.entries) {
-      final remaining = entry.value - consumed;
-      reduced[entry.key] = remaining.isNegative ? const Money.zero() : remaining;
+
+    // `capRemaining` is measured in the cap's own unit. The old optimizer
+    // subtracted allocated rupees from every cap, which made a ₹100 reward-
+    // value cap appear exhausted after ₹100 of spend at 10% (it should take
+    // ₹1,000), and treated transaction-count caps as spend caps. Match the
+    // same rule/cap pair as RecommendationEngine and reduce only the amount
+    // that this allocated portion would actually consume.
+    final card = snapshot.product;
+    final allocationContext = RecommendationContext(
+      amount: consumed,
+      categoryId: baseContext.categoryId,
+      categorySlug: baseContext.categorySlug,
+      mcc: baseContext.mcc,
+      vpa: baseContext.vpa,
+      rail: baseContext.rail,
+      isP2P: baseContext.isP2P,
+      travelMode: baseContext.travelMode,
+      merchantName: baseContext.merchantName,
+      now: baseContext.now,
+    );
+    final isCategoryExcluded = card.excludesCategory(
+      allocationContext.categoryId,
+    );
+    if (isCategoryExcluded &&
+        (!allocationContext.isFuel || card.fuelRule == null)) {
+      return snapshot;
     }
+    final matching = isCategoryExcluded
+        ? const <RewardRule>[]
+        : (card.rewardRules
+              .where(
+                (rule) =>
+                    RecommendationEngine.ruleApplies(rule, allocationContext),
+              )
+              .toList()
+            ..sort((a, b) => a.priority.compareTo(b.priority)));
+    if (matching.isEmpty) return snapshot;
+
+    final rule = matching.first;
+    final capRule = card.capRules
+        .where(
+          (cap) =>
+              (cap.rewardRuleId != null && cap.rewardRuleId == rule.id) ||
+              (cap.categoryId != null &&
+                  cap.categoryId == allocationContext.categoryId),
+        )
+        .firstOrNull;
+    if (capRule == null || capRule.measure == CapMeasure.txnCount) {
+      // A split allocation is one eventual charge on this card. Internal
+      // marginal steps must not consume a transaction-count cap repeatedly.
+      return snapshot;
+    }
+
+    final maxTxn = rule.maxTxn;
+    final bonusEligible = maxTxn != null && consumed > maxTxn
+        ? maxTxn
+        : consumed;
+    final consumedDelta = capRule.measure == CapMeasure.spendAmount
+        ? bonusEligible
+        : bonusEligible *
+              rule.unit.effectiveRatePerRupee(
+                rule.rate,
+                pointValueInr: card.pointValueInr,
+              );
+    if (consumedDelta.isZero || consumedDelta.isNegative) return snapshot;
+
+    final before = snapshot.capRemaining[capRule.id] ?? capRule.capValue;
+    final after = before - consumedDelta;
+    final reduced = <String, Money>{};
+    reduced.addAll(snapshot.capRemaining);
+    reduced[capRule.id] = after.isNegative ? const Money.zero() : after;
     return CardSnapshot(
       product: snapshot.product,
       capRemaining: reduced,
@@ -174,7 +269,10 @@ class BillingCycleFloat {
   final int daysUntilStatement;
   final int totalInterestFreeDays;
 
-  const BillingCycleFloat({required this.daysUntilStatement, required this.totalInterestFreeDays});
+  const BillingCycleFloat({
+    required this.daysUntilStatement,
+    required this.totalInterestFreeDays,
+  });
 }
 
 BillingCycleFloat billingCycleFloat({
@@ -187,7 +285,9 @@ BillingCycleFloat billingCycleFloat({
   if (!nextStatement.isAfter(now)) {
     nextStatement = DateTime(now.year, now.month + 1, statementDay);
   }
-  final daysUntilStatement = nextStatement.difference(DateTime(now.year, now.month, now.day)).inDays;
+  final daysUntilStatement = nextStatement
+      .difference(DateTime(now.year, now.month, now.day))
+      .inDays;
   return BillingCycleFloat(
     daysUntilStatement: daysUntilStatement,
     totalInterestFreeDays: daysUntilStatement + gracePeriodDays,
@@ -213,14 +313,16 @@ EmiAdvice adviseEmi({
   required Money principal,
   required double annualInterestRatePercent,
   required int tenureMonths,
-  required Money forgoneRewardValue, // what you'd have earned paying in full instead
+  required Money
+  forgoneRewardValue, // what you'd have earned paying in full instead
 }) {
   final monthlyRate = annualInterestRatePercent / 100 / 12;
   Money totalPaid;
   if (monthlyRate == 0) {
     totalPaid = principal;
   } else {
-    final emi = principal.rupees *
+    final emi =
+        principal.rupees *
         monthlyRate *
         _pow(1 + monthlyRate, tenureMonths) /
         (_pow(1 + monthlyRate, tenureMonths) - 1);
@@ -257,7 +359,11 @@ class RailComparison {
   final Recommendation swipeTop;
   final Money delta; // swipe - upi; positive means swipe pays more
 
-  const RailComparison({required this.upiTop, required this.swipeTop, required this.delta});
+  const RailComparison({
+    required this.upiTop,
+    required this.swipeTop,
+    required this.delta,
+  });
 }
 
 RailComparison compareRails(
@@ -292,8 +398,14 @@ RailComparison compareRails(
     cards,
   );
 
-  final upiTop = upiResults.firstWhere((r) => !r.isExcluded, orElse: () => upiResults.first);
-  final swipeTop = swipeResults.firstWhere((r) => !r.isExcluded, orElse: () => swipeResults.first);
+  final upiTop = upiResults.firstWhere(
+    (r) => !r.isExcluded,
+    orElse: () => upiResults.first,
+  );
+  final swipeTop = swipeResults.firstWhere(
+    (r) => !r.isExcluded,
+    orElse: () => swipeResults.first,
+  );
 
   return RailComparison(
     upiTop: upiTop,

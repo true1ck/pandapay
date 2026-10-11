@@ -3248,7 +3248,9 @@ async function repairSmsHistory(client, userId) {
   }
 
   const legacyRows = await client.query(
-    `SELECT t.id, t.merchant_name, t.merchant_vpa, t.mcc,
+    `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at,
+            t.merchant_name, t.merchant_vpa, t.mcc, t.rail,
+            t.instrument, t.entry_kind, t.state_applied,
             t.category_id, sc.slug AS category_slug, sc.name AS category_name
        FROM transactions t
        LEFT JOIN spend_categories sc ON sc.id = t.category_id
@@ -3279,10 +3281,46 @@ async function repairSmsHistory(client, userId) {
       messageText: null,
     });
     if (!categoryId || categoryId === row.category_id) continue;
+
+    // Reclassification changes the reward rule that governs this spend.
+    // Older code changed only category_id, leaving expected_value_inr,
+    // cap_states, milestone_states and points_ledger priced as if the old
+    // category were still active. That made a later MCC/VPA/merchant repair
+    // silently leave a valid spend at the old base-rate reward (or leave a
+    // newly excluded spend earning). Reverse and re-apply the same state
+    // machine around the category update so every derived reward field stays
+    // consistent. Backfill rows have state_applied=false and intentionally
+    // remain historical-only; they get the category correction but do not
+    // mutate the current cycle.
+    let cardForState = null;
+    const shouldRecompute = row.instrument === 'credit_card'
+      && row.entry_kind === 'spend'
+      && row.user_card_id
+      && row.state_applied !== false;
+    if (shouldRecompute) {
+      cardForState = await loadUserCardForState(client, userId, row.user_card_id);
+      if (cardForState) {
+        await reverseTransactionState(client, userId, cardForState, row);
+      }
+    }
+
     await client.query(
       `UPDATE transactions SET category_id = $1 WHERE id = $2 AND profile_id = $3`,
       [categoryId, row.id, userId]
     );
+
+    if (cardForState) {
+      await applyTransactionState(client, userId, cardForState, {
+        txnId: row.id,
+        userCardId: row.user_card_id,
+        amount: Number(row.amount_inr),
+        occurred: row.occurred_at,
+        categoryId,
+        merchantName: row.merchant_name,
+        rail: row.rail,
+        sign: 1,
+      });
+    }
     reclassified += 1;
   }
 
