@@ -71,6 +71,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           );
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
       if (mounted) context.pop();
     } catch (e) {
       // Plan Phase 4. Before this, an edit made offline simply failed and the

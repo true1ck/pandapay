@@ -285,6 +285,7 @@ class _SmsBackupImportScreenState extends ConsumerState<SmsBackupImportScreen> {
       ref.invalidate(smsImportBatchesProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
       if (mounted) setState(() => _phase = _Phase.done);
     } catch (e) {
       if (mounted) {

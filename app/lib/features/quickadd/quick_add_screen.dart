@@ -294,6 +294,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
       if (mounted) {
         // Captured BEFORE pop() — by the time a user actually taps "Undo"
         // (the snackbar lives ~4s, the pop animation completes in ~300ms),
@@ -326,6 +327,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                   container.invalidate(userCardsProvider);
                   container.invalidate(transactionsProvider);
                   container.invalidate(utilizationTransactionsProvider);
+                  container.invalidate(homeSummaryProvider);
                   messenger.showSnackBar(const SnackBar(content: Text('Undone.')));
                 } catch (e) {
                   messenger.showSnackBar(

@@ -152,6 +152,7 @@ class _PaymentSentScreenState extends ConsumerState<PaymentSentScreen> {
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
       ref
           .read(analyticsProvider)
           .track(

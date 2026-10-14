@@ -157,6 +157,7 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
       ref.invalidate(statementImportsProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
       ref.invalidate(userCardsProvider);
       if (mounted) setState(() => _step = _Step.done);
     } catch (e) {

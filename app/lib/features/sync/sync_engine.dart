@@ -165,6 +165,7 @@ class SyncEngine {
     if (entities.contains('transactions')) {
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(utilizationTransactionsProvider);
+      _ref.invalidate(homeSummaryProvider);
     }
     if (entities.contains('user_cards')) {
       _ref.invalidate(userCardsProvider);

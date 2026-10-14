@@ -362,6 +362,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     ref.invalidate(userCardsProvider);
     ref.invalidate(transactionsProvider);
     ref.invalidate(utilizationTransactionsProvider);
+    ref.invalidate(homeSummaryProvider);
     ref.invalidate(needsReviewCountProvider);
     ref.invalidate(spendReportProvider);
   }

@@ -238,6 +238,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       ref.invalidate(_transactionProvider(widget.entry.id));
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
       if (mounted) {
         ScaffoldMessenger.of(
           context,

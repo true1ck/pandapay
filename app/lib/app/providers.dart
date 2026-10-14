@@ -1138,6 +1138,7 @@ final outboxFlushProvider = Provider<void>((ref) {
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
     }
   });
 });
@@ -2443,6 +2444,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         ref.invalidate(userCardsProvider);
         ref.invalidate(transactionsProvider);
         ref.invalidate(utilizationTransactionsProvider);
+        ref.invalidate(homeSummaryProvider);
         ref.invalidate(spendReportProvider);
         ref.invalidate(budgetsProvider);
         ref.invalidate(recurringReportProvider);
@@ -2491,6 +2493,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       ref.invalidate(userCardsProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
     }
   }
 
@@ -2654,6 +2657,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           ref.invalidate(userCardsProvider);
           ref.invalidate(transactionsProvider);
           ref.invalidate(utilizationTransactionsProvider);
+          ref.invalidate(homeSummaryProvider);
           // Reconciliation can change active-row counts and categories, so
           // refresh dependent reports once after a real change only.
           ref.invalidate(spendReportProvider);
@@ -2818,6 +2822,7 @@ class SmsAutoImportController {
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(utilizationTransactionsProvider);
+      _ref.invalidate(homeSummaryProvider);
       _ref.invalidate(needsReviewCountProvider);
       _ref.invalidate(spendReportProvider);
       _ref.invalidate(budgetsProvider);
@@ -2867,6 +2872,7 @@ class SmsAutoImportController {
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(utilizationTransactionsProvider);
+      _ref.invalidate(homeSummaryProvider);
       _ref.invalidate(needsReviewCountProvider);
       _ref.invalidate(spendReportProvider);
       _ref.invalidate(budgetsProvider);
