@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -546,7 +547,13 @@ class SessionRefreshCoordinator {
 }
 
 final sessionInitProvider = FutureProvider<void>((ref) async {
-  final store = await ref.watch(tokenStoreProvider.future);
+  // Keystore access can be slow or unavailable on a cold boot, especially on
+  // an emulator after install. Treat that as a signed-out/offline start so
+  // the router can show onboarding; a later sign-in can retry normally.
+  final store = await ref.watch(tokenStoreProvider.future).timeout(
+    const Duration(seconds: 6),
+    onTimeout: () => TokenStore(const FlutterSecureStorage()),
+  );
   final refreshToken = store.refreshToken;
   final storedAccessToken = store.accessToken;
   if (refreshToken == null) {
@@ -559,7 +566,13 @@ final sessionInitProvider = FutureProvider<void>((ref) async {
     return;
   }
 
-  final refreshed = await ref.read(sessionRefreshCoordinatorProvider).refresh();
+  // Never keep the native/Flutter splash up while a hosted auth service is
+  // unreachable. The coordinator preserves the cached token on transient
+  // failures, so the router can continue into the cached/offline experience.
+  final refreshed = await ref
+      .read(sessionRefreshCoordinatorProvider)
+      .refresh()
+      .timeout(const Duration(seconds: 9), onTimeout: () => null);
   if (refreshed == null &&
       storedAccessToken != null &&
       store.accessToken != null) {

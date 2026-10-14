@@ -16,17 +16,23 @@ class AuthTokens {
 }
 
 class AuthApi {
+  // Auth is used during cold start. A network that is offline or a hosted
+  // service that is slow must never hold the app's first frame indefinitely.
+  static const _requestTimeout = Duration(seconds: 8);
+
   final String authBaseUrl;
   final http.Client _client;
   AuthApi({required this.authBaseUrl, http.Client? client})
     : _client = client ?? http.Client();
 
   Future<void> requestOtp(String phoneNumber) async {
-    final response = await _client.post(
-      Uri.parse('$authBaseUrl/auth/request-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone_number': phoneNumber}),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$authBaseUrl/auth/request-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'phone_number': phoneNumber}),
+        )
+        .timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'OTP request failed: ${response.statusCode} ${response.body}',
@@ -39,15 +45,17 @@ class AuthApi {
     String code,
     String deviceId,
   ) async {
-    final response = await _client.post(
-      Uri.parse('$authBaseUrl/auth/verify-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'phone_number': phoneNumber,
-        'code': code,
-        'device_id': deviceId,
-      }),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$authBaseUrl/auth/verify-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'phone_number': phoneNumber,
+            'code': code,
+            'device_id': deviceId,
+          }),
+        )
+        .timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'OTP verify failed: ${response.statusCode} ${response.body}',
@@ -61,11 +69,13 @@ class AuthApi {
   }
 
   Future<AuthTokens> refresh(String refreshToken) async {
-    final response = await _client.post(
-      Uri.parse('$authBaseUrl/auth/refresh'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'refresh_token': refreshToken}),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$authBaseUrl/auth/refresh'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refresh_token': refreshToken}),
+        )
+        .timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'Refresh failed: ${response.statusCode} ${response.body}',
@@ -88,16 +98,18 @@ class AuthApi {
     bool isSignUp = false,
     String? phoneNumber,
   }) async {
-    final response = await _client.post(
-      Uri.parse('$authBaseUrl/auth/request-email-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': email,
-        if (isSignUp) 'is_signup': true,
-        if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
-          'phone_number': phoneNumber.trim(),
-      }),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$authBaseUrl/auth/request-email-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'email': email,
+            if (isSignUp) 'is_signup': true,
+            if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
+              'phone_number': phoneNumber.trim(),
+          }),
+        )
+        .timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'OTP request failed: ${response.statusCode} ${response.body}',
@@ -117,17 +129,19 @@ class AuthApi {
     String? phoneNumber,
   }) async {
     final trimmedPhone = phoneNumber?.trim();
-    final response = await _client.post(
-      Uri.parse('$authBaseUrl/auth/verify-email-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': email,
-        'code': code,
-        'device_id': deviceId,
-        if (trimmedPhone != null && trimmedPhone.isNotEmpty)
-          'phone_number': trimmedPhone,
-      }),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$authBaseUrl/auth/verify-email-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'email': email,
+            'code': code,
+            'device_id': deviceId,
+            if (trimmedPhone != null && trimmedPhone.isNotEmpty)
+              'phone_number': trimmedPhone,
+          }),
+        )
+        .timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'OTP verify failed: ${response.statusCode} ${response.body}',
