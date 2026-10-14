@@ -189,7 +189,7 @@ class CardCapabilitySection extends StatelessWidget {
               product: product,
               title: cardName,
               subtitle: '$capabilityCount $capabilityLabel',
-              visualWidth: 58,
+              visualWidth: 84,
             ),
             children: children,
           ),

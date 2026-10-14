@@ -54,9 +54,9 @@ class BenefitsCheatSheetScreen extends ConsumerWidget {
                 for (final benefit in uniqueCardBenefits(product.benefits))
                   (userCard, product, benefit),
                 if (product.fuelRule != null &&
-                    !uniqueCardBenefits(product.benefits).any(
-                      (b) => b.kind == BenefitKind.fuelSurcharge,
-                    ))
+                    !uniqueCardBenefits(
+                      product.benefits,
+                    ).any((b) => b.kind == BenefitKind.fuelSurcharge))
                   (
                     userCard,
                     product,
@@ -307,7 +307,7 @@ class _BenefitTileState extends ConsumerState<_BenefitTile> {
                   product: widget.product,
                   title: _compactTitle,
                   subtitle: cardLabel,
-                  visualWidth: 62,
+                  visualWidth: 86,
                   badgeIcon: _benefitIcon,
                   footer: Wrap(
                     spacing: AppSpace.xs,

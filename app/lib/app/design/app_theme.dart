@@ -95,7 +95,9 @@ abstract final class BambooInk {
   // Decision surfaces — the dark slate cards/sheets that carry a verdict
   // or an action, per the design chat's "L2"/Slate #2B313A pick.
   static const slate = Color(0xFF2B313A);
-  static const slateRaised = Color(0xFF333A45); // top of a subtle vertical gradient on slate
+  static const slateRaised = Color(
+    0xFF333A45,
+  ); // top of a subtle vertical gradient on slate
   static const slateLow = Color(0xFF262B33); // bottom of that same gradient
   static const slateHairline = Color(0xFF424956);
 
@@ -162,12 +164,10 @@ abstract final class BambooInk {
 }
 
 /// Bamboo Ink's two-face type system: Bricolage Grotesque for money and
-/// headings, Instrument Sans for everything else. Thin wrappers around
-/// `google_fonts` (already a dependency for the navy/teal system's own
-/// Plus Jakarta Sans/Inter pairing) rather than a second `TextTheme`,
-/// since Home is the only screen using these so far — see [BambooInk]'s
-/// own doc-comment for why this isn't wired into the global `ThemeData`
-/// yet.
+/// headings, Instrument Sans for everything else. These wrappers are also
+/// used by the global [ThemeData] below, so older screens and the newer
+/// Bamboo surfaces share one typographic voice instead of switching fonts
+/// as the user navigates through the app.
 abstract final class BambooFonts {
   static TextStyle money(
     double size, {
@@ -202,7 +202,12 @@ abstract final class BambooFonts {
     FontWeight weight = FontWeight.w400,
     Color color = BambooInk.ink900,
     double? height,
-  }) => GoogleFonts.instrumentSans(fontSize: size, fontWeight: weight, color: color, height: height);
+  }) => GoogleFonts.instrumentSans(
+    fontSize: size,
+    fontWeight: weight,
+    color: color,
+    height: height,
+  );
 }
 
 /// Dark-mode neutrals. `AppColors` above is a set of hardcoded light-mode
@@ -238,30 +243,57 @@ class AppTheme {
       error: AppColors.error,
     );
 
-    // Plus Jakarta Sans for headings/money (a bold, geometric, distinctly
-    // "modern fintech" display face — the free, widely-used stand-in for
-    // the commissioned faces houses like Stripe use); Inter for body copy
-    // (the highest-legibility workhorse at small sizes). Tabular figures
-    // are set explicitly wherever money/amounts render (see MoneyText).
-    final display = GoogleFonts.plusJakartaSansTextTheme();
-    final body = GoogleFonts.interTextTheme();
+    // Use the same display/body pairing as the Bamboo surfaces globally.
+    // This prevents the card, rewards, wallet, and utility screens from
+    // falling back to a second font system when they use Theme.of(context).
+    final display = GoogleFonts.bricolageGrotesqueTextTheme();
+    final body = GoogleFonts.instrumentSansTextTheme();
 
     final textTheme = body.copyWith(
       displayLarge: display.displayLarge?.copyWith(fontWeight: FontWeight.w700),
-      displayMedium: display.displayMedium?.copyWith(fontWeight: FontWeight.w700),
+      displayMedium: display.displayMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
       displaySmall: display.displaySmall?.copyWith(fontWeight: FontWeight.w700),
-      headlineLarge: display.headlineLarge?.copyWith(fontWeight: FontWeight.w700),
-      headlineMedium: display.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
-      headlineSmall: display.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-      titleLarge: display.titleLarge?.copyWith(fontWeight: FontWeight.w700, color: AppColors.ink900),
-      titleMedium: display.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: AppColors.ink900),
-      titleSmall: display.titleSmall?.copyWith(fontWeight: FontWeight.w600, color: AppColors.ink900),
+      headlineLarge: display.headlineLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+      headlineMedium: display.headlineMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+      headlineSmall: display.headlineSmall?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+      titleLarge: display.titleLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: AppColors.ink900,
+      ),
+      titleMedium: display.titleMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: AppColors.ink900,
+      ),
+      titleSmall: display.titleSmall?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: AppColors.ink900,
+      ),
       bodyLarge: body.bodyLarge?.copyWith(color: AppColors.ink900, height: 1.5),
-      bodyMedium: body.bodyMedium?.copyWith(color: AppColors.ink700, height: 1.5),
+      bodyMedium: body.bodyMedium?.copyWith(
+        color: AppColors.ink700,
+        height: 1.5,
+      ),
       bodySmall: body.bodySmall?.copyWith(color: AppColors.ink500, height: 1.4),
-      labelLarge: body.labelLarge?.copyWith(fontWeight: FontWeight.w600, color: AppColors.ink900),
-      labelMedium: body.labelMedium?.copyWith(fontWeight: FontWeight.w600, color: AppColors.ink700),
-      labelSmall: body.labelSmall?.copyWith(fontWeight: FontWeight.w500, color: AppColors.ink500),
+      labelLarge: body.labelLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: AppColors.ink900,
+      ),
+      labelMedium: body.labelMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: AppColors.ink700,
+      ),
+      labelSmall: body.labelSmall?.copyWith(
+        fontWeight: FontWeight.w500,
+        color: AppColors.ink500,
+      ),
     );
 
     return ThemeData(
@@ -280,22 +312,34 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         margin: EdgeInsets.zero,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surfaceMuted,
         selectedColor: AppColors.teal50,
         labelStyle: textTheme.labelLarge,
-        secondaryLabelStyle: textTheme.labelLarge?.copyWith(color: AppColors.teal600),
+        secondaryLabelStyle: textTheme.labelLarge?.copyWith(
+          color: AppColors.teal600,
+        ),
         side: BorderSide.none,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.pill)),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.xs),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.md,
+          vertical: AppSpace.xs,
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceMuted,
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.lg),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.lg,
+          vertical: AppSpace.lg,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: BorderSide.none,
@@ -321,8 +365,13 @@ class AppTheme {
           foregroundColor: Colors.white,
           minimumSize: const Size.fromHeight(52),
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.xl),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-          textStyle: textTheme.labelLarge?.copyWith(color: Colors.white, fontSize: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          textStyle: textTheme.labelLarge?.copyWith(
+            color: Colors.white,
+            fontSize: 16,
+          ),
           disabledBackgroundColor: AppColors.ink100,
           disabledForegroundColor: AppColors.ink300,
         ),
@@ -332,12 +381,17 @@ class AppTheme {
           foregroundColor: AppColors.navy800,
           minimumSize: const Size.fromHeight(48),
           side: const BorderSide(color: AppColors.ink100, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: BambooInk.ink900, textStyle: textTheme.labelLarge),
+        style: TextButton.styleFrom(
+          foregroundColor: BambooInk.ink900,
+          textStyle: textTheme.labelLarge,
+        ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.navy900,
@@ -349,12 +403,18 @@ class AppTheme {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
-      dividerTheme: const DividerThemeData(color: AppColors.ink100, thickness: 1, space: 1),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.ink100,
+        thickness: 1,
+        space: 1,
+      ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.navy900,
         contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
       ),
       // Bamboo Ink dialog/date-picker chrome — additive, same reasoning as
       // every per-screen restyle this session: AlertDialog/showDatePicker
@@ -371,29 +431,39 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: BambooInk.paper,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         titleTextStyle: BambooFonts.heading(17, color: BambooInk.ink900),
         contentTextStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       ),
       datePickerTheme: DatePickerThemeData(
         backgroundColor: BambooInk.paper,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         headerBackgroundColor: BambooInk.slate,
         headerForegroundColor: BambooInk.lime,
         todayForegroundColor: const WidgetStatePropertyAll(BambooInk.jade),
         todayBorder: const BorderSide(color: BambooInk.jade, width: 1),
         dayForegroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected) ? BambooInk.onSlate : BambooInk.ink900,
+          (states) => states.contains(WidgetState.selected)
+              ? BambooInk.onSlate
+              : BambooInk.ink900,
         ),
         dayBackgroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected) ? BambooInk.slate : null,
+          (states) =>
+              states.contains(WidgetState.selected) ? BambooInk.slate : null,
         ),
         yearForegroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected) ? BambooInk.onSlate : BambooInk.ink900,
+          (states) => states.contains(WidgetState.selected)
+              ? BambooInk.onSlate
+              : BambooInk.ink900,
         ),
         yearBackgroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected) ? BambooInk.slate : null,
+          (states) =>
+              states.contains(WidgetState.selected) ? BambooInk.slate : null,
         ),
       ),
     );
@@ -414,25 +484,64 @@ class AppTheme {
       error: const Color(0xFFEF5350),
     );
 
-    final display = GoogleFonts.plusJakartaSansTextTheme(ThemeData.dark().textTheme);
-    final body = GoogleFonts.interTextTheme(ThemeData.dark().textTheme);
+    final display = GoogleFonts.bricolageGrotesqueTextTheme(
+      ThemeData.dark().textTheme,
+    );
+    final body = GoogleFonts.instrumentSansTextTheme(
+      ThemeData.dark().textTheme,
+    );
 
     final textTheme = body.copyWith(
       displayLarge: display.displayLarge?.copyWith(fontWeight: FontWeight.w700),
-      displayMedium: display.displayMedium?.copyWith(fontWeight: FontWeight.w700),
+      displayMedium: display.displayMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
       displaySmall: display.displaySmall?.copyWith(fontWeight: FontWeight.w700),
-      headlineLarge: display.headlineLarge?.copyWith(fontWeight: FontWeight.w700),
-      headlineMedium: display.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
-      headlineSmall: display.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-      titleLarge: display.titleLarge?.copyWith(fontWeight: FontWeight.w700, color: _AppColorsDark.ink900),
-      titleMedium: display.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: _AppColorsDark.ink900),
-      titleSmall: display.titleSmall?.copyWith(fontWeight: FontWeight.w600, color: _AppColorsDark.ink900),
-      bodyLarge: body.bodyLarge?.copyWith(color: _AppColorsDark.ink900, height: 1.5),
-      bodyMedium: body.bodyMedium?.copyWith(color: _AppColorsDark.ink700, height: 1.5),
-      bodySmall: body.bodySmall?.copyWith(color: _AppColorsDark.ink500, height: 1.4),
-      labelLarge: body.labelLarge?.copyWith(fontWeight: FontWeight.w600, color: _AppColorsDark.ink900),
-      labelMedium: body.labelMedium?.copyWith(fontWeight: FontWeight.w600, color: _AppColorsDark.ink700),
-      labelSmall: body.labelSmall?.copyWith(fontWeight: FontWeight.w500, color: _AppColorsDark.ink500),
+      headlineLarge: display.headlineLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+      headlineMedium: display.headlineMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+      headlineSmall: display.headlineSmall?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+      titleLarge: display.titleLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: _AppColorsDark.ink900,
+      ),
+      titleMedium: display.titleMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: _AppColorsDark.ink900,
+      ),
+      titleSmall: display.titleSmall?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: _AppColorsDark.ink900,
+      ),
+      bodyLarge: body.bodyLarge?.copyWith(
+        color: _AppColorsDark.ink900,
+        height: 1.5,
+      ),
+      bodyMedium: body.bodyMedium?.copyWith(
+        color: _AppColorsDark.ink700,
+        height: 1.5,
+      ),
+      bodySmall: body.bodySmall?.copyWith(
+        color: _AppColorsDark.ink500,
+        height: 1.4,
+      ),
+      labelLarge: body.labelLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: _AppColorsDark.ink900,
+      ),
+      labelMedium: body.labelMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: _AppColorsDark.ink700,
+      ),
+      labelSmall: body.labelSmall?.copyWith(
+        fontWeight: FontWeight.w500,
+        color: _AppColorsDark.ink500,
+      ),
     );
 
     return ThemeData(
@@ -452,22 +561,34 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: _AppColorsDark.surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         margin: EdgeInsets.zero,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: _AppColorsDark.surfaceMuted,
         selectedColor: AppColors.teal600.withValues(alpha: 0.25),
         labelStyle: textTheme.labelLarge,
-        secondaryLabelStyle: textTheme.labelLarge?.copyWith(color: AppColors.teal400),
+        secondaryLabelStyle: textTheme.labelLarge?.copyWith(
+          color: AppColors.teal400,
+        ),
         side: BorderSide.none,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.pill)),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.xs),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.md,
+          vertical: AppSpace.xs,
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: _AppColorsDark.surfaceMuted,
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.lg),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.lg,
+          vertical: AppSpace.lg,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: BorderSide.none,
@@ -493,8 +614,13 @@ class AppTheme {
           foregroundColor: AppColors.navy900,
           minimumSize: const Size.fromHeight(52),
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.xl),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-          textStyle: textTheme.labelLarge?.copyWith(color: AppColors.navy900, fontSize: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          textStyle: textTheme.labelLarge?.copyWith(
+            color: AppColors.navy900,
+            fontSize: 16,
+          ),
           disabledBackgroundColor: _AppColorsDark.ink100,
           disabledForegroundColor: _AppColorsDark.ink300,
         ),
@@ -504,12 +630,17 @@ class AppTheme {
           foregroundColor: _AppColorsDark.ink900,
           minimumSize: const Size.fromHeight(48),
           side: const BorderSide(color: Color(0xFF33404D), width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: BambooInk.ink900, textStyle: textTheme.labelLarge),
+        style: TextButton.styleFrom(
+          foregroundColor: BambooInk.ink900,
+          textStyle: textTheme.labelLarge,
+        ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.teal500,
@@ -521,12 +652,20 @@ class AppTheme {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
-      dividerTheme: const DividerThemeData(color: Color(0xFF33404D), thickness: 1, space: 1),
+      dividerTheme: const DividerThemeData(
+        color: Color(0xFF33404D),
+        thickness: 1,
+        space: 1,
+      ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: _AppColorsDark.surfaceMuted,
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: _AppColorsDark.ink900),
+        contentTextStyle: textTheme.bodyMedium?.copyWith(
+          color: _AppColorsDark.ink900,
+        ),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
       ),
       // Same Bamboo Ink dialog/date-picker chrome as light() — deliberately
       // identical rather than swapped to the dark navy surfaces this
@@ -536,29 +675,39 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: BambooInk.paper,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         titleTextStyle: BambooFonts.heading(17, color: BambooInk.ink900),
         contentTextStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
       ),
       datePickerTheme: DatePickerThemeData(
         backgroundColor: BambooInk.paper,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         headerBackgroundColor: BambooInk.slate,
         headerForegroundColor: BambooInk.lime,
         todayForegroundColor: const WidgetStatePropertyAll(BambooInk.jade),
         todayBorder: const BorderSide(color: BambooInk.jade, width: 1),
         dayForegroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected) ? BambooInk.onSlate : BambooInk.ink900,
+          (states) => states.contains(WidgetState.selected)
+              ? BambooInk.onSlate
+              : BambooInk.ink900,
         ),
         dayBackgroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected) ? BambooInk.slate : null,
+          (states) =>
+              states.contains(WidgetState.selected) ? BambooInk.slate : null,
         ),
         yearForegroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected) ? BambooInk.onSlate : BambooInk.ink900,
+          (states) => states.contains(WidgetState.selected)
+              ? BambooInk.onSlate
+              : BambooInk.ink900,
         ),
         yearBackgroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected) ? BambooInk.slate : null,
+          (states) =>
+              states.contains(WidgetState.selected) ? BambooInk.slate : null,
         ),
       ),
     );

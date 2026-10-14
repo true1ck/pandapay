@@ -68,7 +68,7 @@ class CardSummaryHeader extends StatelessWidget {
     this.footer,
     this.trailing,
     this.badgeIcon,
-    this.visualWidth = 78,
+    this.visualWidth = 98,
   });
 
   @override
@@ -81,7 +81,7 @@ class CardSummaryHeader extends StatelessWidget {
         ? visual
         : SizedBox(
             width: visualWidth + 10,
-            height: 58,
+            height: visualWidth * 0.62 + 6,
             child: Stack(
               clipBehavior: Clip.none,
               children: [

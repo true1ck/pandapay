@@ -120,7 +120,7 @@ class _AuditTile extends ConsumerWidget {
             product: product,
             title: title,
             subtitle: usageLabel,
-            visualWidth: 66,
+            visualWidth: 84,
             badgeIcon: annualFee == null
                 ? Icons.help_outline_rounded
                 : paidForItself

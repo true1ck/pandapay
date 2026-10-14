@@ -36,7 +36,9 @@ class CardVisual extends StatelessWidget {
         // small card as compact too, otherwise the full header row can
         // overflow before the constraint reaches the card face.
         final compact =
-            (width != null && width! < 120) || constraints.maxWidth < 120;
+            (width != null && width! < 132) ||
+            (height != null && height! < 96) ||
+            constraints.maxWidth < 132;
         final card = ClipRRect(
           borderRadius: BorderRadius.circular(compact ? 12 : 18),
           child: DecoratedBox(
@@ -84,9 +86,9 @@ class CardVisual extends StatelessWidget {
                   ),
                 ] else ...[
                   Positioned(
-                    top: 12,
-                    left: 14,
-                    right: 14,
+                    top: 11,
+                    left: 15,
+                    right: 15,
                     child: Row(
                       children: [
                         Expanded(
@@ -95,7 +97,7 @@ class CardVisual extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: BambooFonts.ui(
-                              10,
+                              11,
                               weight: FontWeight.w700,
                               color: palette.foreground,
                             ).copyWith(letterSpacing: 1.1),
@@ -110,45 +112,54 @@ class CardVisual extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    left: 14,
-                    top: 38,
+                    left: 15,
+                    top: 40,
                     child: _CardChip(
                       gold: palette.chip,
                       foreground: palette.chipInk,
                     ),
                   ),
-                  Positioned(
-                    left: 14,
-                    right: 14,
-                    bottom: 11,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: FittedBox(
-                            alignment: Alignment.centerLeft,
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              showProductName
-                                  ? product.name.toUpperCase()
-                                  : _issuerLabel(product),
-                              maxLines: 1,
-                              style: BambooFonts.ui(
-                                10.5,
-                                weight: FontWeight.w700,
-                                color: palette.foreground,
-                              ).copyWith(letterSpacing: 0.7),
+                  if (showProductName)
+                    Positioned(
+                      left: 15,
+                      right: 15,
+                      bottom: 11,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: FittedBox(
+                              alignment: Alignment.centerLeft,
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                product.name.toUpperCase(),
+                                maxLines: 1,
+                                style: BambooFonts.ui(
+                                  11,
+                                  weight: FontWeight.w700,
+                                  color: palette.foreground,
+                                ).copyWith(letterSpacing: 0.55),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 7),
-                        Icon(
-                          Icons.contactless_rounded,
-                          size: 18,
-                          color: palette.foreground.withValues(alpha: 0.9),
-                        ),
-                      ],
+                          const SizedBox(width: 7),
+                          Icon(
+                            Icons.contactless_rounded,
+                            size: 18,
+                            color: palette.foreground.withValues(alpha: 0.9),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Positioned(
+                      right: 15,
+                      bottom: 11,
+                      child: Icon(
+                        Icons.contactless_rounded,
+                        size: 18,
+                        color: palette.foreground.withValues(alpha: 0.9),
+                      ),
                     ),
-                  ),
                 ],
               ],
             ),
