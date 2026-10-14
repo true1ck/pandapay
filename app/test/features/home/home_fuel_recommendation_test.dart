@@ -93,6 +93,13 @@ void main() {
       expect(find.text('MoneyBack+ Credit Card'), findsOneWidget);
       expect(find.text('₹30'), findsOneWidget);
 
+      // The icon shortcuts should select the same category as the dropdown.
+      await tester.tap(
+        find.byKey(const ValueKey('home-category-icon-fuel')),
+      );
+      await tester.pumpAndSettle();
+      expect(container.read(selectedCategoryProvider), 'fuel');
+
       // Switch to Fuel through the purchase-type selector.
       await tester.tap(find.byKey(const ValueKey('home-purchase-type')));
       await tester.pumpAndSettle();

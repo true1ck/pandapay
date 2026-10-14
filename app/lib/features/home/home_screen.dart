@@ -130,16 +130,13 @@ class HomeScreen extends ConsumerWidget {
               child: HomeContextLine(),
             ),
             const SizedBox(height: AppSpace.lg),
-            SizedBox(
+            Padding(
               key: tutorialKeys.categoryChips,
-              height: 68,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: _gutter),
-                child: _PurchaseTypeSelector(
-                  selectedCategory: selectedCategory,
-                  onChanged: (slug) =>
-                      ref.read(selectedCategoryProvider.notifier).state = slug,
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: _gutter),
+              child: _PurchaseTypeSelector(
+                selectedCategory: selectedCategory,
+                onChanged: (slug) =>
+                    ref.read(selectedCategoryProvider.notifier).state = slug,
               ),
             ),
             Padding(
@@ -367,7 +364,7 @@ class _PurchaseTypeSelector extends StatelessWidget {
     final selectedEntry = selected.isEmpty ? null : selected.first;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(18),
@@ -380,61 +377,138 @@ class _PurchaseTypeSelector extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: BambooInk.slate,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(
-              selectedEntry?.$3 ?? Icons.shopping_bag_outlined,
-              color: BambooInk.lime,
-              size: 21,
-            ),
+          Row(
+            children: [
+              for (final (slug, label, icon) in HomeScreen._categories)
+                Expanded(
+                  child: _PurchaseTypeIconButton(
+                    slug: slug,
+                    label: label,
+                    icon: icon,
+                    selected: slug == selectedCategory,
+                    onTap: () => onChanged(slug),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(width: AppSpace.sm),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                key: const ValueKey('home-purchase-type'),
-                value: selectedEntry?.$1,
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.expand_more_rounded,
-                  color: BambooInk.ink500,
+          const SizedBox(height: AppSpace.sm),
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: BambooInk.slate,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                hint: Text(
-                  'Choose purchase type',
-                  style: BambooFonts.ui(14, color: BambooInk.ink500),
+                child: Icon(
+                  selectedEntry?.$3 ?? Icons.shopping_bag_outlined,
+                  color: BambooInk.lime,
+                  size: 20,
                 ),
-                style: BambooFonts.ui(
-                  15,
-                  weight: FontWeight.w700,
-                  color: BambooInk.ink900,
-                ),
-                dropdownColor: BambooInk.paper,
-                borderRadius: BorderRadius.circular(16),
-                items: [
-                  for (final (slug, label, icon) in HomeScreen._categories)
-                    DropdownMenuItem<String>(
-                      value: slug,
-                      child: Row(
-                        children: [
-                          Icon(icon, size: 18, color: BambooInk.ink500),
-                          const SizedBox(width: AppSpace.sm),
-                          Text(label),
-                        ],
-                      ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    key: const ValueKey('home-purchase-type'),
+                    value: selectedEntry?.$1,
+                    isExpanded: true,
+                    isDense: true,
+                    icon: const Icon(
+                      Icons.expand_more_rounded,
+                      color: BambooInk.ink500,
                     ),
-                ],
-                onChanged: onChanged,
+                    hint: Text(
+                      'Choose purchase type',
+                      style: BambooFonts.ui(14, color: BambooInk.ink500),
+                    ),
+                    style: BambooFonts.ui(
+                      15,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
+                    ),
+                    dropdownColor: BambooInk.paper,
+                    borderRadius: BorderRadius.circular(16),
+                    menuMaxHeight: 360,
+                    items: [
+                      for (final (slug, label, icon) in HomeScreen._categories)
+                        DropdownMenuItem<String>(
+                          value: slug,
+                          child: Row(
+                            children: [
+                              Icon(icon, size: 18, color: BambooInk.ink500),
+                              const SizedBox(width: AppSpace.sm),
+                              Text(label),
+                            ],
+                          ),
+                        ),
+                    ],
+                    onChanged: onChanged,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PurchaseTypeIconButton extends StatelessWidget {
+  final String slug;
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PurchaseTypeIconButton({
+    required this.slug,
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = selected ? BambooInk.slate : BambooInk.ink500;
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey('home-category-icon-$slug'),
+              borderRadius: BorderRadius.circular(12),
+              onTap: onTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOut,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: selected ? BambooInk.lime : BambooInk.paperMuted,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected
+                        ? BambooInk.lime
+                        : BambooInk.hairlineOnPaper,
+                  ),
+                ),
+                child: Icon(icon, size: 20, color: foreground),
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
