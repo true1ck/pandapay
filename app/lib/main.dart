@@ -38,9 +38,16 @@ void main() {
   // network error" (env.dart's own words). Inside the zone guard, that
   // exception would just become a silent CrashLog entry behind a blank
   // screen, which is the opposite of what this check exists for.
-  Env.assertReleaseConfigured();
+  // A malformed release APK must render an actionable error instead of
+  // throwing before runApp(), which leaves Android's native splash visible.
+  final configurationError = Env.releaseConfigurationError;
 
   runGuarded(() {
+    if (configurationError != null) {
+      runApp(_BuildConfigurationErrorApp(message: configurationError));
+      return;
+    }
+
     // Debug-only: materialise the semantics tree even when no assistive
     // technology is attached.
     //
@@ -60,6 +67,56 @@ void main() {
     }
     runApp(const ProviderScope(child: PandaPayApp()));
   });
+}
+
+/// Independent of Riverpod and the backend so a bad artifact can explain
+/// itself even when the missing endpoint prevented normal initialization.
+class _BuildConfigurationErrorApp extends StatelessWidget {
+  final String message;
+
+  const _BuildConfigurationErrorApp({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(brightness: Brightness.light),
+      home: Scaffold(
+        backgroundColor: const Color(0xFFF7F9F2),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.build_circle_outlined, size: 56, color: Color(0xFF2D333D)),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'PandaPay could not start',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Color(0xFF20242B)),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 16, height: 1.4, color: Color(0xFF5D6470)),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Please install a fresh production build.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: Color(0xFF5D6470)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// UA-0.4.2 bottom nav: Home · Cards · raised SCAN FAB · Activity · Account.

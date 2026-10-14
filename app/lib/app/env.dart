@@ -92,7 +92,7 @@ class Env {
     return host == 'localhost' || host == '127.0.0.1' || host == '10.0.2.2';
   }
 
-  /// Fails fast in a release build that was compiled without the defines.
+  /// Describes a release build compiled without the required hosted defines.
   ///
   /// Deliberately an unconditional `throw` rather than an `assert`: asserts
   /// are stripped from release builds, which is precisely the build this is
@@ -100,7 +100,7 @@ class Env {
   /// strictly better than shipping a build that can only ever show users a
   /// network error, and it can only ever fire on a misconfigured release —
   /// never on a real user's device once the build is correct.
-  static void assertReleaseConfigured() {
+  static String? get releaseConfigurationError {
     // `bool.fromEnvironment('dart.vm.product')` rather than Flutter's
     // `kReleaseMode` — identical meaning, but it keeps this file free of any
     // Flutter import. That matters because `tool/verify_live_*.dart` are
@@ -109,18 +109,23 @@ class Env {
     // "Undefined name 'Image'" out of dart:ui, which is a confusing failure
     // a long way from its cause.
     const isRelease = bool.fromEnvironment('dart.vm.product');
-    if (isRelease && environment == AppEnvironment.dev) {
-      throw StateError(
-        'Release build was compiled with PANDAPAY_ENV=dev. Use the build '
-        'script to select staging or prod and pass explicit backend URLs.',
-      );
+    if (!isRelease) return null;
+    if (environment == AppEnvironment.dev) {
+      return 'This release build was compiled as dev. Use the production '
+          'build script with the prod flavor and hosted backend URLs.';
     }
-    if (isRelease && pointsAtLocalhost) {
-      throw StateError(
-        'Release build was compiled without --dart-define=PANDAPAY_API_BASE_URL / '
-        'PANDAPAY_AUTH_BASE_URL, so it points at $apiBaseUrl and $authBaseUrl. '
-        'See app/lib/app/env.dart for the required build flags.',
-      );
+    if (pointsAtLocalhost) {
+      return 'This release build has no hosted backend URL. Rebuild it with '
+          'the production build script and PANDAPAY_API_BASE_URL plus '
+          'PANDAPAY_AUTH_BASE_URL.';
     }
+    return null;
+  }
+
+  /// Retained for command-line validation and existing callers. UI startup
+  /// uses [releaseConfigurationError] so a malformed APK can explain itself.
+  static void assertReleaseConfigured() {
+    final error = releaseConfigurationError;
+    if (error != null) throw StateError(error);
   }
 }
