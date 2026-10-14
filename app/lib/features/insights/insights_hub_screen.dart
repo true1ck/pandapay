@@ -94,11 +94,12 @@ class InsightsHubScreen extends ConsumerWidget {
 
     final capRows = [
       for (final (userCard, product) in owned)
-        for (final cap in product.capRules) (userCard, cap),
+        for (final cap in uniqueCapRules(product.capRules)) (userCard, cap),
     ];
     final milestoneRows = [
       for (final (userCard, product) in owned)
-        for (final m in product.milestoneRules) (userCard, product, m),
+        for (final m in uniqueMilestoneRules(product.milestoneRules))
+          (userCard, product, m),
     ];
     final feeWaiverRows = [
       for (final (userCard, _) in owned)

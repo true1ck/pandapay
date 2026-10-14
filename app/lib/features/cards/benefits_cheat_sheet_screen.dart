@@ -51,10 +51,10 @@ class BenefitsCheatSheetScreen extends ConsumerWidget {
             // not a collapsed one, since their quotas/programs may differ.
             final entries = <(UserCard, CardProduct, CardBenefit)>[
               for (final (userCard, product) in pairs) ...[
-                for (final benefit in product.benefits)
+                for (final benefit in uniqueCardBenefits(product.benefits))
                   (userCard, product, benefit),
                 if (product.fuelRule != null &&
-                    !product.benefits.any(
+                    !uniqueCardBenefits(product.benefits).any(
                       (b) => b.kind == BenefitKind.fuelSurcharge,
                     ))
                   (

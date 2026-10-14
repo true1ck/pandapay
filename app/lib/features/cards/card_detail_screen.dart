@@ -215,18 +215,18 @@ class CardDetailScreen extends ConsumerWidget {
 String _sectionSummary(String label, UserCard card, CardProduct product) {
   return switch (label) {
     'Rewards' =>
-      '${product.rewardRules.length + (product.fuelRule == null ? 0 : 1)} earning rules · tap rows for details',
+      '${uniqueRewardRules(product.rewardRules).length + (product.fuelRule == null ? 0 : 1)} earning rules · tap rows for details',
     'Spend' => 'This month · actual spend and effective reward rate',
     'Caps' =>
-      '${product.capRules.length} tracked caps · consumption resets by period',
+      '${uniqueCapRules(product.capRules).length} tracked caps · consumption resets by period',
     'Milestones' =>
-      '${product.milestoneRules.length} milestone${product.milestoneRules.length == 1 ? '' : 's'} · progress to unlock',
+      '${uniqueMilestoneRules(product.milestoneRules).length} milestone${uniqueMilestoneRules(product.milestoneRules).length == 1 ? '' : 's'} · progress to unlock',
     'Fees' =>
       card.annualFeeOverride?.isZero == true
           ? 'Lifetime free for you'
           : '${card.feeWaiverStates.length} waiver rule${card.feeWaiverStates.length == 1 ? '' : 's'} · annual fee below',
     'Benefits' =>
-      '${product.benefits.length} benefits · lounge access and protections',
+      '${uniqueCardBenefits(product.benefits).length} benefits · lounge access and protections',
     'Statement' =>
       card.statementDay == null
           ? 'Add statement day to see your billing cycle'
@@ -524,7 +524,7 @@ class _RewardsTab extends ConsumerWidget {
       return 'Unknown category';
     }
 
-    final rules = List<RewardRule>.from(product.rewardRules)
+    final rules = List<RewardRule>.from(uniqueRewardRules(product.rewardRules))
       ..sort((a, b) => a.priority.compareTo(b.priority));
     final hasFuelInRules = rules.any(
       (r) =>
@@ -710,27 +710,14 @@ class _CapsTab extends ConsumerWidget {
           'Card-wide';
     }
 
-    String capTitle(CapRule cap) {
-      final raw = cap.label.trim();
-      if (raw.isEmpty) return categoryName(cap.categoryId);
-      final normalized = raw
-          .toLowerCase()
-          .replaceAll('_', ' ')
-          .replaceAll(RegExp(r'\s+cap$'), '')
-          .trim();
-      if (normalized == 'bonus reward points' || normalized == 'bonus points') {
-        return 'Bonus reward points';
-      }
-      return raw;
-    }
-
     String measureLabel(CapRule cap) => switch (cap.measure) {
       CapMeasure.rewardValue => 'reward value cap',
       CapMeasure.spendAmount => 'spend cap',
       CapMeasure.txnCount => 'transaction cap',
     };
 
-    if (product.capRules.isEmpty && product.fuelRule == null) {
+    final caps = uniqueCapRules(product.capRules);
+    if (caps.isEmpty && product.fuelRule == null) {
       return const EmptyState(
         icon: Icons.speed_outlined,
         title: 'No caps on this card',
@@ -741,7 +728,7 @@ class _CapsTab extends ConsumerWidget {
       shrinkWrap: embedded,
       physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
-        for (final cap in product.capRules)
+        for (final cap in caps)
           Builder(
             builder: (context) {
               final consumed =
@@ -752,7 +739,10 @@ class _CapsTab extends ConsumerWidget {
                   ? '${consumed.paise ~/ 100} of ${cap.capValue.paise ~/ 100} transactions'
                   : '${consumed.format()} of ${cap.capValue.format()}';
               return _CompactDisclosure(
-                title: capTitle(cap),
+                title: capRuleDisplayLabel(
+                  cap,
+                  categoryName: categoryName(cap.categoryId),
+                ),
                 subtitle:
                     '${categoryName(cap.categoryId)} · ${measureLabel(cap)} · resets ${_periodLabel(cap.period)}',
                 trailing: consumption,
@@ -786,7 +776,7 @@ class _CapsTab extends ConsumerWidget {
             },
           ),
         if (product.fuelRule != null) ...[
-          if (product.capRules.isNotEmpty) ...[
+          if (caps.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpace.sm),
               child: Text(
@@ -855,7 +845,8 @@ class _MilestonesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (product.milestoneRules.isEmpty) {
+    final milestones = uniqueMilestoneRules(product.milestoneRules);
+    if (milestones.isEmpty) {
       return const EmptyState(
         icon: Icons.flag_outlined,
         title: 'No milestones on this card',
@@ -866,7 +857,7 @@ class _MilestonesTab extends StatelessWidget {
       shrinkWrap: embedded,
       physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
-        for (final milestone in product.milestoneRules)
+        for (final milestone in milestones)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.md),
             child: Builder(
@@ -1196,9 +1187,10 @@ class _BenefitsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final benefits = [
-      ...product.benefits,
+      ...uniqueCardBenefits(product.benefits),
       if (product.fuelRule != null &&
-          !product.benefits.any((b) => b.kind == BenefitKind.fuelSurcharge))
+          !uniqueCardBenefits(product.benefits)
+              .any((b) => b.kind == BenefitKind.fuelSurcharge))
         CardBenefit(
           id: 'fuel-${product.id}',
           kind: BenefitKind.fuelSurcharge,

@@ -298,27 +298,32 @@ extension CardProductJson on CardProduct {
       baseRewardRate: _numOrNull(json['base_reward_rate']),
       excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const [])
           .cast<String>(),
-      rewardRules: ((json['reward_rules'] as List?) ?? const [])
-          .map((e) => RewardRuleJson.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      capRules: ((json['cap_rules'] as List?) ?? const [])
-          .map((e) => CapRuleJson.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      milestoneRules: ((json['milestone_rules'] as List?) ?? const [])
-          .map((e) => MilestoneRuleJson.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      rewardRules: uniqueRewardRules(
+        ((json['reward_rules'] as List?) ?? const [])
+            .map((e) => RewardRuleJson.fromJson(e as Map<String, dynamic>)),
+      ),
+      capRules: uniqueCapRules(
+        ((json['cap_rules'] as List?) ?? const [])
+            .map((e) => CapRuleJson.fromJson(e as Map<String, dynamic>)),
+      ),
+      milestoneRules: uniqueMilestoneRules(
+        ((json['milestone_rules'] as List?) ?? const [])
+            .map((e) => MilestoneRuleJson.fromJson(e as Map<String, dynamic>)),
+      ),
       forexRule: json['forex'] != null
           ? ForexRuleJson.fromJson(json['forex'] as Map<String, dynamic>)
           : null,
       fuelRule: json['fuel'] != null
           ? FuelSurchargeRuleJson.fromJson(json['fuel'] as Map<String, dynamic>)
           : null,
-      feeWaiverRules: ((json['fee_waiver_rules'] as List?) ?? const [])
-          .map((e) => FeeWaiverRuleJson.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      benefits: ((json['benefits'] as List?) ?? const [])
-          .map((e) => CardBenefitJson.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      feeWaiverRules: uniqueFeeWaiverRules(
+        ((json['fee_waiver_rules'] as List?) ?? const [])
+            .map((e) => FeeWaiverRuleJson.fromJson(e as Map<String, dynamic>)),
+      ),
+      benefits: uniqueCardBenefits(
+        ((json['benefits'] as List?) ?? const [])
+            .map((e) => CardBenefitJson.fromJson(e as Map<String, dynamic>)),
+      ),
       annualFeeInr: _moneyOrNull(json['annual_fee_inr']),
       joiningFeeInr: _moneyOrNull(json['joining_fee_inr']),
       verifiedAt: json['verified_at'] == null

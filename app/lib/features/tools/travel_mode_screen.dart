@@ -249,7 +249,7 @@ class _LoungeAbroadSection extends ConsumerWidget {
     final visits = ref.watch(loungeUsageProvider);
     final rows = <(UserCard, CardProduct, CardBenefit)>[
       for (final (uc, p) in owned)
-        for (final b in p.benefits)
+        for (final b in uniqueCardBenefits(p.benefits))
           if (b.kind == BenefitKind.loungeInternational) (uc, p, b),
     ];
     if (rows.isEmpty) {
@@ -382,7 +382,7 @@ class _TravelInsuranceSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = <(UserCard, CardProduct, CardBenefit)>[
       for (final (uc, p) in owned)
-        for (final b in p.benefits)
+        for (final b in uniqueCardBenefits(p.benefits))
           if (b.kind == BenefitKind.insuranceTravel) (uc, p, b),
     ];
     if (rows.isEmpty) {

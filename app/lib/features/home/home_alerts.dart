@@ -41,7 +41,7 @@ List<HomeAlert> computeHomeAlerts({
     final product = catalogue.where((c) => c.id == userCard.cardProductId).firstOrNull;
     if (product == null) continue;
 
-    for (final cap in product.capRules) {
+    for (final cap in uniqueCapRules(product.capRules)) {
       final consumed = userCard.capConsumed[cap.id];
       if (consumed == null || cap.capValue.isZero) continue;
       final fraction = consumed.paise / cap.capValue.paise;
@@ -49,7 +49,8 @@ List<HomeAlert> computeHomeAlerts({
         alerts.add(
           HomeAlert(
             kind: HomeAlertKind.capNearlyHit,
-            message: '${userCard.cardName}: ${cap.label} cap almost reached this cycle',
+            message:
+                '${userCard.cardName}: ${capRuleDisplayLabel(cap)} almost reached this cycle',
             priority: 0,
           ),
         );

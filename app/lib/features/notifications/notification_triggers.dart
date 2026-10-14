@@ -99,7 +99,7 @@ class NotificationTriggerRunner {
     final gate = ref.read(notificationGateProvider);
     final now = DateTime.now();
     for (final (userCard, product) in owned) {
-      for (final cap in product.capRules) {
+      for (final cap in uniqueCapRules(product.capRules)) {
         final consumed = userCard.capConsumed[cap.id] ?? const Money.zero();
         final ratio = capRatio(consumed, cap.capValue);
         if (ratio < 0.8) continue;
@@ -110,8 +110,8 @@ class NotificationTriggerRunner {
           category: 'caps',
           title: reached ? '$name cap reached' : '$name is close to its cap',
           body: reached
-              ? 'You\'ve used up this period\'s "${cap.label}" cap — extra spend here won\'t earn the bonus rate.'
-              : 'You\'ve used ${(ratio * 100).round()}% of $name\'s "${cap.label}" cap this period.',
+              ? 'You\'ve used up this period\'s "${capRuleDisplayLabel(cap)}" — extra spend here won\'t earn the bonus rate.'
+              : 'You\'ve used ${(ratio * 100).round()}% of $name\'s "${capRuleDisplayLabel(cap)}" this period.',
           dedupeKey:
               'cap:${userCard.id}:${cap.id}:$bucket:${reached ? 'reached' : 'warning'}',
         );
@@ -124,7 +124,7 @@ class NotificationTriggerRunner {
     if (owned == null) return;
     final gate = ref.read(notificationGateProvider);
     for (final (userCard, product) in owned) {
-      for (final milestone in product.milestoneRules) {
+      for (final milestone in uniqueMilestoneRules(product.milestoneRules)) {
         final progress =
             userCard.milestoneQualifiedSpend[milestone.id] ??
             const Money.zero();

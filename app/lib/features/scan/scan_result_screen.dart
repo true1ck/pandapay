@@ -273,7 +273,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           final capRemaining = owned == null
               ? const <String, Money>{}
               : {
-                  for (final cap in c.capRules)
+                  for (final cap in uniqueCapRules(c.capRules))
                     if (owned.capConsumed.containsKey(cap.id))
                       cap.id: cap.capValue - owned.capConsumed[cap.id]!,
                 };

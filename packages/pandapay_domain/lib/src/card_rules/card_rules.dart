@@ -406,3 +406,142 @@ class CardProduct {
   bool excludesCategory(String? categoryId) =>
       categoryId != null && excludedCategoryIds.contains(categoryId);
 }
+
+String _catalogueTextKey(String? value) => value?.trim().toLowerCase() ?? '';
+
+String _catalogueListKey(Iterable<String> values) {
+  final normalized = values.map(_catalogueTextKey).toList()..sort();
+  return normalized.join(',');
+}
+
+String _catalogueMoneyKey(Money value) => value.paise.toString();
+
+String _catalogueDateKey(DateTime? value) => value?.toIso8601String() ?? '';
+
+/// Stable semantic identity for a cap definition.
+///
+/// The database id is deliberately excluded: catalogue imports can recreate
+/// the same rule with a new id, and showing that as a second cap is misleading.
+/// [rewardRuleId] remains part of the key because two different reward rules
+/// can intentionally have the same visible cap amount.
+String capRuleIdentityKey(CapRule rule) => [
+  rule.rewardRuleId ?? '',
+  rule.categoryId ?? '',
+  _catalogueTextKey(rule.label),
+  rule.measure.name,
+  rule.period.name,
+  _catalogueMoneyKey(rule.capValue),
+  rule.postCapUnit?.name ?? '',
+  rule.postCapRate?.toString() ?? '',
+].join('|');
+
+List<CapRule> uniqueCapRules(Iterable<CapRule> rules) {
+  final seen = <String>{};
+  return [for (final rule in rules) if (seen.add(capRuleIdentityKey(rule))) rule];
+}
+
+String rewardRuleIdentityKey(RewardRule rule) => [
+  rule.categoryId ?? '',
+  _catalogueTextKey(rule.merchantPattern),
+  rule.rail?.name ?? '',
+  rule.unit.name,
+  rule.rate.toString(),
+  rule.minTxn == null ? '' : _catalogueMoneyKey(rule.minTxn!),
+  rule.maxTxn == null ? '' : _catalogueMoneyKey(rule.maxTxn!),
+  _catalogueListKey(rule.excludedCategoryIds),
+  _catalogueDateKey(rule.effectiveFrom),
+  _catalogueDateKey(rule.effectiveTo),
+  rule.priority.toString(),
+].join('|');
+
+List<RewardRule> uniqueRewardRules(Iterable<RewardRule> rules) {
+  final seen = <String>{};
+  return [
+    for (final rule in rules)
+      if (seen.add(rewardRuleIdentityKey(rule))) rule,
+  ];
+}
+
+String milestoneRuleIdentityKey(MilestoneRule rule) => [
+  _catalogueTextKey(rule.label),
+  _catalogueMoneyKey(rule.thresholdSpend),
+  _catalogueMoneyKey(rule.rewardValue),
+  rule.isRepeatable.toString(),
+].join('|');
+
+List<MilestoneRule> uniqueMilestoneRules(Iterable<MilestoneRule> rules) {
+  final seen = <String>{};
+  return [
+    for (final rule in rules)
+      if (seen.add(milestoneRuleIdentityKey(rule))) rule,
+  ];
+}
+
+String cardBenefitIdentityKey(CardBenefit benefit) => [
+  benefit.kind.name,
+  _catalogueTextKey(benefit.label),
+  _catalogueTextKey(benefit.description),
+  benefit.quotaCount?.toString() ?? '',
+  benefit.quotaPeriod?.name ?? '',
+  _catalogueTextKey(benefit.networkProgram),
+  benefit.valueEstimate == null
+      ? ''
+      : _catalogueMoneyKey(benefit.valueEstimate!),
+].join('|');
+
+List<CardBenefit> uniqueCardBenefits(Iterable<CardBenefit> benefits) {
+  final seen = <String>{};
+  return [
+    for (final benefit in benefits)
+      if (seen.add(cardBenefitIdentityKey(benefit))) benefit,
+  ];
+}
+
+String feeWaiverRuleIdentityKey(FeeWaiverRule rule) => [
+  _catalogueMoneyKey(rule.thresholdSpend),
+  rule.period.name,
+  _catalogueMoneyKey(rule.waivesFee),
+  _catalogueListKey(rule.excludedCategoryIds),
+  _catalogueTextKey(rule.notes),
+].join('|');
+
+List<FeeWaiverRule> uniqueFeeWaiverRules(Iterable<FeeWaiverRule> rules) {
+  final seen = <String>{};
+  return [
+    for (final rule in rules)
+      if (seen.add(feeWaiverRuleIdentityKey(rule))) rule,
+  ];
+}
+
+/// Human-readable cap title used by every cap surface.
+///
+/// Raw catalogue labels are identifiers (`bonus_reward_points cap`), not
+/// user-facing copy. Category-aware titles make separate caps recognizable
+/// and avoid making every row look like a duplicate.
+String capRuleDisplayLabel(CapRule rule, {String? categoryName}) {
+  final category = categoryName?.trim();
+  final hasCategory = category != null && category.isNotEmpty;
+  final normalized = _catalogueTextKey(rule.label)
+      .replaceAll('_', ' ')
+      .replaceAll(RegExp(r'\s+cap$'), '')
+      .trim();
+
+  if (hasCategory) {
+    final noun = switch (rule.measure) {
+      CapMeasure.rewardValue => 'rewards',
+      CapMeasure.spendAmount => 'spend',
+      CapMeasure.txnCount => 'transactions',
+    };
+    return '$category $noun cap';
+  }
+
+  final title = switch (normalized) {
+    'bonus reward points' || 'bonus points' => 'Bonus reward points cap',
+    'total reward points' || 'total rewards' => 'Total rewards cap',
+    'eligible spend amount' || 'eligible spend' => 'Eligible spend cap',
+    'spend amount' || 'spend' => 'Spend cap',
+    'txn count' || 'transaction count' => 'Transaction cap',
+    _ => normalized.isEmpty ? 'Reward cap' : normalized,
+  };
+  return title[0].toUpperCase() + title.substring(1);
+}

@@ -225,7 +225,7 @@ class _BigPurchaseCalculatorScreenState extends ConsumerState<BigPurchaseCalcula
     final snapshots = owned.map((c) {
       final uc = wallet.where((w) => w.cardProductId == c.id).first;
       final capRemaining = {
-        for (final cap in c.capRules)
+        for (final cap in uniqueCapRules(c.capRules))
           if (uc.capConsumed.containsKey(cap.id)) cap.id: cap.capValue - uc.capConsumed[cap.id]!,
       };
       return CardSnapshot(

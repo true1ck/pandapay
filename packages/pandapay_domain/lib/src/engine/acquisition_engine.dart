@@ -230,7 +230,7 @@ class CardAcquisitionRecommender {
     for (final card in cards) {
       final spend = attributedTotalSpend[card.id] ?? const Money.zero();
       if (spend.isZero) continue;
-      for (final milestone in card.milestoneRules) {
+      for (final milestone in uniqueMilestoneRules(card.milestoneRules)) {
         Money bonus;
         if (milestone.isRepeatable) {
           final times = (spend.paise / milestone.thresholdSpend.paise).floor();
@@ -265,13 +265,13 @@ class CardAcquisitionRecommender {
         pointValueInr: card.pointValueInr,
         baseRewardUnit: card.baseRewardUnit,
         baseRewardRate: card.baseRewardRate,
-        rewardRules: card.rewardRules,
-        capRules: card.capRules,
+        rewardRules: uniqueRewardRules(card.rewardRules),
+        capRules: uniqueCapRules(card.capRules),
         milestoneRules: const [],
         forexRule: card.forexRule,
         fuelRule: card.fuelRule,
-        feeWaiverRules: card.feeWaiverRules,
-        benefits: card.benefits,
+        feeWaiverRules: uniqueFeeWaiverRules(card.feeWaiverRules),
+        benefits: uniqueCardBenefits(card.benefits),
         annualFeeInr: card.annualFeeInr,
         joiningFeeInr: card.joiningFeeInr,
         verifiedAt: card.verifiedAt,
@@ -290,7 +290,7 @@ class CardAcquisitionRecommender {
   /// over a year regardless.
   Map<String, Money> _annualizedCapRemaining(CardProduct card, Money categorySpend) {
     final result = <String, Money>{};
-    for (final cap in card.capRules) {
+    for (final cap in uniqueCapRules(card.capRules)) {
       if (cap.measure == CapMeasure.txnCount) {
         result[cap.id] = cap.capValue;
         continue;
@@ -310,7 +310,7 @@ class CardAcquisitionRecommender {
     var fee = card.annualFeeInr ?? const Money.zero();
     if (fee.isZero || fee.isNegative) return const Money.zero();
 
-    for (final waiver in card.feeWaiverRules) {
+    for (final waiver in uniqueFeeWaiverRules(card.feeWaiverRules)) {
       final countedSpend = attributedSpendByCategory.entries
           .where((e) => e.key == null || !waiver.excludedCategoryIds.contains(e.key))
           .fold(const Money.zero(), (sum, e) => sum + e.value);

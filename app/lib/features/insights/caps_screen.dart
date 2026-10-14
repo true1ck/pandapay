@@ -48,9 +48,20 @@ class CapsScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
       ),
       data: (owned) {
+        final categories =
+            ref.watch(categoriesProvider).valueOrNull ?? const [];
+        String categoryName(String? id) {
+          if (id == null) return 'All other spends';
+          return categories
+                  .where((category) => category.id == id)
+                  .map((category) => category.name)
+                  .firstOrNull ??
+              'Card-wide';
+        }
         final rows = <(UserCard, CardProduct, CapRule)>[
           for (final (userCard, product) in owned)
-            for (final cap in product.capRules) (userCard, product, cap),
+            for (final cap in uniqueCapRules(product.capRules))
+              (userCard, product, cap),
         ];
         rows.sort((a, b) {
           final consumedA = a.$1.capConsumed[a.$3.id] ?? const Money.zero();
@@ -138,6 +149,7 @@ class CapsScreen extends ConsumerWidget {
                         userCard: group.userCard,
                         product: group.product,
                         cap: cap,
+                        categoryName: categoryName(cap.categoryId),
                         allOwned: owned,
                       ),
                   ],
@@ -159,11 +171,13 @@ class _CapTile extends StatelessWidget {
   final UserCard userCard;
   final CardProduct product;
   final CapRule cap;
+  final String categoryName;
   final List<(UserCard, CardProduct)> allOwned;
   const _CapTile({
     required this.userCard,
     required this.product,
     required this.cap,
+    required this.categoryName,
     required this.allOwned,
   });
 
@@ -215,8 +229,13 @@ class _CapTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      cap.label,
+                      capRuleDisplayLabel(cap, categoryName: categoryName),
                       style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${cap.measure == CapMeasure.txnCount ? 'Transaction limit' : 'Reward limit'} · ${_periodLabel(cap.period)}',
+                      style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                     ),
                   ],
                 ),
@@ -278,6 +297,15 @@ class _CapTile extends StatelessWidget {
       ),
     );
   }
+
+  static String _periodLabel(CapPeriod period) => switch (period) {
+    CapPeriod.statementCycle => 'statement cycle',
+    CapPeriod.calendarMonth => 'calendar month',
+    CapPeriod.quarter => 'quarter',
+    CapPeriod.halfYear => 'half-year',
+    CapPeriod.annual => 'year',
+    CapPeriod.lifetime => 'lifetime',
+  };
 }
 
 /// "₹300 left on X — switch to Y after that" — reuses

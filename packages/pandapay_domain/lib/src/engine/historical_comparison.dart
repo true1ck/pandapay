@@ -71,7 +71,9 @@ Money baseRateValueFor({
   String? categoryId,
 }) {
   if (amount.isZero || amount.isNegative) return const Money.zero();
-  final matching = product.rewardRules.where((r) => r.categoryId == null || r.categoryId == categoryId).toList()
+  final matching = uniqueRewardRules(product.rewardRules)
+    .where((r) => r.categoryId == null || r.categoryId == categoryId)
+    .toList()
     ..sort((a, b) => a.priority.compareTo(b.priority));
   if (matching.isEmpty) return const Money.zero();
   final rule = matching.first;

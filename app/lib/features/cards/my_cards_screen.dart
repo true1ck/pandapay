@@ -438,7 +438,11 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                 ),
               if (product != null && !card.isArchived) ...[
                 const SizedBox(height: AppSpace.md),
-                _NearestCapBar(card: card, product: product),
+                _NearestCapBar(
+                  card: card,
+                  product: product,
+                  categories: categories,
+                ),
                 if (utilization != null) ...[
                   const SizedBox(height: AppSpace.sm),
                   _UtilizationBar(card: card, result: utilization),
@@ -585,7 +589,7 @@ List<String> bestUsedFor(
   final namesById = {for (final c in categories) c.id: c.name};
 
   final rated = <(String, double)>[];
-  for (final rule in product.rewardRules) {
+  for (final rule in uniqueRewardRules(product.rewardRules)) {
     final categoryId = rule.categoryId;
     if (categoryId == null) continue;
     final name = namesById[categoryId];
@@ -647,14 +651,21 @@ class _AutopayPill extends StatelessWidget {
 class _NearestCapBar extends StatelessWidget {
   final UserCard card;
   final CardProduct product;
-  const _NearestCapBar({required this.card, required this.product});
+  final List<SpendCategory> categories;
+
+  const _NearestCapBar({
+    required this.card,
+    required this.product,
+    required this.categories,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (product.capRules.isEmpty) return const SizedBox.shrink();
+    final caps = uniqueCapRules(product.capRules);
+    if (caps.isEmpty) return const SizedBox.shrink();
     CapRule? worst;
     double worstRatio = -1;
-    for (final cap in product.capRules) {
+    for (final cap in caps) {
       final consumed = card.capConsumed[cap.id] ?? const Money.zero();
       final ratio = capRatio(consumed, cap.capValue);
       if (ratio > worstRatio) {
@@ -663,10 +674,17 @@ class _NearestCapBar extends StatelessWidget {
       }
     }
     if (worst == null) return const SizedBox.shrink();
+    final categoryName = categories
+        .where((category) => category.id == worst!.categoryId)
+        .map((category) => category.name)
+        .firstOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(worst.label, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+        Text(
+          capRuleDisplayLabel(worst!, categoryName: categoryName),
+          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+        ),
         const SizedBox(height: 5),
         ClipRRect(
           borderRadius: BorderRadius.circular(999),

@@ -848,7 +848,8 @@ class _CatalogueCardDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveFee =
         feePreview ?? userCard.annualFeeOverride ?? product.annualFeeInr;
-    final loungeCount = product.benefits
+    final benefits = uniqueCardBenefits(product.benefits);
+    final loungeCount = benefits
         .where(
           (benefit) =>
               benefit.kind == BenefitKind.loungeDomestic ||
@@ -856,7 +857,8 @@ class _CatalogueCardDetails extends StatelessWidget {
         )
         .length;
     final rewardCount =
-        product.rewardRules.length + (product.fuelRule == null ? 0 : 1);
+        uniqueRewardRules(product.rewardRules).length +
+        (product.fuelRule == null ? 0 : 1);
     final verified = product.verifiedAt == null
         ? null
         : _shortDate(product.verifiedAt!);
@@ -918,13 +920,13 @@ class _CatalogueCardDetails extends StatelessWidget {
               _CatalogueInfoRow(
                 label: 'Tracked limits',
                 value:
-                    '${product.capRules.length} caps · ${product.milestoneRules.length} milestones',
+                    '${uniqueCapRules(product.capRules).length} caps · ${uniqueMilestoneRules(product.milestoneRules).length} milestones',
               ),
               _CatalogueInfoRow(
                 label: 'Benefits',
-                value: product.benefits.isEmpty
+                value: benefits.isEmpty
                     ? 'None recorded'
-                    : '${product.benefits.length} benefits${loungeCount == 0 ? '' : ' · $loungeCount lounge'}',
+                    : '${benefits.length} benefits${loungeCount == 0 ? '' : ' · $loungeCount lounge'}',
               ),
               if (verified != null)
                 _CatalogueInfoRow(label: 'Catalogue verified', value: verified),

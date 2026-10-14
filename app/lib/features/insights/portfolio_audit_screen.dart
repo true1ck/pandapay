@@ -80,7 +80,7 @@ class _AuditTile extends ConsumerWidget {
     // has no tracked consumption anywhere in this schema, so it's labelled
     // "not tracked" rather than guessed at, per the cross-cutting "never
     // display a number the app can't justify" rule.
-    final untrackedBenefits = product.benefits.where(
+    final untrackedBenefits = uniqueCardBenefits(product.benefits).where(
       (b) =>
           b.kind != BenefitKind.loungeDomestic &&
           b.kind != BenefitKind.loungeInternational,

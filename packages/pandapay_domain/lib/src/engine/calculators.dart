@@ -212,7 +212,7 @@ class SplitOptimizer {
     }
     final matching = isCategoryExcluded
         ? const <RewardRule>[]
-        : (card.rewardRules
+        : (uniqueRewardRules(card.rewardRules)
               .where(
                 (rule) =>
                     RecommendationEngine.ruleApplies(rule, allocationContext),
@@ -222,7 +222,7 @@ class SplitOptimizer {
     if (matching.isEmpty) return snapshot;
 
     final rule = matching.first;
-    final capRule = card.capRules
+    final capRule = uniqueCapRules(card.capRules)
         .where(
           (cap) =>
               (cap.rewardRuleId != null && cap.rewardRuleId == rule.id) ||

@@ -35,7 +35,7 @@ class MilestonesScreen extends ConsumerWidget {
       data: (owned) {
         final rows = <(UserCard, CardProduct, MilestoneRule)>[
           for (final (userCard, product) in owned)
-            for (final milestone in product.milestoneRules)
+            for (final milestone in uniqueMilestoneRules(product.milestoneRules))
               (userCard, product, milestone),
         ];
         // Task E-0c: nearest-deadline/closest-to-target first, same shared
@@ -155,7 +155,9 @@ class _MilestoneTile extends StatelessWidget {
     // same rule-selection RecommendationEngine._evaluate uses for "all
     // other spends").
     final baseRule =
-        product.rewardRules.where((r) => r.categoryId == null).toList()
+        uniqueRewardRules(product.rewardRules)
+            .where((r) => r.categoryId == null)
+            .toList()
           ..sort((a, b) => a.priority.compareTo(b.priority));
     MilestoneChase? chase;
     if (!reached && baseRule.isNotEmpty) {

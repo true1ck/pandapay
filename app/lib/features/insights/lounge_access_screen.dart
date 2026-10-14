@@ -49,7 +49,7 @@ class LoungeAccessScreen extends ConsumerWidget {
           data: (visitList) {
             final rows = <(UserCard, CardProduct, CardBenefit)>[
               for (final (userCard, product) in owned)
-                for (final b in product.benefits)
+                for (final b in uniqueCardBenefits(product.benefits))
                   if (b.kind == BenefitKind.loungeDomestic ||
                       b.kind == BenefitKind.loungeInternational)
                     (userCard, product, b),

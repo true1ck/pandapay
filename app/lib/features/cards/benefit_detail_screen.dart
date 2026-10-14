@@ -76,7 +76,7 @@ class BenefitDetailScreen extends ConsumerWidget {
       data: (pairs) {
         for (final (card, prod) in pairs) {
           if (userCardId != null && card.id != userCardId) continue;
-          for (final b in prod.benefits) {
+          for (final b in uniqueCardBenefits(prod.benefits)) {
             if (b.id == benefitId) {
               return _BenefitDetailBody(
                 userCard: card,

@@ -458,7 +458,9 @@ class RecommendationEngine {
     // If the category is excluded from rewards, it earns no reward rule rate.
     final matching = isCategoryExcluded
         ? <RewardRule>[]
-        : (card.rewardRules.where((r) => ruleApplies(r, context)).toList()
+        : (uniqueRewardRules(card.rewardRules)
+                .where((r) => ruleApplies(r, context))
+                .toList()
             ..sort((a, b) => a.priority.compareTo(b.priority)));
 
     if (matching.isEmpty) {
@@ -562,7 +564,7 @@ class RecommendationEngine {
     // NOT a wildcard: a cap with neither key set belongs to no rule and no
     // category, and treating it as card-wide would let an unrelated spend
     // consume it.
-    final capRule = card.capRules
+    final capRule = uniqueCapRules(card.capRules)
         .where(
           (c) =>
               (c.rewardRuleId != null && c.rewardRuleId == rule.id) ||
@@ -766,7 +768,7 @@ class RecommendationEngine {
     // a transaction that just barely clears the bar doesn't claim the whole
     // milestone reward, and a transaction that completes it claims exactly
     // the reward once (never more, never double-counted across scenarios).
-    for (final milestone in card.milestoneRules) {
+    for (final milestone in uniqueMilestoneRules(card.milestoneRules)) {
       final progress =
           snapshot.milestoneProgress[milestone.id] ?? const Money.zero();
       final remaining = milestone.thresholdSpend - progress;
