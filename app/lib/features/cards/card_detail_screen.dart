@@ -9,6 +9,8 @@ import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import 'card_actions_screen.dart';
+import 'card_visual.dart';
+import '../insights/lounge_access_screen.dart' show isInCurrentLoungeWindow;
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
 import '../../data/user_cards_repository.dart';
@@ -157,7 +159,11 @@ class CardDetailScreen extends ConsumerWidget {
                     ),
                     (
                       label: 'Benefits',
-                      body: _BenefitsTab(product: product, embedded: true),
+                      body: _BenefitsTab(
+                        userCard: userCard,
+                        product: product,
+                        embedded: true,
+                      ),
                     ),
                     (
                       label: 'Statement',
@@ -181,11 +187,19 @@ class CardDetailScreen extends ConsumerWidget {
                       AppSpace.xl,
                     ),
                     children: [
-                      for (final section in ordered)
+                      CardVisual(product: product, height: 112),
+                      const SizedBox(height: AppSpace.lg),
+                      for (final section in ordered) ...[
                         _CardDetailSection(
                           label: section.label,
+                          summary: _sectionSummary(
+                            section.label,
+                            userCard,
+                            product,
+                          ),
                           body: section.body,
                         ),
+                      ],
                     ],
                   );
                 },
@@ -198,11 +212,42 @@ class CardDetailScreen extends ConsumerWidget {
   }
 }
 
+String _sectionSummary(String label, UserCard card, CardProduct product) {
+  return switch (label) {
+    'Rewards' =>
+      '${product.rewardRules.length + (product.fuelRule == null ? 0 : 1)} earning rules · tap rows for details',
+    'Spend' => 'This month · actual spend and effective reward rate',
+    'Caps' =>
+      '${product.capRules.length} tracked caps · consumption resets by period',
+    'Milestones' =>
+      '${product.milestoneRules.length} milestone${product.milestoneRules.length == 1 ? '' : 's'} · progress to unlock',
+    'Fees' =>
+      card.annualFeeOverride?.isZero == true
+          ? 'Lifetime free for you'
+          : '${card.feeWaiverStates.length} waiver rule${card.feeWaiverStates.length == 1 ? '' : 's'} · annual fee below',
+    'Benefits' =>
+      '${product.benefits.length} benefits · lounge access and protections',
+    'Statement' =>
+      card.statementDay == null
+          ? 'Add statement day to see your billing cycle'
+          : 'Cuts on day ${card.statementDay} · due day ${card.dueDay ?? 'not set'}',
+    _ => '',
+  };
+}
+
+Money? _effectiveAnnualFee(UserCard card, CardProduct product) =>
+    card.annualFeeOverride ?? product.annualFeeInr;
+
 class _CardDetailSection extends StatelessWidget {
   final String label;
+  final String summary;
   final Widget body;
 
-  const _CardDetailSection({required this.label, required this.body});
+  const _CardDetailSection({
+    required this.label,
+    required this.summary,
+    required this.body,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -216,13 +261,27 @@ class _CardDetailSection extends StatelessWidget {
               left: AppSpace.xs,
               bottom: AppSpace.sm,
             ),
-            child: Text(
-              label.toUpperCase(),
-              style: BambooFonts.ui(
-                12,
-                weight: FontWeight.w700,
-                color: BambooInk.ink500,
-              ).copyWith(letterSpacing: 1),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: BambooFonts.ui(
+                    12,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink500,
+                  ).copyWith(letterSpacing: 1),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    summary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                  ),
+                ),
+              ],
             ),
           ),
           body,
@@ -281,9 +340,10 @@ class _SpendTab extends ConsumerWidget {
             .where((c) => c.cardId == userCard.id)
             .firstOrNull;
         if (row == null || row.total.isZero) {
-          return const EmptyState(
+          final suffix = userCard.last4 == null ? '' : ' ending ${userCard.last4}';
+          return EmptyState(
             icon: Icons.show_chart_rounded,
-            title: 'Nothing on this card this month',
+            title: 'Nothing on ${userCard.cardName}$suffix this month',
             message:
                 'Once spend is logged against this card, you\'ll see what it earned and the '
                 'rate it really paid.',
@@ -291,7 +351,7 @@ class _SpendTab extends ConsumerWidget {
         }
 
         final rate = row.effectiveRatePerRupee;
-        final fee = product.annualFeeInr;
+        final fee = _effectiveAnnualFee(userCard, product);
         // Annualised from ONE month, and labelled as such. A month is a
         // small sample and a bad one to extrapolate from blindly, but the
         // alternative — comparing a month of rewards against a year of fee
@@ -375,6 +435,78 @@ class _SpendStatCard extends StatelessWidget {
   }
 }
 
+/// A compact summary row used throughout card detail. The first frame shows
+/// the useful answer (category, rate, consumption, or status); the issuer
+/// wording and constraints remain one tap away instead of making the page a
+/// wall of repeated cards.
+class _CompactDisclosure extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String trailing;
+  final List<Widget> details;
+
+  const _CompactDisclosure({
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
+    required this.details,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpace.sm),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        clipBehavior: Clip.antiAlias,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: AppSpace.lg,
+              vertical: AppSpace.xs,
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              0,
+              AppSpace.lg,
+              AppSpace.lg,
+            ),
+            title: Text(
+              title,
+              style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+            ),
+            subtitle: Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  trailing,
+                  style: BambooFonts.heading(15.5, color: BambooInk.ink900),
+                ),
+                const SizedBox(width: AppSpace.xs),
+                const Icon(Icons.expand_more_rounded, color: BambooInk.ink500),
+              ],
+            ),
+            children: details,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RewardsTab extends ConsumerWidget {
   final CardProduct product;
   final bool embedded;
@@ -406,6 +538,28 @@ class _RewardsTab extends ConsumerWidget {
         title: 'No reward structure on file yet',
       );
     }
+    final grouped = <String, List<RewardRule>>{};
+    for (final rule in rules) {
+      grouped.putIfAbsent(categoryName(rule.categoryId), () => []).add(rule);
+    }
+    if (!hasFuelInRules &&
+        product.fuelRule != null &&
+        product.fuelRule!.waiverPercent > 0) {
+      grouped.putIfAbsent('Fuel', () => []);
+    }
+    String rateFor(String label, List<RewardRule> group) {
+      final isFuel =
+          label == 'Fuel' ||
+          (fuelCategory != null && label == fuelCategory.name);
+      if (isFuel && product.fuelRule != null && group.length == 1) {
+        final waiver = _rate(product.fuelRule!.waiverPercent);
+        return group.first.rate == 0
+            ? '$waiver% waiver'
+            : '${_rate(group.first.rate)}% + $waiver% waiver';
+      }
+      return group.length == 1 ? _rateLabel(group.first) : 'Multiple';
+    }
+
     return ListView(
       padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
       shrinkWrap: embedded,
@@ -419,113 +573,78 @@ class _RewardsTab extends ConsumerWidget {
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ),
-        for (final rule in rules)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.sm),
-            child: Builder(
-              builder: (context) {
-                final isFuelRule =
-                    (fuelCategory != null &&
-                        rule.categoryId == fuelCategory.id) ||
-                    rule.categoryId == 'fuel';
-                final String rateText;
-                if (isFuelRule &&
-                    product.fuelRule != null &&
-                    product.fuelRule!.waiverPercent > 0) {
-                  rateText = rule.rate == 0
-                      ? '${_rate(product.fuelRule!.waiverPercent)}% waiver'
-                      : '${_rate(rule.rate)}% + ${_rate(product.fuelRule!.waiverPercent)}% waiver';
-                } else {
-                  rateText = _rateLabel(rule);
-                }
-
-                return Container(
-                  decoration: BoxDecoration(
-                    color: BambooInk.glassFillOnPaper,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: BambooInk.hairlineOnPaper),
-                  ),
-                  padding: const EdgeInsets.all(AppSpace.lg),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              categoryName(rule.categoryId),
-                              style: BambooFonts.heading(
-                                14.5,
-                                color: BambooInk.ink900,
-                              ),
-                            ),
-                            if (rule.rail != null) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                _railLabel(rule.rail!),
-                                style: BambooFonts.ui(
-                                  12.5,
-                                  color: BambooInk.ink500,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Text(
-                        rateText,
-                        style: BambooFonts.heading(17, color: BambooInk.ink900),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        if (!hasFuelInRules &&
-            product.fuelRule != null &&
-            product.fuelRule!.waiverPercent > 0)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.sm),
-            child: Container(
-              decoration: BoxDecoration(
-                color: BambooInk.glassFillOnPaper,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: BambooInk.hairlineOnPaper),
-              ),
-              padding: const EdgeInsets.all(AppSpace.lg),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Fuel',
-                          style: BambooFonts.heading(
-                            14.5,
-                            color: BambooInk.ink900,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Surcharge waiver',
-                          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    '${_rate(product.fuelRule!.waiverPercent)}% waiver',
-                    style: BambooFonts.heading(17, color: BambooInk.ink900),
-                  ),
-                ],
-              ),
-            ),
+        for (final entry in grouped.entries)
+          _CompactDisclosure(
+            title: entry.key,
+            subtitle: entry.value.isEmpty
+                ? 'Surcharge waiver'
+                : entry.value.length == 1
+                ? _ruleSummary(entry.value.first)
+                : '${entry.value.length} reward rules · expand for rails and limits',
+            trailing: entry.value.isEmpty
+                ? '${_rate(product.fuelRule!.waiverPercent)}% waiver'
+                : rateFor(entry.key, entry.value),
+            details: entry.value.isEmpty
+                ? [_fuelDetail(product.fuelRule!)]
+                : [for (final rule in entry.value) _rewardRuleDetail(rule)],
           ),
       ],
     );
   }
+
+  static String _ruleSummary(RewardRule rule) {
+    final qualifiers = <String>[
+      if (rule.rail != null && _railLabel(rule.rail!).isNotEmpty)
+        _railLabel(rule.rail!),
+      if (rule.merchantPattern != null) 'at ${rule.merchantPattern}',
+    ];
+    return qualifiers.isEmpty ? 'Base category rate' : qualifiers.join(' · ');
+  }
+
+  static Widget _rewardRuleDetail(RewardRule rule) => Padding(
+    padding: const EdgeInsets.only(top: AppSpace.sm),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              _rateLabel(rule),
+              style: BambooFonts.ui(
+                13.5,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
+            ),
+            if (rule.rail != null)
+              Text(
+                _railLabel(rule.rail!),
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+          ],
+        ),
+        if (rule.merchantPattern != null)
+          Text(
+            'Merchant: ${rule.merchantPattern}',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+        if (rule.minTxn != null || rule.maxTxn != null)
+          Text(
+            '${rule.minTxn == null ? '' : 'From ${rule.minTxn!.format()}'}${rule.minTxn != null && rule.maxTxn != null ? ' · ' : ''}${rule.maxTxn == null ? '' : 'Up to ${rule.maxTxn!.format()} per transaction'}',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+      ],
+    ),
+  );
+
+  static Widget _fuelDetail(FuelSurchargeRule fuel) => Padding(
+    padding: const EdgeInsets.only(top: AppSpace.sm),
+    child: Text(
+      'Surcharge waived${fuel.minTxn == null ? '' : ' above ${fuel.minTxn!.format()}'}${fuel.maxTxn == null ? '' : ' up to ${fuel.maxTxn!.format()}'}.',
+      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+    ),
+  );
 
   static String _rate(double rate) =>
       rate == rate.roundToDouble() ? rate.toStringAsFixed(0) : rate.toString();
@@ -569,7 +688,7 @@ class _RewardsTab extends ConsumerWidget {
   }
 }
 
-class _CapsTab extends StatelessWidget {
+class _CapsTab extends ConsumerWidget {
   final UserCard userCard;
   final CardProduct product;
   final bool embedded;
@@ -580,7 +699,37 @@ class _CapsTab extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    String categoryName(String? id) {
+      if (id == null) return 'All other spends';
+      return categories
+              .where((c) => c.id == id)
+              .map((c) => c.name)
+              .firstOrNull ??
+          'Card-wide';
+    }
+
+    String capTitle(CapRule cap) {
+      final raw = cap.label.trim();
+      if (raw.isEmpty) return categoryName(cap.categoryId);
+      final normalized = raw
+          .toLowerCase()
+          .replaceAll('_', ' ')
+          .replaceAll(RegExp(r'\s+cap$'), '')
+          .trim();
+      if (normalized == 'bonus reward points' || normalized == 'bonus points') {
+        return 'Bonus reward points';
+      }
+      return raw;
+    }
+
+    String measureLabel(CapRule cap) => switch (cap.measure) {
+      CapMeasure.rewardValue => 'reward value cap',
+      CapMeasure.spendAmount => 'spend cap',
+      CapMeasure.txnCount => 'transaction cap',
+    };
+
     if (product.capRules.isEmpty && product.fuelRule == null) {
       return const EmptyState(
         icon: Icons.speed_outlined,
@@ -593,58 +742,48 @@ class _CapsTab extends StatelessWidget {
       physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
         for (final cap in product.capRules)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.md),
-            child: Builder(
-              builder: (context) {
-                final consumed =
-                    userCard.capConsumed[cap.id] ?? const Money.zero();
-                final ratio = capRatio(consumed, cap.capValue);
-                final isCount = cap.measure == CapMeasure.txnCount;
-                return Container(
-                  decoration: BoxDecoration(
-                    color: BambooInk.glassFillOnPaper,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: BambooInk.hairlineOnPaper),
+          Builder(
+            builder: (context) {
+              final consumed =
+                  userCard.capConsumed[cap.id] ?? const Money.zero();
+              final ratio = capRatio(consumed, cap.capValue);
+              final isCount = cap.measure == CapMeasure.txnCount;
+              final consumption = isCount
+                  ? '${consumed.paise ~/ 100} of ${cap.capValue.paise ~/ 100} transactions'
+                  : '${consumed.format()} of ${cap.capValue.format()}';
+              return _CompactDisclosure(
+                title: capTitle(cap),
+                subtitle:
+                    '${categoryName(cap.categoryId)} · ${measureLabel(cap)} · resets ${_periodLabel(cap.period)}',
+                trailing: consumption,
+                details: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    child: LinearProgressIndicator(
+                      value: ratio,
+                      minHeight: 8,
+                      backgroundColor: BambooInk.paperMuted,
+                      color: ratio >= 0.9 ? BambooInk.clay : BambooInk.jade,
+                    ),
                   ),
-                  padding: const EdgeInsets.all(AppSpace.lg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        cap.label,
-                        style: BambooFonts.heading(
-                          14.5,
-                          color: BambooInk.ink900,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpace.sm),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                        child: LinearProgressIndicator(
-                          value: ratio,
-                          minHeight: 8,
-                          backgroundColor: BambooInk.paperMuted,
-                          color: ratio >= 0.9 ? BambooInk.clay : BambooInk.jade,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpace.sm),
-                      Text(
-                        isCount
-                            ? '${consumed.paise ~/ 100} / ${cap.capValue.paise ~/ 100} transactions'
-                            : '${consumed.format()} of ${cap.capValue.format()}',
-                        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Resets: ${_periodLabel(cap.period)}',
-                        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                      ),
-                    ],
+                  const SizedBox(height: AppSpace.sm),
+                  Text(
+                    consumption,
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
-                );
-              },
-            ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Resets: ${_periodLabel(cap.period)}',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                  if (cap.postCapRate != null)
+                    Text(
+                      'After cap: ${cap.postCapRate}% ${cap.postCapUnit?.name ?? ''}',
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
+                ],
+              );
+            },
           ),
         if (product.fuelRule != null) ...[
           if (product.capRules.isNotEmpty) ...[
@@ -863,6 +1002,7 @@ class _FeesTab extends StatelessWidget {
     // It was parsed (CardProduct.annualFeeInr) but never rendered anywhere —
     // this tab only ever showed fee-WAIVER progress, which is a different
     // thing and meaningless without the fee it waives.
+    final effectiveFee = _effectiveAnnualFee(userCard, product);
     final feeHeader = Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.md),
       child: Container(
@@ -887,19 +1027,19 @@ class _FeesTab extends StatelessWidget {
                     ).copyWith(letterSpacing: 1),
                   ),
                   const SizedBox(height: 4),
-                  if (product.annualFeeInr == null)
+                  if (effectiveFee == null)
                     Text(
                       'Not recorded for this card',
                       style: BambooFonts.ui(13.5, color: BambooInk.ink500),
                     )
-                  else if (product.annualFeeInr!.isZero)
+                  else if (effectiveFee.isZero)
                     Text(
                       'Lifetime free',
                       style: BambooFonts.heading(20, color: BambooInk.jade),
                     )
                   else
                     MoneyText(
-                      product.annualFeeInr!,
+                      effectiveFee,
                       confidence: Confidence.confirmed,
                       style: BambooFonts.money(22, color: BambooInk.ink900),
                     ),
@@ -1043,13 +1183,18 @@ class _FeesTab extends StatelessWidget {
   }
 }
 
-class _BenefitsTab extends StatelessWidget {
+class _BenefitsTab extends ConsumerWidget {
+  final UserCard userCard;
   final CardProduct product;
   final bool embedded;
-  const _BenefitsTab({required this.product, this.embedded = false});
+  const _BenefitsTab({
+    required this.userCard,
+    required this.product,
+    this.embedded = false,
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final benefits = [
       ...product.benefits,
       if (product.fuelRule != null &&
@@ -1071,45 +1216,87 @@ class _BenefitsTab extends StatelessWidget {
         title: 'No benefits on file for this card',
       );
     }
+    final visits = ref.watch(loungeUsageProvider).valueOrNull ?? const [];
     return ListView(
       padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
       shrinkWrap: embedded,
       physics: embedded ? const NeverScrollableScrollPhysics() : null,
       children: [
         for (final benefit in benefits)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.sm),
-            child: Container(
-              decoration: BoxDecoration(
-                color: BambooInk.glassFillOnPaper,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: BambooInk.hairlineOnPaper),
-              ),
-              padding: const EdgeInsets.all(AppSpace.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+          Builder(
+            builder: (context) {
+              final isLounge =
+                  benefit.kind == BenefitKind.loungeDomestic ||
+                  benefit.kind == BenefitKind.loungeInternational;
+              final used = isLounge
+                  ? visits
+                        .where(
+                          (visit) =>
+                              visit.userCardId == userCard.id &&
+                              visit.benefitId == benefit.id,
+                        )
+                        .where(
+                          (visit) => isInCurrentLoungeWindow(
+                            visit.usedOn,
+                            benefit.quotaPeriod,
+                          ),
+                        )
+                        .length
+                  : 0;
+              final quota = benefit.quotaCount;
+              final usage = isLounge && quota != null
+                  ? '$used / $quota used'
+                  : isLounge
+                  ? '$used used · no fixed quota'
+                  : 'Tap to view details';
+              final details = <Widget>[
+                if (benefit.description != null)
                   Text(
-                    benefit.label,
-                    style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                    benefit.description!,
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                   ),
-                  if (benefit.description != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      benefit.description!,
-                      style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                if (benefit.networkProgram != null)
+                  Text(
+                    'Program: ${benefit.networkProgram}',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                if (quota != null)
+                  Text(
+                    'Allowance: $quota per ${benefit.quotaPeriod?.name ?? 'period'}',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                if (isLounge && quota != null) ...[
+                  const SizedBox(height: AppSpace.sm),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    child: LinearProgressIndicator(
+                      value: quota == 0 ? 0 : (used / quota).clamp(0.0, 1.0),
+                      minHeight: 8,
+                      backgroundColor: BambooInk.paperMuted,
+                      color: used >= quota ? BambooInk.clay : BambooInk.jade,
                     ),
-                  ],
-                  if (benefit.quotaCount != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '${benefit.quotaCount} / period',
-                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                  const SizedBox(height: AppSpace.xs),
+                  Text(
+                    used >= quota
+                        ? 'No lounge visits remaining in this period'
+                        : '${quota - used} lounge visit${quota - used == 1 ? '' : 's'} remaining',
+                    style: BambooFonts.ui(
+                      12.5,
+                      color: used >= quota ? BambooInk.clay : BambooInk.ink500,
                     ),
-                  ],
+                  ),
                 ],
-              ),
-            ),
+              ];
+              return _CompactDisclosure(
+                title: benefit.label,
+                subtitle: isLounge
+                    ? 'Lounge access · ${benefit.networkProgram ?? 'eligible program'}'
+                    : benefit.description ?? 'Card benefit',
+                trailing: usage,
+                details: details,
+              );
+            },
           ),
       ],
     );

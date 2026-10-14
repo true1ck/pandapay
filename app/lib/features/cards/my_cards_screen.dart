@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -15,7 +14,9 @@ import '../../data/user_cards_repository.dart';
 import '../scan/scan_card_screen.dart';
 import 'card_picker_screen.dart';
 import 'find_cards_screen.dart';
-import 'autopay_issuer_links.dart';
+import 'card_add_guard.dart';
+import 'card_summary.dart';
+import '../insights/credit_utilization_ui.dart';
 
 /// C1 My Cards (ui-spec Group C, implementation-plan-group-c-d.md) —
 /// restyled onto the Bamboo Ink design system (see home_screen.dart's
@@ -69,8 +70,8 @@ class MyCardsScreen extends ConsumerWidget {
               0,
             ),
             // Design 02's header: a 28pt "Wallet" title with a slate
-            // "+ Add card" pill opposite it. Archive management lives under
-            // Settings so the main wallet stays focused on active cards.
+            // "+ Add card" pill opposite it. Secondary card actions live on
+            // the card detail/edit screens so the wallet stays focused.
             child: Column(
               children: [
                 Row(
@@ -144,7 +145,6 @@ class MyCardsScreen extends ConsumerWidget {
             gutter: AppSpace.lg,
             onRetry: () => ref.invalidate(myCardsProvider),
           ),
-          const _AutopayNudge(),
           Expanded(
             child: myCards.when(
               // Skeleton rows rather than a centred spinner: the wallet is
@@ -254,20 +254,6 @@ class MyCardsScreen extends ConsumerWidget {
   }
 }
 
-/// Deterministic per-card "card art" face color (same card always gets the
-/// same color — not decorative randomness), echoing the mockup's colored
-/// wallet-card tiles.
-const _cardFaces = [
-  BambooInk.slate,
-  BambooInk.jade,
-  Color(0xFF5B4B8A),
-  BambooInk.clay,
-  Color(0xFF1B5E6B),
-];
-
-Color _faceColorFor(String cardId) =>
-    _cardFaces[cardId.hashCode.abs() % _cardFaces.length];
-
 class _MyCardTile extends ConsumerStatefulWidget {
   final UserCard card;
   const _MyCardTile(this.card);
@@ -318,35 +304,6 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
       }
     } finally {
       if (mounted) setState(() => _logging = false);
-    }
-  }
-
-  Future<void> _toggleArchive() async {
-    setState(() => _archiving = true);
-    try {
-      final repo = ref.read(userCardsRepositoryProvider);
-      if (repo == null) {
-        final local = await ref.read(localUserCardsRepositoryProvider.future);
-        if (widget.card.isArchived) {
-          await local.unarchiveCard(widget.card.id);
-        } else {
-          await local.archiveCard(widget.card.id);
-        }
-      } else if (widget.card.isArchived) {
-        await repo.unarchiveCard(widget.card.id);
-      } else {
-        await repo.archiveCard(widget.card.id);
-      }
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(userCardsProvider);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed. ${userFacingErrorMessage(e)}')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _archiving = false);
     }
   }
 
@@ -403,6 +360,7 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
       return _UnresolvedCardTile(busy: _archiving, onRemove: _removeUnresolved);
     }
     final amount = ref.watch(enteredAmountProvider);
+    final utilization = ref.watch(creditUtilizationProvider)[card.id];
     final badges = <String>[
       if (card.totalPointsEarned > 0)
         '${card.totalPointsEarned.toStringAsFixed(0)} pts earned',
@@ -417,7 +375,6 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
         .where((p) => p.$1.id == card.id)
         .map((p) => p.$2)
         .firstOrNull;
-    final faceColor = _faceColorFor(card.id);
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
     final bestFor = product == null
         ? const <String>[]
@@ -428,81 +385,63 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
       // See account_screen.dart's _AccountTile for why Pressable, not InkWell.
       child: Pressable(
         onTap: () => context.push('/cards/${card.id}'),
-        child: Container(
-          decoration: BoxDecoration(
-            color: BambooInk.glassFillOnPaper,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: BambooInk.hairlineOnPaper),
-            boxShadow: [
-              BoxShadow(
-                color: BambooInk.ink900.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(AppSpace.lg),
+        child: CardSummaryPanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: faceColor,
-                      borderRadius: BorderRadius.circular(14),
+              if (product == null)
+                Row(
+                  children: [
+                    Container(
+                      width: 78,
+                      height: 49,
+                      decoration: BoxDecoration(
+                        color: BambooInk.slate,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.credit_card_rounded,
+                        color: BambooInk.lime,
+                        size: 20,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.credit_card_rounded,
-                      color: BambooInk.onSlate,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpace.md),
-                  Expanded(
-                    child: Text(
-                      card.nickname?.isNotEmpty == true
-                          ? card.nickname!
-                          : card.cardName,
-                      style: BambooFonts.heading(15.5, color: BambooInk.ink900),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (!card.isArchived)
-                    _CardActionButton(
-                      icon: _logging ? null : Icons.add_card_rounded,
-                      loading: _logging,
-                      tooltip: 'Log a ${amount.format()} spend on this card',
-                      onPressed: _logging ? null : _logTransaction,
-                    ),
-                  if (!card.isArchived) ...[
-                    const SizedBox(width: AppSpace.xs),
-                    _CardActionButton(
-                      icon: _archiving ? null : Icons.archive_outlined,
-                      loading: _archiving,
-                      tooltip: 'Archive',
-                      onPressed: _archiving ? null : _toggleArchive,
+                    const SizedBox(width: AppSpace.md),
+                    Expanded(
+                      child: Text(
+                        card.nickname?.isNotEmpty == true
+                            ? card.nickname!
+                            : card.cardName,
+                        style: BambooFonts.heading(
+                          15.5,
+                          color: BambooInk.ink900,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
-                  if (card.isArchived) ...[
-                    const SizedBox(width: AppSpace.xs),
-                    _CardActionButton(
-                      icon: _archiving ? null : Icons.unarchive_outlined,
-                      loading: _archiving,
-                      tooltip: 'Restore',
-                      onPressed: _archiving ? null : _toggleArchive,
-                    ),
-                  ],
-                ],
-              ),
+                )
+              else
+                CardSummaryHeader(
+                  product: product,
+                  title: card.nickname?.isNotEmpty == true
+                      ? card.nickname!
+                      : card.cardName,
+                  trailing: !card.isArchived
+                      ? _CardActionButton(
+                          icon: _logging ? null : Icons.add_card_rounded,
+                          loading: _logging,
+                          tooltip:
+                              'Log a ${amount.format()} spend on this card',
+                          onPressed: _logging ? null : _logTransaction,
+                        )
+                      : null,
+                ),
               if (product != null && !card.isArchived) ...[
                 const SizedBox(height: AppSpace.md),
                 _NearestCapBar(card: card, product: product),
-                if (card.creditLimit != null && !card.creditLimit!.isZero) ...[
+                if (utilization != null) ...[
                   const SizedBox(height: AppSpace.sm),
-                  _UtilizationBar(card: card),
+                  _UtilizationBar(card: card, result: utilization),
                 ],
               ],
               // Design 02's "Best used for" row. Derived from the card's own
@@ -535,7 +474,7 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                 Wrap(
                   spacing: AppSpace.xs,
                   runSpacing: AppSpace.xs,
-                  children: [for (final b in badges) _BambooPill(b)],
+                  children: [for (final b in badges) CardSummaryPill(label: b)],
                 ),
               ],
             ],
@@ -625,191 +564,6 @@ class _UnresolvedCardTile extends StatelessWidget {
   }
 }
 
-/// Design 02's *"Autopay is off — never lose ₹500 to a late fee again"*
-/// nudge, above the card list.
-///
-/// PandaPay cannot access or mutate an issuer's autopay mandate. This banner
-/// therefore never calls a local setting "on" or "off" and only offers a
-/// path to the card issuer's official destination.
-///
-class _AutopayNudge extends ConsumerWidget {
-  const _AutopayNudge();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (ref.watch(userCardsRepositoryProvider) == null) {
-      return const SizedBox.shrink();
-    }
-
-    final cards = (ref.watch(myCardsProvider).valueOrNull ?? const <UserCard>[])
-        .where((c) => !c.isArchived)
-        .toList(growable: false);
-    if (cards.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpace.lg,
-        AppSpace.md,
-        AppSpace.lg,
-        0,
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: BambooInk.warningBg,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: BambooInk.warningBorder),
-        ),
-        padding: const EdgeInsets.all(AppSpace.md),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.event_repeat_outlined,
-              size: 18,
-              color: BambooInk.clayInk,
-            ),
-            const SizedBox(width: AppSpace.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    cards.length == 1
-                        ? 'Autopay status not verified on 1 card'
-                        : 'Autopay status not verified on ${cards.length} cards',
-                    style: BambooFonts.ui(
-                      13,
-                      weight: FontWeight.w700,
-                      color: BambooInk.clayInk,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'PandaPay cannot change bank autopay. Manage it with your issuer.',
-                    style: BambooFonts.ui(12.5, color: BambooInk.clayInkMuted),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpace.sm),
-            TextButton(
-              onPressed: () => _showAutopaySheet(context, cards),
-              style: TextButton.styleFrom(
-                foregroundColor: BambooInk.clayInk,
-                minimumSize: const Size(44, 44),
-                textStyle: BambooFonts.ui(13, weight: FontWeight.w700),
-              ),
-              child: const Text('Manage'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Issuer navigation sheet behind the nudge's "Manage" action.
-///
-/// This is deliberately read-only. It contains no Off/Minimum/Full control,
-/// because changing a PandaPay value cannot create or change an issuer
-/// mandate.
-Future<void> _showAutopaySheet(BuildContext context, List<UserCard> cards) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: BambooInk.paper,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    isScrollControlled: true,
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Manage autopay with your issuer',
-              style: BambooFonts.heading(20, color: BambooInk.ink900),
-            ),
-            const SizedBox(height: AppSpace.xs),
-            Text(
-              'PandaPay does not have access to your bank/card account and will not '
-              'mark autopay as enabled here.',
-              style: BambooFonts.ui(13, color: BambooInk.ink500),
-            ),
-            const SizedBox(height: AppSpace.lg),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: [for (final card in cards) _AutopayIssuerRow(card: card)],
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _AutopayIssuerRow extends StatelessWidget {
-  final UserCard card;
-  const _AutopayIssuerRow({required this.card});
-
-  @override
-  Widget build(BuildContext context) {
-    final url = officialAutopayUrl(cardName: card.cardName);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName,
-            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Text(
-            'Autopay status: not verified',
-            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: AppSpace.xs),
-          if (url != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => _openIssuerSite(context, url),
-                icon: const Icon(Icons.open_in_new, size: 17),
-                label: const Text('Open official issuer site'),
-                style: TextButton.styleFrom(
-                  foregroundColor: BambooInk.rankBadgeInk,
-                  padding: EdgeInsets.zero,
-                  textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
-                ),
-              ),
-            )
-          else
-            Text(
-              'Open your issuer app or its official website to manage it.',
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-Future<void> _openIssuerSite(BuildContext context, String url) async {
-  final uri = Uri.parse(url);
-  if (await canLaunchUrl(uri) &&
-      await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-    return;
-  }
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Could not open the issuer website.')),
-  );
-}
-
 /// The categories this card pays best on, highest first — design 02's
 /// "Best used for" line.
 ///
@@ -885,34 +639,6 @@ class _AutopayPill extends StatelessWidget {
   }
 }
 
-/// A small rounded label pill in Bamboo typography (Instrument Sans) — the
-/// generic [StatusPill] in widgets.dart renders in the ambient Material
-/// theme's font instead, so this is a Bamboo-specific equivalent, same
-/// reasoning as home_screen.dart's own pill widgets.
-class _BambooPill extends StatelessWidget {
-  final String label;
-  const _BambooPill(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-      decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: BambooFonts.ui(
-          12,
-          weight: FontWeight.w500,
-          color: BambooInk.ink900,
-        ),
-      ),
-    );
-  }
-}
-
 /// The cap closest to being maxed out, across this card's own rules —
 /// C1's single-bar-per-card summary (full per-cap detail lives in C2's
 /// Caps tab / the existing E2 Caps & Limits screen). Reuses the same
@@ -958,31 +684,31 @@ class _NearestCapBar extends StatelessWidget {
 
 class _UtilizationBar extends StatelessWidget {
   final UserCard card;
-  const _UtilizationBar({required this.card});
+  final UtilizationResult result;
+  const _UtilizationBar({required this.card, required this.result});
 
   @override
   Widget build(BuildContext context) {
-    final spendProxy = card.capConsumed.values.fold<Money>(
-      const Money.zero(),
-      (a, b) => a + b,
-    );
-    final result = creditUtilization(spendProxy, card.creditLimit!);
+    final ratio = result.ratio;
+    final color = CreditUtilizationUi.color(ratio);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Text(
-              'Utilization',
+              'Credit utilization',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
             const Spacer(),
+            Icon(CreditUtilizationUi.icon(ratio), size: 15, color: color),
+            const SizedBox(width: 3),
             Text(
-              '${(result.ratio * 100).clamp(0, 999).toStringAsFixed(0)}%',
+              '${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}% · ${CreditUtilizationUi.label(ratio)}',
               style: BambooFonts.ui(
-                12.5,
+                11.5,
                 weight: FontWeight.w600,
-                color: BambooInk.ink900,
+                color: color,
               ),
             ),
           ],
@@ -991,11 +717,16 @@ class _UtilizationBar extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(999),
           child: LinearProgressIndicator(
-            value: result.ratio.clamp(0.0, 1.0),
+            value: ratio.clamp(0.0, 1.0),
             minHeight: 7,
             backgroundColor: BambooInk.paperMuted,
-            color: result.overThreshold ? BambooInk.clay : BambooInk.jade,
+            color: color,
           ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${result.currentBalance.format(hidePaise: true)} tracked this cycle of ${card.creditLimit!.format(hidePaise: true)}',
+          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
         ),
       ],
     );
@@ -1178,8 +909,16 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
   Future<void> _scan() async {
     final catalogue = ref.read(catalogueProvider).valueOrNull;
     if (catalogue == null) return;
+    final owned = ref.read(myCardsProvider).valueOrNull ?? const <UserCard>[];
     final picked = await Navigator.of(context).push<CardProduct>(
-      MaterialPageRoute(builder: (_) => ScanCardScreen(catalogue: catalogue)),
+      MaterialPageRoute(
+        builder: (_) => ScanCardScreen(
+          catalogue: catalogue,
+          alreadyOwnedProductIds: owned
+              .map((card) => card.cardProductId)
+              .toSet(),
+        ),
+      ),
     );
     if (picked != null) await _addCards([picked.id]);
   }
@@ -1187,31 +926,74 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
   Future<void> _addCards(List<String> cardProductIds) async {
     setState(() => _busy = true);
     final failures = <String>[];
-    final repo = ref.read(userCardsRepositoryProvider);
-    final local = repo == null
-        ? await ref.read(localUserCardsRepositoryProvider.future)
-        : null;
-    for (final id in cardProductIds) {
-      try {
-        if (local != null) {
-          await local.addCard(id);
-        } else {
-          await repo!.addCard(id);
+    final duplicateIds = <String>[];
+    var added = 0;
+    var alreadyPresentCount = 0;
+    try {
+      final repo = ref.read(userCardsRepositoryProvider);
+      final local = repo == null
+          ? await ref.read(localUserCardsRepositoryProvider.future)
+          : null;
+      final existing = repo == null
+          ? await local!.fetchUserCards(
+              includeArchived: true,
+              catalogue: ref.read(catalogueProvider).valueOrNull ?? const [],
+            )
+          : ref.read(myCardsProvider).valueOrNull ?? const <UserCard>[];
+      final plan = planCardAdds(cardProductIds, existing);
+
+      for (final id in plan.idsToAdd) {
+        try {
+          if (local != null) {
+            await local.addCard(id);
+          } else {
+            await repo!.addCard(id);
+          }
+        } catch (e) {
+          if (e is CardAlreadyAddedException ||
+              (e is ApiException && e.errorCode == 'card_already_added')) {
+            duplicateIds.add(id);
+          } else {
+            failures.add(userFacingErrorMessage(e));
+          }
         }
-      } catch (e) {
-        failures.add(userFacingErrorMessage(e));
       }
+
+      added = plan.idsToAdd.length - duplicateIds.length - failures.length;
+      alreadyPresentCount = plan.alreadyPresent.length + duplicateIds.length;
+      if (added > 0) {
+        ref.invalidate(myCardsProvider);
+        ref.invalidate(userCardsProvider);
+      }
+    } catch (e) {
+      failures.add(userFacingErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    ref.invalidate(myCardsProvider);
-    ref.invalidate(userCardsProvider);
     if (mounted) {
-      setState(() => _busy = false);
-      final added = cardProductIds.length - failures.length;
       if (failures.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Added $added card(s); ${failures.length} failed: ${failures.first}',
+              'Added $added card(s)${alreadyPresentCount > 0 ? '; $alreadyPresentCount already in your wallet' : ''}; '
+              '${failures.length} failed: ${failures.first}',
+            ),
+          ),
+        );
+      } else if (alreadyPresentCount > 0 && added == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This card is already in your wallet. No duplicate was added.',
+            ),
+          ),
+        );
+      } else if (alreadyPresentCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Added $added card${added == 1 ? '' : 's'}; '
+              '$alreadyPresentCount already in your wallet.',
             ),
           ),
         );

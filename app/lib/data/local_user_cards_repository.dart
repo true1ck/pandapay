@@ -3,6 +3,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 import 'local/app_database.dart';
 import 'user_cards_repository.dart';
+import 'api_exception.dart';
 
 /// Guest/no-account mode (ui-spec.md A3) — the on-device counterpart to
 /// [UserCardsRepository], scoped to card ownership + ordering only. A
@@ -56,21 +57,42 @@ class LocalUserCardsRepository {
   }
 
   Future<String> addCard(String cardProductId, {String? nickname}) async {
+    final existingRows = _raw.select(
+      'SELECT id FROM local_user_cards WHERE card_product_id = ? LIMIT 1',
+      [cardProductId],
+    );
+    if (existingRows.isNotEmpty) {
+      throw const CardAlreadyAddedException();
+    }
+
     final id = 'local_${DateTime.now().microsecondsSinceEpoch}';
-    final maxOrderRows = _raw.select('SELECT MAX(sort_order) AS m FROM local_user_cards');
+    final maxOrderRows = _raw.select(
+      'SELECT MAX(sort_order) AS m FROM local_user_cards',
+    );
     final maxOrder = (maxOrderRows.first['m'] as num?)?.toDouble() ?? 0;
-    final countRows = _raw.select('SELECT COUNT(*) AS c FROM local_user_cards WHERE is_archived = 0');
+    final countRows = _raw.select(
+      'SELECT COUNT(*) AS c FROM local_user_cards WHERE is_archived = 0',
+    );
     final isFirstCard = (countRows.first['c'] as int) == 0;
     _raw.execute(
       'INSERT INTO local_user_cards (id, card_product_id, nickname, is_default, is_archived, sort_order, created_at) '
       'VALUES (?, ?, ?, ?, 0, ?, ?)',
-      [id, cardProductId, nickname, isFirstCard ? 1 : 0, maxOrder + 1, DateTime.now().millisecondsSinceEpoch],
+      [
+        id,
+        cardProductId,
+        nickname,
+        isFirstCard ? 1 : 0,
+        maxOrder + 1,
+        DateTime.now().millisecondsSinceEpoch,
+      ],
     );
     return id;
   }
 
   Future<void> archiveCard(String userCardId) async {
-    _raw.execute('UPDATE local_user_cards SET is_archived = 1 WHERE id = ?', [userCardId]);
+    _raw.execute('UPDATE local_user_cards SET is_archived = 1 WHERE id = ?', [
+      userCardId,
+    ]);
   }
 
   /// Hard-deletes a single local card row. Used only for an [UserCard.isUnresolved]
@@ -82,19 +104,28 @@ class LocalUserCardsRepository {
   }
 
   Future<void> unarchiveCard(String userCardId) async {
-    _raw.execute('UPDATE local_user_cards SET is_archived = 0 WHERE id = ?', [userCardId]);
+    _raw.execute('UPDATE local_user_cards SET is_archived = 0 WHERE id = ?', [
+      userCardId,
+    ]);
   }
 
   /// Mirrors [UserCardsRepository.setDefaultCard] — clears any existing
   /// default first, since only one card may be default at a time.
   Future<void> setDefaultCard(String userCardId) async {
-    _raw.execute('UPDATE local_user_cards SET is_default = 0 WHERE is_default = 1');
-    _raw.execute('UPDATE local_user_cards SET is_default = 1 WHERE id = ?', [userCardId]);
+    _raw.execute(
+      'UPDATE local_user_cards SET is_default = 0 WHERE is_default = 1',
+    );
+    _raw.execute('UPDATE local_user_cards SET is_default = 1 WHERE id = ?', [
+      userCardId,
+    ]);
   }
 
   Future<void> reorderCards(List<String> orderedIds) async {
     for (var i = 0; i < orderedIds.length; i++) {
-      _raw.execute('UPDATE local_user_cards SET sort_order = ? WHERE id = ?', [i.toDouble(), orderedIds[i]]);
+      _raw.execute('UPDATE local_user_cards SET sort_order = ? WHERE id = ?', [
+        i.toDouble(),
+        orderedIds[i],
+      ]);
     }
   }
 
@@ -112,7 +143,10 @@ class LocalUserCardsRepository {
     double? pointsBalance,
   }) async {
     if (nickname != null) {
-      _raw.execute('UPDATE local_user_cards SET nickname = ? WHERE id = ?', [nickname, userCardId]);
+      _raw.execute('UPDATE local_user_cards SET nickname = ? WHERE id = ?', [
+        nickname,
+        userCardId,
+      ]);
     }
   }
 
@@ -126,7 +160,9 @@ class LocalUserCardsRepository {
   /// over, or "archive, never delete" (R4) would be quietly violated by the
   /// act of signing up.
   Future<List<Map<String, Object?>>> exportForMigration() async {
-    final rows = _raw.select('SELECT * FROM local_user_cards ORDER BY sort_order ASC');
+    final rows = _raw.select(
+      'SELECT * FROM local_user_cards ORDER BY sort_order ASC',
+    );
     return rows
         .map(
           (r) => <String, Object?>{

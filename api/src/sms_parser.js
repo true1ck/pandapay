@@ -68,14 +68,59 @@ function isAmbiguousAccountDebit(body) {
   return isBankAccountUpiMessage(text) && !/\bupi\b/.test(text);
 }
 
+// Some bank-account transfer alerts do not say "UPI". They identify a
+// beneficiary with a bank-specific label such as "Fvg:" (favouring) and
+// identify the channel as mobile banking. That is enough evidence to import
+// the payment as a cardless bank spend, while still keeping a bare account
+// debit in the review queue. The transaction remains reward-ineligible until
+// it is linked to a card; this only fixes detection and history completeness.
+function parseBuiltInBeneficiaryDebit(sms) {
+  const body = String(sms?.body || '');
+  if (!isSuccessfulSpend(body) || !isBankAccountUpiMessage(body) || /\bupi\b/i.test(body)) {
+    return { ok: false, reason: 'no_beneficiary_debit_match' };
+  }
+  const channelMatch = /\b(?:by\s+mob(?:ile)?\s*(?:bk|bank)|mobile\s+bank(?:ing)?|imps|neft)\b/i.test(body);
+  if (!channelMatch) return { ok: false, reason: 'no_beneficiary_debit_match' };
+
+  const beneficiaryMatch = body.match(
+    /\b(?:fvg|favou?ring|beneficiary|payee)\s*[:#-]?\s*([A-Za-z][A-Za-z0-9 .&'\/-]{1,80}?)(?=\s+(?:avl|available|bal(?:ance)?|ref(?:erence)?|txn|transaction|on|from)\b|[.,;]|$)/i,
+  );
+  if (!beneficiaryMatch) return { ok: false, reason: 'no_beneficiary_debit_match' };
+
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_beneficiary_debit_match' };
+  const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
+
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: 'builtin_beneficiary_debit',
+    fields: {
+      amountInr: Number(amountMatch[1].replace(/,/g, '')),
+      merchant: beneficiaryMatch[1].trim(),
+      ...(dateMatch ? { date: dateMatch[1] } : {}),
+      ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
+      // This alert proves a bank-account transfer, but it does not prove the
+      // UPI rail. Keep it out of UPI/card reward rules until the user or a
+      // stronger issuer-specific pattern provides that evidence.
+      instrument: 'other',
+      entryKind: 'spend',
+    },
+  };
+}
+
 function inferInstrument(body, hasLast4) {
   const text = String(body || '').toLowerCase();
+  // An account/UPI debit wins before any generic "debit" wording. The
+  // suffix after A/c is an account suffix, never a card last-4.
+  if (isBankAccountUpiMessage(text)) return 'upi_bank';
   if (/\bdebit\s+card\b/.test(text)) return 'debit_card';
   // ATM/cash-withdrawal alerts commonly say only "Card x1234" and identify
   // the card as DC in the fraud footer. They are not credit-card purchases.
   if (/\b(?:atm|withdrawn|cash\s+withdrawal)\b/.test(text) && !/\bcredit\s+card\b/.test(text)) return 'debit_card';
+  if (/\b(?:block\s+dc|dc\s*\d{4})\b/.test(text) && !/\bcredit\s+card\b/.test(text)) return 'debit_card';
   if (/\bcredit\s+card\b/.test(text) || (hasLast4 && /\bcard\b/.test(text))) return 'credit_card';
-  if (/\b(?:upi|a\/?c\.?|account)\b/.test(text) && /\b(?:debit(?:ed)?|paid|spent|sent|transferred)\b/.test(text)) return 'upi_bank';
   return null;
 }
 
@@ -308,7 +353,15 @@ function parseSms(pattern, sms) {
     delete fields.last4;
     fields.instrument = 'upi_bank';
   } else {
-    fields.instrument = fields.instrument || inferInstrument(sms.body, Boolean(fields.last4)) || 'credit_card';
+    // Raw-message evidence is stronger than a pattern's mapped instrument.
+    // This prevents a stale/broad pattern from turning a debit-card alert
+    // into a credit-card spend merely because its field_map says
+    // `instrument=credit_card`.
+    const inferredInstrument = inferInstrument(sms.body, Boolean(fields.last4));
+    const mappedInstrument = String(fields.instrument || '').trim().toLowerCase();
+    fields.instrument = inferredInstrument
+      || (['credit_card', 'debit_card'].includes(mappedInstrument) ? mappedInstrument : null)
+      || 'credit_card';
   }
   fields.entryKind = 'spend';
   return { ok: true, fields };
@@ -358,8 +411,15 @@ function parseConservativeBankSpend(sms) {
     return { ok: false, reason: 'unparseable_amount' };
   }
 
-  const fields = { amountInr, instrument: 'credit_card', entryKind: 'spend' };
   const last4 = body.match(/(?:ending|end(?:ing)?\s+in|xx+|x{2,}|card\s*(?:no\.?|number)?\s*[*x-]*)\s*([0-9]{4})\b/i);
+  const fields = {
+    amountInr,
+    // Keep the fallback conservative, but preserve an explicit debit-card
+    // signal so a purchase on a debit card is not labelled as credit-card
+    // spend before the richer built-in parser gets a chance to run.
+    instrument: inferInstrument(body, Boolean(last4)) || 'credit_card',
+    entryKind: 'spend',
+  };
   if (last4) fields.last4 = last4[1];
 
   const merchant = body.match(/\b(?:credit\s+|debit\s+|bank\s+)?card\b[^.;]{0,40}?\bon\s+([A-Za-z_][A-Za-z0-9 &*._'/-]{1,60}?)(?=\s+(?:on|using|via|ref|txn|avl|available|bal(?:ance)?|if\s+not|to\s+dispute|call|sms\s+block)\b|[.;]|$)/i)
@@ -396,6 +456,8 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (isNonTransactionAlert(sms?.body)) {
     return { ok: false, reason: 'not_a_transaction_alert' };
   }
+  const beneficiaryDebit = parseBuiltInBeneficiaryDebit(sms);
+  if (beneficiaryDebit.ok) return beneficiaryDebit;
   if (isAmbiguousAccountDebit(sms?.body)) {
     return { ok: false, reason: 'ambiguous_account_debit' };
   }

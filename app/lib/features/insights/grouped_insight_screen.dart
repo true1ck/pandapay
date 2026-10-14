@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../cards/card_summary.dart';
 
 /// One insight made of several closely-related views.
 ///
@@ -144,6 +146,7 @@ class _VerticalInsightSection extends StatelessWidget {
 /// capability rows underneath.
 class CardCapabilitySection extends StatelessWidget {
   final String cardName;
+  final CardProduct product;
   final String capabilityLabel;
   final int capabilityCount;
   final List<Widget> children;
@@ -151,6 +154,7 @@ class CardCapabilitySection extends StatelessWidget {
   const CardCapabilitySection({
     super.key,
     required this.cardName,
+    required this.product,
     required this.capabilityLabel,
     required this.capabilityCount,
     required this.children,
@@ -158,13 +162,9 @@ class CardCapabilitySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return CardSummaryPanel(
       margin: const EdgeInsets.only(bottom: AppSpace.md),
-      decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-      ),
+      padding: EdgeInsets.zero,
       child: Material(
         color: Colors.transparent,
         child: Theme(
@@ -185,18 +185,11 @@ class CardCapabilitySection extends StatelessWidget {
               AppSpace.lg,
               AppSpace.sm,
             ),
-            leading: const Icon(
-              Icons.credit_card_rounded,
-              color: BambooInk.slate,
-            ),
-            title: Text(
-              cardName,
-              style: BambooFonts.heading(15, color: BambooInk.ink900),
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              '$capabilityCount $capabilityLabel',
-              style: BambooFonts.ui(12, color: BambooInk.ink500),
+            title: CardSummaryHeader(
+              product: product,
+              title: cardName,
+              subtitle: '$capabilityCount $capabilityLabel',
+              visualWidth: 58,
             ),
             children: children,
           ),

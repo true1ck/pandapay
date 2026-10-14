@@ -90,7 +90,7 @@ class LocalCardDiscoveryEngine {
     final cleaned = text.replaceAll(_accountNumberSpan, ' ');
     final hits = <String>{};
     final re = RegExp(
-      r'(?:ending\s+in|ending\s+with|ending|no\.?\s*x+|xx+|\*{2,}|\.{3,})\s*(\d{4})\b',
+      r'(?:ending\s+in|ending\s+with|ending|no\.?\s*x+|xx+|\*{2,}|\.{3,}|\b(?:x+|dc))\s*(\d{4})\b',
       caseSensitive: false,
     );
     for (final match in re.allMatches(cleaned)) {
@@ -202,11 +202,9 @@ class LocalCardDiscoveryEngine {
     return txnMarkers.any(lower.contains);
   }
 
-  /// Account / debit-card alert markers. PandaPay ranks *credit* cards, so
-  /// the placeholder fallback skips a message that reads like a
-  /// savings-account or debit-card spend alert — unless it also carries a
-  /// clear credit-card signal (some issuers word credit-card alerts as
-  /// "debited from"). Mirrors DEBIT_ACCOUNT_MARKERS in api/src/card_discovery.js.
+  /// Account / debit-card alert markers. Account-only alerts must not become
+  /// physical-card suggestions, while explicit debit-card alerts are kept as
+  /// debit suggestions. Mirrors DEBIT_ACCOUNT_MARKERS in api/src/card_discovery.js.
   static const List<String> debitAccountMarkers = [
     'debit card',
     'a/c',
@@ -264,6 +262,17 @@ class LocalCardDiscoveryEngine {
     return creditCardMarkers.any(lower.contains);
   }
 
+  /// True when the message identifies a physical debit card, not a bank
+  /// account. ATM/cash-withdrawal alerts are debit-card evidence too.
+  static bool looksDebitCardSms(String text) {
+    final lower = text.toLowerCase();
+    return RegExp(r'\bdebit\s+card\b').hasMatch(lower) ||
+        RegExp(
+          r'\b(?:atm|cash\s+withdrawal|withdrawn\s+from\s+(?:your\s+)?(?:bank\s+)?card)\b',
+        ).hasMatch(lower) ||
+        RegExp(r'\bblock\s+dc\b').hasMatch(lower);
+  }
+
   /// Scan one message for cards from [catalogue].
   static List<DiscoveredCard> discoverInMessage({
     String? subject,
@@ -279,10 +288,19 @@ class LocalCardDiscoveryEngine {
     final haystack = normalise(combined);
     if (haystack.isEmpty) return const [];
 
+    final messageIsDebit = looksDebitCardSms(combined);
+    final messageIsCredit = looksCreditCardSms(combined);
+
     final haystackWords = Set<String>.from(haystack.split(' '));
     final results = <DiscoveredCard>[];
 
     for (final card in catalogue) {
+      if (card.cardType == 'debit' && messageIsCredit && !messageIsDebit) {
+        continue;
+      }
+      if (card.cardType == 'credit' && messageIsDebit && !messageIsCredit) {
+        continue;
+      }
       final nameTokens = significantTokens(card.name);
 
       final fullName = normalise(card.name);
@@ -330,6 +348,13 @@ class LocalCardDiscoveryEngine {
           last4: extractLast4(combined),
           messageCount: 1,
           sources: const ['sms'],
+          cardType:
+              card.cardType ??
+              (messageIsDebit
+                  ? 'debit'
+                  : messageIsCredit
+                  ? 'credit'
+                  : null),
         ),
       );
     }
@@ -370,9 +395,28 @@ class LocalCardDiscoveryEngine {
     // one. One "…debited from A/c …1234 via UPI" is enough. Keyed
     // "<normalised issuer>|<last4>" ('' last4 = the issuer with no number).
     final debitPoisoned = <String>{};
+    final debitCardPoisoned = <String>{};
     if (isSms) {
       for (final body in smsBodies) {
-        if (!looksDebitAccountSms(body) || looksCreditCardSms(body)) continue;
+        final explicitDebitCard =
+            looksDebitCardSms(body) && !looksCreditCardSms(body);
+        if (explicitDebitCard) {
+          final low = normalise(body);
+          final l4s = extractLast4(body);
+          for (final issuer in issuers) {
+            if (!low.contains(normalise(issuer))) continue;
+            final ni = normalise(issuer);
+            debitCardPoisoned.add('$ni|');
+            for (final l in l4s) {
+              debitCardPoisoned.add('$ni|$l');
+            }
+          }
+        }
+        final accountOnly =
+            looksDebitAccountSms(body) &&
+            !looksCreditCardSms(body) &&
+            !looksDebitCardSms(body);
+        if (!accountOnly) continue;
         final low = normalise(body);
         final l4s = extractLast4(body);
         for (final issuer in issuers) {
@@ -467,10 +511,19 @@ class LocalCardDiscoveryEngine {
           }
         }
       } else if (isSms) {
-        // A debit-card or bank-account spend alert has no credit card to
-        // rank; don't manufacture a placeholder from one. A real credit-card
-        // alert that merely says "debited" still trips a creditCardMarker.
-        if (looksDebitAccountSms(body) && !looksCreditCardSms(body)) continue;
+        // A bank-account/UPI alert has no physical card to rank. An explicit
+        // debit-card alert is different: preserve it as a debit suggestion.
+        final explicitDebitCard =
+            looksDebitCardSms(body) && !looksCreditCardSms(body);
+        if (looksDebitAccountSms(body) &&
+            !looksCreditCardSms(body) &&
+            !explicitDebitCard) {
+          continue;
+        }
+        final placeholderType = explicitDebitCard ? 'debit' : 'credit';
+        final placeholderLabel = explicitDebitCard
+            ? 'Debit card'
+            : 'Credit card';
 
         // No exact match. Fallback to generating Placeholder cards based on Issuer.
         final haystack = normalise(body);
@@ -483,7 +536,9 @@ class LocalCardDiscoveryEngine {
         // as a generic placeholder for the user to choose from.
         if (matchingIssuers.isEmpty && last4s.isNotEmpty) {
           for (final l4 in last4s) {
-            final placeholderId = 'placeholder_card_$l4';
+            final placeholderId = explicitDebitCard
+                ? 'placeholder_debit_card_$l4'
+                : 'placeholder_card_$l4';
             final existing = byCard[placeholderId];
             if (existing != null) {
               byCard[placeholderId] = DiscoveredCard(
@@ -495,17 +550,19 @@ class LocalCardDiscoveryEngine {
                 messageCount: existing.messageCount + 1,
                 sources: const ['sms'],
                 isPlaceholder: true,
+                cardType: placeholderType,
               );
             } else {
               byCard[placeholderId] = DiscoveredCard(
                 cardProductId: placeholderId,
-                name: 'Credit card ending in $l4',
+                name: '$placeholderLabel ending in $l4',
                 score: 0.1,
                 evidence: ['Transaction matched card ending in $l4'],
                 last4: [l4],
                 messageCount: 1,
                 sources: const ['sms'],
                 isPlaceholder: true,
+                cardType: placeholderType,
               );
             }
           }
@@ -516,8 +573,14 @@ class LocalCardDiscoveryEngine {
           final l4sToUse = last4s.isEmpty ? [''] : last4s;
           for (final l4 in l4sToUse) {
             // Skip a card this issuer was seen debiting an account for.
-            if (debitPoisoned.contains('$normIssuer|$l4')) continue;
-            final placeholderId = 'placeholder_${normIssuer}_$l4';
+            if (!explicitDebitCard &&
+                (debitPoisoned.contains('$normIssuer|$l4') ||
+                    debitCardPoisoned.contains('$normIssuer|$l4'))) {
+              continue;
+            }
+            final placeholderId = explicitDebitCard
+                ? 'placeholder_debit_${normIssuer}_$l4'
+                : 'placeholder_${normIssuer}_$l4';
             final existing = byCard[placeholderId];
 
             if (existing != null) {
@@ -531,6 +594,7 @@ class LocalCardDiscoveryEngine {
                 sources: const ['sms'],
                 isPlaceholder: true,
                 issuerName: issuer,
+                cardType: placeholderType,
               );
             } else {
               final nameSuffix = l4.isNotEmpty ? ' ending in $l4' : '';
@@ -544,6 +608,7 @@ class LocalCardDiscoveryEngine {
                 sources: const ['sms'],
                 isPlaceholder: true,
                 issuerName: issuer,
+                cardType: placeholderType,
               );
             }
           }

@@ -54,7 +54,14 @@ enum CardNetwork { rupay, visa, mastercard, amex, diners, unknown }
 
 enum TxnRail { upiQr, swipe, online, contactless, atm, emi, unknown }
 
-enum CapPeriod { statementCycle, calendarMonth, quarter, halfYear, annual, lifetime }
+enum CapPeriod {
+  statementCycle,
+  calendarMonth,
+  quarter,
+  halfYear,
+  annual,
+  lifetime,
+}
 
 /// Mirrors `cap_measure` (database.sql §0001). What [CapRule.capValue] and
 /// the engine's `capRemaining` headroom actually count — critical, because
@@ -133,7 +140,8 @@ class CapRule {
   final String? rewardRuleId;
   final String? categoryId;
   final String label;
-  final Money capValue; // in the unit [measure] names — spend, reward value, or (as a count) txn_count
+  final Money
+  capValue; // in the unit [measure] names — spend, reward value, or (as a count) txn_count
   final CapMeasure measure;
 
   /// What you earn once the cap is spent.
@@ -309,6 +317,11 @@ class CardProduct {
   final Money? joiningFeeInr;
   final DateTime? verifiedAt;
   final String? issuerName;
+
+  /// Catalogue instrument type (`credit`, `debit`, `prepaid`, ...). Kept on
+  /// the shared projection so on-device SMS discovery cannot match a debit
+  /// alert to a same-name credit product.
+  final String? cardType;
   final String? artAssetUrl;
   final String? artPrimaryColor;
 
@@ -366,6 +379,7 @@ class CardProduct {
     this.joiningFeeInr,
     this.verifiedAt,
     this.issuerName,
+    this.cardType,
     this.artAssetUrl,
     this.artPrimaryColor,
     this.hasApplyUrl = false,

@@ -12,6 +12,7 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../cards/find_cards_screen.dart';
+import '../cards/card_visual.dart';
 import '../scan/scan_card_screen.dart';
 import '../sms_import/sms_listener_service.dart';
 import 'all_set_screen.dart';
@@ -52,7 +53,10 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
   bool _matchesNetworkFilter(CardProduct card) {
     if (_networkFilters.isEmpty) return true;
     // Amex/Diners share one filter chip per ui-spec's own grouping.
-    if (_networkFilters.contains(CardNetwork.amex) && card.network == CardNetwork.diners) return true;
+    if (_networkFilters.contains(CardNetwork.amex) &&
+        card.network == CardNetwork.diners) {
+      return true;
+    }
     return _networkFilters.contains(card.network);
   }
 
@@ -96,7 +100,9 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
     } finally {
       if (mounted) setState(() => _adding = false);
     }
-    if (addedIds.isEmpty) return; // every add failed — stay here, error shown above.
+    if (addedIds.isEmpty) {
+      return; // every add failed — stay here, error shown above.
+    }
     ref.invalidate(userCardsProvider);
     ref.invalidate(myCardsProvider);
     if (mounted) context.go(AppRoute.cardDetailsSetup, extra: addedIds);
@@ -136,9 +142,9 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
   /// already shipped for Wallet's own add-a-card flow (ScanCardScreen),
   /// not a new implementation.
   Future<void> _photographCard(List<CardProduct> catalogue) async {
-    final picked = await Navigator.of(
-      context,
-    ).push<CardProduct>(MaterialPageRoute(builder: (_) => ScanCardScreen(catalogue: catalogue)));
+    final picked = await Navigator.of(context).push<CardProduct>(
+      MaterialPageRoute(builder: (_) => ScanCardScreen(catalogue: catalogue)),
+    );
     if (picked != null && mounted) setState(() => _selected.add(picked.id));
   }
 
@@ -150,7 +156,9 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
   /// it, for the redirect-guard ordering reason documented in
   /// TrackingSetupScreen._finish().
   Future<void> _skip() async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AllSetScreen()));
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AllSetScreen()));
   }
 
   @override
@@ -176,8 +184,12 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
             onRetry: () => ref.invalidate(catalogueProvider),
           ),
           data: (cards) {
-            final filtered = cards.where(_matchesSearch).where(_matchesNetworkFilter).toList()
-              ..sort((a, b) => a.name.compareTo(b.name));
+            final filtered =
+                cards
+                    .where(_matchesSearch)
+                    .where(_matchesNetworkFilter)
+                    .toList()
+                  ..sort((a, b) => a.name.compareTo(b.name));
             final byIssuer = <String, List<CardProduct>>{};
             for (final c in filtered) {
               byIssuer.putIfAbsent(c.issuerName ?? 'Other', () => []).add(c);
@@ -187,7 +199,12 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
             return Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, AppSpace.sm),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpace.lg,
+                    AppSpace.lg,
+                    AppSpace.lg,
+                    AppSpace.sm,
+                  ),
                   child: Column(
                     children: [
                       // Design 30: "Step 2 of 3" progress bar at 66%.
@@ -207,7 +224,11 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                           const SizedBox(width: AppSpace.sm),
                           Text(
                             'Step 2 of 3',
-                            style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.ink500),
+                            style: BambooFonts.ui(
+                              12,
+                              weight: FontWeight.w600,
+                              color: BambooInk.ink500,
+                            ),
                           ),
                         ],
                       ),
@@ -252,7 +273,11 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                         alignment: Alignment.centerLeft,
                         child: Text(
                           'Or pick from 340 Indian cards',
-                          style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink500),
+                          style: BambooFonts.ui(
+                            12.5,
+                            weight: FontWeight.w600,
+                            color: BambooInk.ink500,
+                          ),
                         ),
                       ),
                       const SizedBox(height: AppSpace.sm),
@@ -260,9 +285,15 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                         controller: _searchController,
                         style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                         decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.search_rounded, color: BambooInk.ink500),
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            color: BambooInk.ink500,
+                          ),
                           hintText: 'Search by issuer or card name',
-                          hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+                          hintStyle: BambooFonts.ui(
+                            14,
+                            color: BambooInk.ink500,
+                          ),
                           filled: true,
                           fillColor: BambooInk.glassFillOnPaper,
                           border: OutlineInputBorder(
@@ -271,11 +302,16 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                            borderSide: const BorderSide(
+                              color: BambooInk.hairlineOnPaper,
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                            borderSide: const BorderSide(
+                              color: BambooInk.slate,
+                              width: 1.5,
+                            ),
                           ),
                         ),
                         onChanged: (_) => setState(() {}),
@@ -293,10 +329,14 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                               CardNetwork.amex,
                             ])
                               Padding(
-                                padding: const EdgeInsets.only(right: AppSpace.xs),
+                                padding: const EdgeInsets.only(
+                                  right: AppSpace.xs,
+                                ),
                                 child: FilterChip(
                                   label: Text(
-                                    network == CardNetwork.amex ? 'Amex/Diners' : _networkLabel(network),
+                                    network == CardNetwork.amex
+                                        ? 'Amex/Diners'
+                                        : _networkLabel(network),
                                   ),
                                   labelStyle: BambooFonts.ui(
                                     13,
@@ -309,7 +349,9 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                                   selectedColor: BambooInk.slate,
                                   backgroundColor: BambooInk.paperMuted,
                                   side: BorderSide.none,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
                                   onSelected: (selected) => setState(() {
                                     if (selected) {
                                       _networkFilters.add(network);
@@ -327,14 +369,27 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                 ),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const EmptyState(icon: Icons.search_off_rounded, title: 'No cards match')
+                      ? const EmptyState(
+                          icon: Icons.search_off_rounded,
+                          title: 'No cards match',
+                        )
                       : ListView(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpace.lg,
+                          ),
                           children: [
                             for (final issuer in issuers) ...[
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-                                child: Text(issuer, style: BambooFonts.heading(13, color: BambooInk.ink500)),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpace.sm,
+                                ),
+                                child: Text(
+                                  issuer,
+                                  style: BambooFonts.heading(
+                                    13,
+                                    color: BambooInk.ink500,
+                                  ),
+                                ),
                               ),
                               for (final card in byIssuer[issuer]!)
                                 _CardRow(
@@ -350,12 +405,19 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                                 ),
                             ],
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: AppSpace.lg),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: AppSpace.lg,
+                              ),
                               child: Center(
                                 child: TextButton(
-                                  style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: BambooInk.jade,
+                                  ),
                                   onPressed: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const RequestUnsupportedCardScreen()),
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const RequestUnsupportedCardScreen(),
+                                    ),
                                   ),
                                   child: const Text("My card isn't listed"),
                                 ),
@@ -366,13 +428,23 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                 ),
                 if (_error != null)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
-                    child: Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.lg,
+                    ),
+                    child: Text(
+                      _error!,
+                      style: BambooFonts.ui(12.5, color: BambooInk.clay),
+                    ),
                   ),
                 SafeArea(
                   top: false,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.lg),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpace.lg,
+                      0,
+                      AppSpace.lg,
+                      AppSpace.lg,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -381,15 +453,25 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                             backgroundColor: BambooInk.slate,
                             foregroundColor: BambooInk.lime,
                             minimumSize: const Size.fromHeight(52),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            textStyle: BambooFonts.ui(
+                              15,
+                              weight: FontWeight.w700,
+                            ),
                           ),
-                          onPressed: _selected.isEmpty || _adding ? null : () => _continue(cards),
+                          onPressed: _selected.isEmpty || _adding
+                              ? null
+                              : () => _continue(cards),
                           child: _adding
                               ? const SizedBox(
                                   width: 18,
                                   height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: BambooInk.lime,
+                                  ),
                                 )
                               : Text(
                                   _selected.isEmpty
@@ -401,7 +483,9 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
                           const SizedBox(height: AppSpace.xs),
                           TextButton(
                             onPressed: _adding ? null : _skip,
-                            style: TextButton.styleFrom(foregroundColor: BambooInk.ink500),
+                            style: TextButton.styleFrom(
+                              foregroundColor: BambooInk.ink500,
+                            ),
                             child: const Text("I'll do this later"),
                           ),
                         ],
@@ -433,7 +517,11 @@ class _CardRow extends StatelessWidget {
   final CardProduct card;
   final bool selected;
   final VoidCallback onToggle;
-  const _CardRow({required this.card, required this.selected, required this.onToggle});
+  const _CardRow({
+    required this.card,
+    required this.selected,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -444,15 +532,16 @@ class _CardRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.credit_card_rounded, color: BambooInk.lime, size: 20),
+            SizedBox(
+              width: 62,
+              child: CardVisual(product: card, showProductName: false),
             ),
             const SizedBox(width: AppSpace.md),
             Expanded(
-              child: Text(card.name, style: BambooFonts.ui(15, color: BambooInk.ink900)),
+              child: Text(
+                card.name,
+                style: BambooFonts.ui(15, color: BambooInk.ink900),
+              ),
             ),
             Checkbox(
               value: selected,
@@ -473,7 +562,12 @@ class _MethodCard extends StatelessWidget {
   final String? badge;
   final String title;
   final VoidCallback onTap;
-  const _MethodCard({required this.icon, required this.badge, required this.title, required this.onTap});
+  const _MethodCard({
+    required this.icon,
+    required this.badge,
+    required this.title,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -496,7 +590,10 @@ class _MethodCard extends StatelessWidget {
             if (badge != null) ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: BambooInk.lime, borderRadius: BorderRadius.circular(999)),
+                decoration: BoxDecoration(
+                  color: BambooInk.lime,
+                  borderRadius: BorderRadius.circular(999),
+                ),
                 child: Text(
                   badge!,
                   style: BambooFonts.ui(
@@ -512,7 +609,11 @@ class _MethodCard extends StatelessWidget {
             const SizedBox(height: AppSpace.sm),
             Text(
               title,
-              style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink900),
+              style: BambooFonts.ui(
+                13,
+                weight: FontWeight.w600,
+                color: BambooInk.ink900,
+              ),
             ),
           ],
         ),

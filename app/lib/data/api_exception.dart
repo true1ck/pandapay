@@ -20,6 +20,23 @@ class ApiException implements Exception {
     return match == null ? null : int.tryParse(match.group(1)!);
   }
 
+  /// Machine-readable API error code, when the response ended in JSON.
+  /// Screens can use this for a specific recovery path without matching on
+  /// human-facing copy.
+  String? get errorCode {
+    final jsonStart = debugMessage.indexOf('{');
+    if (jsonStart == -1) return null;
+    try {
+      final decoded = jsonDecode(debugMessage.substring(jsonStart));
+      if (decoded is Map && decoded['error'] is String) {
+        return decoded['error'] as String;
+      }
+    } catch (_) {
+      // Not parseable JSON — there is no machine-readable code.
+    }
+    return null;
+  }
+
   @override
   String toString() => debugMessage;
 
@@ -54,6 +71,20 @@ class ApiException implements Exception {
 /// purpose (see nearby_merchants_screen.dart's location-permission checks).
 String userFacingErrorMessage(Object error) {
   if (error is ApiException) return error.userMessage;
+  if (error is CardAlreadyAddedException) return error.message;
   if (error is StateError) return error.message;
   return 'Something went wrong. Please check your connection and try again.';
+}
+
+/// Used by the local wallet, which has no HTTP response to carry the same
+/// duplicate status as the signed-in API.
+class CardAlreadyAddedException implements Exception {
+  final String message;
+
+  const CardAlreadyAddedException([
+    this.message = 'This card is already in your wallet.',
+  ]);
+
+  @override
+  String toString() => message;
 }

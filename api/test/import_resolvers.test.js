@@ -25,7 +25,7 @@ test('card import matching uses issuer plus last4 when both are available', asyn
     userCardId: 'card-hdfc-9080',
     basis: 'issuer+last4:9080',
   });
-  assert.deepEqual(client.calls[0].params, ['user-1', '9080', 'issuer-hdfc']);
+  assert.deepEqual(client.calls[0].params, ['user-1', '9080', 'issuer-hdfc', null]);
 });
 
 test('card import matching does not attach a known issuer SMS to another bank', async () => {
@@ -37,6 +37,33 @@ test('card import matching does not attach a known issuer SMS to another bank', 
 
   assert.equal(result, null);
   assert.equal(client.calls.length, 1);
+});
+
+test('card import matching keeps a shared last4 on the correct card type', async () => {
+  const client = fakeClient([[{ id: 'debit-9080' }]]);
+  const result = await resolveUserCardForImport(client, 'user-1', {
+    last4: '9080',
+    patternIssuerId: 'issuer-hdfc',
+    instrument: 'debit_card',
+  });
+
+  assert.deepEqual(result, {
+    userCardId: 'debit-9080',
+    basis: 'issuer+last4:9080',
+  });
+  assert.deepEqual(client.calls[0].params, ['user-1', '9080', 'issuer-hdfc', 'debit']);
+  assert.match(client.calls[0].sql, /cp\.card_type::text = \$4::text/);
+});
+
+test('issuer-only matching also filters by physical card type', async () => {
+  const client = fakeClient([[{ id: 'credit-hdfc' }]]);
+  const result = await resolveUserCardForImport(client, 'user-1', {
+    patternIssuerId: 'issuer-hdfc',
+    instrument: 'credit_card',
+  });
+
+  assert.deepEqual(result, { userCardId: 'credit-hdfc', basis: 'sole-card-for-issuer' });
+  assert.deepEqual(client.calls[0].params, ['user-1', 'issuer-hdfc', 'credit']);
 });
 
 test('category fallback recognises a fuel-station merchant when no rule exists', async () => {

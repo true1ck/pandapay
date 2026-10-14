@@ -142,6 +142,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Override active'));
     await tester.tap(find.text('Override active'));
     await tester.pumpAndSettle();
 

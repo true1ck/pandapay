@@ -14,15 +14,37 @@ class _FakeCatalogueRepository implements CatalogueRepository {
 }
 
 List<CardProduct> _catalogue() => [
-      CardProduct(id: 'p1', name: 'Ace', network: CardNetwork.rupay, issuerName: 'Axis Bank'),
-      CardProduct(id: 'p2', name: 'Millennia', network: CardNetwork.visa, issuerName: 'HDFC Bank'),
-      CardProduct(id: 'p3', name: 'Cashback', network: CardNetwork.mastercard, issuerName: 'HDFC Bank'),
-    ];
+  CardProduct(
+    id: 'p1',
+    name: 'Ace',
+    network: CardNetwork.rupay,
+    issuerName: 'Axis Bank',
+  ),
+  CardProduct(
+    id: 'p2',
+    name: 'Millennia',
+    network: CardNetwork.visa,
+    issuerName: 'HDFC Bank',
+  ),
+  CardProduct(
+    id: 'p3',
+    name: 'Cashback',
+    network: CardNetwork.mastercard,
+    issuerName: 'HDFC Bank',
+  ),
+];
 
-Future<void> _pumpAndPick(WidgetTester tester, {required List<CardProduct> catalogue}) async {
+Future<void> _pumpAndPick(
+  WidgetTester tester, {
+  required List<CardProduct> catalogue,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogue))],
+      overrides: [
+        catalogueRepositoryProvider.overrideWithValue(
+          _FakeCatalogueRepository(catalogue),
+        ),
+      ],
       child: MaterialApp(
         home: Builder(
           builder: (context) => ElevatedButton(
@@ -40,7 +62,9 @@ Future<void> _pumpAndPick(WidgetTester tester, {required List<CardProduct> catal
 }
 
 void main() {
-  testWidgets('groups cards by issuer and shows all three by default', (tester) async {
+  testWidgets('groups cards by issuer and shows all three by default', (
+    tester,
+  ) async {
     await _pumpAndPick(tester, catalogue: _catalogue());
     expect(find.text('Axis Bank'), findsOneWidget);
     expect(find.text('HDFC Bank'), findsOneWidget);
@@ -60,7 +84,9 @@ void main() {
     expect(find.text('Cashback'), findsNothing);
   });
 
-  testWidgets('network filter chip narrows results to that network', (tester) async {
+  testWidgets('network filter chip narrows results to that network', (
+    tester,
+  ) async {
     await _pumpAndPick(tester, catalogue: _catalogue());
     await tester.tap(find.widgetWithText(FilterChip, 'Visa'));
     await tester.pumpAndSettle();
@@ -68,38 +94,74 @@ void main() {
     expect(find.text('Ace'), findsNothing);
   });
 
-  testWidgets('multi-select shows a running count and returns all picks on Add', (tester) async {
-    List<CardProduct>? result;
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(_catalogue()))],
-        child: MaterialApp(
-          home: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () async {
-                result = await Navigator.of(context).push<List<CardProduct>>(
-                  MaterialPageRoute(builder: (_) => const CardPickerScreen()),
-                );
-              },
-              child: const Text('open'),
+  testWidgets(
+    'shows the detected suffix and asks the user to confirm the product',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            catalogueRepositoryProvider.overrideWithValue(
+              _FakeCatalogueRepository(_catalogue()),
+            ),
+          ],
+          child: MaterialApp(
+            home: const CardPickerScreen(
+              initialSearch: 'HDFC Bank',
+              detectedLast4: '9087',
             ),
           ),
         ),
-      ),
-    );
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Ace'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Millennia'));
-    await tester.pumpAndSettle();
+      expect(find.textContaining('card ending in 9087'), findsOneWidget);
+      expect(
+        find.textContaining('future bank SMS alerts attach automatically'),
+        findsOneWidget,
+      );
+      expect(find.text('Millennia'), findsOneWidget);
+    },
+  );
 
-    expect(find.text('Add (2)'), findsOneWidget);
-    await tester.tap(find.text('Add (2)'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'multi-select shows a running count and returns all picks on Add',
+    (tester) async {
+      List<CardProduct>? result;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            catalogueRepositoryProvider.overrideWithValue(
+              _FakeCatalogueRepository(_catalogue()),
+            ),
+          ],
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () async {
+                  result = await Navigator.of(context).push<List<CardProduct>>(
+                    MaterialPageRoute(builder: (_) => const CardPickerScreen()),
+                  );
+                },
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
 
-    expect(result, isNotNull);
-    expect(result!.map((c) => c.name).toSet(), {'Ace', 'Millennia'});
-  });
+      await tester.tap(find.text('Ace'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Millennia'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add (2)'), findsOneWidget);
+      await tester.tap(find.text('Add (2)'));
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result!.map((c) => c.name).toSet(), {'Ace', 'Millennia'});
+    },
+  );
 }

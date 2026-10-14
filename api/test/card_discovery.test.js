@@ -309,13 +309,30 @@ test('looksDebitAccountSms / looksCreditCardSms classify the obvious cases', () 
   assert.equal(looksCreditCardSms('Rs 500 debited from your HDFC Bank Credit Card. Avl limit Rs 20000'), true);
 });
 
-test('a debit-card spend alert produces no placeholder card', () => {
+test('a debit-card spend alert produces a debit-card placeholder', () => {
   const merged = discoverCardsAcrossMessages(
     [{ body: 'Rs 500 spent on your HDFC Bank Debit Card XX8708 at ATM on 12-Aug' }],
     SMS_CATALOGUE,
     true
   );
-  assert.deepEqual(merged, []);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].isPlaceholder, true);
+  assert.equal(merged[0].cardType, 'debit');
+  assert.deepEqual(merged[0].last4, ['8708']);
+});
+
+test('debit and credit placeholders with the same suffix never merge', () => {
+  const merged = discoverCardsAcrossMessages(
+    [
+      { body: 'Rs 500 spent on your debit card ending 1234 at ATM on 12-Aug' },
+      { body: 'Rs 500 spent on your credit card ending 1234 at ONLINE STORE on 12-Aug' },
+    ],
+    [],
+    true,
+  );
+  assert.equal(merged.length, 2);
+  assert.ok(merged.some((s) => s.cardType === 'debit' && s.last4.includes('1234')));
+  assert.ok(merged.some((s) => s.cardType === 'credit' && s.last4.includes('1234')));
 });
 
 test('a credit-card alert worded with "debited" still yields a placeholder', () => {
@@ -373,10 +390,9 @@ test('a UPI/debit alert that carries only an account number surfaces nothing', (
   assert.deepEqual(merged, []);
 });
 
-test('a debit alert POISONS its issuer+last-4 against a wordless sibling message', () => {
+test('a debit alert prevents a credit placeholder for the same issuer+last4', () => {
   // One message names no card type ("card ending 1234") and alone would seed
-  // an HDFC placeholder; another shows the same 1234 being debited from an
-  // account. The account context wins for that card.
+  // an HDFC credit placeholder; the explicit debit alert wins for that card.
   const merged = discoverCardsAcrossMessages(
     [
       { body: 'Rs 500 spent on HDFC Bank card ending 1234 at BigBazaar on 20-Aug' },
@@ -385,7 +401,9 @@ test('a debit alert POISONS its issuer+last-4 against a wordless sibling message
     SMS_CATALOGUE,
     true
   );
-  assert.deepEqual(merged, []);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].cardType, 'debit');
+  assert.deepEqual(merged[0].last4, ['1234']);
 });
 
 test('poisoning is scoped to the exact issuer+last-4, not the whole issuer', () => {
@@ -397,9 +415,10 @@ test('poisoning is scoped to the exact issuer+last-4, not the whole issuer', () 
     SMS_CATALOGUE,
     true
   );
-  assert.equal(merged.length, 1);
-  assert.equal(merged[0].isPlaceholder, true);
-  assert.deepEqual(merged[0].last4, ['2222']);
+  assert.equal(merged.length, 2);
+  assert.ok(merged.every((suggestion) => suggestion.isPlaceholder));
+  assert.ok(merged.some((suggestion) => suggestion.cardType === 'debit' && suggestion.last4[0] === '1111'));
+  assert.ok(merged.some((suggestion) => suggestion.cardType === 'credit' && suggestion.last4[0] === '2222'));
 });
 
 // --- real HDFC SMS shapes (from a user export) that leaked an account as a card ---
@@ -417,7 +436,7 @@ test('every real-world way HDFC names the savings account is stripped', () => {
   }
 });
 
-test('the real HDFC SMS corpus surfaces the credit card and NOT the bank account', () => {
+test('the real HDFC SMS corpus separates credit, debit, and bank-account alerts', () => {
   const catalogue = [
     { id: 'hdfc-tataneu', name: 'Tata Neu Infinity HDFC Bank Credit Card', issuer_name: 'HDFC Bank' },
   ];
@@ -427,7 +446,7 @@ test('the real HDFC SMS corpus surfaces the credit card and NOT the bank account
     { body: 'Sent Rs.1000.00 From HDFC Bank A/C *1797 To SOMEONE On 16/05/25 Ref 104892602823' },
     { body: 'UPDATE: INR 15,660.00 debited from HDFC Bank XX1797 on 08-AUG-26. Info: CC 000463202XXXXXX8708 Autopay' },
     { body: 'UPI Transaction Declined for your HDFC Bank account ending 1797 for security reasons' },
-    // debit card 8406 — ATM / DC, should not surface
+    // debit card 8406 — ATM / DC, should surface as debit
     { body: '370846 is your SECRET 6-digit OTP to complete your ATM withdrawal of Rs. 20000 via Card XX8406 at HDFC Bank ATM' },
     { body: 'Spent Rs.210 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2025-08-14 Bal Rs.81007 SMS BLOCK DC 8406' },
     // credit card 8708 — real spends, SHOULD surface
@@ -437,7 +456,11 @@ test('the real HDFC SMS corpus surfaces the credit card and NOT the bank account
   const merged = discoverCardsAcrossMessages(bodies, catalogue, true);
   const l4s = merged.flatMap((s) => s.last4);
   assert.equal(l4s.includes('1797'), false, 'savings account 1797 must not surface');
-  assert.equal(l4s.includes('8406'), false, 'debit card 8406 must not surface');
+  assert.equal(
+    merged.some((s) => s.last4?.includes('8406') && s.cardType === 'debit'),
+    true,
+    'debit card 8406 should surface as debit',
+  );
   assert.ok(l4s.includes('8708'), 'credit card 8708 should surface');
 });
 

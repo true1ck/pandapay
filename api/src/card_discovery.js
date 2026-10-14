@@ -74,7 +74,7 @@ const ACCOUNT_NUMBER_SPAN =
 function extractLast4(text) {
   const cleaned = String(text || '').replace(ACCOUNT_NUMBER_SPAN, ' ');
   const hits = new Set();
-  const re = /(?:ending\s+in|ending\s+with|ending|no\.?\s*x+|xx+|\*{2,}|\.{3,})\s*(\d{4})\b/gi;
+  const re = /(?:ending\s+in|ending\s+with|ending|no\.?\s*x+|xx+|\*{2,}|\.{3,}|\b(?:x+|dc))\s*(\d{4})\b/gi;
   let m;
   while ((m = re.exec(cleaned)) !== null) hits.add(m[1]);
   return [...hits];
@@ -171,6 +171,14 @@ function looksCreditCardSms(text) {
   return CREDIT_CARD_MARKERS.some((m) => lower.includes(m));
 }
 
+/** True when the message identifies a physical debit card, not an account. */
+function looksDebitCardSms(text) {
+  const lower = String(text || '').toLowerCase();
+  return /\bdebit\s+card\b/.test(lower)
+    || /\b(?:atm|cash\s+withdrawal|withdrawn\s+from\s+(?:your\s+)?(?:bank\s+)?card)\b/.test(lower)
+    || /\bblock\s+dc\b/.test(lower);
+}
+
 /**
  * Scan one message for cards from `catalogue`.
  *
@@ -184,6 +192,8 @@ function discoverCardsInMessage(message, catalogue) {
     [message?.subject, message?.body, message?.sender].filter(Boolean).join(' ')
   );
   if (!haystack) return [];
+  const messageIsDebit = looksDebitCardSms(haystack);
+  const messageIsCredit = looksCreditCardSms(haystack);
 
   // Whole-word view of the same text. A product token has to appear as a
   // WORD, not as a substring, or short card names manufacture matches out
@@ -199,6 +209,11 @@ function discoverCardsInMessage(message, catalogue) {
 
   const results = [];
   for (const card of catalogue || []) {
+    // A catalogue product name can be identical across credit/debit variants.
+    // Keep the SMS's explicit instrument type authoritative when the catalogue
+    // supplies card_type; otherwise retain the legacy matching behaviour.
+    if (card.card_type === 'debit' && messageIsCredit && !messageIsDebit) continue;
+    if (card.card_type === 'credit' && messageIsDebit && !messageIsCredit) continue;
     const nameTokens = significantTokens(card.name);
     // A name that reduces to nothing but stopwords ("Credit Card") can never
     // be evidence — not even verbatim, or "your credit card statement" would
@@ -233,7 +248,13 @@ function discoverCardsInMessage(message, catalogue) {
       ? 2
       : 0.5 + 0.5 * (distinguishing.length / Math.max(nameTokens.length - issuerTokens.length, 1));
 
-    results.push({ cardProductId: card.id, name: card.name, score, evidence });
+    results.push({
+      cardProductId: card.id,
+      name: card.name,
+      score,
+      evidence,
+      cardType: card.card_type || null,
+    });
   }
 
   results.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
@@ -255,16 +276,29 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
     (catalogue || []).map((c) => c.issuer_name).filter(Boolean)
   );
 
-  // Pre-pass: an issuer + last-4 that appears in ANY debit/account alert is
-  // "poisoned" — no issuer placeholder is offered for it even if another,
-  // wordless message ("Rs 500 on card ending 1234") would otherwise seed
-  // one. One "…debited from A/c …1234 via UPI" is enough. Keyed
-  // "<normalised issuer>|<last4>" ('' last4 = the issuer with no number).
+  // Pre-pass: an issuer + last-4 that appears in an account/debit alert is
+  // remembered so a weaker, wordless sibling message cannot manufacture a
+  // credit-card placeholder for the same number. Explicit debit-card alerts
+  // still produce a debit suggestion below.
   const debitPoisoned = new Set();
+  const debitCardPoisoned = new Set();
   if (isSms) {
     for (const message of messages || []) {
       const text = [message?.subject, message?.body].filter(Boolean).join(' ');
-      if (!looksDebitAccountSms(text) || looksCreditCardSms(text)) continue;
+      if (looksDebitCardSms(text) && !looksCreditCardSms(text)) {
+        const low = normalise(text);
+        const l4s = extractLast4(text);
+        for (const issuer of issuers) {
+          if (!low.includes(normalise(issuer))) continue;
+          const ni = normalise(issuer);
+          debitCardPoisoned.add(`${ni}|`);
+          for (const l of l4s) debitCardPoisoned.add(`${ni}|${l}`);
+        }
+      }
+      const accountOnly = looksDebitAccountSms(text)
+        && !looksCreditCardSms(text)
+        && !looksDebitCardSms(text);
+      if (!accountOnly) continue;
       const low = normalise(text);
       const l4s = extractLast4(text);
       for (const issuer of issuers) {
@@ -289,6 +323,7 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
 
     const last4s = extractLast4(text);
     const creditLimit = extractCreditLimit(text);
+    const explicitDebitCard = looksDebitCardSms(text);
 
     // SMS discovery: a card number in the SAME message is required. A real
     // spend/statement alert always carries "card ending 1234"; a marketing
@@ -339,10 +374,13 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
         }
       }
     } else if (isSms) {
-      // A debit-card or bank-account spend alert has no credit card to rank;
-      // don't manufacture a placeholder from one. A real credit-card alert
-      // that merely says "debited" still trips a CREDIT_CARD_MARKER.
-      if (looksDebitAccountSms(text) && !looksCreditCardSms(text)) continue;
+      // A bank-account/UPI alert has no physical card to rank; don't
+      // manufacture a placeholder from the account suffix. An explicit
+      // debit-card alert is different: surface a debit-card suggestion so the
+      // user can add and track it without mixing it into credit-card rewards.
+      if (looksDebitAccountSms(text) && !looksCreditCardSms(text) && !explicitDebitCard) continue;
+      const placeholderCardType = explicitDebitCard ? 'debit' : 'credit';
+      const placeholderLabel = explicitDebitCard ? 'Debit card' : 'Credit card';
 
       // Fallback for SMS: generate placeholders if no exact match found
       const haystack = normalise([message?.subject, message?.body].filter(Boolean).join(' '));
@@ -358,7 +396,13 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
       // the issuer-specific placeholder below is more helpful.
       if (matchingIssuers.length === 0 && last4s.length > 0) {
         for (const l4 of last4s) {
-          const placeholderId = `placeholder_card_${l4}`;
+          // Keep debit and credit placeholders separate even when their last
+          // four digits happen to be identical. A suffix is not globally
+          // unique, so sharing this key would merge the two instruments and
+          // make the first message's type win by accident.
+          const placeholderId = explicitDebitCard
+            ? `placeholder_debit_card_${l4}`
+            : `placeholder_card_${l4}`;
           const existing = byCard.get(placeholderId);
           if (existing) {
             existing.messageCount += 1;
@@ -368,12 +412,13 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
           } else {
             byCard.set(placeholderId, {
               cardProductId: placeholderId,
-              name: `Credit card ending in ${l4}`,
+              name: `${placeholderLabel} ending in ${l4}`,
               score: 0.1,
               evidence: [`Transaction matched card ending in ${l4}`],
               last4: [l4],
               messageCount: 1,
               isPlaceholder: true,
+              cardType: placeholderCardType,
               issuerName: null,
               creditLimitInr: creditLimit?.amountInr ?? null,
             });
@@ -386,8 +431,16 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
         const l4sToUse = last4s.length === 0 ? [''] : last4s;
         for (const l4 of l4sToUse) {
           // Skip a card this issuer was seen debiting an account for.
-          if (debitPoisoned.has(`${normIssuer}|${l4}`)) continue;
-          const placeholderId = `placeholder_${normIssuer}_${l4}`;
+          if (
+            !explicitDebitCard
+            && (debitPoisoned.has(`${normIssuer}|${l4}`)
+              || debitCardPoisoned.has(`${normIssuer}|${l4}`))
+          ) continue;
+          // The issuer + suffix is also not globally unique across physical
+          // card types. Debit and credit suggestions must never coalesce.
+          const placeholderId = explicitDebitCard
+            ? `placeholder_debit_${normIssuer}_${l4}`
+            : `placeholder_${normIssuer}_${l4}`;
           const existing = byCard.get(placeholderId);
 
           if (existing) {
@@ -405,6 +458,7 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
               last4: l4 ? [l4] : [],
               messageCount: 1,
               isPlaceholder: true,
+              cardType: placeholderCardType,
               issuerName: issuer,
               creditLimitInr: creditLimit?.amountInr ?? null,
             });
@@ -446,5 +500,6 @@ module.exports = {
   looksPromotionalSms,
   looksTransactionalSms,
   looksDebitAccountSms,
+  looksDebitCardSms,
   looksCreditCardSms,
 };

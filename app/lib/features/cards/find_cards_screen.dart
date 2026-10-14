@@ -353,19 +353,11 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     }
   }
 
-  /// A transaction may have been imported before its matching card was added.
-  /// Relink that history immediately instead of waiting for the next app
-  /// resume or the background reconciliation interval.
+  /// Refresh wallet-dependent screens after a card add. When card discovery
+  /// supplied a suffix, POST /user-cards already performs the targeted
+  /// attribution repair in the same transaction; running the full repair a
+  /// second time here made card additions feel unnecessarily slow.
   Future<void> _reconcileAfterCardAdded() async {
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo != null) {
-      try {
-        await repo.reconcileSmsHistory();
-      } catch (_) {
-        // Card creation succeeded; a transient repair failure is safe because
-        // the normal startup/resume reconciliation will retry it.
-      }
-    }
     ref.invalidate(myCardsProvider);
     ref.invalidate(userCardsProvider);
     ref.invalidate(transactionsProvider);
@@ -516,7 +508,10 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     if (card.isPlaceholder) {
       final picked = await Navigator.of(context).push<List<CardProduct>>(
         MaterialPageRoute(
-          builder: (_) => CardPickerScreen(initialSearch: card.issuerName),
+          builder: (_) => CardPickerScreen(
+            initialSearch: card.issuerName,
+            detectedLast4: card.last4.length == 1 ? card.last4.first : null,
+          ),
         ),
       );
       if (picked != null && picked.isNotEmpty && mounted) {
@@ -846,13 +841,50 @@ class _SuggestionCardState extends State<_SuggestionCard> {
                 ),
             ],
           ),
+          if (card.cardType == 'debit' || card.cardType == 'credit') ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: card.cardType == 'debit'
+                      ? BambooInk.paperMuted
+                      : BambooInk.rankBadgeBg,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  child: Text(
+                    card.cardType == 'debit' ? 'Debit card' : 'Credit card',
+                    style: BambooFonts.ui(
+                      11.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 6),
           // The evidence line is the point of this screen: it lets someone
           // spot a wrong suggestion instead of trusting a bare list.
           Text(
-            'Found in $sources — ${card.evidence.take(3).join(', ')}',
+            card.isPlaceholder
+                ? 'We found the masked card number in $sources, but the bank message did not name the exact card.'
+                : 'Matched in $sources — ${card.evidence.take(3).join(', ')}',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.45),
           ),
+          if (card.isPlaceholder && card.last4.length == 1) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Choose the card ending in ${card.last4.first}; we will remember it for future alerts.',
+              style: BambooFonts.ui(12.5, color: BambooInk.jade, height: 1.4),
+            ),
+          ],
           if (card.creditLimit != null) ...[
             const SizedBox(height: 6),
             Text(

@@ -9,6 +9,8 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
+import '../cards/card_visual.dart';
+import 'credit_utilization_ui.dart';
 
 /// ui-spec.md E3 Credit Utilization (Task E-0/G-0 unblocked this — the
 /// calculator (`creditUtilization()`) and its provider
@@ -152,6 +154,11 @@ class _AddLimitPrompt extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpace.md),
             child: Row(
               children: [
+                SizedBox(
+                  width: 58,
+                  child: CardVisual(product: product, showProductName: false),
+                ),
+                const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: Text(
                     userCard.nickname?.isNotEmpty == true
@@ -198,7 +205,7 @@ class _UtilizationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final ratio = result.ratio.clamp(0.0, 1.0);
     final over = result.overThreshold;
-    final color = over ? BambooInk.clay : BambooInk.jade;
+    final color = CreditUtilizationUi.color(result.ratio);
 
     return Container(
       decoration: BoxDecoration(
@@ -212,6 +219,11 @@ class _UtilizationTile extends StatelessWidget {
         children: [
           Row(
             children: [
+              SizedBox(
+                width: 62,
+                child: CardVisual(product: product, showProductName: false),
+              ),
+              const SizedBox(width: AppSpace.sm),
               Expanded(
                 child: Text(
                   userCard.nickname?.isNotEmpty == true
@@ -277,11 +289,30 @@ class _UtilizationTile extends StatelessWidget {
               ),
             ],
           ),
-          if (over) ...[
+          const SizedBox(height: AppSpace.sm),
+          Row(
+            children: [
+              Icon(
+                CreditUtilizationUi.icon(result.ratio),
+                size: 16,
+                color: color,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                CreditUtilizationUi.label(result.ratio),
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          if (over || result.ratio > 0.5) ...[
             const SizedBox(height: AppSpace.sm),
             Text(
-              'Above the 30% guideline most bureaus use — consider moving spend to another card.',
-              style: BambooFonts.ui(12.5, color: BambooInk.clay),
+              CreditUtilizationUi.guidance(result.ratio),
+              style: BambooFonts.ui(12.5, color: color),
             ),
           ],
         ],

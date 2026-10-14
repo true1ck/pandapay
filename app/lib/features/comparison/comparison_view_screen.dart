@@ -8,6 +8,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/analytics.dart';
 import '../../data/api_exception.dart';
+import '../cards/card_visual.dart';
 import '../../main.dart' show MoneyText;
 
 enum _SortBy { value, name }
@@ -40,7 +41,8 @@ class ComparisonViewScreen extends ConsumerStatefulWidget {
   const ComparisonViewScreen({super.key});
 
   @override
-  ConsumerState<ComparisonViewScreen> createState() => _ComparisonViewScreenState();
+  ConsumerState<ComparisonViewScreen> createState() =>
+      _ComparisonViewScreenState();
 }
 
 class _ComparisonViewScreenState extends ConsumerState<ComparisonViewScreen> {
@@ -88,7 +90,10 @@ class _ComparisonViewScreenState extends ConsumerState<ComparisonViewScreen> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Compare cards', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Compare cards',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: ranked.when(
@@ -105,9 +110,13 @@ class _ComparisonViewScreenState extends ConsumerState<ComparisonViewScreen> {
             final sorted = _sorted(recommendations);
             // The winner's value, independent of the current sort order.
             final included = recommendations.where((r) => !r.isExcluded);
-            final bestValue = included.isEmpty
-                ? const Money.zero()
-                : included.map((r) => r.expectedValue).reduce((a, b) => a.paise >= b.paise ? a : b);
+            final best = included.isEmpty
+                ? null
+                : included.reduce(
+                    (a, b) =>
+                        a.expectedValue.paise >= b.expectedValue.paise ? a : b,
+                  );
+            final bestValue = best?.expectedValue ?? const Money.zero();
             return Column(
               children: [
                 Padding(
@@ -132,7 +141,9 @@ class _ComparisonViewScreenState extends ConsumerState<ComparisonViewScreen> {
                 ),
                 Expanded(
                   child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.md,
+                    ),
                     itemCount: sorted.length,
                     // Keyed by card identity, not just position: _ComparisonRow
                     // is a StatefulWidget holding its own expand/collapse
@@ -151,7 +162,9 @@ class _ComparisonViewScreenState extends ConsumerState<ComparisonViewScreen> {
                     // closes that gap.
                     findChildIndexCallback: (key) {
                       final valueKey = key as ValueKey<String>;
-                      final index = sorted.indexWhere((r) => r.card.id == valueKey.value);
+                      final index = sorted.indexWhere(
+                        (r) => r.card.id == valueKey.value,
+                      );
                       return index == -1 ? null : index;
                     },
                     itemBuilder: (context, index) {
@@ -160,10 +173,16 @@ class _ComparisonViewScreenState extends ConsumerState<ComparisonViewScreen> {
                       // card in the ranking, not against whatever happens to
                       // sit above it in the current sort — sorting by name
                       // must not change what "behind" means.
-                      final behind = rec.isExcluded || rec.expectedValue >= bestValue
+                      final behind =
+                          rec.isExcluded || rec.expectedValue >= bestValue
                           ? null
                           : bestValue - rec.expectedValue;
-                      return _ComparisonRow(rec, behind: behind, key: ValueKey(rec.card.id));
+                      return _ComparisonRow(
+                        rec,
+                        behind: behind,
+                        isWinner: rec.card.id == best?.card.id,
+                        key: ValueKey(rec.card.id),
+                      );
                     },
                   ),
                 ),
@@ -211,7 +230,9 @@ class _SortHeaderButton extends StatelessWidget {
               ),
               if (active)
                 Icon(
-                  ascending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                  ascending
+                      ? Icons.arrow_upward_rounded
+                      : Icons.arrow_downward_rounded,
                   size: 14,
                   color: BambooInk.ink900,
                 ),
@@ -233,7 +254,13 @@ class _SortHeaderButton extends StatelessWidget {
 class _ComparisonRow extends ConsumerStatefulWidget {
   final Recommendation recommendation;
   final Money? behind;
-  const _ComparisonRow(this.recommendation, {this.behind, super.key});
+  final bool isWinner;
+  const _ComparisonRow(
+    this.recommendation, {
+    this.behind,
+    this.isWinner = false,
+    super.key,
+  });
 
   @override
   ConsumerState<_ComparisonRow> createState() => _ComparisonRowState();
@@ -256,23 +283,31 @@ class _ComparisonRowState extends ConsumerState<_ComparisonRow> {
       return;
     }
     setState(() => _applying = true);
-    ref.read(analyticsProvider).track(
-      AnalyticsEvent.partnerApplyTapped,
-      props: const {'placement': 'comparison'},
-    );
+    ref
+        .read(analyticsProvider)
+        .track(
+          AnalyticsEvent.partnerApplyTapped,
+          props: const {'placement': 'comparison'},
+        );
     try {
-      final url = await repo.beginApply(cardProductId: card.id, placement: 'comparison');
+      final url = await repo.beginApply(
+        cardProductId: card.id,
+        placement: 'comparison',
+      );
       if (!mounted) return;
       if (url == null) {
         // Not an error: the catalogue simply has no application link for this
         // card yet. Saying so is more useful than a generic failure.
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No application link for this card yet.')),
+          const SnackBar(
+            content: Text('No application link for this card yet.'),
+          ),
         );
         return;
       }
       final uri = Uri.parse(url);
-      if (!await canLaunchUrl(uri) || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!await canLaunchUrl(uri) ||
+          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not open your browser.')),
@@ -306,26 +341,67 @@ class _ComparisonRowState extends ConsumerState<_ComparisonRow> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: BambooInk.hairlineOnPaper),
+        side: BorderSide(
+          color: widget.isWinner ? BambooInk.jade : BambooInk.hairlineOnPaper,
+          width: widget.isWinner ? 2 : 1,
+        ),
       ),
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ListTile(
-            onTap: rec.isExcluded ? null : () => setState(() => _expanded = !_expanded),
-            title: Text(rec.card.name, style: BambooFonts.heading(15, color: BambooInk.ink900)),
+            onTap: rec.isExcluded
+                ? null
+                : () => setState(() => _expanded = !_expanded),
+            leading: CardVisual(
+              product: rec.card,
+              showProductName: false,
+              width: 68,
+              height: 43,
+            ),
+            title: Text(
+              rec.card.name,
+              style: BambooFonts.heading(15, color: BambooInk.ink900),
+            ),
             subtitle: rec.isExcluded
-                ? Text(rec.exclusionReason!, style: BambooFonts.ui(12.5, color: BambooInk.ink500))
+                ? Text(
+                    rec.exclusionReason!,
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (widget.isWinner)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, bottom: 2),
+                          child: Text(
+                            'BEST VALUE',
+                            style: BambooFonts.ui(
+                              10,
+                              weight: FontWeight.w800,
+                              color: BambooInk.jade,
+                            ).copyWith(letterSpacing: 0.8),
+                          ),
+                        ),
                       if (breakdown != null)
-                        Text(_headlineFor(breakdown), style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                        Text(
+                          _headlineFor(breakdown),
+                          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                        ),
+                      if (breakdown != null && _hasNumericCap(breakdown))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 7),
+                          child: _CapProgress(breakdown: breakdown),
+                        ),
                       if (behind != null && !behind.isZero)
                         Text(
                           '${behind.format()} behind',
-                          style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.clay),
+                          style: BambooFonts.ui(
+                            12,
+                            weight: FontWeight.w600,
+                            color: BambooInk.clay,
+                          ),
                         ),
                     ],
                   ),
@@ -339,7 +415,12 @@ class _ComparisonRowState extends ConsumerState<_ComparisonRow> {
           ),
           if (_expanded && !rec.isExcluded)
             Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.md),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                0,
+                AppSpace.lg,
+                AppSpace.md,
+              ),
               child: breakdown == null
                   // The base-rate fallback path produces no breakdown \u2014 fall
                   // back to the engine's own prose rather than showing an
@@ -352,16 +433,27 @@ class _ComparisonRowState extends ConsumerState<_ComparisonRow> {
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               '\u2022  $line',
-                              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                              style: BambooFonts.ui(
+                                12.5,
+                                color: BambooInk.ink500,
+                              ),
                             ),
                           ),
                       ],
                     )
-                  : _BreakdownTable(breakdown: breakdown, total: rec.expectedValue),
+                  : _BreakdownTable(
+                      breakdown: breakdown,
+                      total: rec.expectedValue,
+                    ),
             ),
           if (canApply)
             Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.md),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                0,
+                AppSpace.lg,
+                AppSpace.md,
+              ),
               child: Row(
                 children: [
                   OutlinedButton.icon(
@@ -398,10 +490,86 @@ class _ComparisonRowState extends ConsumerState<_ComparisonRow> {
   /// computed at, plus whatever single fact most changes the answer.
   static String _headlineFor(RecommendationBreakdown b) {
     final rate = '${(b.baseRatePerRupee * 100).toStringAsFixed(1)}%';
+    if (_hasNumericCap(b)) return '$rate · ${_capShortLabel(b)}';
     if (b.capNote != null) return '$rate \u00b7 ${b.capNote}';
-    final headroom = b.capHeadroom;
-    if (headroom != null) return '$rate \u00b7 ${headroom.format()} of cap headroom left';
     return '$rate \u00b7 no cap in your way';
+  }
+}
+
+bool _hasNumericCap(RecommendationBreakdown b) =>
+    b.capRemaining != null &&
+    b.capLimit != null &&
+    b.capMeasure != null &&
+    b.capLimit!.paise > 0;
+
+String _capShortLabel(RecommendationBreakdown b) {
+  final remaining = b.capRemaining!;
+  return switch (b.capMeasure!) {
+    CapMeasure.rewardValue => '${remaining.format()} reward value left',
+    CapMeasure.spendAmount => '${remaining.format()} spend left in cap',
+    CapMeasure.txnCount =>
+      '${remaining.rupees.toStringAsFixed(0)} transactions left',
+  };
+}
+
+String _capPeriodLabel(CapPeriod period) => switch (period) {
+  CapPeriod.statementCycle => 'billing cycle',
+  CapPeriod.calendarMonth => 'month',
+  CapPeriod.quarter => 'quarter',
+  CapPeriod.halfYear => '6 months',
+  CapPeriod.annual => 'year',
+  CapPeriod.lifetime => 'lifetime',
+};
+
+class _CapProgress extends StatelessWidget {
+  final RecommendationBreakdown breakdown;
+  const _CapProgress({required this.breakdown});
+
+  @override
+  Widget build(BuildContext context) {
+    final limit = breakdown.capLimit!;
+    final remaining = breakdown.capRemaining!;
+    final progress = (1 - (remaining.paise / limit.paise)).clamp(0.0, 1.0);
+    final color = progress >= 0.9
+        ? BambooInk.clay
+        : progress >= 0.65
+        ? const Color(0xFFB7791F)
+        : BambooInk.jade;
+    final period = breakdown.capPeriod == null
+        ? ''
+        : ' · ${_capPeriodLabel(breakdown.capPeriod!)}';
+    final valueLabel = switch (breakdown.capMeasure!) {
+      CapMeasure.rewardValue =>
+        '${remaining.format()} of ${limit.format()} reward value left',
+      CapMeasure.spendAmount =>
+        '${remaining.format()} of ${limit.format()} spend cap left',
+      CapMeasure.txnCount =>
+        '${remaining.rupees.toStringAsFixed(0)} of ${limit.rupees.toStringAsFixed(0)} transactions left',
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 6,
+            backgroundColor: BambooInk.paperMuted,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '$valueLabel$period',
+          style: BambooFonts.ui(
+            11.5,
+            weight: FontWeight.w600,
+            color: BambooInk.ink500,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -422,28 +590,52 @@ class _BreakdownTable extends StatelessWidget {
           label: 'Base rate ${(b.baseRatePerRupee * 100).toStringAsFixed(1)}%',
           value: '+${b.baseValue.format()}',
         ),
+        if (_hasNumericCap(b))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+            child: _CapProgress(breakdown: b),
+          )
+        else
+          _BreakdownRow(
+            label: 'Cap status',
+            // Legacy fallback for an older/manually-created breakdown.
+            value: b.capHeadroom != null
+                ? '${b.capHeadroom!.format()} free'
+                : (b.capNote ?? 'None'),
+          ),
         _BreakdownRow(
-          label: 'Monthly cap headroom',
-          // Null headroom means the rule has no spend cap at all, which is
-          // "None" \u2014 distinct from a cap that exists and is exhausted.
-          value: b.capHeadroom != null ? '${b.capHeadroom!.format()} free' : (b.capNote ?? 'None'),
+          label: 'Merchant restriction',
+          value: b.merchantRestriction ?? 'None',
         ),
-        _BreakdownRow(label: 'Merchant restriction', value: b.merchantRestriction ?? 'None'),
         if (b.pointValueInr != null)
           _BreakdownRow(
             label: 'Points value used',
             value: '\u20b9${b.pointValueInr!.toStringAsFixed(2)} / point',
           ),
-        if (!b.forexCost.isZero) _BreakdownRow(label: 'Less forex markup', value: '-${b.forexCost.format()}'),
+        if (!b.forexCost.isZero)
+          _BreakdownRow(
+            label: 'Less forex markup',
+            value: '-${b.forexCost.format()}',
+          ),
         if (!b.fuelWaiver.isZero)
-          _BreakdownRow(label: 'Fuel surcharge waiver', value: '+${b.fuelWaiver.format()}'),
+          _BreakdownRow(
+            label: 'Fuel surcharge waiver',
+            value: '+${b.fuelWaiver.format()}',
+          ),
         if (!b.milestoneBonus.isZero)
-          _BreakdownRow(label: 'Milestone bonus', value: '+${b.milestoneBonus.format()}'),
+          _BreakdownRow(
+            label: 'Milestone bonus',
+            value: '+${b.milestoneBonus.format()}',
+          ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: AppSpace.sm),
           child: Divider(height: 1, color: BambooInk.hairlineOnPaper),
         ),
-        _BreakdownRow(label: 'You get back', value: total.format(), emphasised: true),
+        _BreakdownRow(
+          label: 'You get back',
+          value: total.format(),
+          emphasised: true,
+        ),
       ],
     );
   }
@@ -453,7 +645,11 @@ class _BreakdownRow extends StatelessWidget {
   final String label;
   final String value;
   final bool emphasised;
-  const _BreakdownRow({required this.label, required this.value, this.emphasised = false});
+  const _BreakdownRow({
+    required this.label,
+    required this.value,
+    this.emphasised = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -475,7 +671,11 @@ class _BreakdownRow extends StatelessWidget {
             value,
             style: emphasised
                 ? BambooFonts.money(15, color: BambooInk.ink900)
-                : BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                : BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
           ),
         ],
       ),

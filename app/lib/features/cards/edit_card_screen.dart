@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
+import 'card_network_util.dart';
+import 'card_visual.dart';
+import '../insights/credit_utilization_ui.dart';
 
 /// C4 Edit Card (ui-spec Group C, implementation-plan-group-c-d.md).
-/// Fields: nickname, credit limit, statement/due dates, points balance —
-/// every field with a real backing column (`PATCH /user-cards/:id`).
-/// "Card art/colour" is in the spec's field list too, but no per-user
-/// override column exists in the schema (only card_products' own
-/// catalogue-wide art) — flagged, not faked; see the backend route's own
-/// doc-comment.
+///
+/// The catalogue section is intentionally read-only: fees, rewards, caps and
+/// benefits belong to the card product and are already fetched from the
+/// catalogue. The settings below it are the values that can differ for one
+/// customer, such as their last four digits, credit limit and fee offer.
 class EditCardScreen extends ConsumerStatefulWidget {
   final String userCardId;
   const EditCardScreen({super.key, required this.userCardId});
@@ -28,12 +31,17 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
   final _creditLimitController = TextEditingController();
   final _pointsBalanceController = TextEditingController();
   final _last4Controller = TextEditingController();
+  final _annualFeeController = TextEditingController();
   int? _statementDay;
   int? _dueDay;
   bool _initialized = false;
   bool _saving = false;
   bool _archiving = false;
   bool _settingDefault = false;
+  bool _feeOverrideEnabled = false;
+  bool _lifetimeFree = false;
+  AutopayMode _autopayMode = AutopayMode.off;
+  Money? _originalAnnualFeeOverride;
   String? _error;
 
   @override
@@ -42,6 +50,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
     _creditLimitController.dispose();
     _pointsBalanceController.dispose();
     _last4Controller.dispose();
+    _annualFeeController.dispose();
     super.dispose();
   }
 
@@ -51,14 +60,25 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
     if (_initialized) return;
     _initialized = true;
     _nicknameController.text = card.nickname ?? '';
-    if (card.creditLimit != null) _creditLimitController.text = card.creditLimit!.rupees.toStringAsFixed(0);
+    if (card.creditLimit != null) {
+      _creditLimitController.text = card.creditLimit!.rupees.toStringAsFixed(0);
+    }
     // totalPointsEarned is a lifetime calculated total. The editable field is
     // the raw current/starting balance stored on user_cards.
-    _pointsBalanceController.text = card.pointsBalance?.toStringAsFixed(0) ?? '';
+    _pointsBalanceController.text =
+        card.pointsBalance?.toStringAsFixed(0) ?? '';
     _originalPointsBalance = card.pointsBalance;
     _statementDay = card.statementDay;
     _dueDay = card.dueDay;
     _last4Controller.text = card.last4 ?? '';
+    _autopayMode = card.autopayMode;
+    _feeOverrideEnabled = card.annualFeeOverride != null;
+    _lifetimeFree = card.annualFeeOverride?.isZero ?? false;
+    _originalAnnualFeeOverride = card.annualFeeOverride;
+    if (_feeOverrideEnabled && !_lifetimeFree) {
+      _annualFeeController.text = card.annualFeeOverride!.rupees
+          .toStringAsFixed(0);
+    }
   }
 
   Future<void> _save() async {
@@ -66,8 +86,17 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       _saving = true;
       _error = null;
     });
+    final editedAnnualFeeOverride = _feeOverrideEnabled
+        ? (_lifetimeFree
+              ? 0.0
+              : double.tryParse(_annualFeeController.text.trim()) ?? 0.0)
+        : null;
+    final annualFeeOverrideChanged =
+        editedAnnualFeeOverride != _originalAnnualFeeOverride?.rupees;
     try {
-      final nickname = _nicknameController.text.trim().isEmpty ? null : _nicknameController.text.trim();
+      final nickname = _nicknameController.text.trim().isEmpty
+          ? null
+          : _nicknameController.text.trim();
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo == null) {
         // Guest mode: only nickname has a local backing column — see
@@ -86,11 +115,19 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
           pointsBalance: _pointsBalanceController.text.trim().isEmpty
               ? null
               : double.tryParse(_pointsBalanceController.text.trim()),
+          autopayMode: _autopayMode,
           // Always sent (never null-skipped), so clearing the field really
           // clears the stored digits — '' is a meaningful value here, not
           // "leave it alone". See UserCardsRepository.updateCard.
           last4: _last4Controller.text.trim(),
         );
+        if (annualFeeOverrideChanged) {
+          await repo.updateAnnualFeeOverride(
+            widget.userCardId,
+            annualFeeOverrideInr: editedAnnualFeeOverride,
+            clear: !_feeOverrideEnabled,
+          );
+        }
       }
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
@@ -98,9 +135,8 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
     } catch (e) {
       // Same offline-queue pattern as edit_transaction_screen.dart's _save —
       // this is an edit to a row that already exists, which the sync queue
-      // can represent. Only nickname/credit-limit/statement-day/due-day are
-      // queued: pandapay.sync_fields_for('user_cards') (migration 0034) does
-      // NOT include points balance — that field is corrected through
+      // can represent. Points balance is not queued: pandapay.sync_fields_for
+      // ('user_cards') does NOT include it — that field is corrected through
       // points_ledger/adjustPointsBalance's own reconciliation path, not a
       // blind field overwrite, so queuing it here would be silently dropped
       // by the server rather than applied. A changed points balance is
@@ -112,20 +148,28 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
             ? null
             : double.tryParse(_pointsBalanceController.text.trim());
         final pointsBalanceChanged =
-            newPointsBalance != null && newPointsBalance != _originalPointsBalance;
+            newPointsBalance != null &&
+            newPointsBalance != _originalPointsBalance;
 
         final queue = await ref.read(syncQueueProvider.future);
         queue.enqueueUpdate(
           entity: 'user_cards',
           entityId: widget.userCardId,
           fields: {
-            'nickname': _nicknameController.text.trim().isEmpty ? null : _nicknameController.text.trim(),
+            'nickname': _nicknameController.text.trim().isEmpty
+                ? null
+                : _nicknameController.text.trim(),
             'credit_limit_inr': _creditLimitController.text.trim().isEmpty
                 ? null
                 : double.tryParse(_creditLimitController.text.trim()),
             'statement_day': _statementDay,
             'due_day': _dueDay,
-            'last4': _last4Controller.text.trim().isEmpty ? null : _last4Controller.text.trim(),
+            'autopay_mode': _autopayMode.wireValue,
+            'last4': _last4Controller.text.trim().isEmpty
+                ? null
+                : _last4Controller.text.trim(),
+            if (annualFeeOverrideChanged)
+              'annual_fee_override_inr': editedAnnualFeeOverride,
           },
         );
         ref.invalidate(pendingSyncCountProvider);
@@ -170,7 +214,10 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Remove this card?', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+              Text(
+                'Remove this card?',
+                style: BambooFonts.heading(18, color: BambooInk.ink900),
+              ),
               const SizedBox(height: AppSpace.sm),
               Text(
                 "It stops appearing in recommendations right away. Its transaction history is kept, and you can "
@@ -183,7 +230,9 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                   backgroundColor: BambooInk.clay,
                   foregroundColor: Colors.white,
                   minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 onPressed: () => Navigator.of(sheetContext).pop(true),
                 child: const Text('Remove card'),
@@ -230,14 +279,18 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
         ref.invalidate(pendingSyncCountProvider);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Removed offline — will sync when you reconnect.')),
+            const SnackBar(
+              content: Text('Removed offline — will sync when you reconnect.'),
+            ),
           );
           context.pop();
         }
         return;
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _archiving = false);
@@ -260,9 +313,9 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Set as your default card.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Set as your default card.')),
+        );
       }
     } catch (e) {
       // Deliberately NOT queued offline, unlike _save/_archive above. "Only
@@ -295,6 +348,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
   @override
   Widget build(BuildContext context) {
     final pairs = ref.watch(myCardsWithProductProvider);
+    final utilization = ref.watch(creditUtilizationProvider);
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -302,25 +356,55 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Edit card', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Edit card',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: pairs.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
           data: (owned) {
-            final match = owned.where((p) => p.$1.id == widget.userCardId).firstOrNull;
+            final match = owned
+                .where((p) => p.$1.id == widget.userCardId)
+                .firstOrNull;
             if (match == null) {
-              return const ErrorState(message: 'This card could not be found — it may have been removed.');
+              return const ErrorState(
+                message:
+                    'This card could not be found — it may have been removed.',
+              );
             }
             final (userCard, product) = match;
             _initFrom(userCard);
+            final utilizationResult = utilization[userCard.id];
+            final feePreview = _feeOverrideEnabled
+                ? (_lifetimeFree
+                      ? const Money.zero()
+                      : Money.fromRupees(
+                          double.tryParse(_annualFeeController.text.trim()) ??
+                              0,
+                        ))
+                : null;
 
             return ListView(
               padding: const EdgeInsets.all(AppSpace.lg),
               children: [
-                Text(product.name, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                _CatalogueCardDetails(
+                  product: product,
+                  userCard: userCard,
+                  feePreview: feePreview,
+                ),
                 const SizedBox(height: AppSpace.lg),
+                Text(
+                  'YOUR CARD SETTINGS',
+                  style: BambooFonts.ui(
+                    11,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink500,
+                  ).copyWith(letterSpacing: 1),
+                ),
+                const SizedBox(height: AppSpace.sm),
                 TextField(
                   controller: _nicknameController,
                   decoration: const InputDecoration(labelText: 'Nickname'),
@@ -338,7 +422,8 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                   maxLength: 4,
                   decoration: const InputDecoration(
                     labelText: 'Last 4 digits',
-                    helperText: 'Lets PandaPay match your bank\'s SMS and email alerts to this card '
+                    helperText:
+                        'Lets PandaPay match your bank\'s SMS and email alerts to this card '
                         'automatically. Never your full card number.',
                     helperMaxLines: 3,
                     counterText: '',
@@ -350,8 +435,33 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Credit limit (₹)',
-                    helperText: 'Used to protect your credit score (Credit Utilization)',
+                    helperText:
+                        'Detected from bank SMS when available. Edit it if your issuer changed the limit.',
+                    helperMaxLines: 2,
                   ),
+                ),
+                const SizedBox(height: AppSpace.md),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _creditLimitController,
+                  builder: (context, value, child) {
+                    final parsedLimit = double.tryParse(value.text.trim());
+                    final editedLimit = parsedLimit == null
+                        ? userCard.creditLimit
+                        : Money.fromRupees(parsedLimit);
+                    final editedResult =
+                        utilizationResult == null ||
+                            editedLimit == null ||
+                            editedLimit.isZero
+                        ? null
+                        : creditUtilization(
+                            utilizationResult.currentBalance,
+                            editedLimit,
+                          );
+                    return _CreditUtilizationSummary(
+                      result: editedResult,
+                      creditLimit: editedLimit,
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpace.lg),
                 Row(
@@ -359,8 +469,13 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                     Expanded(
                       child: DropdownButtonFormField<int>(
                         initialValue: _statementDay,
-                        decoration: const InputDecoration(labelText: 'Statement day'),
-                        items: [for (var d = 1; d <= 31; d++) DropdownMenuItem(value: d, child: Text('$d'))],
+                        decoration: const InputDecoration(
+                          labelText: 'Statement day',
+                        ),
+                        items: [
+                          for (var d = 1; d <= 31; d++)
+                            DropdownMenuItem(value: d, child: Text('$d')),
+                        ],
                         onChanged: (v) => setState(() => _statementDay = v),
                       ),
                     ),
@@ -369,7 +484,10 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                       child: DropdownButtonFormField<int>(
                         initialValue: _dueDay,
                         decoration: const InputDecoration(labelText: 'Due day'),
-                        items: [for (var d = 1; d <= 31; d++) DropdownMenuItem(value: d, child: Text('$d'))],
+                        items: [
+                          for (var d = 1; d <= 31; d++)
+                            DropdownMenuItem(value: d, child: Text('$d')),
+                        ],
                         onChanged: (v) => setState(() => _dueDay = v),
                       ),
                     ),
@@ -384,9 +502,32 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                     helperText: "Starting point — we'll track from here",
                   ),
                 ),
+                const SizedBox(height: AppSpace.lg),
+                DropdownButtonFormField<AutopayMode>(
+                  initialValue: _autopayMode,
+                  decoration: const InputDecoration(
+                    labelText: 'Autopay preference',
+                    helperText:
+                        'This records your answer only. PandaPay cannot verify or change your bank mandate.',
+                    helperMaxLines: 2,
+                  ),
+                  items: [
+                    for (final mode in AutopayMode.values)
+                      DropdownMenuItem(
+                        value: mode,
+                        child: Text(_autopayLabel(mode)),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _autopayMode = value);
+                  },
+                ),
                 if (_error != null) ...[
                   const SizedBox(height: AppSpace.md),
-                  Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
+                  Text(
+                    _error!,
+                    style: BambooFonts.ui(12.5, color: BambooInk.clay),
+                  ),
                 ],
                 const SizedBox(height: AppSpace.xl),
                 FilledButton(
@@ -394,7 +535,9 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                     backgroundColor: BambooInk.slate,
                     foregroundColor: BambooInk.lime,
                     minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
                   ),
                   onPressed: _saving ? null : _save,
@@ -402,7 +545,10 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: BambooInk.lime,
+                          ),
                         )
                       : const Text('Save'),
                 ),
@@ -419,7 +565,10 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                 const SizedBox(height: AppSpace.sm),
                 if (userCard.isDefault)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.md),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.md,
+                      vertical: AppSpace.md,
+                    ),
                     decoration: BoxDecoration(
                       color: BambooInk.paperMuted,
                       borderRadius: BorderRadius.circular(16),
@@ -427,12 +576,20 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.star_rounded, size: 18, color: BambooInk.jade),
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 18,
+                          color: BambooInk.jade,
+                        ),
                         const SizedBox(width: AppSpace.sm),
                         Expanded(
                           child: Text(
                             'This is your default card',
-                            style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                            style: BambooFonts.ui(
+                              13.5,
+                              weight: FontWeight.w600,
+                              color: BambooInk.ink900,
+                            ),
                           ),
                         ),
                       ],
@@ -444,7 +601,9 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                       foregroundColor: BambooInk.ink900,
                       minimumSize: const Size.fromHeight(48),
                       side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
                     onPressed: _settingDefault ? null : _setDefault,
                     icon: _settingDefault
@@ -461,15 +620,22 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: BambooInk.clay,
                     minimumSize: const Size.fromHeight(48),
-                    side: BorderSide(color: BambooInk.clay.withValues(alpha: 0.4)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    side: BorderSide(
+                      color: BambooInk.clay.withValues(alpha: 0.4),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   onPressed: _archiving ? null : _archive,
                   icon: _archiving
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.clay),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: BambooInk.clay,
+                          ),
                         )
                       : const Icon(Icons.delete_outline_rounded),
                   label: const Text('Remove card'),
@@ -480,6 +646,98 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                   style: BambooFonts.ui(12, color: BambooInk.ink500),
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: AppSpace.xl),
+                Text(
+                  'FEE FOR THIS CARD',
+                  style: BambooFonts.ui(
+                    11,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink500,
+                  ).copyWith(letterSpacing: 1),
+                ),
+                const SizedBox(height: AppSpace.sm),
+                Container(
+                  padding: const EdgeInsets.all(AppSpace.md),
+                  decoration: BoxDecoration(
+                    color: BambooInk.glassFillOnPaper,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    border: Border.all(color: BambooInk.hairlineOnPaper),
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            'Override annual fee for me',
+                            style: BambooFonts.ui(
+                              14,
+                              weight: FontWeight.w700,
+                              color: BambooInk.ink900,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Use this when your bank gave you a lifetime-free or custom-fee offer.',
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.ink500,
+                            ),
+                          ),
+                          value: _feeOverrideEnabled,
+                          onChanged: (value) => setState(() {
+                            _feeOverrideEnabled = value;
+                            if (!value) {
+                              _lifetimeFree = false;
+                              _annualFeeController.clear();
+                            } else if (_annualFeeController.text
+                                .trim()
+                                .isEmpty) {
+                              _annualFeeController.text = '0';
+                            }
+                          }),
+                          activeThumbColor: BambooInk.jade,
+                          activeTrackColor: BambooInk.jade.withValues(
+                            alpha: 0.35,
+                          ),
+                        ),
+                        if (_feeOverrideEnabled) ...[
+                          const Divider(height: AppSpace.lg),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Lifetime free (LTF)',
+                              style: BambooFonts.ui(
+                                13.5,
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                            value: _lifetimeFree,
+                            onChanged: (value) => setState(() {
+                              _lifetimeFree = value ?? false;
+                              if (_lifetimeFree) {
+                                _annualFeeController.text = '0';
+                              }
+                            }),
+                            activeColor: BambooInk.jade,
+                          ),
+                          if (!_lifetimeFree)
+                            TextField(
+                              controller: _annualFeeController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Your annual fee (₹)',
+                                helperText:
+                                    'Leave the catalogue fee unchanged by switching the override off.',
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               ],
             );
           },
@@ -487,6 +745,251 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       ),
     );
   }
+}
+
+class _CreditUtilizationSummary extends StatelessWidget {
+  final UtilizationResult? result;
+  final Money? creditLimit;
+
+  const _CreditUtilizationSummary({
+    required this.result,
+    required this.creditLimit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (result == null || creditLimit == null || creditLimit!.isZero) {
+      return const SizedBox.shrink();
+    }
+
+    final current = result!;
+    final color = CreditUtilizationUi.color(current.ratio);
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.md),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Credit health this cycle',
+                  style: BambooFonts.ui(
+                    13,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+              ),
+              Icon(
+                CreditUtilizationUi.icon(current.ratio),
+                size: 16,
+                color: color,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${(current.ratio * 100).clamp(0, 999).toStringAsFixed(0)}%',
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.sm),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: LinearProgressIndicator(
+              value: current.ratio.clamp(0.0, 1.0),
+              minHeight: 8,
+              backgroundColor: BambooInk.paperMuted,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${current.currentBalance.format(hidePaise: true)} tracked spend of ${creditLimit!.format(hidePaise: true)} this statement cycle',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            CreditUtilizationUi.guidance(current.ratio),
+            style: BambooFonts.ui(12, color: color),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'This is calculated from imported card transactions, not an issuer statement balance. Correct a wrong transaction from Activity.',
+            style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogueCardDetails extends StatelessWidget {
+  final CardProduct product;
+  final UserCard userCard;
+  final Money? feePreview;
+
+  const _CatalogueCardDetails({
+    required this.product,
+    required this.userCard,
+    this.feePreview,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveFee =
+        feePreview ?? userCard.annualFeeOverride ?? product.annualFeeInr;
+    final loungeCount = product.benefits
+        .where(
+          (benefit) =>
+              benefit.kind == BenefitKind.loungeDomestic ||
+              benefit.kind == BenefitKind.loungeInternational,
+        )
+        .length;
+    final rewardCount =
+        product.rewardRules.length + (product.fuelRule == null ? 0 : 1);
+    final verified = product.verifiedAt == null
+        ? null
+        : _shortDate(product.verifiedAt!);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CardVisual(product: product, height: 142),
+        const SizedBox(height: AppSpace.md),
+        Text(
+          product.name,
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          [
+            if (product.issuerName?.trim().isNotEmpty == true)
+              product.issuerName!,
+            cardNetworkLabel(product.network),
+          ].join(' · '),
+          style: BambooFonts.ui(13, color: BambooInk.ink500),
+        ),
+        const SizedBox(height: AppSpace.md),
+        Container(
+          padding: const EdgeInsets.all(AppSpace.md),
+          decoration: BoxDecoration(
+            color: BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+          ),
+          child: Column(
+            children: [
+              _CatalogueInfoRow(
+                label: feePreview == null && userCard.annualFeeOverride == null
+                    ? 'Annual fee'
+                    : 'Your annual fee',
+                value: effectiveFee == null
+                    ? 'Not recorded'
+                    : effectiveFee.isZero
+                    ? 'Lifetime free'
+                    : effectiveFee.format(hidePaise: true),
+                valueColor: effectiveFee?.isZero == true
+                    ? BambooInk.jade
+                    : BambooInk.ink900,
+              ),
+              if (product.joiningFeeInr != null)
+                _CatalogueInfoRow(
+                  label: 'Joining fee',
+                  value: product.joiningFeeInr!.isZero
+                      ? 'Free'
+                      : product.joiningFeeInr!.format(hidePaise: true),
+                ),
+              _CatalogueInfoRow(
+                label: 'Rewards',
+                value: rewardCount == 0
+                    ? 'No reward rules recorded'
+                    : '$rewardCount earning rules',
+              ),
+              _CatalogueInfoRow(
+                label: 'Tracked limits',
+                value:
+                    '${product.capRules.length} caps · ${product.milestoneRules.length} milestones',
+              ),
+              _CatalogueInfoRow(
+                label: 'Benefits',
+                value: product.benefits.isEmpty
+                    ? 'None recorded'
+                    : '${product.benefits.length} benefits${loungeCount == 0 ? '' : ' · $loungeCount lounge'}',
+              ),
+              if (verified != null)
+                _CatalogueInfoRow(label: 'Catalogue verified', value: verified),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpace.sm),
+        Text(
+          'These card details come from PandaPay’s catalogue. Edit only your personal settings below; catalogue rules stay consistent everywhere in the app.',
+          style: BambooFonts.ui(12, color: BambooInk.ink500),
+        ),
+      ],
+    );
+  }
+}
+
+class _CatalogueInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _CatalogueInfoRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+        ),
+        const SizedBox(width: AppSpace.sm),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: BambooFonts.ui(
+              12.5,
+              weight: FontWeight.w700,
+              color: valueColor ?? BambooInk.ink900,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+String _autopayLabel(AutopayMode mode) => switch (mode) {
+  AutopayMode.off => 'Not verified',
+  AutopayMode.minimum => 'Minimum due',
+  AutopayMode.full => 'Full statement balance',
+};
+
+String _shortDate(DateTime value) {
+  final date = value.toLocal();
+  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

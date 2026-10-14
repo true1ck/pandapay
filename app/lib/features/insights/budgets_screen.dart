@@ -9,6 +9,8 @@ import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/spend_reports_repository.dart';
 import '../../main.dart' show MoneyText;
+import '../cards/card_summary.dart';
+import 'spending_visuals.dart';
 
 /// Budgets — a line the user draws for themselves, and being told when
 /// they're near it.
@@ -32,7 +34,10 @@ class BudgetsScreen extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: BambooInk.paper,
         elevation: 0,
-        title: Text('Budgets', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Budgets',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       floatingActionButton: signedIn
           ? FloatingActionButton.extended(
@@ -55,7 +60,8 @@ class BudgetsScreen extends ConsumerWidget {
               return const EmptyState(
                 icon: Icons.lock_outline_rounded,
                 title: 'Sign in to set a budget',
-                message: 'Budgets are measured against your transaction history, which lives with '
+                message:
+                    'Budgets are measured against your transaction history, which lives with '
                     'your account.',
               );
             }
@@ -64,7 +70,8 @@ class BudgetsScreen extends ConsumerWidget {
                 onRefresh: () async => ref.invalidate(budgetsProvider),
                 icon: Icons.savings_outlined,
                 title: 'No budgets yet',
-                message: 'Set a monthly limit for everything, for one category, or for a single '
+                message:
+                    'Set a monthly limit for everything, for one category, or for a single '
                     'card. PandaPay will tell you when you\'re running ahead of it — it never '
                     'blocks anything.',
               );
@@ -72,7 +79,12 @@ class BudgetsScreen extends ConsumerWidget {
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(budgetsProvider),
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 96),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  AppSpace.lg,
+                  AppSpace.lg,
+                  96,
+                ),
                 children: [
                   for (final b in list) ...[
                     _BudgetCard(budget: b),
@@ -121,33 +133,45 @@ class _BudgetCard extends ConsumerWidget {
         'Ahead of pace — ${(budget.consumedFraction * 100).toStringAsFixed(0)}% spent, '
             '${(budget.elapsedFraction * 100).toStringAsFixed(0)}% of the period gone',
       ),
-      _ => (
-        BambooInk.jade,
-        '${budget.remaining.format(hidePaise: true)} left',
-      ),
+      _ => (BambooInk.jade, '${budget.remaining.format(hidePaise: true)} left'),
     };
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+    return CardSummaryPanel(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.md,
+        AppSpace.md,
+        AppSpace.md,
+        AppSpace.lg,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              _BudgetVisualBadge(visual: _visualForBudget(budget)),
+              const SizedBox(width: AppSpace.md),
               Expanded(
-                child: Text(
-                  budget.label,
-                  style: BambooFonts.ui(14.5, weight: FontWeight.w700, color: BambooInk.ink900),
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      budget.label,
+                      style: BambooFonts.heading(15, color: BambooInk.ink900),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${budget.scope.label} · ${budget.period.label}',
+                      style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                budget.period.label,
-                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              CardSummaryPill(
+                label: budget.period.label,
+                foreground: tone,
+                background: tone.withValues(alpha: 0.12),
               ),
               IconButton(
                 icon: const Icon(Icons.close_rounded, size: 18),
@@ -194,12 +218,18 @@ class _BudgetCard extends ConsumerWidget {
                 child: LayoutBuilder(
                   builder: (context, constraints) => Padding(
                     padding: EdgeInsets.only(
-                      left: constraints.maxWidth * budget.elapsedFraction.clamp(0.0, 1.0),
+                      left:
+                          constraints.maxWidth *
+                          budget.elapsedFraction.clamp(0.0, 1.0),
                     ),
                     child: Semantics(
-                      label: '${(budget.elapsedFraction * 100).toStringAsFixed(0)} percent of the '
+                      label:
+                          '${(budget.elapsedFraction * 100).toStringAsFixed(0)} percent of the '
                           'period has passed',
-                      child: Container(width: 2, color: BambooInk.ink900.withValues(alpha: 0.45)),
+                      child: Container(
+                        width: 2,
+                        color: BambooInk.ink900.withValues(alpha: 0.45),
+                      ),
                     ),
                   ),
                 ),
@@ -207,7 +237,31 @@ class _BudgetCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: AppSpace.sm),
-          Text(statusLine, style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: tone)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                budget.isOver
+                    ? Icons.warning_amber_rounded
+                    : budget.isOffPace
+                    ? Icons.speed_rounded
+                    : Icons.check_circle_outline_rounded,
+                size: 17,
+                color: tone,
+              ),
+              const SizedBox(width: AppSpace.xs),
+              Expanded(
+                child: Text(
+                  statusLine,
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w600,
+                    color: tone,
+                  ),
+                ),
+              ),
+            ],
+          ),
           if (budget.projected != null && !budget.isOver) ...[
             const SizedBox(height: 2),
             Text(
@@ -230,8 +284,14 @@ class _BudgetCard extends ConsumerWidget {
           'tracked. Your transactions are not affected.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep it')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep it'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
         ],
       ),
     );
@@ -243,9 +303,9 @@ class _BudgetCard extends ConsumerWidget {
       ref.invalidate(budgetsProvider);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingErrorMessage(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
     }
   }
@@ -274,97 +334,178 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = ref.watch(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+    final categories =
+        ref.watch(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpace.lg,
-        right: AppSpace.lg,
-        top: AppSpace.lg,
-        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Set a budget', style: BambooFonts.heading(17, color: BambooInk.ink900)),
-          const SizedBox(height: AppSpace.md),
-          DropdownButtonFormField<BudgetScope>(
-            initialValue: _scope,
-            decoration: const InputDecoration(labelText: 'Applies to'),
-            items: [
-              for (final s in BudgetScope.values) DropdownMenuItem(value: s, child: Text(s.label)),
-            ],
-            onChanged: (v) => setState(() {
-              _scope = v ?? BudgetScope.overall;
-              // The old target is meaningless under a new scope — clearing
-              // it stops a category id being submitted as a card id.
-              _scopeRefId = null;
-            }),
-          ),
-          if (_scope == BudgetScope.category) ...[
-            const SizedBox(height: AppSpace.md),
-            DropdownButtonFormField<String>(
-              initialValue: _scopeRefId,
-              decoration: const InputDecoration(labelText: 'Category'),
-              items: [
-                for (final c in categories) DropdownMenuItem(value: c.id, child: Text(c.name)),
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(
+          left: AppSpace.lg,
+          right: AppSpace.lg,
+          top: AppSpace.lg,
+          bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _BudgetVisualBadge(visual: _visualForScope(_scope), size: 42),
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Set a budget',
+                        style: BambooFonts.heading(17, color: BambooInk.ink900),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'A helpful limit, never a payment block',
+                        style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      ),
+                    ],
+                  ),
+                ),
               ],
-              onChanged: (v) => setState(() => _scopeRefId = v),
             ),
-          ],
-          if (_scope == BudgetScope.card) ...[
             const SizedBox(height: AppSpace.md),
-            DropdownButtonFormField<String>(
-              initialValue: _scopeRefId,
-              decoration: const InputDecoration(labelText: 'Card'),
+            DropdownButtonFormField<BudgetScope>(
+              initialValue: _scope,
+              decoration: const InputDecoration(
+                labelText: 'Applies to',
+                prefixIcon: Icon(Icons.tune_rounded),
+              ),
               items: [
-                for (final c in cards)
+                for (final s in BudgetScope.values)
                   DropdownMenuItem(
-                    value: c.id,
-                    child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                    value: s,
+                    child: Row(
+                      children: [
+                        Icon(_iconForScope(s), size: 18),
+                        const SizedBox(width: AppSpace.sm),
+                        Text(s.label),
+                      ],
+                    ),
                   ),
               ],
-              onChanged: (v) => setState(() => _scopeRefId = v),
+              onChanged: (v) => setState(() {
+                _scope = v ?? BudgetScope.overall;
+                // The old target is meaningless under a new scope — clearing
+                // it stops a category id being submitted as a card id.
+                _scopeRefId = null;
+              }),
             ),
-          ],
-          const SizedBox(height: AppSpace.md),
-          DropdownButtonFormField<BudgetPeriod>(
-            initialValue: _period,
-            decoration: const InputDecoration(labelText: 'Resets'),
-            items: [
-              for (final p in BudgetPeriod.values) DropdownMenuItem(value: p, child: Text(p.label)),
+            if (_scope == BudgetScope.category) ...[
+              const SizedBox(height: AppSpace.md),
+              DropdownButtonFormField<String>(
+                initialValue: _scopeRefId,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                  prefixIcon: Icon(Icons.category_rounded),
+                ),
+                items: [
+                  for (final c in categories)
+                    DropdownMenuItem(
+                      value: c.id,
+                      child: Row(
+                        children: [
+                          Icon(
+                            spendingCategoryVisual(c.name).icon,
+                            size: 18,
+                            color: spendingCategoryVisual(c.name).accent,
+                          ),
+                          const SizedBox(width: AppSpace.sm),
+                          Text(c.name),
+                        ],
+                      ),
+                    ),
+                ],
+                onChanged: (v) => setState(() => _scopeRefId = v),
+              ),
             ],
-            onChanged: (v) => setState(() => _period = v ?? BudgetPeriod.monthly),
-          ),
-          const SizedBox(height: AppSpace.md),
-          TextField(
-            controller: _amountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Amount (₹)'),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: AppSpace.sm),
-            Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
-          ],
-          const SizedBox(height: AppSpace.lg),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: BambooInk.slate,
-              foregroundColor: BambooInk.lime,
-              minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            if (_scope == BudgetScope.card) ...[
+              const SizedBox(height: AppSpace.md),
+              DropdownButtonFormField<String>(
+                initialValue: _scopeRefId,
+                decoration: const InputDecoration(
+                  labelText: 'Card',
+                  prefixIcon: Icon(Icons.credit_card_rounded),
+                ),
+                items: [
+                  for (final c in cards)
+                    DropdownMenuItem(
+                      value: c.id,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.credit_card_rounded, size: 18),
+                          const SizedBox(width: AppSpace.sm),
+                          Text(
+                            c.nickname?.isNotEmpty == true
+                                ? c.nickname!
+                                : c.cardName,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+                onChanged: (v) => setState(() => _scopeRefId = v),
+              ),
+            ],
+            const SizedBox(height: AppSpace.md),
+            DropdownButtonFormField<BudgetPeriod>(
+              initialValue: _period,
+              decoration: const InputDecoration(
+                labelText: 'Resets',
+                prefixIcon: Icon(Icons.autorenew_rounded),
+              ),
+              items: [
+                for (final p in BudgetPeriod.values)
+                  DropdownMenuItem(value: p, child: Text(p.label)),
+              ],
+              onChanged: (v) =>
+                  setState(() => _period = v ?? BudgetPeriod.monthly),
             ),
-            onPressed: _saving ? null : _save,
-            child: Text(_saving ? 'Saving…' : 'Save budget'),
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Text(
-            'PandaPay never blocks a payment. A budget only changes what it tells you.',
-            style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-          ),
-        ],
+            const SizedBox(height: AppSpace.md),
+            TextField(
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Amount',
+                prefixIcon: Icon(Icons.currency_rupee_rounded),
+                prefixText: '₹ ',
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text(_error!, style: BambooFonts.ui(12.5, color: BambooInk.clay)),
+            ],
+            const SizedBox(height: AppSpace.lg),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: _saving ? null : _save,
+              child: Text(_saving ? 'Saving…' : 'Save budget'),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              'PandaPay never blocks a payment. A budget only changes what it tells you.',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -376,7 +517,10 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
       return;
     }
     if (_scope != BudgetScope.overall && _scopeRefId == null) {
-      setState(() => _error = 'Pick which ${_scope == BudgetScope.category ? 'category' : 'card'}.');
+      setState(
+        () => _error =
+            'Pick which ${_scope == BudgetScope.category ? 'category' : 'card'}.',
+      );
       return;
     }
     final repo = ref.read(spendReportsRepositoryProvider);
@@ -403,4 +547,60 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
       }
     }
   }
+}
+
+SpendingVisual _visualForBudget(BudgetStatus budget) {
+  return switch (budget.scope) {
+    BudgetScope.overall => const SpendingVisual(
+      icon: Icons.pie_chart_rounded,
+      accent: BambooInk.jade,
+    ),
+    BudgetScope.category => spendingCategoryVisual(budget.label),
+    BudgetScope.card => const SpendingVisual(
+      icon: Icons.credit_card_rounded,
+      accent: Color(0xFF315E48),
+    ),
+  };
+}
+
+SpendingVisual _visualForScope(BudgetScope scope) {
+  return switch (scope) {
+    BudgetScope.overall => const SpendingVisual(
+      icon: Icons.pie_chart_rounded,
+      accent: BambooInk.jade,
+    ),
+    BudgetScope.category => const SpendingVisual(
+      icon: Icons.category_rounded,
+      accent: BambooInk.jade,
+    ),
+    BudgetScope.card => const SpendingVisual(
+      icon: Icons.credit_card_rounded,
+      accent: Color(0xFF315E48),
+    ),
+  };
+}
+
+IconData _iconForScope(BudgetScope scope) => switch (scope) {
+  BudgetScope.overall => Icons.pie_chart_rounded,
+  BudgetScope.category => Icons.category_rounded,
+  BudgetScope.card => Icons.credit_card_rounded,
+};
+
+class _BudgetVisualBadge extends StatelessWidget {
+  final SpendingVisual visual;
+  final double size;
+
+  const _BudgetVisualBadge({required this.visual, this.size = 42});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: visual.surface,
+      borderRadius: BorderRadius.circular(size * 0.3),
+    ),
+    alignment: Alignment.center,
+    child: Icon(visual.icon, size: size * 0.47, color: visual.accent),
+  );
 }

@@ -7,10 +7,11 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
-import '../../main.dart' show MoneyText;
+import '../cards/card_summary.dart';
 
 /// ui-spec.md E10 Portfolio Audit. Live aggregation, no dedicated table:
-/// annual fee from CardProduct.annualFeeInr (Task C-0), rewards from
+/// annual fee from the user's override when present, otherwise
+/// CardProduct.annualFeeInr (Task C-0), rewards from
 /// UserCard.totalPointsEarned × CardProduct.pointValueInr, usage frequency
 /// from GET /transactions?cardId= (Task E-0's shared query-param work).
 /// Unused-benefit detection is intentionally narrow — see the per-card
@@ -33,7 +34,8 @@ class PortfolioAuditScreen extends ConsumerWidget {
           return const EmptyState(
             icon: Icons.fact_check_outlined,
             title: 'No cards to audit yet',
-            message: 'Add a card to see its annual-fee break-even and usage here.',
+            message:
+                'Add a card to see its annual-fee break-even and usage here.',
           );
         }
         return ListView.builder(
@@ -59,9 +61,13 @@ class _AuditTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final annualFee = product.annualFeeInr;
-    final rewardsEarnedInr = Money.fromRupees(userCard.totalPointsEarned * product.pointValueInr);
-    final breakEven = annualFee == null ? null : rewardsEarnedInr.paise >= annualFee.paise;
+    final annualFee = userCard.annualFeeOverride ?? product.annualFeeInr;
+    final rewardsEarnedInr = Money.fromRupees(
+      userCard.totalPointsEarned * product.pointValueInr,
+    );
+    final breakEven = annualFee == null
+        ? null
+        : rewardsEarnedInr.paise >= annualFee.paise;
 
     final repo = ref.watch(userCardsRepositoryProvider);
     final usageAsync = repo == null
@@ -75,91 +81,201 @@ class _AuditTile extends ConsumerWidget {
     // "not tracked" rather than guessed at, per the cross-cutting "never
     // display a number the app can't justify" rule.
     final untrackedBenefits = product.benefits.where(
-      (b) => b.kind != BenefitKind.loungeDomestic && b.kind != BenefitKind.loungeInternational,
+      (b) =>
+          b.kind != BenefitKind.loungeDomestic &&
+          b.kind != BenefitKind.loungeInternational,
     );
 
-    return Container(
-      decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-      ),
-      padding: const EdgeInsets.all(AppSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name,
-            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+    final title = userCard.nickname?.isNotEmpty == true
+        ? userCard.nickname!
+        : product.name;
+    final usageLabel = usageAsync.when(
+      loading: () => 'Checking usage…',
+      error: (_, _) => 'Usage unavailable',
+      data: (count) => '$count transaction${count == 1 ? '' : 's'}',
+    );
+    final feeLabel = annualFee == null
+        ? 'Fee not listed'
+        : annualFee.isZero
+        ? 'Lifetime free'
+        : 'Fee ${annualFee.format(hidePaise: true)}';
+    final paidForItself = breakEven == true;
+
+    return CardSummaryPanel(
+      padding: EdgeInsets.zero,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.lg,
+            vertical: AppSpace.sm,
           ),
-          const SizedBox(height: AppSpace.md),
-          if (annualFee == null)
-            Text('Annual fee not listed for this card', style: BambooFonts.ui(12.5, color: BambooInk.ink500))
-          else ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpace.lg,
+            0,
+            AppSpace.lg,
+            AppSpace.md,
+          ),
+          title: CardSummaryHeader(
+            product: product,
+            title: title,
+            subtitle: usageLabel,
+            visualWidth: 66,
+            badgeIcon: annualFee == null
+                ? Icons.help_outline_rounded
+                : paidForItself
+                ? Icons.check_rounded
+                : Icons.timelapse_rounded,
+            footer: Wrap(
+              spacing: AppSpace.xs,
+              runSpacing: AppSpace.xs,
               children: [
-                Text('Annual fee', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                MoneyText(
-                  annualFee,
-                  confidence: Confidence.confirmed,
-                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                ),
+                CardSummaryPill(label: feeLabel),
+                if (untrackedBenefits.isNotEmpty)
+                  CardSummaryPill(
+                    label: '${untrackedBenefits.length} benefits',
+                    foreground: BambooInk.ink500,
+                  ),
               ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Rewards earned (lifetime)', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                MoneyText(
-                  rewardsEarnedInr,
-                  confidence: Confidence.estimated,
-                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpace.sm),
-            Row(
-              children: [
-                Icon(
-                  breakEven! ? Icons.check_circle_outline_rounded : Icons.trending_down_rounded,
-                  size: 16,
-                  color: breakEven ? BambooInk.jade : BambooInk.amber,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  breakEven ? 'This card has paid for itself' : 'Hasn\'t earned back its fee yet',
-                  style: BambooFonts.ui(12.5, color: breakEven ? BambooInk.jade : BambooInk.amber),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: AppSpace.md),
-          usageAsync.when(
-            loading: () =>
-                const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-            error: (_, _) =>
-                Text('Usage frequency unavailable', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-            data: (count) => Text(
-              '$count transactions logged on this card',
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ),
-          if (untrackedBenefits.isNotEmpty) ...[
+          children: [
+            if (annualFee == null)
+              _AuditNotice(
+                icon: Icons.help_outline_rounded,
+                text:
+                    'Add the annual fee in card settings to track break-even.',
+              )
+            else ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: _AuditMetric(
+                      icon: Icons.receipt_long_rounded,
+                      label: 'Annual fee',
+                      value: annualFee.format(hidePaise: true),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: _AuditMetric(
+                      icon: Icons.workspace_premium_rounded,
+                      label: 'Rewards',
+                      value: rewardsEarnedInr.format(hidePaise: true),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.sm),
+              _AuditNotice(
+                icon: paidForItself
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.trending_down_rounded,
+                color: paidForItself ? BambooInk.jade : BambooInk.amber,
+                text: paidForItself
+                    ? 'Rewards have covered the annual fee.'
+                    : 'Rewards have not covered the annual fee yet.',
+              ),
+            ],
             const SizedBox(height: AppSpace.sm),
-            Text(
-              '${untrackedBenefits.length} other benefit(s) on this card — usage not tracked, so "unused" can\'t be measured honestly.',
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            _AuditNotice(
+              icon: Icons.swap_horiz_rounded,
+              text: usageAsync.when(
+                loading: () => 'Checking transaction usage…',
+                error: (_, _) => 'Transaction usage is unavailable.',
+                data: (count) =>
+                    '$count transaction${count == 1 ? '' : 's'} tracked on this card.',
+              ),
             ),
+            if (untrackedBenefits.isNotEmpty) ...[
+              const SizedBox(height: AppSpace.xs),
+              _AuditNotice(
+                icon: Icons.visibility_off_outlined,
+                text:
+                    '${untrackedBenefits.length} benefit${untrackedBenefits.length == 1 ? '' : 's'} do not have usage tracking yet.',
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-final _cardTxnCountProvider = FutureProvider.family<int, String>((ref, cardId) async {
+class _AuditMetric extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _AuditMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpace.sm),
+    decoration: BoxDecoration(
+      color: BambooInk.paperMuted,
+      borderRadius: BorderRadius.circular(AppRadius.md),
+    ),
+    child: Row(
+      children: [
+        Icon(icon, size: 17, color: BambooInk.jade),
+        const SizedBox(width: AppSpace.xs),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: BambooFonts.ui(10.5, color: BambooInk.ink500)),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w700,
+                  color: BambooInk.ink900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AuditNotice extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  const _AuditNotice({
+    required this.icon,
+    required this.text,
+    this.color = BambooInk.ink500,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 16, color: color),
+      const SizedBox(width: AppSpace.xs),
+      Expanded(
+        child: Text(text, style: BambooFonts.ui(11.5, color: color)),
+      ),
+    ],
+  );
+}
+
+final _cardTxnCountProvider = FutureProvider.family<int, String>((
+  ref,
+  cardId,
+) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return 0;
   final txns = await repo.fetchTransactions(cardId: cardId);

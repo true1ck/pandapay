@@ -7,6 +7,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import 'card_network_util.dart';
+import 'card_visual.dart';
 
 /// C3 Add Card (ui-spec Group C: "same picker as A7"). A standalone,
 /// reusable widget deliberately kept out of features/onboarding/ — A7
@@ -23,14 +24,26 @@ import 'card_network_util.dart';
 class CardPickerScreen extends ConsumerStatefulWidget {
   final VoidCallback? onCardNotListed;
   final String? initialSearch;
-  const CardPickerScreen({super.key, this.onCardNotListed, this.initialSearch});
+
+  /// A masked suffix found in a bank SMS. It is display-only until the user
+  /// picks and confirms a catalogue card; the caller owns persisting it.
+  final String? detectedLast4;
+
+  const CardPickerScreen({
+    super.key,
+    this.onCardNotListed,
+    this.initialSearch,
+    this.detectedLast4,
+  });
 
   @override
   ConsumerState<CardPickerScreen> createState() => _CardPickerScreenState();
 }
 
 class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
-  late final _searchController = TextEditingController(text: widget.initialSearch ?? '');
+  late final _searchController = TextEditingController(
+    text: widget.initialSearch ?? '',
+  );
   final _selected = <String>{};
   final _networkFilters = <CardNetwork>{};
 
@@ -43,7 +56,10 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
   bool _matchesNetworkFilter(CardProduct card) {
     if (_networkFilters.isEmpty) return true;
     // Amex/Diners share one filter chip per ui-spec's own grouping.
-    if (_networkFilters.contains(CardNetwork.amex) && card.network == CardNetwork.diners) return true;
+    if (_networkFilters.contains(CardNetwork.amex) &&
+        card.network == CardNetwork.diners) {
+      return true;
+    }
     return _networkFilters.contains(card.network);
   }
 
@@ -64,19 +80,28 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Add a card', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Add a card',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
         actions: [
           if (_selected.isNotEmpty)
             TextButton(
               style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
               onPressed: () {
                 final catalogueValue = catalogue.valueOrNull ?? const [];
-                final picked = catalogueValue.where((c) => _selected.contains(c.id)).toList();
+                final picked = catalogueValue
+                    .where((c) => _selected.contains(c.id))
+                    .toList();
                 Navigator.of(context).pop(picked);
               },
               child: Text(
                 'Add (${_selected.length})',
-                style: BambooFonts.ui(14, weight: FontWeight.w700, color: BambooInk.jade),
+                style: BambooFonts.ui(
+                  14,
+                  weight: FontWeight.w700,
+                  color: BambooInk.jade,
+                ),
               ),
             ),
         ],
@@ -89,8 +114,12 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
             onRetry: () => ref.invalidate(catalogueProvider),
           ),
           data: (cards) {
-            final filtered = cards.where(_matchesSearch).where(_matchesNetworkFilter).toList()
-              ..sort((a, b) => a.name.compareTo(b.name));
+            final filtered =
+                cards
+                    .where(_matchesSearch)
+                    .where(_matchesNetworkFilter)
+                    .toList()
+                  ..sort((a, b) => a.name.compareTo(b.name));
             final byIssuer = <String, List<CardProduct>>{};
             for (final c in filtered) {
               byIssuer.putIfAbsent(c.issuerName ?? 'Other', () => []).add(c);
@@ -100,16 +129,62 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
             return Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, AppSpace.sm),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpace.lg,
+                    AppSpace.lg,
+                    AppSpace.lg,
+                    AppSpace.sm,
+                  ),
                   child: Column(
                     children: [
+                      if (widget.detectedLast4 != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppSpace.md),
+                          decoration: BoxDecoration(
+                            color: BambooInk.paperMuted,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: BambooInk.hairlineOnPaper,
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.verified_outlined,
+                                size: 20,
+                                color: BambooInk.jade,
+                              ),
+                              const SizedBox(width: AppSpace.sm),
+                              Expanded(
+                                child: Text(
+                                  'We found a card ending in ${widget.detectedLast4}. Choose the matching card below to confirm it. This lets future bank SMS alerts attach automatically.',
+                                  style: BambooFonts.ui(
+                                    12.5,
+                                    color: BambooInk.ink500,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpace.sm),
+                      ],
                       TextField(
                         controller: _searchController,
                         style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                         decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.search_rounded, color: BambooInk.ink500),
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            color: BambooInk.ink500,
+                          ),
                           hintText: 'Search by issuer or card name',
-                          hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+                          hintStyle: BambooFonts.ui(
+                            14,
+                            color: BambooInk.ink500,
+                          ),
                           filled: true,
                           fillColor: BambooInk.glassFillOnPaper,
                           border: OutlineInputBorder(
@@ -118,11 +193,16 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                            borderSide: const BorderSide(
+                              color: BambooInk.hairlineOnPaper,
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                            borderSide: const BorderSide(
+                              color: BambooInk.slate,
+                              width: 1.5,
+                            ),
                           ),
                         ),
                         onChanged: (_) => setState(() {}),
@@ -140,10 +220,14 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                               CardNetwork.amex,
                             ])
                               Padding(
-                                padding: const EdgeInsets.only(right: AppSpace.xs),
+                                padding: const EdgeInsets.only(
+                                  right: AppSpace.xs,
+                                ),
                                 child: FilterChip(
                                   label: Text(
-                                    network == CardNetwork.amex ? 'Amex/Diners' : cardNetworkLabel(network),
+                                    network == CardNetwork.amex
+                                        ? 'Amex/Diners'
+                                        : cardNetworkLabel(network),
                                   ),
                                   labelStyle: BambooFonts.ui(
                                     13,
@@ -156,7 +240,9 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                                   selectedColor: BambooInk.slate,
                                   backgroundColor: BambooInk.paperMuted,
                                   side: BorderSide.none,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
                                   onSelected: (selected) => setState(() {
                                     if (selected) {
                                       _networkFilters.add(network);
@@ -174,14 +260,27 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                 ),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const EmptyState(icon: Icons.search_off_rounded, title: 'No cards match')
+                      ? const EmptyState(
+                          icon: Icons.search_off_rounded,
+                          title: 'No cards match',
+                        )
                       : ListView(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpace.lg,
+                          ),
                           children: [
                             for (final issuer in issuers) ...[
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-                                child: Text(issuer, style: BambooFonts.heading(13, color: BambooInk.ink500)),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpace.sm,
+                                ),
+                                child: Text(
+                                  issuer,
+                                  style: BambooFonts.heading(
+                                    13,
+                                    color: BambooInk.ink500,
+                                  ),
+                                ),
                               ),
                               for (final card in byIssuer[issuer]!)
                                 _CardRow(
@@ -197,10 +296,14 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
                                 ),
                             ],
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: AppSpace.lg),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: AppSpace.lg,
+                              ),
                               child: Center(
                                 child: TextButton(
-                                  style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: BambooInk.jade,
+                                  ),
                                   onPressed: widget.onCardNotListed,
                                   child: const Text("My card isn't listed"),
                                 ),
@@ -216,14 +319,17 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
       ),
     );
   }
-
 }
 
 class _CardRow extends StatelessWidget {
   final CardProduct card;
   final bool selected;
   final VoidCallback onToggle;
-  const _CardRow({required this.card, required this.selected, required this.onToggle});
+  const _CardRow({
+    required this.card,
+    required this.selected,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -234,15 +340,16 @@ class _CardRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(color: BambooInk.slate, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.credit_card_rounded, color: BambooInk.lime, size: 20),
+            SizedBox(
+              width: 62,
+              child: CardVisual(product: card, showProductName: false),
             ),
             const SizedBox(width: AppSpace.md),
             Expanded(
-              child: Text(card.name, style: BambooFonts.ui(15, color: BambooInk.ink900)),
+              child: Text(
+                card.name,
+                style: BambooFonts.ui(15, color: BambooInk.ink900),
+              ),
             ),
             Checkbox(
               value: selected,

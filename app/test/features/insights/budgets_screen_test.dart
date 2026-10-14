@@ -1,8 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/insights/budgets_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -31,7 +37,11 @@ BudgetStatus _budget({
   projected: Money.fromRupees(elapsed > 0 ? spent / elapsed : 0),
 );
 
-Future<void> _pump(WidgetTester tester, List<BudgetStatus> budgets, {bool signedIn = true}) async {
+Future<void> _pump(
+  WidgetTester tester,
+  List<BudgetStatus> budgets, {
+  bool signedIn = true,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -49,6 +59,79 @@ Future<void> _pump(WidgetTester tester, List<BudgetStatus> budgets, {bool signed
   await tester.pumpAndSettle();
 }
 
+Future<List<Map<String, dynamic>>> _createBudget(
+  WidgetTester tester, {
+  required BudgetScope scope,
+}) async {
+  final requests = <Map<String, dynamic>>[];
+  final client = MockClient((request) async {
+    if (request.method == 'POST' && request.url.path.endsWith('/budgets')) {
+      requests.add(jsonDecode(request.body) as Map<String, dynamic>);
+      return http.Response('{}', 201);
+    }
+    return http.Response('{}', 200);
+  });
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        spendReportsRepositoryProvider.overrideWithValue(
+          SpendReportsRepository(
+            apiBaseUrl: 'http://test',
+            accessToken: 't',
+            client: client,
+          ),
+        ),
+        budgetsProvider.overrideWith((ref) async => const []),
+        categoriesProvider.overrideWith(
+          (ref) async => const [
+            SpendCategory(id: 'cat-dining', slug: 'dining', name: 'Dining'),
+          ],
+        ),
+        userCardsProvider.overrideWith(
+          (ref) async => const [
+            UserCard(
+              id: 'uc-1',
+              cardProductId: 'card-1',
+              cardName: 'HDFC Millennia',
+              isDefault: false,
+            ),
+          ],
+        ),
+      ],
+      child: const MaterialApp(home: BudgetsScreen()),
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.text('Set a budget'));
+  await tester.pumpAndSettle();
+
+  final scopeField = find.byType(DropdownButtonFormField<BudgetScope>);
+  await tester.tap(scopeField);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(scope.label).last);
+  await tester.pumpAndSettle();
+
+  if (scope == BudgetScope.category) {
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dining').last);
+    await tester.pumpAndSettle();
+  }
+  if (scope == BudgetScope.card) {
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('HDFC Millennia').last);
+    await tester.pumpAndSettle();
+  }
+
+  await tester.enterText(find.byType(TextField), '1200');
+  await tester.tap(find.text('Save budget'));
+  await tester.pumpAndSettle();
+  return requests;
+}
+
 void main() {
   testWidgets('a budget on track shows what is left', (tester) async {
     // Half spent, half the month gone — nothing to warn about.
@@ -59,16 +142,21 @@ void main() {
     expect(find.textContaining('Ahead of pace'), findsNothing);
   });
 
-  testWidgets('spending faster than the period is passing reads as ahead of pace, not over', (tester) async {
-    // 80% spent on day 6 of a month. Not over — but the whole value of a
-    // budget is being told while there is still something to do about it.
-    await _pump(tester, [_budget(amount: 20000, spent: 16000, elapsed: 0.2)]);
+  testWidgets(
+    'spending faster than the period is passing reads as ahead of pace, not over',
+    (tester) async {
+      // 80% spent on day 6 of a month. Not over — but the whole value of a
+      // budget is being told while there is still something to do about it.
+      await _pump(tester, [_budget(amount: 20000, spent: 16000, elapsed: 0.2)]);
 
-    expect(find.textContaining('Ahead of pace'), findsOneWidget);
-    expect(find.textContaining('Over by'), findsNothing);
-  });
+      expect(find.textContaining('Ahead of pace'), findsOneWidget);
+      expect(find.textContaining('Over by'), findsNothing);
+    },
+  );
 
-  testWidgets('a small lead over pace is not treated as a warning', (tester) async {
+  testWidgets('a small lead over pace is not treated as a warning', (
+    tester,
+  ) async {
     // 52% spent with 50% of the period gone is noise. A warning that fires
     // on noise is one people learn to dismiss without reading.
     await _pump(tester, [_budget(amount: 20000, spent: 10400, elapsed: 0.5)]);
@@ -87,23 +175,53 @@ void main() {
     expect(find.textContaining('never blocks'), findsOneWidget);
   });
 
-  testWidgets('guest mode explains why budgets need an account', (tester) async {
+  testWidgets('guest mode explains why budgets need an account', (
+    tester,
+  ) async {
     await _pump(tester, const [], signedIn: false);
     expect(find.textContaining('Sign in to set a budget'), findsOneWidget);
   });
 
-  testWidgets('removing a budget asks first and says transactions are untouched', (tester) async {
-    await _pump(tester, [_budget()]);
+  testWidgets(
+    'removing a budget asks first and says transactions are untouched',
+    (tester) async {
+      await _pump(tester, [_budget()]);
 
-    await tester.tap(find.byTooltip('Remove this budget'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Remove this budget'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Remove this budget?'), findsOneWidget);
-    expect(find.textContaining('transactions are not affected'), findsOneWidget);
+      expect(find.text('Remove this budget?'), findsOneWidget);
+      expect(
+        find.textContaining('transactions are not affected'),
+        findsOneWidget,
+      );
 
-    // Cancelling leaves the budget in place.
-    await tester.tap(find.text('Keep it'));
-    await tester.pumpAndSettle();
-    expect(find.text('Groceries'), findsOneWidget);
+      // Cancelling leaves the budget in place.
+      await tester.tap(find.text('Keep it'));
+      await tester.pumpAndSettle();
+      expect(find.text('Groceries'), findsOneWidget);
+    },
+  );
+
+  testWidgets('can create an overall, category, and card budget', (
+    tester,
+  ) async {
+    final overall = await _createBudget(tester, scope: BudgetScope.overall);
+    expect(overall.single, {
+      'scope': 'overall',
+      'period': 'monthly',
+      'amountInr': 1200.0,
+      'rollover': false,
+    });
+
+    final category = await _createBudget(tester, scope: BudgetScope.category);
+    expect(category.single['scope'], 'category');
+    expect(category.single['scopeRefId'], 'cat-dining');
+    expect(category.single['amountInr'], 1200.0);
+
+    final card = await _createBudget(tester, scope: BudgetScope.card);
+    expect(card.single['scope'], 'card');
+    expect(card.single['scopeRefId'], 'uc-1');
+    expect(card.single['amountInr'], 1200.0);
   });
 }

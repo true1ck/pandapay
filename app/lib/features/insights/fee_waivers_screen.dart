@@ -88,6 +88,7 @@ class FeeWaiversScreen extends ConsumerWidget {
                 cardName: group.userCard.nickname?.isNotEmpty == true
                     ? group.userCard.nickname!
                     : group.product.name,
+                product: group.product,
                 capabilityLabel:
                     'fee waiver${group.waivers.length == 1 ? '' : 's'}',
                 capabilityCount: group.waivers.length,

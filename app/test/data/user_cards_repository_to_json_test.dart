@@ -28,6 +28,7 @@ void main() {
       statementDay: 5,
       openedOn: DateTime.utc(2024, 1, 1),
       creditLimit: Money.fromRupees(300000),
+      annualFeeOverride: Money.zero(),
       dueDay: 25,
       anniversaryOn: DateTime.utc(2024, 1, 15),
       isArchived: false,
@@ -50,6 +51,7 @@ void main() {
     expect(roundTripped.statementDay, 5);
     expect(roundTripped.openedOn, DateTime.utc(2024, 1, 1));
     expect(roundTripped.creditLimit!.paise, Money.fromRupees(300000).paise);
+    expect(roundTripped.annualFeeOverride!.paise, 0);
     expect(roundTripped.dueDay, 25);
     expect(roundTripped.anniversaryOn, DateTime.utc(2024, 1, 15));
     expect(roundTripped.isArchived, false);
@@ -64,5 +66,6 @@ void main() {
     expect(roundTripped.capConsumed, isEmpty);
     expect(roundTripped.feeWaiverStates, isEmpty);
     expect(roundTripped.creditLimit, isNull);
+    expect(roundTripped.annualFeeOverride, isNull);
   });
 }

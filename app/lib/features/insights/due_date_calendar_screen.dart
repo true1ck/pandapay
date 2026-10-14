@@ -8,6 +8,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
+import '../cards/card_visual.dart';
 
 /// ui-spec.md E8 Due Date Calendar. Statement/due days come from Task E-0's
 /// gap-fill (statementDay already existed client-side; dueDay is new).
@@ -56,7 +57,9 @@ class DueDateCalendarScreen extends ConsumerWidget {
                   userCard: userCard,
                   product: product,
                   reminderOn: reminders.contains(userCard.id),
-                  onToggleReminder: () => ref.read(dueDateRemindersProvider.notifier).toggle(userCard.id),
+                  onToggleReminder: () => ref
+                      .read(dueDateRemindersProvider.notifier)
+                      .toggle(userCard.id),
                 ),
               ),
           ],
@@ -96,9 +99,15 @@ class _CardDateTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final nextDue = userCard.dueDay == null ? null : _nextOccurrence(userCard.dueDay!, now);
-    final nextStatement = userCard.statementDay == null ? null : _nextOccurrence(userCard.statementDay!, now);
-    final displayName = userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name;
+    final nextDue = userCard.dueDay == null
+        ? null
+        : _nextOccurrence(userCard.dueDay!, now);
+    final nextStatement = userCard.statementDay == null
+        ? null
+        : _nextOccurrence(userCard.statementDay!, now);
+    final displayName = userCard.nickname?.isNotEmpty == true
+        ? userCard.nickname!
+        : product.name;
 
     return Pressable(
       semanticLabel: 'Open details for $displayName',
@@ -116,17 +125,29 @@ class _CardDateTile extends StatelessWidget {
           children: [
             Row(
               children: [
+                SizedBox(
+                  width: 62,
+                  child: CardVisual(product: product, showProductName: false),
+                ),
+                const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: Text(
                     displayName,
                     style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, color: BambooInk.ink300),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: BambooInk.ink300,
+                ),
                 IconButton(
-                  tooltip: reminderOn ? 'Reminder on (this device only)' : 'Remind me (this device only)',
+                  tooltip: reminderOn
+                      ? 'Reminder on (this device only)'
+                      : 'Remind me (this device only)',
                   icon: Icon(
-                    reminderOn ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
+                    reminderOn
+                        ? Icons.notifications_active_rounded
+                        : Icons.notifications_none_rounded,
                     color: reminderOn ? BambooInk.jade : BambooInk.ink300,
                   ),
                   onPressed: onToggleReminder,
@@ -135,11 +156,20 @@ class _CardDateTile extends StatelessWidget {
             ),
             if (nextStatement != null) ...[
               const SizedBox(height: AppSpace.sm),
-              _DateRow(icon: Icons.receipt_outlined, label: 'Statement cuts', date: nextStatement),
+              _DateRow(
+                icon: Icons.receipt_outlined,
+                label: 'Statement cuts',
+                date: nextStatement,
+              ),
             ],
             if (nextDue != null) ...[
               const SizedBox(height: AppSpace.sm),
-              _DateRow(icon: Icons.event_outlined, label: 'Payment due', date: nextDue, emphasize: true),
+              _DateRow(
+                icon: Icons.event_outlined,
+                label: 'Payment due',
+                date: nextDue,
+                emphasize: true,
+              ),
             ],
             if (nextDue == null) ...[
               const SizedBox(height: AppSpace.sm),
@@ -165,7 +195,11 @@ class _MissingDateRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(Icons.event_busy_outlined, size: 16, color: BambooInk.ink500),
+        const Icon(
+          Icons.event_busy_outlined,
+          size: 16,
+          color: BambooInk.ink500,
+        ),
         const SizedBox(width: AppSpace.sm),
         Expanded(
           child: Text(
@@ -183,16 +217,31 @@ class _DateRow extends StatelessWidget {
   final String label;
   final DateTime date;
   final bool emphasize;
-  const _DateRow({required this.icon, required this.label, required this.date, this.emphasize = false});
+  const _DateRow({
+    required this.icon,
+    required this.label,
+    required this.date,
+    this.emphasize = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final daysLeft = date
-        .difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day))
+        .difference(
+          DateTime(
+            DateTime.now().year,
+            DateTime.now().month,
+            DateTime.now().day,
+          ),
+        )
         .inDays;
     return Row(
       children: [
-        Icon(icon, size: 16, color: emphasize ? BambooInk.clay : BambooInk.ink500),
+        Icon(
+          icon,
+          size: 16,
+          color: emphasize ? BambooInk.clay : BambooInk.ink500,
+        ),
         const SizedBox(width: AppSpace.sm),
         Expanded(
           child: Text(
@@ -202,7 +251,10 @@ class _DateRow extends StatelessWidget {
         ),
         Text(
           '${daysLeft}d',
-          style: BambooFonts.ui(12.5, color: emphasize ? BambooInk.clay : BambooInk.ink500),
+          style: BambooFonts.ui(
+            12.5,
+            color: emphasize ? BambooInk.clay : BambooInk.ink500,
+          ),
         ),
       ],
     );

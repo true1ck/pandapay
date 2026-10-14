@@ -126,6 +126,7 @@ class CapsScreen extends ConsumerWidget {
                 cardName: group.userCard.nickname?.isNotEmpty == true
                     ? group.userCard.nickname!
                     : group.product.name,
+                product: group.product,
                 capabilityCount: group.caps.length + group.fuels.length,
                 capabilityLabel:
                     'capabilit${group.caps.length + group.fuels.length == 1 ? 'y' : 'ies'}',

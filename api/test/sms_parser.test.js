@@ -309,6 +309,17 @@ test('ATM withdrawal alerts are debit-card transactions, not credit-card purchas
   assert.equal(result.fields.last4, '8406');
 });
 
+test('explicit debit-card purchase alerts stay debit-card transactions', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Rs.850 debited from HDFC Bank Debit Card ending 8406 at LOCAL CAFE on 2026-10-13. SMS BLOCK DC 8406',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.amountInr, 850);
+  assert.equal(result.fields.last4, '8406');
+  assert.equal(result.fields.instrument, 'debit_card');
+});
+
 test('built-in card fallback handles the bare HDFC Card NNNN format and underscore merchant', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'JD-HDFCBK-S',
@@ -342,6 +353,22 @@ test('account debit without explicit UPI is held for confirmation, not counted a
   assert.equal(result.reason, 'ambiguous_account_debit');
 });
 
+test('named mobile-banking beneficiary debit is imported as a cardless spend', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'VA-UNIONNB-T',
+    body: 'Union Bank of India A/c *8565 Debited Rs:4000.00 on 13-10-2026 19:30:59 by Mob Bk ref no 104241294136, Fvg: HANDRICH Avl Bal Rs:28995.92.',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'builtin_beneficiary_debit');
+  assert.equal(result.fields.amountInr, 4000);
+  assert.equal(result.fields.merchant, 'HANDRICH');
+  assert.equal(result.fields.instrument, 'other');
+  assert.equal(result.fields.entryKind, 'spend');
+  assert.equal(result.fields.date, '13-10-2026');
+  assert.equal(result.fields.reference, '104241294136');
+});
+
 test('built-in UPI fallback stops merchant extraction before parenthesized reference metadata', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'SLICE-BANK',
@@ -368,6 +395,22 @@ test('configured patterns cannot misclassify a bank-account UPI alert as a card 
   assert.equal(result.ok, true);
   assert.equal(result.fields.instrument, 'upi_bank');
   assert.equal(result.fields.last4, undefined);
+});
+
+test('configured patterns cannot override explicit debit-card evidence as credit', () => {
+  const broadPattern = {
+    id: 'p-wrong-card-type',
+    sender_pattern: 'HDFCBK',
+    regex: 'Rs\\s([\\d]+) debited from HDFC Bank Debit Card ending (\\d{4})',
+    field_map: { amount: 1, last4: 2, instrument: 2 },
+  };
+  const result = parseSmsAgainstPatterns([broadPattern], {
+    sender: 'VM-HDFCBK-S',
+    body: 'Rs 850 debited from HDFC Bank Debit Card ending 8406 at LOCAL CAFE',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.last4, '8406');
+  assert.equal(result.fields.instrument, 'debit_card');
 });
 
 test('OTP/security alerts are rejected even when they contain transaction-shaped fields', () => {

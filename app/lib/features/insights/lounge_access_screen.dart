@@ -95,6 +95,7 @@ class LoungeAccessScreen extends ConsumerWidget {
                     cardName: group.userCard.nickname?.isNotEmpty == true
                         ? group.userCard.nickname!
                         : group.product.name,
+                    product: group.product,
                     capabilityLabel:
                         'lounge benefit${group.benefits.length == 1 ? '' : 's'}',
                     capabilityCount: group.benefits.length,

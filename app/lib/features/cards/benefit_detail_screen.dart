@@ -12,6 +12,7 @@ import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../insights/lounge_access_screen.dart' show isInCurrentLoungeWindow;
 import 'benefits_cheat_sheet_screen.dart';
+import 'card_visual.dart';
 
 /// Screen showing in-depth details of a specific [CardBenefit], the card providing it,
 /// its quota/terms, and integrated tracking (e.g. for lounge visits).
@@ -49,7 +50,10 @@ class BenefitDetailScreen extends ConsumerWidget {
           backgroundColor: BambooInk.paper,
           foregroundColor: BambooInk.ink900,
           elevation: 0,
-          title: Text('Benefit details', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+          title: Text(
+            'Benefit details',
+            style: BambooFonts.heading(17, color: BambooInk.ink900),
+          ),
         ),
         body: const Center(child: CircularProgressIndicator()),
       ),
@@ -59,7 +63,10 @@ class BenefitDetailScreen extends ConsumerWidget {
           backgroundColor: BambooInk.paper,
           foregroundColor: BambooInk.ink900,
           elevation: 0,
-          title: Text('Benefit details', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+          title: Text(
+            'Benefit details',
+            style: BambooFonts.heading(17, color: BambooInk.ink900),
+          ),
         ),
         body: ErrorState(
           message: userFacingErrorMessage(err),
@@ -87,7 +94,8 @@ class BenefitDetailScreen extends ConsumerWidget {
                 kind: BenefitKind.fuelSurcharge,
                 label:
                     '${prod.fuelRule!.waiverPercent == prod.fuelRule!.waiverPercent.roundToDouble() ? prod.fuelRule!.waiverPercent.toStringAsFixed(0) : prod.fuelRule!.waiverPercent.toStringAsFixed(2)}% fuel surcharge waiver',
-                description: 'Fuel surcharge waived'
+                description:
+                    'Fuel surcharge waived'
                     '${prod.fuelRule!.minTxn != null ? " on transactions above ${prod.fuelRule!.minTxn!.format()}" : ""}'
                     '${prod.fuelRule!.maxTxn != null ? " up to ${prod.fuelRule!.maxTxn!.format()}" : ""}.',
               ),
@@ -100,11 +108,12 @@ class BenefitDetailScreen extends ConsumerWidget {
             backgroundColor: BambooInk.paper,
             foregroundColor: BambooInk.ink900,
             elevation: 0,
-            title: Text('Benefit details', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+            title: Text(
+              'Benefit details',
+              style: BambooFonts.heading(17, color: BambooInk.ink900),
+            ),
           ),
-          body: const ErrorState(
-            message: 'This benefit could not be found.',
-          ),
+          body: const ErrorState(message: 'This benefit could not be found.'),
         );
       },
     );
@@ -123,12 +132,14 @@ class _BenefitDetailBody extends ConsumerWidget {
   });
 
   bool get _isLoungeBenefit =>
-      benefit.kind == BenefitKind.loungeDomestic || benefit.kind == BenefitKind.loungeInternational;
+      benefit.kind == BenefitKind.loungeDomestic ||
+      benefit.kind == BenefitKind.loungeInternational;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cardDisplayName =
-        userCard.nickname?.isNotEmpty == true ? userCard.nickname! : userCard.cardName;
+    final cardDisplayName = userCard.nickname?.isNotEmpty == true
+        ? userCard.nickname!
+        : userCard.cardName;
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -137,12 +148,17 @@ class _BenefitDetailBody extends ConsumerWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Benefit details', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+        title: Text(
+          'Benefit details',
+          style: BambooFonts.heading(17, color: BambooInk.ink900),
+        ),
         actions: [
           IconButton(
             tooltip: 'Report wrong data',
             icon: const Icon(Icons.flag_outlined),
-            onPressed: () => context.push('${AppRoute.reportWrongData}?cardProductId=${product.id}'),
+            onPressed: () => context.push(
+              '${AppRoute.reportWrongData}?cardProductId=${product.id}',
+            ),
           ),
         ],
       ),
@@ -173,19 +189,32 @@ class _BenefitDetailBody extends ConsumerWidget {
             // Estimated value banner if present
             if (benefit.valueEstimate != null) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.md,
+                  vertical: AppSpace.sm,
+                ),
                 decoration: BoxDecoration(
                   color: BambooInk.jade.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: BambooInk.jade.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: BambooInk.jade.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.savings_outlined, color: BambooInk.jade, size: 20),
+                    const Icon(
+                      Icons.savings_outlined,
+                      color: BambooInk.jade,
+                      size: 20,
+                    ),
                     const SizedBox(width: AppSpace.sm),
                     Text(
                       'Estimated value: ',
-                      style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                      style: BambooFonts.ui(
+                        13.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink900,
+                      ),
                     ),
                     MoneyText(
                       benefit.valueEstimate!,
@@ -226,8 +255,9 @@ class _BenefitDetailBody extends ConsumerWidget {
                 style: TextButton.styleFrom(foregroundColor: BambooInk.ink500),
                 icon: const Icon(Icons.flag_outlined, size: 16),
                 label: const Text('Report incorrect details for this benefit'),
-                onPressed: () =>
-                    context.push('${AppRoute.reportWrongData}?cardProductId=${product.id}'),
+                onPressed: () => context.push(
+                  '${AppRoute.reportWrongData}?cardProductId=${product.id}',
+                ),
               ),
             ),
             const SizedBox(height: AppSpace.xl),
@@ -253,19 +283,18 @@ class _BenefitDetailBody extends ConsumerWidget {
           children: [
             Text(
               'PROVIDED BY',
-              style: BambooFonts.ui(11, weight: FontWeight.w700, color: BambooInk.ink500),
+              style: BambooFonts.ui(
+                11,
+                weight: FontWeight.w700,
+                color: BambooInk.ink500,
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             Row(
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: BambooInk.slate,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
-                  child: const Icon(Icons.credit_card_rounded, color: BambooInk.lime, size: 22),
+                SizedBox(
+                  width: 64,
+                  child: CardVisual(product: product, showProductName: false),
                 ),
                 const SizedBox(width: AppSpace.md),
                 Expanded(
@@ -284,7 +313,11 @@ class _BenefitDetailBody extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, color: BambooInk.ink500, size: 22),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: BambooInk.ink500,
+                  size: 22,
+                ),
               ],
             ),
           ],
@@ -311,7 +344,11 @@ class _BenefitDetailBody extends ConsumerWidget {
         children: [
           Text(
             'BENEFIT PARAMETERS',
-            style: BambooFonts.ui(11, weight: FontWeight.w700, color: BambooInk.ink500),
+            style: BambooFonts.ui(
+              11,
+              weight: FontWeight.w700,
+              color: BambooInk.ink500,
+            ),
           ),
           const SizedBox(height: AppSpace.md),
           Row(
@@ -338,7 +375,11 @@ class _BenefitDetailBody extends ConsumerWidget {
     );
   }
 
-  Widget _buildParamItem({required IconData icon, required String label, required String value}) {
+  Widget _buildParamItem({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -352,7 +393,11 @@ class _BenefitDetailBody extends ConsumerWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
+          style: BambooFonts.ui(
+            13.5,
+            weight: FontWeight.w600,
+            color: BambooInk.ink900,
+          ),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
@@ -380,22 +425,36 @@ class _BenefitDetailBody extends ConsumerWidget {
         error: (err, _) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Lounge Usage Tracker', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+            Text(
+              'Lounge Usage Tracker',
+              style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+            ),
             const SizedBox(height: AppSpace.xs),
-            Text('Could not load usage data.', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+            Text(
+              'Could not load usage data.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
           ],
         ),
         data: (visitList) {
           final windowVisits = visitList
-              .where((v) => v.userCardId == userCard.id && v.benefitId == benefit.id)
-              .where((v) => isInCurrentLoungeWindow(v.usedOn, benefit.quotaPeriod))
+              .where(
+                (v) => v.userCardId == userCard.id && v.benefitId == benefit.id,
+              )
+              .where(
+                (v) => isInCurrentLoungeWindow(v.usedOn, benefit.quotaPeriod),
+              )
               .length;
 
           final quotaValue = benefit.quotaCount;
           final unlimited = quotaValue == null;
           final quota = quotaValue ?? 0;
-          final remaining = unlimited ? null : (quota - windowVisits).clamp(0, quota);
-          final ratio = unlimited ? 0.0 : (quota == 0 ? 0.0 : (windowVisits / quota).clamp(0.0, 1.0));
+          final remaining = unlimited
+              ? null
+              : (quota - windowVisits).clamp(0, quota);
+          final ratio = unlimited
+              ? 0.0
+              : (quota == 0 ? 0.0 : (windowVisits / quota).clamp(0.0, 1.0));
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,7 +464,11 @@ class _BenefitDetailBody extends ConsumerWidget {
                 children: [
                   Text(
                     'LOUNGE TRACKING',
-                    style: BambooFonts.ui(11, weight: FontWeight.w700, color: BambooInk.ink500),
+                    style: BambooFonts.ui(
+                      11,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink500,
+                    ),
                   ),
                   TextButton.icon(
                     style: TextButton.styleFrom(
@@ -438,7 +501,11 @@ class _BenefitDetailBody extends ConsumerWidget {
                 Row(
                   children: [
                     if (ratio >= 1.0)
-                      const Icon(Icons.block_rounded, size: 14, color: BambooInk.clay),
+                      const Icon(
+                        Icons.block_rounded,
+                        size: 14,
+                        color: BambooInk.clay,
+                      ),
                     if (ratio >= 1.0) const SizedBox(width: 4),
                     Text(
                       '$windowVisits of $quota visits used this period ($remaining left)',
@@ -457,9 +524,14 @@ class _BenefitDetailBody extends ConsumerWidget {
                   foregroundColor: BambooInk.ink900,
                   side: const BorderSide(color: BambooInk.hairlineOnPaper),
                   minimumSize: const Size.fromHeight(40),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
                 ),
-                icon: const Icon(Icons.airline_seat_flat_angled_rounded, size: 16),
+                icon: const Icon(
+                  Icons.airline_seat_flat_angled_rounded,
+                  size: 16,
+                ),
                 label: const Text('View All Lounge Access'),
                 onPressed: () => context.push(AppRoute.loungeAccess),
               ),
@@ -483,19 +555,25 @@ class _BenefitDetailBody extends ConsumerWidget {
         children: [
           Text(
             'HOW TO ACCESS THE LOUNGE',
-            style: BambooFonts.ui(11, weight: FontWeight.w700, color: BambooInk.ink500),
+            style: BambooFonts.ui(
+              11,
+              weight: FontWeight.w700,
+              color: BambooInk.ink500,
+            ),
           ),
           const SizedBox(height: AppSpace.md),
           _buildStepRow(
             stepNumber: '1',
             title: 'Present physical or digital card',
-            description: 'Show your eligible card at the airport lounge reception counter.',
+            description:
+                'Show your eligible card at the airport lounge reception counter.',
           ),
           const SizedBox(height: AppSpace.sm),
           _buildStepRow(
             stepNumber: '2',
             title: 'Boarding pass verification',
-            description: 'Provide a valid same-day boarding pass matching the cardholder name.',
+            description:
+                'Provide a valid same-day boarding pass matching the cardholder name.',
           ),
           const SizedBox(height: AppSpace.sm),
           _buildStepRow(
@@ -529,7 +607,11 @@ class _BenefitDetailBody extends ConsumerWidget {
         children: [
           Text(
             'ELIGIBILITY & LOUNGE NETWORK',
-            style: BambooFonts.ui(11, weight: FontWeight.w700, color: BambooInk.ink500),
+            style: BambooFonts.ui(
+              11,
+              weight: FontWeight.w700,
+              color: BambooInk.ink500,
+            ),
           ),
           const SizedBox(height: AppSpace.md),
           _buildRuleItem(
@@ -582,7 +664,11 @@ class _BenefitDetailBody extends ConsumerWidget {
           ),
           child: Text(
             stepNumber,
-            style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.lime),
+            style: BambooFonts.ui(
+              12,
+              weight: FontWeight.w700,
+              color: BambooInk.lime,
+            ),
           ),
         ),
         const SizedBox(width: AppSpace.sm),
@@ -592,7 +678,11 @@ class _BenefitDetailBody extends ConsumerWidget {
             children: [
               Text(
                 title,
-                style: BambooFonts.ui(13.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                style: BambooFonts.ui(
+                  13.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
@@ -622,7 +712,11 @@ class _BenefitDetailBody extends ConsumerWidget {
             children: [
               Text(
                 title,
-                style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink900),
+                style: BambooFonts.ui(
+                  13,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
@@ -649,10 +743,15 @@ class _BenefitDetailBody extends ConsumerWidget {
         children: [
           Text(
             'TERMS & DETAILS',
-            style: BambooFonts.ui(11, weight: FontWeight.w700, color: BambooInk.ink500),
+            style: BambooFonts.ui(
+              11,
+              weight: FontWeight.w700,
+              color: BambooInk.ink500,
+            ),
           ),
           const SizedBox(height: AppSpace.sm),
-          if (benefit.description != null && benefit.description!.isNotEmpty) ...[
+          if (benefit.description != null &&
+              benefit.description!.isNotEmpty) ...[
             Text(
               benefit.description!,
               style: BambooFonts.ui(14, color: BambooInk.ink900),
@@ -692,7 +791,11 @@ class _BenefitDetailBody extends ConsumerWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.info_outline_rounded, size: 16, color: BambooInk.ink500),
+        const Icon(
+          Icons.info_outline_rounded,
+          size: 16,
+          color: BambooInk.ink500,
+        ),
         const SizedBox(width: AppSpace.xs),
         Expanded(
           child: Text(
@@ -726,7 +829,10 @@ class _BenefitDetailBody extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Log a lounge visit', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+            Text(
+              'Log a lounge visit',
+              style: BambooFonts.heading(17, color: BambooInk.ink900),
+            ),
             const SizedBox(height: AppSpace.md),
             TextField(
               controller: airportController,
@@ -742,11 +848,16 @@ class _BenefitDetailBody extends ConsumerWidget {
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  borderSide: const BorderSide(
+                    color: BambooInk.hairlineOnPaper,
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: BambooInk.slate,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
@@ -756,7 +867,9 @@ class _BenefitDetailBody extends ConsumerWidget {
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.lime,
                 minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
               ),
               onPressed: () async {
@@ -767,7 +880,9 @@ class _BenefitDetailBody extends ConsumerWidget {
                     userCardId: userCard.id,
                     benefitId: benefit.id,
                     usedOn: pickedDate,
-                    airport: airportController.text.trim().isEmpty ? null : airportController.text.trim(),
+                    airport: airportController.text.trim().isEmpty
+                        ? null
+                        : airportController.text.trim(),
                   );
                   ref.invalidate(loungeUsageProvider);
                   if (sheetContext.mounted) Navigator.of(sheetContext).pop();

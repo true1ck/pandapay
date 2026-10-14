@@ -22,7 +22,12 @@ CardProduct _card({
   isUpiLinkable: true,
   pointValueInr: pointValueInr,
   rewardRules: [
-    RewardRule(id: '$id-rule', unit: unit, rate: rate, merchantPattern: merchantPattern),
+    RewardRule(
+      id: '$id-rule',
+      unit: unit,
+      rate: rate,
+      merchantPattern: merchantPattern,
+    ),
   ],
   capRules: caps,
   forexRule: forex,
@@ -31,10 +36,18 @@ CardProduct _card({
 
 void main() {
   final engine = RecommendationEngine();
-  final ctx = RecommendationContext(amount: Money.fromRupees(2500), rail: TxnRail.swipe);
+  final ctx = RecommendationContext(
+    amount: Money.fromRupees(2500),
+    rail: TxnRail.swipe,
+  );
 
-  RecommendationBreakdown breakdownFor(CardProduct card, {CardSnapshot? snapshot}) {
-    final result = engine.rank(ctx, [snapshot ?? CardSnapshot(product: card)]).first;
+  RecommendationBreakdown breakdownFor(
+    CardProduct card, {
+    CardSnapshot? snapshot,
+  }) {
+    final result = engine.rank(ctx, [
+      snapshot ?? CardSnapshot(product: card),
+    ]).first;
     return result.breakdown!;
   }
 
@@ -50,6 +63,10 @@ void main() {
     final b = breakdownFor(_card(id: 'c', rate: 5));
     expect(b.capHeadroom, isNull);
     expect(b.capNote, isNull);
+    expect(b.capRemaining, isNull);
+    expect(b.capLimit, isNull);
+    expect(b.capMeasure, isNull);
+    expect(b.capPeriod, isNull);
   });
 
   test('a spend cap reports its remaining headroom in rupees', () {
@@ -75,6 +92,10 @@ void main() {
       ),
     );
     expect(b.capHeadroom, Money.fromRupees(4000));
+    expect(b.capRemaining, Money.fromRupees(4000));
+    expect(b.capLimit, Money.fromRupees(10000));
+    expect(b.capMeasure, CapMeasure.spendAmount);
+    expect(b.capPeriod, CapPeriod.calendarMonth);
   });
 
   test('an exhausted spend cap reports zero headroom and says so', () {
@@ -94,7 +115,10 @@ void main() {
     );
     final b = breakdownFor(
       card,
-      snapshot: CardSnapshot(product: card, capRemaining: {'cap': const Money.zero()}),
+      snapshot: CardSnapshot(
+        product: card,
+        capRemaining: {'cap': const Money.zero()},
+      ),
     );
     expect(b.capHeadroom, const Money.zero());
     expect(b.capNote, 'Cap reached');
@@ -126,16 +150,29 @@ void main() {
     );
     expect(b.capHeadroom, isNull);
     expect(b.capNote, contains('reward value'));
+    expect(b.capRemaining, Money.fromRupees(600));
+    expect(b.capLimit, Money.fromRupees(1000));
+    expect(b.capMeasure, CapMeasure.rewardValue);
+    expect(b.capPeriod, CapPeriod.calendarMonth);
   });
 
   test('points value is reported for points rules and null for cashback', () {
     final points = breakdownFor(
-      _card(id: 'p', rate: 2, unit: RewardUnit.pointsPer100, pointValueInr: 0.25),
+      _card(
+        id: 'p',
+        rate: 2,
+        unit: RewardUnit.pointsPer100,
+        pointValueInr: 0.25,
+      ),
     );
     expect(points.pointValueInr, 0.25);
 
     final cashback = breakdownFor(_card(id: 'c', rate: 5));
-    expect(cashback.pointValueInr, isNull, reason: 'a ₹/point row on a cashback card is noise');
+    expect(
+      cashback.pointValueInr,
+      isNull,
+      reason: 'a ₹/point row on a cashback card is noise',
+    );
   });
 
   test('merchant restriction is carried through, null when unrestricted', () {
@@ -146,16 +183,18 @@ void main() {
     // (see RecommendationEngine.ruleApplies). Before that, this rule
     // matched every transaction and design 09 showed a restriction the
     // engine wasn't honouring.
-    final atAmazon = engine
-        .rank(
-          RecommendationContext(
-            amount: Money.fromRupees(2500),
-            rail: TxnRail.swipe,
-            merchantName: 'AMAZON PAY INDIA',
-          ),
-          [CardSnapshot(product: _card(id: 'c', rate: 5, merchantPattern: 'AMAZON'))],
-        )
-        .first;
+    final atAmazon = engine.rank(
+      RecommendationContext(
+        amount: Money.fromRupees(2500),
+        rail: TxnRail.swipe,
+        merchantName: 'AMAZON PAY INDIA',
+      ),
+      [
+        CardSnapshot(
+          product: _card(id: 'c', rate: 5, merchantPattern: 'AMAZON'),
+        ),
+      ],
+    ).first;
     expect(atAmazon.breakdown!.merchantRestriction, 'AMAZON');
   });
 
@@ -168,13 +207,19 @@ void main() {
   });
 
   test('forex markup is recorded separately from the final value', () {
-    final card = _card(id: 'c', rate: 5, forex: const ForexRule(markupPercent: 3.5));
-    final result = engine
-        .rank(
-          RecommendationContext(amount: Money.fromRupees(2500), rail: TxnRail.swipe, travelMode: true),
-          [CardSnapshot(product: card)],
-        )
-        .first;
+    final card = _card(
+      id: 'c',
+      rate: 5,
+      forex: const ForexRule(markupPercent: 3.5),
+    );
+    final result = engine.rank(
+      RecommendationContext(
+        amount: Money.fromRupees(2500),
+        rail: TxnRail.swipe,
+        travelMode: true,
+      ),
+      [CardSnapshot(product: card)],
+    ).first;
     final b = result.breakdown!;
     expect(b.forexCost.isZero, isFalse);
     expect(b.hasAdjustments, isTrue);
@@ -184,22 +229,23 @@ void main() {
 
   test('an excluded card carries no breakdown to show', () {
     final card = _card(id: 'visa', rate: 5);
-    final excluded = engine
-        .rank(
-          RecommendationContext(amount: Money.fromRupees(2500), rail: TxnRail.upiQr),
-          [
-            CardSnapshot(
-              product: CardProduct(
-                id: 'visa',
-                name: 'visa',
-                network: CardNetwork.visa,
-                isUpiLinkable: false,
-                rewardRules: card.rewardRules,
-              ),
-            ),
-          ],
-        )
-        .first;
+    final excluded = engine.rank(
+      RecommendationContext(
+        amount: Money.fromRupees(2500),
+        rail: TxnRail.upiQr,
+      ),
+      [
+        CardSnapshot(
+          product: CardProduct(
+            id: 'visa',
+            name: 'visa',
+            network: CardNetwork.visa,
+            isUpiLinkable: false,
+            rewardRules: card.rewardRules,
+          ),
+        ),
+      ],
+    ).first;
     expect(excluded.isExcluded, isTrue);
     expect(excluded.breakdown, isNull);
   });

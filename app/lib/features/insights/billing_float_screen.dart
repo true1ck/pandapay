@@ -7,6 +7,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
+import '../cards/card_visual.dart';
 
 /// The grace period between a statement date and its due date is set by the
 /// issuer per-product and isn't modeled anywhere in this schema (no bank
@@ -39,7 +40,8 @@ class BillingFloatScreen extends ConsumerWidget {
           return const EmptyState(
             icon: Icons.event_available_outlined,
             title: 'No cards yet',
-            message: 'Add a card to see how many interest-free days you have left.',
+            message:
+                'Add a card to see how many interest-free days you have left.',
           );
         }
         return ListView.builder(
@@ -49,7 +51,11 @@ class BillingFloatScreen extends ConsumerWidget {
             final (userCard, product) = owned[index];
             return Padding(
               padding: const EdgeInsets.only(bottom: AppSpace.md),
-              child: _BillingFloatTile(userCard: userCard, product: product, clock: clock),
+              child: _BillingFloatTile(
+                userCard: userCard,
+                product: product,
+                clock: clock,
+              ),
             );
           },
         );
@@ -62,11 +68,17 @@ class _BillingFloatTile extends StatelessWidget {
   final UserCard userCard;
   final CardProduct product;
   final Clock clock;
-  const _BillingFloatTile({required this.userCard, required this.product, required this.clock});
+  const _BillingFloatTile({
+    required this.userCard,
+    required this.product,
+    required this.clock,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final displayName = userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name;
+    final displayName = userCard.nickname?.isNotEmpty == true
+        ? userCard.nickname!
+        : product.name;
 
     if (userCard.statementDay == null) {
       return Container(
@@ -77,13 +89,19 @@ class _BillingFloatTile extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpace.lg),
         child: Row(
           children: [
-            const Icon(Icons.event_busy_rounded, size: 20, color: BambooInk.ink500),
+            SizedBox(
+              width: 64,
+              child: CardVisual(product: product, showProductName: false),
+            ),
             const SizedBox(width: AppSpace.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(displayName, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                  Text(
+                    displayName,
+                    style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     'Set a statement day to see this card\'s float.',
@@ -113,7 +131,15 @@ class _BillingFloatTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(displayName, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+          SizedBox(
+            width: 112,
+            child: CardVisual(product: product, showProductName: false),
+          ),
+          const SizedBox(height: AppSpace.md),
+          Text(
+            displayName,
+            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+          ),
           const SizedBox(height: AppSpace.sm),
           Text(
             'Use $displayName today → up to ${result.totalInterestFreeDays} interest-free days.',

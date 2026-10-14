@@ -167,7 +167,7 @@ void main() {
       },
     );
 
-    test('a debit-card spend alert produces no placeholder card', () {
+    test('a debit-card spend alert produces a debit-card placeholder', () {
       final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
         smsBodies: [
           'Rs 500 spent on your HDFC Bank Debit Card XX8708 at ATM on 12-Aug',
@@ -175,7 +175,10 @@ void main() {
         catalogue: catalogue,
         isSms: true,
       );
-      expect(result.suggestions, isEmpty);
+      expect(result.suggestions, hasLength(1));
+      expect(result.suggestions.single.isPlaceholder, isTrue);
+      expect(result.suggestions.single.cardType, 'debit');
+      expect(result.suggestions.single.last4, contains('8708'));
     });
 
     test(
@@ -372,7 +375,7 @@ void main() {
     );
 
     test(
-      'a debit alert poisons its issuer+last-4 against a wordless sibling',
+      'a debit alert wins over a wordless credit sibling with the same last-4',
       () {
         final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
           smsBodies: const [
@@ -382,7 +385,9 @@ void main() {
           catalogue: catalogue,
           isSms: true,
         );
-        expect(result.suggestions, isEmpty);
+        expect(result.suggestions, hasLength(1));
+        expect(result.suggestions.single.cardType, 'debit');
+        expect(result.suggestions.single.last4, contains('1234'));
       },
     );
 
@@ -404,44 +409,42 @@ void main() {
       }
     });
 
-    test(
-      'real HDFC corpus: credit card surfaces, savings account + debit card do not',
-      () {
-        const cat = [
-          CardProduct(
-            id: 'hdfc_tataneu',
-            name: 'Tata Neu Infinity HDFC Bank Credit Card',
-            issuerName: 'HDFC Bank',
-            network: CardNetwork.visa,
-            isUpiLinkable: false,
-            pointValueInr: 1.0,
-            rewardRules: [],
-            capRules: [],
-            milestoneRules: [],
-            feeWaiverRules: [],
-            benefits: [],
-          ),
-        ];
-        final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
-          smsBodies: const [
-            'Update! INR 48,000.00 deposited in HDFC Bank A/c XX1797 on 29-AUG-26 for Salary',
-            'Sent Rs.1000.00 From HDFC Bank A/C *1797 To SOMEONE On 16/05/25 Ref 104892602823',
-            'UPDATE: INR 15,660.00 debited from HDFC Bank XX1797 on 08-AUG-26. Info: CC 000463202XXXXXX8708 Autopay',
-            'UPI Transaction Declined for your HDFC Bank account ending 1797 for security reasons',
-            '370846 is your SECRET 6-digit OTP to complete your ATM withdrawal of Rs. 20000 via Card XX8406 at HDFC Bank ATM',
-            'Spent Rs.210 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2025-08-14 SMS BLOCK DC 8406',
-            'OTP is 047388 for txn of INR 335.00 at CHEQ DIGITA on HDFC Bank card ending 8708',
-            'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 4150.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 8708. YOUR AVAILABLE LIMIT IS RS. 96149',
-          ],
-          catalogue: cat,
-          isSms: true,
-        );
-        final l4s = result.suggestions.expand((s) => s.last4).toList();
-        expect(l4s, isNot(contains('1797')));
-        expect(l4s, isNot(contains('8406')));
-        expect(l4s, contains('8708'));
-      },
-    );
+    test('real HDFC corpus: credit card and explicit debit card stay distinct', () {
+      const cat = [
+        CardProduct(
+          id: 'hdfc_tataneu',
+          name: 'Tata Neu Infinity HDFC Bank Credit Card',
+          issuerName: 'HDFC Bank',
+          cardType: 'credit',
+          network: CardNetwork.visa,
+          isUpiLinkable: false,
+          pointValueInr: 1.0,
+          rewardRules: [],
+          capRules: [],
+          milestoneRules: [],
+          feeWaiverRules: [],
+          benefits: [],
+        ),
+      ];
+      final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+        smsBodies: const [
+          'Update! INR 48,000.00 deposited in HDFC Bank A/c XX1797 on 29-AUG-26 for Salary',
+          'Sent Rs.1000.00 From HDFC Bank A/C *1797 To SOMEONE On 16/05/25 Ref 104892602823',
+          'UPDATE: INR 15,660.00 debited from HDFC Bank XX1797 on 08-AUG-26. Info: CC 000463202XXXXXX8708 Autopay',
+          'UPI Transaction Declined for your HDFC Bank account ending 1797 for security reasons',
+          '370846 is your SECRET 6-digit OTP to complete your ATM withdrawal of Rs. 20000 via Card XX8406 at HDFC Bank ATM',
+          'Spent Rs.210 From HDFC Bank Card x8406 At QUALITY FUEL STATION On 2025-08-14 SMS BLOCK DC 8406',
+          'OTP is 047388 for txn of INR 335.00 at CHEQ DIGITA on HDFC Bank card ending 8708',
+          'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 4150.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 8708. YOUR AVAILABLE LIMIT IS RS. 96149',
+        ],
+        catalogue: cat,
+        isSms: true,
+      );
+      final l4s = result.suggestions.expand((s) => s.last4).toList();
+      expect(l4s, isNot(contains('1797')));
+      expect(l4s, contains('8406'));
+      expect(l4s, contains('8708'));
+    });
 
     test('poisoning is scoped to the exact issuer+last-4', () {
       final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
@@ -452,9 +455,15 @@ void main() {
         catalogue: catalogue,
         isSms: true,
       );
-      expect(result.suggestions.length, 1);
-      expect(result.suggestions.first.isPlaceholder, isTrue);
-      expect(result.suggestions.first.last4, contains('2222'));
+      expect(result.suggestions.length, 2);
+      expect(
+        result.suggestions.where((s) => s.cardType == 'debit').single.last4,
+        contains('1111'),
+      );
+      expect(
+        result.suggestions.where((s) => s.cardType == 'credit').single.last4,
+        contains('2222'),
+      );
     });
   });
 }

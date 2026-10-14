@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local_user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -18,42 +19,52 @@ void main() {
   tearDown(() => appDb.close());
 
   CardProduct product(String id, String name) => CardProduct(
-        id: id,
-        name: name,
-        issuerName: 'Test Bank',
-        network: CardNetwork.visa,
-        isUpiLinkable: false,
-        pointValueInr: 1.0,
-        rewardRules: const [],
-        capRules: const [],
-        milestoneRules: const [],
-        feeWaiverRules: const [],
-        benefits: const [],
-      );
+    id: id,
+    name: name,
+    issuerName: 'Test Bank',
+    network: CardNetwork.visa,
+    isUpiLinkable: false,
+    pointValueInr: 1.0,
+    rewardRules: const [],
+    capRules: const [],
+    milestoneRules: const [],
+    feeWaiverRules: const [],
+    benefits: const [],
+  );
 
   test('a card whose product is in the catalogue resolves normally', () async {
     await local.addCard('p-live');
-    final cards = await local.fetchUserCards(catalogue: [product('p-live', 'HDFC Millennia')]);
+    final cards = await local.fetchUserCards(
+      catalogue: [product('p-live', 'HDFC Millennia')],
+    );
 
     expect(cards.single.cardName, 'HDFC Millennia');
     expect(cards.single.isUnresolved, isFalse);
   });
 
-  test('a card missing from a NON-empty catalogue is marked unresolved', () async {
-    await local.addCard('p-dead');
-    final cards = await local.fetchUserCards(catalogue: [product('p-other', 'Some Other Card')]);
+  test(
+    'a card missing from a NON-empty catalogue is marked unresolved',
+    () async {
+      await local.addCard('p-dead');
+      final cards = await local.fetchUserCards(
+        catalogue: [product('p-other', 'Some Other Card')],
+      );
 
-    expect(cards.single.isUnresolved, isTrue);
-    expect(cards.single.cardName, 'Unrecognized card');
-  });
+      expect(cards.single.isUnresolved, isTrue);
+      expect(cards.single.cardName, 'Unrecognized card');
+    },
+  );
 
-  test('an empty catalogue never marks a card unresolved (transient, not a ghost)', () async {
-    await local.addCard('p-dead');
-    final cards = await local.fetchUserCards(catalogue: const []);
+  test(
+    'an empty catalogue never marks a card unresolved (transient, not a ghost)',
+    () async {
+      await local.addCard('p-dead');
+      final cards = await local.fetchUserCards(catalogue: const []);
 
-    expect(cards.single.isUnresolved, isFalse);
-    expect(cards.single.cardName, 'Card');
-  });
+      expect(cards.single.isUnresolved, isFalse);
+      expect(cards.single.cardName, 'Card');
+    },
+  );
 
   test('deleteCard removes only the targeted row', () async {
     final keepId = await local.addCard('p-keep');
@@ -62,7 +73,22 @@ void main() {
 
     await local.deleteCard(dropId);
 
-    final cards = await local.fetchUserCards(catalogue: [product('p-keep', 'Kept Card')]);
+    final cards = await local.fetchUserCards(
+      catalogue: [product('p-keep', 'Kept Card')],
+    );
     expect(cards.map((c) => c.id), [keepId]);
   });
+
+  test(
+    'adding the same product twice is rejected without a second row',
+    () async {
+      await local.addCard('p-same');
+
+      expect(
+        () => local.addCard('p-same'),
+        throwsA(isA<CardAlreadyAddedException>()),
+      );
+      expect(await local.count(), 1);
+    },
+  );
 }

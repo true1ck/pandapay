@@ -39,50 +39,134 @@ class _RecordingCardFeedbackRepository implements CardFeedbackRepository {
 }
 
 void main() {
-  testWidgets('pre-fills the card name from the catalogue and submits a report', (tester) async {
-    final repo = _RecordingCardFeedbackRepository();
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository([product])),
-          cardFeedbackRepositoryProvider.overrideWithValue(repo),
-        ],
-        child: const MaterialApp(home: ReportWrongDataScreen(cardProductId: 'p1', initialFieldPath: 'Dining rate')),
-      ),
-    );
-    await tester.pumpAndSettle();
+  testWidgets(
+    'pre-fills the card name from the catalogue and submits a report',
+    (tester) async {
+      final repo = _RecordingCardFeedbackRepository();
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            catalogueRepositoryProvider.overrideWithValue(
+              _FakeCatalogueRepository([product]),
+            ),
+            cardFeedbackRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: const MaterialApp(
+            home: ReportWrongDataScreen(
+              cardProductId: 'p1',
+              initialFieldPath: 'Dining rate',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Test Card'), findsOneWidget);
-    expect(find.text('Dining rate'), findsOneWidget);
+      expect(find.text('Test Card'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Dining rate'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Dining rate'), findsOneWidget);
 
-    await tester.enterText(find.widgetWithText(TextField, 'What it should be'), '5%');
-    await tester.tap(find.text('Submit report'));
-    await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('What it should be'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'What it should be'),
+        '5%',
+      );
+      await tester.scrollUntilVisible(
+        find.text('Submit report'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Submit report'));
+      await tester.pumpAndSettle();
 
-    expect(repo.lastReport?['cardProductId'], 'p1');
-    expect(repo.lastReport?['fieldPath'], 'Dining rate');
-    expect(repo.lastReport?['claimedValue'], '5%');
-    expect(find.textContaining('we verify before publishing'), findsOneWidget);
-  });
+      expect(repo.lastReport?['cardProductId'], 'p1');
+      expect(repo.lastReport?['fieldPath'], 'Dining rate');
+      expect(repo.lastReport?['claimedValue'], '5%');
+      expect(
+        find.textContaining('we verify before publishing'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('requires a field before submitting', (tester) async {
     final repo = _RecordingCardFeedbackRepository();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(const [])),
+          catalogueRepositoryProvider.overrideWithValue(
+            _FakeCatalogueRepository(const []),
+          ),
           cardFeedbackRepositoryProvider.overrideWithValue(repo),
         ],
-        child: const MaterialApp(home: ReportWrongDataScreen(cardProductId: 'p1')),
+        child: const MaterialApp(
+          home: ReportWrongDataScreen(cardProductId: 'p1'),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Submit report'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Submit report'));
     await tester.pumpAndSettle();
 
     expect(repo.lastReport, isNull);
     expect(find.textContaining('Tell us which field'), findsOneWidget);
+  });
+
+  testWidgets('selects a known field with a radio button', (tester) async {
+    final repo = _RecordingCardFeedbackRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogueRepositoryProvider.overrideWithValue(
+            _FakeCatalogueRepository(const []),
+          ),
+          cardFeedbackRepositoryProvider.overrideWithValue(repo),
+        ],
+        child: const MaterialApp(
+          home: ReportWrongDataScreen(cardProductId: 'p1'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RadioListTile<String>), findsNWidgets(14));
+    await tester.tap(find.text('Annual fee'));
+    await tester.scrollUntilVisible(
+      find.text('What it should be'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'What it should be'),
+      'Lifetime free',
+    );
+    await tester.scrollUntilVisible(
+      find.text('Submit report'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Submit report'));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastReport?['fieldPath'], 'annual_fee');
+    expect(repo.lastReport?['claimedValue'], 'Lifetime free');
   });
 }

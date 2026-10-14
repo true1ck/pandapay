@@ -49,7 +49,8 @@ class _RecordingUserCardsRepository implements UserCardsRepository {
   Future<void> archiveCard(String userCardId) async => archived = true;
 
   @override
-  Future<void> setDefaultCard(String userCardId) async => defaultedId = userCardId;
+  Future<void> setDefaultCard(String userCardId) async =>
+      defaultedId = userCardId;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -99,14 +100,22 @@ Future<GoRouter> _pump(
   final router = GoRouter(
     initialLocation: '/edit',
     routes: [
-      GoRoute(path: '/edit', builder: (context, state) => const EditCardScreen(userCardId: 'uc1')),
-      GoRoute(path: '/back', builder: (context, state) => const Scaffold(body: Text('back home'))),
+      GoRoute(
+        path: '/edit',
+        builder: (context, state) => const EditCardScreen(userCardId: 'uc1'),
+      ),
+      GoRoute(
+        path: '/back',
+        builder: (context, state) => const Scaffold(body: Text('back home')),
+      ),
     ],
   );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogue)),
+        catalogueRepositoryProvider.overrideWithValue(
+          _FakeCatalogueRepository(catalogue),
+        ),
         userCardsProvider.overrideWith((ref) async => owned),
         myCardsProvider.overrideWith((ref) async => owned),
         userCardsRepositoryProvider.overrideWithValue(repo),
@@ -151,10 +160,14 @@ Future<(GoRouter, SyncQueue)> _pumpOffline(
   final router = GoRouter(
     initialLocation: '/home',
     routes: [
-      GoRoute(path: '/home', builder: (context, state) => const Scaffold(body: Text('home'))),
+      GoRoute(
+        path: '/home',
+        builder: (context, state) => const Scaffold(body: Text('home')),
+      ),
       GoRoute(
         path: '/edit',
-        builder: (context, state) => const _WarmIsOnline(child: EditCardScreen(userCardId: 'uc1')),
+        builder: (context, state) =>
+            const _WarmIsOnline(child: EditCardScreen(userCardId: 'uc1')),
       ),
     ],
   );
@@ -162,10 +175,14 @@ Future<(GoRouter, SyncQueue)> _pumpOffline(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogue)),
+        catalogueRepositoryProvider.overrideWithValue(
+          _FakeCatalogueRepository(catalogue),
+        ),
         userCardsProvider.overrideWith((ref) async => owned),
         myCardsProvider.overrideWith((ref) async => owned),
-        userCardsRepositoryProvider.overrideWithValue(_OfflineUserCardsRepository()),
+        userCardsRepositoryProvider.overrideWithValue(
+          _OfflineUserCardsRepository(),
+        ),
         isOnlineProvider.overrideWith((ref) => Stream.value(false)),
         syncQueueProvider.overrideWith((ref) async => queue),
       ],
@@ -179,8 +196,14 @@ Future<(GoRouter, SyncQueue)> _pumpOffline(
 }
 
 void main() {
-  testWidgets('pre-fills nickname and credit limit from the existing card', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+  testWidgets('pre-fills nickname and credit limit from the existing card', (
+    tester,
+  ) async {
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.rupay,
+    );
     final owned = [
       UserCard(
         id: 'uc1',
@@ -191,17 +214,109 @@ void main() {
         creditLimit: Money.fromRupees(50000),
       ),
     ];
-    await _pump(tester, catalogue: [product], owned: owned, repo: _RecordingUserCardsRepository());
+    await _pump(
+      tester,
+      catalogue: [product],
+      owned: owned,
+      repo: _RecordingUserCardsRepository(),
+    );
 
     expect(find.widgetWithText(TextField, 'Nickname'), findsOneWidget);
-    final nicknameField = tester.widget<TextField>(find.widgetWithText(TextField, 'Nickname'));
+    final nicknameField = tester.widget<TextField>(
+      find.widgetWithText(TextField, 'Nickname'),
+    );
     expect(nicknameField.controller!.text, 'My Card');
-    final limitField = tester.widget<TextField>(find.widgetWithText(TextField, 'Credit limit (₹)'));
+    await tester.scrollUntilVisible(
+      find.text('Credit limit (₹)'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final limitField = tester.widget<TextField>(
+      find.widgetWithText(TextField, 'Credit limit (₹)'),
+    );
     expect(limitField.controller!.text, '50000');
   });
 
-  testWidgets('pre-fills current points balance, not lifetime points earned', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+  testWidgets(
+    'shows catalogue details without asking the user to re-enter them',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+        issuerName: 'Test Bank',
+        annualFeeInr: Money.fromRupees(999),
+        joiningFeeInr: Money.fromRupees(499),
+        verifiedAt: DateTime(2026, 10, 1),
+        rewardRules: [
+          const RewardRule(id: 'r1', unit: RewardUnit.cashbackPercent, rate: 1),
+        ],
+        capRules: [
+          const CapRule(
+            id: 'cap1',
+            label: 'Monthly cap',
+            capValue: Money.fromPaise(100000),
+            measure: CapMeasure.spendAmount,
+            period: CapPeriod.calendarMonth,
+          ),
+        ],
+        milestoneRules: [
+          const MilestoneRule(
+            id: 'm1',
+            label: 'Welcome milestone',
+            thresholdSpend: Money.fromPaise(1000000),
+            rewardValue: Money.fromPaise(10000),
+          ),
+        ],
+        benefits: [
+          const CardBenefit(
+            id: 'b1',
+            kind: BenefitKind.loungeDomestic,
+            label: 'Domestic lounge access',
+          ),
+        ],
+      );
+      await _pump(
+        tester,
+        catalogue: [product],
+        owned: [
+          const UserCard(
+            id: 'uc1',
+            cardProductId: 'p1',
+            cardName: 'Test Card',
+            isDefault: false,
+            annualFeeOverride: Money.zero(),
+            autopayMode: AutopayMode.full,
+          ),
+        ],
+        repo: _RecordingUserCardsRepository(),
+      );
+
+      expect(find.text('Test Bank · RuPay'), findsOneWidget);
+      expect(find.text('Your annual fee'), findsOneWidget);
+      expect(find.text('Lifetime free'), findsOneWidget);
+      expect(find.text('Joining fee'), findsOneWidget);
+      expect(find.text('1 earning rules'), findsOneWidget);
+      expect(find.text('1 caps · 1 milestones'), findsOneWidget);
+      expect(find.text('1 benefits · 1 lounge'), findsOneWidget);
+      expect(find.text('01/10/2026'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Autopay preference'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Full statement balance'), findsOneWidget);
+    },
+  );
+
+  testWidgets('pre-fills current points balance, not lifetime points earned', (
+    tester,
+  ) async {
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.rupay,
+    );
     final owned = [
       UserCard(
         id: 'uc1',
@@ -212,21 +327,53 @@ void main() {
         pointsBalance: 2122,
       ),
     ];
-    await _pump(tester, catalogue: [product], owned: owned, repo: _RecordingUserCardsRepository());
+    await _pump(
+      tester,
+      catalogue: [product],
+      owned: owned,
+      repo: _RecordingUserCardsRepository(),
+    );
 
-    final pointsField = tester.widget<TextField>(find.widgetWithText(TextField, 'Current points balance'));
+    await tester.scrollUntilVisible(
+      find.text('Current points balance'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final pointsField = tester.widget<TextField>(
+      find.widgetWithText(TextField, 'Current points balance'),
+    );
     expect(pointsField.controller!.text, '2122');
   });
 
-  testWidgets('Save sends the edited nickname to the repository and pops', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+  testWidgets('Save sends the edited nickname to the repository and pops', (
+    tester,
+  ) async {
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.rupay,
+    );
     final owned = [
-      const UserCard(id: 'uc1', cardProductId: 'p1', nickname: 'Old', cardName: 'Test Card', isDefault: false),
+      const UserCard(
+        id: 'uc1',
+        cardProductId: 'p1',
+        nickname: 'Old',
+        cardName: 'Test Card',
+        isDefault: false,
+      ),
     ];
     final repo = _RecordingUserCardsRepository();
     await _pump(tester, catalogue: [product], owned: owned, repo: repo);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Nickname'), 'Renamed');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Nickname'),
+      'Renamed',
+    );
+    await tester.scrollUntilVisible(
+      find.text('Save'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -234,15 +381,31 @@ void main() {
     expect(repo.lastUpdateArgs?['nickname'], 'Renamed');
   });
 
-  testWidgets('Remove card confirms in a sheet before calling archiveCard', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+  testWidgets('Remove card confirms in a sheet before calling archiveCard', (
+    tester,
+  ) async {
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.rupay,
+    );
     final owned = [
-      const UserCard(id: 'uc1', cardProductId: 'p1', nickname: 'Old', cardName: 'Test Card', isDefault: false),
+      const UserCard(
+        id: 'uc1',
+        cardProductId: 'p1',
+        nickname: 'Old',
+        cardName: 'Test Card',
+        isDefault: false,
+      ),
     ];
     final repo = _RecordingUserCardsRepository();
     await _pump(tester, catalogue: [product], owned: owned, repo: repo);
 
-    await tester.scrollUntilVisible(find.text('Remove card'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('Remove card'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Remove card'));
     await tester.pumpAndSettle();
 
@@ -259,15 +422,31 @@ void main() {
     expect(repo.archived, isTrue);
   });
 
-  testWidgets('cancelling the remove sheet leaves the card alone', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+  testWidgets('cancelling the remove sheet leaves the card alone', (
+    tester,
+  ) async {
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.rupay,
+    );
     final owned = [
-      const UserCard(id: 'uc1', cardProductId: 'p1', nickname: 'Old', cardName: 'Test Card', isDefault: false),
+      const UserCard(
+        id: 'uc1',
+        cardProductId: 'p1',
+        nickname: 'Old',
+        cardName: 'Test Card',
+        isDefault: false,
+      ),
     ];
     final repo = _RecordingUserCardsRepository();
     await _pump(tester, catalogue: [product], owned: owned, repo: repo);
 
-    await tester.scrollUntilVisible(find.text('Remove card'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('Remove card'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Remove card'));
     await tester.pumpAndSettle();
 
@@ -278,119 +457,25 @@ void main() {
   });
 
   testWidgets('Set as default card calls setDefaultCard', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
+    final product = CardProduct(
+      id: 'p1',
+      name: 'Test Card',
+      network: CardNetwork.rupay,
+    );
     final repo = _RecordingUserCardsRepository();
     await _pump(
       tester,
       catalogue: [product],
-      owned: [const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Card', isDefault: false)],
-      repo: repo,
-    );
-
-    await tester.scrollUntilVisible(find.text('Set as default card'), 200, scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.text('Set as default card'));
-    await tester.pumpAndSettle();
-
-    expect(repo.defaultedId, 'uc1');
-  });
-
-  testWidgets('a card that is already default shows a state row, not the action', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
-    await _pump(
-      tester,
-      catalogue: [product],
-      owned: [const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Card', isDefault: true)],
-      repo: _RecordingUserCardsRepository(),
-    );
-
-    await tester.scrollUntilVisible(
-      find.text('This is your default card'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Set as default card'), findsNothing);
-  });
-
-  testWidgets('Save while offline queues nickname/credit-limit edits instead of failing outright', (
-    tester,
-  ) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
-    final owned = [
-      const UserCard(id: 'uc1', cardProductId: 'p1', nickname: 'Old', cardName: 'Test Card', isDefault: false),
-    ];
-    final (router, queue) = await _pumpOffline(tester, catalogue: [product], owned: owned);
-
-    await tester.enterText(find.widgetWithText(TextField, 'Nickname'), 'Renamed');
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Saved offline — will sync when you reconnect.'), findsOneWidget);
-    final pending = queue.pending();
-    expect(pending, hasLength(1));
-    expect(pending.single.entity, 'user_cards');
-    expect(pending.single.entityId, 'uc1');
-    expect(pending.single.payload['nickname'], 'Renamed');
-    // Points balance was never in this test's payload since it wasn't
-    // touched, and must never appear even as a null placeholder — the
-    // server-side allowlist doesn't recognize it at all for this entity.
-    expect(pending.single.payload.containsKey('pointsBalance'), isFalse);
-  });
-
-  testWidgets(
-    'Save while offline warns explicitly when the points balance also changed, since that field cannot be queued',
-    (tester) async {
-      final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
-      final owned = [
-        UserCard(
+      owned: [
+        const UserCard(
           id: 'uc1',
           cardProductId: 'p1',
           cardName: 'Test Card',
           isDefault: false,
-          totalPointsEarned: 100,
         ),
-      ];
-      final (_, queue) = await _pumpOffline(tester, catalogue: [product], owned: owned);
-
-      await tester.enterText(find.widgetWithText(TextField, 'Current points balance'), '500');
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('Points balance needs a live connection'), findsOneWidget);
-      // The rest of the edit (even though unchanged here) still queues —
-      // only the points balance itself is excluded.
-      expect(queue.pending(), hasLength(1));
-    },
-  );
-
-  testWidgets('Remove card while offline queues is_archived instead of failing outright', (tester) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
-    final owned = [
-      const UserCard(id: 'uc1', cardProductId: 'p1', nickname: 'Old', cardName: 'Test Card', isDefault: false),
-    ];
-    final (_, queue) = await _pumpOffline(tester, catalogue: [product], owned: owned);
-
-    await tester.scrollUntilVisible(find.text('Remove card'), 200, scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.text('Remove card'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Remove card'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Removed offline — will sync when you reconnect.'), findsOneWidget);
-    final pending = queue.pending();
-    expect(pending, hasLength(1));
-    expect(pending.single.entity, 'user_cards');
-    expect(pending.single.entityId, 'uc1');
-    expect(pending.single.payload, {'is_archived': true});
-  });
-
-  testWidgets('Set as default while offline asks for connectivity rather than queuing an unsafe change', (
-    tester,
-  ) async {
-    final product = CardProduct(id: 'p1', name: 'Test Card', network: CardNetwork.rupay);
-    final owned = [
-      const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Card', isDefault: false),
-    ];
-    final (_, queue) = await _pumpOffline(tester, catalogue: [product], owned: owned);
+      ],
+      repo: repo,
+    );
 
     await tester.scrollUntilVisible(
       find.text('Set as default card'),
@@ -400,9 +485,223 @@ void main() {
     await tester.tap(find.text('Set as default card'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('needs an internet connection'), findsOneWidget);
-    // Deliberately nothing queued — see the source comment: queuing just
-    // this row's is_default=true could leave two cards flagged default.
-    expect(queue.pending(), isEmpty);
+    expect(repo.defaultedId, 'uc1');
   });
+
+  testWidgets(
+    'a card that is already default shows a state row, not the action',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+      );
+      await _pump(
+        tester,
+        catalogue: [product],
+        owned: [
+          const UserCard(
+            id: 'uc1',
+            cardProductId: 'p1',
+            cardName: 'Test Card',
+            isDefault: true,
+          ),
+        ],
+        repo: _RecordingUserCardsRepository(),
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('This is your default card'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Set as default card'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Save while offline queues nickname/credit-limit edits instead of failing outright',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+      );
+      final owned = [
+        const UserCard(
+          id: 'uc1',
+          cardProductId: 'p1',
+          nickname: 'Old',
+          cardName: 'Test Card',
+          isDefault: false,
+        ),
+      ];
+      final (router, queue) = await _pumpOffline(
+        tester,
+        catalogue: [product],
+        owned: owned,
+      );
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Nickname'),
+        'Renamed',
+      );
+      await tester.scrollUntilVisible(
+        find.text('Save'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Saved offline — will sync when you reconnect.'),
+        findsOneWidget,
+      );
+      final pending = queue.pending();
+      expect(pending, hasLength(1));
+      expect(pending.single.entity, 'user_cards');
+      expect(pending.single.entityId, 'uc1');
+      expect(pending.single.payload['nickname'], 'Renamed');
+      // Points balance was never in this test's payload since it wasn't
+      // touched, and must never appear even as a null placeholder — the
+      // server-side allowlist doesn't recognize it at all for this entity.
+      expect(pending.single.payload.containsKey('pointsBalance'), isFalse);
+    },
+  );
+
+  testWidgets(
+    'Save while offline warns explicitly when the points balance also changed, since that field cannot be queued',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+      );
+      final owned = [
+        UserCard(
+          id: 'uc1',
+          cardProductId: 'p1',
+          cardName: 'Test Card',
+          isDefault: false,
+          totalPointsEarned: 100,
+        ),
+      ];
+      final (_, queue) = await _pumpOffline(
+        tester,
+        catalogue: [product],
+        owned: owned,
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Current points balance'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Current points balance'),
+        '500',
+      );
+      await tester.scrollUntilVisible(
+        find.text('Save'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Points balance needs a live connection'),
+        findsOneWidget,
+      );
+      // The rest of the edit (even though unchanged here) still queues —
+      // only the points balance itself is excluded.
+      expect(queue.pending(), hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'Remove card while offline queues is_archived instead of failing outright',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+      );
+      final owned = [
+        const UserCard(
+          id: 'uc1',
+          cardProductId: 'p1',
+          nickname: 'Old',
+          cardName: 'Test Card',
+          isDefault: false,
+        ),
+      ];
+      final (_, queue) = await _pumpOffline(
+        tester,
+        catalogue: [product],
+        owned: owned,
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Remove card'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Remove card'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Remove card'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Removed offline — will sync when you reconnect.'),
+        findsOneWidget,
+      );
+      final pending = queue.pending();
+      expect(pending, hasLength(1));
+      expect(pending.single.entity, 'user_cards');
+      expect(pending.single.entityId, 'uc1');
+      expect(pending.single.payload, {'is_archived': true});
+    },
+  );
+
+  testWidgets(
+    'Set as default while offline asks for connectivity rather than queuing an unsafe change',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Test Card',
+        network: CardNetwork.rupay,
+      );
+      final owned = [
+        const UserCard(
+          id: 'uc1',
+          cardProductId: 'p1',
+          cardName: 'Test Card',
+          isDefault: false,
+        ),
+      ];
+      final (_, queue) = await _pumpOffline(
+        tester,
+        catalogue: [product],
+        owned: owned,
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Set as default card'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Set as default card'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('needs an internet connection'),
+        findsOneWidget,
+      );
+      // Deliberately nothing queued — see the source comment: queuing just
+      // this row's is_default=true could leave two cards flagged default.
+      expect(queue.pending(), isEmpty);
+    },
+  );
 }

@@ -51,6 +51,11 @@ import 'package:permission_handler/permission_handler.dart';
 class ScanCardScreen extends StatefulWidget {
   final List<CardProduct> catalogue;
 
+  /// Product ids already in the wallet. This remains optional so the scanner
+  /// is reusable from onboarding, while Wallet can warn on a duplicate before
+  /// the user confirms the scan.
+  final Set<String> alreadyOwnedProductIds;
+
   /// Test seam: overrides the on-device text recognizer. Production leaves
   /// this null and a real [MlKitCardTextRecognizer] is used.
   @visibleForTesting
@@ -71,6 +76,7 @@ class ScanCardScreen extends StatefulWidget {
   const ScanCardScreen({
     super.key,
     required this.catalogue,
+    this.alreadyOwnedProductIds = const <String>{},
     this.recognizerFactory,
     this.pickImagePath,
     this.decodeBarcodeFromImage,
@@ -79,9 +85,11 @@ class ScanCardScreen extends StatefulWidget {
   @override
   State<ScanCardScreen> createState() => _ScanCardScreenState();
 }
+
 enum _ScanMode { ocr, qr }
 
-class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObserver {
+class _ScanCardScreenState extends State<ScanCardScreen>
+    with WidgetsBindingObserver {
   _ScanMode _mode = _ScanMode.ocr;
 
   // ---- OCR (primary) state ----
@@ -104,6 +112,7 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   List<CardMatch> _matches = const [];
   bool _resultIsFromOcr = false;
   File? _capturedImageFile;
+
   /// The image currently shown behind the result panel. Camera captures are
   /// temporary files; gallery images belong to the user and are never deleted
   /// by this screen.
@@ -139,10 +148,13 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
           (Platform.isAndroid || Platform.isIOS)) {
         final status = await Permission.camera.request();
         if (!status.isGranted) {
-          throw CameraException('CameraAccessDenied', 'User denied camera permission.');
+          throw CameraException(
+            'CameraAccessDenied',
+            'User denied camera permission.',
+          );
         }
       }
-      
+
       final cameras = await availableCameras();
       final back = cameras.firstWhere(
         (c) => c.lensDirection == CameraLensDirection.back,
@@ -166,7 +178,7 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
         } catch (_) {}
         await tryInit(ResolutionPreset.medium);
       }
-      
+
       // Auto-focus is critical for clear OCR of small text on physical cards.
       try {
         await controller?.setFocusMode(FocusMode.auto);
@@ -175,7 +187,10 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
       }
 
       _ensureRecognizer();
-      if (!mounted || generation != _cameraGeneration || _mode != _ScanMode.ocr || _lastExtracted != null) {
+      if (!mounted ||
+          generation != _cameraGeneration ||
+          _mode != _ScanMode.ocr ||
+          _lastExtracted != null) {
         // Torn down (or moved past the live-camera view) while we awaited.
         try {
           await controller?.dispose();
@@ -215,7 +230,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   }
 
   String _friendlyCameraError(Object e) {
-    if (e is CameraException && (e.code == 'CameraAccessDenied' || e.code == 'CameraAccessDeniedWithoutPrompt')) {
+    if (e is CameraException &&
+        (e.code == 'CameraAccessDenied' ||
+            e.code == 'CameraAccessDeniedWithoutPrompt')) {
       return 'Camera access is off for PandaPay. Enable it in your phone\'s settings to scan a card.';
     }
     return "Couldn't start the camera. You can still add a card from the list below.";
@@ -254,7 +271,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     if (_capturedImageFile != null) {
-      unawaited(_capturedImageFile!.delete().catchError((_) => _capturedImageFile!));
+      unawaited(
+        _capturedImageFile!.delete().catchError((_) => _capturedImageFile!),
+      );
     }
     // Invalidate any in-flight _initCamera so it disposes its controller
     // instead of publishing it into a dead State.
@@ -290,17 +309,19 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
       });
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Couldn't read that — try again with more light.")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Couldn't read that — try again with more light."),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _capturing = false);
     }
   }
 
-  CardTextRecognizer _ensureRecognizer() =>
-      _recognizer ??= widget.recognizerFactory?.call() ?? MlKitCardTextRecognizer();
+  CardTextRecognizer _ensureRecognizer() => _recognizer ??=
+      widget.recognizerFactory?.call() ?? MlKitCardTextRecognizer();
 
   /// "Upload a photo instead": the card may not be in hand (a partner's
   /// card, a card mailer photographed earlier, a card in another room), and
@@ -318,7 +339,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
       if (widget.pickImagePath != null) {
         path = await widget.pickImagePath!();
       } else {
-        final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+        final picked = await ImagePicker().pickImage(
+          source: ImageSource.gallery,
+        );
         path = picked?.path;
       }
       if (path == null || !mounted) return;
@@ -353,7 +376,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
       });
     } catch (_) {
       if (mounted) {
-        _showSnack("Couldn't use that photo. Try another, or add the card from the list below.");
+        _showSnack(
+          "Couldn't use that photo. Try another, or add the card from the list below.",
+        );
       }
     } finally {
       if (mounted) {
@@ -380,7 +405,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _onQrDetect(BarcodeCapture capture) {
@@ -400,14 +427,18 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
       _matches = const [];
       _previewImageFile = null;
       if (_capturedImageFile != null) {
-        unawaited(_capturedImageFile!.delete().catchError((_) => _capturedImageFile!));
+        unawaited(
+          _capturedImageFile!.delete().catchError((_) => _capturedImageFile!),
+        );
         _capturedImageFile = null;
       }
     });
     // The camera preview may have been torn down while the result panel was
     // up (notification shade, app switch) — bring it back so "Scan again"
     // lands on a live view, not a dead frame.
-    if (_mode == _ScanMode.ocr && _cameraController == null && _cameraError == null) {
+    if (_mode == _ScanMode.ocr &&
+        _cameraController == null &&
+        _cameraError == null) {
       _initCamera();
     }
   }
@@ -428,7 +459,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
       _lastExtracted = null;
       _matches = const [];
     });
-    if (mode == _ScanMode.ocr && _cameraController == null && _cameraError == null) {
+    if (mode == _ScanMode.ocr &&
+        _cameraController == null &&
+        _cameraError == null) {
       await _initCamera();
     }
   }
@@ -480,7 +513,9 @@ class _ScanCardScreenState extends State<ScanCardScreen> with WidgetsBindingObse
                         extracted: _lastExtracted!,
                         matches: _matches,
                         showRawText: !_resultIsFromOcr,
-                        onConfirm: (product) => Navigator.of(context).pop(product),
+                        alreadyOwnedProductIds: widget.alreadyOwnedProductIds,
+                        onConfirm: (product) =>
+                            Navigator.of(context).pop(product),
                         onRescan: _rescan,
                       ),
               ),
@@ -520,7 +555,9 @@ class _ModeToggle extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? BambooInk.lime : Colors.white.withValues(alpha: 0.08),
+          color: selected
+              ? BambooInk.lime
+              : Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppRadius.pill),
         ),
         child: Text(
@@ -542,9 +579,11 @@ class _OcrView extends StatefulWidget {
   final Future<void>? initFuture;
   final String? error;
   final bool capturing;
+
   /// True once OCR has returned a result — keeps the frozen camera frame
   /// visible (rather than going black) and overlays a success badge.
   final bool captured;
+
   /// The image to keep visible behind the result panel. This can be a camera
   /// capture or a gallery upload. Rendering the file directly also avoids
   /// Android clearing the camera texture after a capture or picker return.
@@ -565,14 +604,17 @@ class _OcrView extends StatefulWidget {
   State<_OcrView> createState() => _OcrViewState();
 }
 
-class _OcrViewState extends State<_OcrView> with SingleTickerProviderStateMixin {
+class _OcrViewState extends State<_OcrView>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))
-      ..repeat(reverse: true);
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -605,14 +647,18 @@ class _OcrViewState extends State<_OcrView> with SingleTickerProviderStateMixin 
       );
     }
     if (controller == null || widget.initFuture == null) {
-      return const Center(child: CircularProgressIndicator(color: BambooInk.lime));
+      return const Center(
+        child: CircularProgressIndicator(color: BambooInk.lime),
+      );
     }
 
     return FutureBuilder<void>(
       future: widget.initFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator(color: BambooInk.lime));
+          return const Center(
+            child: CircularProgressIndicator(color: BambooInk.lime),
+          );
         }
         return _buildResultView(_AspectPreservingCameraPreview(controller));
       },
@@ -710,10 +756,15 @@ class _AspectPreservingCameraPreview extends StatelessWidget {
 
         final orientation = value.isRecordingVideo
             ? value.recordingOrientation
-            : (value.previewPauseOrientation ?? value.lockedCaptureOrientation ?? value.deviceOrientation);
-        final isLandscape = orientation == DeviceOrientation.landscapeLeft ||
+            : (value.previewPauseOrientation ??
+                  value.lockedCaptureOrientation ??
+                  value.deviceOrientation);
+        final isLandscape =
+            orientation == DeviceOrientation.landscapeLeft ||
             orientation == DeviceOrientation.landscapeRight;
-        final previewAspectRatio = isLandscape ? nativeAspectRatio : 1 / nativeAspectRatio;
+        final previewAspectRatio = isLandscape
+            ? nativeAspectRatio
+            : 1 / nativeAspectRatio;
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -766,7 +817,10 @@ class _QrView extends StatelessWidget {
           child: MobileScanner(controller: controller, onDetect: onDetect),
         ),
         IgnorePointer(
-          child: CustomPaint(painter: _CornerBracketPainter(), size: Size.infinite),
+          child: CustomPaint(
+            painter: _CornerBracketPainter(),
+            size: Size.infinite,
+          ),
         ),
       ],
     );
@@ -781,12 +835,19 @@ class _CornerBracketPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final side = size.width * 0.6;
-    final rect = Rect.fromCenter(center: size.center(Offset.zero), width: side, height: side);
+    final rect = Rect.fromCenter(
+      center: size.center(Offset.zero),
+      width: side,
+      height: side,
+    );
     final overlayPath = Path()
       ..fillType = PathFillType.evenOdd
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
       ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(16)));
-    canvas.drawPath(overlayPath, Paint()..color = Colors.black.withValues(alpha: 0.55));
+    canvas.drawPath(
+      overlayPath,
+      Paint()..color = Colors.black.withValues(alpha: 0.55),
+    );
 
     final cornerLen = side * 0.18;
     final paint = Paint()
@@ -819,7 +880,13 @@ class _CapturedPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return const ColoredBox(
       color: Colors.black,
-      child: Center(child: Icon(Icons.check_circle_rounded, size: 56, color: BambooInk.lime)),
+      child: Center(
+        child: Icon(
+          Icons.check_circle_rounded,
+          size: 56,
+          color: BambooInk.lime,
+        ),
+      ),
     );
   }
 }
@@ -864,16 +931,26 @@ class _IdleHint extends StatelessWidget {
             '"Front of card" for that.',
       ),
     };
-    final pickLabel = mode == _ScanMode.ocr ? 'Upload a photo instead' : 'Pick an image instead';
+    final pickLabel = mode == _ScanMode.ocr
+        ? 'Upload a photo instead'
+        : 'Pick an image instead';
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(title, style: BambooFonts.heading(15, color: BambooInk.ink900), textAlign: TextAlign.center),
+            Text(
+              title,
+              style: BambooFonts.heading(15, color: BambooInk.ink900),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: AppSpace.sm),
-            Text(body, style: BambooFonts.ui(12.5, color: BambooInk.ink500), textAlign: TextAlign.center),
+            Text(
+              body,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: AppSpace.md),
             OutlinedButton.icon(
               onPressed: onPickImage,
@@ -908,6 +985,7 @@ class ScanResultPanel extends StatelessWidget {
   /// can't accidentally inherit "show raw text" without a deliberate
   /// decision to allow it.
   final bool showRawText;
+  final Set<String> alreadyOwnedProductIds;
   final void Function(CardProduct) onConfirm;
   final VoidCallback onRescan;
 
@@ -916,6 +994,7 @@ class ScanResultPanel extends StatelessWidget {
     required this.extracted,
     required this.matches,
     required this.showRawText,
+    this.alreadyOwnedProductIds = const <String>{},
     required this.onConfirm,
     required this.onRescan,
   });
@@ -925,18 +1004,32 @@ class ScanResultPanel extends StatelessWidget {
     // Low-confidence candidates are suggestions only. Showing one as the
     // detected card made OCR noise such as the word "platinum" look like a
     // real identification. Never present a low-confidence row as a result.
-    final usableMatches = matches.where((m) => m.confidence != MatchConfidence.low).toList();
-    final highConfidence = usableMatches.where((m) => m.confidence == MatchConfidence.high).toList();
+    final usableMatches = matches
+        .where((m) => m.confidence != MatchConfidence.low)
+        .toList();
+    final highConfidence = usableMatches
+        .where((m) => m.confidence == MatchConfidence.high)
+        .toList();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (showRawText) ...[
-            Text('Scanned text', style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500)),
+            Text(
+              'Scanned text',
+              style: BambooFonts.ui(
+                12,
+                weight: FontWeight.w700,
+                color: BambooInk.ink500,
+              ),
+            ),
             Text(
               redactDigitRuns(extracted.rawText),
-              style: const TextStyle(fontFamily: 'monospace', color: BambooInk.ink900),
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                color: BambooInk.ink900,
+              ),
             ),
             const SizedBox(height: 12),
           ],
@@ -948,14 +1041,24 @@ class ScanResultPanel extends StatelessWidget {
           else if (highConfidence.isEmpty)
             Text(
               'Possible matches — verify the card name before adding it.',
-              style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500),
+              style: BambooFonts.ui(
+                12,
+                weight: FontWeight.w700,
+                color: BambooInk.ink500,
+              ),
             )
           else
             Text(
               'Detected card',
-              style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.ink500),
+              style: BambooFonts.ui(
+                12,
+                weight: FontWeight.w700,
+                color: BambooInk.ink500,
+              ),
             ),
-          for (final match in usableMatches.take(highConfidence.isNotEmpty ? 1 : 3))
+          for (final match in usableMatches.take(
+            highConfidence.isNotEmpty ? 1 : 3,
+          ))
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
@@ -965,12 +1068,25 @@ class ScanResultPanel extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(match.product.name, style: BambooFonts.ui(14.5, color: BambooInk.ink900)),
-                        const SizedBox(height: 2),
                         Text(
-                          '${match.confidence.name} confidence · ${match.reason}',
-                          style: BambooFonts.ui(12, color: BambooInk.ink500),
+                          match.product.name,
+                          style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                         ),
+                        const SizedBox(height: 2),
+                        if (alreadyOwnedProductIds.contains(match.product.id))
+                          Text(
+                            'Already in your wallet · we will not add another copy',
+                            style: BambooFonts.ui(
+                              12,
+                              color: BambooInk.jade,
+                              weight: FontWeight.w700,
+                            ),
+                          )
+                        else
+                          Text(
+                            '${match.confidence.name} confidence · ${match.reason}',
+                            style: BambooFonts.ui(12, color: BambooInk.ink500),
+                          ),
                       ],
                     ),
                   ),
@@ -988,7 +1104,11 @@ class ScanResultPanel extends StatelessWidget {
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       onPressed: () => onConfirm(match.product),
-                      child: const Text('Use this'),
+                      child: Text(
+                        alreadyOwnedProductIds.contains(match.product.id)
+                            ? 'Done'
+                            : 'Use this',
+                      ),
                     ),
                   ],
                 ],

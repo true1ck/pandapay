@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -14,13 +15,16 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show MonthlyReport, TxnEntryKind;
 import '../../main.dart' show MoneyText;
+import '../cards/card_summary.dart';
 import '../referrals/invite_friends_screen.dart';
 import 'insights_overview.dart';
+import 'spending_visuals.dart';
 
 /// A reward/opportunity delta is an earned-value figure, not a debit.
 /// [Money] remains signed globally because refunds and reversals are valid
 /// domain values; this helper is only for derived reward comparisons.
-Money nonNegativeRewardValue(Money value) => value.isNegative ? const Money.zero() : value;
+Money nonNegativeRewardValue(Money value) =>
+    value.isNegative ? const Money.zero() : value;
 
 /// baseline_single_card / value_missed for the CURRENT month, computed
 /// client-side from the exact same [baseRateValueFor]/[compareToOwnedCards]
@@ -43,9 +47,13 @@ class _MonthlyExtras {
   });
 }
 
-final _monthlyExtrasProvider = FutureProvider.family<_MonthlyExtras, DateTime>((ref, periodMonth) async {
+final _monthlyExtrasProvider = FutureProvider.family<_MonthlyExtras, DateTime>((
+  ref,
+  periodMonth,
+) async {
   final repo = ref.watch(userCardsRepositoryProvider);
-  final pairs = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+  final pairs =
+      ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
   if (repo == null || pairs.length < 2) {
     return const _MonthlyExtras(
       baselineSingleCard: Money.zero(),
@@ -57,10 +65,22 @@ final _monthlyExtrasProvider = FutureProvider.family<_MonthlyExtras, DateTime>((
   final allProducts = [for (final (_, p) in pairs) p];
   final productsByUserCardId = {for (final (uc, p) in pairs) uc.id: p};
   final monthStart = DateTime(periodMonth.year, periodMonth.month, 1);
-  final monthEnd = DateTime(periodMonth.year, periodMonth.month + 1, 1).subtract(const Duration(days: 1));
-  final transactions = await repo.fetchTransactions(from: monthStart, to: monthEnd);
+  final monthEnd = DateTime(
+    periodMonth.year,
+    periodMonth.month + 1,
+    1,
+  ).subtract(const Duration(days: 1));
+  final transactions = await repo.fetchTransactions(
+    from: monthStart,
+    to: monthEnd,
+  );
   final active = transactions
-      .where((t) => t.status == 'active' && t.entryKind == TxnEntryKind.spend && t.amount.paise > 0)
+      .where(
+        (t) =>
+            t.status == 'active' &&
+            t.entryKind == TxnEntryKind.spend &&
+            t.amount.paise > 0,
+      )
       .toList();
 
   var valueMissed = const Money.zero();
@@ -81,7 +101,11 @@ final _monthlyExtrasProvider = FutureProvider.family<_MonthlyExtras, DateTime>((
   for (final candidate in allProducts) {
     var total = const Money.zero();
     for (final txn in active) {
-      total += baseRateValueFor(product: candidate, amount: txn.amount, categoryId: txn.categoryId);
+      total += baseRateValueFor(
+        product: candidate,
+        amount: txn.amount,
+        categoryId: txn.categoryId,
+      );
     }
     if (total > baselineSingleCard) baselineSingleCard = total;
   }
@@ -106,7 +130,9 @@ class MonthlySavingsScreen extends ConsumerWidget {
 
   Future<void> _shareAsImage(BuildContext context) async {
     try {
-      final boundary = _shareBoundaryKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final boundary =
+          _shareBoundaryKey.currentContext!.findRenderObject()!
+              as RenderRepaintBoundary;
       final image = await boundary.toImage(pixelRatio: 3);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       if (bytes == null) return;
@@ -114,13 +140,18 @@ class MonthlySavingsScreen extends ConsumerWidget {
       final file = File('${dir.path}/pandapay_monthly_savings_report.png');
       await file.writeAsBytes(bytes.buffer.asUint8List());
       await SharePlus.instance.share(
-        ShareParams(files: [XFile(file.path)], text: 'My PandaPay savings report'),
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'My PandaPay savings report',
+        ),
       );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not share. ${userFacingErrorMessage(e)}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not share. ${userFacingErrorMessage(e)}'),
+          ),
+        );
       }
     }
   }
@@ -145,13 +176,21 @@ class MonthlySavingsScreen extends ConsumerWidget {
           );
         }
         final extras = ref.watch(_monthlyExtrasProvider(r.periodMonth));
-        final overview = ref.watch(insightsOverviewProvider(InsightsPeriod.thisMonth)).valueOrNull;
-        final streakDays = ref.watch(homeSummaryProvider).valueOrNull?.streakDays ?? 0;
+        final overview = ref
+            .watch(insightsOverviewProvider(InsightsPeriod.thisMonth))
+            .valueOrNull;
+        final streakDays =
+            ref.watch(homeSummaryProvider).valueOrNull?.streakDays ?? 0;
         return Column(
           children: [
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, AppSpace.lg),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  AppSpace.lg,
+                  AppSpace.lg,
+                  AppSpace.lg,
+                ),
                 children: [
                   // Design 32's shareable card. Only what's inside this
                   // RepaintBoundary lands in the PNG — the breakdown and the
@@ -173,48 +212,63 @@ class MonthlySavingsScreen extends ConsumerWidget {
                       backgroundColor: BambooInk.slate,
                       foregroundColor: BambooInk.onSlate,
                       minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
                     ),
-                    icon: const Icon(Icons.ios_share_rounded, size: 18, color: BambooInk.lime),
+                    icon: const Icon(
+                      Icons.ios_share_rounded,
+                      size: 18,
+                      color: BambooInk.lime,
+                    ),
                     label: const Text('Share this card'),
                   ),
                   if (overview != null && overview.byCategory.isNotEmpty) ...[
                     const SizedBox(height: AppSpace.xl),
-                    _WhereItCameFrom(categories: overview.byCategory),
+                    _WhereItCameFrom(
+                      categories: overview.byCategory,
+                      earnedTotal: overview.earned,
+                    ),
                   ],
                   const SizedBox(height: AppSpace.xl),
                   const _ReferralPrompt(),
                   const SizedBox(height: AppSpace.xl),
-                  Text('The detail', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+                  Text(
+                    'The detail',
+                    style: BambooFonts.heading(17, color: BambooInk.ink900),
+                  ),
                   const SizedBox(height: AppSpace.sm),
-                  Container(
-                    padding: const EdgeInsets.all(AppSpace.lg),
-                    decoration: BoxDecoration(
-                      color: BambooInk.glassFillOnPaper,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: BambooInk.hairlineOnPaper),
-                    ),
+                  CardSummaryPanel(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _StatRow(
+                        _RewardStatRow(
+                          icon: Icons.payments_rounded,
                           label: 'Total spend',
                           child: MoneyText(
                             r.totalSpend,
                             confidence: Confidence.estimated,
-                            style: BambooFonts.money(15, color: BambooInk.ink900),
+                            style: BambooFonts.money(
+                              15,
+                              color: BambooInk.ink900,
+                            ),
                           ),
                         ),
                         const Divider(height: AppSpace.xl),
                         extras.when(
                           loading: () => const Padding(
-                            padding: EdgeInsets.symmetric(vertical: AppSpace.lg),
+                            padding: EdgeInsets.symmetric(
+                              vertical: AppSpace.lg,
+                            ),
                             child: Center(child: CircularProgressIndicator()),
                           ),
                           error: (_, _) => Text(
                             "Couldn't compute this month's baseline comparison.",
-                            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.ink500,
+                            ),
                           ),
                           data: (e) {
                             if (!e.hasCounterfactual) {
@@ -222,17 +276,26 @@ class MonthlySavingsScreen extends ConsumerWidget {
                                 padding: const EdgeInsets.all(AppSpace.md),
                                 decoration: BoxDecoration(
                                   color: BambooInk.paperMuted,
-                                  borderRadius: BorderRadius.circular(AppRadius.md),
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.info_outline_rounded, size: 16, color: BambooInk.ink500),
+                                    const Icon(
+                                      Icons.info_outline_rounded,
+                                      size: 16,
+                                      color: BambooInk.ink500,
+                                    ),
                                     const SizedBox(width: AppSpace.sm),
                                     Expanded(
                                       child: Text(
                                         'Add a second card to see what a single best-overall card would '
                                         'have earned instead, and what a suboptimal choice may have cost.',
-                                        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                                        style: BambooFonts.ui(
+                                          12.5,
+                                          color: BambooInk.ink500,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -241,23 +304,30 @@ class MonthlySavingsScreen extends ConsumerWidget {
                             }
                             return Column(
                               children: [
-                                _StatRow(
+                                _RewardStatRow(
+                                  icon: Icons.workspace_premium_rounded,
                                   label: 'Single best card would\'ve earned',
                                   child: MoneyText(
                                     e.baselineSingleCard,
                                     confidence: Confidence.estimated,
-                                    style: BambooFonts.money(15, color: BambooInk.ink900),
+                                    style: BambooFonts.money(
+                                      15,
+                                      color: BambooInk.ink900,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: AppSpace.sm),
-                                _StatRow(
+                                _RewardStatRow(
+                                  icon: Icons.trending_down_rounded,
                                   label: 'Value missed to suboptimal picks',
                                   child: MoneyText(
                                     e.valueMissed,
                                     confidence: Confidence.estimated,
                                     style: BambooFonts.money(
                                       15,
-                                      color: e.valueMissed.isZero ? BambooInk.ink900 : BambooInk.clay,
+                                      color: e.valueMissed.isZero
+                                          ? BambooInk.ink900
+                                          : BambooInk.clay,
                                     ),
                                   ),
                                 ),
@@ -326,7 +396,9 @@ class _RecapCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasComparison = extras?.hasCounterfactual ?? false;
     final savedVsOneCard = hasComparison
-        ? nonNegativeRewardValue(report.rewardsEarned - extras!.baselineSingleCard)
+        ? nonNegativeRewardValue(
+            report.rewardsEarned - extras!.baselineSingleCard,
+          )
         : nonNegativeRewardValue(report.rewardsEarned);
     final payments = overview?.transactionCount ?? 0;
 
@@ -347,11 +419,18 @@ class _RecapCard extends StatelessWidget {
             children: [
               const PandaMark(size: 26),
               const SizedBox(width: AppSpace.sm),
-              Text('PandaPay', style: BambooFonts.heading(15, color: BambooInk.onSlate)),
+              Text(
+                'PandaPay',
+                style: BambooFonts.heading(15, color: BambooInk.onSlate),
+              ),
               const Spacer(),
               Text(
                 MonthlySavingsScreen._monthLabel(report.periodMonth),
-                style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.onSlateMuted),
+                style: BambooFonts.ui(
+                  12,
+                  weight: FontWeight.w600,
+                  color: BambooInk.onSlateMuted,
+                ),
               ),
             ],
           ),
@@ -370,21 +449,37 @@ class _RecapCard extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Text(
             [
-              if (payments > 0) 'across $payments payment${payments == 1 ? '' : 's'}',
+              if (payments > 0)
+                'across $payments payment${payments == 1 ? '' : 's'}',
               if (hasComparison) 'more than paying with one card all month',
             ].join(' — '),
-            style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle, height: 1.45),
+            style: BambooFonts.ui(
+              12.5,
+              color: BambooInk.onSlateSubtle,
+              height: 1.45,
+            ),
           ),
           const SizedBox(height: AppSpace.lg),
           const Divider(height: 1, color: BambooInk.slateHairline),
           const SizedBox(height: AppSpace.lg),
           Row(
             children: [
-              _RecapTile(label: 'Best card', value: overview?.bestCard?.label ?? '—'),
-              _RecapTile(label: 'Top category', value: overview?.bestCategory?.label ?? '—'),
               _RecapTile(
+                icon: Icons.credit_card_rounded,
+                label: 'Best card',
+                value: overview?.bestCard?.label ?? '—',
+              ),
+              _RecapTile(
+                icon: Icons.category_rounded,
+                label: 'Top category',
+                value: overview?.bestCategory?.label ?? '—',
+              ),
+              _RecapTile(
+                icon: Icons.local_fire_department_rounded,
                 label: 'Streak',
-                value: streakDays > 0 ? '$streakDays day${streakDays == 1 ? '' : 's'}' : '—',
+                value: streakDays > 0
+                    ? '$streakDays day${streakDays == 1 ? '' : 's'}'
+                    : '—',
               ),
             ],
           ),
@@ -397,7 +492,13 @@ class _RecapCard extends StatelessWidget {
 class _RecapTile extends StatelessWidget {
   final String label;
   final String value;
-  const _RecapTile({required this.label, required this.value});
+  final IconData icon;
+
+  const _RecapTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -405,7 +506,20 @@ class _RecapTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: BambooFonts.ui(11, color: BambooInk.onSlateMuted)),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: BambooInk.onSlate.withValues(alpha: 0.11),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 15, color: BambooInk.lime),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            label,
+            style: BambooFonts.ui(10.5, color: BambooInk.onSlateMuted),
+          ),
           const SizedBox(height: 3),
           Text(
             value,
@@ -424,36 +538,296 @@ class _RecapTile extends StatelessWidget {
 /// an audience.
 class _WhereItCameFrom extends StatelessWidget {
   final List<CategoryEarning> categories;
-  const _WhereItCameFrom({required this.categories});
+  final Money earnedTotal;
+
+  const _WhereItCameFrom({required this.categories, required this.earnedTotal});
 
   @override
   Widget build(BuildContext context) {
+    return CardSummaryPanel(
+      padding: const EdgeInsets.all(AppSpace.md),
+      child: _RewardCategoryBreakdown(
+        categories: categories,
+        earnedTotal: earnedTotal,
+      ),
+    );
+  }
+}
+
+class _RewardCategoryBreakdown extends StatefulWidget {
+  final List<CategoryEarning> categories;
+  final Money earnedTotal;
+
+  const _RewardCategoryBreakdown({
+    required this.categories,
+    required this.earnedTotal,
+  });
+
+  @override
+  State<_RewardCategoryBreakdown> createState() =>
+      _RewardCategoryBreakdownState();
+}
+
+class _RewardCategoryBreakdownState extends State<_RewardCategoryBreakdown> {
+  bool _expanded = false;
+
+  static const _chartColors = [
+    BambooInk.slate,
+    BambooInk.jade,
+    Color(0xffd98634),
+    Color(0xff8d75b8),
+    Color(0xff4d9aa3),
+    BambooInk.ink300,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = widget.categories.take(5).toList();
+    final total = widget.categories.fold<int>(
+      0,
+      (sum, category) => sum + category.earned.paise,
+    );
+    if (visible.isEmpty || total <= 0) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Where it came from', style: BambooFonts.heading(17, color: BambooInk.ink900)),
-        const SizedBox(height: AppSpace.sm),
-        for (final category in categories.take(4))
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.xs),
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpace.xs),
             child: Row(
               children: [
-                Expanded(
-                  child: Text(category.label, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+                _RewardIconBadge(
+                  icon: Icons.pie_chart_rounded,
+                  accent: BambooInk.jade,
                 ),
-                MoneyText(
-                  category.earned,
-                  confidence: Confidence.confirmed,
-                  style: BambooFonts.money(14, color: BambooInk.ink900),
-                  hidePaise: true,
-                  showConfidenceIcon: false,
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Where it came from',
+                        style: BambooFonts.heading(15, color: BambooInk.ink900),
+                      ),
+                      Text(
+                        '${widget.categories.length} reward categories',
+                        style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: BambooInk.ink500,
                 ),
               ],
             ),
           ),
+        ),
+        const SizedBox(height: AppSpace.md),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 118,
+              height: 118,
+              child: CustomPaint(
+                painter: _RewardDonutPainter(
+                  values: visible
+                      .map((category) => category.earned.paise.toDouble())
+                      .toList(),
+                  colors: _chartColors,
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Earned',
+                        style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+                      ),
+                      MoneyText(
+                        widget.earnedTotal,
+                        confidence: Confidence.confirmed,
+                        style: BambooFonts.money(16, color: BambooInk.ink900),
+                        hidePaise: true,
+                        showConfidenceIcon: false,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                children: [
+                  for (
+                    var index = 0;
+                    index < visible.length && index < 3;
+                    index++
+                  )
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == 2 ? 0 : AppSpace.sm,
+                      ),
+                      child: _RewardBreakdownRow(
+                        category: visible[index],
+                        totalPaise: total,
+                        color: _chartColors[index % _chartColors.length],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (_expanded) ...[
+          const Divider(height: AppSpace.xl),
+          for (var index = 0; index < widget.categories.length; index++)
+            Padding(
+              padding: EdgeInsets.only(
+                bottom: index == widget.categories.length - 1 ? 0 : AppSpace.sm,
+              ),
+              child: _RewardBreakdownRow(
+                category: widget.categories[index],
+                totalPaise: total,
+                color: _chartColors[index % _chartColors.length],
+              ),
+            ),
+        ],
       ],
     );
   }
+}
+
+class _RewardBreakdownRow extends StatelessWidget {
+  final CategoryEarning category;
+  final int totalPaise;
+  final Color color;
+
+  const _RewardBreakdownRow({
+    required this.category,
+    required this.totalPaise,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = (category.earned.paise / totalPaise).clamp(0.0, 1.0);
+    final visual = spendingCategoryVisual(category.label);
+    return Row(
+      children: [
+        _RewardIconBadge(icon: visual.icon, accent: visual.accent, size: 30),
+        const SizedBox(width: AppSpace.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      category.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(
+                        12.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                  ),
+                  MoneyText(
+                    category.earned,
+                    confidence: Confidence.confirmed,
+                    style: BambooFonts.money(12.5, color: BambooInk.ink900),
+                    hidePaise: true,
+                    showConfidenceIcon: false,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: LinearProgressIndicator(
+                  value: ratio,
+                  minHeight: 5,
+                  backgroundColor: BambooInk.paperMuted,
+                  valueColor: AlwaysStoppedAnimation(color),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RewardIconBadge extends StatelessWidget {
+  final IconData icon;
+  final Color accent;
+  final double size;
+
+  const _RewardIconBadge({
+    required this.icon,
+    required this.accent,
+    this.size = 34,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: accent.withValues(alpha: 0.14),
+      borderRadius: BorderRadius.circular(size * 0.3),
+    ),
+    child: Icon(icon, size: size * 0.48, color: accent),
+  );
+}
+
+class _RewardDonutPainter extends CustomPainter {
+  final List<double> values;
+  final List<Color> colors;
+
+  const _RewardDonutPainter({required this.values, required this.colors});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = values.fold<double>(0, (sum, value) => sum + value);
+    if (total <= 0) return;
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    var start = -math.pi / 2;
+    for (var index = 0; index < values.length; index++) {
+      final sweep = values[index] / total * math.pi * 2;
+      canvas.drawArc(
+        rect,
+        start,
+        sweep,
+        true,
+        Paint()..color = colors[index % colors.length],
+      );
+      start += sweep;
+    }
+    canvas.drawCircle(
+      center,
+      radius * 0.62,
+      Paint()..color = BambooInk.glassFillOnPaper,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RewardDonutPainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.colors != colors;
 }
 
 /// Design 32's "Invite a friend, both get ₹100 — share the recap and your
@@ -471,7 +845,9 @@ class _ReferralPrompt extends ConsumerWidget {
     if (referral == null) return const SizedBox.shrink();
 
     return Pressable(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InviteFriendsScreen())),
+      onTap: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const InviteFriendsScreen())),
       semanticLabel: 'Invite a friend, both get ₹100',
       child: Container(
         decoration: BoxDecoration(
@@ -482,7 +858,11 @@ class _ReferralPrompt extends ConsumerWidget {
         padding: const EdgeInsets.all(AppSpace.md),
         child: Row(
           children: [
-            const Icon(Icons.card_giftcard_rounded, size: 18, color: BambooInk.rankBadgeInk),
+            const Icon(
+              Icons.card_giftcard_rounded,
+              size: 18,
+              color: BambooInk.rankBadgeInk,
+            ),
             const SizedBox(width: AppSpace.sm),
             Expanded(
               child: Column(
@@ -490,7 +870,11 @@ class _ReferralPrompt extends ConsumerWidget {
                 children: [
                   Text(
                     'Invite a friend, both get ₹100',
-                    style: BambooFonts.ui(13, weight: FontWeight.w700, color: BambooInk.rankBadgeInk),
+                    style: BambooFonts.ui(
+                      13,
+                      weight: FontWeight.w700,
+                      color: BambooInk.rankBadgeInk,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -500,7 +884,11 @@ class _ReferralPrompt extends ConsumerWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink300),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: BambooInk.ink300,
+            ),
           ],
         ),
       ),
@@ -508,17 +896,39 @@ class _ReferralPrompt extends ConsumerWidget {
   }
 }
 
-class _StatRow extends StatelessWidget {
+class _RewardStatRow extends StatelessWidget {
+  final IconData icon;
   final String label;
   final Widget child;
-  const _StatRow({required this.label, required this.child});
+
+  const _RewardStatRow({
+    required this.icon,
+    required this.label,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+        Expanded(
+          child: Row(
+            children: [
+              _RewardIconBadge(icon: icon, accent: BambooInk.jade, size: 30),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(13, color: BambooInk.ink900),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpace.sm),
         child,
       ],
     );

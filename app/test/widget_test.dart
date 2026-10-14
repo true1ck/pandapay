@@ -293,9 +293,8 @@ void main() {
   });
 
   testWidgets(
-    'Chunk 16: Cards tab shows a real owned card and lets it be archived',
+    'Chunk 16: Cards tab shows a real owned card without wallet archive action',
     (tester) async {
-      var archiveCalled = false;
       await tester.pumpWidget(
         _appWithFakeCatalogue(
           [_rupayCard()],
@@ -306,11 +305,6 @@ void main() {
                 apiBaseUrl: 'http://test',
                 accessToken: 'fake-access-token',
                 client: MockClient((request) async {
-                  if (request.method == 'POST' &&
-                      request.url.path.endsWith('/archive')) {
-                    archiveCalled = true;
-                    return http.Response(jsonEncode({'ok': true}), 200);
-                  }
                   return http.Response(
                     jsonEncode({
                       'userCards': [
@@ -337,10 +331,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Test RuPay Card'), findsWidgets);
-
-      await tester.tap(find.byIcon(Icons.archive_outlined));
-      await tester.pump();
-      expect(archiveCalled, isTrue);
+      expect(find.byIcon(Icons.archive_outlined), findsNothing);
+      expect(find.byIcon(Icons.unarchive_outlined), findsNothing);
     },
   );
 

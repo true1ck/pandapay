@@ -15,8 +15,10 @@ import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import '../comparison/comparison_view_screen.dart';
 import '../insights/credit_utilization_screen.dart';
+import '../insights/credit_utilization_ui.dart';
 import '../overrides/manual_overrides_screen.dart';
 import '../quickadd/quick_add_screen.dart';
+import '../cards/card_visual.dart';
 import 'home_alerts.dart';
 import 'home_context_line.dart';
 
@@ -24,7 +26,7 @@ import 'home_context_line.dart';
 /// sizes and the header composition are transcribed from that mockup; the
 /// functionality underneath is the real B1 feature set, nothing mocked:
 ///
-/// - Amount entry, category chips, offline banner, alerts strip, the ranked
+/// - Amount entry, purchase selector, offline banner, alerts strip, the ranked
 ///   list (hero + backup + rest), "Why this card?"/"Compare all cards", and
 ///   the override pill are unchanged in behaviour — only their order and
 ///   visuals moved.
@@ -89,7 +91,7 @@ class HomeScreen extends ConsumerWidget {
     final now = ref.watch(clockProvider).now();
 
     // Section order is design 01's, top to bottom: header, "What are you
-    // paying for?", category chips, amount, "Panda says use" + the verdict,
+    // paying for?", purchase selector, amount, the verdict,
     // backups, utilisation warning. It used to run header → action icons →
     // rewards strip → amount → chips, which buried the question the screen
     // exists to answer under two strips of chrome.
@@ -130,24 +132,14 @@ class HomeScreen extends ConsumerWidget {
             const SizedBox(height: AppSpace.lg),
             SizedBox(
               key: tutorialKeys.categoryChips,
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
+              height: 68,
+              child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: _gutter),
-                children: [
-                  for (final (slug, label, icon) in _categories)
-                    Padding(
-                      padding: const EdgeInsets.only(right: AppSpace.sm),
-                      child: _CategoryChip(
-                        label: label,
-                        icon: icon,
-                        selected: selectedCategory == slug,
-                        onTap: () =>
-                            ref.read(selectedCategoryProvider.notifier).state =
-                                slug,
-                      ),
-                    ),
-                ],
+                child: _PurchaseTypeSelector(
+                  selectedCategory: selectedCategory,
+                  onChanged: (slug) =>
+                      ref.read(selectedCategoryProvider.notifier).state = slug,
+                ),
               ),
             ),
             Padding(
@@ -358,52 +350,91 @@ class _StreakPill extends StatelessWidget {
   }
 }
 
-class _CategoryChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  const _CategoryChip({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
+class _PurchaseTypeSelector extends StatelessWidget {
+  final String? selectedCategory;
+  final ValueChanged<String?> onChanged;
+
+  const _PurchaseTypeSelector({
+    required this.selectedCategory,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? BambooInk.slate : BambooInk.paperMuted,
-          borderRadius: BorderRadius.circular(999),
-          border: selected
-              ? null
-              : Border.all(color: BambooInk.hairlineOnPaper),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 15,
-              color: selected ? BambooInk.lime : BambooInk.ink500,
+    final selected = HomeScreen._categories.where(
+      (entry) => entry.$1 == selectedCategory,
+    );
+    final selectedEntry = selected.isEmpty ? null : selected.first;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+        boxShadow: [
+          BoxShadow(
+            color: BambooInk.ink900.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: BambooInk.slate,
+              borderRadius: BorderRadius.circular(13),
             ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: BambooFonts.ui(
-                13.5,
-                weight: FontWeight.w600,
-                color: selected ? BambooInk.onSlate : BambooInk.ink900,
+            child: Icon(
+              selectedEntry?.$3 ?? Icons.shopping_bag_outlined,
+              color: BambooInk.lime,
+              size: 21,
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                key: const ValueKey('home-purchase-type'),
+                value: selectedEntry?.$1,
+                isExpanded: true,
+                icon: const Icon(
+                  Icons.expand_more_rounded,
+                  color: BambooInk.ink500,
+                ),
+                hint: Text(
+                  'Choose purchase type',
+                  style: BambooFonts.ui(14, color: BambooInk.ink500),
+                ),
+                style: BambooFonts.ui(
+                  15,
+                  weight: FontWeight.w700,
+                  color: BambooInk.ink900,
+                ),
+                dropdownColor: BambooInk.paper,
+                borderRadius: BorderRadius.circular(16),
+                items: [
+                  for (final (slug, label, icon) in HomeScreen._categories)
+                    DropdownMenuItem<String>(
+                      value: slug,
+                      child: Row(
+                        children: [
+                          Icon(icon, size: 18, color: BambooInk.ink500),
+                          const SizedBox(width: AppSpace.sm),
+                          Text(label),
+                        ],
+                      ),
+                    ),
+                ],
+                onChanged: onChanged,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -520,6 +551,7 @@ class _UtilizationWarningBanner extends ConsumerWidget {
         ? userCard.nickname!
         : product.name;
     final pct = (worstResult.ratio * 100).toStringAsFixed(0);
+    final utilizationColor = CreditUtilizationUi.color(worstResult.ratio);
     final now = ref.watch(clockProvider).now();
     final due = userCard.dueDay == null
         ? null
@@ -570,9 +602,24 @@ class _UtilizationWarningBanner extends ConsumerWidget {
                         color: BambooInk.ink900,
                       ),
                     ),
+                    const SizedBox(height: AppSpace.sm),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      child: LinearProgressIndicator(
+                        value: worstResult.ratio.clamp(0.0, 1.0),
+                        minHeight: 7,
+                        backgroundColor: Colors.white,
+                        color: utilizationColor,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${CreditUtilizationUi.label(worstResult.ratio)} · ${worstResult.currentBalance.format(hidePaise: true)} of ${userCard.creditLimit!.format(hidePaise: true)} tracked this cycle',
+                      style: BambooFonts.ui(11.5, color: utilizationColor),
+                    ),
                     const SizedBox(height: 2),
                     Text(
-                      '$dueClause protects your score.',
+                      '$dueClause can help keep utilization lower.',
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ],
@@ -807,7 +854,7 @@ class _RankedSection extends ConsumerWidget {
                 children: [
                   const PandaMark(size: 22),
                   const SizedBox(width: 8),
-                  Text('Panda says use', style: BambooFonts.heading(15)),
+                  Text('Best card', style: BambooFonts.heading(15)),
                 ],
               ),
             ),
@@ -952,13 +999,23 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
             ? null
             : (excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper),
         borderRadius: BorderRadius.circular(isHero ? 28 : 20),
-        border: isHero ? null : Border.all(color: BambooInk.hairlineOnPaper),
+        border: isHero
+            ? Border.all(
+                color: BambooInk.lime.withValues(alpha: 0.72),
+                width: 1.5,
+              )
+            : Border.all(color: BambooInk.hairlineOnPaper),
         boxShadow: isHero
             ? [
                 BoxShadow(
                   color: BambooInk.slate.withValues(alpha: 0.28),
                   blurRadius: 24,
                   offset: const Offset(0, 12),
+                ),
+                BoxShadow(
+                  color: BambooInk.lime.withValues(alpha: 0.14),
+                  blurRadius: 20,
+                  spreadRadius: 1,
                 ),
               ]
             : null,
@@ -967,6 +1024,15 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SizedBox(
+            width: double.infinity,
+            height: isHero ? 112 : 82,
+            child: CardVisual(
+              product: recommendation.card,
+              showProductName: false,
+            ),
+          ),
+          SizedBox(height: isHero ? 16 : 12),
           Row(
             children: [
               Expanded(

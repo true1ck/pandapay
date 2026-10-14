@@ -31,6 +31,11 @@ const { importSourceKey } = require('./import_source_key');
 const { extractVpa, extractMcc } = require('./merchant_category');
 const notificationService = require('./notification_service');
 const { createTestNotificationLimiter } = require('./notification_test');
+const {
+  normalizeCardLast4,
+  cardIdentityKey,
+  findCardAddConflict,
+} = require('./card_identity');
 
 const testNotificationLimiter = createTestNotificationLimiter();
 
@@ -58,6 +63,7 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
   const card = await importResolvers.resolveUserCardForImport(client, userId, {
     last4: fields.last4,
     patternIssuerId,
+    instrument: fields.instrument || 'credit_card',
   });
   const categoryId = await importResolvers.resolveCategoryForImport(client, userId, {
     merchantName: fields.merchant,
@@ -2062,9 +2068,9 @@ app.get('/user-cards', requireAuth, async (req, res) => {
       const cards = await client.query(
         `SELECT uc.id, uc.card_product_id, uc.nickname, uc.is_default, uc.sort_order,
                 uc.created_at, uc.statement_day, uc.due_day, uc.opened_on,
-                uc.credit_limit_inr, uc.anniversary_on, uc.is_archived, uc.last4,
+                uc.credit_limit_inr, uc.annual_fee_override_inr, uc.anniversary_on, uc.is_archived, uc.last4,
                 uc.points_balance, uc.points_balance_state, uc.autopay_mode,
-                cp.name AS card_name, cp.network, cp.is_upi_linkable
+                cp.name AS card_name, cp.network, cp.card_type, cp.is_upi_linkable
            FROM user_cards uc
            JOIN card_products cp ON cp.id = uc.card_product_id
           WHERE ($1::boolean OR uc.is_archived = false)
@@ -2139,6 +2145,7 @@ app.get('/user-cards', requireAuth, async (req, res) => {
  */
 app.post('/user-cards', requireAuth, async (req, res) => {
   const { cardProductId, nickname, last4 } = req.body || {};
+  const normalizedLast4 = normalizeCardLast4(last4);
   if (!cardProductId || typeof cardProductId !== 'string') {
     return res.status(400).json({ error: 'cardProductId is required' });
   }
@@ -2146,35 +2153,95 @@ app.post('/user-cards', requireAuth, async (req, res) => {
   // the caller gets a clear 400 rather than a 500 from a constraint
   // violation — and so this route can never be the way a longer number
   // reaches a column that must only ever hold a matching key.
-  if (last4 !== undefined && last4 !== null && last4 !== '' && !/^[0-9]{4}$/.test(String(last4))) {
+  if (normalizedLast4 !== null && !/^[0-9]{4}$/.test(normalizedLast4)) {
     return res.status(400).json({ error: 'last4 must be exactly 4 digits' });
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // Serialize adds for the same account/product pair. The UI performs a
+      // fast local duplicate check, but this transaction-level lock is the
+      // authoritative guard for two scans/taps racing each other.
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
+        [req.userId, cardProductId],
+      );
       const card = await client.query(
         `SELECT id FROM card_products WHERE id = $1 AND status = 'published'`,
         [cardProductId]
       );
       if (card.rows.length === 0) return null;
 
+      const existing = await client.query(
+        `SELECT uc.id, uc.card_product_id, uc.nickname, uc.last4,
+                uc.is_default, uc.sort_order, uc.created_at,
+                uc.is_archived, cp.name AS card_name
+           FROM user_cards uc
+           JOIN card_products cp ON cp.id = uc.card_product_id
+          WHERE uc.profile_id = $1 AND uc.card_product_id = $2
+            AND uc.is_archived = false
+          ORDER BY uc.created_at ASC, uc.id ASC`,
+        [req.userId, cardProductId],
+      );
+      const conflict = findCardAddConflict(existing.rows, {
+        cardProductId,
+        last4: normalizedLast4,
+      });
+      if (conflict?.kind === 'already_present') {
+        return { alreadyPresent: true, userCard: conflict.userCard };
+      }
+      if (conflict?.kind === 'link_existing') {
+        const linked = await client.query(
+          `UPDATE user_cards
+              SET last4 = $1,
+                  nickname = COALESCE(NULLIF($2, ''), nickname)
+            WHERE id = $3 AND profile_id = $4 AND is_archived = false
+            RETURNING id, card_product_id, nickname, last4, is_default, sort_order, created_at`,
+          [normalizedLast4, nickname || null, conflict.userCard.id, req.userId],
+        );
+        if (linked.rows.length > 0) {
+          await repairSmsHistory(client, req.userId);
+          return { linkedExisting: true, userCard: linked.rows[0] };
+        }
+      }
+
       const inserted = await client.query(
         `INSERT INTO user_cards (profile_id, card_product_id, nickname, last4)
          VALUES ($1, $2, $3, $4)
          RETURNING id, card_product_id, nickname, last4, is_default, sort_order, created_at`,
-        [req.userId, cardProductId, nickname || null, last4 || null]
+        [req.userId, cardProductId, nickname || null, normalizedLast4]
       );
-      // SMS history may have arrived before the user added this card. Repair
+      // When SMS history arrived before the user added this card, repair
       // attribution in the same transaction so Spending stops showing the
       // matching suffix as "unlinked" immediately after card creation.
-      if (inserted.rows.length > 0) {
+      // A camera/manual add has no reliable card suffix, so there is nothing
+      // for repairSmsHistory to match and the full repair scan only adds
+      // latency. Discovery/import paths that know the suffix still get the
+      // immediate attribution repair.
+      if (inserted.rows.length > 0 && normalizedLast4) {
         await repairSmsHistory(client, req.userId);
       }
       return inserted.rows[0];
     });
 
     if (!result) return res.status(404).json({ error: 'card_product not found or not published' });
+    if (result.alreadyPresent) {
+      return res.status(409).json({
+        error: 'card_already_added',
+        message: 'This card is already in your wallet.',
+        userCard: result.userCard,
+      });
+    }
+    if (result.linkedExisting) {
+      return res.status(200).json({ userCard: result.userCard, linkedExisting: true });
+    }
     res.status(201).json({ userCard: result });
   } catch (err) {
+    if (err && err.code === '23505' && err.constraint === 'uq_user_cards_active_identity') {
+      return res.status(409).json({
+        error: 'card_already_added',
+        message: 'This physical card is already in your wallet.',
+      });
+    }
     console.error('POST /user-cards error', err);
     res.status(500).json({ error: 'internal_error' });
   }
@@ -2192,7 +2259,7 @@ app.post('/user-cards', requireAuth, async (req, res) => {
  * to the product. That is the single worst place in the funnel for silent
  * data loss, which is why this exists.
  *
- * IDEMPOTENT BY CARD PRODUCT, not by a client-supplied id. The client cannot
+ * IDEMPOTENT BY CARD PRODUCT + LAST FOUR, not by a client-supplied id. The client cannot
  * distinguish "the request timed out" from "the request succeeded and the
  * response was lost", so a retry has to be safe; and a guest id like
  * `local_1723...` means nothing to this database, so it can't be a dedupe
@@ -2228,10 +2295,10 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
       // transaction, and this also lets `isDefault` below be decided from
       // the true "did they have any cards at all before this import" state.
       const existing = await client.query(
-        `SELECT card_product_id FROM user_cards WHERE profile_id = $1`,
+        `SELECT card_product_id, last4, is_archived FROM user_cards WHERE profile_id = $1`,
         [req.userId]
       );
-      const owned = new Set(existing.rows.map((r) => r.card_product_id));
+      const owned = new Set(existing.rows.map((r) => cardIdentityKey(r.card_product_id, r.last4)));
       const hadNoCards = owned.size === 0;
 
       const maxOrder = await client.query(
@@ -2245,12 +2312,18 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
       for (const card of cards) {
         const cardProductId = card && card.cardProductId;
         const localId = (card && card.localId) || null;
+        const importedLast4 = normalizeCardLast4(card && card.last4);
         if (!cardProductId || typeof cardProductId !== 'string') {
           out.push({ localId, status: 'invalid' });
           continue;
         }
-        if (owned.has(cardProductId)) {
-          out.push({ localId, cardProductId, status: 'already_present' });
+        if (importedLast4 !== null && !/^[0-9]{4}$/.test(importedLast4)) {
+          out.push({ localId, cardProductId, status: 'invalid_last4' });
+          continue;
+        }
+        const identityKey = cardIdentityKey(cardProductId, importedLast4);
+        if (owned.has(identityKey)) {
+          out.push({ localId, cardProductId, last4: importedLast4, status: 'already_present' });
           continue;
         }
 
@@ -2265,22 +2338,23 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
 
         nextOrder += 1;
         const inserted = await client.query(
-          `INSERT INTO user_cards (profile_id, card_product_id, nickname, is_archived, sort_order)
-                VALUES ($1, $2, $3, $4, $5)
-             RETURNING id, card_product_id, nickname, is_default, is_archived, sort_order, created_at`,
+          `INSERT INTO user_cards (profile_id, card_product_id, nickname, last4, is_archived, sort_order)
+                VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, card_product_id, nickname, last4, is_default, is_archived, sort_order, created_at`,
           [
             req.userId,
             cardProductId,
             typeof card.nickname === 'string' && card.nickname.trim() !== '' ? card.nickname : null,
+            importedLast4,
             card.isArchived === true,
             nextOrder,
           ]
         );
-        owned.add(cardProductId);
+        owned.add(identityKey);
         if (firstImportedId === null && card.isArchived !== true) {
           firstImportedId = inserted.rows[0].id;
         }
-        out.push({ localId, cardProductId, status: 'imported', userCard: inserted.rows[0] });
+        out.push({ localId, cardProductId, last4: importedLast4, status: 'imported', userCard: inserted.rows[0] });
       }
 
       // Default card: only ever set when the account had none before, and
@@ -2587,6 +2661,7 @@ const USER_CARD_PATCH_FIELDS = {
   statementDay: 'statement_day',
   dueDay: 'due_day',
   pointsBalance: 'points_balance',
+  annualFeeOverrideInr: 'annual_fee_override_inr',
   autopayMode: 'autopay_mode',
   // Migration 0039: the matching key that lets an incoming bank SMS/email
   // be attached to this card without asking the user which one it was.
@@ -2647,6 +2722,12 @@ app.patch('/user-cards/:id', requireAuth, async (req, res) => {
     const l = Number(body.creditLimitInr);
     if (!Number.isFinite(l) || l < 0) return res.status(400).json({ error: 'creditLimitInr must be a non-negative number' });
   }
+  if (body.annualFeeOverrideInr !== undefined && body.annualFeeOverrideInr !== null) {
+    const fee = Number(body.annualFeeOverrideInr);
+    if (!Number.isFinite(fee) || fee < 0) {
+      return res.status(400).json({ error: 'annualFeeOverrideInr must be a non-negative number' });
+    }
+  }
   // Rejected here as a 400 rather than left to the CHECK constraint, which
   // would surface as an opaque 500. autopay_mode is NOT NULL, so an
   // explicit null is a client bug too, not "clear it".
@@ -2663,7 +2744,7 @@ app.patch('/user-cards/:id', requireAuth, async (req, res) => {
       client.query(
         `UPDATE user_cards SET ${sets.join(', ')}
           WHERE id = $${idParam} AND profile_id = $${profileParam} AND is_archived = false
-          RETURNING id, nickname, credit_limit_inr, statement_day, due_day, points_balance,
+          RETURNING id, nickname, credit_limit_inr, annual_fee_override_inr, statement_day, due_day, points_balance,
                     points_balance_state, autopay_mode, last4`,
         values
       )
@@ -3067,10 +3148,28 @@ async function importParsedMessage(client, userId, {
     matchBasis = 'instrument-cardless';
   }
 
+  // A caller-supplied card is still checked against the parser's physical
+  // card type. This matters when the same last four digits exist on both a
+  // debit and a credit card, or when an older app build remembered the wrong
+  // selected card. Never let that override cross the credit/debit boundary.
+  if (isPhysicalCard && userCardId) {
+    const compatible = await importResolvers.userCardMatchesInstrument(
+      client,
+      userId,
+      userCardId,
+      instrument,
+    );
+    if (!compatible) {
+      userCardId = null;
+      matchBasis = 'caller-card-type-mismatch';
+    }
+  }
+
   if (isPhysicalCard && !userCardId) {
     const resolved = await importResolvers.resolveUserCardForImport(client, userId, {
       last4: parsed.fields.last4,
       patternIssuerId,
+      instrument,
     });
     if (resolved) {
       userCardId = resolved.userCardId;
@@ -3207,6 +3306,7 @@ async function repairSmsHistory(client, userId) {
     const resolved = await importResolvers.resolveUserCardForImport(client, userId, {
       last4: row.card_last4,
       patternIssuerId: row.pattern_issuer_id || null,
+      instrument: row.instrument,
     });
     if (!resolved) continue;
 
@@ -3732,10 +3832,10 @@ app.post('/transactions', requireAuth, async (req, res) => {
   if (!TXN_ENTRY_KINDS.includes(entryKind)) {
     return res.status(400).json({ error: `entryKind must be one of ${TXN_ENTRY_KINDS.join(', ')}` });
   }
-  // userCardId is required only for a credit-card entry, which is the same
-  // rule the `transactions_card_matches_instrument` CHECK enforces. Cash,
-  // debit, income and investments have no card by definition, and demanding
-  // one is what previously made them impossible to record at all.
+  // A credit-card entry still requires a saved card because the database
+  // treats that row as card spend. Debit-card entries may be cardless when
+  // the user is logging a one-off purchase, but a supplied debit-card id is
+  // retained and validated rather than silently discarded.
   if (instrument === 'credit_card' && (!userCardId || typeof userCardId !== 'string')) {
     return res.status(400).json({ error: 'userCardId is required for a credit-card transaction' });
   }
@@ -3757,6 +3857,20 @@ app.post('/transactions', requireAuth, async (req, res) => {
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      if (userCardId && (instrument === 'credit_card' || instrument === 'debit_card')) {
+        const compatible = await importResolvers.userCardMatchesInstrument(
+          client,
+          req.userId,
+          userCardId,
+          instrument,
+        );
+        if (!compatible) {
+          return {
+            status: 400,
+            error: `userCardId does not match the ${instrument === 'debit_card' ? 'debit' : 'credit'}-card instrument`,
+          };
+        }
+      }
       // QR/manual payments often arrive with a merchant name but without an
       // explicit category selection. Reuse the same conservative resolver as
       // SMS import so a known merchant is categorized before rewards and
@@ -3768,7 +3882,9 @@ app.post('/transactions', requireAuth, async (req, res) => {
         messageText: null,
       });
       return insertTransactionAndUpdateState(client, req.userId, {
-        userCardId: instrument === 'credit_card' ? userCardId : null,
+        userCardId: instrument === 'credit_card' || instrument === 'debit_card'
+          ? userCardId
+          : null,
         amount,
         occurred,
         categoryId: resolvedCategoryId,
@@ -4967,9 +5083,17 @@ app.get('/monthly-reports', requireAuth, async (req, res) => {
       );
 
       const totalSpend = txnRows.rows.reduce((sum, t) => sum + Number(t.amount_inr), 0);
+      // Keep this identical to Insights and /home-summary: rewards are the
+      // stored transaction value, but only positive spend rows contribute.
+      // A reversal/refund can legitimately carry a negative expected value;
+      // it must not subtract from the earned-rewards headline or make two
+      // screens disagree about the same month.
       const rewardsEarned = Math.min(
         totalSpend,
-        Math.max(0, txnRows.rows.reduce((sum, t) => sum + Number(t.expected_value_inr || 0), 0)),
+        txnRows.rows.reduce(
+          (sum, t) => sum + Math.max(0, Number(t.expected_value_inr || 0)),
+          0,
+        ),
       );
 
       // The wallet as it stands, with each card's full rule set. Archived
@@ -5599,7 +5723,7 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
   try {
     const payload = await withUserClient(req.userId, async (client) => {
       const catalogue = await client.query(
-        `SELECT id, slug, name, issuer_name, issuer_slug FROM v_card_catalogue_export`
+        `SELECT id, slug, name, card_type, issuer_name, issuer_slug FROM v_card_catalogue_export`
       );
 
       // Only sender-verified bank mail is scanned. Anyone can send mail to a
@@ -5643,6 +5767,22 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
             existing.sources.push(source);
             existing.score = Math.max(existing.score, hit.score);
             existing.messageCount += hit.messageCount;
+            // A bank statement email can identify the product while the
+            // device SMS carries the masked suffix. Preserve both pieces of
+            // evidence when the two channels resolve to the same catalogue
+            // row; otherwise the UI loses the suffix depending on which
+            // source was merged first and the confirmed card cannot be saved
+            // with its matching key.
+            for (const evidence of hit.evidence || []) {
+              if (!existing.evidence?.includes(evidence)) {
+                existing.evidence = [...(existing.evidence || []), evidence];
+              }
+            }
+            for (const last4 of hit.last4 || []) {
+              if (!existing.last4?.includes(last4)) {
+                existing.last4 = [...(existing.last4 || []), last4];
+              }
+            }
             if (existing.creditLimitInr == null && hit.creditLimitInr != null) {
               existing.creditLimitInr = hit.creditLimitInr;
             }
@@ -5983,13 +6123,17 @@ app.get('/home-summary', requireAuth, async (req, res) => {
 
       const totals = await client.query(
         `SELECT
-           COALESCE(SUM(expected_value_inr), 0) AS all_time,
-           COALESCE(SUM(expected_value_inr) FILTER (
-             WHERE occurred_at >= date_trunc('month', ($2::timestamptz AT TIME ZONE $3)) AT TIME ZONE $3
+           COALESCE(SUM(GREATEST(COALESCE(expected_value_inr, 0), 0)) FILTER (
+             WHERE entry_kind = 'spend' AND amount_inr > 0
+           ), 0) AS all_time,
+           COALESCE(SUM(GREATEST(COALESCE(expected_value_inr, 0), 0)) FILTER (
+             WHERE entry_kind = 'spend'
+               AND amount_inr > 0
+               AND occurred_at >= date_trunc('month', ($2::timestamptz AT TIME ZONE $3)) AT TIME ZONE $3
            ), 0) AS this_month,
-           COUNT(*) AS txn_count
+           COUNT(*) FILTER (WHERE entry_kind = 'spend' AND amount_inr > 0) AS txn_count
          FROM transactions
-         WHERE profile_id = $1 AND status = 'active' AND entry_kind = 'spend'`,
+         WHERE profile_id = $1 AND status = 'active'`,
         [req.userId, anchor.toISOString(), zone]
       );
 

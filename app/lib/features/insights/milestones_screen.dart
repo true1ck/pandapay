@@ -102,6 +102,7 @@ class MilestonesScreen extends ConsumerWidget {
                 cardName: group.userCard.nickname?.isNotEmpty == true
                     ? group.userCard.nickname!
                     : group.product.name,
+                product: group.product,
                 capabilityLabel:
                     'milestone${group.milestones.length == 1 ? '' : 's'}',
                 capabilityCount: group.milestones.length,

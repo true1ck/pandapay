@@ -128,4 +128,36 @@ void main() {
     expect(find.text('Platinum Credit Card'), findsNothing);
     expect(find.textContaining('No confident match'), findsOneWidget);
   });
+
+  testWidgets('labels an already-owned confident scan and avoids another add', (
+    tester,
+  ) async {
+    final matches = matchCardText(
+      const ExtractedCardText('HDFC BANK MILLENNIA VISA 4242 1234'),
+      catalogue,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: ScanResultPanel(
+            extracted: const ExtractedCardText(
+              'HDFC BANK MILLENNIA VISA 4242 1234',
+            ),
+            matches: matches,
+            showRawText: false,
+            alreadyOwnedProductIds: const {'c1'},
+            onConfirm: (_) {},
+            onRescan: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Already in your wallet'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Done'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Use this'), findsNothing);
+  });
 }

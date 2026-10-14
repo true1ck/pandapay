@@ -43,15 +43,36 @@ const { extractDueDate, extractLast4 } = require('./due_date_parser');
  * can record HOW the match was made — a user who finds a mis-attributed
  * transaction deserves to see why the app thought it belonged there.
  */
-async function resolveUserCardForImport(client, userId, { last4, patternIssuerId }) {
+function cardTypeForInstrument(instrument) {
+  if (instrument === 'credit_card') return 'credit';
+  if (instrument === 'debit_card') return 'debit';
+  return null;
+}
+
+/**
+ * Resolve only a card whose catalogue type agrees with the payment evidence.
+ *
+ * The last four digits are not globally unique across a wallet. In
+ * particular, a debit card and a credit card can share them. Matching only on
+ * issuer + last4 therefore lets a debit-card SMS land on a credit card (or
+ * vice versa), which then poisons the wrong card's history. The parser's
+ * instrument is the authoritative discriminator whenever it is known.
+ */
+async function resolveUserCardForImport(client, userId, {
+  last4,
+  patternIssuerId,
+  instrument,
+}) {
+  const cardType = cardTypeForInstrument(instrument);
   if (last4 && /^[0-9]{4}$/.test(last4)) {
     const byLast4 = await client.query(
       `SELECT uc.id
          FROM user_cards uc
          JOIN card_products cp ON cp.id = uc.card_product_id
         WHERE uc.profile_id = $1 AND uc.is_archived = false AND uc.last4 = $2
-          AND ($3::uuid IS NULL OR cp.issuer_id = $3::uuid)`,
-      [userId, last4, patternIssuerId || null]
+          AND ($3::uuid IS NULL OR cp.issuer_id = $3::uuid)
+          AND ($4::text IS NULL OR cp.card_type::text = $4::text)`,
+      [userId, last4, patternIssuerId || null, cardType]
     );
     if (byLast4.rows.length === 1) {
       return {
@@ -73,8 +94,9 @@ async function resolveUserCardForImport(client, userId, { last4, patternIssuerId
     const byIssuer = await client.query(
       `SELECT uc.id FROM user_cards uc
          JOIN card_products cp ON cp.id = uc.card_product_id
-        WHERE uc.profile_id = $1 AND uc.is_archived = false AND cp.issuer_id = $2`,
-      [userId, patternIssuerId]
+        WHERE uc.profile_id = $1 AND uc.is_archived = false AND cp.issuer_id = $2
+          AND ($3::text IS NULL OR cp.card_type::text = $3::text)`,
+      [userId, patternIssuerId, cardType]
     );
     if (byIssuer.rows.length === 1) {
       return { userCardId: byIssuer.rows[0].id, basis: 'sole-card-for-issuer' };
@@ -82,6 +104,26 @@ async function resolveUserCardForImport(client, userId, { last4, patternIssuerId
   }
 
   return null;
+}
+
+/**
+ * Validate a caller-supplied card override before it reaches the transaction
+ * writer. The import endpoint accepts an override for backup imports and for
+ * an already-selected card in the UI, but it must not be allowed to cross the
+ * credit/debit boundary established by the SMS itself.
+ */
+async function userCardMatchesInstrument(client, userId, userCardId, instrument) {
+  const cardType = cardTypeForInstrument(instrument);
+  if (!cardType || !userCardId) return true;
+  const result = await client.query(
+    `SELECT uc.id
+       FROM user_cards uc
+       JOIN card_products cp ON cp.id = uc.card_product_id
+      WHERE uc.id = $1 AND uc.profile_id = $2 AND uc.is_archived = false
+        AND cp.card_type::text = $3::text`,
+    [userCardId, userId, cardType]
+  );
+  return result.rows.length === 1;
 }
 
 /**
@@ -99,6 +141,7 @@ async function syncCreditLimitFromSms(client, userId, { body, patternIssuerId })
   const card = await resolveUserCardForImport(client, userId, {
     last4: detected.last4,
     patternIssuerId,
+    instrument: 'credit_card',
   });
   if (!card) {
     return { detected, updated: false, reason: 'card_not_unambiguous' };
@@ -137,6 +180,7 @@ async function syncDueDayFromSms(client, userId, { body, patternIssuerId }) {
   const card = await resolveUserCardForImport(client, userId, {
     last4: extractLast4(body),
     patternIssuerId,
+    instrument: 'credit_card',
   });
   if (!card) return { detected, updated: false, reason: 'card_not_unambiguous' };
 
@@ -316,6 +360,7 @@ async function fileForReview(client, userId, { source, rawText, sender, parseErr
 
 module.exports = {
   resolveUserCardForImport,
+  userCardMatchesInstrument,
   syncCreditLimitFromSms,
   syncDueDayFromSms,
   resolveCategoryForImport,

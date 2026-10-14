@@ -18,11 +18,17 @@ class _FakeCatalogueRepository implements CatalogueRepository {
   Future<List<CardProduct>> fetchCatalogue() async => cards;
 }
 
-Future<void> _pump(WidgetTester tester, {required List<CardProduct> catalogue, required List<UserCard> owned}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  required List<CardProduct> catalogue,
+  required List<UserCard> owned,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogue)),
+        catalogueRepositoryProvider.overrideWithValue(
+          _FakeCatalogueRepository(catalogue),
+        ),
         userCardsProvider.overrideWith((ref) async => owned),
       ],
       child: const MaterialApp(home: BenefitsCheatSheetScreen()),
@@ -32,12 +38,16 @@ Future<void> _pump(WidgetTester tester, {required List<CardProduct> catalogue, r
 }
 
 void main() {
-  testWidgets('shows an empty state when no owned card has any benefits', (tester) async {
+  testWidgets('shows an empty state when no owned card has any benefits', (
+    tester,
+  ) async {
     await _pump(tester, catalogue: const [], owned: const []);
     expect(find.text('No benefits to show yet'), findsOneWidget);
   });
 
-  testWidgets('groups benefits by kind, across two different owned cards', (tester) async {
+  testWidgets('groups benefits by kind, across two different owned cards', (
+    tester,
+  ) async {
     final loungeCard = CardProduct(
       id: 'p1',
       name: 'Lounge Card',
@@ -67,38 +77,71 @@ void main() {
       ],
     );
     final owned = [
-      const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Lounge Card', isDefault: false),
-      const UserCard(id: 'uc2', cardProductId: 'p2', cardName: 'Warranty Card', isDefault: false),
+      const UserCard(
+        id: 'uc1',
+        cardProductId: 'p1',
+        cardName: 'Lounge Card',
+        isDefault: false,
+      ),
+      const UserCard(
+        id: 'uc2',
+        cardProductId: 'p2',
+        cardName: 'Warranty Card',
+        isDefault: false,
+      ),
     ];
 
     await _pump(tester, catalogue: [loungeCard, warrantyCard], owned: owned);
 
     expect(find.text('Domestic lounge access'), findsOneWidget);
-    expect(find.text('8 domestic lounge visits/year'), findsOneWidget);
-    expect(find.text('Priority Pass'), findsOneWidget);
-    expect(find.text('Extended warranty'), findsOneWidget);
-    expect(find.text('1 year extended warranty on electronics'), findsOneWidget);
+    expect(find.text('Domestic lounge'), findsOneWidget);
+    expect(find.text('8 / year'), findsOneWidget);
+    expect(find.text('Priority Pass'), findsNothing);
+    expect(find.text('Warranty Card'), findsOneWidget);
+    expect(find.text('Extended warranty'), findsNWidgets(2));
+    expect(find.text('Details inside'), findsOneWidget);
+    expect(find.text('1 year extended warranty on electronics'), findsNothing);
   });
 
-  testWidgets('two benefits of the same kind on the same card both show, not collapsed', (tester) async {
-    final product = CardProduct(
-      id: 'p1',
-      name: 'Dual Lounge Card',
-      network: CardNetwork.rupay,
-      benefits: const [
-        CardBenefit(id: 'b1', kind: BenefitKind.loungeDomestic, label: '8 domestic visits'),
-        CardBenefit(id: 'b2', kind: BenefitKind.loungeInternational, label: '4 international visits'),
-      ],
-    );
-    final owned = [const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Dual Lounge Card', isDefault: false)];
+  testWidgets(
+    'two benefits of the same kind on the same card both show, not collapsed',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Dual Lounge Card',
+        network: CardNetwork.rupay,
+        benefits: const [
+          CardBenefit(
+            id: 'b1',
+            kind: BenefitKind.loungeDomestic,
+            label: '8 domestic visits',
+          ),
+          CardBenefit(
+            id: 'b2',
+            kind: BenefitKind.loungeInternational,
+            label: '4 international visits',
+          ),
+        ],
+      );
+      final owned = [
+        const UserCard(
+          id: 'uc1',
+          cardProductId: 'p1',
+          cardName: 'Dual Lounge Card',
+          isDefault: false,
+        ),
+      ];
 
-    await _pump(tester, catalogue: [product], owned: owned);
+      await _pump(tester, catalogue: [product], owned: owned);
 
-    expect(find.text('8 domestic visits'), findsOneWidget);
-    expect(find.text('4 international visits'), findsOneWidget);
-  });
+      expect(find.text('Domestic lounge'), findsOneWidget);
+      expect(find.text('International lounge'), findsOneWidget);
+    },
+  );
 
-  testWidgets('tapping on a benefit tile navigates to BenefitDetailScreen', (tester) async {
+  testWidgets('a benefit expands and can open BenefitDetailScreen', (
+    tester,
+  ) async {
     final product = CardProduct(
       id: 'p1',
       name: 'Test Dining Card',
@@ -111,13 +154,31 @@ void main() {
         ),
       ],
     );
-    final owned = [const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Dining Card', isDefault: false)];
+    final owned = [
+      const UserCard(
+        id: 'uc1',
+        cardProductId: 'p1',
+        cardName: 'Test Dining Card',
+        isDefault: false,
+      ),
+    ];
 
     await _pump(tester, catalogue: [product], owned: owned);
 
-    expect(find.text('Dining Delights Program'), findsOneWidget);
+    expect(find.text('Test Dining Card'), findsOneWidget);
 
-    await tester.tap(find.text('Dining Delights Program'));
+    await tester.tap(find.text('Test Dining Card'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Included with this card. Check the issuer terms before using the benefit.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('View full details'), findsOneWidget);
+
+    await tester.tap(find.text('View full details'));
     await tester.pumpAndSettle();
 
     expect(find.text('Benefit details'), findsOneWidget);
@@ -125,24 +186,35 @@ void main() {
     expect(find.text('TERMS & DETAILS'), findsOneWidget);
   });
 
-  testWidgets('synthesizes and shows fuel surcharge waiver when fuelRule is present', (tester) async {
-    final product = CardProduct(
-      id: 'p1',
-      name: 'Fuel Card',
-      network: CardNetwork.visa,
-      fuelRule: FuelSurchargeRule(
-        surchargePercent: 1.0,
-        waiverPercent: 1.0,
-        minTxn: Money.fromRupees(400),
-        maxTxn: Money.fromRupees(4000),
-      ),
-    );
-    final owned = [const UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Fuel Card', isDefault: false)];
+  testWidgets(
+    'synthesizes and shows fuel surcharge waiver when fuelRule is present',
+    (tester) async {
+      final product = CardProduct(
+        id: 'p1',
+        name: 'Fuel Card',
+        network: CardNetwork.visa,
+        fuelRule: FuelSurchargeRule(
+          surchargePercent: 1.0,
+          waiverPercent: 1.0,
+          minTxn: Money.fromRupees(400),
+          maxTxn: Money.fromRupees(4000),
+        ),
+      );
+      final owned = [
+        const UserCard(
+          id: 'uc1',
+          cardProductId: 'p1',
+          cardName: 'Fuel Card',
+          isDefault: false,
+        ),
+      ];
 
-    await _pump(tester, catalogue: [product], owned: owned);
+      await _pump(tester, catalogue: [product], owned: owned);
 
-    expect(find.text('Fuel surcharge waiver'), findsOneWidget);
-    expect(find.text('1% fuel surcharge waiver'), findsOneWidget);
-  });
+      expect(find.text('Fuel surcharge waiver'), findsOneWidget);
+      expect(find.text('Fuel waiver'), findsOneWidget);
+      expect(find.text('Fuel Card'), findsOneWidget);
+      expect(find.text('Included'), findsOneWidget);
+    },
+  );
 }
-

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +14,7 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import 'insights_overview.dart';
+import '../cards/card_visual.dart';
 
 /// Design 04 "Insights · what you earned", over ui-spec.md's E1 Insights
 /// Hub.
@@ -95,7 +98,7 @@ class InsightsHubScreen extends ConsumerWidget {
     ];
     final milestoneRows = [
       for (final (userCard, product) in owned)
-        for (final m in product.milestoneRules) (userCard, m),
+        for (final m in product.milestoneRules) (userCard, product, m),
     ];
     final feeWaiverRows = [
       for (final (userCard, _) in owned)
@@ -113,7 +116,7 @@ class InsightsHubScreen extends ConsumerWidget {
       }
     }
     UrgencyScore? mostUrgentMilestone;
-    for (final (userCard, m) in milestoneRows) {
+    for (final (userCard, _, m) in milestoneRows) {
       final qualified =
           userCard.milestoneQualifiedSpend[m.id] ?? const Money.zero();
       final end = userCard.milestonePeriodEnd[m.id];
@@ -522,7 +525,7 @@ class _PeriodChips extends ConsumerWidget {
 /// preview, and the milestone in reach.
 class _OverviewSections extends StatelessWidget {
   final InsightsOverview data;
-  final List<(UserCard, MilestoneRule)> milestones;
+  final List<(UserCard, CardProduct, MilestoneRule)> milestones;
 
   const _OverviewSections({required this.data, required this.milestones});
 
@@ -543,10 +546,14 @@ class _OverviewSections extends StatelessWidget {
         _EarnedHero(data: data),
         if (data.byCategory.isNotEmpty) ...[
           const SizedBox(height: AppSpace.lg),
-          _CategoryBars(categories: data.byCategory),
+          _CategoryPie(
+            categories: data.byCategory,
+            earnedTotal: data.earned,
+            missed: data.missed,
+            missedCount: data.missedCount,
+            bestCategory: data.bestCategory,
+          ),
         ],
-        const SizedBox(height: AppSpace.lg),
-        _MissedAndBest(data: data),
         if (data.topMissed.isNotEmpty) ...[
           const SizedBox(height: AppSpace.xl),
           _MissedPreview(rows: data.topMissed, totalMissed: data.missed),
@@ -673,147 +680,208 @@ class _EarnedHero extends StatelessWidget {
   }
 }
 
-/// Design 04's category breakdown. Bars are proportional to the largest
-/// category rather than to the total, so a month dominated by one category
-/// still shows readable bars for the rest.
-class _CategoryBars extends StatelessWidget {
+/// Design 04's category breakdown. The chart gives the user an immediate
+/// composition view; tapping it expands the exact amounts without replacing
+/// the concise first frame with a long list.
+class _CategoryPie extends StatefulWidget {
   final List<CategoryEarning> categories;
-  const _CategoryBars({required this.categories});
+  final Money earnedTotal;
+  final Money missed;
+  final int missedCount;
+  final CategoryEarning? bestCategory;
+
+  const _CategoryPie({
+    required this.categories,
+    required this.earnedTotal,
+    required this.missed,
+    required this.missedCount,
+    required this.bestCategory,
+  });
+
+  @override
+  State<_CategoryPie> createState() => _CategoryPieState();
+}
+
+class _CategoryPieState extends State<_CategoryPie> {
+  bool _expanded = false;
+
+  static const _colors = [
+    BambooInk.slate,
+    BambooInk.jade,
+    Color(0xffd98634),
+    Color(0xff8d75b8),
+    Color(0xff4d9aa3),
+    BambooInk.ink300,
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final top = categories.take(5).toList();
-    final maxPaise = top.first.earned.paise;
+    final top = widget.categories.take(5).toList();
+    final overflow = widget.categories
+        .skip(top.length)
+        .fold<int>(0, (sum, row) => sum + row.earned.paise);
+    // "Other" is a real category in the API, so append-only aggregation can
+    // accidentally render two Other rows. Merge overflow into an existing
+    // Other bucket when one is already visible.
+    if (overflow > 0) {
+      final existingOther = top.indexWhere(
+        (row) => row.label.trim().toLowerCase() == 'other',
+      );
+      if (existingOther >= 0) {
+        final row = top[existingOther];
+        top[existingOther] = CategoryEarning(
+          label: row.label,
+          earned: row.earned + Money.fromPaise(overflow),
+        );
+      } else {
+        top.add(
+          CategoryEarning(label: 'Other', earned: Money.fromPaise(overflow)),
+        );
+      }
+    }
+    final total = top.fold<int>(0, (sum, row) => sum + row.earned.paise);
+    if (top.isEmpty || total == 0) return const SizedBox.shrink();
+    final chartValues = top.map((row) => row.earned.paise.toDouble()).toList();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-      ),
-      padding: const EdgeInsets.all(AppSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Where it came from',
-            style: BambooFonts.heading(15, color: BambooInk.ink900),
-          ),
-          const SizedBox(height: AppSpace.md),
-          for (final category in top) ...[
-            Semantics(
-              label: '${category.label}, ${category.earned.format()} earned',
-              child: ExcludeSemantics(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            category.label,
-                            style: BambooFonts.ui(13, color: BambooInk.ink900),
-                          ),
-                        ),
-                        MoneyText(
-                          category.earned,
-                          confidence: Confidence.confirmed,
-                          style: BambooFonts.money(13, color: BambooInk.ink900),
-                          hidePaise: true,
-                          showConfidenceIcon: false,
-                        ),
-                      ],
+    return GestureDetector(
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: Container(
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        padding: const EdgeInsets.all(AppSpace.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Where it came from',
+                    style: BambooFonts.heading(15, color: BambooInk.ink900),
+                  ),
+                ),
+                Text(
+                  _expanded ? 'Tap to collapse' : 'Tap to expand',
+                  style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 132,
+                  height: 132,
+                  child: CustomPaint(
+                    painter: _CategoryPiePainter(
+                      values: chartValues,
+                      colors: _colors,
                     ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      child: LinearProgressIndicator(
-                        value: maxPaise == 0
-                            ? 0
-                            : category.earned.paise / maxPaise,
-                        minHeight: 6,
-                        backgroundColor: BambooInk.paperMuted,
-                        valueColor: const AlwaysStoppedAnimation(
-                          BambooInk.slate,
-                        ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Rewards',
+                            style: BambooFonts.ui(11, color: BambooInk.ink500),
+                          ),
+                          MoneyText(
+                            widget.earnedTotal,
+                            confidence: Confidence.confirmed,
+                            style: BambooFonts.money(
+                              17,
+                              color: BambooInk.ink900,
+                            ),
+                            hidePaise: true,
+                            showConfidenceIcon: false,
+                          ),
+                        ],
                       ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.lg),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _CompactHighlight(
+                        label: 'Left on the table',
+                        value: widget.missed,
+                        valueColor: BambooInk.clay,
+                        caption: widget.missedCount == 0
+                            ? 'No missed rewards'
+                            : '${widget.missedCount} payment${widget.missedCount == 1 ? '' : 's'}',
+                      ),
+                      const SizedBox(height: AppSpace.sm),
+                      _CompactHighlight(
+                        label: 'Best category',
+                        value: widget.bestCategory?.earned,
+                        valueColor: BambooInk.ink900,
+                        caption: widget.bestCategory?.label ?? '—',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            Wrap(
+              spacing: AppSpace.md,
+              runSpacing: AppSpace.xs,
+              children: [
+                for (var i = 0; i < top.length; i++)
+                  _CategoryLegend(
+                    label: top[i].label,
+                    percent: (top[i].earned.paise / total) * 100,
+                    color: _colors[i % _colors.length],
+                  ),
+              ],
+            ),
+            if (_expanded) ...[
+              const Divider(height: AppSpace.xl),
+              for (final category in widget.categories) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        category.label,
+                        style: BambooFonts.ui(13, color: BambooInk.ink900),
+                      ),
+                    ),
+                    MoneyText(
+                      category.earned,
+                      confidence: Confidence.confirmed,
+                      style: BambooFonts.money(13, color: BambooInk.ink900),
+                      hidePaise: true,
+                      showConfidenceIcon: false,
                     ),
                   ],
                 ),
-              ),
-            ),
-            if (category != top.last) const SizedBox(height: AppSpace.md),
+                if (category != widget.categories.last)
+                  const SizedBox(height: AppSpace.sm),
+              ],
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-/// Design 04's paired tiles: what slipped, and what worked. Clay on the
-/// left, jade on the right — the deck's own two-tier semantic pair.
-class _MissedAndBest extends StatelessWidget {
-  final InsightsOverview data;
-  const _MissedAndBest({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final best = data.bestCategory;
-    // IntrinsicHeight so the two tiles match height whichever caption wraps
-    // further. `stretch` alone can't do it here: this sits in a ListView, so
-    // the Row's height constraint is unbounded and stretching to it asserts.
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: _StatTile(
-              label: 'Left on the table',
-              value: data.missed,
-              // Estimated, not confirmed: the comparator behind this can't see
-              // historical cap state. See InsightsOverview.missedIsEstimate.
-              confidence: Confidence.estimated,
-              valueColor: BambooInk.clay,
-              caption: data.missedCount == 0
-                  ? 'Every payment used one of your best cards'
-                  : '${data.missedCount} ${data.missedCount == 1 ? 'swipe' : 'swipes'} on the wrong card',
-            ),
-          ),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: best == null
-                ? const _StatTile(
-                    label: 'Best category',
-                    value: null,
-                    confidence: Confidence.confirmed,
-                    valueColor: BambooInk.ink900,
-                    caption: 'Categorise a payment to see this',
-                  )
-                : _StatTile(
-                    label: 'Best category',
-                    value: best.earned,
-                    confidence: Confidence.confirmed,
-                    valueColor: BambooInk.ink900,
-                    caption: '${best.label} earned the most',
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatTile extends StatelessWidget {
+class _CompactHighlight extends StatelessWidget {
   final String label;
   final Money? value;
-  final Confidence confidence;
   final Color valueColor;
   final String caption;
 
-  const _StatTile({
+  const _CompactHighlight({
     required this.label,
     required this.value,
-    required this.confidence,
     required this.valueColor,
     required this.caption,
   });
@@ -821,39 +889,110 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpace.sm),
       decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
+        color: BambooInk.paperMuted,
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
-      padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: BambooFonts.ui(
-              12,
-              weight: FontWeight.w600,
-              color: BambooInk.ink500,
-            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: BambooFonts.ui(10.5, color: BambooInk.ink500),
           ),
-          const SizedBox(height: AppSpace.sm),
+          const SizedBox(height: 2),
           if (value == null)
-            Text('—', style: BambooFonts.money(22, color: BambooInk.ink300))
+            Text('—', style: BambooFonts.heading(16, color: valueColor))
           else
             MoneyText(
               value!,
-              confidence: confidence,
-              style: BambooFonts.money(22, color: valueColor),
+              confidence: Confidence.confirmed,
+              style: BambooFonts.money(16, color: valueColor),
               hidePaise: true,
+              showConfidenceIcon: false,
             ),
-          const SizedBox(height: 6),
-          Text(caption, style: BambooFonts.ui(12, color: BambooInk.ink500)),
+          Text(
+            caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+          ),
         ],
       ),
     );
   }
+}
+
+class _CategoryLegend extends StatelessWidget {
+  final String label;
+  final double percent;
+  final Color color;
+
+  const _CategoryLegend({
+    required this.label,
+    required this.percent,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: AppSpace.xs),
+        Text(
+          '${label.trim()} ${percent.round()}%',
+          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryPiePainter extends CustomPainter {
+  final List<double> values;
+  final List<Color> colors;
+
+  const _CategoryPiePainter({required this.values, required this.colors});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = values.fold<double>(0, (sum, value) => sum + value);
+    if (total <= 0) return;
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    var start = -math.pi / 2;
+    for (var i = 0; i < values.length; i++) {
+      final sweep = values[i] / total * math.pi * 2;
+      canvas.drawArc(
+        rect,
+        start,
+        sweep,
+        true,
+        Paint()..color = colors[i % colors.length],
+      );
+      start += sweep;
+    }
+    canvas.drawCircle(
+      center,
+      radius * 0.62,
+      Paint()..color = BambooInk.glassFillOnPaper,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CategoryPiePainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.colors != colors;
 }
 
 /// Design 04's "Missed opportunities · See all" preview — the three
@@ -967,26 +1106,36 @@ class _MissedPreview extends StatelessWidget {
 /// "nothing in reach" panel would be noise on a screen that is already
 /// dense.
 class _MilestoneInReach extends StatelessWidget {
-  final List<(UserCard, MilestoneRule)> milestones;
+  final List<(UserCard, CardProduct, MilestoneRule)> milestones;
   const _MilestoneInReach({required this.milestones});
 
   @override
   Widget build(BuildContext context) {
-    (UserCard, MilestoneRule, Money, double)? closest;
-    for (final (userCard, rule) in milestones) {
+    (UserCard, CardProduct, MilestoneRule, Money, Money, double, DateTime?)?
+    closest;
+    for (final (userCard, product, rule) in milestones) {
       final qualified =
           userCard.milestoneQualifiedSpend[rule.id] ?? const Money.zero();
       if (rule.thresholdSpend.paise <= 0) continue;
       final progress = qualified.paise / rule.thresholdSpend.paise;
       if (progress >= 1.0) continue; // already earned — not "in reach"
       final remaining = rule.thresholdSpend - qualified;
-      if (closest == null || progress > closest.$4) {
-        closest = (userCard, rule, remaining, progress);
+      if (closest == null || progress > closest.$6) {
+        closest = (
+          userCard,
+          product,
+          rule,
+          qualified,
+          remaining,
+          progress,
+          userCard.milestonePeriodEnd[rule.id],
+        );
       }
     }
     if (closest == null) return const SizedBox.shrink();
 
-    final (_, rule, remaining, progress) = closest;
+    final (_, product, rule, qualified, remaining, progress, periodEnd) =
+        closest;
     return Padding(
       padding: const EdgeInsets.only(top: AppSpace.xl),
       child: Container(
@@ -999,35 +1148,91 @@ class _MilestoneInReach extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Milestone in reach',
-              style: BambooFonts.ui(
-                12,
-                weight: FontWeight.w700,
-                color: BambooInk.rankBadgeInk,
-              ),
-            ),
-            const SizedBox(height: AppSpace.sm),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                MoneyText(
-                  remaining,
-                  confidence: Confidence.confirmed,
-                  style: BambooFonts.money(20, color: BambooInk.ink900),
-                  hidePaise: true,
-                  showConfidenceIcon: false,
+                CardVisual(
+                  product: product,
+                  showProductName: false,
+                  width: 86,
+                  height: 54,
                 ),
-                Flexible(
-                  child: Text(
-                    ' more to go — ${rule.label}',
-                    style: BambooFonts.ui(13, color: BambooInk.ink900),
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Milestone in reach',
+                        style: BambooFonts.ui(
+                          12,
+                          weight: FontWeight.w700,
+                          color: BambooInk.rankBadgeInk,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        product.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: BambooFonts.heading(14, color: BambooInk.ink900),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              rule.label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: BambooFonts.ui(
+                13,
+                weight: FontWeight.w600,
+                color: BambooInk.ink900,
+              ),
+            ),
             const SizedBox(height: AppSpace.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Spend progress',
+                        style: BambooFonts.ui(11, color: BambooInk.ink500),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${qualified.format()} of ${rule.thresholdSpend.format()}',
+                        style: BambooFonts.ui(
+                          13,
+                          weight: FontWeight.w700,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${remaining.format()} to go',
+                      style: BambooFonts.money(16, color: BambooInk.ink900),
+                    ),
+                    Text(
+                      'Reward ${rule.rewardValue.format()}',
+                      style: BambooFonts.ui(11, color: BambooInk.ink500),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.sm),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.pill),
               child: LinearProgressIndicator(
@@ -1037,6 +1242,13 @@ class _MilestoneInReach extends StatelessWidget {
                 valueColor: const AlwaysStoppedAnimation(BambooInk.jade),
               ),
             ),
+            if (periodEnd != null) ...[
+              const SizedBox(height: AppSpace.xs),
+              Text(
+                'Current period ends ${MaterialLocalizations.of(context).formatMediumDate(periodEnd.toLocal())}',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
+            ],
           ],
         ),
       ),

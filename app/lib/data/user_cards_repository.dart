@@ -30,6 +30,11 @@ class UserCard {
   final String cardProductId;
   final String? nickname;
   final String cardName;
+
+  /// Catalogue type, when the API exposes it (`credit`, `debit`, ...). This
+  /// is display/matching metadata; SMS attribution still comes from the
+  /// server-side instrument resolver.
+  final String? cardType;
   final bool isDefault;
   final Map<String, Money>
   capConsumed; // capRule.id -> consumed (in the cap's own measure unit)
@@ -59,6 +64,12 @@ class UserCard {
   /// [dueDay] feeds E8's calendar. [anniversaryOn] feeds E5's
   /// days-to-anniversary.
   final Money? creditLimit;
+
+  /// Optional per-user annual-fee override. A zero value means the issuer
+  /// treats this particular card as lifetime free; null means use the
+  /// catalogue fee. This is intentionally user-scoped because LTF offers
+  /// vary by customer even when the card product is the same.
+  final Money? annualFeeOverride;
   final int? dueDay;
   final DateTime? anniversaryOn;
 
@@ -101,6 +112,7 @@ class UserCard {
     required this.cardProductId,
     this.nickname,
     required this.cardName,
+    this.cardType,
     required this.isDefault,
     this.isUnresolved = false,
     this.capConsumed = const {},
@@ -112,6 +124,7 @@ class UserCard {
     this.statementDay,
     this.openedOn,
     this.creditLimit,
+    this.annualFeeOverride,
     this.dueDay,
     this.anniversaryOn,
     this.isArchived = false,
@@ -131,6 +144,7 @@ class UserCard {
       cardProductId: json['card_product_id'] as String,
       nickname: json['nickname'] as String?,
       cardName: json['card_name'] as String,
+      cardType: json['card_type'] as String?,
       isDefault: json['is_default'] as bool? ?? false,
       capConsumed: {
         for (final s in capStates)
@@ -161,6 +175,9 @@ class UserCard {
       creditLimit: json['credit_limit_inr'] == null
           ? null
           : Money.fromRupees(_num(json['credit_limit_inr'])),
+      annualFeeOverride: json['annual_fee_override_inr'] == null
+          ? null
+          : Money.fromRupees(_num(json['annual_fee_override_inr'])),
       dueDay: json['due_day'] as int?,
       anniversaryOn: json['anniversary_on'] == null
           ? null
@@ -179,6 +196,7 @@ class UserCard {
     'card_product_id': cardProductId,
     'nickname': nickname,
     'card_name': cardName,
+    'card_type': cardType,
     'is_default': isDefault,
     'cap_states': [
       for (final entry in capConsumed.entries)
@@ -199,6 +217,7 @@ class UserCard {
     'statement_day': statementDay,
     'opened_on': openedOn?.toIso8601String(),
     'credit_limit_inr': creditLimit?.rupees,
+    'annual_fee_override_inr': annualFeeOverride?.rupees,
     'due_day': dueDay,
     'anniversary_on': anniversaryOn?.toIso8601String(),
     'is_archived': isArchived,
@@ -670,6 +689,9 @@ class DiscoveredCard {
   final List<String> sources; // 'email' and/or 'sms'
   final bool isPlaceholder;
   final String? issuerName;
+
+  /// `credit` or `debit` when the SMS or catalogue made that distinction.
+  final String? cardType;
   final Money? creditLimit;
 
   const DiscoveredCard({
@@ -682,6 +704,7 @@ class DiscoveredCard {
     required this.sources,
     this.isPlaceholder = false,
     this.issuerName,
+    this.cardType,
     this.creditLimit,
   });
 
@@ -695,6 +718,7 @@ class DiscoveredCard {
     sources: ((json['sources'] as List?) ?? const []).cast<String>(),
     isPlaceholder: json['isPlaceholder'] as bool? ?? false,
     issuerName: json['issuerName'] as String?,
+    cardType: json['cardType'] as String?,
     creditLimit: json['creditLimitInr'] == null
         ? null
         : Money.fromRupees(_num(json['creditLimitInr'])),
@@ -782,7 +806,9 @@ class UserCardsRepository {
           }),
         )
         .timeout(const Duration(seconds: 60));
-    if (response.statusCode != 201) {
+    // 201 means a new row was created; 200 means discovery enriched the
+    // single existing product-only placeholder with its detected last four.
+    if (response.statusCode != 200 && response.statusCode != 201) {
       throw ApiException(
         'POST /user-cards failed: ${response.statusCode} ${response.body}',
       );
@@ -885,6 +911,29 @@ class UserCardsRepository {
     if (response.statusCode != 200) {
       throw ApiException(
         'update failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
+  /// Saves the customer's fee offer separately from the general card-edit
+  /// contract. Keeping this as a dedicated method preserves compatibility
+  /// with lightweight repository fakes and makes the three states explicit:
+  /// catalogue fee, a custom fee, or lifetime free (zero).
+  Future<void> updateAnnualFeeOverride(
+    String userCardId, {
+    double? annualFeeOverrideInr,
+    bool clear = false,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$apiBaseUrl/user-cards/$userCardId'),
+      headers: _headers,
+      body: jsonEncode({
+        'annualFeeOverrideInr': clear ? null : annualFeeOverrideInr,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'annual fee update failed: ${response.statusCode} ${response.body}',
       );
     }
   }

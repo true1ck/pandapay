@@ -35,10 +35,11 @@ DateTime? _dateOrNull(dynamic v) {
 
 /// Round-trips through the offline cache as a plain 'YYYY-MM-DD' date, the
 /// same shape [_dateOrNull] reads from the wire.
-String? _dateToJson(DateTime? v) =>
-    v == null ? null : '${v.year.toString().padLeft(4, '0')}-'
-        '${v.month.toString().padLeft(2, '0')}-'
-        '${v.day.toString().padLeft(2, '0')}';
+String? _dateToJson(DateTime? v) => v == null
+    ? null
+    : '${v.year.toString().padLeft(4, '0')}-'
+          '${v.month.toString().padLeft(2, '0')}-'
+          '${v.day.toString().padLeft(2, '0')}';
 
 RewardUnit _parseRewardUnit(String value) {
   return RewardUnit.values.firstWhere(
@@ -65,7 +66,11 @@ CapMeasure _parseCapMeasure(String value) =>
 
 String _camelFromSnake(String snake) {
   final parts = snake.split('_');
-  return parts.first + parts.skip(1).map((p) => p.isEmpty ? '' : p[0].toUpperCase() + p.substring(1)).join();
+  return parts.first +
+      parts
+          .skip(1)
+          .map((p) => p.isEmpty ? '' : p[0].toUpperCase() + p.substring(1))
+          .join();
 }
 
 /// Inverse of [_camelFromSnake] — used only by the offline-cache toJson
@@ -99,7 +104,8 @@ extension RewardRuleJson on RewardRule {
       rate: _num(json['rate']),
       minTxn: _moneyOrNull(json['min_txn_inr']),
       maxTxn: _moneyOrNull(json['max_txn_inr']),
-      excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const []).cast<String>(),
+      excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const [])
+          .cast<String>(),
       effectiveFrom: _dateOrNull(json['effective_from']),
       effectiveTo: _dateOrNull(json['effective_to']),
       priority: (json['priority'] as num?)?.toInt() ?? 100,
@@ -107,19 +113,19 @@ extension RewardRuleJson on RewardRule {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'category_id': categoryId,
-        'merchant_pattern': merchantPattern,
-        'rail': rail == null ? null : _snakeFromCamel(rail!.name),
-        'unit': _snakeFromCamel(unit.name),
-        'rate': rate,
-        'min_txn_inr': minTxn?.rupees,
-        'max_txn_inr': maxTxn?.rupees,
-        'excluded_categories': excludedCategoryIds,
-        'effective_from': _dateToJson(effectiveFrom),
-        'effective_to': _dateToJson(effectiveTo),
-        'priority': priority,
-      };
+    'id': id,
+    'category_id': categoryId,
+    'merchant_pattern': merchantPattern,
+    'rail': rail == null ? null : _snakeFromCamel(rail!.name),
+    'unit': _snakeFromCamel(unit.name),
+    'rate': rate,
+    'min_txn_inr': minTxn?.rupees,
+    'max_txn_inr': maxTxn?.rupees,
+    'excluded_categories': excludedCategoryIds,
+    'effective_from': _dateToJson(effectiveFrom),
+    'effective_to': _dateToJson(effectiveTo),
+    'priority': priority,
+  };
 }
 
 extension CapRuleJson on CapRule {
@@ -137,7 +143,9 @@ extension CapRuleJson on CapRule {
       // than treating it as currency.
       capValue: _moneyFromRupees(json['cap_value']),
       measure: _parseCapMeasure(json['measure'] as String),
-      postCapUnit: json['post_cap_unit'] != null ? _parseRewardUnit(json['post_cap_unit'] as String) : null,
+      postCapUnit: json['post_cap_unit'] != null
+          ? _parseRewardUnit(json['post_cap_unit'] as String)
+          : null,
       // _numOrNull, not _num: null must survive as null so the engine can
       // tell "catalogue doesn't say, fall back to the card's base rate"
       // from an explicit "this card pays nothing past the cap". See
@@ -148,16 +156,18 @@ extension CapRuleJson on CapRule {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'reward_rule_id': rewardRuleId,
-        'category_id': categoryId,
-        'label': label,
-        'cap_value': capValue.rupees,
-        'measure': _snakeFromCamel(measure.name),
-        'post_cap_unit': postCapUnit == null ? null : _snakeFromCamel(postCapUnit!.name),
-        'post_cap_rate': postCapRate,
-        'period': _snakeFromCamel(period.name),
-      };
+    'id': id,
+    'reward_rule_id': rewardRuleId,
+    'category_id': categoryId,
+    'label': label,
+    'cap_value': capValue.rupees,
+    'measure': _snakeFromCamel(measure.name),
+    'post_cap_unit': postCapUnit == null
+        ? null
+        : _snakeFromCamel(postCapUnit!.name),
+    'post_cap_rate': postCapRate,
+    'period': _snakeFromCamel(period.name),
+  };
 }
 
 extension MilestoneRuleJson on MilestoneRule {
@@ -172,12 +182,12 @@ extension MilestoneRuleJson on MilestoneRule {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'label': label,
-        'threshold_spend_inr': thresholdSpend.rupees,
-        'reward_value_inr': rewardValue.rupees,
-        'is_repeatable': isRepeatable,
-      };
+    'id': id,
+    'label': label,
+    'threshold_spend_inr': thresholdSpend.rupees,
+    'reward_value_inr': rewardValue.rupees,
+    'is_repeatable': isRepeatable,
+  };
 }
 
 extension ForexRuleJson on ForexRule {
@@ -189,9 +199,9 @@ extension ForexRuleJson on ForexRule {
   }
 
   Map<String, dynamic> toJson() => {
-        'markup_percent': markupPercent,
-        'gst_on_markup': gstOnMarkup,
-      };
+    'markup_percent': markupPercent,
+    'gst_on_markup': gstOnMarkup,
+  };
 }
 
 extension FuelSurchargeRuleJson on FuelSurchargeRule {
@@ -205,17 +215,19 @@ extension FuelSurchargeRuleJson on FuelSurchargeRule {
   }
 
   Map<String, dynamic> toJson() => {
-        'surcharge_percent': surchargePercent,
-        'waiver_percent': waiverPercent,
-        'min_txn_inr': minTxn?.rupees,
-        'max_txn_inr': maxTxn?.rupees,
-      };
+    'surcharge_percent': surchargePercent,
+    'waiver_percent': waiverPercent,
+    'min_txn_inr': minTxn?.rupees,
+    'max_txn_inr': maxTxn?.rupees,
+  };
 }
 
 /// Mirrors `benefit_kind` (database.sql) — Postgres enum values are already
 /// snake_case, same `_camelFromSnake` bridge every other enum here uses.
-BenefitKind _parseBenefitKind(String value) =>
-    BenefitKind.values.firstWhere((k) => k.name == _camelFromSnake(value), orElse: () => BenefitKind.other);
+BenefitKind _parseBenefitKind(String value) => BenefitKind.values.firstWhere(
+  (k) => k.name == _camelFromSnake(value),
+  orElse: () => BenefitKind.other,
+);
 
 extension FeeWaiverRuleJson on FeeWaiverRule {
   static FeeWaiverRule fromJson(Map<String, dynamic> json) {
@@ -224,19 +236,20 @@ extension FeeWaiverRuleJson on FeeWaiverRule {
       thresholdSpend: _moneyFromRupees(json['threshold_spend_inr']),
       period: _parseCapPeriod(json['period'] as String),
       waivesFee: _moneyFromRupees(json['waives_fee_inr']),
-      excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const []).cast<String>(),
+      excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const [])
+          .cast<String>(),
       notes: json['notes'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'threshold_spend_inr': thresholdSpend.rupees,
-        'period': _snakeFromCamel(period.name),
-        'waives_fee_inr': waivesFee.rupees,
-        'excluded_categories': excludedCategoryIds,
-        'notes': notes,
-      };
+    'id': id,
+    'threshold_spend_inr': thresholdSpend.rupees,
+    'period': _snakeFromCamel(period.name),
+    'waives_fee_inr': waivesFee.rupees,
+    'excluded_categories': excludedCategoryIds,
+    'notes': notes,
+  };
 }
 
 extension CardBenefitJson on CardBenefit {
@@ -247,22 +260,26 @@ extension CardBenefitJson on CardBenefit {
       label: json['label'] as String,
       description: json['description'] as String?,
       quotaCount: (json['quota_count'] as num?)?.toInt(),
-      quotaPeriod: json['quota_period'] != null ? _parseCapPeriod(json['quota_period'] as String) : null,
+      quotaPeriod: json['quota_period'] != null
+          ? _parseCapPeriod(json['quota_period'] as String)
+          : null,
       networkProgram: json['network_program'] as String?,
       valueEstimate: _moneyOrNull(json['value_estimate_inr']),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'kind': _snakeFromCamel(kind.name),
-        'label': label,
-        'description': description,
-        'quota_count': quotaCount,
-        'quota_period': quotaPeriod == null ? null : _snakeFromCamel(quotaPeriod!.name),
-        'network_program': networkProgram,
-        'value_estimate_inr': valueEstimate?.rupees,
-      };
+    'id': id,
+    'kind': _snakeFromCamel(kind.name),
+    'label': label,
+    'description': description,
+    'quota_count': quotaCount,
+    'quota_period': quotaPeriod == null
+        ? null
+        : _snakeFromCamel(quotaPeriod!.name),
+    'network_program': networkProgram,
+    'value_estimate_inr': valueEstimate?.rupees,
+  };
 }
 
 extension CardProductJson on CardProduct {
@@ -279,7 +296,8 @@ extension CardProductJson on CardProduct {
           ? null
           : _parseRewardUnit(json['base_reward_unit'] as String),
       baseRewardRate: _numOrNull(json['base_reward_rate']),
-      excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const []).cast<String>(),
+      excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const [])
+          .cast<String>(),
       rewardRules: ((json['reward_rules'] as List?) ?? const [])
           .map((e) => RewardRuleJson.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -289,8 +307,12 @@ extension CardProductJson on CardProduct {
       milestoneRules: ((json['milestone_rules'] as List?) ?? const [])
           .map((e) => MilestoneRuleJson.fromJson(e as Map<String, dynamic>))
           .toList(),
-      forexRule: json['forex'] != null ? ForexRuleJson.fromJson(json['forex'] as Map<String, dynamic>) : null,
-      fuelRule: json['fuel'] != null ? FuelSurchargeRuleJson.fromJson(json['fuel'] as Map<String, dynamic>) : null,
+      forexRule: json['forex'] != null
+          ? ForexRuleJson.fromJson(json['forex'] as Map<String, dynamic>)
+          : null,
+      fuelRule: json['fuel'] != null
+          ? FuelSurchargeRuleJson.fromJson(json['fuel'] as Map<String, dynamic>)
+          : null,
       feeWaiverRules: ((json['fee_waiver_rules'] as List?) ?? const [])
           .map((e) => FeeWaiverRuleJson.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -299,8 +321,11 @@ extension CardProductJson on CardProduct {
           .toList(),
       annualFeeInr: _moneyOrNull(json['annual_fee_inr']),
       joiningFeeInr: _moneyOrNull(json['joining_fee_inr']),
-      verifiedAt: json['verified_at'] == null ? null : DateTime.parse(json['verified_at'] as String),
+      verifiedAt: json['verified_at'] == null
+          ? null
+          : DateTime.parse(json['verified_at'] as String),
       issuerName: json['issuer_name'] as String?,
+      cardType: json['card_type'] as String?,
       artAssetUrl: json['art_asset'] as String?,
       artPrimaryColor: json['art_primary_color'] as String?,
       hasApplyUrl: json['has_apply_url'] == true,
@@ -308,27 +333,30 @@ extension CardProductJson on CardProduct {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'network': network.name,
-        'is_upi_linkable': isUpiLinkable,
-        'point_value_inr': pointValueInr,
-        'base_reward_unit': baseRewardUnit == null ? null : _snakeFromCamel(baseRewardUnit!.name),
-        'base_reward_rate': baseRewardRate,
-        'excluded_categories': excludedCategoryIds,
-        'reward_rules': rewardRules.map((r) => r.toJson()).toList(),
-        'cap_rules': capRules.map((r) => r.toJson()).toList(),
-        'milestone_rules': milestoneRules.map((r) => r.toJson()).toList(),
-        'forex': forexRule?.toJson(),
-        'fuel': fuelRule?.toJson(),
-        'fee_waiver_rules': feeWaiverRules.map((r) => r.toJson()).toList(),
-        'benefits': benefits.map((b) => b.toJson()).toList(),
-        'annual_fee_inr': annualFeeInr?.rupees,
-        'joining_fee_inr': joiningFeeInr?.rupees,
-        'verified_at': verifiedAt?.toIso8601String(),
-        'issuer_name': issuerName,
-        'art_asset': artAssetUrl,
-        'art_primary_color': artPrimaryColor,
-        'has_apply_url': hasApplyUrl,
-      };
+    'id': id,
+    'name': name,
+    'network': network.name,
+    'is_upi_linkable': isUpiLinkable,
+    'point_value_inr': pointValueInr,
+    'base_reward_unit': baseRewardUnit == null
+        ? null
+        : _snakeFromCamel(baseRewardUnit!.name),
+    'base_reward_rate': baseRewardRate,
+    'excluded_categories': excludedCategoryIds,
+    'reward_rules': rewardRules.map((r) => r.toJson()).toList(),
+    'cap_rules': capRules.map((r) => r.toJson()).toList(),
+    'milestone_rules': milestoneRules.map((r) => r.toJson()).toList(),
+    'forex': forexRule?.toJson(),
+    'fuel': fuelRule?.toJson(),
+    'fee_waiver_rules': feeWaiverRules.map((r) => r.toJson()).toList(),
+    'benefits': benefits.map((b) => b.toJson()).toList(),
+    'annual_fee_inr': annualFeeInr?.rupees,
+    'joining_fee_inr': joiningFeeInr?.rupees,
+    'verified_at': verifiedAt?.toIso8601String(),
+    'issuer_name': issuerName,
+    'card_type': cardType,
+    'art_asset': artAssetUrl,
+    'art_primary_color': artPrimaryColor,
+    'has_apply_url': hasApplyUrl,
+  };
 }

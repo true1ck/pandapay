@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -163,4 +164,50 @@ void main() {
     final state = await repository.fetchSmsImportState();
     expect(state.smsObservationCount, isNull);
   });
+
+  test('accepts a 200 when discovery links an existing card placeholder', () async {
+    final repository = UserCardsRepository(
+      apiBaseUrl: 'https://api.test',
+      accessToken: 'token',
+      client: MockClient(
+        (request) async => http.Response(
+          jsonEncode({
+            'linkedExisting': true,
+            'userCard': {'id': 'uc-linked'},
+          }),
+          200,
+        ),
+      ),
+    );
+
+    expect(await repository.addCard('card-1', last4: '9087'), 'uc-linked');
+  });
+
+  test(
+    'exposes the duplicate-card API code for a friendly wallet message',
+    () async {
+      final repository = UserCardsRepository(
+        apiBaseUrl: 'https://api.test',
+        accessToken: 'token',
+        client: MockClient(
+          (request) async => http.Response(
+            jsonEncode({
+              'error': 'card_already_added',
+              'message': 'This card is already in your wallet.',
+            }),
+            409,
+          ),
+        ),
+      );
+
+      try {
+        await repository.addCard('card-1');
+        fail('expected duplicate-card error');
+      } on ApiException catch (error) {
+        expect(error.statusCode, 409);
+        expect(error.errorCode, 'card_already_added');
+        expect(error.userMessage, 'This card is already in your wallet.');
+      }
+    },
+  );
 }

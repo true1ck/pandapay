@@ -182,7 +182,8 @@ async function periodTotals(client, userId, { start, end }) {
     `SELECT entry_kind,
             COALESCE(SUM(amount_inr), 0) AS total,
             COUNT(*) AS txn_count,
-            COALESCE(SUM(expected_value_inr), 0) AS rewards
+            COALESCE(SUM(GREATEST(COALESCE(expected_value_inr, 0), 0))
+              FILTER (WHERE entry_kind = 'spend' AND amount_inr > 0), 0) AS rewards
        FROM transactions
       WHERE profile_id = $1 AND status = 'active'
         AND occurred_at >= $2 AND occurred_at < $3
@@ -277,7 +278,7 @@ async function spendByCard(client, userId, { start, end }) {
        SELECT t.user_card_id,
               t.instrument,
               cp.name AS card_name, uc.nickname AS card_nickname,
-              cp.annual_fee_inr,
+              COALESCE(uc.annual_fee_override_inr, cp.annual_fee_inr) AS annual_fee_inr,
               t.amount_inr, t.expected_value_inr,
               CASE WHEN t.user_card_id IS NULL THEN
                 (SELECT o.metadata->>'cardLast4'
@@ -291,12 +292,13 @@ async function spendByCard(client, userId, { start, end }) {
          LEFT JOIN user_cards uc ON uc.id = t.user_card_id
          LEFT JOIN card_products cp ON cp.id = uc.card_product_id
         WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+          AND t.amount_inr > 0
           AND t.occurred_at >= $2 AND t.occurred_at < $3
      )
      SELECT user_card_id, instrument, card_name, card_nickname,
             annual_fee_inr, card_last4,
             COALESCE(SUM(amount_inr), 0) AS total,
-            COALESCE(SUM(expected_value_inr), 0) AS rewards,
+            COALESCE(SUM(GREATEST(COALESCE(expected_value_inr, 0), 0)), 0) AS rewards,
             COUNT(*) AS txn_count
        FROM transaction_rows
       GROUP BY user_card_id, instrument, card_name, card_nickname,
@@ -453,12 +455,13 @@ async function spendSeries(client, userId, period, buckets, anchor = new Date(),
      )
      SELECT b.bucket_start,
             COALESCE(SUM(t.amount_inr) FILTER (WHERE t.entry_kind = 'spend'), 0) AS spend,
-            COALESCE(SUM(t.expected_value_inr) FILTER (WHERE t.entry_kind = 'spend'), 0) AS rewards,
+            COALESCE(SUM(GREATEST(COALESCE(t.expected_value_inr, 0), 0)) FILTER (WHERE t.entry_kind = 'spend'), 0) AS rewards,
             COUNT(t.id) FILTER (WHERE t.entry_kind = 'spend') AS txn_count
        FROM buckets b
        LEFT JOIN transactions t
          ON t.profile_id = $1
         AND t.status = 'active'
+        AND t.amount_inr > 0
         AND t.occurred_at >= b.bucket_start
         AND t.occurred_at < b.bucket_end
       GROUP BY b.bucket_start
