@@ -312,7 +312,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         Navigator.of(context).pop();
         messenger.showSnackBar(
           SnackBar(
-            content: const Text('Transaction logged'),
+            content: Text(
+              'Logged ${Money.fromRupees(amount).format()} spend',
+            ),
             action: SnackBarAction(
               label: 'Undo',
               // Real undo: POST /transactions/:id/ignore with reason

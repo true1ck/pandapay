@@ -17,6 +17,7 @@ import 'find_cards_screen.dart';
 import 'card_add_guard.dart';
 import 'card_summary.dart';
 import '../insights/credit_utilization_ui.dart';
+import '../quickadd/quick_add_screen.dart';
 
 /// C1 My Cards (ui-spec Group C, implementation-plan-group-c-d.md) —
 /// restyled onto the Bamboo Ink design system (see home_screen.dart's
@@ -263,48 +264,20 @@ class _MyCardTile extends ConsumerStatefulWidget {
 }
 
 class _MyCardTileState extends ConsumerState<_MyCardTile> {
-  bool _logging = false;
   bool _archiving = false;
 
-  Future<void> _logTransaction() async {
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null) {
-      // Guest mode has no cap/points ledger to update — logging spend
-      // needs an account, unlike browsing/adding/archiving cards.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sign in to log spend and track caps & points.'),
+  Future<void> _openSpendLogger() async {
+    final amount = ref.read(enteredAmountProvider);
+    final categoryId = ref.read(_resolvedSelectedCategoryIdProvider);
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => QuickAddScreen(
+          initialAmount: amount.isZero ? null : amount,
+          initialCategoryId: categoryId,
+          initialUserCardId: widget.card.id,
         ),
-      );
-      return;
-    }
-    setState(() => _logging = true);
-    try {
-      final categoryId = ref.read(_resolvedSelectedCategoryIdProvider);
-      final amount = ref.read(enteredAmountProvider);
-      await repo.logTransaction(
-        userCardId: widget.card.id,
-        amount: amount,
-        categoryId: categoryId,
-      );
-      ref.invalidate(myCardsProvider);
-      ref.invalidate(userCardsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Logged ${amount.format()} spend.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to log spend. ${userFacingErrorMessage(e)}'),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _logging = false);
-    }
+      ),
+    );
   }
 
   Future<void> _removeUnresolved() async {
@@ -359,7 +332,6 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
     if (card.isUnresolved) {
       return _UnresolvedCardTile(busy: _archiving, onRemove: _removeUnresolved);
     }
-    final amount = ref.watch(enteredAmountProvider);
     final utilization = ref.watch(creditUtilizationProvider)[card.id];
     final badges = <String>[
       if (card.totalPointsEarned > 0)
@@ -428,11 +400,9 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                       : card.cardName,
                   trailing: !card.isArchived
                       ? _CardActionButton(
-                          icon: _logging ? null : Icons.add_card_rounded,
-                          loading: _logging,
-                          tooltip:
-                              'Log a ${amount.format()} spend on this card',
-                          onPressed: _logging ? null : _logTransaction,
+                          icon: Icons.receipt_long_rounded,
+                          tooltip: 'Review and log a spend on this card',
+                          onPressed: _openSpendLogger,
                         )
                       : null,
                 ),
