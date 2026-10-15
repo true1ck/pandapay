@@ -130,6 +130,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
           );
         }
       }
+      await clearUserCardsCache(ref);
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
       if (mounted) context.pop();
@@ -260,6 +261,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       } else {
         await repo.archiveCard(widget.userCardId);
       }
+      await clearUserCardsCache(ref);
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
       // The card detail route is now stale because the archived card is no
@@ -315,6 +317,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       } else {
         await repo.setDefaultCard(widget.userCardId);
       }
+      await clearUserCardsCache(ref);
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
       if (mounted) {

@@ -58,14 +58,24 @@ class LocalUserCardsRepository {
 
   Future<String> addCard(String cardProductId, {String? nickname}) async {
     final existingRows = _raw.select(
-      'SELECT id FROM local_user_cards WHERE card_product_id = ? LIMIT 1',
+      'SELECT id FROM local_user_cards WHERE card_product_id = ? AND is_archived = 0 LIMIT 1',
       [cardProductId],
     );
     if (existingRows.isNotEmpty) {
       throw const CardAlreadyAddedException();
     }
 
-    final id = 'local_${DateTime.now().microsecondsSinceEpoch}';
+    // Android/emulator clocks can return the same microsecond value for two
+    // back-to-back writes. Keep the readable local prefix, but add a suffix
+    // and verify it against SQLite so remove-then-readd can never collide.
+    var attempt = 0;
+    late String id;
+    do {
+      id = 'local_${DateTime.now().microsecondsSinceEpoch}_$attempt';
+      attempt += 1;
+    } while (_raw.select('SELECT 1 FROM local_user_cards WHERE id = ?', [
+      id,
+    ]).isNotEmpty);
     final maxOrderRows = _raw.select(
       'SELECT MAX(sort_order) AS m FROM local_user_cards',
     );

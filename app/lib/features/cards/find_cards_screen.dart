@@ -358,6 +358,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   /// attribution repair in the same transaction; running the full repair a
   /// second time here made card additions feel unnecessarily slow.
   Future<void> _reconcileAfterCardAdded() async {
+    await clearUserCardsCache(ref);
     ref.invalidate(myCardsProvider);
     ref.invalidate(userCardsProvider);
     ref.invalidate(transactionsProvider);

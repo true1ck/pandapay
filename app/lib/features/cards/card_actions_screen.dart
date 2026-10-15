@@ -52,6 +52,7 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await action();
+      await clearUserCardsCache(ref);
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
       messenger.showSnackBar(SnackBar(content: Text(success)));

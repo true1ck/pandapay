@@ -1993,6 +1993,27 @@ Future<ResponseCache?> _cacheOrNull(Ref ref) async {
   }
 }
 
+/// Clears authenticated wallet snapshots after a card mutation.
+///
+/// Wallet reads are intentionally cache-first so Home can render quickly on
+/// a cold launch. Invalidating a provider alone can therefore replay the
+/// pre-mutation snapshot. Mutation flows call this before invalidating their
+/// providers so Find My Cards and Wallet agree immediately.
+Future<void> clearUserCardsCache(WidgetRef ref) async {
+  ResponseCache? cache;
+  try {
+    cache = await ref.read(responseCacheProvider.future);
+  } catch (_) {
+    return;
+  }
+  if (cache == null) return;
+  final namespace = ref.read(cacheNamespaceProvider);
+  await Future.wait([
+    cache.clear('$namespace:$_userCardsCacheKey'),
+    cache.clear('$namespace:$_userCardsWithArchivedCacheKey'),
+  ]);
+}
+
 Future<CachedResponse?> _readCacheOrNull(
   ResponseCache? cache,
   String key,

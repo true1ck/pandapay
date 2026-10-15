@@ -66,3 +66,18 @@ test('an unknown suffix cannot create a second product-only card', () => {
     'already_present',
   );
 });
+
+test('archived cards do not block a replacement add', () => {
+  const archived = {
+    id: 'archived-card',
+    card_product_id: product,
+    last4: '9087',
+    is_archived: true,
+    created_at: '2026-10-01T00:00:00Z',
+  };
+
+  assert.equal(
+    findCardAddConflict([archived], { cardProductId: product, last4: '9087' }),
+    null,
+  );
+});

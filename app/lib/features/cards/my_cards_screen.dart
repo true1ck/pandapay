@@ -967,6 +967,7 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
       added = plan.idsToAdd.length - duplicateIds.length - failures.length;
       alreadyPresentCount = plan.alreadyPresent.length + duplicateIds.length;
       if (added > 0) {
+        await clearUserCardsCache(ref);
         ref.invalidate(myCardsProvider);
         ref.invalidate(userCardsProvider);
       }

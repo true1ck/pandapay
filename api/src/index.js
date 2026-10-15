@@ -2339,7 +2339,9 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
       // transaction, and this also lets `isDefault` below be decided from
       // the true "did they have any cards at all before this import" state.
       const existing = await client.query(
-        `SELECT card_product_id, last4, is_archived FROM user_cards WHERE profile_id = $1`,
+        `SELECT card_product_id, last4, is_archived
+           FROM user_cards
+          WHERE profile_id = $1 AND is_archived = false`,
         [req.userId]
       );
       const owned = new Set(existing.rows.map((r) => cardIdentityKey(r.card_product_id, r.last4)));
@@ -5927,7 +5929,9 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
         .map((body) => ({ body }));
 
       const owned = await client.query(
-        `SELECT card_product_id FROM user_cards WHERE profile_id = $1 AND archived_at IS NULL`,
+        `SELECT card_product_id
+           FROM user_cards
+          WHERE profile_id = $1 AND is_archived = false`,
         [req.userId]
       );
       const ownedIds = new Set(owned.rows.map((r) => r.card_product_id));

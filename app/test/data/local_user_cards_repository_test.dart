@@ -91,4 +91,28 @@ void main() {
       expect(await local.count(), 1);
     },
   );
+
+  test(
+    'an archived product can be added again as a fresh active card',
+    () async {
+      final archivedId = await local.addCard('p-replaced');
+      await local.archiveCard(archivedId);
+
+      final replacementId = await local.addCard('p-replaced');
+      expect(replacementId, isNot(archivedId));
+      expect(
+        (await local.fetchUserCards(
+          catalogue: const [],
+        )).map((card) => card.id),
+        [replacementId],
+      );
+      expect(
+        (await local.fetchUserCards(
+          includeArchived: true,
+          catalogue: const [],
+        )).map((card) => card.id),
+        [archivedId, replacementId],
+      );
+    },
+  );
 }
