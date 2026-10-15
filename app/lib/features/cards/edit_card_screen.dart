@@ -6,6 +6,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import 'card_network_util.dart';
@@ -261,7 +262,11 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       }
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
-      if (mounted) context.pop();
+      // The card detail route is now stale because the archived card is no
+      // longer part of the active-card query. Return to Wallet directly so we
+      // never render CardDetailScreen's "card could not be found" state after
+      // a successful removal.
+      if (mounted) context.go(AppRoute.cards);
     } catch (e) {
       // Archiving is just `is_archived = true` on a row that already exists
       // (R4 "archive, never delete" — see this method's own doc comment),
@@ -283,7 +288,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
               content: Text('Removed offline — will sync when you reconnect.'),
             ),
           );
-          context.pop();
+          context.go(AppRoute.cards);
         }
         return;
       }

@@ -108,6 +108,10 @@ Future<GoRouter> _pump(
         path: '/back',
         builder: (context, state) => const Scaffold(body: Text('back home')),
       ),
+      GoRoute(
+        path: '/cards',
+        builder: (context, state) => const Scaffold(body: Text('Wallet')),
+      ),
     ],
   );
   await tester.pumpWidget(
@@ -420,6 +424,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repo.archived, isTrue);
+    expect(find.text('Wallet'), findsOneWidget);
+    expect(find.textContaining('could not be found'), findsNothing);
   });
 
   testWidgets('cancelling the remove sheet leaves the card alone', (

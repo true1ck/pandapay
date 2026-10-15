@@ -29,7 +29,11 @@ import '../overrides/manual_overrides_screen.dart';
 class CardActionsScreen extends ConsumerStatefulWidget {
   final UserCard card;
   final CardProduct product;
-  const CardActionsScreen({super.key, required this.card, required this.product});
+  const CardActionsScreen({
+    super.key,
+    required this.card,
+    required this.product,
+  });
 
   @override
   ConsumerState<CardActionsScreen> createState() => _CardActionsScreenState();
@@ -42,8 +46,8 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
       ? widget.card.nickname!
       : widget.card.cardName;
 
-  Future<void> _run(Future<void> Function() action, String success) async {
-    if (_busy) return;
+  Future<bool> _run(Future<void> Function() action, String success) async {
+    if (_busy) return false;
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -51,8 +55,12 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
       messenger.showSnackBar(SnackBar(content: Text(success)));
+      return true;
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingErrorMessage(e))),
+      );
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -61,20 +69,30 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
   /// Both the pause toggle and "Remove card" archive the same card, because
   /// archiving is the only real operation underneath. They differ in intent
   /// and in how loudly they say so, which is why Remove confirms first.
-  Future<void> _setPaused(bool paused) async {
+  Future<bool> _setPaused(bool paused) async {
     final repo = ref.read(userCardsRepositoryProvider);
-    final local = repo == null ? await ref.read(localUserCardsRepositoryProvider.future) : null;
-    await _run(
+    final local = repo == null
+        ? await ref.read(localUserCardsRepositoryProvider.future)
+        : null;
+    return _run(
       () async => paused
-          ? (repo != null ? repo.archiveCard(widget.card.id) : local!.archiveCard(widget.card.id))
-          : (repo != null ? repo.unarchiveCard(widget.card.id) : local!.unarchiveCard(widget.card.id)),
-      paused ? '$_displayName paused — it will not be ranked.' : '$_displayName is back in the ranking.',
+          ? (repo != null
+                ? repo.archiveCard(widget.card.id)
+                : local!.archiveCard(widget.card.id))
+          : (repo != null
+                ? repo.unarchiveCard(widget.card.id)
+                : local!.unarchiveCard(widget.card.id)),
+      paused
+          ? '$_displayName paused — it will not be ranked.'
+          : '$_displayName is back in the ranking.',
     );
   }
 
   Future<void> _setDefault() async {
     final repo = ref.read(userCardsRepositoryProvider);
-    final local = repo == null ? await ref.read(localUserCardsRepositoryProvider.future) : null;
+    final local = repo == null
+        ? await ref.read(localUserCardsRepositoryProvider.future)
+        : null;
     await _run(
       () async => repo != null
           ? repo.setDefaultCard(widget.card.id)
@@ -88,7 +106,10 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: BambooInk.paper,
-        title: Text('Remove $_displayName?', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Remove $_displayName?',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
         content: Text(
           'PandaPay stops ranking it and moves it to Archived, where you can restore it any '
           'time. Spends already logged against it stay in your history, so your totals do not '
@@ -96,7 +117,10 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
           style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.5),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Keep it')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep it'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: BambooInk.clay,
@@ -110,8 +134,8 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
     );
     if (confirmed != true || !mounted) return;
     destructiveActionHaptic();
-    await _setPaused(true);
-    if (mounted) Navigator.of(context).pop();
+    final removed = await _setPaused(true);
+    if (removed && mounted) context.go(AppRoute.cards);
   }
 
   @override
@@ -125,7 +149,10 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text(_displayName, style: BambooFonts.heading(19, color: BambooInk.ink900)),
+        title: Text(
+          _displayName,
+          style: BambooFonts.heading(19, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: ListView(
@@ -160,10 +187,14 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
                   Expanded(
                     child: Text(
                       [
-                        if (widget.product.issuerName != null) widget.product.issuerName!,
+                        if (widget.product.issuerName != null)
+                          widget.product.issuerName!,
                         widget.product.network.name.toUpperCase(),
                       ].join(' · '),
-                      style: BambooFonts.ui(13.5, color: BambooInk.onSlateSubtle),
+                      style: BambooFonts.ui(
+                        13.5,
+                        color: BambooInk.onSlateSubtle,
+                      ),
                     ),
                   ),
                 ],
@@ -181,7 +212,8 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
                 children: [
                   _ActionRow(
                     title: 'Pause this card',
-                    subtitle: 'PandaPay stops ranking it. This does not block the card with '
+                    subtitle:
+                        'PandaPay stops ranking it. This does not block the card with '
                         'your bank — only your bank can do that.',
                     trailing: Switch(
                       value: paused,
@@ -193,12 +225,15 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
                   const _RowDivider(),
                   _ActionRow(
                     title: 'Report lost or stolen',
-                    subtitle: "Your issuer's hotline — works offline, no sign-in.",
+                    subtitle:
+                        "Your issuer's hotline — works offline, no sign-in.",
                     onTap: () => context.push(AppRoute.emergencyCardInfo),
                   ),
                   const _RowDivider(),
                   _ActionRow(
-                    title: widget.card.isDefault ? 'Already your default card' : 'Set as default card',
+                    title: widget.card.isDefault
+                        ? 'Already your default card'
+                        : 'Set as default card',
                     subtitle: 'Used when nothing else clearly wins.',
                     onTap: widget.card.isDefault || _busy ? null : _setDefault,
                   ),
@@ -206,9 +241,11 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
                   _ActionRow(
                     title: 'Always use this card for a category',
                     subtitle: 'A manual override beats the ranking every time.',
-                    onTap: () => Navigator.of(
-                      context,
-                    ).push(MaterialPageRoute(builder: (_) => const ManualOverridesScreen())),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ManualOverridesScreen(),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -226,13 +263,21 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
                 children: [
                   Text(
                     'Remove this card',
-                    style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.clayInk),
+                    style: BambooFonts.ui(
+                      14.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.clayInk,
+                    ),
                   ),
                   const SizedBox(height: 5),
                   Text(
                     'PandaPay stops ranking it and moves it to Archived. Your logged spends stay. '
                     'This does not close the card with your bank.',
-                    style: BambooFonts.ui(12.5, color: BambooInk.clayInkMuted, height: 1.5),
+                    style: BambooFonts.ui(
+                      12.5,
+                      color: BambooInk.clayInkMuted,
+                      height: 1.5,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton(
@@ -242,7 +287,9 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
                       backgroundColor: BambooInk.paper.withValues(alpha: 0.88),
                       minimumSize: const Size.fromHeight(46),
                       side: const BorderSide(color: BambooInk.clay, width: 1.5),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
                     ),
                     child: Text(paused ? 'Already removed' : 'Remove card'),
@@ -273,7 +320,12 @@ class _ActionRow extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
 
-  const _ActionRow({required this.title, required this.subtitle, this.trailing, this.onTap});
+  const _ActionRow({
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -297,7 +349,11 @@ class _ActionRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.45),
+                  style: BambooFonts.ui(
+                    12.5,
+                    color: BambooInk.ink500,
+                    height: 1.45,
+                  ),
                 ),
               ],
             ),
@@ -306,7 +362,10 @@ class _ActionRow extends StatelessWidget {
           trailing ??
               (onTap == null
                   ? const SizedBox.shrink()
-                  : const Icon(Icons.chevron_right_rounded, color: BambooInk.ink300)),
+                  : const Icon(
+                      Icons.chevron_right_rounded,
+                      color: BambooInk.ink300,
+                    )),
         ],
       ),
     );
