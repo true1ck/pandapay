@@ -332,10 +332,6 @@ class _ReportBodyState extends State<_ReportBody> {
         children: [
           _HeadlineCard(report: report),
           const SizedBox(height: AppSpace.lg),
-          if (report.series.length > 1) ...[
-            _TrendChart(report: report),
-            const SizedBox(height: AppSpace.lg),
-          ],
           if (!report.income.total.isZero ||
               !report.investment.total.isZero) ...[
             _FlowCard(report: report),
@@ -357,7 +353,10 @@ class _ReportBodyState extends State<_ReportBody> {
           if (report.byInstrument.isNotEmpty) ...[
             _BreakdownPanel(
               title: 'Payment method',
-              icon: Icons.payments_rounded,
+              visual: const SpendingVisual(
+                icon: Icons.payments_rounded,
+                accent: BambooChartColors.blue,
+              ),
               child: Column(
                 children: [
                   for (final row in report.byInstrument)
@@ -376,7 +375,10 @@ class _ReportBodyState extends State<_ReportBody> {
           if (report.byCard.isNotEmpty) ...[
             _BreakdownPanel(
               title: 'Which card',
-              icon: Icons.credit_card_rounded,
+              visual: const SpendingVisual(
+                icon: Icons.credit_card_rounded,
+                accent: BambooChartColors.violet,
+              ),
               child: Column(
                 children: [
                   for (final row in report.byCard)
@@ -389,7 +391,10 @@ class _ReportBodyState extends State<_ReportBody> {
           if (report.byCardCategory.isNotEmpty) ...[
             _BreakdownPanel(
               title: 'Card spending by category',
-              icon: Icons.auto_graph_rounded,
+              visual: const SpendingVisual(
+                icon: Icons.auto_graph_rounded,
+                accent: BambooChartColors.amber,
+              ),
               child: Column(
                 children: [
                   for (final row in report.byCardCategory)
@@ -408,7 +413,10 @@ class _ReportBodyState extends State<_ReportBody> {
           if (report.byMerchant.isNotEmpty) ...[
             _BreakdownPanel(
               title: 'Top merchants',
-              icon: Icons.storefront_rounded,
+              visual: const SpendingVisual(
+                icon: Icons.storefront_rounded,
+                accent: BambooChartColors.coral,
+              ),
               child: Column(
                 children: [
                   for (final row in report.byMerchant.take(10))
@@ -419,7 +427,7 @@ class _ReportBodyState extends State<_ReportBody> {
                       count: row.txnCount,
                       visual: const SpendingVisual(
                         icon: Icons.storefront_rounded,
-                        accent: BambooInk.jade,
+                        accent: BambooChartColors.coral,
                       ),
                     ),
                 ],
@@ -629,141 +637,6 @@ class _FlowRow extends StatelessWidget {
   }
 }
 
-/// A bar per period, tallest scaled to full height.
-///
-/// A CustomPaint would give finer control, but bars in a Row are legible,
-/// accessible to the semantics tree, and cheap — and the question this
-/// answers ("is the trend up or down?") needs shape, not precision.
-class _TrendChart extends StatelessWidget {
-  final SpendReport report;
-  const _TrendChart({required this.report});
-
-  @override
-  Widget build(BuildContext context) {
-    final maxPaise = report.series.fold<int>(
-      0,
-      (m, p) => p.spend.paise > m ? p.spend.paise : m,
-    );
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Last ${report.series.length} ${_unitLabel(report.period, report.series.length)}',
-            style: BambooFonts.ui(
-              12.5,
-              weight: FontWeight.w700,
-              color: BambooInk.ink900,
-            ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          SizedBox(
-            height: 96,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (var i = 0; i < report.series.length; i++)
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: Semantics(
-                        label:
-                            '${_barLabel(report.period, report.series[i].periodStart)}: '
-                            '${report.series[i].spend.format(hidePaise: true)}',
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Container(
-                              // A minimum height of 2 so a zero period is
-                              // still visibly a period, not a gap in the
-                              // chart that reads as missing data.
-                              height: maxPaise == 0
-                                  ? 2
-                                  : (2 +
-                                        86 *
-                                            (report.series[i].spend.paise /
-                                                maxPaise)),
-                              decoration: BoxDecoration(
-                                color: i == report.series.length - 1
-                                    ? BambooInk.jade
-                                    : BambooInk.ink500,
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _barLabel(report.period, report.series.first.periodStart),
-                style: BambooFonts.ui(11, color: BambooInk.ink500),
-              ),
-              Text(
-                _barLabel(report.period, report.series.last.periodStart),
-                style: BambooFonts.ui(11, color: BambooInk.ink500),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _unitLabel(SpendPeriod period, int count) {
-    final plural = count == 1 ? '' : 's';
-    return switch (period) {
-      SpendPeriod.week => 'week$plural',
-      SpendPeriod.month => 'month$plural',
-      SpendPeriod.quarter => 'quarter$plural',
-      SpendPeriod.year => 'year$plural',
-    };
-  }
-
-  static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  static String _barLabel(SpendPeriod period, DateTime start) {
-    // The API serializes India-local calendar midnights as UTC instants
-    // (for example, 2026-10-01 00:00 IST becomes 2026-09-30T18:30Z).
-    // Format in the device timezone or the chart moves every bucket into
-    // the previous calendar day/month even though the totals are correct.
-    final localStart = start.toLocal();
-    return switch (period) {
-      SpendPeriod.week => '${localStart.day} ${_months[localStart.month - 1]}',
-      SpendPeriod.month =>
-        '${_months[localStart.month - 1]} ${localStart.year % 100}',
-      SpendPeriod.quarter =>
-        'Q${((localStart.month - 1) ~/ 3) + 1} ${localStart.year % 100}',
-      SpendPeriod.year => '${localStart.year}',
-    };
-  }
-}
-
 /// A visual summary of the same category totals shown in the expandable rows
 /// below it. The chart is deliberately decorative rather than a second data
 /// source: every slice is built directly from [SpendReport.byCategory].
@@ -795,7 +668,7 @@ class _SpendingMixCard extends StatelessWidget {
               _SpendingVisualBadge(
                 visual: const SpendingVisual(
                   icon: Icons.pie_chart_rounded,
-                  accent: BambooInk.jade,
+                  accent: BambooChartColors.teal,
                 ),
                 size: 38,
               ),
@@ -905,7 +778,7 @@ class _SpendingDonutPainter extends CustomPainter {
     final totalPaise = rows.fold<int>(0, (sum, row) => sum + row.total.paise);
     final rect = Offset.zero & size;
     final track = Paint()
-      ..color = BambooInk.paperMuted
+      ..color = BambooChartColors.chartTrack
       ..style = PaintingStyle.stroke
       ..strokeWidth = 18;
     canvas.drawArc(rect.deflate(10), 0, math.pi * 2, false, track);
@@ -979,12 +852,12 @@ class _MixLegendRow extends StatelessWidget {
 
 class _BreakdownPanel extends StatelessWidget {
   final String title;
-  final IconData icon;
+  final SpendingVisual visual;
   final Widget child;
 
   const _BreakdownPanel({
     required this.title,
-    required this.icon,
+    required this.visual,
     required this.child,
   });
 
@@ -1003,7 +876,7 @@ class _BreakdownPanel extends StatelessWidget {
           Row(
             children: [
               _SpendingVisualBadge(
-                visual: SpendingVisual(icon: icon, accent: BambooInk.jade),
+                visual: visual,
                 size: 34,
               ),
               const SizedBox(width: AppSpace.md),
@@ -1171,7 +1044,7 @@ class _ExpandableCategoryRow extends StatelessWidget {
                 value: ratio,
                 minHeight: 4,
                 backgroundColor: BambooInk.paperMuted,
-                color: BambooInk.jade,
+                color: spendingCategoryVisual(row.label).accent,
               ),
             ),
           ],
@@ -1241,7 +1114,7 @@ class _MerchantGroup extends StatelessWidget {
               const _SpendingVisualBadge(
                 visual: SpendingVisual(
                   icon: Icons.storefront_rounded,
-                  accent: BambooInk.jade,
+                  accent: BambooChartColors.coral,
                 ),
                 size: 30,
               ),
@@ -1393,7 +1266,7 @@ class _BreakdownRow extends StatelessWidget {
               value: ratio,
               minHeight: 4,
               backgroundColor: BambooInk.paperMuted,
-              color: BambooInk.jade,
+              color: visual.accent,
             ),
           ),
         ],
@@ -1419,6 +1292,14 @@ class _CardRow extends StatelessWidget {
         ? 0.0
         : (row.total.paise / total.paise).clamp(0.0, 1.0);
     final rate = row.effectiveRatePerRupee;
+    final visual = SpendingVisual(
+      icon: row.cardId == null
+          ? Icons.account_balance_rounded
+          : Icons.credit_card_rounded,
+      accent: row.cardId == null
+          ? BambooChartColors.violet
+          : BambooChartColors.blue,
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.md),
       child: Column(
@@ -1427,14 +1308,7 @@ class _CardRow extends StatelessWidget {
           Row(
             children: [
               _SpendingVisualBadge(
-                visual: SpendingVisual(
-                  icon: row.cardId == null
-                      ? Icons.account_balance_rounded
-                      : Icons.credit_card_rounded,
-                  accent: row.cardId == null
-                      ? const Color(0xFF7359C7)
-                      : BambooInk.jade,
-                ),
+                visual: visual,
                 size: 34,
               ),
               const SizedBox(width: AppSpace.sm),
@@ -1477,7 +1351,7 @@ class _CardRow extends StatelessWidget {
               value: ratio,
               minHeight: 4,
               backgroundColor: BambooInk.paperMuted,
-              color: BambooInk.jade,
+              color: visual.accent,
             ),
           ),
         ],

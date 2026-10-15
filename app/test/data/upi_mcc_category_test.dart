@@ -25,6 +25,11 @@ void main() {
     expect(categoryIdForUpiMcc('', categories), isNull);
     expect(categoryIdForUpiMcc('0000', categories), isNull);
     expect(categoryIdForUpiMcc('9999', categories), isNull);
+    // 5999 is "Miscellaneous and Specialty Retail Stores". It is a broad
+    // network classification, not proof that this is online shopping or
+    // groceries, so the local resolver must leave it for a directory/provider
+    // lookup instead of presenting a confident but wrong category.
+    expect(categoryIdForUpiMcc('5999', categories), isNull);
   });
 
   test(

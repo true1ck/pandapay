@@ -56,37 +56,37 @@ void main() {
     expect(container.read(cacheNamespaceProvider), 'user:user-1');
   });
 
-  test(
-    'does not restore a stale startup token when refresh is rejected',
-    () async {
-      SharedPreferences.setMockInitialValues({
-        'pandapay_app.access_token': 'stale-access',
-        'pandapay_app.refresh_token': 'revoked-refresh',
-      });
+  test('preserves a cached startup session when refresh is rejected', () async {
+    SharedPreferences.setMockInitialValues({
+      'pandapay_app.access_token': 'stale-access',
+      'pandapay_app.refresh_token': 'revoked-refresh',
+    });
 
-      final client = MockClient(
-        (req) async =>
-            http.Response(jsonEncode({'error': 'Invalid refresh token'}), 401),
-      );
+    final client = MockClient(
+      (req) async =>
+          http.Response(jsonEncode({'error': 'Invalid refresh token'}), 401),
+    );
 
-      final container = ProviderContainer(
-        overrides: [
-          tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
-          authApiProvider.overrideWithValue(
-            AuthApi(authBaseUrl: 'http://auth.test', client: client),
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
+    final container = ProviderContainer(
+      overrides: [
+        tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+        authApiProvider.overrideWithValue(
+          AuthApi(authBaseUrl: 'http://auth.test', client: client),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
 
-      await container.read(sessionInitProvider.future);
+    await container.read(sessionInitProvider.future);
+    // Startup restores the cached token without waiting on auth/. A refresh
+    // rejection must not erase the local session asynchronously.
+    await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      expect(container.read(accessTokenProvider), isNull);
-      final store = await container.read(tokenStoreProvider.future);
-      expect(store.accessToken, isNull);
-      expect(store.refreshToken, isNull);
-    },
-  );
+    expect(container.read(accessTokenProvider), 'stale-access');
+    final store = await container.read(tokenStoreProvider.future);
+    expect(store.accessToken, 'stale-access');
+    expect(store.refreshToken, 'revoked-refresh');
+  });
 
   test(
     'keeps the session during a temporary startup failure even if access expired',
@@ -132,6 +132,34 @@ void main() {
       expect(store.refreshToken, 'still-recoverable-refresh');
     },
   );
+
+  test('does not log out for a refresh policy/step-up response', () async {
+    SharedPreferences.setMockInitialValues({
+      'pandapay_app.access_token': 'access',
+      'pandapay_app.refresh_token': 'refresh',
+    });
+
+    final client = MockClient(
+      (req) async =>
+          http.Response(jsonEncode({'error': 'step_up_required'}), 403),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+        authApiProvider.overrideWithValue(
+          AuthApi(authBaseUrl: 'http://auth.test', client: client),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(sessionInitProvider.future);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    expect(container.read(accessTokenProvider), 'access');
+    final store = await container.read(tokenStoreProvider.future);
+    expect(store.refreshToken, 'refresh');
+  });
 
   test('rotates the access token on the interval, well inside the 15m TTL', () {
     fakeAsync((async) {
@@ -247,7 +275,7 @@ void main() {
     });
   });
 
-  test('clears the session when the refresh token is rejected', () {
+  test('keeps the session when the refresh token is rejected', () {
     fakeAsync((async) {
       SharedPreferences.setMockInitialValues({
         'pandapay_app.access_token': 'initial-access',
@@ -282,9 +310,9 @@ void main() {
 
       async.elapse(const Duration(minutes: 11));
 
-      expect(container.read(accessTokenProvider), isNull);
-      expect(capturedStore?.accessToken, isNull);
-      expect(capturedStore?.refreshToken, isNull);
+      expect(container.read(accessTokenProvider), 'initial-access');
+      expect(capturedStore?.accessToken, 'initial-access');
+      expect(capturedStore?.refreshToken, 'initial-refresh');
     });
   });
 

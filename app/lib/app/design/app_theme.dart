@@ -163,6 +163,39 @@ abstract final class BambooInk {
   static const amber = Color(0xFFD97706);
 }
 
+/// Bright, light-theme colors for data visualizations.
+///
+/// These are intentionally separate from semantic status colors and the
+/// slate/lime decision-surface pair. Charts need several distinct colors that
+/// remain easy to compare on a white card without making the rest of the UI
+/// feel noisy.
+abstract final class BambooChartColors {
+  static const teal = Color(0xFF159A78);
+  static const blue = Color(0xFF3B82D0);
+  static const amber = Color(0xFFE99A2F);
+  static const violet = Color(0xFF8064C7);
+  static const cyan = Color(0xFF2B9DB7);
+  static const coral = Color(0xFFE96B58);
+  static const rose = Color(0xFFD65D78);
+  static const indigo = Color(0xFF5A6FD6);
+  static const pink = Color(0xFFB85E9A);
+
+  /// Stable order for charts whose categories are supplied by the API.
+  static const categorical = <Color>[
+    teal,
+    blue,
+    amber,
+    violet,
+    cyan,
+    coral,
+    rose,
+    indigo,
+    pink,
+  ];
+
+  static const chartTrack = Color(0xFFE8F0EC);
+}
+
 /// Bamboo Ink's two-face type system: Bricolage Grotesque for money and
 /// headings, Instrument Sans for everything else. These wrappers are also
 /// used by the global [ThemeData] below, so older screens and the newer

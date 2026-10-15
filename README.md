@@ -37,6 +37,11 @@ PANDAPAY_AUTH_BASE_URL=https://auth.pandapath.site \
 scripts/build_app.sh prod appbundle --release
 ```
 
+For Android phone updates, use the split-APK checklist in
+[`docs/android-release-build-guide.md`](./docs/android-release-build-guide.md).
+It covers version codes, ABI selection, signing-key compatibility, and runtime
+SMS/notification permissions.
+
 ## Implementation plans
 
 - [`Userappimplementation_plan.md`](./Userappimplementation_plan.md) — detailed build plan for the **Flutter** user app: 14 workstreams broken into tasks and sub-engineering tasks, each with deliverables, dependencies, and definitions of done.

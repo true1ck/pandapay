@@ -59,13 +59,70 @@ function isBankAccountUpiMessage(body) {
     && !/\b(?:credit|debit)\s+card\b/.test(text);
 }
 
-// An account debit without an explicit UPI rail is not enough evidence of a
-// purchase. It may be a bank transfer, bill payment, cash withdrawal, or a
-// beneficiary transfer. Counting it as consumer spend silently inflates the
-// report, so it is sent to the on-device confirmation queue instead.
+// Final guard for an account-shaped alert that did not contain enough data
+// for any automatic parser (normally a missing amount). Complete account
+// debits are handled by the built-in bank-debit parser above and do not enter
+// the user's review queue.
 function isAmbiguousAccountDebit(body) {
   const text = String(body || '').toLowerCase();
   return isBankAccountUpiMessage(text) && !/\bupi\b/.test(text);
+}
+
+// Account suffixes are useful for grouping spend, but they must never share
+// the `last4` field used to resolve a physical card. Keep this as a separate
+// masked identifier; the full account number is never stored or inferred.
+function extractAccountLast4(body) {
+  const match = String(body || '').match(
+    /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*(\d{4})\b/i,
+  );
+  return match ? match[1] : null;
+}
+
+// A few issuers describe an account-to-account transfer as
+// "Sent ... From <bank> A/C *1797 To <recipient>". This is a money
+// movement, not merchant spend. The explicit source-account-then-recipient
+// shape is intentionally required so a normal "sent to merchant@upi from
+// account" alert still follows the purchase parser.
+function parseBuiltInAccountTransfer(sms) {
+  const body = String(sms?.body || '');
+  if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_account_transfer_match' };
+
+  const sourceMatch = body.match(
+    /\bfrom\b[\s\S]{0,80}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*\d{4}\b/i,
+  );
+  if (!sourceMatch) return { ok: false, reason: 'no_account_transfer_match' };
+
+  const afterSource = body.slice(sourceMatch.index + sourceMatch[0].length);
+  const recipientMatch = afterSource.match(
+    /^\s*to\s+([A-Za-z][A-Za-z0-9 .&'\/-]{1,100}?)(?=\s+\b(?:on|ref(?:erence)?|txn(?:action)?|not\s+you|call|sms\s+block)\b|[.,;]|$)/i,
+  );
+  if (!recipientMatch) return { ok: false, reason: 'no_account_transfer_match' };
+
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_account_transfer_match' };
+  const accountLast4 = extractAccountLast4(body);
+  if (!accountLast4) return { ok: false, reason: 'no_account_transfer_match' };
+
+  const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
+  const transferParty = recipientMatch[1].trim();
+
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: 'builtin_account_transfer',
+    fields: {
+      amountInr: Number(amountMatch[1].replace(/,/g, '')),
+      merchant: 'Transfer to ' + transferParty,
+      transferParty,
+      transferKind: 'account_to_account',
+      accountLast4,
+      ...(dateMatch ? { date: dateMatch[1] } : {}),
+      ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
+      instrument: 'upi_bank',
+      entryKind: 'transfer',
+    },
+  };
 }
 
 // Some bank-account transfer alerts do not say "UPI". They identify a
@@ -101,10 +158,50 @@ function parseBuiltInBeneficiaryDebit(sms) {
       merchant: beneficiaryMatch[1].trim(),
       ...(dateMatch ? { date: dateMatch[1] } : {}),
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
-      // This alert proves a bank-account transfer, but it does not prove the
-      // UPI rail. Keep it out of UPI/card reward rules until the user or a
-      // stronger issuer-specific pattern provides that evidence.
-      instrument: 'other',
+      ...(extractAccountLast4(body) ? { accountLast4: extractAccountLast4(body) } : {}),
+      // This is a cardless bank-account debit. Keep it separate from
+      // physical-card reward rules; the account suffix is retained only for
+      // source-account grouping.
+      instrument: 'upi_bank',
+      entryKind: 'spend',
+    },
+  };
+}
+
+// When a bank does not include a named beneficiary, the account debit is
+// still a real outgoing transaction. Import it cardlessly instead of sending
+// the user to a manual queue. A specific merchant/beneficiary parser always
+// runs first, so this fallback only supplies a human-readable bank-transfer
+// label when the issuer gives us no better name.
+function parseBuiltInAccountDebit(sms) {
+  const body = String(sms?.body || '');
+  if (
+    !isSuccessfulSpend(body)
+    || !isBankAccountUpiMessage(body)
+    || /\bupi\b/i.test(body)
+    || /\b(?:credit|debit)\s+card\b/i.test(body)
+  ) {
+    return { ok: false, reason: 'no_account_debit_match' };
+  }
+
+  const accountLast4 = extractAccountLast4(body);
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_account_debit_match' };
+
+  const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
+
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: 'builtin_account_debit',
+    fields: {
+      amountInr: Number(amountMatch[1].replace(/,/g, '')),
+      merchant: 'Bank transfer',
+      ...(accountLast4 ? { accountLast4 } : {}),
+      ...(dateMatch ? { date: dateMatch[1] } : {}),
+      ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
+      instrument: 'upi_bank',
       entryKind: 'spend',
     },
   };
@@ -352,6 +449,8 @@ function parseSms(pattern, sms) {
     // user's unrelated card and silently corrupt card attribution.
     delete fields.last4;
     fields.instrument = 'upi_bank';
+    const accountLast4 = extractAccountLast4(sms.body);
+    if (accountLast4) fields.accountLast4 = accountLast4;
   } else {
     // Raw-message evidence is stronger than a pattern's mapped instrument.
     // This prevents a stale/broad pattern from turning a debit-card alert
@@ -456,8 +555,12 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (isNonTransactionAlert(sms?.body)) {
     return { ok: false, reason: 'not_a_transaction_alert' };
   }
+  const accountTransfer = parseBuiltInAccountTransfer(sms);
+  if (accountTransfer.ok) return accountTransfer;
   const beneficiaryDebit = parseBuiltInBeneficiaryDebit(sms);
   if (beneficiaryDebit.ok) return beneficiaryDebit;
+  const accountDebit = parseBuiltInAccountDebit(sms);
+  if (accountDebit.ok) return accountDebit;
   if (isAmbiguousAccountDebit(sms?.body)) {
     return { ok: false, reason: 'ambiguous_account_debit' };
   }

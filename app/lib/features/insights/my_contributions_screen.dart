@@ -46,7 +46,10 @@ class MyContributionsScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Share what you see', style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                    Text(
+                      'Share what you see',
+                      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       'When on, PandaPay may anonymously log a merchant name/MCC/rough location '
@@ -60,7 +63,7 @@ class MyContributionsScreen extends ConsumerWidget {
               const SizedBox(width: AppSpace.md),
               Switch(
                 value: optedIn,
-                activeTrackColor: BambooInk.jade,
+                activeTrackColor: BambooChartColors.teal,
                 activeThumbColor: BambooInk.lime,
                 onChanged: (v) async {
                   final repo = ref.read(userCardsRepositoryProvider);
@@ -70,9 +73,9 @@ class MyContributionsScreen extends ConsumerWidget {
                     ref.invalidate(profileProvider);
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(userFacingErrorMessage(e))),
+                      );
                     }
                   }
                 },
@@ -83,7 +86,11 @@ class MyContributionsScreen extends ConsumerWidget {
         const SizedBox(height: AppSpace.xl),
         Text(
           'Network-wide',
-          style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+          style: BambooFonts.ui(
+            12.5,
+            weight: FontWeight.w700,
+            color: BambooInk.ink900,
+          ),
         ),
         const SizedBox(height: AppSpace.sm),
         stats.when(
@@ -94,7 +101,10 @@ class MyContributionsScreen extends ConsumerWidget {
           ),
           data: (s) {
             if (s == null) {
-              return const EmptyState(icon: Icons.groups_outlined, title: 'Sign in to see network stats');
+              return const EmptyState(
+                icon: Icons.groups_outlined,
+                title: 'Sign in to see network stats',
+              );
             }
             return Container(
               padding: const EdgeInsets.all(AppSpace.lg),

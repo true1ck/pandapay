@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
@@ -706,14 +707,7 @@ class _CategoryPie extends StatefulWidget {
 class _CategoryPieState extends State<_CategoryPie> {
   bool _expanded = false;
 
-  static const _colors = [
-    BambooInk.slate,
-    BambooInk.jade,
-    Color(0xffd98634),
-    Color(0xff8d75b8),
-    Color(0xff4d9aa3),
-    BambooInk.ink300,
-  ];
+  static const _colors = BambooChartColors.categorical;
 
   @override
   Widget build(BuildContext context) {
@@ -1185,7 +1179,7 @@ class _MilestoneInReach extends StatelessWidget {
             ),
             const SizedBox(height: AppSpace.sm),
             Text(
-              rule.label,
+              humanizeIdentifier(rule.label),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: BambooFonts.ui(
@@ -1240,7 +1234,9 @@ class _MilestoneInReach extends StatelessWidget {
                 value: progress,
                 minHeight: 8,
                 backgroundColor: BambooInk.paper,
-                valueColor: const AlwaysStoppedAnimation(BambooInk.jade),
+                valueColor: const AlwaysStoppedAnimation(
+                  BambooChartColors.teal,
+                ),
               ),
             ),
             if (periodEnd != null) ...[

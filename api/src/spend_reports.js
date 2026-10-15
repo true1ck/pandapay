@@ -280,6 +280,13 @@ async function spendByCard(client, userId, { start, end }) {
               cp.name AS card_name, uc.nickname AS card_nickname,
               COALESCE(uc.annual_fee_override_inr, cp.annual_fee_inr) AS annual_fee_inr,
               t.amount_inr, t.expected_value_inr,
+              COALESCE(t.source_account_last4,
+                (SELECT o.metadata->>'accountLast4'
+                   FROM transaction_observations o
+                  WHERE o.transaction_id = t.id
+                    AND o.source IN ('sms', 'sms_bulk')
+                  ORDER BY o.observed_at DESC
+                  LIMIT 1)) AS account_last4,
               CASE WHEN t.user_card_id IS NULL THEN
                 (SELECT o.metadata->>'cardLast4'
                    FROM transaction_observations o
@@ -296,13 +303,13 @@ async function spendByCard(client, userId, { start, end }) {
           AND t.occurred_at >= $2 AND t.occurred_at < $3
      )
      SELECT user_card_id, instrument, card_name, card_nickname,
-            annual_fee_inr, card_last4,
+            annual_fee_inr, card_last4, account_last4,
             COALESCE(SUM(amount_inr), 0) AS total,
             COALESCE(SUM(GREATEST(COALESCE(expected_value_inr, 0), 0)), 0) AS rewards,
             COUNT(*) AS txn_count
        FROM transaction_rows
       GROUP BY user_card_id, instrument, card_name, card_nickname,
-               annual_fee_inr, card_last4
+               annual_fee_inr, card_last4, account_last4
       ORDER BY total DESC`,
     [userId, start, end]
   );
@@ -312,7 +319,7 @@ async function spendByCard(client, userId, { start, end }) {
     return {
       cardId: r.user_card_id,
       cardName: r.card_nickname || r.card_name || (r.instrument === 'upi_bank'
-        ? 'UPI / bank account'
+        ? (r.account_last4 ? `Bank account ending ${r.account_last4}` : 'UPI / bank account')
         : r.instrument === 'debit_card'
           ? (r.card_last4 ? `Debit card ending ${r.card_last4} (unlinked)` : 'Debit card (unmatched)')
           : r.instrument === 'credit_card'
@@ -364,6 +371,13 @@ async function spendByCardCategory(client, userId, { start, end }) {
               cp.name AS card_name, uc.nickname AS card_nickname,
               sc.id AS category_id, sc.name AS category_name,
               t.amount_inr,
+              COALESCE(t.source_account_last4,
+                (SELECT o.metadata->>'accountLast4'
+                   FROM transaction_observations o
+                  WHERE o.transaction_id = t.id
+                    AND o.source IN ('sms', 'sms_bulk')
+                  ORDER BY o.observed_at DESC
+                  LIMIT 1)) AS account_last4,
               CASE WHEN t.user_card_id IS NULL THEN
                 (SELECT o.metadata->>'cardLast4'
                    FROM transaction_observations o
@@ -380,19 +394,19 @@ async function spendByCardCategory(client, userId, { start, end }) {
           AND t.occurred_at >= $2 AND t.occurred_at < $3
      )
      SELECT user_card_id, instrument, card_name, card_nickname,
-            category_id, category_name, card_last4,
+            category_id, category_name, card_last4, account_last4,
             COALESCE(SUM(amount_inr), 0) AS total,
             COUNT(*) AS txn_count
        FROM transaction_rows
       GROUP BY user_card_id, instrument, card_name, card_nickname,
-               category_id, category_name, card_last4
+               category_id, category_name, card_last4, account_last4
       ORDER BY total DESC`,
     [userId, start, end]
   );
   return result.rows.map((r) => ({
     cardId: r.user_card_id,
     cardName: r.card_nickname || r.card_name || (r.instrument === 'upi_bank'
-      ? 'UPI / bank account'
+      ? (r.account_last4 ? `Bank account ending ${r.account_last4}` : 'UPI / bank account')
       : r.instrument === 'debit_card'
         ? (r.card_last4 ? `Debit card ending ${r.card_last4} (unlinked)` : 'Debit card (unmatched)')
         : r.instrument === 'credit_card'

@@ -85,6 +85,9 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Start the server refresh in the background. The recommendation inputs
+    // are cache-first, so this does not delay the first Home frame.
+    ref.watch(homeDataRefreshProvider);
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final ranked = ref.watch(rankedRecommendationsProvider);
     final tutorialKeys = ref.watch(tutorialKeysProvider);
@@ -153,6 +156,7 @@ class HomeScreen extends ConsumerWidget {
             OfflineBanner(
               gutter: _gutter,
               onRetry: () {
+                ref.invalidate(homeDataRefreshProvider);
                 ref.invalidate(catalogueProvider);
                 ref.invalidate(categoriesProvider);
                 ref.invalidate(userCardsProvider);
@@ -1072,7 +1076,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
         color: isHero
             ? null
             : (excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper),
-        borderRadius: BorderRadius.circular(isHero ? 28 : 20),
+        borderRadius: BorderRadius.circular(isHero ? 24 : 20),
         border: isHero
             ? Border.all(
                 color: BambooInk.lime.withValues(alpha: 0.72),
@@ -1094,19 +1098,19 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
               ]
             : null,
       ),
-      padding: EdgeInsets.all(isHero ? 22 : 16),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: double.infinity,
-            height: isHero ? 112 : 82,
+            height: isHero ? 92 : 82,
             child: CardVisual(
               product: recommendation.card,
               showProductName: false,
             ),
           ),
-          SizedBox(height: isHero ? 16 : 12),
+          SizedBox(height: isHero ? 10 : 12),
           Row(
             children: [
               Expanded(
@@ -1123,8 +1127,8 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 11,
-                                  vertical: 5,
+                                  horizontal: 9,
+                                  vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
                                   color: BambooInk.lime,
@@ -1133,19 +1137,19 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                                 child: Text(
                                   'BEST PICK',
                                   style: BambooFonts.ui(
-                                    11,
+                                    10,
                                     weight: FontWeight.w700,
                                     color: BambooInk.slate,
                                   ).copyWith(letterSpacing: 0.9),
                                 ),
                               ),
                               if (_rateLabel(recommendation) != null) ...[
-                                const SizedBox(width: 10),
+                                const SizedBox(width: 8),
                                 Flexible(
                                   child: Text(
                                     _rateLabel(recommendation)!,
                                     style: BambooFonts.ui(
-                                      12,
+                                      11.5,
                                       color: BambooInk.onSlateMuted,
                                     ),
                                     overflow: TextOverflow.ellipsis,
@@ -1154,11 +1158,11 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                               ],
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 7),
                           Text(
                             recommendation.card.name,
                             style: BambooFonts.heading(
-                              20,
+                              18,
                               color: BambooInk.onSlate,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -1242,7 +1246,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 7),
           if (excluded)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1269,7 +1273,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                   MoneyText(
                     recommendation.expectedValue,
                     confidence: recommendation.confidence,
-                    style: BambooFonts.money(44, color: BambooInk.lime),
+                    style: BambooFonts.money(36, color: BambooInk.lime),
                     hidePaise: true,
                     // The confidence marker belongs after the whole phrase,
                     // not wedged between "₹125" and "back".
@@ -1277,13 +1281,13 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                   ),
                   const SizedBox(width: 10),
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 7),
+                    padding: const EdgeInsets.only(bottom: 5),
                     child: Row(
                       children: [
                         Text(
                           'back',
                           style: BambooFonts.ui(
-                            13,
+                            12,
                             color: BambooInk.onSlateMuted,
                           ),
                         ),
@@ -1292,7 +1296,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                           recommendation.confidence.isConfirmed
                               ? Icons.check_circle_rounded
                               : Icons.hourglass_top_rounded,
-                          size: 13,
+                          size: 12,
                           color: recommendation.confidence.isConfirmed
                               ? BambooInk.lime
                               : BambooInk.onSlateMuted,
@@ -1309,16 +1313,18 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                 style: BambooFonts.money(22, color: BambooInk.ink900),
                 hidePaise: true,
               ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             // ui-spec B1.3 "Why this card?" — collapsed to the first reason
             // line by default, full arithmetic behind an explicit tap.
             if (recommendation.reasonLines.isNotEmpty) ...[
               Text(
                 '•  ${recommendation.reasonLines.first}',
                 style: BambooFonts.ui(
-                  13,
+                  12,
                   color: isHero ? BambooInk.onSlateSubtle : BambooInk.ink500,
                 ),
+                maxLines: isHero ? 1 : 2,
+                overflow: TextOverflow.ellipsis,
               ),
               if (recommendation.reasonLines.length > 1) ...[
                 ConstrainedBox(
@@ -1337,7 +1343,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                                   ? 'Hide the full breakdown'
                                   : 'Why this card?',
                               style: BambooFonts.ui(
-                                13,
+                                12,
                                 weight: FontWeight.w600,
                                 color: isHero ? BambooInk.lime : BambooInk.jade,
                               ),
@@ -1346,7 +1352,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                               _expanded
                                   ? Icons.expand_less_rounded
                                   : Icons.expand_more_rounded,
-                              size: 18,
+                              size: 16,
                               color: isHero ? BambooInk.lime : BambooInk.jade,
                             ),
                           ],
@@ -1367,7 +1373,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                             child: Text(
                               '•  $line',
                               style: BambooFonts.ui(
-                                13,
+                                12,
                                 color: isHero
                                     ? BambooInk.onSlateSubtle
                                     : BambooInk.ink500,
@@ -1391,9 +1397,9 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
           // the app's real (tested) spend-logging path, not a fabricated
           // confirmation screen.
           if (isHero) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Container(height: 1, color: BambooInk.slateHairline),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -1401,11 +1407,11 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                     style: FilledButton.styleFrom(
                       backgroundColor: BambooInk.lime,
                       foregroundColor: BambooInk.slate,
-                      minimumSize: const Size(0, 44),
+                      minimumSize: const Size(0, 40),
                       padding: EdgeInsets.zero,
-                      textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
+                      textStyle: BambooFonts.ui(13, weight: FontWeight.w700),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     onPressed: () {
@@ -1441,7 +1447,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                     child: const Text('Pay with this card'),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 FilledButton(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -1451,11 +1457,11 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                   style: FilledButton.styleFrom(
                     backgroundColor: BambooInk.slateRaised,
                     foregroundColor: BambooInk.lime,
-                    minimumSize: const Size(0, 52),
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
+                    minimumSize: const Size(0, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    textStyle: BambooFonts.ui(12.5, weight: FontWeight.w700),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(13),
                     ),
                   ),
                   child: const Text('See the math'),
@@ -1477,15 +1483,15 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
         // The card sizes the stack; the bloom fills whatever it measures.
         Positioned.fill(
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(24),
             child: Stack(
               children: [
                 Positioned(
-                  top: -60,
-                  right: -50,
+                  top: -52,
+                  right: -44,
                   child: Container(
-                    width: 180,
-                    height: 180,
+                    width: 150,
+                    height: 150,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: BambooInk.lime.withValues(alpha: 0.10),

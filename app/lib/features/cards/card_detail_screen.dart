@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
@@ -340,7 +341,9 @@ class _SpendTab extends ConsumerWidget {
             .where((c) => c.cardId == userCard.id)
             .firstOrNull;
         if (row == null || row.total.isZero) {
-          final suffix = userCard.last4 == null ? '' : ' ending ${userCard.last4}';
+          final suffix = userCard.last4 == null
+              ? ''
+              : ' ending ${userCard.last4}';
           return EmptyState(
             icon: Icons.show_chart_rounded,
             title: 'Nothing on ${userCard.cardName}$suffix this month',
@@ -768,7 +771,7 @@ class _CapsTab extends ConsumerWidget {
                   ),
                   if (cap.postCapRate != null)
                     Text(
-                      'After cap: ${cap.postCapRate}% ${cap.postCapUnit?.name ?? ''}',
+                      'After cap: ${cap.postCapRate}% ${humanizeIdentifier(cap.postCapUnit?.name, fallback: '')}',
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                 ],
@@ -900,7 +903,7 @@ class _MilestonesTab extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              milestone.label,
+                              humanizeIdentifier(milestone.label),
                               style: BambooFonts.heading(
                                 14.5,
                                 color: BambooInk.ink900,
@@ -1189,8 +1192,9 @@ class _BenefitsTab extends ConsumerWidget {
     final benefits = [
       ...uniqueCardBenefits(product.benefits),
       if (product.fuelRule != null &&
-          !uniqueCardBenefits(product.benefits)
-              .any((b) => b.kind == BenefitKind.fuelSurcharge))
+          !uniqueCardBenefits(
+            product.benefits,
+          ).any((b) => b.kind == BenefitKind.fuelSurcharge))
         CardBenefit(
           id: 'fuel-${product.id}',
           kind: BenefitKind.fuelSurcharge,
@@ -1249,12 +1253,12 @@ class _BenefitsTab extends ConsumerWidget {
                   ),
                 if (benefit.networkProgram != null)
                   Text(
-                    'Program: ${benefit.networkProgram}',
+                    'Program: ${humanizeIdentifier(benefit.networkProgram)}',
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 if (quota != null)
                   Text(
-                    'Allowance: $quota per ${benefit.quotaPeriod?.name ?? 'period'}',
+                    'Allowance: $quota per ${humanizeIdentifier(benefit.quotaPeriod?.name, fallback: 'period').toLowerCase()}',
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 if (isLounge && quota != null) ...[
@@ -1281,9 +1285,9 @@ class _BenefitsTab extends ConsumerWidget {
                 ],
               ];
               return _CompactDisclosure(
-                title: benefit.label,
+                title: humanizeIdentifier(benefit.label),
                 subtitle: isLounge
-                    ? 'Lounge access · ${benefit.networkProgram ?? 'eligible program'}'
+                    ? 'Lounge access · ${humanizeIdentifier(benefit.networkProgram, fallback: 'eligible program')}'
                     : benefit.description ?? 'Card benefit',
                 trailing: usage,
                 details: details,

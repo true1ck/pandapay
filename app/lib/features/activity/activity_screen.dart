@@ -536,6 +536,15 @@ class _TransactionTile extends StatelessWidget {
         entry.cardLast4 == null
             ? 'Credit card · unmatched'
             : 'Credit card ending ${entry.cardLast4}',
+      if (entry.cardDisplayName == null &&
+          entry.instrument == TxnInstrument.upiBank)
+        entry.accountLast4 == null
+            ? 'Bank account · unmatched'
+            : 'Bank account ending ${entry.accountLast4}',
+      if (entry.status == 'active' &&
+          entry.rewardState == 'estimated' &&
+          (entry.source == 'sms' || entry.source == 'sms_bulk'))
+        'Pending confirmation',
       if (entry.categoryName != null) entry.categoryName!,
     ];
     // See account_screen.dart's _AccountTile for why Pressable, not InkWell.

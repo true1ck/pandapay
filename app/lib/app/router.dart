@@ -62,6 +62,7 @@ import '../features/system/forced_upgrade_screen.dart';
 import '../features/system/maintenance_screen.dart';
 import '../features/tools/emergency_card_info_screen.dart';
 import '../features/tools/tools_hub_screen.dart';
+import '../features/voice/voice_input_sheet.dart';
 import 'providers.dart';
 import 'tutorial_keys.dart';
 
@@ -953,6 +954,23 @@ class _AppShellState extends ConsumerState<_AppShell> {
                   context.go(path);
                 },
                 onScan: _scanning ? null : _scanToPay,
+              ),
+            ),
+          ),
+          Positioned(
+            right: 24,
+            bottom: 104,
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _shellStackNotEmpty,
+              builder: (context, pushedOnTop, child) => pushedOnTop ? const SizedBox.shrink() : child!,
+              child: FloatingActionButton(
+                heroTag: 'voiceCapture',
+                mini: true,
+                backgroundColor: BambooInk.jade,
+                foregroundColor: Colors.white,
+                tooltip: 'Add by voice',
+                onPressed: () => showVoiceInputSheet(context),
+                child: const Icon(Icons.mic_rounded),
               ),
             ),
           ),

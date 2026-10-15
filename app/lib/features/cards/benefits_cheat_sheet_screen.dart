@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -10,6 +11,7 @@ import '../../data/user_cards_repository.dart' show LoungeVisit, UserCard;
 import '../insights/lounge_access_screen.dart' show isInCurrentLoungeWindow;
 import 'benefit_detail_screen.dart';
 import 'card_summary.dart';
+import 'card_visual.dart';
 
 /// C5 Benefits Cheat Sheet (ui-spec Group C): "what am I actually paying
 /// for?" — every benefit across every owned card, grouped by type. Purely
@@ -235,22 +237,6 @@ class _BenefitTileState extends ConsumerState<_BenefitTile> {
     return 'Other benefit';
   }
 
-  IconData get _benefitIcon {
-    if (widget.benefit.kind == BenefitKind.other) {
-      final label = widget.benefit.label.toLowerCase();
-      final description = widget.benefit.description?.toLowerCase() ?? '';
-      final text = '$label $description';
-      if (text.contains('liability') || text.contains('fraud')) {
-        return Icons.security_outlined;
-      }
-      if (text.contains('voucher') || text.contains('discount')) {
-        return Icons.local_offer_outlined;
-      }
-      if (text.contains('insurance')) return Icons.shield_outlined;
-    }
-    return BenefitsCheatSheetScreen.kindIcon(widget.benefit.kind);
-  }
-
   int? _usedThisWindow(List<LoungeVisit>? visits) {
     if (!_isLounge || visits == null) return null;
     return visits
@@ -291,6 +277,7 @@ class _BenefitTileState extends ConsumerState<_BenefitTile> {
         : used == null
         ? BambooInk.ink500
         : BambooInk.jade;
+    final collapsedTitle = _isLounge ? null : _compactTitle;
 
     return CardSummaryPanel(
       padding: EdgeInsets.zero,
@@ -303,107 +290,178 @@ class _BenefitTileState extends ConsumerState<_BenefitTile> {
             children: [
               Padding(
                 padding: const EdgeInsets.all(AppSpace.md),
-                child: CardSummaryHeader(
-                  product: widget.product,
-                  title: _compactTitle,
-                  subtitle: cardLabel,
-                  visualWidth: 86,
-                  badgeIcon: _benefitIcon,
-                  footer: Wrap(
-                    spacing: AppSpace.xs,
-                    runSpacing: AppSpace.xs,
-                    children: [
-                      CardSummaryPill(
-                        label: quota == null ? 'Included' : '$quota / $period',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 124,
+                        child: CardVisual(
+                          product: widget.product,
+                          showProductName: false,
+                        ),
                       ),
-                      CardSummaryPill(
-                        label: availabilityLabel,
-                        foreground: availabilityColor,
-                        background: availabilityColor.withValues(alpha: 0.10),
-                      ),
-                    ],
-                  ),
-                  trailing: Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: BambooInk.ink500,
-                    size: 22,
-                  ),
+                    ),
+                    const SizedBox(height: AppSpace.sm),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (collapsedTitle != null)
+                                Text(
+                                  collapsedTitle,
+                                  style: BambooFonts.heading(
+                                    15,
+                                    color: BambooInk.ink900,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              Text(
+                                cardLabel,
+                                style: BambooFonts.ui(
+                                  collapsedTitle == null ? 15 : 12.5,
+                                  weight: collapsedTitle == null
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: collapsedTitle == null
+                                      ? BambooInk.ink900
+                                      : BambooInk.ink500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: AppSpace.xs),
+                              Wrap(
+                                spacing: AppSpace.xs,
+                                runSpacing: AppSpace.xs,
+                                children: [
+                                  CardSummaryPill(
+                                    label: quota == null
+                                        ? 'Included'
+                                        : '$quota / $period',
+                                  ),
+                                  CardSummaryPill(
+                                    label: availabilityLabel,
+                                    foreground: availabilityColor,
+                                    background: availabilityColor.withValues(
+                                      alpha: 0.10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: AppSpace.sm),
+                        AnimatedRotation(
+                          turns: _expanded ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOutCubic,
+                          child: const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            color: BambooInk.ink500,
+                            size: 22,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              if (_expanded)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpace.md,
-                    0,
-                    AppSpace.md,
-                    AppSpace.md,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Divider(height: 1),
-                      const SizedBox(height: AppSpace.md),
-                      Text(
-                        widget.benefit.description ??
-                            'Included with this card. Check the issuer terms before using the benefit.',
-                        style: BambooFonts.ui(
-                          13,
-                          color: BambooInk.ink900,
-                          height: 1.4,
+              AnimatedSize(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                child: _expanded
+                    ? Padding(
+                        key: const ValueKey('benefit-details-expanded'),
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpace.md,
+                          0,
+                          AppSpace.md,
+                          AppSpace.md,
                         ),
-                      ),
-                      const SizedBox(height: AppSpace.sm),
-                      if (widget.benefit.networkProgram != null)
-                        _BenefitMetaRow(
-                          label: 'Program',
-                          value: widget.benefit.networkProgram!,
-                        ),
-                      if (widget.product.issuerName?.trim().isNotEmpty == true)
-                        _BenefitMetaRow(
-                          label: 'Issuer',
-                          value: widget.product.issuerName!,
-                        ),
-                      if (widget.benefit.valueEstimate != null)
-                        _BenefitMetaRow(
-                          label: 'Estimated value',
-                          value: widget.benefit.valueEstimate!.format(),
-                        ),
-                      if (_isLounge && used != null && quota != null)
-                        _BenefitMetaRow(
-                          label: 'This $period',
-                          value: '$used of $quota used · $remaining remaining',
-                        ),
-                      if (_isLounge && used == null)
-                        Text(
-                          'Usage has not synced yet, so availability cannot be confirmed here.',
-                          style: BambooFonts.ui(12, color: BambooInk.ink500),
-                        ),
-                      const SizedBox(height: AppSpace.xs),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => BenefitDetailScreen(
-                                userCard: widget.userCard,
-                                product: widget.product,
-                                benefit: widget.benefit,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Divider(height: 1),
+                            const SizedBox(height: AppSpace.md),
+                            Text(
+                              widget.benefit.description ??
+                                  'Included with this card. Check the issuer terms before using the benefit.',
+                              style: BambooFonts.ui(
+                                13,
+                                color: BambooInk.ink900,
+                                height: 1.4,
                               ),
                             ),
-                          ),
-                          icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                          label: const Text('View full details'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: BambooInk.jade,
-                            padding: EdgeInsets.zero,
-                          ),
+                            const SizedBox(height: AppSpace.sm),
+                            if (widget.benefit.networkProgram != null)
+                              _BenefitMetaRow(
+                                label: 'Program',
+                                value: humanizeIdentifier(
+                                  widget.benefit.networkProgram,
+                                ),
+                              ),
+                            if (widget.product.issuerName?.trim().isNotEmpty ==
+                                true)
+                              _BenefitMetaRow(
+                                label: 'Issuer',
+                                value: widget.product.issuerName!,
+                              ),
+                            if (widget.benefit.valueEstimate != null)
+                              _BenefitMetaRow(
+                                label: 'Estimated value',
+                                value: widget.benefit.valueEstimate!.format(),
+                              ),
+                            if (_isLounge && used != null && quota != null)
+                              _BenefitMetaRow(
+                                label: 'This $period',
+                                value:
+                                    '$used of $quota used · $remaining remaining',
+                              ),
+                            if (_isLounge && used == null)
+                              Text(
+                                'Usage has not synced yet, so availability cannot be confirmed here.',
+                                style: BambooFonts.ui(
+                                  12,
+                                  color: BambooInk.ink500,
+                                ),
+                              ),
+                            const SizedBox(height: AppSpace.xs),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => BenefitDetailScreen(
+                                      userCard: widget.userCard,
+                                      product: widget.product,
+                                      benefit: widget.benefit,
+                                    ),
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.open_in_new_rounded,
+                                  size: 16,
+                                ),
+                                label: const Text('View full details'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: BambooInk.jade,
+                                  padding: EdgeInsets.zero,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ],
           ),
         ),

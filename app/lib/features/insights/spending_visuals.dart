@@ -13,7 +13,9 @@ class SpendingVisual {
 
   const SpendingVisual({required this.icon, required this.accent});
 
-  Color get surface => accent.withValues(alpha: 0.13);
+  // A little more saturation keeps the shared icon badges readable on the
+  // light cards without changing the application's semantic color tokens.
+  Color get surface => accent.withValues(alpha: 0.17);
 }
 
 SpendingVisual spendingCategoryVisual(String label) {
@@ -23,13 +25,13 @@ SpendingVisual spendingCategoryVisual(String label) {
       value.contains('restaurant')) {
     return const SpendingVisual(
       icon: Icons.restaurant_rounded,
-      accent: Color(0xFFE56B58),
+      accent: BambooChartColors.coral,
     );
   }
   if (value.contains('fuel') || value.contains('petrol')) {
     return const SpendingVisual(
       icon: Icons.local_gas_station_rounded,
-      accent: Color(0xFFD98A28),
+      accent: BambooChartColors.amber,
     );
   }
   if (value.contains('online') ||
@@ -37,7 +39,7 @@ SpendingVisual spendingCategoryVisual(String label) {
       value.contains('retail')) {
     return const SpendingVisual(
       icon: Icons.shopping_bag_rounded,
-      accent: Color(0xFF7359C7),
+      accent: BambooChartColors.violet,
     );
   }
   if (value.contains('travel') ||
@@ -46,48 +48,48 @@ SpendingVisual spendingCategoryVisual(String label) {
       value.contains('cab')) {
     return const SpendingVisual(
       icon: Icons.flight_takeoff_rounded,
-      accent: Color(0xFF4B84C6),
+      accent: BambooChartColors.blue,
     );
   }
   if (value.contains('grocery')) {
     return const SpendingVisual(
       icon: Icons.local_grocery_store_rounded,
-      accent: Color(0xFF4B9A72),
+      accent: BambooChartColors.teal,
     );
   }
   if (value.contains('bill') || value.contains('utility')) {
     return const SpendingVisual(
       icon: Icons.receipt_long_rounded,
-      accent: Color(0xFF4A8DA5),
+      accent: BambooChartColors.cyan,
     );
   }
   if (value.contains('rent') || value.contains('home')) {
     return const SpendingVisual(
       icon: Icons.home_work_rounded,
-      accent: Color(0xFF8C70BF),
+      accent: BambooChartColors.indigo,
     );
   }
   if (value.contains('education') || value.contains('school')) {
     return const SpendingVisual(
       icon: Icons.school_rounded,
-      accent: Color(0xFF3F8E91),
+      accent: BambooChartColors.cyan,
     );
   }
   if (value.contains('health') || value.contains('medical')) {
     return const SpendingVisual(
       icon: Icons.local_hospital_rounded,
-      accent: Color(0xFFD45A72),
+      accent: BambooChartColors.rose,
     );
   }
   if (value.contains('entertainment') || value.contains('movie')) {
     return const SpendingVisual(
       icon: Icons.movie_rounded,
-      accent: Color(0xFFB0609A),
+      accent: BambooChartColors.pink,
     );
   }
   return const SpendingVisual(
     icon: Icons.category_rounded,
-    accent: BambooInk.jade,
+    accent: BambooChartColors.teal,
   );
 }
 
@@ -95,23 +97,23 @@ SpendingVisual spendingInstrumentVisual(String instrument) {
   return switch (instrument.toLowerCase()) {
     'credit_card' => const SpendingVisual(
       icon: Icons.credit_card_rounded,
-      accent: Color(0xFF315E48),
+      accent: BambooChartColors.teal,
     ),
     'debit_card' => const SpendingVisual(
       icon: Icons.credit_card_outlined,
-      accent: Color(0xFF4A8DA5),
+      accent: BambooChartColors.blue,
     ),
     'upi_bank' => const SpendingVisual(
       icon: Icons.account_balance_rounded,
-      accent: Color(0xFF7359C7),
+      accent: BambooChartColors.violet,
     ),
     'wallet' => const SpendingVisual(
       icon: Icons.account_balance_wallet_rounded,
-      accent: Color(0xFFD98A28),
+      accent: BambooChartColors.amber,
     ),
     _ => const SpendingVisual(
       icon: Icons.payments_rounded,
-      accent: BambooInk.jade,
+      accent: BambooChartColors.teal,
     ),
   };
 }

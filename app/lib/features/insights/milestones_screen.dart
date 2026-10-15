@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -35,7 +36,9 @@ class MilestonesScreen extends ConsumerWidget {
       data: (owned) {
         final rows = <(UserCard, CardProduct, MilestoneRule)>[
           for (final (userCard, product) in owned)
-            for (final milestone in uniqueMilestoneRules(product.milestoneRules))
+            for (final milestone in uniqueMilestoneRules(
+              product.milestoneRules,
+            ))
               (userCard, product, milestone),
         ];
         // Task E-0c: nearest-deadline/closest-to-target first, same shared
@@ -155,9 +158,9 @@ class _MilestoneTile extends StatelessWidget {
     // same rule-selection RecommendationEngine._evaluate uses for "all
     // other spends").
     final baseRule =
-        uniqueRewardRules(product.rewardRules)
-            .where((r) => r.categoryId == null)
-            .toList()
+        uniqueRewardRules(
+            product.rewardRules,
+          ).where((r) => r.categoryId == null).toList()
           ..sort((a, b) => a.priority.compareTo(b.priority));
     MilestoneChase? chase;
     if (!reached && baseRule.isNotEmpty) {
@@ -193,7 +196,7 @@ class _MilestoneTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      milestone.label,
+                      humanizeIdentifier(milestone.label),
                       style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                     ),
                   ],
@@ -221,7 +224,7 @@ class _MilestoneTile extends StatelessWidget {
               value: ratio,
               minHeight: 8,
               backgroundColor: BambooInk.paperMuted,
-              color: BambooInk.jade,
+              color: BambooChartColors.teal,
             ),
           ),
           const SizedBox(height: AppSpace.sm),

@@ -133,7 +133,10 @@ class _BudgetCard extends ConsumerWidget {
         'Ahead of pace — ${(budget.consumedFraction * 100).toStringAsFixed(0)}% spent, '
             '${(budget.elapsedFraction * 100).toStringAsFixed(0)}% of the period gone',
       ),
-      _ => (BambooInk.jade, '${budget.remaining.format(hidePaise: true)} left'),
+      _ => (
+        BambooChartColors.teal,
+        '${budget.remaining.format(hidePaise: true)} left',
+      ),
     };
 
     return CardSummaryPanel(
@@ -553,12 +556,12 @@ SpendingVisual _visualForBudget(BudgetStatus budget) {
   return switch (budget.scope) {
     BudgetScope.overall => const SpendingVisual(
       icon: Icons.pie_chart_rounded,
-      accent: BambooInk.jade,
+      accent: BambooChartColors.teal,
     ),
     BudgetScope.category => spendingCategoryVisual(budget.label),
     BudgetScope.card => const SpendingVisual(
       icon: Icons.credit_card_rounded,
-      accent: Color(0xFF315E48),
+      accent: BambooChartColors.blue,
     ),
   };
 }
@@ -567,15 +570,15 @@ SpendingVisual _visualForScope(BudgetScope scope) {
   return switch (scope) {
     BudgetScope.overall => const SpendingVisual(
       icon: Icons.pie_chart_rounded,
-      accent: BambooInk.jade,
+      accent: BambooChartColors.teal,
     ),
     BudgetScope.category => const SpendingVisual(
       icon: Icons.category_rounded,
-      accent: BambooInk.jade,
+      accent: BambooChartColors.teal,
     ),
     BudgetScope.card => const SpendingVisual(
       icon: Icons.credit_card_rounded,
-      accent: Color(0xFF315E48),
+      accent: BambooChartColors.blue,
     ),
   };
 }

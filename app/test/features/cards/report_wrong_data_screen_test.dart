@@ -148,11 +148,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(RadioListTile<String>), findsNWidgets(14));
+    for (final option in const [
+      'Card name or product',
+      'Issuer or bank',
+      'Card network or variant',
+      'Joining fee',
+      'Annual fee',
+      'Reward rate or cashback',
+      'Reward categories or exclusions',
+      'Reward cap or limit',
+      'Lounge access',
+      'Other benefit',
+      'Milestone or spend requirement',
+      'Fee waiver',
+      'Fuel surcharge waiver',
+      'Other field — specify below',
+    ]) {
+      expect(find.text(option), findsOneWidget);
+    }
     await tester.tap(find.text('Annual fee'));
     await tester.scrollUntilVisible(
       find.text('What it should be'),
       300,
       scrollable: find.byType(Scrollable).first,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'What we currently show'),
+      '₹500',
     );
     await tester.enterText(
       find.widgetWithText(TextField, 'What it should be'),
@@ -167,6 +189,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repo.lastReport?['fieldPath'], 'annual_fee');
+    expect(repo.lastReport?['shownValue'], '₹500');
     expect(repo.lastReport?['claimedValue'], 'Lifetime free');
   });
 }

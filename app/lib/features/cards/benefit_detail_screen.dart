@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
@@ -181,7 +182,7 @@ class _BenefitDetailBody extends ConsumerWidget {
 
             // Benefit headline
             Text(
-              benefit.label,
+              humanizeIdentifier(benefit.label),
               style: BambooFonts.heading(20, color: BambooInk.ink900),
             ),
             const SizedBox(height: AppSpace.md),
@@ -330,7 +331,10 @@ class _BenefitDetailBody extends ConsumerWidget {
     final quotaText = benefit.quotaCount != null
         ? '${benefit.quotaCount} per ${BenefitsCheatSheetScreen.periodLabel(benefit.quotaPeriod)}'
         : 'Unlimited';
-    final programText = benefit.networkProgram ?? 'Standard card benefit';
+    final programText = humanizeIdentifier(
+      benefit.networkProgram,
+      fallback: 'Standard card benefit',
+    );
 
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),

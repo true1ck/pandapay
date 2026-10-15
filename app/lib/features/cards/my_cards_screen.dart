@@ -16,6 +16,7 @@ import 'card_picker_screen.dart';
 import 'find_cards_screen.dart';
 import 'card_add_guard.dart';
 import 'card_summary.dart';
+import 'card_visual.dart';
 import '../insights/credit_utilization_ui.dart';
 import '../quickadd/quick_add_screen.dart';
 
@@ -392,20 +393,36 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                     ),
                   ],
                 )
-              else
-                CardSummaryHeader(
-                  product: product,
-                  title: card.nickname?.isNotEmpty == true
-                      ? card.nickname!
-                      : card.cardName,
-                  trailing: !card.isArchived
-                      ? _CardActionButton(
-                          icon: Icons.receipt_long_rounded,
-                          tooltip: 'Review and log a spend on this card',
-                          onPressed: _openSpendLogger,
-                        )
-                      : null,
+              else ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 122,
+                  child: CardVisual(product: product, showProductName: false),
                 ),
+                const SizedBox(height: AppSpace.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        card.nickname?.isNotEmpty == true
+                            ? card.nickname!
+                            : card.cardName,
+                        style: BambooFonts.heading(16, color: BambooInk.ink900),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (!card.isArchived) ...[
+                      const SizedBox(width: AppSpace.sm),
+                      _CardActionButton(
+                        icon: Icons.receipt_long_rounded,
+                        tooltip: 'Review and log a spend on this card',
+                        onPressed: _openSpendLogger,
+                      ),
+                    ],
+                  ],
+                ),
+              ],
               if (product != null && !card.isArchived) ...[
                 const SizedBox(height: AppSpace.md),
                 _NearestCapBar(

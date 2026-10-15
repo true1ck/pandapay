@@ -1,13 +1,12 @@
 import '../money/money.dart';
 
 /// B2/B3 — everything decoded from a scanned UPI QR (`upi://pay?...`).
-/// [isLikelyP2P] mirrors ui-spec B3.4's "P2P QR detected (no mc, personal
-/// VPA pattern)" edge case — this codebase has no merchant-vs-personal VPA
-/// classifier, so the heuristic is deliberately just "no mc (merchant
-/// category code) present", the one signal actually available from the QR
-/// payload alone. Stated simplification, not a full VPA-pattern detector.
+/// [isLikelyP2P] is intentionally conservative: no MCC normally requires a
+/// business confirmation, except for a small set of provider-managed merchant
+/// VPA formats whose local part is a reliable QR signal.
 class ParsedUpiQr {
-  final String pa; // payee VPA — the only required field for a usable payment target
+  final String
+  pa; // payee VPA — the only required field for a usable payment target
   final String? pn; // payee name
   final String? mc; // merchant category code
   final Money? am; // amount, when the QR pre-fills one
@@ -24,6 +23,10 @@ class ParsedUpiQr {
   final String? orgid; // acquiring org id
   final String? sign; // merchant QR signature (base64)
 
+  /// Allowlisted UPI query parameters we do not interpret for ranking, but
+  /// must not silently drop when the QR is handed to a UPI app.
+  final Map<String, String> extraParams;
+
   const ParsedUpiQr({
     required this.pa,
     this.pn,
@@ -36,7 +39,37 @@ class ParsedUpiQr {
     this.mode,
     this.orgid,
     this.sign,
+    this.extraParams = const {},
   });
+}
+
+/// A provider label is not the merchant identity. A QR may contain `pn=Paytm`
+/// while the PSP resolves the VPA to a real shop during its own preview.
+bool isGenericUpiProviderLabel(String? value) {
+  final normalized = (value ?? '').toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9]'),
+    '',
+  );
+  return {
+    'paytm',
+    'phonepe',
+    'googlepay',
+    'gpay',
+    'bhim',
+    'upi',
+  }.contains(normalized);
+}
+
+/// Some provider-managed merchant QRs omit `mc`, but their VPA still carries
+/// a narrow merchant signal. Ordinary handles continue through the
+/// business-payment confirmation gate.
+bool isProviderManagedMerchantVpa(String value) {
+  final local = value.trim().toLowerCase().split('@').first;
+  return local.startsWith('paytmqr') ||
+      local.startsWith('phonepeq') ||
+      local.startsWith('gpayq') ||
+      local.startsWith('merchantqr') ||
+      local.startsWith('qrcode');
 }
 
 /// Returns null for anything that isn't a `upi://pay` link, or that is one
@@ -57,7 +90,9 @@ ParsedUpiQr? parseUpiQrString(String raw) {
   // (am: null) rather than rejecting the whole QR, since pa is the only
   // field this function's doc comment promises is required.
   final amRaw = uri.queryParameters['am'];
-  final parsedAm = amRaw == null || amRaw.isEmpty ? null : double.tryParse(amRaw);
+  final parsedAm = amRaw == null || amRaw.isEmpty
+      ? null
+      : double.tryParse(amRaw);
   final am = parsedAm == null ? null : Money.fromRupees(parsedAm);
   final mc = uri.queryParameters['mc'];
 
@@ -66,18 +101,64 @@ ParsedUpiQr? parseUpiQrString(String raw) {
     return (v == null || v.isEmpty) ? null : v;
   }
 
+  const known = {
+    'pa',
+    'pn',
+    'mc',
+    'am',
+    'cu',
+    'tr',
+    'tn',
+    'mode',
+    'orgid',
+    'sign',
+  };
+  // Only forward documented UPI deep-link fields that this parser does not
+  // otherwise interpret. Arbitrary QR query keys are not passed to a payment
+  // app because a QR is attacker-controlled input.
+  // Preserve standard NPCI fields that this model does not use for ranking.
+  // A proxy scanner must not silently strip merchant identity, references,
+  // minimum-amount, or acquiring metadata before handing the request to a
+  // PSP app.
+  const passThrough = {
+    'ver',
+    'purpose',
+    'url',
+    'category',
+    'mam',
+    'tid',
+    'mid',
+    'msid',
+    'mtid',
+    'refUrl',
+    'invoiceNo',
+    'invoiceDate',
+    'gstIn',
+    'gstBrkUp',
+  };
+  final extras = <String, String>{};
+  for (final entry in uri.queryParameters.entries) {
+    if (!known.contains(entry.key) &&
+        passThrough.contains(entry.key) &&
+        entry.value.isNotEmpty) {
+      extras[entry.key] = entry.value;
+    }
+  }
+
   return ParsedUpiQr(
     pa: pa,
     pn: uri.queryParameters['pn'],
     mc: (mc == null || mc.isEmpty) ? null : mc,
     am: am,
     cu: uri.queryParameters['cu'] ?? 'INR',
-    isLikelyP2P: mc == null || mc.isEmpty,
+    isLikelyP2P:
+        (mc == null || mc.isEmpty) && !isProviderManagedMerchantVpa(pa),
     tr: nonEmpty('tr'),
     tn: nonEmpty('tn'),
     mode: nonEmpty('mode'),
     orgid: nonEmpty('orgid'),
     sign: nonEmpty('sign'),
+    extraParams: extras,
   );
 }
 
@@ -104,13 +185,16 @@ String buildUpiPayUri({
   String? mode,
   String? orgid,
   String? sign,
+  Map<String, String> extraParams = const {},
 }) {
   final params = <String>['pa=${Uri.encodeComponent(pa)}'];
   if (pn != null && pn.isNotEmpty) params.add('pn=${Uri.encodeComponent(pn)}');
   if (am != null) params.add('am=${am.rupees.toStringAsFixed(2)}');
   params.add('cu=${Uri.encodeComponent(cu)}');
   void addIf(String key, String? value) {
-    if (value != null && value.isNotEmpty) params.add('$key=${Uri.encodeComponent(value)}');
+    if (value != null && value.isNotEmpty) {
+      params.add('$key=${Uri.encodeComponent(value)}');
+    }
   }
 
   addIf('mc', mc);
@@ -119,5 +203,12 @@ String buildUpiPayUri({
   addIf('mode', mode);
   addIf('orgid', orgid);
   addIf('sign', sign);
+  for (final entry in extraParams.entries) {
+    if (entry.key.isNotEmpty && entry.value.isNotEmpty) {
+      params.add(
+        '${Uri.encodeComponent(entry.key)}=${Uri.encodeComponent(entry.value)}',
+      );
+    }
+  }
   return 'upi://pay?${params.join('&')}';
 }

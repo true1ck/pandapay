@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -207,12 +208,15 @@ class _LoungeTile extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      benefit.label,
+                      humanizeIdentifier(benefit.label),
                       style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      benefit.networkProgram ?? 'Lounge benefit',
+                      humanizeIdentifier(
+                        benefit.networkProgram,
+                        fallback: 'Lounge benefit',
+                      ),
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                   ],
@@ -240,7 +244,7 @@ class _LoungeTile extends ConsumerWidget {
                 value: ratio,
                 minHeight: 8,
                 backgroundColor: BambooInk.paperMuted,
-                color: ratio >= 1.0 ? BambooInk.clay : BambooInk.jade,
+                color: ratio >= 1.0 ? BambooInk.clay : BambooChartColors.teal,
               ),
             ),
             const SizedBox(height: AppSpace.sm),

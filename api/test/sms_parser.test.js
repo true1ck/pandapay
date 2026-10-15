@@ -343,14 +343,38 @@ test('built-in UPI fallback stops merchant extraction before the source-account 
   assert.equal(result.fields.instrument, 'upi_bank');
 });
 
-test('account debit without explicit UPI is held for confirmation, not counted as spend', () => {
+test('account debit without explicit UPI is imported automatically as bank spend', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'UBIN-BANK',
     body: 'A/c *8565 Debited for Rs:2.00 on 08-07-2025 12:50:01 by Mob Bk ref no 4987654321 Avl Bal Rs 900.00',
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.reason, 'ambiguous_account_debit');
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'builtin_account_debit');
+  assert.equal(result.fields.amountInr, 2);
+  assert.equal(result.fields.merchant, 'Bank transfer');
+  assert.equal(result.fields.instrument, 'upi_bank');
+  assert.equal(result.fields.accountLast4, '8565');
+  assert.equal(result.fields.entryKind, 'spend');
+  assert.equal(result.fields.reference, '4987654321');
+});
+
+test('account-to-account transfer is recorded as a transfer, not spending', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'VM-HDFCBK-T',
+    body: 'Sent Rs.5000.00 From HDFC Bank A/C *1797 To SUJAY SHANTARAM KURTIKAR On 13/10/26 Ref 131234538577 Not You?',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'builtin_account_transfer');
+  assert.equal(result.fields.amountInr, 5000);
+  assert.equal(result.fields.instrument, 'upi_bank');
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.accountLast4, '1797');
+  assert.equal(result.fields.transferParty, 'SUJAY SHANTARAM KURTIKAR');
+  assert.equal(result.fields.transferKind, 'account_to_account');
+  assert.equal(result.fields.date, '13/10/26');
+  assert.equal(result.fields.reference, '131234538577');
 });
 
 test('named mobile-banking beneficiary debit is imported as a cardless spend', () => {
@@ -363,10 +387,54 @@ test('named mobile-banking beneficiary debit is imported as a cardless spend', (
   assert.equal(result.parserKind, 'builtin_beneficiary_debit');
   assert.equal(result.fields.amountInr, 4000);
   assert.equal(result.fields.merchant, 'HANDRICH');
-  assert.equal(result.fields.instrument, 'other');
+  assert.equal(result.fields.instrument, 'upi_bank');
+  assert.equal(result.fields.accountLast4, '8565');
   assert.equal(result.fields.entryKind, 'spend');
   assert.equal(result.fields.date, '13-10-2026');
   assert.equal(result.fields.reference, '104241294136');
+});
+
+test('transaction matrix auto-classifies bank, UPI, debit-card and credit-card alerts', () => {
+  const cases = [
+    {
+      body: 'A/c *8565 Debited Rs:4000.00 on 13-10-2026 by Mob Bk ref no 104241294136, Fvg: HANDRICH',
+      instrument: 'upi_bank',
+      entryKind: 'spend',
+      parserKind: 'builtin_beneficiary_debit',
+    },
+    {
+      body: 'Rs 640 debited from HDFC Bank A/c XX1797 via UPI to SWIGGY on 19-09-26. UPI Ref No 107392990952',
+      instrument: 'upi_bank',
+      entryKind: 'spend',
+      parserKind: undefined,
+    },
+    {
+      body: 'Rs.850 debited from HDFC Bank Debit Card ending 8406 at LOCAL CAFE on 2026-10-13',
+      instrument: 'debit_card',
+      entryKind: 'spend',
+      parserKind: undefined,
+    },
+    {
+      body: 'Rs.1250 spent on HDFC Bank Credit Card ending 8708 at AMAZON on 2026-10-13',
+      instrument: 'credit_card',
+      entryKind: 'spend',
+      parserKind: undefined,
+    },
+    {
+      body: 'Sent Rs.5000.00 From HDFC Bank A/C *1797 To SUJAY SHANTARAM KURTIKAR On 13/10/26 Ref 131234538577',
+      instrument: 'upi_bank',
+      entryKind: 'transfer',
+      parserKind: 'builtin_account_transfer',
+    },
+  ];
+
+  for (const scenario of cases) {
+    const result = parseSmsAgainstPatterns([], { sender: 'MATRIX-BANK', body: scenario.body });
+    assert.equal(result.ok, true, scenario.body);
+    assert.equal(result.fields.instrument, scenario.instrument, scenario.body);
+    assert.equal(result.fields.entryKind, scenario.entryKind, scenario.body);
+    if (scenario.parserKind) assert.equal(result.parserKind, scenario.parserKind, scenario.body);
+  }
 });
 
 test('built-in UPI fallback stops merchant extraction before parenthesized reference metadata', () => {

@@ -9,6 +9,7 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import 'card_summary.dart';
+import 'card_visual.dart';
 
 /// C6 Points & Expiry (ui-spec Group C). Per-program balances (one program
 /// == one owned card, since points aren't modeled as separate named
@@ -95,70 +96,101 @@ class _ProgramCard extends ConsumerWidget {
         : daysUntil(nearestExpiry.expiresOn!, DateTime.now());
 
     return CardSummaryPanel(
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CardSummaryHeader(
-            product: product,
-            title: userCard.nickname?.isNotEmpty == true
-                ? userCard.nickname!
-                : product.name,
-            subtitle: product.issuerName,
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppRadius.lg),
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              height: 124,
+              child: CardVisual(product: product, showProductName: false),
+            ),
           ),
-          const SizedBox(height: AppSpace.lg),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                userCard.totalPointsEarned.toStringAsFixed(0),
-                style: BambooFonts.heading(24, color: BambooInk.ink900),
-              ),
-              const SizedBox(width: AppSpace.xs),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  'points',
-                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          Padding(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userCard.nickname?.isNotEmpty == true
+                      ? userCard.nickname!
+                      : product.name,
+                  style: BambooFonts.heading(16, color: BambooInk.ink900),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Row(
-            children: [
-              Text(
-                'Estimated value ',
-                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-              ),
-              MoneyText(
-                valueEstimate,
-                confidence: Confidence.estimated,
-                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-              ),
-            ],
-          ),
-          if (product.pointValueInr <= 0) ...[
-            const SizedBox(height: AppSpace.xs),
-            Text(
-              'No ₹/point value on file for this card — estimate unavailable.',
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-            ),
-          ],
-          if (nearestExpiry != null && daysToExpiry != null) ...[
-            const SizedBox(height: AppSpace.sm),
-            _ExpiryChip(
-              daysLeft: daysToExpiry,
-              points: nearestExpiry.deltaPoints,
-            ),
-          ],
-          const SizedBox(height: AppSpace.md),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
-              onPressed: () => _showCorrectionSheet(context, ref),
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('Correct balance'),
+                if (product.issuerName?.trim().isNotEmpty == true) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    product.issuerName!,
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const SizedBox(height: AppSpace.lg),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      userCard.totalPointsEarned.toStringAsFixed(0),
+                      style: BambooFonts.heading(24, color: BambooInk.ink900),
+                    ),
+                    const SizedBox(width: AppSpace.xs),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'points',
+                        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(
+                      'Estimated value ',
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
+                    MoneyText(
+                      valueEstimate,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
+                  ],
+                ),
+                if (product.pointValueInr <= 0) ...[
+                  const SizedBox(height: AppSpace.xs),
+                  Text(
+                    'No ₹/point value on file for this card — estimate unavailable.',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                ],
+                if (nearestExpiry != null && daysToExpiry != null) ...[
+                  const SizedBox(height: AppSpace.sm),
+                  _ExpiryChip(
+                    daysLeft: daysToExpiry,
+                    points: nearestExpiry.deltaPoints,
+                  ),
+                ],
+                const SizedBox(height: AppSpace.md),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: BambooInk.jade,
+                    ),
+                    onPressed: () => _showCorrectionSheet(context, ref),
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Correct balance'),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

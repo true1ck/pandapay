@@ -70,9 +70,9 @@ abstract class UpiPaymentService {
   /// to return. [upiUri] must be the output of `buildUpiPayUri`.
   Future<UpiPaymentResult> pay({required String upiUri, required String packageName});
 
-  /// A fresh merchant/order reference for one payment attempt — `PP` + a
-  /// millisecond timestamp + 4 random chars. Passed as `tr` when the QR
-  /// itself didn't carry one, and echoed into support logs.
+  /// Generates a local reference for diagnostics or a future merchant-initiated
+  /// flow. A scan-to-pay handoff does not add this to a static QR: the selected
+  /// PSP app owns the transaction reference when the QR did not provide one.
   String newTransactionRef();
 }
 

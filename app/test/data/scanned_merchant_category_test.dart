@@ -34,6 +34,27 @@ void main() {
     );
   });
 
+  test('5411 identifies groceries before payment', () {
+    final hint = inferScannedMerchantCategory(
+      merchantName: 'Paytm Merchant',
+      vpa: 'paytmqr6z7fka@ptys',
+      mcc: '5411',
+    );
+
+    expect(hint?.slug, 'groceries');
+    expect(hint?.source, ScannedMerchantCategorySource.mcc);
+  });
+
+  test('the supplied QR keeps 5999 unresolved instead of guessing', () {
+    final hint = inferScannedMerchantCategory(
+      merchantName: 'Paytm Merchant',
+      vpa: 'paytmqr6z7fka@ptys',
+      mcc: '5999',
+    );
+
+    expect(hint, isNull);
+  });
+
   test('merchant names classify common QR merchants without MCC', () {
     expect(
       categoryIdForScannedMerchant(

@@ -177,7 +177,7 @@ class _FeeWaiverTile extends StatelessWidget {
                 value: ratio,
                 minHeight: 8,
                 backgroundColor: BambooInk.paperMuted,
-                color: ratio >= 0.9 ? BambooInk.amber : BambooInk.jade,
+                color: ratio >= 0.9 ? BambooInk.amber : BambooChartColors.teal,
               ),
             ),
             const SizedBox(height: AppSpace.sm),

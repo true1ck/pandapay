@@ -38,6 +38,16 @@ __pycache__/
 /.pub-cache/
 /.appdata/
 
+# Local PandaPay test/build state (generated on the developer machine)
+.dart-appdata-*/
+.dart-localappdata-*/
+.flutter-appdata-*/
+.flutter-ci-logs/
+.flutter-state-*/
+.session-localappdata/
+.card_rule_test.log
+artifacts/ui-verification/
+
 # macOS
 .DS_Store
 

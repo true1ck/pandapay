@@ -18,6 +18,12 @@ test('supports month-name due dates', () => {
   assert.equal(result.date.getMonth(), 9);
 });
 
+test('supports issuer hyphenated and ordinal date formats', () => {
+  assert.equal(extractDueDate('Payment due date: 16-Oct-26.').day, 16);
+  assert.equal(extractDueDate('Your amount is due by 5th October 2026.').day, 5);
+  assert.equal(extractDueDate('Payment due on Oct 16, 2026.').day, 16);
+});
+
 test('extracts a due date from a pay-by instruction', () => {
   const result = extractDueDate(
     'Please pay the minimum amount of Rs. 500 by 16/10/2026 to avoid late fees.',

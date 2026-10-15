@@ -35,8 +35,10 @@ class TokenStore {
       final legacyAccess = prefs.getString(_accessKey);
       final legacyRefresh = prefs.getString(_refreshKey);
       if (legacyAccess != null || legacyRefresh != null) {
-        if (legacyAccess != null) await secureStorage.write(key: _accessKey, value: legacyAccess);
-        if (legacyRefresh != null) await secureStorage.write(key: _refreshKey, value: legacyRefresh);
+        if (legacyAccess != null)
+          await secureStorage.write(key: _accessKey, value: legacyAccess);
+        if (legacyRefresh != null)
+          await secureStorage.write(key: _refreshKey, value: legacyRefresh);
         await prefs.remove(_accessKey);
         await prefs.remove(_refreshKey);
         accessToken = legacyAccess;
@@ -44,19 +46,27 @@ class TokenStore {
       }
     }
 
-    return TokenStore(secureStorage, accessToken: accessToken, refreshToken: refreshToken);
+    return TokenStore(
+      secureStorage,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+    );
   }
 
   String? get accessToken => _cachedAccessToken;
   String? get refreshToken => _cachedRefreshToken;
 
   Future<void> save({required String accessToken, String? refreshToken}) async {
-    _cachedAccessToken = accessToken;
-    await _secureStorage.write(key: _accessKey, value: accessToken);
+    // Refresh tokens rotate and the previous value becomes invalid as soon as
+    // the server accepts a refresh. Persist the replacement first so a process
+    // death between the two writes can recover with the new credential rather
+    // than leaving the device holding an already-spent refresh token.
     if (refreshToken != null) {
       _cachedRefreshToken = refreshToken;
       await _secureStorage.write(key: _refreshKey, value: refreshToken);
     }
+    _cachedAccessToken = accessToken;
+    await _secureStorage.write(key: _accessKey, value: accessToken);
   }
 
   Future<void> clear() async {

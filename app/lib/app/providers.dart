@@ -438,8 +438,11 @@ final userSettingsApiProvider = Provider<UserSettingsApi?>((ref) {
 
 /// Same pattern as console/lib/app/providers.dart's sessionInitProvider:
 /// resolve a stored refresh token through auth/'s real POST /auth/refresh
-/// on startup. Temporary refresh failures preserve the cached session, while
-/// a definitive 401/403 clears unrecoverable credentials and returns to login.
+/// on startup. Refresh failures preserve the cached session. A failed refresh
+/// is not the same thing as an explicit sign-out: the auth service can reject
+/// a rotated/stale token after a process restart, deployment, database restore,
+/// or temporary device/network condition. Clearing secure credentials here
+/// would turn that recoverable state into the "Welcome back" screen.
 String? _jwtSubject(String token) {
   try {
     final parts = token.split('.');
@@ -531,61 +534,67 @@ class SessionRefreshCoordinator {
       );
       writeAccessToken(tokens.accessToken);
       return tokens.accessToken;
-    } catch (error) {
-      if (_isRejectedCredentialRefresh(error) &&
-          readAccessToken() == accessTokenBeforeRefresh &&
-          store.refreshToken == refreshToken) {
-        await store.clear();
-        writeAccessToken(null);
-      }
-      // Network/5xx errors are recoverable. Keep the last known credentials
-      // so cached screens remain usable and the next lifecycle/API retry can
-      // recover without forcing a login.
+    } catch (_) {
+      // A refresh failure must never silently sign the user out. In
+      // particular, /auth/refresh returns 401 for a stale/replayed/expired
+      // rotating refresh token, but that response is not an explicit user
+      // action and may also be caused by an auth deployment/database
+      // mismatch. Keep both secure credentials and the last access token so
+      // the account remains available from cache and a later retry can
+      // recover. Only the explicit Sign out action clears TokenStore.
       return null;
     }
   }
 }
 
 final sessionInitProvider = FutureProvider<void>((ref) async {
-  // Keystore access can be slow or unavailable on a cold boot, especially on
-  // an emulator after install. Treat that as a signed-out/offline start so
-  // the router can show onboarding; a later sign-in can retry normally.
-  final store = await ref.watch(tokenStoreProvider.future).timeout(
-    const Duration(seconds: 6),
-    onTimeout: () => TokenStore(const FlutterSecureStorage()),
-  );
+  // Restore the locally persisted access token before doing any network work.
+  // The old startup path waited for /auth/refresh here, which made a healthy
+  // install sit on the splash for several seconds whenever auth/ was slow.
+  // A refresh is still started immediately below, but Home can now render
+  // from its local snapshot while it runs.
+  late final TokenStore store;
+  try {
+    store = await ref.watch(tokenStoreProvider.future);
+  } catch (_) {
+    // Keystore/platform failures are not proof that the account is signed
+    // out. The router can show the account gate, while a later explicit login
+    // can recreate the secure-store entry.
+    return;
+  }
   final refreshToken = store.refreshToken;
   final storedAccessToken = store.accessToken;
+  if (storedAccessToken != null) {
+    ref.read(accessTokenProvider.notifier).state = storedAccessToken;
+  }
   if (refreshToken == null) {
     // A legacy/partially-written session may contain only an access token.
     // Keep it available for the normal offline-cache path; there is no
     // refresh request we can make until the user signs in again.
-    if (storedAccessToken != null) {
-      ref.read(accessTokenProvider.notifier).state = storedAccessToken;
-    }
     return;
   }
 
-  // Never keep the native/Flutter splash up while a hosted auth service is
-  // unreachable. The coordinator preserves the cached token on transient
-  // failures, so the router can continue into the cached/offline experience.
-  final refreshed = await ref
-      .read(sessionRefreshCoordinatorProvider)
-      .refresh()
-      .timeout(const Duration(seconds: 9), onTimeout: () => null);
-  if (refreshed == null &&
-      storedAccessToken != null &&
-      store.accessToken != null) {
-    // Temporary startup failures keep the last access token available for
-    // local cache reads; a rejected refresh has already cleared both values.
-    ref.read(accessTokenProvider.notifier).state = storedAccessToken;
-  }
+  // Do not make routing wait on the hosted auth service. The coordinator
+  // shares this request with any API call that receives a 401, preserves the
+  // stored session for every refresh outcome. This keeps app startup usable
+  // from the local cache even when auth/ is unavailable or rejects a stale
+  // rotating credential.
+  unawaited(
+    ref
+        .read(sessionRefreshCoordinatorProvider)
+        .refresh()
+        .then<void>((_) {}, onError: (_, __) {}),
+  );
 });
 
 bool _isRejectedCredentialRefresh(Object error) {
   if (error is! ApiException) return false;
   final statusCode = error.statusCode;
-  return statusCode == 401 || statusCode == 403;
+  // auth/ uses 401 for an expired/revoked refresh credential. A 403 can be a
+  // temporary risk/step-up or location decision, and clearing both stored
+  // tokens for that response is what turns a recoverable auth policy event
+  // into an unexpected logout.
+  return statusCode == 401;
 }
 
 /// Keeps a signed-in session alive for as long as the app stays open, not
@@ -596,9 +605,9 @@ bool _isRejectedCredentialRefresh(Object error) {
 /// every API call while accessTokenProvider still held the now-dead token
 /// — "signed in" on screen, broken underneath. This re-reads the CURRENT
 /// refresh token from storage (not a captured value) every 10 minutes,
-/// comfortably inside the 15-minute TTL. Temporary refresh failures leave
-/// the current session intact; a definitive 401/403 clears credentials and
-/// returns the user to login.
+/// comfortably inside the 15-minute TTL. Refresh failures leave the current
+/// session intact; only explicit user sign-out clears credentials and returns
+/// the user to login.
 /// Read once from `_AppShell` in main.dart so it runs for the app's whole
 /// lifetime regardless of which tab is showing.
 /// How often to proactively rotate the access token. Must stay comfortably
@@ -951,6 +960,26 @@ final userCardsProvider = FutureProvider<List<UserCard>>((ref) async {
     final catalogue = await ref.watch(catalogueProvider.future);
     return local.fetchUserCards(catalogue: catalogue);
   }
+  // Home is a read-mostly decision surface. If a prior sync exists, return it
+  // immediately even while the device is online; homeDataRefreshProvider
+  // refreshes the same snapshot in the background and invalidates this
+  // provider after the write completes.
+  final cache = await _cacheOrNull(ref);
+  final cacheKey = _scopedCacheKey(ref, _userCardsCacheKey);
+  final cached = await cache?.get(cacheKey);
+  if (cached != null) {
+    try {
+      final body = jsonDecode(cached) as Map<String, dynamic>;
+      return (body['userCards'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(UserCard.fromJson)
+          .where((card) => !card.isArchived)
+          .toList();
+    } catch (_) {
+      // A corrupt snapshot is not fatal; the normal server path below repairs
+      // it and the next launch can use the repaired copy.
+    }
+  }
   return _loadUserCardsWithOfflineCache(ref, repo);
 });
 
@@ -1053,12 +1082,25 @@ final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((
 final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
   final repo = ref.watch(cardOverridesRepositoryProvider);
   if (repo == null) return const [];
+  final cache = await _cacheOrNull(ref);
+  final cacheKey = _scopedCacheKey(ref, _cardOverridesCacheKey);
+  final cached = await cache?.get(cacheKey);
+  if (cached != null) {
+    try {
+      final body = jsonDecode(cached) as Map<String, dynamic>;
+      return (body['overrides'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(CardOverride.fromJson)
+          .toList();
+    } catch (_) {
+      // The live request below repairs an invalid snapshot.
+    }
+  }
   try {
     final overrides = await repo.fetchOverrides().timeout(_homeRequestTimeout);
-    final cache = await _cacheOrNull(ref);
     try {
       await cache?.put(
-        _scopedCacheKey(ref, _cardOverridesCacheKey),
+        cacheKey,
         jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
       );
     } catch (_) {
@@ -1068,10 +1110,6 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
     return overrides;
   } catch (error) {
     if (!_canUseStaleCache(error)) rethrow;
-    final cache = await _cacheOrNull(ref);
-    final cached = await cache?.get(
-      _scopedCacheKey(ref, _cardOverridesCacheKey),
-    );
     // Overrides are an enhancement to ranking, not a prerequisite for
     // showing the wallet. If this is the first signed-in request and there is
     // no cache yet, fail open with the base catalogue instead of replacing
@@ -1083,6 +1121,108 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
         .map(CardOverride.fromJson)
         .toList();
   }
+});
+
+/// Refreshes Home's small set of inputs without blocking its first frame.
+/// Read providers above are cache-first; this provider writes a fresh snapshot
+/// in parallel and publishes it only after the local writes complete.
+final homeDataRefreshProvider = FutureProvider<void>((ref) async {
+  final userRepo = ref.watch(userCardsRepositoryProvider);
+  final cache = await _cacheOrNull(ref);
+  if (cache == null) return;
+
+  Future<void> refreshUserCards() async {
+    if (userRepo == null) return;
+    try {
+      final cards = await userRepo.fetchUserCards().timeout(
+        _homeRequestTimeout,
+      );
+      await cache.put(
+        _scopedCacheKey(ref, _userCardsCacheKey),
+        jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> refreshCatalogue() async {
+    try {
+      final cards = await ref
+          .read(catalogueRepositoryProvider)
+          .fetchCatalogue()
+          .timeout(_homeRequestTimeout);
+      if (cards.isNotEmpty) {
+        await cache.put(
+          _catalogueCacheKey,
+          jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> refreshCategories() async {
+    try {
+      final categories = await ref
+          .read(categoryRepositoryProvider)
+          .fetchCategories()
+          .timeout(_homeRequestTimeout);
+      await cache.put(
+        _categoriesCacheKey,
+        jsonEncode({'categories': categories.map((c) => c.toJson()).toList()}),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> refreshOverrides() async {
+    if (userRepo == null) return;
+    final overridesRepo = ref.read(cardOverridesRepositoryProvider);
+    if (overridesRepo == null) return;
+    try {
+      final overrides = await overridesRepo.fetchOverrides().timeout(
+        _homeRequestTimeout,
+      );
+      await cache.put(
+        _scopedCacheKey(ref, _cardOverridesCacheKey),
+        jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> refreshHomeSummary() async {
+    if (userRepo == null) return;
+    try {
+      final summary = await userRepo
+          .fetchHomeSummary(
+            anchor: DateTime.now().toUtc(),
+            timeZone: ref.read(deviceTimeZoneProvider),
+          )
+          .timeout(_homeRequestTimeout);
+      if (summary != null) {
+        await cache.put(
+          _scopedCacheKey(ref, 'home_summary'),
+          jsonEncode({
+            'rewardsThisMonthInr': summary.rewardsThisMonth.rupees,
+            'rewardsAllTimeInr': summary.rewardsAllTime.rupees,
+            'transactionCount': summary.transactionCount,
+            'streakDays': summary.streakDays,
+          }),
+        );
+      }
+    } catch (_) {}
+  }
+
+  await Future.wait([
+    refreshUserCards(),
+    refreshCatalogue(),
+    refreshCategories(),
+    refreshOverrides(),
+    refreshHomeSummary(),
+  ]);
+  ref.invalidate(userCardsProvider);
+  ref.invalidate(catalogueProvider);
+  ref.invalidate(categoriesProvider);
+  ref.invalidate(cardOverridesProvider);
+  ref.invalidate(homeSummaryProvider);
+  ref.invalidate(lastSyncedAtProvider);
 });
 
 /// Privacy: user_cards/card_overrides cache entries are per-signed-in-user
@@ -1514,10 +1654,14 @@ final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
   final key = _scopedCacheKey(ref, 'home_summary');
   final cache = await _cacheOrNull(ref);
   final cached = await _readCacheOrNull(cache, key);
-  if (_isKnownOffline() && cached != null) {
-    return HomeSummary.fromJson(
-      jsonDecode(cached.rawJson) as Map<String, dynamic>,
-    );
+  if (cached != null) {
+    try {
+      return HomeSummary.fromJson(
+        jsonDecode(cached.rawJson) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      // The live request below repairs an invalid snapshot.
+    }
   }
   try {
     final summary = await repo
@@ -1752,6 +1896,18 @@ final merchantSearchRepositoryProvider = Provider<MerchantSearchRepository>((
   return HttpMerchantSearchRepository(baseUrl: _apiBaseUrl);
 });
 
+/// Exact-VPA merchant directory lookup used by QR scan. It is intentionally
+/// best-effort: scan results render from local data immediately, and a
+/// directory/network miss must never prevent a user from choosing a category.
+final merchantResolutionProvider =
+    FutureProvider.family<MerchantResolution?, String>((ref, vpa) async {
+      try {
+        return await ref.watch(merchantSearchRepositoryProvider).resolveVpa(vpa);
+      } catch (_) {
+        return null;
+      }
+    });
+
 /// S5/S6 (ui-spec System Surfaces, GAP_ANALYSIS.md §3) — forced upgrade /
 /// maintenance mode. Public, no auth, same pattern as
 /// catalogueRepositoryProvider above.
@@ -1980,15 +2136,16 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
 final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
   final cache = await _cacheOrNull(ref);
   final cached = await cache?.get(_catalogueCacheKey);
-  if (_isKnownOffline() && cached != null) {
+  if (cached != null) {
     try {
       final body = jsonDecode(cached) as Map<String, dynamic>;
-      return (body['cards'] as List)
+      final cards = (body['cards'] as List)
           .cast<Map<String, dynamic>>()
           .map(CardProductJson.fromJson)
           .toList();
+      if (cards.isNotEmpty) return cards;
     } catch (_) {
-      // Fall through to the bundled catalogue below.
+      // Fall through to the live/bundled catalogue below.
     }
   }
   try {
@@ -2034,13 +2191,14 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
 final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
   final cache = await _cacheOrNull(ref);
   final cached = await cache?.get(_categoriesCacheKey);
-  if (_isKnownOffline() && cached != null) {
+  if (cached != null) {
     try {
       final body = jsonDecode(cached) as Map<String, dynamic>;
-      return (body['categories'] as List)
+      final categories = (body['categories'] as List)
           .cast<Map<String, dynamic>>()
           .map(SpendCategory.fromJson)
           .toList();
+      if (categories.isNotEmpty) return categories;
     } catch (_) {}
   }
   try {
@@ -2433,6 +2591,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     // Guest mode has no server to send to; the queue simply waits until
     // there is one rather than being discarded.
     if (repo == null) return 0;
+    var dueDayUpdated = false;
     try {
       final handled = await SmsListenerService().flushBackgroundQueue((
         sender,
@@ -2444,6 +2603,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           body: body,
           occurredAt: receivedAt,
         );
+        dueDayUpdated = dueDayUpdated || result.dueDayUpdated;
         await saveAmbiguousSmsForConfirmation(sender, body, receivedAt, result);
         // Every one of these is "dealt with": imported, recognised as
         // already imported, or explicitly ignored as a non-spend. Successful
@@ -2453,8 +2613,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       });
       // Refresh Spending immediately after a queue upload. If a later inbox
       // reconciliation request times out, an open report must not stay stale.
-      if (handled > 0) {
+      if (handled > 0 || dueDayUpdated) {
         ref.invalidate(userCardsProvider);
+        ref.invalidate(myCardsProvider);
         ref.invalidate(transactionsProvider);
         ref.invalidate(utilizationTransactionsProvider);
         ref.invalidate(homeSummaryProvider);
@@ -2480,6 +2641,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     final reviewRepo = ref.read(needsReviewRepositoryProvider);
     final items = await reviewRepo.fetchAll();
     var changed = false;
+    var dueDayUpdated = false;
     for (final item in items) {
       try {
         final result = await repo.logTransactionFromSms(
@@ -2487,6 +2649,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           body: item.body,
           occurredAt: item.receivedAt,
         );
+        dueDayUpdated = dueDayUpdated || result.dueDayUpdated;
         final canRemove =
             (result.parsed && !result.needsReview) ||
             _isIgnorableSmsResult(result);
@@ -2500,10 +2663,11 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         break;
       }
     }
-    if (changed) {
+    if (changed || dueDayUpdated) {
       ref.invalidate(needsReviewItemsProvider);
       ref.invalidate(needsReviewCountProvider);
       ref.invalidate(userCardsProvider);
+      ref.invalidate(myCardsProvider);
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
       ref.invalidate(homeSummaryProvider);
@@ -2612,7 +2776,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     } catch (_) {
       // The next reconciliation will refresh the checkpoint.
     }
-    return summary.imported > 0 || summary.needsReview > 0;
+    return summary.imported > 0 ||
+        summary.needsReview > 0 ||
+        summary.dueDatesUpdated > 0;
   }
 
   Future<void> flushAndRetry() async {
@@ -2712,6 +2878,7 @@ class SmsInboxSyncSummary {
   final int duplicates;
   final int ignored;
   final int needsReview;
+  final int dueDatesUpdated;
 
   const SmsInboxSyncSummary({
     required this.scanned,
@@ -2719,6 +2886,7 @@ class SmsInboxSyncSummary {
     required this.duplicates,
     required this.ignored,
     this.needsReview = 0,
+    this.dueDatesUpdated = 0,
   });
 }
 
@@ -2787,6 +2955,7 @@ class SmsAutoImportController {
     var duplicates = 0;
     var ignored = 0;
     var needsReview = 0;
+    var dueDatesUpdated = 0;
     final now = DateTime.now();
     final currentMonth = DateTime(now.year, now.month);
 
@@ -2825,14 +2994,16 @@ class SmsAutoImportController {
         duplicates += result.duplicate;
         ignored += result.unparsed + result.invalid + result.errored;
         needsReview += result.needsReview;
+        dueDatesUpdated += result.dueDatesUpdated;
       }
     }
 
     // Publish once after the complete bounded pass. Re-reading the inbox can
     // find messages the server already knows; that is not a data change and
     // must not trigger a full-screen refresh.
-    if (imported > 0 || needsReview > 0) {
+    if (imported > 0 || needsReview > 0 || dueDatesUpdated > 0) {
       _ref.invalidate(userCardsProvider);
+      _ref.invalidate(myCardsProvider);
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(utilizationTransactionsProvider);
       _ref.invalidate(homeSummaryProvider);
@@ -2847,6 +3018,7 @@ class SmsAutoImportController {
       duplicates: duplicates,
       ignored: ignored,
       needsReview: needsReview,
+      dueDatesUpdated: dueDatesUpdated,
     );
   }
 
@@ -2883,6 +3055,7 @@ class SmsAutoImportController {
         _ref.invalidate(needsReviewCountProvider);
       }
       _ref.invalidate(userCardsProvider);
+      _ref.invalidate(myCardsProvider);
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(utilizationTransactionsProvider);
       _ref.invalidate(homeSummaryProvider);

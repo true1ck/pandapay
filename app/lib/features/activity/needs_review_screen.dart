@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -211,7 +212,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           if (item.reason != null) ...[
             const SizedBox(height: AppSpace.xs),
             Text(
-              'Reason: ${item.reason}',
+              'Reason: ${humanizeIdentifier(item.reason)}',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],

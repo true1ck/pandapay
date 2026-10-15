@@ -292,7 +292,7 @@ void main() {
     expect(find.text('UPI from bank account'), findsOneWidget);
   });
 
-  testWidgets('formats calendar-month trend labels from local period starts', (
+  testWidgets('omits the long trend chart from the spending summary', (
     tester,
   ) async {
     await _pump(
@@ -315,8 +315,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Sep 26'), findsOneWidget);
-    expect(find.text('Oct 26'), findsOneWidget);
+    expect(find.text('Sep 26'), findsNothing);
+    expect(find.text('Oct 26'), findsNothing);
   });
 
   testWidgets('an empty period shows an explicit zero-spending state', (

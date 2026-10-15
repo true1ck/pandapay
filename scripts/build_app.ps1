@@ -16,6 +16,23 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $appRoot = Join-Path $repoRoot 'app'
+$keyProperties = Join-Path $appRoot 'android\key.properties'
+
+if ($Environment -eq 'prod' -and -not (Test-Path -LiteralPath $keyProperties)) {
+  throw "Production builds require app/android/key.properties. Refusing to use the Android debug signing key, because it cannot update an installed release signed with the original release key."
+}
+
+if ($Environment -eq 'prod' -and [string]::IsNullOrWhiteSpace($BuildNumber)) {
+  throw "Production builds require an explicit -BuildNumber so an older APK cannot be shared by mistake."
+}
+
+if ($Environment -eq 'prod' -and $Target -eq 'apk' -and -not $SplitPerAbi) {
+  throw "Production phone APKs must use -SplitPerAbi. Build an app bundle separately for Play Console delivery."
+}
+
+if (-not [string]::IsNullOrWhiteSpace($BuildNumber) -and $BuildNumber -notmatch '^[1-9][0-9]*$') {
+  throw "-BuildNumber must be a positive integer."
+}
 
 if ($Environment -eq 'dev') {
   if ([string]::IsNullOrWhiteSpace($ApiBaseUrl)) { $ApiBaseUrl = 'http://10.0.2.2:4000' }

@@ -18,7 +18,8 @@
          exactly what Play Store review flags, and it's what
          scripts/check_prod_manifest.sh's denylist exists to catch — it did,
          on the first build after this pass added the plugin. -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove"/>
+    <!-- Voice capture: requested only when the user taps/holds the mic. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
     <!-- UA-5.3 (Chunk 31): SMS-based transaction auto-import. Permission

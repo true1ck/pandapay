@@ -1119,6 +1119,7 @@ class UserCardsRepository {
       duplicate: json['duplicate'] == true,
       needsReview: json['needsReview'] == true,
       categoryId: json['resolvedCategoryId'] as String?,
+      dueDayUpdated: json['dueDayUpdated'] == true,
     );
   }
 
@@ -1231,6 +1232,7 @@ class UserCardsRepository {
       invalid: (summary['invalid'] as num?)?.toInt() ?? 0,
       needsReview: (summary['needsReview'] as num?)?.toInt() ?? 0,
       errored: (summary['error'] as num?)?.toInt() ?? 0,
+      dueDatesUpdated: (summary['dueDatesUpdated'] as num?)?.toInt() ?? 0,
       // Indices are batch-relative; the caller maps them back to its own
       // list so callers can report genuinely unparsed messages without
       // turning successful cardless spends into a manual workflow.
@@ -1433,6 +1435,7 @@ class UserCardsRepository {
     String userCardId, {
     required double newBalance,
     DateTime? expiresOn,
+    String? reason,
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/user-cards/$userCardId/points-adjustment'),
@@ -1440,6 +1443,7 @@ class UserCardsRepository {
       body: jsonEncode({
         'newBalance': newBalance,
         if (expiresOn != null) 'expiresOn': _dateOnly(expiresOn),
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
       }),
     );
     if (response.statusCode != 201) {
@@ -1691,6 +1695,10 @@ class TransactionEntry {
   /// Last four digits extracted from a card SMS when the saved card is not
   /// linked yet. This is masked evidence only, never a full card number.
   final String? cardLast4;
+  /// Last four digits of the source bank account for a cardless debit.
+  /// This stays separate from cardLast4 so it cannot attach a payment to a
+  /// physical card with matching digits.
+  final String? accountLast4;
 
   /// Task D-1/D-2/D-3: added alongside the D1 rebuild — `GET /transactions`
   /// already selected `t.source`/`t.note` (Task C-0c) and `t.user_card_id`/
@@ -1708,6 +1716,7 @@ class TransactionEntry {
   final TxnEntryKind entryKind;
   final String source;
   final String status;
+  final String rewardState;
   final String? note;
 
   /// What this transaction actually earned — `transactions.expected_value_inr`,
@@ -1738,6 +1747,7 @@ class TransactionEntry {
     this.categoryName,
     this.cardDisplayName,
     this.cardLast4,
+    this.accountLast4,
     this.userCardId,
     this.rail = TxnRail.unknown,
     this.instrument = TxnInstrument.creditCard,
@@ -1745,6 +1755,7 @@ class TransactionEntry {
     this.entryKind = TxnEntryKind.spend,
     required this.source,
     required this.status,
+    this.rewardState = 'estimated',
     this.note,
     this.rewardValue,
   });
@@ -1762,12 +1773,14 @@ class TransactionEntry {
     'card_name': cardDisplayName,
     'card_nickname': null,
     'card_last4': cardLast4,
+    'account_last4': accountLast4,
     'user_card_id': userCardId,
     'rail': instrumentKnown ? _railToJson(rail) : null,
     'instrument': instrumentKnown ? instrument.wireValue : null,
     'entry_kind': entryKind.wireValue,
     'source': source,
     'status': status,
+    'reward_state': rewardState,
     'note': note,
     'expected_value_inr': rewardValue?.rupees,
   };
@@ -1796,6 +1809,7 @@ class TransactionEntry {
       categoryName: _displayCategoryName(json['category_name'] as String?),
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
       cardLast4: json['card_last4'] as String?,
+      accountLast4: json['account_last4'] as String?,
       userCardId: json['user_card_id'] as String?,
       rail: _parseRail(json['rail'] as String?),
       instrument: TxnInstrument.fromJson(json['instrument'] as String?),
@@ -1803,6 +1817,7 @@ class TransactionEntry {
       entryKind: TxnEntryKind.fromJson(json['entry_kind'] as String?),
       source: json['source'] as String? ?? 'manual',
       status: json['status'] as String? ?? 'active',
+      rewardState: json['reward_state'] as String? ?? 'estimated',
       note: json['note'] as String?,
       rewardValue: json['expected_value_inr'] == null
           ? null
@@ -1859,12 +1874,18 @@ class SmsImportResult {
   /// the request succeeds.
   final String? categoryId;
 
+  /// True when this alert filled a previously missing recurring due day on
+  /// the matched card. This can happen for a bill reminder that is not a
+  /// purchase, so it must be propagated separately from [parsed].
+  final bool dueDayUpdated;
+
   const SmsImportResult({
     required this.parsed,
     this.reason,
     this.duplicate = false,
     this.needsReview = false,
     this.categoryId,
+    this.dueDayUpdated = false,
   });
 }
 
@@ -1937,6 +1958,7 @@ class SmsBatchImportResult {
   /// messages are counted as imported even when card attribution is unknown.
   final int needsReview;
   final int errored;
+  final int dueDatesUpdated;
   final List<int> unparsedIndices;
   final Map<int, String> reasonByIndex;
 
@@ -1947,6 +1969,7 @@ class SmsBatchImportResult {
     required this.invalid,
     this.needsReview = 0,
     required this.errored,
+    this.dueDatesUpdated = 0,
     this.unparsedIndices = const [],
     this.reasonByIndex = const {},
   });

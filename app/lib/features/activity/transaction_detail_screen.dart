@@ -446,7 +446,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     // saved credit card.
     if (entry.instrument == TxnInstrument.upiBank ||
         (!entry.instrumentKnown && entry.rail == TxnRail.upiQr)) {
-      return 'UPI / bank account';
+      final accountLast4 = entry.accountLast4;
+      return accountLast4 == null || accountLast4.isEmpty
+          ? 'UPI / bank account'
+          : 'Bank account ending $accountLast4';
     }
     if (entry.instrument == TxnInstrument.debitCard) {
       return 'Debit card (unmatched)';

@@ -6,6 +6,7 @@ const config = require('./config');
 const { withUserClient, pool } = require('./db');
 const { optionalAuth, requireAuth } = require('./auth');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
+const { replayCurrentCapConsumption } = require('./card_state_reconciliation');
 const { parseSmsAgainstPatterns, redactSmsShape, senderMatches, parseTransactionDate } = require('./sms_parser');
 const { parseSubscriptionMandate } = require('./subscription_parser');
 const importResolvers = require('./import_resolvers');
@@ -1085,8 +1086,9 @@ app.post('/data-error-reports', requireAuth, async (req, res) => {
 
 /**
  * GET /merchants/search — B5: typed search over published merchants, by
- * display name only (not VPA — VPA search is a B3 scope reduction noted in
- * this plan's Task 12). Public read, same is_published-only filter as
+ * display name. Exact VPA resolution is exposed separately below because
+ * scanned QR flows need an identifier lookup rather than fuzzy text search.
+ * Public read, same is_published-only filter as
  * GET /merchants/nearby, same q ILIKE pattern as GET /admin/merchants but
  * without the admin gate. Each row is shaped like a /merchants/nearby
  * candidate (minus distance_meters, since search has no origin point) so
@@ -1704,6 +1706,40 @@ app.get('/merchants/search', async (req, res) => {
 });
 
 /**
+ * GET /merchants/resolve?vpa=... — exact published merchant lookup for QR
+ * scans. This is public directory data only; no payment is initiated here.
+ * Keeping this keyed by VPA lets the app use an acquiring-bank/MCC-backed
+ * category when the QR contains no MCC or only a provider-generic name.
+ */
+app.get('/merchants/resolve', async (req, res) => {
+  const vpa = typeof req.query.vpa === 'string'
+    ? req.query.vpa.trim().toLowerCase()
+    : '';
+  if (vpa.length === 0 || vpa.length > 255 || !vpa.includes('@')) {
+    return res.status(400).json({ error: 'valid vpa is required' });
+  }
+
+  try {
+    const result = await withUserClient(null, (client) =>
+      client.query(
+        `SELECT m.id AS merchant_id, m.vpa, m.display_name, m.mcc,
+                m.category_id, sc.name AS category_name, sc.slug AS category_slug,
+                m.confidence, m.confidence_score, m.confirmation_count, m.is_p2p
+           FROM merchants m
+           LEFT JOIN spend_categories sc ON sc.id = m.category_id
+          WHERE m.is_published = true AND m.vpa = $1
+          LIMIT 1`,
+        [vpa],
+      ),
+    );
+    res.json({ merchant: result.rows[0] || null });
+  } catch (err) {
+    console.error('GET /merchants/resolve error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * GET /admin/card-requests — AD-2.1: New Card Request queue (A8/C8), grouped
  * by issuer+product with counts so priority follows actual demand. `state`
  * is the shared `review_state` enum (pending/resolved/dismissed) — there is
@@ -2057,6 +2093,14 @@ app.get('/user-cards', requireAuth, async (req, res) => {
   const includeArchived = req.query.includeArchived === 'true';
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // Keep the card surfaces aligned with Spending when an older build
+      // inserted the ledger row without applying derived cap state. The SMS
+      // attribution repair remains an explicit reconciliation operation;
+      // this read path only rebuilds the derived current-period cap rows.
+      // The reconciliation is idempotent and runs inside this request
+      // transaction, so the response never exposes stale cap rows.
+      await reconcileCurrentCapStates(client, req.userId);
+
       // statement_day/opened_on added for Task 11 (E7 Billing Cycle Float —
       // the same two columns insertTransactionAndUpdateState below already
       // reads internally for period-bounds math, just never previously
@@ -2801,7 +2845,7 @@ app.get('/user-cards/:id/points-ledger', requireAuth, async (req, res) => {
  * rather than introducing a second mutable total that could drift from it.
  */
 app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
-  const { newBalance, expiresOn } = req.body || {};
+  const { newBalance, expiresOn, reason } = req.body || {};
   const target = Number(newBalance);
   if (!Number.isFinite(target)) {
     return res.status(400).json({ error: 'newBalance must be a number' });
@@ -2821,11 +2865,14 @@ app.post('/user-cards/:id/points-adjustment', requireAuth, async (req, res) => {
       const currentTotal = Number(currentLedgerSum.rows[0].total) + Number(owns.rows[0].points_balance || 0);
       const delta = target - currentTotal;
 
+      const adjustmentReason = typeof reason === 'string' && reason.trim()
+        ? reason.trim().slice(0, 160)
+        : 'manual correction';
       const inserted = await client.query(
         `INSERT INTO points_ledger (profile_id, user_card_id, delta_points, reason, state, expires_on, occurred_at)
-         VALUES ($1, $2, $3, 'manual correction', 'estimated', $4, now())
+         VALUES ($1, $2, $3, $4, 'estimated', $5, now())
          RETURNING id, delta_points, reason, state, expires_on, occurred_at`,
-        [req.userId, req.params.id, delta, expiresOn || null]
+        [req.userId, req.params.id, delta, adjustmentReason, expiresOn || null]
       );
       return inserted.rows[0];
     });
@@ -2893,11 +2940,15 @@ function clientMutationSourceKey(userId, source, clientMutationId) {
 
 async function insertTransactionAndUpdateState(client, userId, {
   userCardId, amount, occurred, categoryId, rail, merchantName, note, source,
-  merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, observationMetadata,
+  merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, accountLast4,
+  observationMetadata,
 }) {
   const resolvedInstrument = instrument || 'credit_card';
   const resolvedEntryKind = entryKind || 'spend';
   const resolvedSource = source || 'manual';
+  const resolvedAccountLast4 = /^\d{4}$/.test(String(accountLast4 || '').trim())
+    ? String(accountLast4).trim()
+    : null;
 
   // All transaction channels use this helper, so one profile-scoped
   // transaction lock closes the race where SMS and email arrive together,
@@ -2963,11 +3014,11 @@ async function insertTransactionAndUpdateState(client, userId, {
   // index only covers non-null keys.
   const txn = await client.query(
     `INSERT INTO transactions
-       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'estimated', $12, $13, $14, false, $15)
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill, source_account_last4)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'estimated', $12, $13, $14, false, $15, $16)
      ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
-     RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, state_applied, is_backfill`,
-    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, backfill === true]
+     RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
+    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, backfill === true, resolvedAccountLast4]
   );
 
   // Zero rows back means the unique index rejected it: this exact message
@@ -2999,10 +3050,11 @@ async function insertTransactionAndUpdateState(client, userId, {
                 WHEN t.user_card_id IS NULL AND $4::uuid IS NOT NULL
                   THEN $4::uuid
                 ELSE t.user_card_id
-              END
+              END,
+              source_account_last4 = COALESCE(t.source_account_last4, $5)
         WHERE t.id = $1 AND t.profile_id = $2
-      RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, state_applied, is_backfill`,
-      [existing.rows[0].id, userId, resolvedInstrument, userCardId || null]
+      RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
+      [existing.rows[0].id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4]
     );
     await recordTransactionObservation(client, userId, refreshed.rows[0].id, {
       source: resolvedSource,
@@ -3129,6 +3181,15 @@ async function importParsedMessage(client, userId, {
 }) {
   const parsedVpa = vpa || extractVpa(parsed.fields.merchant) || extractVpa(rawText);
   const parsedMcc = mcc || parsed.fields.mcc || extractMcc(rawText);
+  const importMetadata = {
+    ...(observationMetadata || {}),
+    // A bank-account suffix is masked evidence for grouping only. It is not a
+    // card last-4 and must never participate in physical-card resolution.
+    ...(parsed.fields.accountLast4 ? { accountLast4: parsed.fields.accountLast4 } : {}),
+    ...(parsed.fields.reference ? { bankReference: parsed.fields.reference } : {}),
+    ...(parsed.fields.transferParty ? { transferParty: parsed.fields.transferParty } : {}),
+    ...(parsed.fields.transferKind ? { transferKind: parsed.fields.transferKind } : {}),
+  };
   // A QR payment can produce either a credit-card alert or a bank-account
   // UPI debit alert. Account-number suffixes are not card last-4 digits and
   // must never be used to attach a cardless bank payment to the wrong card.
@@ -3204,7 +3265,10 @@ async function importParsedMessage(client, userId, {
     amount: parsed.fields.amountInr,
     occurred,
     categoryId,
-    rail: rail || (instrument === 'upi_bank' || /\bupi\b/i.test(rawText) ? 'upi_qr' : 'unknown'),
+    // A bank-account instrument is not automatically a UPI-QR payment.
+    // Mobile-banking/IMPS/NEFT alerts must stay on the unknown rail so card
+    // reward rules cannot be applied to them by inference.
+    rail: rail || parsed.fields.rail || (/\bupi\b/i.test(rawText) ? 'upi_qr' : 'unknown'),
     merchantName: parsed.fields.merchant || null,
     merchantVpa: parsedVpa,
     mcc: parsedMcc,
@@ -3213,7 +3277,8 @@ async function importParsedMessage(client, userId, {
     backfill,
     instrument,
     entryKind,
-    observationMetadata,
+    accountLast4: parsed.fields.accountLast4 || null,
+    observationMetadata: importMetadata,
   });
 
   return { ...inserted, matchBasis, resolvedCategoryId: categoryId, userCardId };
@@ -3430,6 +3495,107 @@ async function repairSmsHistory(client, userId) {
     reclassified,
     remainingLegacyRows: Math.max(0, legacyRows.rowCount - reclassified),
   };
+}
+
+/**
+ * Rebuilds current-period cap consumption from active, card-linked spends.
+ *
+ * Cap state is derived data. A transaction can be linked to a card after it
+ * was first imported, or an older app version can have recorded the ledger
+ * row without applying the cap state. Reading the stale cap_states row in
+ * that situation makes Spending and the card detail disagree. Replaying the
+ * canonical ledger through reward_math keeps both surfaces aligned and also
+ * repairs rows created before the current state machine was shipped.
+ */
+async function reconcileCurrentCapStates(client, userId) {
+  // Serialize this repair with transaction ingestion/edit/reversal. The
+  // repair is idempotent, but it deletes and rebuilds current-period rows, so
+  // it must not interleave with a live cap update.
+  await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+    `transaction-ingest:${userId}`,
+  ]);
+
+  const cards = await client.query(
+    `SELECT uc.id, uc.card_product_id, uc.statement_day,
+            cp.point_value_inr, cp.base_reward_unit, cp.base_reward_rate,
+            cp.excluded_categories
+       FROM user_cards uc
+       JOIN card_products cp ON cp.id = uc.card_product_id
+      WHERE uc.profile_id = $1 AND uc.is_archived = false`,
+    [userId],
+  );
+  const today = await client.query(`SELECT CURRENT_DATE::text AS today`);
+  const asOf = new Date(`${today.rows[0].today}T12:00:00.000Z`);
+  let rebuiltCaps = 0;
+
+  for (const card of cards.rows) {
+    const rewardRules = await client.query(
+      `SELECT id, category_id, merchant_pattern, rail, unit, rate,
+              min_txn_inr, max_txn_inr, excluded_categories,
+              effective_from, effective_to, priority
+         FROM reward_rules WHERE card_product_id = $1`,
+      [card.card_product_id],
+    );
+    const capRules = await client.query(
+      `SELECT id, reward_rule_id, category_id, period, cap_value, measure,
+              post_cap_unit, post_cap_rate
+         FROM cap_rules WHERE card_product_id = $1`,
+      [card.card_product_id],
+    );
+    if (capRules.rows.length === 0) continue;
+
+    const replay = replayCurrentCapConsumption({
+      card,
+      rewardRules: rewardRules.rows,
+      capRules: capRules.rows,
+      transactions: [],
+      asOf,
+    });
+    const periodStarts = [...replay.periods.values()].map((period) => period.start).sort();
+    const earliestStart = periodStarts[0];
+    const transactions = await client.query(
+      `SELECT id, amount_inr, occurred_at, category_id, merchant_name, rail
+         FROM transactions
+        WHERE profile_id = $1
+          AND user_card_id = $2
+          AND status = 'active'
+          AND instrument = 'credit_card'
+          AND entry_kind = 'spend'
+          AND COALESCE(is_backfill, false) = false
+          AND occurred_at >= $3::date
+          AND occurred_at < ($4::date + interval '1 day')
+        ORDER BY occurred_at ASC, id ASC`,
+      [userId, card.id, earliestStart, today.rows[0].today],
+    );
+    const result = replayCurrentCapConsumption({
+      card,
+      rewardRules: rewardRules.rows,
+      capRules: capRules.rows,
+      transactions: transactions.rows,
+      asOf,
+    });
+
+    for (const cap of capRules.rows) {
+      const period = result.periods.get(cap.id);
+      await client.query(
+        `DELETE FROM cap_states
+          WHERE user_card_id = $1 AND cap_rule_id = $2 AND period_start = $3`,
+        [card.id, cap.id, period.start],
+      );
+      const consumed = result.consumed.get(cap.id) || 0;
+      if (consumed <= 0) continue;
+      await client.query(
+        `INSERT INTO cap_states
+           (profile_id, user_card_id, cap_rule_id, period_start, period_end,
+            consumed, cap_value_snapshot)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [userId, card.id, cap.id, period.start, period.end, consumed, cap.cap_value],
+      );
+      rebuiltCaps += 1;
+    }
+  }
+
+  return { rebuiltCaps };
 }
 
 /**
@@ -4144,6 +4310,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
       );
 
       const results = [];
+      let dueDatesUpdated = 0;
       for (let i = 0; i < messages.length; i += 1) {
         const { sender, body, userCardId, occurredAt, categoryId, rail } = messages[i] || {};
         // userCardId is no longer required per message — see
@@ -4170,6 +4337,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           body,
           patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
         });
+        if (dueDaySync?.updated) dueDatesUpdated += 1;
         if (!parsed.ok) {
           await importResolvers.syncCreditLimitFromSms(client, req.userId, {
             body,
@@ -4277,6 +4445,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           unparsed: results.filter((r) => r.outcome === 'unparsed').length,
           invalid: results.filter((r) => r.outcome === 'invalid').length,
           error: results.filter((r) => r.outcome === 'error').length,
+          dueDatesUpdated,
         },
       };
     });
@@ -4395,8 +4564,15 @@ app.get('/transactions', requireAuth, async (req, res) => {
       client.query(
         `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
-                t.instrument, t.entry_kind,
+                t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
+                COALESCE(t.source_account_last4,
+                  (SELECT o.metadata->>'accountLast4'
+                     FROM transaction_observations o
+                    WHERE o.transaction_id = t.id
+                      AND o.source IN ('sms', 'sms_bulk')
+                    ORDER BY o.observed_at DESC
+                    LIMIT 1)) AS account_last4,
                 (SELECT o.metadata->>'cardLast4'
                    FROM transaction_observations o
                   WHERE o.transaction_id = t.id
@@ -4433,8 +4609,15 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
       client.query(
         `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
-                t.instrument, t.entry_kind,
+                t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
+                COALESCE(t.source_account_last4,
+                  (SELECT o.metadata->>'accountLast4'
+                     FROM transaction_observations o
+                    WHERE o.transaction_id = t.id
+                      AND o.source IN ('sms', 'sms_bulk')
+                    ORDER BY o.observed_at DESC
+                    LIMIT 1)) AS account_last4,
                 (SELECT o.metadata->>'cardLast4'
                    FROM transaction_observations o
                   WHERE o.transaction_id = t.id

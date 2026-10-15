@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
@@ -356,7 +357,7 @@ class _LoungeAbroadTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name} — ${benefit.label}',
+                  '${userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name} — ${humanizeIdentifier(benefit.label)}',
                   style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                 ),
                 Text(
@@ -417,7 +418,7 @@ class _TravelInsuranceSection extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name} — ${benefit.label}',
+                    '${userCard.nickname?.isNotEmpty == true ? userCard.nickname! : product.name} — ${humanizeIdentifier(benefit.label)}',
                     style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                   ),
                   if (benefit.description != null) ...[

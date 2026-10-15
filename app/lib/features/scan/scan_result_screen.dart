@@ -10,20 +10,23 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/merchant_search_repository.dart' show MerchantResolution;
 import '../../data/override_resolver.dart';
 import '../../data/scanned_merchant_category.dart';
 import '../../data/upi_payment_service.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
+import '../cards/card_visual.dart';
 import '../cards/card_picker_screen.dart';
 import '../comparison/comparison_view_screen.dart';
 import 'payment_sent_screen.dart';
 import 'upi_app_picker_sheet.dart';
 
-/// ui-spec B3. See Task 12's plan-doc header for three stated scope
-/// reductions: no automatic VPA->merchant crowdsource lookup, no silent
-/// background contribution write, and a local-only (not server-recorded)
-/// re-rank on "This card wasn't accepted".
+/// ui-spec B3. Merchant identity/category resolution is best-effort and
+/// exact-VPA based: published directory data may enrich a QR before payment,
+/// while the local MCC/name classifier remains the offline fallback. There is
+/// no silent background contribution write, and "This card wasn't accepted"
+/// remains a local-only (not server-recorded) re-rank.
 ///
 /// Ranking here is deliberately independent of Home's
 /// `selectedCategoryProvider`/`enteredAmountProvider` — this screen's
@@ -78,7 +81,11 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   @override
   void initState() {
     super.initState();
-    _merchantController = TextEditingController(text: widget.parsed.pn ?? '');
+    _merchantController = TextEditingController(
+      text: isGenericUpiProviderLabel(widget.parsed.pn)
+          ? ''
+          : (widget.parsed.pn ?? ''),
+    );
     final scannedAmount = widget.parsed.am;
     _amountController = TextEditingController(
       text: (scannedAmount != null && scannedAmount.rupees > 0)
@@ -121,6 +128,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final userCards = ref.watch(userCardsProvider);
     final overrides = ref.watch(cardOverridesProvider);
     final engine = ref.watch(recommendationEngineProvider);
+    final merchantResolution = ref.watch(
+      merchantResolutionProvider(widget.parsed.pa),
+    );
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -144,7 +154,14 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         ],
       ),
       body: AppBackground(
-        child: _buildBody(catalogue, categories, userCards, overrides, engine),
+        child: _buildBody(
+          catalogue,
+          categories,
+          userCards,
+          overrides,
+          engine,
+          merchantResolution,
+        ),
       ),
     );
   }
@@ -155,6 +172,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     AsyncValue<List<UserCard>> userCards,
     AsyncValue<List<CardOverride>> overrides,
     RecommendationEngine engine,
+    AsyncValue<MerchantResolution?> merchantResolution,
   ) {
     // ui-spec B3.4 P2P edge case. A QR with no merchant category code looks
     // like a personal transfer — but many small shops that only accept
@@ -166,9 +184,18 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     //
     // The notice fast-path stays for the no-wallet / still-loading case so
     // it renders without waiting on API calls it doesn't need.
-    final noMcc = widget.parsed.isLikelyP2P;
+    final resolvedMerchant = merchantResolution.valueOrNull;
+    // A trusted exact-VPA directory result may correct/enrich a broad MCC
+    // embedded in the QR (for example, a provider QR carrying 5999 while the
+    // directory knows the merchant is groceries). Keep widget.parsed.mc as
+    // the raw QR value, but use the verified value for ranking/classification.
+    final effectiveMcc = resolvedMerchant?.mcc ?? widget.parsed.mc;
+    final noMcc = widget.parsed.isLikelyP2P &&
+        (resolvedMerchant == null || resolvedMerchant.isP2p);
     final walletPeek = userCards.valueOrNull;
-    if (noMcc && (walletPeek == null || walletPeek.isEmpty)) {
+    if (noMcc &&
+        (walletPeek == null || walletPeek.isEmpty) &&
+        !merchantResolution.isLoading) {
       return _P2PNotice(vpa: widget.parsed.pa);
     }
 
@@ -191,13 +218,38 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final categoryList = categories.requireValue;
     final wallet = userCards.requireValue;
     final overrideList = overrides.requireValue;
-    final inferredCategoryId = categoryIdForScannedMerchant(
-      merchantName: _merchantController.text,
+    final typedMerchantName = _merchantController.text.trim();
+    final effectiveMerchantName = typedMerchantName.isEmpty
+        ? resolvedMerchant?.displayName
+        : typedMerchantName;
+    final resolvedCategoryId = categoryList
+        .where(
+          (c) =>
+              c.id == resolvedMerchant?.categoryId ||
+              c.slug == resolvedMerchant?.categorySlug,
+        )
+        .firstOrNull
+        ?.id;
+    final inferredCategoryId = resolvedCategoryId ??
+        categoryIdForScannedMerchant(
+          merchantName: effectiveMerchantName ?? '',
+          vpa: widget.parsed.pa,
+          mcc: effectiveMcc,
+          categories: categoryList,
+        );
+    final activeCategoryId = _selectedCategoryId ?? inferredCategoryId;
+
+    // Keep the local fallback available if a directory record has no mapped
+    // category yet. A published merchant name/MCC is still useful for ranking
+    // and for showing the verified merchant identity.
+    final localInferredCategoryId = categoryIdForScannedMerchant(
+      merchantName: effectiveMerchantName ?? '',
       vpa: widget.parsed.pa,
-      mcc: widget.parsed.mc,
+      mcc: effectiveMcc,
       categories: categoryList,
     );
-    final activeCategoryId = _selectedCategoryId ?? inferredCategoryId;
+    final selectedCategoryForRanking =
+        activeCategoryId ?? localInferredCategoryId;
 
     // ui-spec B1 says "No cards → CTA to add one". B3 has no rule of its own,
     // so: with an empty wallet still rank the whole catalogue (a useful
@@ -229,7 +281,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     final overrideProductId = resolveActiveOverrideCardProductId(
       overrides: overrideList,
       wallet: wallet,
-      categoryId: activeCategoryId,
+      categoryId: selectedCategoryForRanking,
       vpa: widget.parsed.pa,
     );
 
@@ -237,29 +289,28 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // merchant — a scanned UPI QR carries the payee name — so it is the
     // path where merchant-restricted rules ("10% at Amazon only") can
     // actually be honoured rather than falling through to the base rate.
-    final merchantName = widget.parsed.pn;
     final now = DateTime.now();
     final selectedCategorySlug = categoryList
-        .where((c) => c.id == activeCategoryId)
+        .where((c) => c.id == selectedCategoryForRanking)
         .firstOrNull
         ?.slug;
     final upiContext = RecommendationContext(
       amount: _amount,
-      categoryId: activeCategoryId,
+      categoryId: selectedCategoryForRanking,
       categorySlug: selectedCategorySlug,
-      mcc: widget.parsed.mc,
+      mcc: effectiveMcc,
       vpa: widget.parsed.pa,
-      merchantName: merchantName,
+      merchantName: effectiveMerchantName,
       rail: TxnRail.upiQr,
       now: now,
     );
     final swipeContext = RecommendationContext(
       amount: _amount,
-      categoryId: activeCategoryId,
+      categoryId: selectedCategoryForRanking,
       categorySlug: selectedCategorySlug,
-      mcc: widget.parsed.mc,
+      mcc: effectiveMcc,
       vpa: widget.parsed.pa,
-      merchantName: merchantName,
+      merchantName: effectiveMerchantName,
       rail: TxnRail.swipe,
       now: now,
     );
@@ -335,7 +386,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           controller: _merchantController,
           style: BambooFonts.ui(15, color: BambooInk.ink900),
           decoration: InputDecoration(
-            labelText: 'Merchant name',
+            labelText: 'Merchant name (optional)',
             labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
             filled: true,
             fillColor: BambooInk.glassFillOnPaper,
@@ -351,11 +402,34 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
             ),
+            hintText: 'Use the shop name if the QR did not include one',
+            helperText: 'The selected UPI app will verify ${widget.parsed.pa}',
+            helperStyle: BambooFonts.ui(11.5, color: BambooInk.ink500),
           ),
           // No onChanged/setState needed: _payWith reads _merchantController.text
           // directly at tap time, not from a build-time-captured value, so
           // typing here doesn't need to trigger a rebuild of anything else.
         ),
+        if (resolvedMerchant != null) ...[
+          const SizedBox(height: AppSpace.xs),
+          Row(
+            children: [
+              const Icon(
+                Icons.verified_rounded,
+                size: 16,
+                color: BambooInk.jade,
+              ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  'Verified merchant: ${resolvedMerchant.displayName ?? widget.parsed.pa}'
+                  '${resolvedMerchant.categoryName == null ? '' : ' · ${resolvedMerchant.categoryName}'}',
+                  style: BambooFonts.ui(11.5, color: BambooInk.jade),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: AppSpace.sm),
         // MCC is the strongest signal. When it is absent, the same resolver
         // uses the QR merchant name and then a meaningful VPA prefix. The
@@ -527,21 +601,26 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       if (ok != true || !mounted) return;
     }
 
-    final merchant = _merchantController.text.trim();
     final service = ref.read(upiPaymentServiceProvider);
     final uriString = buildUpiPayUri(
       pa: widget.parsed.pa,
-      pn: merchant.isEmpty ? widget.parsed.pn : merchant,
+      // Preserve the QR's original payee name for the PSP handoff. PandaPay
+      // may show a richer locally detected merchant name in its own UI, but
+      // must not replace the QR's payee field before PSP validation.
+      pn: widget.parsed.pn,
       am: _amount,
-      // Carry the scanned merchant fields through so a verified-merchant QR
-      // isn't downgraded to an "unverified payee" prompt; synth a `tr` when
-      // the QR didn't carry an order reference of its own.
+      cu: widget.parsed.cu,
+      // Carry only the merchant fields that were actually present in the QR.
+      // For a static QR without `tr`, the selected PSP app is the component
+      // required to create the payment reference; PandaPay must not invent a
+      // merchant order id that the receiver bank has never issued.
       mc: widget.parsed.mc,
-      tr: widget.parsed.tr ?? service.newTransactionRef(),
+      tr: widget.parsed.tr,
       tn: widget.parsed.tn,
       mode: widget.parsed.mode,
       orgid: widget.parsed.orgid,
       sign: widget.parsed.sign,
+      extraParams: widget.parsed.extraParams,
     );
 
     final apps = await service.installedApps();
@@ -596,11 +675,16 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         );
         break;
       case UpiPaymentStatus.failure:
+        final responseCode = _upiResponseField(
+          result.rawResponse,
+          'responsecode',
+        );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Payment failed in ${chosen.name}. Try another UPI app, or a different card.',
+              'The receiver bank declined this payment${responseCode == null ? '' : ' (code $responseCode)'}. Try another UPI app or bank account; no spend was logged in PandaPay.',
             ),
+            duration: const Duration(seconds: 5),
           ),
         );
         break;
@@ -621,7 +705,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     String uriString,
   ) async {
     final uri = Uri.parse(uriString);
-    final launched = await canLaunchUrl(uri) && await launchUrl(uri);
+    final launched =
+        await canLaunchUrl(uri) &&
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!mounted) return;
     if (!launched) {
       // ui-spec B3 edge case: no UPI app installed -> recommendation-only
@@ -658,13 +744,23 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PaymentSentScreen(
-          merchantName: _merchantController.text.trim(),
+          merchantName: _merchantController.text.trim().isNotEmpty
+              ? _merchantController.text.trim()
+              : (ref
+                        .read(merchantResolutionProvider(widget.parsed.pa))
+                        .valueOrNull
+                        ?.displayName ??
+                    ''),
           amount: _amount,
           cardName: rec.card.name,
           userCardId: owned?.id,
           categoryId: categoryId,
           merchantVpa: widget.parsed.pa,
-          mcc: widget.parsed.mc,
+          mcc: widget.parsed.mc ??
+              ref
+                  .read(merchantResolutionProvider(widget.parsed.pa))
+                  .valueOrNull
+                  ?.mcc,
           expectedValue: rec.expectedValue,
           confidence: rec.confidence,
           // Plan Phase 2.1: both needed for the acceptance report that
@@ -768,6 +864,19 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   }
 }
 
+String? _upiResponseField(String? raw, String wantedKey) {
+  if (raw == null || raw.isEmpty) return null;
+  for (final part in raw.split('&')) {
+    final separator = part.indexOf('=');
+    if (separator <= 0) continue;
+    if (part.substring(0, separator).trim().toLowerCase() == wantedKey) {
+      final value = part.substring(separator + 1).trim();
+      return value.isEmpty ? null : value;
+    }
+  }
+  return null;
+}
+
 class _CategoryPicker extends StatelessWidget {
   final List<SpendCategory> categories;
   final String? selectedId;
@@ -780,28 +889,49 @@ class _CategoryPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpace.xs,
-      runSpacing: AppSpace.xs,
-      children: [
-        for (final c in categories)
-          ChoiceChip(
-            label: Text(c.name),
-            labelStyle: BambooFonts.ui(
-              13,
-              weight: FontWeight.w600,
-              color: selectedId == c.id ? BambooInk.onSlate : BambooInk.ink900,
-            ),
-            selected: selectedId == c.id,
-            selectedColor: BambooInk.slate,
-            backgroundColor: BambooInk.paperMuted,
-            side: BorderSide.none,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-            ),
-            onSelected: (_) => onSelected(c.id),
+    final validSelectedId =
+        categories.any((category) => category.id == selectedId)
+        ? selectedId
+        : null;
+
+    return DropdownButtonFormField<String>(
+      initialValue: validSelectedId,
+      isExpanded: true,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      style: BambooFonts.ui(
+        14,
+        weight: FontWeight.w600,
+        color: BambooInk.ink900,
+      ),
+      decoration: InputDecoration(
+        labelText: 'Purchase type',
+        labelStyle: BambooFonts.ui(12.5, color: BambooInk.ink500),
+        prefixIcon: const Icon(Icons.category_outlined, size: 20),
+        filled: true,
+        fillColor: BambooInk.glassFillOnPaper,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+        ),
+      ),
+      hint: const Text('Choose a category'),
+      items: [
+        for (final category in categories)
+          DropdownMenuItem<String>(
+            value: category.id,
+            child: Text(category.name, overflow: TextOverflow.ellipsis),
           ),
       ],
+      onChanged: onSelected,
     );
   }
 }
@@ -868,13 +998,16 @@ class _ScanResultCard extends StatelessWidget {
     final excluded = recommendation.isExcluded;
     final hero = isHero && !excluded;
     return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
+      padding: const EdgeInsets.all(AppSpace.md),
       decoration: BoxDecoration(
         color: hero
             ? BambooInk.lime
             : (excluded ? BambooInk.paperMuted : BambooInk.glassFillOnPaper),
         borderRadius: BorderRadius.circular(24),
-        border: hero ? null : Border.all(color: BambooInk.hairlineOnPaper),
+        border: Border.all(
+          color: hero ? BambooInk.lime : BambooInk.hairlineOnPaper,
+          width: hero ? 2 : 1,
+        ),
         boxShadow: hero
             ? [
                 BoxShadow(
@@ -888,6 +1021,14 @@ class _ScanResultCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
+            child: CardVisual(
+              product: recommendation.card,
+              height: hero ? 142 : 116,
+              showProductName: false,
+            ),
+          ),
           Row(
             children: [
               if (hero) ...[
@@ -901,7 +1042,7 @@ class _ScanResultCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    'TAP THIS ONE',
+                    'BEST PICK',
                     style: BambooFonts.ui(
                       10.5,
                       weight: FontWeight.w700,
@@ -968,7 +1109,7 @@ class _ScanResultCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      'RuPay credit card — pays through any UPI app',
+                      'RuPay · UPI eligible',
                       style: BambooFonts.ui(
                         11.5,
                         weight: FontWeight.w600,

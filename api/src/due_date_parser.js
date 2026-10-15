@@ -22,7 +22,10 @@ const MONTHS = {
   dec: 12, december: 12,
 };
 
-const DATE_TOKEN = String.raw`(?:\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{2,4})`;
+// Issuers use all of these in otherwise equivalent alerts: 16/10/26,
+// 16-Oct-26, 16 October 2026, and Oct 16, 2026. Keep the token strict
+// enough that an ordinary transaction date cannot be mistaken for a due date.
+const DATE_TOKEN = String.raw`(?:\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}(?:st|nd|rd|th)?[\s./-]+[A-Za-z]{3,9}[,\s./-]+\d{2,4}|[A-Za-z]{3,9}[\s./-]+\d{1,2}(?:st|nd|rd|th)?[,]?[\s./-]+\d{2,4})`;
 
 function validDate(year, month, day) {
   const normalizedYear = year < 100 ? year + 2000 : year;
@@ -43,14 +46,14 @@ function parseDateToken(token) {
     return date ? { date, day: date.getDate() } : null;
   }
 
-  match = text.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{2,4})$/);
+  match = text.match(/^(\d{1,2})(?:st|nd|rd|th)?[\s./-]+([A-Za-z]{3,9})[,\s./-]+(\d{2,4})$/i);
   if (match) {
     const month = MONTHS[match[2].toLowerCase()];
     const date = month ? validDate(Number(match[3]), month, Number(match[1])) : null;
     return date ? { date, day: date.getDate() } : null;
   }
 
-  match = text.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})$/);
+  match = text.match(/^([A-Za-z]{3,9})[\s./-]+(\d{1,2})(?:st|nd|rd|th)?[,]?[\s./-]+(\d{2,4})$/i);
   if (match) {
     const month = MONTHS[match[1].toLowerCase()];
     const date = month ? validDate(Number(match[3]), month, Number(match[2])) : null;

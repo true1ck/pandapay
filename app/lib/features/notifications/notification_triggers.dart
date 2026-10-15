@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../../app/design/display_text.dart';
 import '../../app/providers.dart';
 import '../insights/payments_due_screen.dart' show paymentsDueProvider;
 
@@ -139,8 +140,8 @@ class NotificationTriggerRunner {
         await gate.fire(
           category: 'milestones',
           title: completed
-              ? '"${milestone.label}" milestone completed on $name'
-              : '"${milestone.label}" is close on $name',
+              ? '"${humanizeIdentifier(milestone.label)}" milestone completed on $name'
+              : '"${humanizeIdentifier(milestone.label)}" is close on $name',
           body: completed
               ? 'You\'ve unlocked ${milestone.rewardValue.format()}.'
               : '${(ratio * 100).round()}% of the way to ${milestone.rewardValue.format()} on $name.',

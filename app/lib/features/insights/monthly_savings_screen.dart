@@ -571,14 +571,7 @@ class _RewardCategoryBreakdown extends StatefulWidget {
 class _RewardCategoryBreakdownState extends State<_RewardCategoryBreakdown> {
   bool _expanded = false;
 
-  static const _chartColors = [
-    BambooInk.slate,
-    BambooInk.jade,
-    Color(0xffd98634),
-    Color(0xff8d75b8),
-    Color(0xff4d9aa3),
-    BambooInk.ink300,
-  ];
+  static const _chartColors = BambooChartColors.categorical;
 
   @override
   Widget build(BuildContext context) {
@@ -601,7 +594,7 @@ class _RewardCategoryBreakdownState extends State<_RewardCategoryBreakdown> {
               children: [
                 _RewardIconBadge(
                   icon: Icons.pie_chart_rounded,
-                  accent: BambooInk.jade,
+                  accent: BambooChartColors.teal,
                 ),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
@@ -915,7 +908,11 @@ class _RewardStatRow extends StatelessWidget {
         Expanded(
           child: Row(
             children: [
-              _RewardIconBadge(icon: icon, accent: BambooInk.jade, size: 30),
+              _RewardIconBadge(
+                icon: icon,
+                accent: BambooChartColors.teal,
+                size: 30,
+              ),
               const SizedBox(width: AppSpace.sm),
               Expanded(
                 child: Text(

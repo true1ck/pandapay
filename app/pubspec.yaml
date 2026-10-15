@@ -84,6 +84,10 @@ dependencies:
   telephony:
     path: third_party/telephony
   permission_handler: ^11.3.1
+  # Voice capture is intentionally only an input layer. Parsed actions are
+  # shown as an editable draft before they use the existing transaction or
+  # points-ledger paths.
+  speech_to_text: ^7.0.0
 
   # UA-8 (Chunk 32, extended): geofencing + home-screen widget. `geolocator`
   # drives both the original foreground-triggered one-shot "check nearby

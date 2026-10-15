@@ -10,6 +10,9 @@ String? categorySlugForUpiMcc(String? rawMcc) {
   final mcc = int.tryParse(rawMcc ?? '');
   if (mcc == null) return null;
 
+  // Do not map broad retail MCCs such as 5999 to a product category. The
+  // acquiring bank's code is retained on ParsedUpiQr, while a trusted exact
+  // VPA/provider result may supply the more specific display category later.
   return switch (mcc) {
     5541 || 5542 => 'fuel',
     5411 || 5422 || 5441 || 5451 || 5462 || 5499 => 'groceries',
@@ -68,8 +71,7 @@ String? categorySlugForUpiMcc(String? rawMcc) {
     5946 ||
     5947 ||
     5948 ||
-    5949 ||
-    5999 => 'online',
+    5949 => 'online',
     _ => null,
   };
 }

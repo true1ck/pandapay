@@ -244,6 +244,11 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
             weight: FontWeight.w700,
           ),
         ),
+        const SizedBox(height: AppSpace.xs),
+        Text(
+          'Choose one option, then add the value currently shown and the correction below.',
+          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+        ),
         const SizedBox(height: AppSpace.sm),
         Container(
           decoration: BoxDecoration(

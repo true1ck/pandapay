@@ -38,10 +38,28 @@ if [ -z "$ENV_NAME" ]; then
 fi
 shift
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ "$ENV_NAME" = "prod" ] && [ ! -f "$REPO_ROOT/app/android/key.properties" ]; then
+  echo "Production builds require app/android/key.properties; refusing to use the Android debug signing key." >&2
+  exit 1
+fi
+
 BUILD_TARGET="apk"
 if [ "${1:-}" = "apk" ] || [ "${1:-}" = "appbundle" ]; then
   BUILD_TARGET="$1"
   shift
+fi
+
+if [ "$ENV_NAME" = "prod" ] && [ "$BUILD_TARGET" = "apk" ]; then
+  case " $* " in
+    *" --split-per-abi "*) ;;
+    *) echo "Production phone APKs require --split-per-abi; build an app bundle separately for Play Console delivery." >&2; exit 1 ;;
+  esac
+  case " $* " in
+    *" --build-number="[1-9][0-9]*"*) ;;
+    *) echo "Production builds require an explicit --build-number so an older APK cannot be shared by mistake." >&2; exit 1 ;;
+  esac
 fi
 
 case "$ENV_NAME" in
@@ -73,7 +91,6 @@ case "$ENV_NAME" in
     ;;
 esac
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT/app"
 
 echo "==> Building $FLAVOR flavor ($BUILD_TARGET) against:"
