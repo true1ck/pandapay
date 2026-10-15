@@ -1902,7 +1902,9 @@ final merchantSearchRepositoryProvider = Provider<MerchantSearchRepository>((
 final merchantResolutionProvider =
     FutureProvider.family<MerchantResolution?, String>((ref, vpa) async {
       try {
-        return await ref.watch(merchantSearchRepositoryProvider).resolveVpa(vpa);
+        return await ref
+            .watch(merchantSearchRepositoryProvider)
+            .resolveVpa(vpa);
       } catch (_) {
         return null;
       }
@@ -1993,6 +1995,22 @@ Future<ResponseCache?> _cacheOrNull(Ref ref) async {
   }
 }
 
+Future<void> _clearUserCardsCacheValues(
+  ResponseCache? cache,
+  String namespace,
+) async {
+  if (cache == null) return;
+  await Future.wait([
+    cache.clear('$namespace:$_userCardsCacheKey'),
+    cache.clear('$namespace:$_userCardsWithArchivedCacheKey'),
+  ]);
+}
+
+Future<void> _clearUserCardsCacheForRef(Ref ref) async {
+  final cache = await _cacheOrNull(ref);
+  await _clearUserCardsCacheValues(cache, ref.read(cacheNamespaceProvider));
+}
+
 /// Clears authenticated wallet snapshots after a card mutation.
 ///
 /// Wallet reads are intentionally cache-first so Home can render quickly on
@@ -2006,12 +2024,7 @@ Future<void> clearUserCardsCache(WidgetRef ref) async {
   } catch (_) {
     return;
   }
-  if (cache == null) return;
-  final namespace = ref.read(cacheNamespaceProvider);
-  await Future.wait([
-    cache.clear('$namespace:$_userCardsCacheKey'),
-    cache.clear('$namespace:$_userCardsWithArchivedCacheKey'),
-  ]);
+  await _clearUserCardsCacheValues(cache, ref.read(cacheNamespaceProvider));
 }
 
 Future<CachedResponse?> _readCacheOrNull(
@@ -2635,6 +2648,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       // Refresh Spending immediately after a queue upload. If a later inbox
       // reconciliation request times out, an open report must not stay stale.
       if (handled > 0 || dueDayUpdated) {
+        if (dueDayUpdated) await _clearUserCardsCacheForRef(ref);
         ref.invalidate(userCardsProvider);
         ref.invalidate(myCardsProvider);
         ref.invalidate(transactionsProvider);
@@ -2685,6 +2699,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       }
     }
     if (changed || dueDayUpdated) {
+      if (dueDayUpdated) await _clearUserCardsCacheForRef(ref);
       ref.invalidate(needsReviewItemsProvider);
       ref.invalidate(needsReviewCountProvider);
       ref.invalidate(userCardsProvider);
@@ -3023,6 +3038,7 @@ class SmsAutoImportController {
     // find messages the server already knows; that is not a data change and
     // must not trigger a full-screen refresh.
     if (imported > 0 || needsReview > 0 || dueDatesUpdated > 0) {
+      if (dueDatesUpdated > 0) await _clearUserCardsCacheForRef(_ref);
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(myCardsProvider);
       _ref.invalidate(transactionsProvider);
@@ -3074,6 +3090,9 @@ class SmsAutoImportController {
             );
         _ref.invalidate(needsReviewItemsProvider);
         _ref.invalidate(needsReviewCountProvider);
+      }
+      if (result.dueDayUpdated) {
+        await _clearUserCardsCacheForRef(_ref);
       }
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(myCardsProvider);

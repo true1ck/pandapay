@@ -24,6 +24,20 @@ test('supports issuer hyphenated and ordinal date formats', () => {
   assert.equal(extractDueDate('Payment due on Oct 16, 2026.').day, 16);
 });
 
+test('supports Axis statement wording with a colon after due on', () => {
+  const body = [
+    'Your statement for Axis Bank Credit Card no. XX7105 is generated.',
+    'Due on: 02-11-26',
+    'Total amt: INR Dr. 2147.00',
+    'Min amt due: INR Dr. 100.00',
+  ].join(' ');
+  const result = extractDueDate(body);
+  assert.equal(result.day, 2);
+  assert.equal(result.date.getMonth(), 10);
+  assert.equal(result.date.getFullYear(), 2026);
+  assert.equal(extractLast4(body), '7105');
+});
+
 test('extracts a due date from a pay-by instruction', () => {
   const result = extractDueDate(
     'Please pay the minimum amount of Rs. 500 by 16/10/2026 to avoid late fees.',

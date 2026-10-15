@@ -1,7 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { resolveUserCardForImport, resolveCategoryForImport } = require('../src/import_resolvers');
+const {
+  resolveUserCardForImport,
+  resolveCategoryForImport,
+  syncDueDayFromSms,
+} = require('../src/import_resolvers');
 
 function fakeClient(rowsByCall) {
   const calls = [];
@@ -64,6 +68,33 @@ test('issuer-only matching also filters by physical card type', async () => {
 
   assert.deepEqual(result, { userCardId: 'credit-hdfc', basis: 'sole-card-for-issuer' });
   assert.deepEqual(client.calls[0].params, ['user-1', 'issuer-hdfc', 'credit']);
+});
+
+test('syncs the due day from an Axis statement to the matched active card', async () => {
+  const body = [
+    'Your statement for Axis Bank Credit Card no. XX7105 is generated.',
+    'Due on: 02-11-26',
+    'Total amt: INR Dr. 2147.00',
+    'Min amt due: INR Dr. 100.00',
+  ].join(' ');
+  const client = fakeClient([[{ id: 'axis-7105' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    if (client.calls.length === 1) return { rows: [{ id: 'axis-7105' }] };
+    return { rows: [{ id: 'axis-7105' }], rowCount: 1 };
+  };
+
+  const result = await syncDueDayFromSms(client, 'user-1', {
+    body,
+    patternIssuerId: null,
+  });
+
+  assert.equal(result.updated, true);
+  assert.equal(result.detected.day, 2);
+  assert.equal(result.userCardId, 'axis-7105');
+  assert.equal(client.calls.length, 2);
+  assert.deepEqual(client.calls[1].params, [2, 'axis-7105', 'user-1']);
+  assert.match(client.calls[1].sql, /SET due_day = \$1/);
 });
 
 test('category fallback recognises a fuel-station merchant when no rule exists', async () => {

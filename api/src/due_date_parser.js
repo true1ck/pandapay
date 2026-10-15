@@ -68,7 +68,9 @@ function extractDueDate(body) {
   if (!text) return null;
 
   const patterns = [
-    new RegExp(`\\b(?:payment|amount|minimum|bill|total)?\\s*(?:is\\s+)?due\\s*(?:date\\s*)?(?:is|on|by|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
+    // Keep punctuation separate from the connector so issuer formats such as
+    // "Due on: 02-11-26" and "Due by - 02/11/2026" are both accepted.
+    new RegExp(`\\b(?:payment|amount|minimum|bill|total)?\\s*(?:is\\s+)?due\\s*(?:date\\s*)?(?:is|on|by)?\\s*[:\\-]?\\s*(${DATE_TOKEN})`, 'i'),
     // Many issuers do not use the words "due date". They instruct the
     // customer to pay/keep/arrange the amount by a date instead. Restrict
     // this to payment-intent verbs so an ordinary transaction date cannot be
