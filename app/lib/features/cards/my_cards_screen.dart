@@ -661,16 +661,17 @@ class _NearestCapBar extends StatelessWidget {
         worst = cap;
       }
     }
-    if (worst == null) return const SizedBox.shrink();
+    final selectedWorst = worst;
+    if (selectedWorst == null) return const SizedBox.shrink();
     final categoryName = categories
-        .where((category) => category.id == worst.categoryId)
+        .where((category) => category.id == selectedWorst.categoryId)
         .map((category) => category.name)
         .firstOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          capRuleDisplayLabel(worst!, categoryName: categoryName),
+          capRuleDisplayLabel(selectedWorst, categoryName: categoryName),
           style: BambooFonts.ui(12.5, color: BambooInk.ink500),
         ),
         const SizedBox(height: 5),
