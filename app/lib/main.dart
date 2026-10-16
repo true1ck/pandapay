@@ -187,7 +187,7 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     }
   }
 
-  void _openAssistantUri(String raw) {
+  Future<void> _openAssistantUri(String raw) async {
     final uri = Uri.tryParse(raw);
     if (!mounted ||
         uri == null ||
@@ -196,6 +196,27 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
         uri.path != '/spending') {
       return;
     }
+
+    // The router starts at /splash while the secure session and onboarding
+    // flag are restored. Navigating immediately would be redirected to the
+    // splash and then to Home, losing the assistant request. Wait only for
+    // these local reads; the normal router/API flow remains responsible for
+    // authentication and the report itself.
+    try {
+      await ref.read(sessionInitProvider.future);
+      // onboardingCompleteProvider is a StateNotifierProvider rather than a
+      // FutureProvider, so wait for its small SharedPreferences read without
+      // introducing a second source of truth for the flag.
+      for (var attempt = 0; attempt < 100; attempt += 1) {
+        if (!mounted || !ref.read(onboardingCompleteProvider).isLoading) break;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    } catch (_) {
+      // A failed local restore must not crash the app. The router will apply
+      // its normal signed-out/onboarding guard below.
+    }
+    if (!mounted) return;
+
     final requestedPeriod = uri.queryParameters['period'];
     final period = SpendPeriod.values.firstWhere(
       (candidate) => candidate.wireValue == requestedPeriod,

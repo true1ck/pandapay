@@ -76,6 +76,13 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Assistant links are delivered through MainActivity's typed
+                 MethodChannel. Disable Flutter's generic deep-link parser so
+                 a warm singleTop intent cannot push the raw pandapay:// URI
+                 into GoRouter before the app validates and handles it. -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
