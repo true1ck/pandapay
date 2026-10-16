@@ -82,7 +82,7 @@ void main() {
       catalogue: catalogue,
     );
 
-    expect(result, hasLength(2));
+    expect(result, hasLength(3));
   });
 
   test('keeps an issuer-less suffix because its issuer is unknown', () {
@@ -92,7 +92,7 @@ void main() {
       catalogue: catalogue,
     );
 
-    expect(result, hasLength(1));
+    expect(result, hasLength(2));
   });
 
   test(
@@ -166,5 +166,35 @@ void main() {
     expect(result, hasLength(1));
     expect(result.single.isAlreadyOwned, isTrue);
     expect(result.single.name, 'Flipkart Axis Bank Credit Card');
+  });
+
+  test('adds a known wallet card when the current scan omitted its match', () {
+    const flipkart = CardProduct(
+      id: 'axis-flipkart',
+      name: 'Flipkart Axis Bank Credit Card',
+      issuerName: 'Axis Bank',
+      cardType: 'credit',
+      network: CardNetwork.mastercard,
+    );
+    final result = filterOwnedCardSuggestions(
+      suggestions: const [],
+      ownedCards: [
+        UserCard(
+          id: 'user-axis-flipkart',
+          cardProductId: 'axis-flipkart',
+          cardName: 'Flipkart Axis Bank Credit Card',
+          cardType: 'credit',
+          isDefault: false,
+          last4: '7105',
+        ),
+      ],
+      catalogue: const [flipkart],
+    );
+
+    expect(result, hasLength(1));
+    expect(result.single.name, 'Flipkart Axis Bank Credit Card');
+    expect(result.single.last4, ['7105']);
+    expect(result.single.sources, ['wallet']);
+    expect(result.single.isAlreadyOwned, isTrue);
   });
 }

@@ -705,11 +705,28 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, AppSpace.md, 20, 30),
       children: [
-        Text(
-          'We read ${_scannedSummary(result)} and think you carry '
-          '${result.suggestions.length} '
-          'of these. Add the ones you actually have.',
-          style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.5),
+        Builder(
+          builder: (context) {
+            final knownWalletCount = result.suggestions
+                .where((suggestion) => suggestion.sources.contains('wallet'))
+                .length;
+            final scannedCount = result.suggestions.length - knownWalletCount;
+            final copy = knownWalletCount == 0
+                ? 'We read ${_scannedSummary(result)} and think you carry '
+                      '$scannedCount of these. Add the ones you actually have.'
+                : 'We read ${_scannedSummary(result)} and found '
+                      '$scannedCount matches. Your $knownWalletCount '
+                      'wallet card${knownWalletCount == 1 ? '' : 's'} '
+                      'is shown below as added.';
+            return Text(
+              copy,
+              style: BambooFonts.ui(
+                13.5,
+                color: BambooInk.ink500,
+                height: 1.5,
+              ),
+            );
+          },
         ),
         if (!_isAndroid) ...[
           const SizedBox(height: AppSpace.sm),
@@ -900,7 +917,9 @@ class _SuggestionCardState extends State<_SuggestionCard> {
           // The evidence line is the point of this screen: it lets someone
           // spot a wrong suggestion instead of trusting a bare list.
           Text(
-            card.isPlaceholder
+            card.sources.contains('wallet')
+                ? 'Already in your wallet'
+                : card.isPlaceholder
                 ? 'We found the masked card number in $sources, but the bank message did not name the exact card.'
                 : 'Matched in $sources — ${card.evidence.take(3).join(', ')}',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.45),
