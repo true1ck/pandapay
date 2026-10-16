@@ -249,6 +249,8 @@ test('card breakdown labels unmatched UPI and card rows instead of calling every
   const client = {
     query: async (sql, params) => {
       assert.match(sql, /t\.instrument/);
+      assert.match(sql, /unique_replacement_cards/);
+      assert.match(sql, /COALESCE\(replacement\.active_card_id, t\.user_card_id\)/);
       assert.deepEqual(params, ['user-1', 'start', 'end']);
       return {
         rows: [
@@ -277,6 +279,8 @@ test('card/category breakdown preserves payment method and category together', a
     query: async (sql, params) => {
       assert.match(sql, /sc\.name/);
       assert.match(sql, /t\.instrument/);
+      assert.match(sql, /unique_replacement_cards/);
+      assert.match(sql, /COALESCE\(replacement\.active_card_id, t\.user_card_id\)/);
       assert.deepEqual(params, ['user-1', 'start', 'end']);
       return {
         rows: [

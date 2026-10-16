@@ -274,8 +274,30 @@ async function spendByMerchant(client, userId, { start, end }, limit = 15) {
  */
 async function spendByCard(client, userId, { start, end }) {
   const result = await client.query(
-    `WITH transaction_rows AS (
-       SELECT t.user_card_id,
+    `WITH active_replacement_cards AS (
+       SELECT archived.id AS archived_card_id, active.id AS active_card_id
+         FROM user_cards archived
+         JOIN card_products archived_product ON archived_product.id = archived.card_product_id
+         JOIN user_cards active
+           ON active.profile_id = archived.profile_id
+          AND active.is_archived = false
+          AND active.last4 IS NOT NULL
+          AND active.last4 = archived.last4
+         JOIN card_products active_product ON active_product.id = active.card_product_id
+        WHERE archived.profile_id = $1
+          AND archived.is_archived = true
+          AND archived.last4 IS NOT NULL
+          AND archived_product.issuer_id = active_product.issuer_id
+          AND archived_product.card_type = active_product.card_type
+        GROUP BY archived.id, active.id
+     ), unique_replacement_cards AS (
+       SELECT archived_card_id,
+              (ARRAY_AGG(active_card_id ORDER BY active_card_id))[1] AS active_card_id
+         FROM active_replacement_cards
+        GROUP BY archived_card_id
+       HAVING COUNT(*) = 1
+     ), transaction_rows AS (
+       SELECT COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
               t.instrument,
               cp.name AS card_name, uc.nickname AS card_nickname,
               COALESCE(uc.annual_fee_override_inr, cp.annual_fee_inr) AS annual_fee_inr,
@@ -296,7 +318,10 @@ async function spendByCard(client, userId, { start, end }) {
                   LIMIT 1)
               END AS card_last4
          FROM transactions t
-         LEFT JOIN user_cards uc ON uc.id = t.user_card_id
+         LEFT JOIN unique_replacement_cards replacement
+           ON replacement.archived_card_id = t.user_card_id
+         LEFT JOIN user_cards uc
+           ON uc.id = COALESCE(replacement.active_card_id, t.user_card_id)
          LEFT JOIN card_products cp ON cp.id = uc.card_product_id
         WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
           AND t.amount_inr > 0
@@ -365,8 +390,30 @@ async function spendByInstrument(client, userId, { start, end }) {
 /** Spend split by the resolved card/payment method and category together. */
 async function spendByCardCategory(client, userId, { start, end }) {
   const result = await client.query(
-    `WITH transaction_rows AS (
-       SELECT t.user_card_id,
+    `WITH active_replacement_cards AS (
+       SELECT archived.id AS archived_card_id, active.id AS active_card_id
+         FROM user_cards archived
+         JOIN card_products archived_product ON archived_product.id = archived.card_product_id
+         JOIN user_cards active
+           ON active.profile_id = archived.profile_id
+          AND active.is_archived = false
+          AND active.last4 IS NOT NULL
+          AND active.last4 = archived.last4
+         JOIN card_products active_product ON active_product.id = active.card_product_id
+        WHERE archived.profile_id = $1
+          AND archived.is_archived = true
+          AND archived.last4 IS NOT NULL
+          AND archived_product.issuer_id = active_product.issuer_id
+          AND archived_product.card_type = active_product.card_type
+        GROUP BY archived.id, active.id
+     ), unique_replacement_cards AS (
+       SELECT archived_card_id,
+              (ARRAY_AGG(active_card_id ORDER BY active_card_id))[1] AS active_card_id
+         FROM active_replacement_cards
+        GROUP BY archived_card_id
+       HAVING COUNT(*) = 1
+     ), transaction_rows AS (
+       SELECT COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
               t.instrument,
               cp.name AS card_name, uc.nickname AS card_nickname,
               sc.id AS category_id, sc.name AS category_name,
@@ -387,7 +434,10 @@ async function spendByCardCategory(client, userId, { start, end }) {
                   LIMIT 1)
               END AS card_last4
          FROM transactions t
-         LEFT JOIN user_cards uc ON uc.id = t.user_card_id
+         LEFT JOIN unique_replacement_cards replacement
+           ON replacement.archived_card_id = t.user_card_id
+         LEFT JOIN user_cards uc
+           ON uc.id = COALESCE(replacement.active_card_id, t.user_card_id)
          LEFT JOIN card_products cp ON cp.id = uc.card_product_id
          LEFT JOIN spend_categories sc ON sc.id = t.category_id
         WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
