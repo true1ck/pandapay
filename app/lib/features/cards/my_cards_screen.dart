@@ -416,6 +416,7 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                       const SizedBox(width: AppSpace.sm),
                       _CardActionButton(
                         icon: Icons.receipt_long_rounded,
+                        loading: false,
                         tooltip: 'Review and log a spend on this card',
                         onPressed: _openSpendLogger,
                       ),
@@ -662,7 +663,7 @@ class _NearestCapBar extends StatelessWidget {
     }
     if (worst == null) return const SizedBox.shrink();
     final categoryName = categories
-        .where((category) => category.id == worst!.categoryId)
+        .where((category) => category.id == worst.categoryId)
         .map((category) => category.name)
         .firstOrNull;
     return Column(

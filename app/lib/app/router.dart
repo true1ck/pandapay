@@ -66,7 +66,6 @@ import '../features/voice/voice_input_sheet.dart';
 import '../features/quickadd/quick_add_screen.dart';
 import '../features/geofence/nearby_merchants_screen.dart';
 import '../features/cards/find_cards_screen.dart';
-import '../features/scan/upi_qr_scanner_screen.dart';
 import 'assistant_action.dart';
 import 'providers.dart';
 import 'tutorial_keys.dart';

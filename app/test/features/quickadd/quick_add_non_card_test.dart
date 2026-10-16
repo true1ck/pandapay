@@ -19,6 +19,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _EmptyMerchantSearchRepository implements MerchantSearchRepository {
   @override
   Future<List<NearbyMerchantCandidate>> search(String query) async => const [];
+
+  @override
+  Future<MerchantResolution?> resolveVpa(String vpa) async => null;
 }
 
 class _RecordingUserCardsRepository extends UserCardsRepository {

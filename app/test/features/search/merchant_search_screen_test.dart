@@ -27,6 +27,9 @@ class _FakeMerchantSearchRepository implements MerchantSearchRepository {
   Future<List<NearbyMerchantCandidate>> search(String query) async {
     return results[query] ?? const [];
   }
+
+  @override
+  Future<MerchantResolution?> resolveVpa(String vpa) async => null;
 }
 
 class _ThrowingMerchantSearchRepository implements MerchantSearchRepository {
@@ -34,6 +37,9 @@ class _ThrowingMerchantSearchRepository implements MerchantSearchRepository {
   Future<List<NearbyMerchantCandidate>> search(String query) async {
     throw ApiException('GET /merchants/search failed: 500 {}');
   }
+
+  @override
+  Future<MerchantResolution?> resolveVpa(String vpa) async => null;
 }
 
 void main() {

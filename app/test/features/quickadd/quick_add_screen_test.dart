@@ -18,11 +18,17 @@ class _FakeMerchantSearchRepository implements MerchantSearchRepository {
 
   @override
   Future<List<NearbyMerchantCandidate>> search(String query) async => results[query] ?? const [];
+
+  @override
+  Future<MerchantResolution?> resolveVpa(String vpa) async => null;
 }
 
 class _EmptyMerchantSearchRepository implements MerchantSearchRepository {
   @override
   Future<List<NearbyMerchantCandidate>> search(String query) async => const [];
+
+  @override
+  Future<MerchantResolution?> resolveVpa(String vpa) async => null;
 }
 
 class _ThrowingMerchantSearchRepository implements MerchantSearchRepository {
@@ -30,6 +36,9 @@ class _ThrowingMerchantSearchRepository implements MerchantSearchRepository {
   Future<List<NearbyMerchantCandidate>> search(String query) async {
     throw ApiException('GET /merchants/search failed: 500 {}');
   }
+
+  @override
+  Future<MerchantResolution?> resolveVpa(String vpa) async => null;
 }
 
 /// In-memory stand-in for UserCardsRepository.logTransaction so the
