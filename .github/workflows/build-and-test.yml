@@ -85,7 +85,23 @@ jobs:
           # Errors and warnings remain build-blocking. Informational analyzer
           # hints vary across stable Flutter releases and must not prevent a
           # production deployment when the source has no actionable issue.
-          flutter analyze
+          set -o pipefail
+          flutter analyze --format machine 2>&1 | tee /tmp/pandapay-flutter-analyze.log
+          analyze_status=${PIPESTATUS[0]}
+          if [ "$analyze_status" -ne 0 ]; then
+            python3 - <<'PY'
+          import pathlib
+
+          for raw in pathlib.Path('/tmp/pandapay-flutter-analyze.log').read_text().splitlines():
+              fields = raw.split('|', 7)
+              if len(fields) != 8 or fields[0] not in {'ERROR', 'WARNING'}:
+                  continue
+              level, code, _kind, path, line, column, _length, message = fields
+              message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print(f'::{"error" if level == "ERROR" else "warning"} file={path},line={line},col={column},title={code}::{message}')
+          PY
+          fi
+          exit "$analyze_status"
 
       - name: App test
         working-directory: app
