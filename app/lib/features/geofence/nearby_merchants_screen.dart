@@ -91,14 +91,14 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
       final cached = await cacheRepo?.readCachedNearby(
         lat: position.latitude,
         lng: position.longitude,
-        radiusM: 2000,
+        radiusM: nearbyMerchantSearchRadiusMeters,
       );
 
       if (cached != null) {
         final cachedMatches = findNearbyMerchants(
           origin: GeoPoint(lat: position.latitude, lng: position.longitude),
           candidates: cached.candidates,
-          radiusMeters: 2000,
+          radiusMeters: nearbyMerchantSearchRadiusMeters,
         );
         setState(() {
           _matches = cachedMatches;
@@ -114,12 +114,12 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
         final candidates = await repo.fetchNearby(
           lat: position.latitude,
           lng: position.longitude,
-          radiusM: 2000,
+          radiusM: nearbyMerchantSearchRadiusMeters,
         );
         var matches = findNearbyMerchants(
           origin: GeoPoint(lat: position.latitude, lng: position.longitude),
           candidates: candidates,
-          radiusMeters: 2000,
+          radiusMeters: nearbyMerchantSearchRadiusMeters,
         );
 
         // Keep the published PandaPay lookup authoritative. Only ask the free
@@ -131,7 +131,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
             final discovered = await repo.discoverNearby(
               lat: position.latitude,
               lng: position.longitude,
-              radiusM: 2000,
+              radiusM: nearbyMerchantSearchRadiusMeters,
             );
             matches = findNearbyMerchants(
               origin: GeoPoint(
@@ -139,7 +139,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                 lng: position.longitude,
               ),
               candidates: discovered,
-              radiusMeters: 2000,
+              radiusMeters: nearbyMerchantSearchRadiusMeters,
             );
           } catch (_) {
             // Discovery is an optional provider. It may be unavailable while

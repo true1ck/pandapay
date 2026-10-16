@@ -6,6 +6,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/api_exception.dart';
 
+/// Foreground nearby-merchant lookup radius.
+///
+/// Production deliberately defaults to 2 km. A local/emulator test build can
+/// widen it without changing the production app by passing
+/// `--dart-define=PANDAPAY_NEARBY_RADIUS_METERS=5000`. The free discovery
+/// fallback currently supports up to 5 km, so do not use 10 km there unless
+/// that backend limit is raised and verified first.
+const _nearbyMerchantSearchRadiusRaw = String.fromEnvironment(
+  'PANDAPAY_NEARBY_RADIUS_METERS',
+  defaultValue: '2000',
+);
+
+final nearbyMerchantSearchRadiusMeters = () {
+  final parsed = double.tryParse(_nearbyMerchantSearchRadiusRaw);
+  return parsed != null && parsed > 0 && parsed <= 5000 ? parsed : 2000.0;
+}();
+
 /// UA-8.3: HTTP client for api/'s `GET /merchants/nearby` — public read, no
 /// auth required (same pattern as CatalogueRepository/CategoryRepository).
 /// This is the thin IO boundary; the actual radius-matching math lives in

@@ -9,6 +9,11 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test('foreground search radius is positive and within the discovery limit', () {
+    expect(nearbyMerchantSearchRadiusMeters, greaterThan(0));
+    expect(nearbyMerchantSearchRadiusMeters, lessThanOrEqualTo(5000));
+  });
+
   group('HttpNearbyMerchantsRepository', () {
     test(
       'parses a real-shaped GET /merchants/nearby response into candidates',
