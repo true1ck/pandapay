@@ -209,7 +209,13 @@ def main():
                      {"platform": "android", "label": "Smoke"}, token=token)
     check("4 sync device registered", code == 201, f"got {code}")
     device_id = dev.get("deviceId")
-    _, txns = call(API, "GET", "/transactions", token=token)
+    code, txns = call(API, "GET", "/transactions", token=token)
+    if not check("4 GET /transactions", code == 200,
+                 f"got {code}: {str(txns)[:120]}"):
+        return 1
+    if not check("4 transaction list contains the created spend",
+                 bool(txns.get("transactions")), str(txns)[:120]):
+        return 1
     txn_id = txns["transactions"][0]["id"]
     code, push = call(API, "POST", "/sync/push",
                       {"deviceId": device_id, "changes": [{

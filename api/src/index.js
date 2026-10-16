@@ -3482,7 +3482,7 @@ async function reconcileArchivedCardReferences(client, userId) {
           AND archived_product.card_type = active_product.card_type
           AND archived.id <> active.id
      ), unique_replacements AS (
-       SELECT archived_card_id, MIN(active_card_id) AS active_card_id
+       SELECT archived_card_id, (array_agg(active_card_id ORDER BY active_card_id))[1] AS active_card_id
          FROM candidates
         GROUP BY archived_card_id
        HAVING COUNT(*) = 1
@@ -4849,7 +4849,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
              AND archived_product.card_type = active_product.card_type
              AND archived.id <> active.id
         ), unique_replacements AS (
-          SELECT archived_card_id, MIN(active_card_id) AS active_card_id
+          SELECT archived_card_id, (array_agg(active_card_id ORDER BY active_card_id))[1] AS active_card_id
             FROM replacement_candidates
            GROUP BY archived_card_id
           HAVING COUNT(*) = 1
@@ -4916,7 +4916,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
              AND archived_product.card_type = active_product.card_type
              AND archived.id <> active.id
         ), unique_replacements AS (
-          SELECT archived_card_id, MIN(active_card_id) AS active_card_id
+          SELECT archived_card_id, (array_agg(active_card_id ORDER BY active_card_id))[1] AS active_card_id
             FROM replacement_candidates
            GROUP BY archived_card_id
           HAVING COUNT(*) = 1

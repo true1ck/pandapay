@@ -141,6 +141,7 @@ bool looksLikeTransactionSms(String smsBody) {
     'total amount due',
     'amount payable',
     'bill payable',
+    'payable by',
     'pay by',
     'pay before',
     'pay on or before',
