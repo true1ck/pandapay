@@ -315,26 +315,21 @@ class _BenefitTileState extends ConsumerState<_BenefitTile> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (collapsedTitle != null)
-                                Text(
-                                  collapsedTitle,
-                                  style: BambooFonts.heading(
-                                    15,
-                                    color: BambooInk.ink900,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                              Text(
+                                collapsedTitle,
+                                style: BambooFonts.heading(
+                                  15,
+                                  color: BambooInk.ink900,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               Text(
                                 cardLabel,
                                 style: BambooFonts.ui(
-                                  collapsedTitle == null ? 15 : 12.5,
-                                  weight: collapsedTitle == null
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                  color: collapsedTitle == null
-                                      ? BambooInk.ink900
-                                      : BambooInk.ink500,
+                                  12.5,
+                                  weight: FontWeight.w400,
+                                  color: BambooInk.ink500,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
