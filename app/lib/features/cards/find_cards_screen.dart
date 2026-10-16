@@ -48,11 +48,17 @@ class FindCardsScreen extends ConsumerStatefulWidget {
 class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   CardDiscoveryResult? _result;
   bool _scanning = false;
-  bool _adding = false;
+  String? _addingKey;
   int _scanGeneration = 0;
   String? _error;
   bool _smsPermanentlyDenied = false;
   final _added = <String>{};
+
+  String _suggestionKey(DiscoveredCard card) =>
+      '${card.cardProductId}|${card.last4.join(',')}';
+
+  bool _isAdding(DiscoveredCard card) =>
+      _addingKey == _suggestionKey(card);
 
   bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
@@ -391,6 +397,23 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     ref.invalidate(homeSummaryProvider);
     ref.invalidate(needsReviewCountProvider);
     ref.invalidate(spendReportProvider);
+
+    // Cache invalidation is not enough when another screen/provider already
+    // has a completed value. Force the two wallet snapshots to read the new
+    // server state now, while treating a refresh failure as non-fatal: the
+    // card mutation already succeeded and the next normal refresh can retry.
+    try {
+      final walletRefresh = ref.refresh(myCardsProvider.future);
+      await walletRefresh;
+    } catch (_) {
+      // The wallet provider will retry on the next screen refresh/resume.
+    }
+    try {
+      final discoveryRefresh = ref.refresh(userCardsProvider.future);
+      await discoveryRefresh;
+    } catch (_) {
+      // Discovery can still show the successful local add state.
+    }
   }
 
   void _showOtherOptionsSheet() {
@@ -530,7 +553,8 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
   /// whichever catalogue row it resolved to (often RuPay) until the user says
   /// otherwise. Null when there was nothing to choose.
   Future<void> _add(DiscoveredCard card, {CardProduct? variant}) async {
-    if (_adding) return;
+    final addingKey = _suggestionKey(card);
+    if (_addingKey == addingKey) return;
 
     if (card.isPlaceholder) {
       final picked = await Navigator.of(context).push<List<CardProduct>>(
@@ -542,7 +566,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         ),
       );
       if (picked != null && picked.isNotEmpty && mounted) {
-        setState(() => _adding = true);
+        setState(() => _addingKey = addingKey);
         final messenger = ScaffoldMessenger.of(context);
         try {
           final repo = ref.read(userCardsRepositoryProvider);
@@ -570,9 +594,10 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           }
           await _reconcileAfterCardAdded();
           if (!mounted) return;
-          setState(
-            () => _added.add(card.cardProductId),
-          ); // Mark the placeholder as added
+          setState(() {
+            _added.add(card.cardProductId);
+            _added.addAll(picked.map((c) => c.id));
+          }); // Mark the placeholder and selected catalogue rows as added
           messenger.showSnackBar(
             SnackBar(
               content: Text('Added ${picked.length} card(s) to wallet.'),
@@ -585,14 +610,14 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
             );
           }
         } finally {
-          if (mounted) setState(() => _adding = false);
+          if (mounted) setState(() => _addingKey = null);
         }
       }
       return;
     }
 
     if (!mounted) return;
-    setState(() => _adding = true);
+    setState(() => _addingKey = addingKey);
     final messenger = ScaffoldMessenger.of(context);
     final productId = variant?.id ?? card.cardProductId;
     final displayName = variant?.name ?? card.name;
@@ -621,6 +646,13 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       }
       await _reconcileAfterCardAdded();
       if (!mounted) return;
+      // Update the discovery card before the optional inbox write. A card
+      // add is already successful at this point; notification recording must
+      // never leave the action looking disabled or unfinished.
+      setState(() {
+        _added.add(card.cardProductId);
+        _added.add(productId);
+      });
       // Design 19's own worked example: "Axis Ace added · Found
       // automatically from a bank SMS". dedupeKey keeps a re-add from
       // stacking duplicates in the inbox.
@@ -633,7 +665,6 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         severity: 'good',
         dedupeKey: 'card_added:$productId',
       );
-      setState(() => _added.add(card.cardProductId));
       messenger.showSnackBar(
         SnackBar(content: Text('$displayName added to your wallet.')),
       );
@@ -644,7 +675,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _adding = false);
+      if (mounted) setState(() => _addingKey = null);
     }
   }
 
@@ -741,7 +772,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
             card: s,
             variants: _variantsFor(s, catalogue),
             added: s.isAlreadyOwned || _added.contains(s.cardProductId),
-            busy: _adding,
+            busy: _isAdding(s),
             onAdd: (variant) => _add(s, variant: variant),
           ),
         const SizedBox(height: AppSpace.xl),

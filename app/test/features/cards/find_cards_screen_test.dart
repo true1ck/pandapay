@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,10 +20,11 @@ class _FakeCatalogueRepository implements CatalogueRepository {
 _FakeLocalUserCardsRepository? _lastLocalRepo;
 
 class _FakeLocalUserCardsRepository implements LocalUserCardsRepository {
-  _FakeLocalUserCardsRepository() {
+  _FakeLocalUserCardsRepository({this.addGate}) {
     _lastLocalRepo = this;
   }
   final List<String> addedCards = [];
+  final Future<void>? addGate;
 
   @override
   Future<List<UserCard>> fetchUserCards({
@@ -31,6 +34,7 @@ class _FakeLocalUserCardsRepository implements LocalUserCardsRepository {
 
   @override
   Future<String> addCard(String cardProductId, {String? nickname}) async {
+    if (addGate != null) await addGate;
     addedCards.add(cardProductId);
     return 'local_$cardProductId';
   }
@@ -60,12 +64,15 @@ void main() {
     WidgetTester tester, {
     List<String> smsBodies = const [],
     List<CardProduct> catalogueOverride = catalogue,
+    Future<void>? addGate,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogueOverride)),
-          localUserCardsRepositoryProvider.overrideWith((ref) async => _FakeLocalUserCardsRepository()),
+          localUserCardsRepositoryProvider.overrideWith(
+            (ref) async => _FakeLocalUserCardsRepository(addGate: addGate),
+          ),
           userCardsRepositoryProvider.overrideWithValue(null),
         ],
         child: MaterialApp(
@@ -162,6 +169,49 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_lastLocalRepo!.addedCards, ['axis_flipkart_mastercard']);
+  });
+
+  testWidgets('keeps other card actions enabled while one card is being added', (tester) async {
+    final addGate = Completer<void>();
+    const secondCard = CardProduct(
+      id: 'axis_flipkart',
+      name: 'Flipkart Axis Card',
+      issuerName: 'Axis Bank',
+      network: CardNetwork.mastercard,
+      isUpiLinkable: false,
+      pointValueInr: 1.0,
+      rewardRules: [],
+      capRules: [],
+      milestoneRules: [],
+      feeWaiverRules: [],
+      benefits: [],
+    );
+
+    await pumpFindCardsScreen(
+      tester,
+      catalogueOverride: [catalogue.first, secondCard],
+      addGate: addGate.future,
+      smsBodies: const [
+        'Rs. 500 spent on your HDFC Millennia card ending 4567 at Amazon',
+        'Rs. 200 spent on your Flipkart Axis card ending 8910 at Flipkart',
+      ],
+    );
+
+    await tester.tap(find.text('Yes, I have HDFC Millennia'));
+    await tester.pump();
+
+    final firstButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Yes, I have HDFC Millennia'),
+    );
+    final secondButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Yes, I have Flipkart Axis Card'),
+    );
+    expect(firstButton.onPressed, isNull);
+    expect(secondButton.onPressed, isNotNull);
+
+    addGate.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Added to your wallet'), findsOneWidget);
   });
 
   testWidgets('opens other ways to import bottom sheet', (tester) async {
