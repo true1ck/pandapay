@@ -331,10 +331,12 @@ class _BenefitDetailBody extends ConsumerWidget {
     final quotaText = benefit.quotaCount != null
         ? '${benefit.quotaCount} per ${BenefitsCheatSheetScreen.periodLabel(benefit.quotaPeriod)}'
         : 'Unlimited';
-    final programText = humanizeIdentifier(
-      benefit.networkProgram,
-      fallback: 'Standard card benefit',
-    );
+    // This is an issuer/network program identifier, not user-facing prose.
+    // Keep the exact value so support and reporting can match it to the
+    // catalogue record without losing underscores or casing.
+    final programText = benefit.networkProgram?.trim().isNotEmpty == true
+        ? benefit.networkProgram!
+        : 'Standard card benefit';
 
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),

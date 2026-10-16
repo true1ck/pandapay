@@ -277,7 +277,10 @@ class _BenefitTileState extends ConsumerState<_BenefitTile> {
         : used == null
         ? BambooInk.ink500
         : BambooInk.jade;
-    final collapsedTitle = _isLounge ? null : _compactTitle;
+    // Show the benefit type for every tile, including lounge benefits. The
+    // previous lounge-only omission left a tile with only the card name, so
+    // users could not tell which benefit they were looking at until tapping.
+    final collapsedTitle = _compactTitle;
 
     return CardSummaryPanel(
       padding: EdgeInsets.zero,

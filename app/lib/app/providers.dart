@@ -1084,7 +1084,9 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
   final cache = await _cacheOrNull(ref);
   final cacheKey = _scopedCacheKey(ref, _cardOverridesCacheKey);
   final cached = await cache?.get(cacheKey);
-  if (cached != null) {
+
+  List<CardOverride>? decodeCached() {
+    if (cached == null) return null;
     try {
       final body = jsonDecode(cached) as Map<String, dynamic>;
       return (body['overrides'] as List)
@@ -1092,9 +1094,13 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
           .map(CardOverride.fromJson)
           .toList();
     } catch (_) {
-      // The live request below repairs an invalid snapshot.
+      return null;
     }
   }
+
+  // After a live edit/delete/toggle invalidates this provider, fetch first so
+  // the screen cannot immediately rehydrate the pre-mutation snapshot.
+  // Cached data remains the fallback for an offline or unavailable API.
   try {
     final overrides = await repo.fetchOverrides().timeout(_homeRequestTimeout);
     try {
@@ -1113,12 +1119,7 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
     // showing the wallet. If this is the first signed-in request and there is
     // no cache yet, fail open with the base catalogue instead of replacing
     // Home with an error state while the API is unavailable.
-    if (cached == null) return const [];
-    final body = jsonDecode(cached) as Map<String, dynamic>;
-    return (body['overrides'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(CardOverride.fromJson)
-        .toList();
+    return decodeCached() ?? const [];
   }
 });
 

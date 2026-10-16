@@ -212,7 +212,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           if (item.reason != null) ...[
             const SizedBox(height: AppSpace.xs),
             Text(
-              'Reason: ${humanizeIdentifier(item.reason)}',
+              'Reason: ${humanizeIdentifier(item.reason)} (${item.reason})',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],

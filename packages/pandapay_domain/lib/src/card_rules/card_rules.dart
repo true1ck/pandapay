@@ -437,7 +437,10 @@ String capRuleIdentityKey(CapRule rule) => [
 
 List<CapRule> uniqueCapRules(Iterable<CapRule> rules) {
   final seen = <String>{};
-  return [for (final rule in rules) if (seen.add(capRuleIdentityKey(rule))) rule];
+  return [
+    for (final rule in rules)
+      if (seen.add(capRuleIdentityKey(rule))) rule,
+  ];
 }
 
 String rewardRuleIdentityKey(RewardRule rule) => [
@@ -521,10 +524,9 @@ List<FeeWaiverRule> uniqueFeeWaiverRules(Iterable<FeeWaiverRule> rules) {
 String capRuleDisplayLabel(CapRule rule, {String? categoryName}) {
   final category = categoryName?.trim();
   final hasCategory = category != null && category.isNotEmpty;
-  final normalized = _catalogueTextKey(rule.label)
-      .replaceAll('_', ' ')
-      .replaceAll(RegExp(r'\s+cap$'), '')
-      .trim();
+  final normalized = _catalogueTextKey(
+    rule.label,
+  ).replaceAll('_', ' ').replaceAll(RegExp(r'\s+cap$'), '').trim();
 
   if (hasCategory) {
     final noun = switch (rule.measure) {
@@ -541,7 +543,7 @@ String capRuleDisplayLabel(CapRule rule, {String? categoryName}) {
     'eligible spend amount' || 'eligible spend' => 'Eligible spend cap',
     'spend amount' || 'spend' => 'Spend cap',
     'txn count' || 'transaction count' => 'Transaction cap',
-    _ => normalized.isEmpty ? 'Reward cap' : normalized,
+    _ => normalized.isEmpty ? 'Reward cap' : '$normalized cap',
   };
   return title[0].toUpperCase() + title.substring(1);
 }
