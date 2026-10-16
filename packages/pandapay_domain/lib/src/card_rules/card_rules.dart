@@ -528,6 +528,32 @@ String capRuleDisplayLabel(CapRule rule, {String? categoryName}) {
     rule.label,
   ).replaceAll('_', ' ').replaceAll(RegExp(r'\s+cap$'), '').trim();
 
+  // Catalogue labels may already be deliberately specific (for example,
+  // "Dining cashback cap" or "5% bills cap"). Preserve that copy across
+  // every surface instead of replacing it with a generic category-derived
+  // label. Category context is only a fallback for generic/blank labels.
+  final genericLabels = {
+    '',
+    'bonus reward points',
+    'bonus points',
+    'total reward points',
+    'total rewards',
+    'eligible spend amount',
+    'eligible spend',
+    'spend amount',
+    'spend',
+    'txn count',
+    'transaction count',
+  };
+  if (!genericLabels.contains(normalized)) {
+    final raw = rule.label.trim();
+    if (raw.isNotEmpty) {
+      return RegExp(r'cap\s*$', caseSensitive: false).hasMatch(raw)
+          ? raw
+          : '$raw cap';
+    }
+  }
+
   if (hasCategory) {
     final noun = switch (rule.measure) {
       CapMeasure.rewardValue => 'rewards',

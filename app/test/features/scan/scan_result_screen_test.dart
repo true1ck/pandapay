@@ -219,9 +219,12 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(
-        find.widgetWithText(TextButton, "Wasn't accepted").first,
-      );
+      final rejectedButton = find
+          .widgetWithText(TextButton, "Wasn't accepted")
+          .first;
+      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      await tester.tap(rejectedButton);
       await tester.pumpAndSettle();
 
       expect(
@@ -235,9 +238,12 @@ void main() {
 
       // Reject the last one too -> not "No cards yet" (they own two), a
       // reversible dead end.
-      await tester.tap(
-        find.widgetWithText(TextButton, "Wasn't accepted").first,
-      );
+      final lastRejectedButton = find
+          .widgetWithText(TextButton, "Wasn't accepted")
+          .first;
+      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      await tester.tap(lastRejectedButton);
       await tester.pumpAndSettle();
       expect(find.text('No other cards to try'), findsOneWidget);
       expect(find.text('No cards yet'), findsNothing);
@@ -483,7 +489,10 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Pay with rupay-1'));
+      final payButton = find.widgetWithText(FilledButton, 'Pay with rupay-1');
+      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      await tester.tap(payButton);
       await tester.pumpAndSettle();
 
       // Amount first (QR carried none) — flagged inline — then, once filled, the

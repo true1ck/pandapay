@@ -50,7 +50,10 @@ class DuePayment {
 /// real gap the user can close from Edit Card, not something to paper over.
 final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
   final repo = ref.watch(userCardsRepositoryProvider);
-  final cards = ref.watch(myCardsProvider).valueOrNull ?? const <UserCard>[];
+  // Await the source provider. Reading valueOrNull here made this screen
+  // briefly see the provider's loading state as an empty wallet and then keep
+  // the empty result, which hid cards whose due dates were already present.
+  final cards = await ref.watch(myCardsProvider.future);
   final now = ref.watch(clockProvider).now();
   final today = DateTime(now.year, now.month, now.day);
 
@@ -67,7 +70,9 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
   final rows = <DuePayment>[];
   for (final card in active) {
     final dueOn = nextOccurrenceOf(card.dueDay!, today);
-    final cycleStart = card.statementDay == null ? null : previousOccurrenceOf(card.statementDay!, today);
+    final cycleStart = card.statementDay == null
+        ? null
+        : previousOccurrenceOf(card.statementDay!, today);
 
     var logged = const Money.zero();
     if (cycleStart != null) {
@@ -147,12 +152,18 @@ class PaymentsDueScreen extends ConsumerWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Payments due', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Payments due',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: Column(
           children: [
-            OfflineBanner(gutter: AppSpace.lg, onRetry: () => ref.invalidate(paymentsDueProvider)),
+            OfflineBanner(
+              gutter: AppSpace.lg,
+              onRetry: () => ref.invalidate(paymentsDueProvider),
+            ),
             Expanded(
               child: due.when(
                 loading: () => const Padding(
@@ -191,12 +202,20 @@ class _DueList extends StatelessWidget {
     final rest = rows.skip(1).toList();
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, AppSpace.xxl),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.lg,
+        AppSpace.lg,
+        AppSpace.xxl,
+      ),
       children: [
         _SoonestCard(row: soonest),
         if (rest.isNotEmpty) ...[
           const SizedBox(height: AppSpace.xl),
-          Text('Coming up', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+          Text(
+            'Coming up',
+            style: BambooFonts.heading(17, color: BambooInk.ink900),
+          ),
           const SizedBox(height: AppSpace.sm),
           for (final row in rest)
             Padding(
@@ -252,7 +271,10 @@ class _SoonestCard extends StatelessWidget {
           const SizedBox(height: AppSpace.md),
           // Labelled as logged spend every single time it renders — see
           // DuePayment.loggedThisCycle for why this is not "amount due".
-          Text('Logged on this card this cycle', style: BambooFonts.ui(12, color: BambooInk.onSlateMuted)),
+          Text(
+            'Logged on this card this cycle',
+            style: BambooFonts.ui(12, color: BambooInk.onSlateMuted),
+          ),
           const SizedBox(height: 2),
           MoneyText(
             row.loggedThisCycle,
@@ -295,13 +317,23 @@ class _ComingUpRow extends StatelessWidget {
           Container(
             width: 44,
             padding: const EdgeInsets.symmetric(vertical: 6),
-            decoration: BoxDecoration(color: BambooInk.paperMuted, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: BambooInk.paperMuted,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Column(
               children: [
-                Text(DateFormat.d().format(row.dueOn), style: BambooFonts.money(16, color: BambooInk.ink900)),
+                Text(
+                  DateFormat.d().format(row.dueOn),
+                  style: BambooFonts.money(16, color: BambooInk.ink900),
+                ),
                 Text(
                   DateFormat.MMM().format(row.dueOn),
-                  style: BambooFonts.ui(10.5, weight: FontWeight.w600, color: BambooInk.ink500),
+                  style: BambooFonts.ui(
+                    10.5,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink500,
+                  ),
                 ),
               ],
             ),
@@ -312,8 +344,14 @@ class _ComingUpRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName,
-                  style: BambooFonts.ui(14, weight: FontWeight.w600, color: BambooInk.ink900),
+                  card.nickname?.isNotEmpty == true
+                      ? card.nickname!
+                      : card.cardName,
+                  style: BambooFonts.ui(
+                    14,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
@@ -392,7 +430,11 @@ class _FreeMoneyCard extends ConsumerWidget {
         children: [
           Text(
             'Free money, briefly',
-            style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.rankBadgeInk),
+            style: BambooFonts.ui(
+              12,
+              weight: FontWeight.w700,
+              color: BambooInk.rankBadgeInk,
+            ),
           ),
           const SizedBox(height: AppSpace.sm),
           Text(

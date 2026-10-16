@@ -39,7 +39,8 @@ class _FakeRepo implements UserCardsRepository {
   }) async => transactions;
 
   @override
-  Future<List<TransactionSplit>> fetchSplits(String transactionId) async => const [];
+  Future<List<TransactionSplit>> fetchSplits(String transactionId) async =>
+      const [];
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -111,8 +112,18 @@ void main() {
   group('PaymentsDueScreen (design 13)', () {
     final cards = [
       _card(id: 'uc1', name: 'SBI Cashback', dueDay: 16, statementDay: 1),
-      _card(id: 'uc2', name: 'HDFC Millennia', dueDay: 21, autopay: AutopayMode.full),
-      _card(id: 'uc3', name: 'Axis Ace', dueDay: 30, autopay: AutopayMode.minimum),
+      _card(
+        id: 'uc2',
+        name: 'HDFC Millennia',
+        dueDay: 21,
+        autopay: AutopayMode.full,
+      ),
+      _card(
+        id: 'uc3',
+        name: 'Axis Ace',
+        dueDay: 30,
+        autopay: AutopayMode.minimum,
+      ),
     ];
 
     Future<void> pumpDue(WidgetTester tester, {Size? size}) => _pump(
@@ -120,14 +131,20 @@ void main() {
       const PaymentsDueScreen(),
       size: size ?? const Size(390, 844),
       overrides: [
-        userCardsRepositoryProvider.overrideWithValue(_FakeRepo(transactions: [_txn()])),
+        userCardsRepositoryProvider.overrideWithValue(
+          _FakeRepo(transactions: [_txn()]),
+        ),
         myCardsProvider.overrideWith((ref) async => cards),
       ],
     );
 
-    testWidgets('renders the hero, the coming-up list and the float card', (tester) async {
+    testWidgets('renders the hero, the coming-up list and the float card', (
+      tester,
+    ) async {
       await pumpDue(tester);
-      expect(find.textContaining('DUE IN'), findsOneWidget);
+      // Depending on the day the suite runs, the nearest card is either due
+      // today or later in the month. Both are valid hero states.
+      expect(find.textContaining('DUE'), findsOneWidget);
       expect(find.text('Coming up'), findsOneWidget);
       expect(find.text('Free money, briefly'), findsOneWidget);
     });
@@ -141,19 +158,28 @@ void main() {
       expect(find.textContaining('the rest carries interest'), findsNothing);
     });
 
-    testWidgets('never presents logged spend as the amount due', (tester) async {
+    testWidgets('never presents logged spend as the amount due', (
+      tester,
+    ) async {
       await pumpDue(tester);
       expect(find.text('Logged on this card this cycle'), findsOneWidget);
-      expect(find.textContaining("issuer's statement may be higher"), findsOneWidget);
+      expect(
+        find.textContaining("issuer's statement may be higher"),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('prompts rather than guessing when no card has a due day', (tester) async {
+    testWidgets('prompts rather than guessing when no card has a due day', (
+      tester,
+    ) async {
       await _pump(
         tester,
         const PaymentsDueScreen(),
         overrides: [
           userCardsRepositoryProvider.overrideWithValue(_FakeRepo()),
-          myCardsProvider.overrideWith((ref) async => [_card(id: 'uc1', name: 'No Due Day')]),
+          myCardsProvider.overrideWith(
+            (ref) async => [_card(id: 'uc1', name: 'No Due Day')],
+          ),
         ],
       );
       expect(find.text('No due dates set'), findsOneWidget);
@@ -161,21 +187,32 @@ void main() {
 
     testWidgets('survives a 320x640 viewport', (tester) async {
       await pumpDue(tester, size: const Size(320, 640));
-      expect(find.textContaining('DUE IN'), findsOneWidget);
+      expect(find.textContaining('DUE'), findsOneWidget);
     });
   });
 
   group('SettingsHubScreen (design 20)', () {
     testWidgets('renders all four groups', (tester) async {
       await _pump(tester, const SettingsHubScreen());
-      for (final group in const ['SECURITY', 'NOTIFICATIONS', 'ACCOUNT', 'ABOUT']) {
+      for (final group in const [
+        'SECURITY',
+        'NOTIFICATIONS',
+        'ACCOUNT',
+        'ABOUT',
+      ]) {
         await tester.ensureVisible(find.text(group));
         await tester.pump(const Duration(milliseconds: 50));
-        expect(find.text(group), findsOneWidget, reason: '$group heading should render');
+        expect(
+          find.text(group),
+          findsOneWidget,
+          reason: '$group heading should render',
+        );
       }
     });
 
-    testWidgets('names the preferences row distinctly from the You inbox row', (tester) async {
+    testWidgets('names the preferences row distinctly from the You inbox row', (
+      tester,
+    ) async {
       await _pump(tester, const SettingsHubScreen());
       // The bug this screen exists to fix: two rows both called
       // "Notifications" going to different places.
@@ -184,13 +221,19 @@ void main() {
     });
 
     testWidgets('survives a 320x640 viewport', (tester) async {
-      await _pump(tester, const SettingsHubScreen(), size: const Size(320, 640));
+      await _pump(
+        tester,
+        const SettingsHubScreen(),
+        size: const Size(320, 640),
+      );
       expect(find.text('SECURITY'), findsOneWidget);
     });
   });
 
   group('ReportTransactionScreen (design 26)', () {
-    testWidgets('shows the attached transaction and all four reason chips', (tester) async {
+    testWidgets('shows the attached transaction and all four reason chips', (
+      tester,
+    ) async {
       await _pump(tester, ReportTransactionScreen(entry: _txn()));
       expect(find.text('Zepto Fresh'), findsOneWidget);
       for (final chip in const [
@@ -199,7 +242,11 @@ void main() {
         'Card not recognized',
         'Other',
       ]) {
-        expect(find.text(chip), findsOneWidget, reason: '$chip chip should render');
+        expect(
+          find.text(chip),
+          findsOneWidget,
+          reason: '$chip chip should render',
+        );
       }
     });
 
@@ -208,7 +255,11 @@ void main() {
       final button = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Submit report'),
       );
-      expect(button.onPressed, isNull, reason: 'an uncategorised report is how inboxes rot');
+      expect(
+        button.onPressed,
+        isNull,
+        reason: 'an uncategorised report is how inboxes rot',
+      );
 
       await tester.tap(find.text('Wrong reward'));
       await tester.pumpAndSettle();
@@ -219,13 +270,19 @@ void main() {
       expect(enabled.onPressed, isNotNull);
     });
 
-    testWidgets('tells the user their payment details travel with the report', (tester) async {
+    testWidgets('tells the user their payment details travel with the report', (
+      tester,
+    ) async {
       await _pump(tester, ReportTransactionScreen(entry: _txn()));
       expect(find.textContaining('sent with your report'), findsOneWidget);
     });
 
     testWidgets('survives a 320x640 viewport', (tester) async {
-      await _pump(tester, ReportTransactionScreen(entry: _txn()), size: const Size(320, 640));
+      await _pump(
+        tester,
+        ReportTransactionScreen(entry: _txn()),
+        size: const Size(320, 640),
+      );
       expect(find.text('What went wrong'), findsOneWidget);
     });
   });
@@ -235,7 +292,11 @@ void main() {
       await _pump(
         tester,
         const TransactionDetailScreen(transactionId: 't1'),
-        overrides: [userCardsRepositoryProvider.overrideWithValue(_FakeRepo(transactions: [_txn()]))],
+        overrides: [
+          userCardsRepositoryProvider.overrideWithValue(
+            _FakeRepo(transactions: [_txn()]),
+          ),
+        ],
       );
       // fetchTransaction goes through noSuchMethod on the fake, so the
       // screen shows its error state rather than the body — that alone is
