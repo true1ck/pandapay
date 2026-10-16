@@ -115,7 +115,9 @@ class VoiceActionParser {
       return double.tryParse(match.group(1)!.replaceAll(',', ''));
     }
     final spendWords = RegExp(
-      r'\b(?:spent|spend|paid|pay|cost|book(?:ed)?)\s+(?:about\s+)?([0-9][0-9,]*(?:\.[0-9]+)?)\b',
+      r'\b(?:spent|spend(?:ing)?|paid|pay|cost|book(?:ed)?|expense|expenses)'
+      r'\b.{0,32}?(?:₹|rs\.?|rupees?|inr)?\s*'
+      r'([0-9][0-9,]*(?:\.[0-9]+)?)\b',
       caseSensitive: false,
     ).firstMatch(text);
     return spendWords == null

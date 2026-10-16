@@ -33,6 +33,17 @@ void main() {
     expect(draft.issues, isEmpty);
   });
 
+  test('prefills an amount from a natural spending phrase', () {
+    final draft = VoiceActionParser.parse(
+      'add spending of 500',
+      cards: [card('card-1')],
+      categories: categories,
+    );
+
+    expect(draft.type, VoiceActionType.expense);
+    expect(draft.amount, 500);
+  });
+
   test('does not guess when duplicate wallet cards match', () {
     final draft = VoiceActionParser.parse(
       'I spent ₹500 on my Tata Neu card',
