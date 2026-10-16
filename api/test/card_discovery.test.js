@@ -268,6 +268,51 @@ test('a real transaction alert with a card number IS discovered', () => {
   assert.deepEqual(merged[0].last4, ['7105']);
 });
 
+test('one physical suffix keeps the best named product and drops the generic sibling', () => {
+  const catalogue = [
+    { id: 'hdfc-moneyback', name: 'MoneyBack+ Credit Card', issuer_name: 'HDFC Bank', card_type: 'credit' },
+    { id: 'hdfc-tataneu', name: 'Tata Neu Plus HDFC Bank Credit Card', issuer_name: 'HDFC Bank', card_type: 'credit' },
+  ];
+  const merged = discoverCardsAcrossMessages(
+    [
+      { body: 'Rs 500 spent on your HDFC Bank card ending 8780 at STORE on 16-Oct' },
+      { body: 'Rs 500 spent on your MoneyBack+ Credit Card ending 8780 at STORE on 16-Oct' },
+    ],
+    catalogue,
+    true,
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].cardProductId, 'hdfc-moneyback');
+  assert.deepEqual(merged[0].last4, ['8780']);
+});
+
+test('a unique product mark can identify a named card when the issuer is omitted', () => {
+  const merged = discoverCardsAcrossMessages(
+    [{ body: 'Rs 500 spent on your MoneyBack+ card ending 8780 at STORE on 16-Oct' }],
+    [{ id: 'hdfc-moneyback', name: 'MoneyBack+ Credit Card', issuer_name: 'HDFC Bank', card_type: 'credit' }],
+    true,
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].cardProductId, 'hdfc-moneyback');
+  assert.deepEqual(merged[0].last4, ['8780']);
+});
+
+test('same suffix remains separate when issuer differs', () => {
+  const merged = discoverCardsAcrossMessages(
+    [
+      { body: 'Rs 500 spent on HDFC MoneyBack+ card ending 8780 at STORE' },
+      { body: 'Rs 500 spent on Axis Flipkart card ending 8780 at STORE' },
+    ],
+    [
+      { id: 'hdfc-moneyback', name: 'MoneyBack+ Credit Card', issuer_name: 'HDFC Bank', card_type: 'credit' },
+      { id: 'axis-flipkart', name: 'Axis Bank Flipkart Credit Card', issuer_name: 'Axis Bank', card_type: 'credit' },
+    ],
+    true,
+  );
+  assert.equal(merged.length, 2);
+  assert.deepEqual(new Set(merged.map((s) => s.cardProductId)), new Set(['hdfc-moneyback', 'axis-flipkart']));
+});
+
 test('a suffix-only credit-card alert surfaces a generic placeholder', () => {
   const merged = discoverCardsAcrossMessages(
     [{ body: 'Rs 400 spent on your credit card XX9080 at Eternal on 01-Oct-26' }],

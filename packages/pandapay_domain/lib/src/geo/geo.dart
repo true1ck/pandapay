@@ -22,12 +22,19 @@ class NearbyMerchantCandidate {
   final String? displayName;
   final String? categoryId;
   final GeoPoint location;
+  /// Where this candidate came from. Published PandaPay rows leave this null;
+  /// discovery providers use a value such as `osm_candidate` so the UI can
+  /// avoid presenting an unverified place as a confirmed merchant.
+  final String? source;
+  final double? confidence;
 
   const NearbyMerchantCandidate({
     required this.merchantId,
     required this.location,
     this.displayName,
     this.categoryId,
+    this.source,
+    this.confidence,
   });
 }
 

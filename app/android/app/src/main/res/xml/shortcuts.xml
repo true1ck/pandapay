@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <!-- Custom App Action fallback for the current-month read-only report.
+         Assistant opens the app on the existing authenticated Spending page;
+         it never receives raw SMS or card data from this fulfillment. -->
+    <capability
+        android:name="custom.actions.intent.SHOW_SPENDING_SUMMARY"
+        app:queryPatterns="@array/assistant_spending_queries">
+        <intent android:action="android.intent.action.VIEW">
+            <url-template android:value="pandapay://assistant/spending?period=month" />
+        </intent>
+    </capability>
+</shortcuts>

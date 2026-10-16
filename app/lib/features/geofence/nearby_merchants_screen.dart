@@ -8,6 +8,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
+import 'nearby_merchants_repository.dart';
 
 /// UA-8.1/8.3: "Nearby merchants" — the original foreground-triggered,
 /// one-shot check (button tap -> one location read -> `GET
@@ -21,7 +22,8 @@ class NearbyMerchantsScreen extends ConsumerStatefulWidget {
   const NearbyMerchantsScreen({super.key});
 
   @override
-  ConsumerState<NearbyMerchantsScreen> createState() => _NearbyMerchantsScreenState();
+  ConsumerState<NearbyMerchantsScreen> createState() =>
+      _NearbyMerchantsScreenState();
 }
 
 enum _LoadState { idle, locating, fetching, done, error }
@@ -30,6 +32,8 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   _LoadState _state = _LoadState.idle;
   String? _errorMessage;
   List<NearbyMerchantMatch> _matches = const [];
+  bool _refreshing = false;
+  bool _showingCached = false;
   bool _backgroundToggleBusy = false;
   String? _backgroundError;
 
@@ -71,29 +75,103 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     setState(() {
       _state = _LoadState.locating;
       _errorMessage = null;
+      _refreshing = false;
+      _showingCached = false;
     });
 
     try {
       final position = await _readCurrentLocationOnce();
-      setState(() => _state = _LoadState.fetching);
+      if (!mounted) return;
 
       final repo = ref.read(nearbyMerchantsRepositoryProvider);
-      final candidates = await repo.fetchNearby(
+      final NearbyMerchantCacheRepository? cacheRepo =
+          repo is NearbyMerchantCacheRepository
+          ? repo as NearbyMerchantCacheRepository
+          : null;
+      final cached = await cacheRepo?.readCachedNearby(
         lat: position.latitude,
         lng: position.longitude,
         radiusM: 2000,
       );
-      final matches = findNearbyMerchants(
-        origin: GeoPoint(lat: position.latitude, lng: position.longitude),
-        candidates: candidates,
-        radiusMeters: 2000,
-      );
 
-      setState(() {
-        _matches = matches;
-        _state = _LoadState.done;
-      });
+      if (cached != null) {
+        final cachedMatches = findNearbyMerchants(
+          origin: GeoPoint(lat: position.latitude, lng: position.longitude),
+          candidates: cached.candidates,
+          radiusMeters: 2000,
+        );
+        setState(() {
+          _matches = cachedMatches;
+          _state = _LoadState.done;
+          _refreshing = true;
+          _showingCached = true;
+        });
+      } else {
+        setState(() => _state = _LoadState.fetching);
+      }
+
+      try {
+        final candidates = await repo.fetchNearby(
+          lat: position.latitude,
+          lng: position.longitude,
+          radiusM: 2000,
+        );
+        var matches = findNearbyMerchants(
+          origin: GeoPoint(lat: position.latitude, lng: position.longitude),
+          candidates: candidates,
+          radiusMeters: 2000,
+        );
+
+        // Keep the published PandaPay lookup authoritative. Only ask the free
+        // discovery provider when there are no known merchants nearby; this
+        // avoids changing existing results and keeps discovery a read-only
+        // candidate path for this screen.
+        if (matches.isEmpty && repo is NearbyMerchantDiscoveryRepository) {
+          try {
+            final discovered = await repo.discoverNearby(
+              lat: position.latitude,
+              lng: position.longitude,
+              radiusM: 2000,
+            );
+            matches = findNearbyMerchants(
+              origin: GeoPoint(
+                lat: position.latitude,
+                lng: position.longitude,
+              ),
+              candidates: discovered,
+              radiusMeters: 2000,
+            );
+          } catch (_) {
+            // Discovery is an optional provider. It may be unavailable while
+            // the backend route is being rolled out or when the provider is
+            // rate-limited. The authoritative published lookup already
+            // completed successfully, so show its honest empty state rather
+            // than turning an optional 404/network failure into a page error.
+          }
+        }
+
+        if (!mounted) return;
+        setState(() {
+          _matches = matches;
+          _state = _LoadState.done;
+          _refreshing = false;
+          _showingCached = false;
+        });
+      } catch (err) {
+        // A cached result is still useful when the network/provider is down.
+        // Keep it visible rather than replacing it with an error screen.
+        if (cached != null && mounted) {
+          setState(() {
+            _state = _LoadState.done;
+            _refreshing = false;
+            _showingCached = true;
+          });
+          return;
+        }
+        rethrow;
+      }
     } catch (err) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = userFacingErrorMessage(err);
         _state = _LoadState.error;
@@ -115,12 +193,17 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-      throw StateError('Location permission was denied — enable it in Settings to use this.');
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw StateError(
+        'Location permission was denied — enable it in Settings to use this.',
+      );
     }
 
     return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.medium,
+      ),
     );
   }
 
@@ -134,7 +217,10 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Nearby merchants', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+        title: Text(
+          'Nearby merchants',
+          style: BambooFonts.heading(17, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: Padding(
@@ -162,47 +248,73 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                 child: Material(
                   type: MaterialType.transparency,
                   child: SwitchListTile(
-                  title: Text(
-                    'Background alerts',
-                    style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900),
-                  ),
-                  subtitle: Text(
-                    backgroundEnabled
-                        ? 'On — you\'ll get a notification when you\'re near a known merchant, '
-                              'even with the app closed. A persistent notification shows while this is active.'
-                        : 'Off — checks only run when you tap the button below.',
-                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                  ),
-                  activeTrackColor: BambooInk.jade,
-                  activeThumbColor: BambooInk.lime,
-                  value: backgroundEnabled,
-                  onChanged: _backgroundToggleBusy ? null : _toggleBackgroundMonitoring,
+                    title: Text(
+                      'Background alerts',
+                      style: BambooFonts.ui(
+                        14.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                    subtitle: Text(
+                      backgroundEnabled
+                          ? 'On — you\'ll get a notification when you\'re near a known merchant, '
+                                'even with the app closed. A persistent notification shows while this is active.'
+                          : 'Off — checks only run when you tap the button below.',
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
+                    activeTrackColor: BambooInk.jade,
+                    activeThumbColor: BambooInk.lime,
+                    value: backgroundEnabled,
+                    onChanged: _backgroundToggleBusy
+                        ? null
+                        : _toggleBackgroundMonitoring,
                   ),
                 ),
               ),
               if (_backgroundError != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4, bottom: 4),
-                  child: Text(_backgroundError!, style: BambooFonts.ui(12, color: BambooInk.clay)),
+                  child: Text(
+                    _backgroundError!,
+                    style: BambooFonts.ui(12, color: BambooInk.clay),
+                  ),
                 ),
               const SizedBox(height: 12),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                   backgroundColor: BambooInk.slate,
                   foregroundColor: BambooInk.lime,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
                 ),
-                onPressed: _state == _LoadState.locating || _state == _LoadState.fetching
+                onPressed:
+                    _state == _LoadState.locating ||
+                        _state == _LoadState.fetching ||
+                        _refreshing
                     ? null
                     : _checkNearby,
                 icon: const Icon(Icons.my_location),
                 label: Text(switch (_state) {
                   _LoadState.locating => 'Getting your location…',
-                  _LoadState.fetching => 'Checking nearby merchants…',
+                  _LoadState.fetching => 'Finding nearby merchants…',
+                  _ when _refreshing => 'Refreshing nearby merchants…',
                   _ => 'Check nearby merchants',
                 }),
               ),
+              if (_refreshing || _showingCached)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    _refreshing
+                        ? 'Showing saved places while checking for updates…'
+                        : 'Showing saved nearby places.',
+                    textAlign: TextAlign.center,
+                    style: BambooFonts.ui(12, color: BambooInk.ink500),
+                  ),
+                ),
               const SizedBox(height: 16),
               Expanded(child: _buildBody()),
             ],
@@ -223,7 +335,10 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     }
     if (_state == _LoadState.idle) {
       return Center(
-        child: Text('Tap the button above to check.', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+        child: Text(
+          'Tap the button above to check.',
+          style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+        ),
       );
     }
     if (_state == _LoadState.locating || _state == _LoadState.fetching) {
@@ -231,7 +346,11 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     }
     if (_matches.isEmpty) {
       return Center(
-        child: Text('No known merchants within 2km.', style: BambooFonts.ui(13.5, color: BambooInk.ink500)),
+        child: Text(
+          'No nearby merchants found yet. Try again closer to the store.',
+          textAlign: TextAlign.center,
+          style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+        ),
       );
     }
     return ListView.builder(
@@ -247,7 +366,9 @@ class _NearbyMerchantTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final best = ref.watch(bestCardForMerchantProvider(match.candidate.categoryId));
+    final best = ref.watch(
+      bestCardForMerchantProvider(match.candidate.categoryId),
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -268,11 +389,21 @@ class _NearbyMerchantTile extends ConsumerWidget {
             '${match.distanceMeters.toStringAsFixed(0)}m away',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
+          if (match.candidate.source == 'osm_candidate')
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                'Nearby place · not yet verified by PandaPay · © OpenStreetMap contributors',
+                style: BambooFonts.ui(11.5, color: BambooInk.clay),
+              ),
+            ),
           const SizedBox(height: 6),
           best.when(
             loading: () => const LinearProgressIndicator(),
-            error: (err, _) =>
-                Text('Could not rank cards: $err', style: BambooFonts.ui(12.5, color: BambooInk.clay)),
+            error: (err, _) => Text(
+              'Could not rank cards: $err',
+              style: BambooFonts.ui(12.5, color: BambooInk.clay),
+            ),
             data: (rec) {
               if (rec == null) {
                 return Text(
@@ -282,14 +413,22 @@ class _NearbyMerchantTile extends ConsumerWidget {
               }
               return Row(
                 children: [
-                  const Icon(Icons.credit_card, size: 18, color: BambooInk.ink900),
+                  const Icon(
+                    Icons.credit_card,
+                    size: 18,
+                    color: BambooInk.ink900,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Use ${rec.card.name}', style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
-                        if (rec.effectiveRatePerRupee != null && rec.effectiveRatePerRupee! > 0)
+                        Text(
+                          'Use ${rec.card.name}',
+                          style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                        ),
+                        if (rec.effectiveRatePerRupee != null &&
+                            rec.effectiveRatePerRupee! > 0)
                           Text(
                             '${_rateLabel(rec.effectiveRatePerRupee!)} reward rate',
                             style: BambooFonts.ui(11.5, color: BambooInk.jade),

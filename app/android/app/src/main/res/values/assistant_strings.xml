@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="assistant_spending_queries">
+        <item>show my spending</item>
+        <item>show my spending this month</item>
+        <item>tell me my spending in PandaPay</item>
+        <item>show my PandaPay spending this month</item>
+    </string-array>
+</resources>

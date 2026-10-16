@@ -124,6 +124,11 @@ abstract final class AppRoute {
   /// only ever shows the current calendar month.
   static const spendTrends = '/insights/trends';
 
+  /// Assistant/App Action fulfillment target. The native assistant entry
+  /// point lands here and the app then shows the same authoritative Trends
+  /// screen used by normal in-app navigation.
+  static const assistantSpending = '/assistant/spending';
+
   /// Budgets — advisory limits the user sets for themselves.
   static const budgets = '/insights/budgets';
 
@@ -597,6 +602,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // button and their own period chips under the title.
       GoRoute(
         path: AppRoute.spendTrends,
+        builder: (context, state) => const SpendTrendsScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.assistantSpending,
         builder: (context, state) => const SpendTrendsScreen(),
       ),
       GoRoute(

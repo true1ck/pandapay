@@ -2448,7 +2448,12 @@ final clockProvider = Provider<Clock>((ref) => const Clock.system());
 final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((
   ref,
 ) {
-  return HttpNearbyMerchantsRepository(baseUrl: _apiBaseUrl);
+  return HttpNearbyMerchantsRepository(
+    baseUrl: _apiBaseUrl,
+    localCache: SharedPreferencesNearbyMerchantCache(
+      namespace: ref.watch(cacheNamespaceProvider),
+    ),
+  );
 });
 
 /// UA-8.3 (B1): one FlutterLocalNotificationsPlugin instance for the whole

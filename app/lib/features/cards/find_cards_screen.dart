@@ -10,6 +10,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_discovery_engine.dart';
+import '../../data/card_discovery_filter.dart';
 import '../../data/user_cards_repository.dart'
     show CardDiscoveryResult, DiscoveredCard;
 import '../import/email_forwarding_screen.dart';
@@ -100,8 +101,29 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           final result = await repo
               .discoverCards(smsBodies: subset)
               .timeout(const Duration(seconds: 20));
+          // The server can identify an SMS-only card only as a generic
+          // issuer/suffix placeholder. Reconcile against the current wallet
+          // before rendering so a card already owned under a named product
+          // cannot be selected and later fail as a duplicate.
+          CardDiscoveryResult filteredResult = result;
+          try {
+            final owned = await ref.read(userCardsProvider.future);
+            final catalogue = await ref.read(catalogueProvider.future);
+            filteredResult = CardDiscoveryResult(
+              suggestions: filterOwnedCardSuggestions(
+                suggestions: result.suggestions,
+                ownedCards: owned,
+                catalogue: catalogue,
+              ),
+              emailsScanned: result.emailsScanned,
+              smsScanned: result.smsScanned,
+            );
+          } catch (_) {
+            // Discovery remains useful if a cached wallet/catalogue read is
+            // unavailable; the API's product-id filter is still applied.
+          }
           if (mounted && generation == _scanGeneration) {
-            setState(() => _result = result);
+            setState(() => _result = filteredResult);
           }
         } catch (_) {
           // The SMS scan is local-first. A slow/cold API must not turn a
@@ -698,7 +720,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           _SuggestionCard(
             card: s,
             variants: _variantsFor(s, catalogue),
-            added: _added.contains(s.cardProductId),
+            added: s.isAlreadyOwned || _added.contains(s.cardProductId),
             busy: _adding,
             onAdd: (variant) => _add(s, variant: variant),
           ),

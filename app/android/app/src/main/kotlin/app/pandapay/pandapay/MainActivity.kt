@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.os.Bundle
 import com.shounakmulay.telephony.sms.IncomingSmsReceiver
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -27,11 +28,26 @@ class MainActivity : FlutterFragmentActivity() {
 
     private companion object {
         const val CHANNEL = "app.pandapay/upi"
+        const val ASSISTANT_CHANNEL = "app.pandapay/assistant"
         const val REQUEST_CODE = 0x5091 // arbitrary, local to this Activity
         const val MAX_ICON_PX = 96
     }
 
     private var pendingResult: MethodChannel.Result? = null
+    private var assistantChannel: MethodChannel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // The initial URI is read by Flutter after the engine is ready. Keep
+        // the Android intent as the source of truth so a cold launch and a
+        // warm singleTop launch behave consistently.
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.dataString?.let { assistantChannel?.invokeMethod("assistantUri", it) }
+    }
 
     override fun onResume() {
         super.onResume()
@@ -45,6 +61,13 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        assistantChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ASSISTANT_CHANNEL)
+        assistantChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getInitialAssistantUri" -> result.success(intent?.dataString)
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getInstalledUpiApps" -> result.success(installedUpiApps())
@@ -136,6 +159,7 @@ class MainActivity : FlutterFragmentActivity() {
             if (i <= 0) null else it.substring(0, i).trim().lowercase() to it.substring(i + 1).trim()
         }.toMap()
     }
+
 
     private fun drawableToPng(drawable: Drawable): ByteArray {
         val bitmap = if (drawable is BitmapDrawable && drawable.bitmap != null) {

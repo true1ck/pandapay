@@ -694,6 +694,10 @@ class DiscoveredCard {
   final String? cardType;
   final Money? creditLimit;
 
+  /// True when discovery found the same card already in the wallet. The
+  /// suggestion stays visible, but its add action is disabled.
+  final bool isAlreadyOwned;
+
   const DiscoveredCard({
     required this.cardProductId,
     required this.name,
@@ -706,6 +710,7 @@ class DiscoveredCard {
     this.issuerName,
     this.cardType,
     this.creditLimit,
+    this.isAlreadyOwned = false,
   });
 
   factory DiscoveredCard.fromJson(Map<String, dynamic> json) => DiscoveredCard(
@@ -722,7 +727,24 @@ class DiscoveredCard {
     creditLimit: json['creditLimitInr'] == null
         ? null
         : Money.fromRupees(_num(json['creditLimitInr'])),
+    isAlreadyOwned: json['isAlreadyOwned'] as bool? ?? false,
   );
+
+  DiscoveredCard copyWith({String? name, bool? isAlreadyOwned}) =>
+      DiscoveredCard(
+        cardProductId: cardProductId,
+        name: name ?? this.name,
+        score: score,
+        evidence: evidence,
+        last4: last4,
+        messageCount: messageCount,
+        sources: sources,
+        isPlaceholder: isPlaceholder,
+        issuerName: issuerName,
+        cardType: cardType,
+        creditLimit: creditLimit,
+        isAlreadyOwned: isAlreadyOwned ?? this.isAlreadyOwned,
+      );
 }
 
 /// What a discovery run looked at, so the screen can explain an empty
@@ -1695,6 +1717,7 @@ class TransactionEntry {
   /// Last four digits extracted from a card SMS when the saved card is not
   /// linked yet. This is masked evidence only, never a full card number.
   final String? cardLast4;
+
   /// Last four digits of the source bank account for a cardless debit.
   /// This stays separate from cardLast4 so it cannot attach a payment to a
   /// physical card with matching digits.

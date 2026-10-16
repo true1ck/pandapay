@@ -294,6 +294,20 @@ class LocalCardDiscoveryEngine {
     final haystackWords = Set<String>.from(haystack.split(' '));
     final results = <DiscoveredCard>[];
 
+    // Some issuers put only the product mark in the alert (for example
+    // "MoneyBack+ xx8708" or "Flipkart card ending 7105") and keep the bank
+    // name in the sender/header. A product token is safe without the issuer
+    // only when it uniquely identifies one catalogue row; family words such
+    // as Tata/Neu remain ambiguous and still require the issuer.
+    final productTokenOwners = <String, Set<String>>{};
+    for (final candidate in catalogue) {
+      for (final token in significantTokens(candidate.name)) {
+        productTokenOwners
+            .putIfAbsent(token, () => <String>{})
+            .add(candidate.id);
+      }
+    }
+
     for (final card in catalogue) {
       if (card.cardType == 'debit' && messageIsCredit && !messageIsDebit) {
         continue;
@@ -320,7 +334,35 @@ class LocalCardDiscoveryEngine {
       final distinguishing = matchedNameTokens
           .where((t) => !issuerTokens.contains(t))
           .toList();
-      if (!exact && !(issuerHit && distinguishing.isNotEmpty)) continue;
+      final words = haystack.split(' ');
+      final uniqueProductToken = distinguishing.any((token) {
+        if (productTokenOwners[token]?.length != 1) return false;
+        // A merchant name such as "Amazon" must not identify the Amazon Pay
+        // card. Product-only evidence must sit next to card language or a
+        // masked suffix ("MoneyBack+ card" / "MoneyBack+ xx8708").
+        final tokenIndexes = <int>[];
+        for (var i = 0; i < words.length; i++) {
+          if (words[i] == token) tokenIndexes.add(i);
+        }
+        for (final index in tokenIndexes) {
+          for (var distance = 1; distance <= 3; distance++) {
+            final nextIndex = index + distance;
+            if (nextIndex >= words.length) break;
+            final next = words[nextIndex];
+            if (next == 'card' ||
+                next == 'ending' ||
+                RegExp(r'^x{2,}\d{4}$').hasMatch(next)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      });
+      if (!exact &&
+          !(issuerHit && distinguishing.isNotEmpty) &&
+          !uniqueProductToken) {
+        continue;
+      }
 
       final evidence = exact
           ? [card.name]
@@ -348,6 +390,7 @@ class LocalCardDiscoveryEngine {
           last4: extractLast4(combined),
           messageCount: 1,
           sources: const ['sms'],
+          issuerName: card.issuerName,
           cardType:
               card.cardType ??
               (messageIsDebit
@@ -364,6 +407,83 @@ class LocalCardDiscoveryEngine {
       return cmp != 0 ? cmp : a.name.compareTo(b.name);
     });
     return results;
+  }
+
+  /// A suffix is not globally unique, but issuer + suffix + instrument type
+  /// is the best physical-card identity available in an SMS. Once one named
+  /// catalogue product wins that identity, do not present sibling products
+  /// for the same card. Exact product evidence beats a weaker hint.
+  static List<DiscoveredCard> _consolidateNamedPhysicalCards({
+    required Iterable<DiscoveredCard> suggestions,
+    required List<CardProduct> catalogue,
+  }) {
+    final productsById = <String, CardProduct>{
+      for (final product in catalogue) product.id: product,
+    };
+    String? issuerFor(DiscoveredCard suggestion) =>
+        suggestion.issuerName ??
+        productsById[suggestion.cardProductId]?.issuerName;
+    String typeFor(DiscoveredCard suggestion) =>
+        suggestion.cardType ??
+        productsById[suggestion.cardProductId]?.cardType ??
+        'unknown';
+    List<String> keysFor(DiscoveredCard suggestion) {
+      if (suggestion.isPlaceholder) return const [];
+      final issuer = normalise(issuerFor(suggestion) ?? '');
+      if (issuer.isEmpty || suggestion.last4.isEmpty) return const [];
+      final type = normalise(typeFor(suggestion));
+      return suggestion.last4.map((last4) => '$issuer|$type|$last4').toList();
+    }
+
+    bool stronger(DiscoveredCard candidate, DiscoveredCard incumbent) =>
+        candidate.score > incumbent.score ||
+        (candidate.score == incumbent.score &&
+            candidate.messageCount > incumbent.messageCount) ||
+        (candidate.score == incumbent.score &&
+            candidate.messageCount == incumbent.messageCount &&
+            candidate.evidence.length > incumbent.evidence.length);
+
+    final winners = <String, DiscoveredCard>{};
+    for (final suggestion in suggestions) {
+      for (final key in keysFor(suggestion)) {
+        final incumbent = winners[key];
+        if (incumbent == null || stronger(suggestion, incumbent)) {
+          winners[key] = suggestion;
+        }
+      }
+    }
+
+    return suggestions.expand((suggestion) {
+      final keys = keysFor(suggestion);
+      if (keys.isEmpty) return [suggestion];
+      final issuer = normalise(issuerFor(suggestion) ?? '');
+      final type = normalise(typeFor(suggestion));
+      final keptLast4 = suggestion.last4
+          .where(
+            (last4) =>
+                winners['$issuer|$type|$last4']?.cardProductId ==
+                suggestion.cardProductId,
+          )
+          .toList();
+      if (keptLast4.isEmpty) return const <DiscoveredCard>[];
+      if (keptLast4.length == suggestion.last4.length) return [suggestion];
+      return [
+        DiscoveredCard(
+          cardProductId: suggestion.cardProductId,
+          name: suggestion.name,
+          score: suggestion.score,
+          evidence: suggestion.evidence,
+          last4: keptLast4,
+          messageCount: suggestion.messageCount,
+          sources: suggestion.sources,
+          isPlaceholder: suggestion.isPlaceholder,
+          issuerName: suggestion.issuerName,
+          cardType: suggestion.cardType,
+          creditLimit: suggestion.creditLimit,
+          isAlreadyOwned: suggestion.isAlreadyOwned,
+        ),
+      ];
+    }).toList();
   }
 
   /// Fold multiple messages into one consolidated suggestion list.
@@ -497,6 +617,11 @@ class LocalCardDiscoveryEngine {
               last4: mergedLast4,
               messageCount: existing.messageCount + 1,
               sources: existing.sources,
+              isPlaceholder: existing.isPlaceholder,
+              issuerName: existing.issuerName ?? hit.issuerName,
+              cardType: existing.cardType ?? hit.cardType,
+              creditLimit: existing.creditLimit ?? hit.creditLimit,
+              isAlreadyOwned: existing.isAlreadyOwned,
             );
           } else {
             byCard[hit.cardProductId] = DiscoveredCard(
@@ -507,6 +632,8 @@ class LocalCardDiscoveryEngine {
               last4: last4s,
               messageCount: 1,
               sources: const ['sms'],
+              issuerName: hit.issuerName,
+              cardType: hit.cardType,
             );
           }
         }
@@ -641,14 +768,17 @@ class LocalCardDiscoveryEngine {
           ),
     );
 
-    final suggestions = byCard.values.toList()
-      ..sort((a, b) {
-        final cmpScore = b.score.compareTo(a.score);
-        if (cmpScore != 0) return cmpScore;
-        final cmpCount = b.messageCount.compareTo(a.messageCount);
-        if (cmpCount != 0) return cmpCount;
-        return a.name.compareTo(b.name);
-      });
+    final suggestions =
+        _consolidateNamedPhysicalCards(
+          suggestions: byCard.values,
+          catalogue: catalogue,
+        ).toList()..sort((a, b) {
+          final cmpScore = b.score.compareTo(a.score);
+          if (cmpScore != 0) return cmpScore;
+          final cmpCount = b.messageCount.compareTo(a.messageCount);
+          if (cmpCount != 0) return cmpCount;
+          return a.name.compareTo(b.name);
+        });
 
     return CardDiscoveryResult(
       suggestions: suggestions,

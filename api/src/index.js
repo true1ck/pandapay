@@ -18,6 +18,7 @@ const rewardMath = require('./reward_math');
 const { AMOUNT_TOLERANCE_INR, MAX_TIME_DISTANCE_MS, bestDuplicate } = require('./transaction_dedup');
 const { emailSourceKey } = require('./source_identity');
 const spendReports = require('./spend_reports');
+const { buildAssistantSpendingSummary } = require('./assistant_spending');
 const {
   detectRecurringSeries,
   annualCost,
@@ -33,12 +34,22 @@ const { extractVpa, extractMcc } = require('./merchant_category');
 const notificationService = require('./notification_service');
 const { createTestNotificationLimiter } = require('./notification_test');
 const {
+  createNearbyDiscovery,
+  normalizeCategory: normalizeNearbyDiscoveryCategory,
+} = require('./nearby_discovery');
+const {
   normalizeCardLast4,
   cardIdentityKey,
   findCardAddConflict,
 } = require('./card_identity');
 
 const testNotificationLimiter = createTestNotificationLimiter();
+// Process-local cache and in-flight request coalescing keep repeated nearby
+// searches from starting duplicate public-data lookups. This is intentionally
+// independent of user data and never writes to merchant, spending, or SMS
+// tables. A future multi-instance deployment can replace this provider with a
+// shared cache without changing the mobile contract.
+const nearbyDiscovery = createNearbyDiscovery();
 
 function uniqueSmsPatternIssuerId(patterns, sender) {
   const issuerIds = new Set(
@@ -969,6 +980,55 @@ app.get('/merchants/nearby', async (req, res) => {
   } catch (err) {
     console.error('GET /merchants/nearby error', err);
     res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /merchants/nearby/discover — free, read-only nearby place discovery.
+ *
+ * This is a fallback for the Nearby merchants screen when PandaPay has no
+ * published merchant at the current location. Results are OpenStreetMap
+ * candidates only; they are never treated as VPA-verified merchants and are
+ * never inserted into spending or payment data by this route.
+ */
+app.get('/merchants/nearby/discover', async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  const radiusM = req.query.radiusM !== undefined ? Number(req.query.radiusM) : 2000;
+  const categoryId = typeof req.query.categoryId === 'string' && req.query.categoryId.trim()
+    ? req.query.categoryId.trim().toLowerCase()
+    : null;
+
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+    return res.status(400).json({ error: 'lat is required and must be between -90 and 90' });
+  }
+  if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: 'lng is required and must be between -180 and 180' });
+  }
+  if (!Number.isFinite(radiusM) || radiusM <= 0 || radiusM > 5000) {
+    return res.status(400).json({ error: 'radiusM must be a positive number, max 5000' });
+  }
+  if (categoryId && !normalizeNearbyDiscoveryCategory(categoryId)) {
+    return res.status(400).json({ error: 'unsupported categoryId' });
+  }
+
+  try {
+    const merchants = await nearbyDiscovery.discover({ lat, lng, radiusM, categoryId });
+    res.json({
+      source: 'openstreetmap',
+      attribution: '© OpenStreetMap contributors',
+      merchants,
+    });
+  } catch (err) {
+    // Discovery is optional. The app can still show its existing published
+    // merchant result or a safe empty state when the public provider is down.
+    console.warn('GET /merchants/nearby/discover unavailable', err.message);
+    res.json({
+      source: 'openstreetmap',
+      attribution: '© OpenStreetMap contributors',
+      merchants: [],
+      unavailable: true,
+    });
   }
 });
 
@@ -5502,6 +5562,60 @@ app.get('/spend-report', requireAuth, async (req, res) => {
     res.json(payload);
   } catch (err) {
     console.error('GET /spend-report error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * GET /assistant/spending-summary — narrow, read-only surface for system
+ * assistants and future MCP/AppFunction adapters.
+ *
+ * This route deliberately reuses spend_reports' period boundaries and totals
+ * so an assistant cannot disagree with the Trends screen about what counts as
+ * spend. It returns no raw transaction, SMS, merchant, or card data.
+ */
+app.get('/assistant/spending-summary', requireAuth, async (req, res) => {
+  const period = req.query.period || 'month';
+  if (!spendReports.PERIODS.includes(period)) {
+    return res.status(400).json({ error: `period must be one of ${spendReports.PERIODS.join(', ')}` });
+  }
+  const anchor = req.query.anchor ? new Date(req.query.anchor) : new Date();
+  if (Number.isNaN(anchor.getTime())) {
+    return res.status(400).json({ error: 'anchor is not a valid date' });
+  }
+  const requestedTimeZone = typeof req.query.tz === 'string' && req.query.tz.length > 0
+    ? req.query.tz
+    : 'Asia/Kolkata';
+
+  try {
+    const summary = await withUserClient(req.userId, async (client) => {
+      const tzOk = await client.query(
+        `SELECT 1 FROM pg_timezone_names WHERE name = $1`,
+        [requestedTimeZone]
+      );
+      const timeZone = tzOk.rowCount > 0 ? requestedTimeZone : 'Asia/Kolkata';
+      const bounds = spendReports.periodBounds(period, anchor, { timeZone });
+      const totals = await spendReports.periodTotals(client, req.userId, bounds);
+      const latestSms = await client.query(
+        `SELECT MAX(o.observed_at) AS latest_sms_observed_at
+           FROM transaction_observations o
+           JOIN transactions t ON t.id = o.transaction_id
+          WHERE t.profile_id = $1
+            AND o.source IN ('sms', 'sms_bulk')`,
+        [req.userId]
+      );
+
+      return buildAssistantSpendingSummary({
+        period,
+        timeZone,
+        bounds,
+        totals,
+        latestSmsObservedAt: latestSms.rows[0]?.latest_sms_observed_at || null,
+      });
+    });
+    res.json({ assistantSpendingSummary: summary });
+  } catch (err) {
+    console.error('GET /assistant/spending-summary error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });

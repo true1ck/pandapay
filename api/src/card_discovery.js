@@ -207,6 +207,19 @@ function discoverCardsInMessage(message, catalogue) {
   // `alerts@hdfcbank.net` is genuinely useful rather than accidental.
   const haystackWords = new Set(haystack.split(' '));
 
+  // Some issuers send only the product mark in the alert (for example
+  // "MoneyBack+ xx8708" or "Flipkart card ending 7105") and put the bank
+  // name in the sender/header instead. A product token is safe without the
+  // issuer only when it uniquely identifies one catalogue row; family words
+  // such as Tata/Neu remain ambiguous and still require the issuer.
+  const productTokenOwners = new Map();
+  for (const candidate of catalogue || []) {
+    for (const token of significantTokens(candidate.name)) {
+      if (!productTokenOwners.has(token)) productTokenOwners.set(token, new Set());
+      productTokenOwners.get(token).add(candidate.id);
+    }
+  }
+
   const results = [];
   for (const card of catalogue || []) {
     // A catalogue product name can be identical across credit/debit variants.
@@ -235,7 +248,17 @@ function discoverCardsInMessage(message, catalogue) {
     // Bank" appears in every HDFC email and would suggest all six HDFC
     // cards at once, which is noise, not discovery.
     const distinguishing = matchedNameTokens.filter((t) => !issuerTokens.includes(t));
-    if (!exact && !(issuerHit && distinguishing.length > 0)) continue;
+    const uniqueProductToken = distinguishing.some((token) => {
+      if (productTokenOwners.get(token)?.size !== 1) return false;
+      // A merchant name such as "Amazon" must not identify the Amazon Pay
+      // card. Product-only evidence must be adjacent to card language or a
+      // masked suffix ("MoneyBack+ card" / "MoneyBack+ xx8708").
+      const tokenContext = new RegExp(
+        `\\b${token}\\b(?:\\s+[a-z0-9]+){0,2}\\s+(?:card|ending\\b|x{2,}\\d{4}\\b)`,
+      );
+      return tokenContext.test(haystack);
+    });
+    if (!exact && !(issuerHit && distinguishing.length > 0) && !uniqueProductToken) continue;
 
     const evidence = exact ? [card.name] : [card.issuer_name, ...distinguishing].filter(Boolean);
     // 1.0 for a verbatim product name; otherwise how much of the
@@ -254,11 +277,56 @@ function discoverCardsInMessage(message, catalogue) {
       score,
       evidence,
       cardType: card.card_type || null,
+      issuerName: card.issuer_name || null,
     });
   }
 
   results.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
   return results;
+}
+
+/**
+ * A suffix is not globally unique, but issuer + suffix + instrument type is
+ * the best physical-card identity available in an SMS. Once one named
+ * catalogue product wins that identity, do not present sibling products for
+ * the same card. This is deliberately applied after message-level scoring so
+ * an exact product name beats a weaker issuer/product-token hint.
+ */
+function consolidateNamedPhysicalCards(suggestions, catalogue) {
+  const issuerById = new Map((catalogue || []).map((card) => [card.id, card.issuer_name || '']));
+  const typeById = new Map((catalogue || []).map((card) => [card.id, card.card_type || '']));
+  const winners = new Map();
+
+  const physicalKeys = (suggestion) => {
+    if (suggestion.isPlaceholder) return [];
+    const issuer = normalise(suggestion.issuerName || issuerById.get(suggestion.cardProductId) || '');
+    if (!issuer || !(suggestion.last4 || []).length) return [];
+    const type = normalise(suggestion.cardType || typeById.get(suggestion.cardProductId) || 'unknown');
+    return suggestion.last4.map((last4) => `${issuer}|${type}|${last4}`);
+  };
+
+  const stronger = (candidate, incumbent) =>
+    candidate.score > incumbent.score
+      || (candidate.score === incumbent.score && candidate.messageCount > incumbent.messageCount)
+      || (candidate.score === incumbent.score
+        && candidate.messageCount === incumbent.messageCount
+        && (candidate.evidence || []).length > (incumbent.evidence || []).length);
+
+  for (const suggestion of suggestions) {
+    for (const key of physicalKeys(suggestion)) {
+      const incumbent = winners.get(key);
+      if (!incumbent || stronger(suggestion, incumbent)) winners.set(key, suggestion);
+    }
+  }
+
+  return suggestions.flatMap((suggestion) => {
+    const keys = physicalKeys(suggestion);
+    if (!keys.length) return [suggestion];
+    const keptLast4 = (suggestion.last4 || []).filter((last4) =>
+      winners.get(`${normalise(suggestion.issuerName || issuerById.get(suggestion.cardProductId) || '')}|${normalise(suggestion.cardType || typeById.get(suggestion.cardProductId) || 'unknown')}|${last4}`)?.cardProductId === suggestion.cardProductId
+    );
+    return keptLast4.length ? [{ ...suggestion, last4: keptLast4 }] : [];
+  });
 }
 
 /**
@@ -486,7 +554,9 @@ function discoverCardsAcrossMessages(messages, catalogue, isSms = false) {
     if ((s.last4 || []).some((l) => realKeys.has(`${iss}|${l}`))) byCard.delete(key);
   }
 
-  return [...byCard.values()].sort(
+  const consolidated = consolidateNamedPhysicalCards([...byCard.values()], catalogue);
+
+  return consolidated.sort(
     (a, b) => b.score - a.score || b.messageCount - a.messageCount || a.name.localeCompare(b.name)
   );
 }

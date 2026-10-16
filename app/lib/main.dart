@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -9,6 +10,7 @@ import 'app/env.dart';
 import 'app/error_handling.dart';
 import 'app/providers.dart';
 import 'app/router.dart';
+import 'data/spend_reports_repository.dart';
 import 'features/settings/appearance_providers.dart';
 
 void main() {
@@ -147,11 +149,71 @@ class _BuildConfigurationErrorApp extends StatelessWidget {
 /// local override there, so choosing 130% did nothing anywhere else in the
 /// app. See [_scaledTextMediaQuery] for how it composes with the OS
 /// setting.
-class PandaPayApp extends ConsumerWidget {
+class PandaPayApp extends ConsumerStatefulWidget {
   const PandaPayApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PandaPayApp> createState() => _PandaPayAppState();
+}
+
+class _PandaPayAppState extends ConsumerState<PandaPayApp> {
+  static const _assistantChannel = MethodChannel('app.pandapay/assistant');
+
+  @override
+  void initState() {
+    super.initState();
+    _assistantChannel.setMethodCallHandler((call) async {
+      if (call.method == 'assistantUri' && call.arguments is String) {
+        _openAssistantUri(call.arguments as String);
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _readInitialAssistantUri();
+    });
+  }
+
+  Future<void> _readInitialAssistantUri() async {
+    try {
+      final raw = await _assistantChannel.invokeMethod<String>(
+        'getInitialAssistantUri',
+      );
+      if (raw != null) _openAssistantUri(raw);
+    } on PlatformException {
+      // Non-Android platforms and test harnesses do not register this
+      // optional channel; normal app startup must remain unaffected.
+    } on MissingPluginException {
+      // The channel is intentionally Android-only. Flutter uses this
+      // exception when the platform has no implementation at all.
+    }
+  }
+
+  void _openAssistantUri(String raw) {
+    final uri = Uri.tryParse(raw);
+    if (!mounted ||
+        uri == null ||
+        uri.scheme != 'pandapay' ||
+        uri.host != 'assistant' ||
+        uri.path != '/spending') {
+      return;
+    }
+    final requestedPeriod = uri.queryParameters['period'];
+    final period = SpendPeriod.values.firstWhere(
+      (candidate) => candidate.wireValue == requestedPeriod,
+      orElse: () => SpendPeriod.month,
+    );
+    ref.read(selectedSpendPeriodProvider.notifier).state = period;
+    ref.read(goRouterProvider).go(AppRoute.assistantSpending);
+  }
+
+  @override
+  void dispose() {
+    _assistantChannel.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final textScale = ref.watch(textScaleProvider);
     // Keep push registration attached to the application root. The service
     // is still gated by the authenticated access token, but it must not wait

@@ -103,6 +103,93 @@ void main() {
       expect(hits.first.last4, contains('4321'));
     });
 
+    test(
+      'one physical suffix keeps the best named product over a generic sibling',
+      () {
+        final physicalCatalogue = [
+          CardProduct(
+            id: 'hdfc-moneyback',
+            name: 'MoneyBack+ Credit Card',
+            issuerName: 'HDFC Bank',
+            cardType: 'credit',
+            network: CardNetwork.visa,
+            isUpiLinkable: false,
+            pointValueInr: 1.0,
+            rewardRules: [],
+            capRules: [],
+            milestoneRules: [],
+            feeWaiverRules: [],
+            benefits: [],
+          ),
+          CardProduct(
+            id: 'hdfc-tataneu',
+            name: 'Tata Neu Plus HDFC Bank Credit Card',
+            issuerName: 'HDFC Bank',
+            cardType: 'credit',
+            network: CardNetwork.visa,
+            isUpiLinkable: false,
+            pointValueInr: 1.0,
+            rewardRules: [],
+            capRules: [],
+            milestoneRules: [],
+            feeWaiverRules: [],
+            benefits: [],
+          ),
+        ];
+        final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+          smsBodies: const [
+            'Rs 500 spent on your HDFC Bank card ending 8780 at STORE on 16-Oct',
+            'Rs 500 spent on your MoneyBack+ Credit Card ending 8780 at STORE on 16-Oct',
+          ],
+          catalogue: physicalCatalogue,
+          isSms: true,
+        );
+        expect(result.suggestions, hasLength(1));
+        expect(result.suggestions.single.cardProductId, 'hdfc-moneyback');
+        expect(result.suggestions.single.last4, ['8780']);
+      },
+    );
+
+    test(
+      'unique product mark identifies a named card without repeating issuer',
+      () {
+        final moneyback = catalogue.map((card) => card).toList();
+        moneyback.add(
+          CardProduct(
+            id: 'hdfc-moneyback',
+            name: 'MoneyBack+ Credit Card',
+            issuerName: 'HDFC Bank',
+            cardType: 'credit',
+            network: CardNetwork.visa,
+            isUpiLinkable: false,
+            pointValueInr: 1.0,
+            rewardRules: [],
+            capRules: [],
+            milestoneRules: [],
+            feeWaiverRules: [],
+            benefits: [],
+          ),
+        );
+        final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
+          smsBodies: const [
+            'Rs 500 spent on your MoneyBack+ card ending 8780 at STORE on 16-Oct',
+          ],
+          catalogue: moneyback,
+          isSms: true,
+        );
+        expect(
+          result.suggestions.map((suggestion) => suggestion.cardProductId),
+          contains('hdfc-moneyback'),
+        );
+        expect(
+          result.suggestions
+              .firstWhere((s) => s.cardProductId == 'hdfc-moneyback')
+              .last4,
+          ['8780'],
+        );
+      },
+    );
+
     test('prevents substring false positive on common words', () {
       // "ace" should not trigger from "interface", "place", "space"
       final hits = LocalCardDiscoveryEngine.discoverInMessage(
