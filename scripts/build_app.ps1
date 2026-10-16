@@ -10,7 +10,8 @@ param(
   [string]$BuildNumber,
   [string]$ApiBaseUrl,
   [string]$AuthBaseUrl,
-  [string]$LegalBaseUrl
+  [string]$LegalBaseUrl,
+  [string]$NearbyRadiusMeters
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,6 +33,16 @@ if ($Environment -eq 'prod' -and $Target -eq 'apk' -and -not $SplitPerAbi) {
 
 if (-not [string]::IsNullOrWhiteSpace($BuildNumber) -and $BuildNumber -notmatch '^[1-9][0-9]*$') {
   throw "-BuildNumber must be a positive integer."
+}
+
+if (-not [string]::IsNullOrWhiteSpace($NearbyRadiusMeters)) {
+  if ($NearbyRadiusMeters -notmatch '^[1-9][0-9]*(\.[0-9]+)?$') {
+    throw "-NearbyRadiusMeters must be a positive number."
+  }
+  $radius = [double]$NearbyRadiusMeters
+  if ($radius -gt 5000) {
+    throw "-NearbyRadiusMeters cannot exceed 5000 while the free nearby discovery route has a 5 km limit."
+  }
 }
 
 if ($Environment -eq 'dev') {
@@ -64,6 +75,9 @@ $flutterArgs = @(
 )
 if ($SplitPerAbi) { $flutterArgs += '--split-per-abi' }
 if (-not [string]::IsNullOrWhiteSpace($BuildNumber)) { $flutterArgs += "--build-number=$BuildNumber" }
+if (-not [string]::IsNullOrWhiteSpace($NearbyRadiusMeters)) {
+  $flutterArgs += "--dart-define=PANDAPAY_NEARBY_RADIUS_METERS=$NearbyRadiusMeters"
+}
 
 Write-Host "Building $Environment $Target with hosted endpoints:" -ForegroundColor Cyan
 Write-Host "  API:   $ApiBaseUrl"

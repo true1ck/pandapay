@@ -88,6 +88,12 @@ command:
 Replace `N` only after completing the pre-build version check. Never reuse a
 version number for a new delivery.
 
+For a temporary nearby-merchant test build only, add
+`-NearbyRadiusMeters 5000`. The app defaults back to the production radius of
+2 km whenever this option is omitted. Do not use the test override for a
+normal release delivery; the free discovery fallback currently supports only
+up to 5 km.
+
 If the project was cleaned, regenerate Flutter plugin metadata with:
 
 ```powershell
