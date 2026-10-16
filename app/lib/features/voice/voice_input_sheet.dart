@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -39,11 +41,14 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   String? _selectedCategoryId;
   bool _available = false;
   bool _listening = false;
+  bool _speechSessionCompleted = false;
+  Timer? _completionTimer;
   bool _saving = false;
   String? _error;
 
   @override
   void dispose() {
+    _completionTimer?.cancel();
     _speech.stop();
     _amountController.dispose();
     _pointsController.dispose();
@@ -55,10 +60,11 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   Future<void> _toggleListening() async {
     if (_listening) {
       await _speech.stop();
-      if (mounted) {
-        setState(() => _listening = false);
-        _makeDraft();
-      }
+      // Android can deliver the final recognition result just after stop()
+      // completes. Give that callback a brief window before interpreting the
+      // transcript; otherwise a valid utterance can open an empty review.
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      _completeListening();
       return;
     }
     setState(() {
@@ -66,16 +72,33 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
       _transcript = '';
       _draft = null;
     });
-    _available = await _speech.initialize(
-      onStatus: (status) {
-        if (!mounted || status != 'done') return;
-        setState(() => _listening = false);
-        if (_transcript.trim().isNotEmpty) _makeDraft();
-      },
-      onError: (error) {
-        if (mounted) setState(() => _error = error.errorMsg);
-      },
-    );
+    _speechSessionCompleted = false;
+    try {
+      _available = await _speech.initialize(
+        onStatus: (status) {
+          if (status == 'done') _scheduleListeningCompletion();
+        },
+        onError: (error) {
+          if (!mounted || _speechSessionCompleted) return;
+          _speechSessionCompleted = true;
+          setState(() {
+            _listening = false;
+            _error = error.errorMsg.trim().isEmpty
+                ? 'Speech recognition stopped. Try again.'
+                : error.errorMsg;
+          });
+        },
+      );
+    } catch (error) {
+      if (mounted) {
+        _speechSessionCompleted = true;
+        setState(() {
+          _listening = false;
+          _error = 'Speech recognition could not start. Try again.';
+        });
+      }
+      return;
+    }
     if (!_available) {
       if (mounted) {
         setState(
@@ -85,19 +108,55 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
       return;
     }
     setState(() => _listening = true);
-    await _speech.listen(
-      onResult: (result) {
-        if (!mounted) return;
-        setState(() => _transcript = result.recognizedWords);
-        if (result.finalResult) _makeDraft();
-      },
-      listenOptions: stt.SpeechListenOptions(
-        partialResults: true,
-        listenFor: const Duration(seconds: 45),
-        pauseFor: const Duration(seconds: 4),
-        listenMode: stt.ListenMode.dictation,
-      ),
+    try {
+      await _speech.listen(
+        onResult: (result) {
+          if (!mounted) return;
+          setState(() => _transcript = result.recognizedWords);
+          if (result.finalResult) _completeListening();
+        },
+        listenOptions: stt.SpeechListenOptions(
+          partialResults: true,
+          listenFor: const Duration(seconds: 45),
+          pauseFor: const Duration(seconds: 4),
+          listenMode: stt.ListenMode.dictation,
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        _speechSessionCompleted = true;
+        setState(() {
+          _listening = false;
+          _error = 'Speech recognition could not start. Try again.';
+        });
+      }
+    }
+  }
+
+  void _scheduleListeningCompletion() {
+    if (!mounted || _speechSessionCompleted) return;
+    _completionTimer?.cancel();
+    _completionTimer = Timer(
+      const Duration(milliseconds: 500),
+      _completeListening,
     );
+  }
+
+  void _completeListening() {
+    if (!mounted || _speechSessionCompleted) return;
+    _completionTimer?.cancel();
+    _completionTimer = null;
+    _speechSessionCompleted = true;
+    final transcript = _transcript.trim();
+    setState(() => _listening = false);
+    if (transcript.isEmpty) {
+      setState(
+        () => _error =
+            'I could not hear anything. Check microphone permission and try again.',
+      );
+      return;
+    }
+    _makeDraft();
   }
 
   void _makeDraft() {
