@@ -127,4 +127,44 @@ void main() {
     expect(result, hasLength(1));
     expect(result.single.isAlreadyOwned, isTrue);
   });
+
+  test('keeps an already-owned Flipkart Axis match visible as added', () {
+    const flipkart = CardProduct(
+      id: 'axis-flipkart',
+      name: 'Flipkart Axis Bank Credit Card',
+      issuerName: 'Axis Bank',
+      cardType: 'credit',
+      network: CardNetwork.mastercard,
+    );
+    final result = filterOwnedCardSuggestions(
+      suggestions: [
+        DiscoveredCard(
+          cardProductId: 'axis-flipkart',
+          name: 'Flipkart Axis Bank Credit Card',
+          score: 2,
+          evidence: const ['Flipkart Axis Bank Credit Card'],
+          last4: const ['7105'],
+          messageCount: 1,
+          sources: const ['sms'],
+          issuerName: 'Axis Bank',
+          cardType: 'credit',
+        ),
+      ],
+      ownedCards: [
+        UserCard(
+          id: 'user-axis-flipkart',
+          cardProductId: 'axis-flipkart',
+          cardName: 'Flipkart Axis Bank Credit Card',
+          cardType: 'credit',
+          isDefault: false,
+          last4: '7105',
+        ),
+      ],
+      catalogue: [flipkart],
+    );
+
+    expect(result, hasLength(1));
+    expect(result.single.isAlreadyOwned, isTrue);
+    expect(result.single.name, 'Flipkart Axis Bank Credit Card');
+  });
 }

@@ -6062,7 +6062,6 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
         ['sms', fromSms],
       ]) {
         for (const hit of hits) {
-          if (ownedIds.has(hit.cardProductId)) continue; // already in the wallet
           const existing = merged.get(hit.cardProductId);
           if (existing) {
             existing.sources.push(source);
@@ -6087,8 +6086,16 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
             if (existing.creditLimitInr == null && hit.creditLimitInr != null) {
               existing.creditLimitInr = hit.creditLimitInr;
             }
+            existing.isAlreadyOwned = existing.isAlreadyOwned || ownedIds.has(hit.cardProductId);
           } else {
-            merged.set(hit.cardProductId, { ...hit, sources: [source] });
+            merged.set(hit.cardProductId, {
+              ...hit,
+              sources: [source],
+              // Keep an owned match in the response so the client can show
+              // the successful detection and disable the add action. Hiding
+              // it here made a previously detected card appear to vanish.
+              isAlreadyOwned: ownedIds.has(hit.cardProductId),
+            });
           }
         }
       }

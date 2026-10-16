@@ -120,7 +120,8 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
             );
           } catch (_) {
             // Discovery remains useful if a cached wallet/catalogue read is
-            // unavailable; the API's product-id filter is still applied.
+            // unavailable; the local fallback still reconciles physical-card
+            // identity before rendering.
           }
           if (mounted && generation == _scanGeneration) {
             setState(() => _result = filteredResult);
@@ -142,7 +143,6 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           localUserCardsRepositoryProvider.future,
         );
         final owned = await localRepo.fetchUserCards(catalogue: catalogue);
-        final ownedIds = owned.map((c) => c.cardProductId).toSet();
 
         final localResult = LocalCardDiscoveryEngine.discoverAcrossMessages(
           smsBodies: bodies,
@@ -150,9 +150,11 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           isSms: true,
         );
 
-        final filteredSuggestions = localResult.suggestions
-            .where((s) => !ownedIds.contains(s.cardProductId))
-            .toList();
+        final filteredSuggestions = filterOwnedCardSuggestions(
+          suggestions: localResult.suggestions,
+          ownedCards: owned,
+          catalogue: catalogue,
+        );
 
         if (mounted && generation == _scanGeneration) {
           setState(() {
@@ -177,16 +179,17 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     final catalogue = await ref.read(catalogueProvider.future);
     final localRepo = await ref.read(localUserCardsRepositoryProvider.future);
     final owned = await localRepo.fetchUserCards(catalogue: catalogue);
-    final ownedIds = owned.map((c) => c.cardProductId).toSet();
     final result = LocalCardDiscoveryEngine.discoverAcrossMessages(
       smsBodies: bodies,
       catalogue: catalogue,
       isSms: true,
     );
     return CardDiscoveryResult(
-      suggestions: result.suggestions
-          .where((s) => !ownedIds.contains(s.cardProductId))
-          .toList(),
+      suggestions: filterOwnedCardSuggestions(
+        suggestions: result.suggestions,
+        ownedCards: owned,
+        catalogue: catalogue,
+      ),
       emailsScanned: 0,
       smsScanned: bodies.length,
     );
@@ -228,11 +231,11 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       final owned = repo != null
           ? await repo.fetchUserCards()
           : await localRepo.fetchUserCards(catalogue: catalogue);
-      final ownedIds = owned.map((c) => c.cardProductId).toSet();
-
-      final filtered = discovery.suggestions
-          .where((s) => !ownedIds.contains(s.cardProductId))
-          .toList();
+      final filtered = filterOwnedCardSuggestions(
+        suggestions: discovery.suggestions,
+        ownedCards: owned,
+        catalogue: catalogue,
+      );
 
       await ref
           .read(gmailConnectControllerProvider.notifier)
