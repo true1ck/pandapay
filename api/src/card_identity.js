@@ -21,11 +21,33 @@ function cardIdentityKey(cardProductId, last4) {
  * product-only placeholder. `existingCards` is plain data so this rule can
  * be tested without a database.
  */
-function findCardAddConflict(existingCards, { cardProductId, last4 }) {
+function findCardAddConflict(existingCards, {
+  cardProductId,
+  last4,
+  issuerId = null,
+  cardType = null,
+}) {
   const incomingLast4 = normalizeCardLast4(last4);
-  const matches = existingCards
+  const activeCards = existingCards.filter((card) => !card.is_archived);
+  const matches = activeCards
     .filter((card) => !card.is_archived && card.card_product_id === cardProductId)
     .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+
+  // Catalogue products can change when a user corrects a card name or chooses
+  // a more specific variant (for example, Tata Neu -> MoneyBack+), but the
+  // physical instrument has not changed. When the issuer, instrument type,
+  // and last four are all known, that identity is authoritative across
+  // catalogue products. This prevents two reward engines from competing for
+  // the same bank card while still allowing cards with the same suffix at a
+  // different issuer or on a different instrument type.
+  if (incomingLast4 !== null && issuerId && cardType) {
+    const samePhysicalCard = activeCards
+      .filter((card) => card.issuer_id === issuerId && card.card_type === cardType)
+      .find((card) => normalizeCardLast4(card.last4) === incomingLast4);
+    if (samePhysicalCard) {
+      return { kind: 'already_present', userCard: samePhysicalCard, physicalIdentity: true };
+    }
+  }
 
   const exact = matches.find(
     (card) => normalizeCardLast4(card.last4) === incomingLast4,

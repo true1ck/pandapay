@@ -70,6 +70,23 @@ void main() {
       expect(looksLikeTransactionSms('Your account has been debited with INR 500'), true);
     });
 
+    test('true for a statement-only due-date alert', () {
+      expect(
+        looksLikeTransactionSms(
+          'Your statement for Axis Bank Credit Card no. XX7105 is generated. '
+          'Due on: 02-11-26 Total amt: INR Dr. 2147.00 Min amt due: INR Dr. 100.00',
+        ),
+        true,
+      );
+    });
+
+    test('true for a due alert without a currency keyword', () {
+      expect(
+        looksLikeTransactionSms('Your bill is payable by 02/11/2026 for card ending 7105.'),
+        true,
+      );
+    });
+
     test('false for an unrelated promotional message', () {
       expect(looksLikeTransactionSms('Flat 50% off on your next order! Shop now.'), false);
     });

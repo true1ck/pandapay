@@ -124,5 +124,32 @@ bool looksLikeTransactionSms(String smsBody) {
     'rs ',
     '₹',
   ];
-  return keywords.any(lower.contains);
+  if (keywords.any(lower.contains)) return true;
+
+  // Statement/bill alerts are not spend alerts, but they are still required
+  // by the due-date engine. These messages often contain only a card suffix,
+  // a due date, and a statement amount, so the old transaction-only gate
+  // silently discarded them before the API could learn the card's due day.
+  const dueDateWords = [
+    'payment due',
+    'due date',
+    'due on',
+    'due by',
+    'minimum amount due',
+    'min amt due',
+    'minimum due',
+    'total amount due',
+    'amount payable',
+    'bill payable',
+    'pay by',
+    'pay before',
+    'pay on or before',
+    'payment deadline',
+    'last date for payment',
+    'last date',
+    'statement generated',
+    'statement is generated',
+    'bill generated',
+  ];
+  return dueDateWords.any(lower.contains);
 }

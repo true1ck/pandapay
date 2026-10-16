@@ -2739,8 +2739,12 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       RegExp(r'[^A-Za-z0-9._+-]'),
       '_',
     );
+    // Bump this when the SMS acceptance/pre-filter rules change. The due-date
+    // engine now accepts statement-only alerts that older builds discarded;
+    // one full inbox pass is required so existing statements are not stranded
+    // behind the previous checkpoint.
     final inboxReconciliationKey =
-        'pandapay_app.sms_inbox_reconciled_at_v3_$safeBuildIdentity';
+        'pandapay_app.sms_inbox_reconciled_at_v4_$safeBuildIdentity';
     final serverObservationCountKey =
         'pandapay_app.sms_server_observation_count_v1_$safeBuildIdentity';
     final now = DateTime.now();

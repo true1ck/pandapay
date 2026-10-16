@@ -81,3 +81,49 @@ test('archived cards do not block a replacement add', () => {
     null,
   );
 });
+
+test('same issuer, instrument, and suffix block a different catalogue product', () => {
+  const existing = [{
+    id: 'tata-neu-8708',
+    card_product_id: 'product-tata-neu',
+    issuer_id: 'issuer-hdfc',
+    card_type: 'credit',
+    last4: '8708',
+    is_archived: false,
+  }];
+
+  const result = findCardAddConflict(existing, {
+    cardProductId: 'product-moneyback',
+    issuerId: 'issuer-hdfc',
+    cardType: 'credit',
+    last4: '8708',
+  });
+
+  assert.equal(result.kind, 'already_present');
+  assert.equal(result.physicalIdentity, true);
+  assert.equal(result.userCard.id, 'tata-neu-8708');
+});
+
+test('same suffix at another issuer or instrument remains a separate card', () => {
+  const existing = [{
+    id: 'hdfc-credit-8708',
+    card_product_id: 'product-tata-neu',
+    issuer_id: 'issuer-hdfc',
+    card_type: 'credit',
+    last4: '8708',
+    is_archived: false,
+  }];
+
+  assert.equal(findCardAddConflict(existing, {
+    cardProductId: 'product-other-bank',
+    issuerId: 'issuer-axis',
+    cardType: 'credit',
+    last4: '8708',
+  }), null);
+  assert.equal(findCardAddConflict(existing, {
+    cardProductId: 'product-hdfc-debit',
+    issuerId: 'issuer-hdfc',
+    cardType: 'debit',
+    last4: '8708',
+  }), null);
+});

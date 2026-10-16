@@ -55,6 +55,12 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
       await clearUserCardsCache(ref);
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+      ref.invalidate(spendReportProvider);
+      ref.invalidate(budgetsProvider);
+      ref.invalidate(recurringReportProvider);
       messenger.showSnackBar(SnackBar(content: Text(success)));
       return true;
     } catch (e) {

@@ -2270,25 +2270,37 @@ app.post('/user-cards', requireAuth, async (req, res) => {
         [req.userId, cardProductId],
       );
       const card = await client.query(
-        `SELECT id FROM card_products WHERE id = $1 AND status = 'published'`,
+        `SELECT id, issuer_id, card_type
+           FROM card_products
+          WHERE id = $1 AND status = 'published'`,
         [cardProductId]
       );
       if (card.rows.length === 0) return null;
 
+      // Serialize physical-card adds as well as product adds. This closes the
+      // race where two catalogue variants for the same bank card are tapped
+      // at nearly the same time.
+      await client.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`,
+        [`card-identity:${req.userId}:${card.rows[0].issuer_id || ''}:${card.rows[0].card_type || ''}:${normalizedLast4 || ''}`],
+      );
+
       const existing = await client.query(
         `SELECT uc.id, uc.card_product_id, uc.nickname, uc.last4,
                 uc.is_default, uc.sort_order, uc.created_at,
-                uc.is_archived, cp.name AS card_name
+                 uc.is_archived, cp.name AS card_name,
+                 cp.issuer_id, cp.card_type
            FROM user_cards uc
            JOIN card_products cp ON cp.id = uc.card_product_id
-          WHERE uc.profile_id = $1 AND uc.card_product_id = $2
-            AND uc.is_archived = false
+          WHERE uc.profile_id = $1 AND uc.is_archived = false
           ORDER BY uc.created_at ASC, uc.id ASC`,
-        [req.userId, cardProductId],
+        [req.userId],
       );
       const conflict = findCardAddConflict(existing.rows, {
         cardProductId,
         last4: normalizedLast4,
+        issuerId: card.rows[0].issuer_id,
+        cardType: card.rows[0].card_type,
       });
       if (conflict?.kind === 'already_present') {
         return { alreadyPresent: true, userCard: conflict.userCard };
@@ -2363,7 +2375,9 @@ app.post('/user-cards', requireAuth, async (req, res) => {
  * to the product. That is the single worst place in the funnel for silent
  * data loss, which is why this exists.
  *
- * IDEMPOTENT BY CARD PRODUCT + LAST FOUR, not by a client-supplied id. The client cannot
+ * IDEMPOTENT BY PHYSICAL CARD IDENTITY (issuer + instrument type + last four)
+ * when catalogue metadata is available, with product + last four as the
+ * fallback. It is not keyed by a client-supplied id. The client cannot
  * distinguish "the request timed out" from "the request succeeded and the
  * response was lost", so a retry has to be safe; and a guest id like
  * `local_1723...` means nothing to this database, so it can't be a dedupe
@@ -2399,13 +2413,16 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
       // transaction, and this also lets `isDefault` below be decided from
       // the true "did they have any cards at all before this import" state.
       const existing = await client.query(
-        `SELECT card_product_id, last4, is_archived
-           FROM user_cards
-          WHERE profile_id = $1 AND is_archived = false`,
+        `SELECT uc.id, uc.card_product_id, uc.last4, uc.is_archived,
+                cp.issuer_id, cp.card_type
+           FROM user_cards uc
+           JOIN card_products cp ON cp.id = uc.card_product_id
+          WHERE uc.profile_id = $1 AND uc.is_archived = false`,
         [req.userId]
       );
-      const owned = new Set(existing.rows.map((r) => cardIdentityKey(r.card_product_id, r.last4)));
-      const hadNoCards = owned.size === 0;
+      const existingCards = existing.rows;
+      const owned = new Set(existingCards.map((r) => cardIdentityKey(r.card_product_id, r.last4)));
+      const hadNoCards = existingCards.length === 0;
 
       const maxOrder = await client.query(
         `SELECT COALESCE(MAX(sort_order), 0) AS m FROM user_cards WHERE profile_id = $1`,
@@ -2427,19 +2444,57 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
           out.push({ localId, cardProductId, status: 'invalid_last4' });
           continue;
         }
-        const identityKey = cardIdentityKey(cardProductId, importedLast4);
-        if (owned.has(identityKey)) {
-          out.push({ localId, cardProductId, last4: importedLast4, status: 'already_present' });
-          continue;
-        }
-
         const product = await client.query(
-          `SELECT id FROM card_products WHERE id = $1 AND status = 'published'`,
+          `SELECT id, issuer_id, card_type
+             FROM card_products
+            WHERE id = $1 AND status = 'published'`,
           [cardProductId]
         );
         if (product.rows.length === 0) {
           out.push({ localId, cardProductId, status: 'unknown_product' });
           continue;
+        }
+
+        const identityKey = cardIdentityKey(cardProductId, importedLast4);
+        const conflict = findCardAddConflict(existingCards, {
+          cardProductId,
+          last4: importedLast4,
+          issuerId: product.rows[0].issuer_id,
+          cardType: product.rows[0].card_type,
+        });
+        if (conflict?.kind === 'already_present' || owned.has(identityKey)) {
+          out.push({
+            localId,
+            cardProductId,
+            last4: importedLast4,
+            status: 'already_present',
+            userCard: conflict?.userCard || null,
+          });
+          continue;
+        }
+        if (conflict?.kind === 'link_existing') {
+          const linked = await client.query(
+            `UPDATE user_cards
+                SET last4 = $1
+              WHERE id = $2 AND profile_id = $3 AND is_archived = false
+              RETURNING id, card_product_id, nickname, last4, is_default, is_archived, sort_order, created_at`,
+            [importedLast4, conflict.userCard.id, req.userId],
+          );
+          if (linked.rows.length > 0) {
+            existingCards.push({
+              ...conflict.userCard,
+              last4: importedLast4,
+            });
+            owned.add(identityKey);
+            out.push({
+              localId,
+              cardProductId,
+              last4: importedLast4,
+              status: 'already_present',
+              userCard: linked.rows[0],
+            });
+            continue;
+          }
         }
 
         nextOrder += 1;
@@ -2456,7 +2511,15 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
             nextOrder,
           ]
         );
-        owned.add(identityKey);
+        if (card.isArchived !== true) owned.add(identityKey);
+        existingCards.push({
+          id: inserted.rows[0].id,
+          card_product_id: cardProductId,
+          last4: importedLast4,
+          is_archived: card.isArchived === true,
+          issuer_id: product.rows[0].issuer_id,
+          card_type: product.rows[0].card_type,
+        });
         if (firstImportedId === null && card.isArchived !== true) {
           firstImportedId = inserted.rows[0].id;
         }
@@ -2501,14 +2564,17 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
  */
 app.post('/user-cards/:id/archive', requireAuth, async (req, res) => {
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
+    const result = await withUserClient(req.userId, async (client) => {
+      const archived = await client.query(
         `UPDATE user_cards SET is_archived = true, archived_at = now()
           WHERE id = $1 AND profile_id = $2
           RETURNING id`,
         [req.params.id, req.userId]
-      )
-    );
+      );
+      if (archived.rows.length === 0) return archived;
+      await repairSmsHistory(client, req.userId);
+      return archived;
+    });
     if (result.rows.length === 0) return res.status(404).json({ error: 'user_card not found' });
     res.json({ ok: true });
   } catch (err) {
@@ -2715,14 +2781,49 @@ app.delete('/card-overrides/:id', requireAuth, async (req, res) => {
  */
 app.post('/user-cards/:id/unarchive', requireAuth, async (req, res) => {
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
+    const result = await withUserClient(req.userId, async (client) => {
+      const target = await client.query(
+        `SELECT uc.id, uc.last4, uc.is_archived, cp.issuer_id, cp.card_type
+           FROM user_cards uc
+           JOIN card_products cp ON cp.id = uc.card_product_id
+          WHERE uc.id = $1 AND uc.profile_id = $2`,
+        [req.params.id, req.userId],
+      );
+      if (target.rows.length === 0) return { notFound: true };
+      const card = target.rows[0];
+      if (!card.is_archived) return { alreadyActive: true };
+      if (card.last4) {
+        const conflict = await client.query(
+          `SELECT uc.id, uc.card_product_id, uc.last4, cp.name AS card_name
+             FROM user_cards uc
+             JOIN card_products cp ON cp.id = uc.card_product_id
+            WHERE uc.profile_id = $1
+              AND uc.is_archived = false
+              AND uc.id <> $2
+              AND uc.last4 = $3
+              AND cp.issuer_id = $4
+              AND cp.card_type = $5
+            LIMIT 1`,
+          [req.userId, req.params.id, card.last4, card.issuer_id, card.card_type],
+        );
+        if (conflict.rows.length > 0) return { conflict: conflict.rows[0] };
+      }
+      return client.query(
         `UPDATE user_cards SET is_archived = false, archived_at = NULL
           WHERE id = $1 AND profile_id = $2
           RETURNING id`,
         [req.params.id, req.userId]
-      )
-    );
+      );
+    });
+    if (result.notFound) return res.status(404).json({ error: 'user_card not found' });
+    if (result.alreadyActive) return res.json({ ok: true });
+    if (result.conflict) {
+      return res.status(409).json({
+        error: 'card_already_added',
+        message: 'An active card with the same issuer, type, and last four is already in your wallet.',
+        userCard: result.conflict,
+      });
+    }
     if (result.rows.length === 0) return res.status(404).json({ error: 'user_card not found' });
     res.json({ ok: true });
   } catch (err) {
@@ -3357,7 +3458,108 @@ async function importParsedMessage(client, userId, {
  * two genuine live purchases at the same merchant from being silently
  * merged. The older/live row is retained; a backfill replay is ignored.
  */
+async function reconcileArchivedCardReferences(client, userId) {
+  // A replacement is safe only when the physical identity is unique on both
+  // sides: issuer + instrument type + last four. If two active catalogue rows
+  // could match, leave the transaction unresolved instead of assigning it to
+  // an arbitrary reward product.
+  const replacements = await client.query(
+    `WITH candidates AS (
+       SELECT archived.id AS archived_card_id, active.id AS active_card_id
+         FROM user_cards archived
+         JOIN card_products archived_product
+           ON archived_product.id = archived.card_product_id
+         JOIN user_cards active
+           ON active.profile_id = archived.profile_id
+          AND active.is_archived = false
+          AND active.last4 = archived.last4
+         JOIN card_products active_product
+           ON active_product.id = active.card_product_id
+        WHERE archived.profile_id = $1
+          AND archived.is_archived = true
+          AND archived.last4 ~ '^[0-9]{4}$'
+          AND archived_product.issuer_id = active_product.issuer_id
+          AND archived_product.card_type = active_product.card_type
+          AND archived.id <> active.id
+     ), unique_replacements AS (
+       SELECT archived_card_id, MIN(active_card_id) AS active_card_id
+         FROM candidates
+        GROUP BY archived_card_id
+       HAVING COUNT(*) = 1
+     )
+     SELECT archived_card_id, active_card_id
+       FROM unique_replacements`,
+    [userId],
+  );
+
+  let remappedTransactions = 0;
+  let remappedReferences = 0;
+  for (const replacement of replacements.rows) {
+    const { archived_card_id: archivedCardId, active_card_id: activeCardId } = replacement;
+    const transactions = await client.query(
+      `UPDATE transactions
+          SET user_card_id = $1, updated_at = now()
+        WHERE profile_id = $2 AND user_card_id = $3
+       RETURNING id`,
+      [activeCardId, userId, archivedCardId],
+    );
+    remappedTransactions += transactions.rowCount;
+
+    // These are references to the same historical instrument, not new
+    // purchases. Move them with the transaction so every user-facing report
+    // resolves to the active replacement card.
+    const referenceUpdates = [
+      ['points_ledger', 'user_card_id'],
+      ['statement_imports', 'user_card_id'],
+      ['lounge_usage', 'user_card_id'],
+      ['recurring_series', 'user_card_id'],
+      ['needs_review_items', 'suggested_card_id'],
+      ['transactions', 'recommended_card_id'],
+    ];
+    for (const [table, column] of referenceUpdates) {
+      const updated = await client.query(
+        `UPDATE ${table}
+            SET ${column} = $1
+          WHERE profile_id = $2 AND ${column} = $3`,
+        [activeCardId, userId, archivedCardId],
+      );
+      remappedReferences += updated.rowCount;
+    }
+    const splitReferences = await client.query(
+      `UPDATE transaction_splits
+          SET user_card_id = $1
+        WHERE user_card_id = $2
+          AND transaction_id IN (
+            SELECT id FROM transactions WHERE profile_id = $3
+          )`,
+      [activeCardId, archivedCardId, userId],
+    );
+    remappedReferences += splitReferences.rowCount;
+
+    // Derived rows belong to the old product's reward rules. Do not copy them
+    // to a different product; current caps are rebuilt from the canonical
+    // transaction ledger after the remap.
+    for (const table of ['cap_states', 'milestone_states', 'fee_waiver_states']) {
+      await client.query(
+        `DELETE FROM ${table} WHERE profile_id = $1 AND user_card_id = $2`,
+        [userId, archivedCardId],
+      );
+    }
+  }
+
+  if (remappedTransactions > 0) {
+    await reconcileCurrentCapStates(client, userId);
+  }
+
+  return {
+    replacementCards: replacements.rowCount,
+    remappedTransactions,
+    remappedReferences,
+  };
+}
+
 async function repairSmsHistory(client, userId) {
+  const cardReplacement = await reconcileArchivedCardReferences(client, userId);
   const duplicateRows = await client.query(
     `WITH groups AS (
        SELECT amount_inr, instrument, entry_kind, user_card_id, occurred_at,
@@ -3556,6 +3758,9 @@ async function repairSmsHistory(client, userId) {
     linkedCards,
     reclassified,
     remainingLegacyRows: Math.max(0, legacyRows.rowCount - reclassified),
+    replacementCards: cardReplacement.replacementCards,
+    remappedTransactions: cardReplacement.remappedTransactions,
+    remappedReferences: cardReplacement.remappedReferences,
   };
 }
 
@@ -4577,6 +4782,10 @@ app.get('/transactions/sms-import-state', requireAuth, async (req, res) => {
  */
 app.get('/transactions', requireAuth, async (req, res) => {
   const { from, to, cardId, categoryId, source, q } = req.query;
+  // Keep transaction-list consumers aligned with spend reports even before a
+  // background reconciliation has run. Only a unique archived -> active
+  // physical-card match is eligible; ambiguity remains visible as unmatched.
+  const canonicalCardId = 'COALESCE(replacement.active_card_id, t.user_card_id)';
   const conditions = [`t.profile_id = $1`, `t.status = 'active'`];
   const params = [req.userId];
   // Task D-1's last missing filter: free-text search. activity_screen.dart
@@ -4602,7 +4811,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
   }
   if (cardId) {
     params.push(cardId);
-    conditions.push(`t.user_card_id = $${params.length}`);
+    conditions.push(`${canonicalCardId} = $${params.length}`);
   }
   // Task D-1: category/source filters (ui-spec D1 "Search + filters (date,
   // card, category, source, needs-review)") — needs-review isn't a
@@ -4624,7 +4833,28 @@ app.get('/transactions', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
+        `WITH replacement_candidates AS (
+          SELECT archived.id AS archived_card_id, active.id AS active_card_id
+            FROM user_cards archived
+            JOIN card_products archived_product ON archived_product.id = archived.card_product_id
+            JOIN user_cards active
+              ON active.profile_id = archived.profile_id
+             AND active.is_archived = false
+             AND active.last4 = archived.last4
+            JOIN card_products active_product ON active_product.id = active.card_product_id
+           WHERE archived.profile_id = $1
+             AND archived.is_archived = true
+             AND archived.last4 ~ '^[0-9]{4}$'
+             AND archived_product.issuer_id = active_product.issuer_id
+             AND archived_product.card_type = active_product.card_type
+             AND archived.id <> active.id
+        ), unique_replacements AS (
+          SELECT archived_card_id, MIN(active_card_id) AS active_card_id
+            FROM replacement_candidates
+           GROUP BY archived_card_id
+          HAVING COUNT(*) = 1
+        )
+        SELECT t.id, ${canonicalCardId} AS user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
@@ -4643,7 +4873,8 @@ app.get('/transactions', requireAuth, async (req, res) => {
                   LIMIT 1) AS card_last4,
                 cp.name AS card_name, uc.nickname AS card_nickname
            FROM transactions t
-           LEFT JOIN user_cards uc ON uc.id = t.user_card_id
+           LEFT JOIN unique_replacements replacement ON replacement.archived_card_id = t.user_card_id
+           LEFT JOIN user_cards uc ON uc.id = ${canonicalCardId}
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
            LEFT JOIN spend_categories sc ON sc.id = t.category_id
           WHERE ${conditions.join(' AND ')}
@@ -4669,7 +4900,29 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
+        `WITH replacement_candidates AS (
+          SELECT archived.id AS archived_card_id, active.id AS active_card_id
+            FROM user_cards archived
+            JOIN card_products archived_product ON archived_product.id = archived.card_product_id
+            JOIN user_cards active
+              ON active.profile_id = archived.profile_id
+             AND active.is_archived = false
+             AND active.last4 = archived.last4
+            JOIN card_products active_product ON active_product.id = active.card_product_id
+           WHERE archived.profile_id = $2
+             AND archived.is_archived = true
+             AND archived.last4 ~ '^[0-9]{4}$'
+             AND archived_product.issuer_id = active_product.issuer_id
+             AND archived_product.card_type = active_product.card_type
+             AND archived.id <> active.id
+        ), unique_replacements AS (
+          SELECT archived_card_id, MIN(active_card_id) AS active_card_id
+            FROM replacement_candidates
+           GROUP BY archived_card_id
+          HAVING COUNT(*) = 1
+        )
+        SELECT t.id, COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
+               t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
@@ -4688,7 +4941,8 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
                   LIMIT 1) AS card_last4,
                 cp.name AS card_name, uc.nickname AS card_nickname
            FROM transactions t
-           LEFT JOIN user_cards uc ON uc.id = t.user_card_id
+           LEFT JOIN unique_replacements replacement ON replacement.archived_card_id = t.user_card_id
+           LEFT JOIN user_cards uc ON uc.id = COALESCE(replacement.active_card_id, t.user_card_id)
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
            LEFT JOIN spend_categories sc ON sc.id = t.category_id
           WHERE t.id = $1 AND t.profile_id = $2`,

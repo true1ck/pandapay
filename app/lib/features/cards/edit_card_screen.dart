@@ -133,6 +133,12 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       await clearUserCardsCache(ref);
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+      ref.invalidate(spendReportProvider);
+      ref.invalidate(budgetsProvider);
+      ref.invalidate(recurringReportProvider);
       if (mounted) context.pop();
     } catch (e) {
       // Same offline-queue pattern as edit_transaction_screen.dart's _save —
@@ -264,6 +270,12 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       await clearUserCardsCache(ref);
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+      ref.invalidate(spendReportProvider);
+      ref.invalidate(budgetsProvider);
+      ref.invalidate(recurringReportProvider);
       // The card detail route is now stale because the archived card is no
       // longer part of the active-card query. Return to Wallet directly so we
       // never render CardDetailScreen's "card could not be found" state after

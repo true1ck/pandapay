@@ -24,6 +24,23 @@ test('supports issuer hyphenated and ordinal date formats', () => {
   assert.equal(extractDueDate('Payment due on Oct 16, 2026.').day, 16);
 });
 
+test('supports ISO dates and bill/payable wording', () => {
+  assert.equal(extractDueDate('Bill payable by: 2026-11-02.').day, 2);
+  assert.equal(extractDueDate('Minimum amount due date is 02.11.2026.').day, 2);
+});
+
+test('supports masked card-number variants used in statement alerts', () => {
+  for (const body of [
+    'Credit Card number: XXXX 7105. Payment due date: 02/11/2026.',
+    'Credit card no XX 7105. Due date - 02-11-2026.',
+    'Credit card x7105. Due on: 02-11-2026.',
+    'Card ending with 7105. Payment due on 02-11-2026.',
+    'Credit Card No-****7105. Pay by 02-11-2026.',
+  ]) {
+    assert.equal(extractLast4(body), '7105', body);
+  }
+});
+
 test('supports Axis statement wording with a colon after due on', () => {
   const body = [
     'Your statement for Axis Bank Credit Card no. XX7105 is generated.',
