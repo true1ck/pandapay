@@ -71,6 +71,19 @@ x86_64: 10013
 
 The version code must be checked from every generated APK before delivery.
 
+Verified phone baseline on 2026-10-16:
+
+| Device | ABI | Installed package version | Signing certificate |
+| --- | --- | ---: | --- |
+| Motorola edge 50 fusion (`ZA222MS4SF`) | `arm64-v8a` | `12027` | Android Debug, SHA-256 `3dda2588c1eb6c14f19dddf3b0af1a6c798bb5c0f81a72b1878d7c39431c1042` |
+
+The ARM64 APK with version code `12027` was installed successfully over USB
+without uninstalling the app, and the app launched afterward. Future update
+builds for this phone must have an ARM64 version code greater than `12027` and
+must match the installed signing certificate. The earlier `8013` APK is lower
+than this phone's actual installed `12026` baseline and must not be delivered
+to this phone.
+
 ## 5. Canonical build command
 
 Use the repository wrapper; do not assemble a production APK with an ad-hoc
