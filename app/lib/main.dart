@@ -9,6 +9,7 @@ import 'app/design/app_theme.dart';
 import 'app/env.dart';
 import 'app/error_handling.dart';
 import 'app/providers.dart';
+import 'app/assistant_action.dart';
 import 'app/router.dart';
 import 'data/spend_reports_repository.dart';
 import 'features/settings/appearance_providers.dart';
@@ -189,13 +190,11 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
 
   Future<void> _openAssistantUri(String raw) async {
     final uri = Uri.tryParse(raw);
-    if (!mounted ||
-        uri == null ||
-        uri.scheme != 'pandapay' ||
-        uri.host != 'assistant' ||
-        uri.path != '/spending') {
+    if (!mounted || uri == null) {
       return;
     }
+    final request = parseAssistantUri(uri);
+    if (request == null) return;
 
     // The router starts at /splash while the secure session and onboarding
     // flag are restored. Navigating immediately would be redirected to the
@@ -217,13 +216,33 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     }
     if (!mounted) return;
 
-    final requestedPeriod = uri.queryParameters['period'];
-    final period = SpendPeriod.values.firstWhere(
-      (candidate) => candidate.wireValue == requestedPeriod,
-      orElse: () => SpendPeriod.month,
-    );
-    ref.read(selectedSpendPeriodProvider.notifier).state = period;
-    ref.read(goRouterProvider).go(AppRoute.assistantSpending);
+    final router = ref.read(goRouterProvider);
+    switch (request.action) {
+      case AssistantAction.spending:
+        final period = SpendPeriod.values.firstWhere(
+          (candidate) => candidate.wireValue == request.period,
+          orElse: () => SpendPeriod.month,
+        );
+        ref.read(selectedSpendPeriodProvider.notifier).state = period;
+        router.go(AppRoute.assistantSpending);
+      case AssistantAction.addSpend:
+        router.go(
+          AppRoute.assistantAddSpend,
+          extra: request,
+        );
+      case AssistantAction.dueDates:
+        router.go(AppRoute.assistantDueDates);
+      case AssistantAction.wallet:
+        router.go(AppRoute.cards);
+      case AssistantAction.findCards:
+        router.go(AppRoute.assistantFindCards);
+      case AssistantAction.nearbyMerchants:
+        router.go(AppRoute.assistantNearbyMerchants);
+      case AssistantAction.scanUpi:
+        router.go(AppRoute.assistantScanUpi);
+      case AssistantAction.bestCard:
+        router.go(AppRoute.home);
+    }
   }
 
   @override

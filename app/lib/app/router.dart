@@ -63,6 +63,11 @@ import '../features/system/maintenance_screen.dart';
 import '../features/tools/emergency_card_info_screen.dart';
 import '../features/tools/tools_hub_screen.dart';
 import '../features/voice/voice_input_sheet.dart';
+import '../features/quickadd/quick_add_screen.dart';
+import '../features/geofence/nearby_merchants_screen.dart';
+import '../features/cards/find_cards_screen.dart';
+import '../features/scan/upi_qr_scanner_screen.dart';
+import 'assistant_action.dart';
 import 'providers.dart';
 import 'tutorial_keys.dart';
 
@@ -128,6 +133,11 @@ abstract final class AppRoute {
   /// point lands here and the app then shows the same authoritative Trends
   /// screen used by normal in-app navigation.
   static const assistantSpending = '/assistant/spending';
+  static const assistantAddSpend = '/assistant/add-spend';
+  static const assistantDueDates = '/assistant/due-dates';
+  static const assistantFindCards = '/assistant/find-cards';
+  static const assistantNearbyMerchants = '/assistant/nearby-merchants';
+  static const assistantScanUpi = '/assistant/scan-upi';
 
   /// Budgets — advisory limits the user sets for themselves.
   static const budgets = '/insights/budgets';
@@ -607,6 +617,40 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoute.assistantSpending,
         builder: (context, state) => const SpendTrendsScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.assistantAddSpend,
+        builder: (context, state) {
+          final request = state.extra is AssistantRequest
+              ? state.extra! as AssistantRequest
+              : null;
+          return QuickAddScreen(
+            initialAmount: request?.amount == null
+                ? null
+                : Money.fromRupees(request!.amount!),
+            initialMerchant: request?.merchant,
+            initialCategoryName: request?.category,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoute.assistantDueDates,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(title: const Text('Due Date Calendar')),
+          body: const DueDateCalendarScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.assistantFindCards,
+        builder: (context, state) => const FindCardsScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.assistantNearbyMerchants,
+        builder: (context, state) => const NearbyMerchantsScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.assistantScanUpi,
+        builder: (context, state) => const UpiQrScannerScreen(),
       ),
       GoRoute(
         path: AppRoute.budgets,

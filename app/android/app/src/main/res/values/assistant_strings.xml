@@ -1,9 +1,62 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="shortcut_spending_short">Spending</string>
+    <string name="shortcut_spending_long">Show my PandaPay spending</string>
+    <string name="shortcut_add_spend_short">Add spend</string>
+    <string name="shortcut_add_spend_long">Add a PandaPay spend</string>
+    <string name="shortcut_due_dates_short">Due dates</string>
+    <string name="shortcut_due_dates_long">Show card payment due dates</string>
+    <string name="shortcut_best_card_short">Best card</string>
+    <string name="shortcut_best_card_long">Show the best card to use</string>
+    <string name="shortcut_scan_upi_short">Scan UPI</string>
+    <string name="shortcut_scan_upi_long">Scan a UPI QR code</string>
     <string-array name="assistant_spending_queries">
         <item>show my spending</item>
         <item>show my spending this month</item>
         <item>tell me my spending in PandaPay</item>
         <item>show my PandaPay spending this month</item>
+    </string-array>
+    <string-array name="assistant_spending_period_queries">
+        <item>show my spending for $period</item>
+        <item>show my PandaPay spending for $period</item>
+        <item>tell me my spending this $period</item>
+    </string-array>
+    <string-array name="assistant_add_spending_queries">
+        <item>add a spend of $amount</item>
+        <item>add spending of $amount</item>
+        <item>record a purchase of $amount at $merchant</item>
+        <item>add a purchase of $amount at $merchant</item>
+        <item>record $amount spent at $merchant</item>
+        <item>add a $category spend of $amount</item>
+    </string-array>
+    <string-array name="assistant_due_payments_queries">
+        <item>show my card payment due dates</item>
+        <item>show my payments due in PandaPay</item>
+        <item>what card payments are due</item>
+    </string-array>
+    <string-array name="assistant_wallet_queries">
+        <item>open my PandaPay wallet</item>
+        <item>show my cards in PandaPay</item>
+        <item>open my card wallet</item>
+    </string-array>
+    <string-array name="assistant_find_cards_queries">
+        <item>find my cards in PandaPay</item>
+        <item>scan my messages for cards</item>
+        <item>discover my cards in PandaPay</item>
+    </string-array>
+    <string-array name="assistant_nearby_queries">
+        <item>check nearby merchants in PandaPay</item>
+        <item>find nearby merchants</item>
+        <item>show nearby places where my cards are useful</item>
+    </string-array>
+    <string-array name="assistant_scan_upi_queries">
+        <item>scan a UPI QR with PandaPay</item>
+        <item>scan a QR code for payment in PandaPay</item>
+        <item>open PandaPay QR scanner</item>
+    </string-array>
+    <string-array name="assistant_best_card_queries">
+        <item>which card should I use in PandaPay</item>
+        <item>show me the best card in PandaPay</item>
+        <item>find my best card to pay</item>
     </string-array>
 </resources>

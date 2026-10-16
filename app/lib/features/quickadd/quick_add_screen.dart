@@ -44,8 +44,17 @@ class QuickAddScreen extends ConsumerStatefulWidget {
   final Money? initialAmount;
   final String? initialCategoryId;
   final String? initialUserCardId;
+  final String? initialMerchant;
+  final String? initialCategoryName;
 
-  const QuickAddScreen({super.key, this.initialAmount, this.initialCategoryId, this.initialUserCardId});
+  const QuickAddScreen({
+    super.key,
+    this.initialAmount,
+    this.initialCategoryId,
+    this.initialUserCardId,
+    this.initialMerchant,
+    this.initialCategoryName,
+  });
 
   @override
   ConsumerState<QuickAddScreen> createState() => _QuickAddScreenState();
@@ -88,14 +97,38 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     if (widget.initialAmount != null && !widget.initialAmount!.isZero) {
       _amountController.text = widget.initialAmount!.rupees.toStringAsFixed(0);
     }
+    if (widget.initialMerchant != null) {
+      _merchantController.text = widget.initialMerchant!;
+    }
     _selectedCategoryId = widget.initialCategoryId;
     _selectedUserCardId = widget.initialUserCardId;
     // Only fall back to the remembered card when Home didn't already hand
     // us a winning one — _loadLastUsedCard's own membership check still
     // protects against a stale cross-user id either way.
     if (widget.initialUserCardId == null) _loadLastUsedCard();
+    if (widget.initialCategoryId == null && widget.initialCategoryName != null) {
+      _resolveInitialCategory(widget.initialCategoryName!);
+    }
     _loadRecentMerchants();
     _merchantFocusNode.addListener(_onMerchantFocusChanged);
+  }
+
+  Future<void> _resolveInitialCategory(String name) async {
+    try {
+      final categories = await ref.read(categoriesProvider.future);
+      final query = name.trim().toLowerCase();
+      final match = categories.where((category) {
+        final label = category.name.trim().toLowerCase();
+        final slug = category.slug.trim().toLowerCase();
+        return label == query || slug == query || label.contains(query) || query.contains(label);
+      }).firstOrNull;
+      if (mounted && match != null && _selectedCategoryId == null) {
+        setState(() => _selectedCategoryId = match.id);
+      }
+    } catch (_) {
+      // Assistant category text is only a convenience. The user can still
+      // choose a category from the normal dropdown if catalogue loading fails.
+    }
   }
 
   @override

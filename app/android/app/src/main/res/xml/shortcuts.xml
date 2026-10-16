@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
-    <!-- Custom App Action fallback for the current-month read-only report.
-         Assistant opens the app on the existing authenticated Spending page;
-         it never receives raw SMS or card data from this fulfillment. -->
+    <!-- App Actions are navigation/intent entry points only. PandaPay reads
+         private spending, SMS and wallet data after its normal auth/session
+         guard; no private result is returned to Assistant/Gemini here. -->
     <capability
         android:name="custom.actions.intent.SHOW_SPENDING_SUMMARY"
         app:queryPatterns="@array/assistant_spending_queries">
@@ -11,4 +11,128 @@
             <url-template android:value="pandapay://assistant/spending?period=month" />
         </intent>
     </capability>
+
+    <capability
+        android:name="custom.actions.intent.SHOW_SPENDING_FOR_PERIOD"
+        app:queryPatterns="@array/assistant_spending_period_queries">
+        <intent android:action="android.intent.action.VIEW">
+            <url-template android:value="pandapay://assistant/spending{?period}" />
+            <parameter
+                android:name="period"
+                android:key="period"
+                android:mimeType="https://schema.org/Text" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.ADD_SPENDING"
+        app:queryPatterns="@array/assistant_add_spending_queries">
+        <intent android:action="android.intent.action.VIEW">
+            <url-template android:value="pandapay://assistant/add-spend{?amount,merchant,category}" />
+            <parameter
+                android:name="amount"
+                android:key="amount"
+                android:mimeType="https://schema.org/Number"
+                android:required="true" />
+            <parameter
+                android:name="merchant"
+                android:key="merchant"
+                android:mimeType="https://schema.org/Text" />
+            <parameter
+                android:name="category"
+                android:key="category"
+                android:mimeType="https://schema.org/Text" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.SHOW_DUE_PAYMENTS"
+        app:queryPatterns="@array/assistant_due_payments_queries">
+        <intent android:action="android.intent.action.VIEW">
+            <url-template android:value="pandapay://assistant/due-dates" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.SHOW_WALLET"
+        app:queryPatterns="@array/assistant_wallet_queries">
+        <intent android:action="android.intent.action.VIEW">
+            <url-template android:value="pandapay://assistant/wallet" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.FIND_MY_CARDS"
+        app:queryPatterns="@array/assistant_find_cards_queries">
+        <intent android:action="android.intent.action.VIEW">
+            <url-template android:value="pandapay://assistant/find-cards" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.CHECK_NEARBY_MERCHANTS"
+        app:queryPatterns="@array/assistant_nearby_queries">
+        <intent android:action="android.intent.action.VIEW">
+            <url-template android:value="pandapay://assistant/nearby-merchants" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.SCAN_UPI"
+        app:queryPatterns="@array/assistant_scan_upi_queries">
+        <intent android:action="android.intent.action.VIEW">
+            <url-template android:value="pandapay://assistant/scan-upi" />
+        </intent>
+    </capability>
+
+    <capability
+        android:name="custom.actions.intent.SHOW_BEST_CARD"
+        app:queryPatterns="@array/assistant_best_card_queries">
+        <intent android:action="android.intent.action.VIEW">
+            <url-template android:value="pandapay://assistant/best-card" />
+        </intent>
+    </capability>
+
+    <!-- Launcher long-press and Assistant suggestion shortcuts. They use the
+         exact same validated URI parser as voice fulfillment. -->
+    <shortcut
+        android:shortcutId="show_spending"
+        android:shortcutShortLabel="@string/shortcut_spending_short"
+        android:shortcutLongLabel="@string/shortcut_spending_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pandapay://assistant/spending?period=month" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="add_spend"
+        android:shortcutShortLabel="@string/shortcut_add_spend_short"
+        android:shortcutLongLabel="@string/shortcut_add_spend_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pandapay://assistant/add-spend" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="due_dates"
+        android:shortcutShortLabel="@string/shortcut_due_dates_short"
+        android:shortcutLongLabel="@string/shortcut_due_dates_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pandapay://assistant/due-dates" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="best_card"
+        android:shortcutShortLabel="@string/shortcut_best_card_short"
+        android:shortcutLongLabel="@string/shortcut_best_card_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pandapay://assistant/best-card" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="scan_upi"
+        android:shortcutShortLabel="@string/shortcut_scan_upi_short"
+        android:shortcutLongLabel="@string/shortcut_scan_upi_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pandapay://assistant/scan-upi" />
+    </shortcut>
 </shortcuts>
