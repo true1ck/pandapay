@@ -63,6 +63,10 @@ def check(label, condition, detail=""):
     status = "PASS" if condition else "FAIL"
     print(f"  [{status}] {label}" + (f"  — {detail}" if detail and not condition else ""))
     if not condition:
+        # Keep the first failing response visible in GitHub's check-run
+        # annotations even when anonymous viewers cannot open job logs.
+        annotation = f"{label}: {detail}".replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::error title=Smoke test failure::{annotation}")
         FAILURES.append(label)
     return condition
 
