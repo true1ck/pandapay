@@ -21,7 +21,6 @@ function signAccessToken(user, options = {}) {
     phone_number: user.phone_number,
     // authMiddleware verifies these claims on protected auth-service routes.
     // Hard-coding `authenticated` here contradicted its `mobile-app` default.
-    aud: getAudience(),
     role: 'authenticated',
     // Our custom app role:
     user_role: user.role,
