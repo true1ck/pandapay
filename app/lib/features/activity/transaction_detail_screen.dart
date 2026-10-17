@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/local/transaction_attachments_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../account/account_screen.dart' show AccountTile;
+import '../cards/card_summary.dart';
 import 'report_transaction_screen.dart';
 
 /// D2 Transaction Detail (ui-spec Group D). Deep-linkable at /activity/:id.
@@ -54,7 +61,14 @@ class TransactionDetailScreen extends ConsumerWidget {
             IconButton(
               tooltip: 'Edit',
               icon: const Icon(Icons.edit_outlined),
-              onPressed: () => context.push('/activity/$transactionId/edit'),
+              onPressed: () async {
+                final changed = await context.push<bool>(
+                  '/activity/$transactionId/edit',
+                );
+                if (changed == true) {
+                  ref.invalidate(_transactionProvider(transactionId));
+                }
+              },
             ),
         ],
       ),
@@ -65,20 +79,33 @@ class TransactionDetailScreen extends ConsumerWidget {
             message: userFacingErrorMessage(err),
             onRetry: () => ref.invalidate(_transactionProvider(transactionId)),
           ),
-          data: (entry) => _DetailBody(entry: entry),
+          data: (entry) => entry == null
+              ? const EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Transaction not available offline',
+                  message:
+                      'Reconnect and try again to load this transaction.',
+                )
+              : _DetailBody(entry: entry),
         ),
       ),
     );
   }
 }
 
-final _transactionProvider = FutureProvider.family<TransactionEntry, String>((
+final _transactionProvider = FutureProvider.family<TransactionEntry?, String>((
   ref,
   id,
 ) async {
   final repo = ref.watch(userCardsRepositoryProvider);
-  if (repo == null) throw ApiException('Not signed in');
-  return repo.fetchTransaction(id);
+  final cached = await cachedTransactionById(ref, id);
+  if (repo == null) return cached;
+  try {
+    return await repo.fetchTransaction(id);
+  } catch (error) {
+    if (isAuthenticationFailure(error) || cached != null) return cached;
+    rethrow;
+  }
 });
 
 class _DetailBody extends ConsumerStatefulWidget {
@@ -91,6 +118,8 @@ class _DetailBody extends ConsumerStatefulWidget {
 
 class _DetailBodyState extends ConsumerState<_DetailBody> {
   bool _ignoring = false;
+  bool _attaching = false;
+  final _imagePicker = ImagePicker();
 
   /// Held locally so the note and split rows update the moment they're
   /// saved, rather than waiting on a re-fetch of the parent transaction.
@@ -297,125 +326,378 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     _ => r,
   };
 
+  Future<void> _openEdit() async {
+    final changed = await context.push<bool>(
+      '/activity/${widget.entry.id}/edit',
+    );
+    if (changed == true && mounted) {
+      ref.invalidate(_transactionProvider(widget.entry.id));
+    }
+  }
+
+  Future<void> _addReceipt() async {
+    if (_attaching) return;
+    final option = await showModalBottomSheet<_ReceiptPickOption>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.lg,
+                AppSpace.lg,
+                AppSpace.sm,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Add proof of payment',
+                  style: BambooFonts.heading(17, color: BambooInk.ink900),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.of(context).pop(_ReceiptPickOption.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose a photo'),
+              onTap: () =>
+                  Navigator.of(context).pop(_ReceiptPickOption.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.attach_file_rounded),
+              title: const Text('Choose a file'),
+              subtitle: const Text('Receipt, PDF, warranty, or any other file'),
+              onTap: () => Navigator.of(context).pop(_ReceiptPickOption.file),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (option == null || !mounted) return;
+
+    setState(() => _attaching = true);
+    try {
+      final repository = await ref.read(
+        transactionAttachmentsRepositoryProvider.future,
+      );
+      if (option == _ReceiptPickOption.file) {
+        final picked = await FilePicker.pickFiles(
+          type: FileType.any,
+          withData: true,
+        );
+        if (picked == null || picked.files.isEmpty) return;
+        final file = picked.files.single;
+        if (file.path != null) {
+          await repository.addFromPath(
+            transactionId: widget.entry.id,
+            sourcePath: file.path!,
+            fileName: file.name,
+            mimeType: file.extension == null ? null : _mimeFor(file.extension!),
+          );
+        } else if (file.bytes != null) {
+          await repository.addFromBytes(
+            transactionId: widget.entry.id,
+            bytes: file.bytes!,
+            fileName: file.name,
+            mimeType: file.extension == null ? null : _mimeFor(file.extension!),
+          );
+        }
+      } else {
+        final image = await _imagePicker.pickImage(
+          source: option == _ReceiptPickOption.camera
+              ? ImageSource.camera
+              : ImageSource.gallery,
+          imageQuality: 95,
+        );
+        if (image == null) return;
+        await repository.addFromPath(
+          transactionId: widget.entry.id,
+          sourcePath: image.path,
+          fileName: image.name,
+          mimeType: image.mimeType ?? 'image/jpeg',
+        );
+      }
+      ref.invalidate(transactionAttachmentsProvider(widget.entry.id));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Attachment saved on this device.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not attach that file: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _attaching = false);
+    }
+  }
+
+  Future<void> _openAttachment(TransactionAttachment attachment) async {
+    if (_isImageAttachment(attachment)) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => Dialog(
+          child: InteractiveViewer(
+            child: Image.file(File(attachment.localPath), fit: BoxFit.contain),
+          ),
+        ),
+      );
+      return;
+    }
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(attachment.localPath, mimeType: attachment.mimeType)],
+        text: attachment.fileName,
+      ),
+    );
+  }
+
+  Future<void> _deleteAttachment(TransactionAttachment attachment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove attachment?'),
+        content: Text('Remove ${attachment.fileName} from this transaction?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final repository = await ref.read(
+      transactionAttachmentsRepositoryProvider.future,
+    );
+    await repository.delete(attachment);
+    ref.invalidate(transactionAttachmentsProvider(widget.entry.id));
+  }
+
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final isActive = entry.status == 'active';
+    final attachments = ref.watch(transactionAttachmentsProvider(entry.id));
 
-    return ListView(
-      padding: const EdgeInsets.all(AppSpace.lg),
+    return Column(
       children: [
-        if (!isActive)
-          Container(
-            margin: const EdgeInsets.only(bottom: AppSpace.lg),
-            padding: const EdgeInsets.all(AppSpace.md),
-            decoration: BoxDecoration(
-              color: BambooInk.paperMuted,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.visibility_off_outlined,
-                  size: 16,
-                  color: BambooInk.ink500,
-                ),
-                const SizedBox(width: AppSpace.xs),
-                Expanded(
-                  child: Text(
-                    'This transaction is ${entry.status} — excluded from caps and rankings.',
-                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              child: Column(
+                children: [
+                  if (!isActive)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: AppSpace.lg),
+                      padding: const EdgeInsets.all(AppSpace.md),
+                      decoration: BoxDecoration(
+                        color: BambooInk.paperMuted,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.visibility_off_outlined,
+                            size: 16,
+                            color: BambooInk.ink500,
+                          ),
+                          const SizedBox(width: AppSpace.xs),
+                          Expanded(
+                            child: Text(
+                              'This transaction is ${entry.status} — excluded from caps and rankings.',
+                              style: BambooFonts.ui(
+                                12.5,
+                                color: BambooInk.ink500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Center(
+                    child: Column(
+                      children: [
+                        MoneyText(
+                          entry.amount,
+                          confidence: Confidence.estimated,
+                          style: BambooFonts.money(26, color: BambooInk.ink900),
+                        ),
+                        const SizedBox(height: AppSpace.xs),
+                        Text(
+                          entry.merchantName ??
+                              (entry.entryKind == TxnEntryKind.income ? 'Income' : entry.entryKind.label),
+                          style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: AppSpace.xl),
+                  _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
+                  _DetailRow(
+                    label: 'Category',
+                    value: entry.categoryName ?? 'Other',
+                  ),
+                  _DetailRow(
+                    label: 'Date',
+                    value: entry.occurredAt
+                        .toLocal()
+                        .toString()
+                        .split('.')
+                        .first,
+                  ),
+                  _DetailRow(label: 'Rail', value: _railLabel(entry.rail)),
+                  _DetailRow(
+                    label: 'Source',
+                    value: _sourceLabel(entry.source),
+                  ),
+                  _DetailRow(
+                    label: 'Status',
+                    value:
+                        entry.status[0].toUpperCase() +
+                        entry.status.substring(1),
+                  ),
+                  if (_note != null && _note!.isNotEmpty)
+                    _DetailRow(label: 'Note', value: _note!),
+                  if (isActive) ...[
+                    const SizedBox(height: AppSpace.lg),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: BambooInk.slate,
+                        foregroundColor: BambooInk.lime,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        textStyle: BambooFonts.ui(
+                          14.5,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                      onPressed: _openEdit,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Edit transaction'),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpace.xl),
+                  attachments.when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => _ReceiptSection(
+                      attachments: const [],
+                      attaching: _attaching,
+                      onAdd: _addReceipt,
+                      onOpen: _openAttachment,
+                      onDelete: _deleteAttachment,
+                    ),
+                    data: (items) => _ReceiptSection(
+                      attachments: items,
+                      attaching: _attaching,
+                      onAdd: _addReceipt,
+                      onOpen: _openAttachment,
+                      onDelete: _deleteAttachment,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.md),
+                  // Design 18's two action rows, both now backed by real routes:
+                  // PATCH /transactions/:id/note and PUT /transactions/:id/splits.
+                  AccountTile(
+                    icon: Icons.edit_note_rounded,
+                    label: (_note == null || _note!.isEmpty)
+                        ? 'Add a note'
+                        : 'Edit note',
+                    onTap: _showNoteSheet,
+                  ),
+                  const SizedBox(height: AppSpace.sm),
+                  AccountTile(
+                    icon: Icons.call_split_rounded,
+                    label: _splits.isEmpty
+                        ? 'Split this expense'
+                        : 'Split across ${_splits.length} ${_splits.length == 1 ? 'share' : 'shares'}',
+                    onTap: _showSplitSheet,
+                  ),
+                  const SizedBox(height: AppSpace.sm),
+                  // Design 18's third row, landing on design 26 with this payment
+                  // already attached — not the catalogue-correction screen (C7) and
+                  // not the general feedback inbox (H9).
+                  AccountTile(
+                    icon: Icons.flag_outlined,
+                    label: 'Report an issue',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ReportTransactionScreen(entry: widget.entry),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.xl),
+                ],
+              ),
             ),
           ),
-        Center(
-          child: Column(
-            children: [
-              MoneyText(
-                entry.amount,
-                confidence: Confidence.estimated,
-                style: BambooFonts.money(26, color: BambooInk.ink900),
-              ),
-              const SizedBox(height: AppSpace.xs),
-              Text(
-                entry.merchantName ?? 'Spend',
-                style: BambooFonts.ui(13.5, color: BambooInk.ink500),
-              ),
-            ],
-          ),
         ),
-        const SizedBox(height: AppSpace.xl),
-        _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
-        _DetailRow(label: 'Category', value: entry.categoryName ?? 'Other'),
-        _DetailRow(
-          label: 'Date',
-          value: entry.occurredAt.toLocal().toString().split('.').first,
-        ),
-        _DetailRow(label: 'Rail', value: _railLabel(entry.rail)),
-        _DetailRow(label: 'Source', value: _sourceLabel(entry.source)),
-        _DetailRow(
-          label: 'Status',
-          value: entry.status[0].toUpperCase() + entry.status.substring(1),
-        ),
-        if (_note != null && _note!.isNotEmpty)
-          _DetailRow(label: 'Note', value: _note!),
-        const SizedBox(height: AppSpace.xl),
-        // Design 18's two action rows, both now backed by real routes:
-        // PATCH /transactions/:id/note and PUT /transactions/:id/splits.
-        AccountTile(
-          icon: Icons.edit_note_rounded,
-          label: (_note == null || _note!.isEmpty) ? 'Add a note' : 'Edit note',
-          onTap: _showNoteSheet,
-        ),
-        const SizedBox(height: AppSpace.sm),
-        AccountTile(
-          icon: Icons.call_split_rounded,
-          label: _splits.isEmpty
-              ? 'Split this expense'
-              : 'Split across ${_splits.length} ${_splits.length == 1 ? 'share' : 'shares'}',
-          onTap: _showSplitSheet,
-        ),
-        const SizedBox(height: AppSpace.sm),
-        // Design 18's third row, landing on design 26 with this payment
-        // already attached — not the catalogue-correction screen (C7) and
-        // not the general feedback inbox (H9).
-        AccountTile(
-          icon: Icons.flag_outlined,
-          label: 'Report an issue',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ReportTransactionScreen(entry: widget.entry),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpace.xl),
         if (isActive)
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: BambooInk.ink900,
-              side: const BorderSide(color: BambooInk.hairlineOnPaper),
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.lg,
+                AppSpace.lg,
               ),
-              textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BambooInk.ink900,
+                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+                ),
+                onPressed: _ignoring ? null : _showIgnoreSheet,
+                icon: _ignoring
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.visibility_off_outlined),
+                label: const Text(
+                  'Mark as ignored (refund / reversal / transfer)',
+                ),
+              ),
             ),
-            onPressed: _ignoring ? null : _showIgnoreSheet,
-            icon: _ignoring
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.visibility_off_outlined),
-            label: const Text('Mark as ignored (refund / reversal / transfer)'),
           ),
       ],
     );
   }
+
+  static String _mimeFor(String extension) => switch (extension.toLowerCase()) {
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    'pdf' => 'application/pdf',
+    _ => 'application/octet-stream',
+  };
 
   static String _railLabel(TxnRail rail) => switch (rail) {
     TxnRail.upiQr => 'UPI QR',
@@ -463,6 +745,113 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     if (entry.instrument == TxnInstrument.wallet) return 'Wallet';
     if (entry.instrument == TxnInstrument.cash) return 'Cash';
     return 'Payment method not matched';
+  }
+}
+
+enum _ReceiptPickOption { camera, gallery, file }
+
+bool _isImageAttachment(TransactionAttachment attachment) {
+  if (attachment.mimeType?.startsWith('image/') == true) return true;
+  return RegExp(
+    r'\.(jpe?g|png|webp|gif|heic)$',
+    caseSensitive: false,
+  ).hasMatch(attachment.fileName);
+}
+
+class _ReceiptSection extends StatelessWidget {
+  final List<TransactionAttachment> attachments;
+  final bool attaching;
+  final VoidCallback onAdd;
+  final ValueChanged<TransactionAttachment> onOpen;
+  final ValueChanged<TransactionAttachment> onDelete;
+
+  const _ReceiptSection({
+    required this.attachments,
+    required this.attaching,
+    required this.onAdd,
+    required this.onOpen,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CardSummaryPanel(
+      padding: const EdgeInsets.all(AppSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.receipt_long_outlined, color: BambooInk.ink500),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Receipts & proof',
+                      style: BambooFonts.ui(
+                        14,
+                        weight: FontWeight.w700,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                    Text(
+                      'Keep bills, warranties, and claim documents with this payment',
+                      style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (attachments.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            for (final attachment in attachments)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                leading: Icon(
+                  _isImageAttachment(attachment)
+                      ? Icons.image_outlined
+                      : Icons.insert_drive_file_outlined,
+                  color: BambooInk.ink500,
+                ),
+                title: Text(
+                  attachment.fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink900),
+                ),
+                subtitle: const Text('Tap to view or share'),
+                onTap: () => onOpen(attachment),
+                trailing: IconButton(
+                  tooltip: 'Remove attachment',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => onDelete(attachment),
+                ),
+              ),
+          ],
+          const SizedBox(height: AppSpace.sm),
+          OutlinedButton.icon(
+            onPressed: attaching ? null : onAdd,
+            icon: attaching
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.attach_file_rounded),
+            label: Text(attaching ? 'Adding…' : 'Attach receipt or file'),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Stored privately on this device',
+            style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+          ),
+        ],
+      ),
+    );
   }
 }
 

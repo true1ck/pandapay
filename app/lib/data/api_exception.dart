@@ -76,6 +76,16 @@ String userFacingErrorMessage(Object error) {
   return 'Something went wrong. Please check your connection and try again.';
 }
 
+/// True when an authenticated read was rejected by the API rather than
+/// failing because of malformed data. Read-only screens use this to keep
+/// their last local snapshot (or an honest empty state) visible while the
+/// shared client attempts token recovery.
+bool isAuthenticationFailure(Object error) {
+  if (error is! ApiException) return false;
+  return error.statusCode == 401 ||
+      error.errorCode == 'Missing or invalid access token';
+}
+
 /// Used by the local wallet, which has no HTTP response to carry the same
 /// duplicate status as the signed-in API.
 class CardAlreadyAddedException implements Exception {

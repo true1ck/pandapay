@@ -768,33 +768,45 @@ class _CategoryPieState extends State<_CategoryPie> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: 132,
-                  height: 132,
-                  child: CustomPaint(
-                    painter: _CategoryPiePainter(
-                      values: chartValues,
-                      colors: _colors,
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Rewards',
-                            style: BambooFonts.ui(11, color: BambooInk.ink500),
-                          ),
-                          MoneyText(
-                            widget.earnedTotal,
-                            confidence: Confidence.confirmed,
-                            style: BambooFonts.money(
-                              17,
-                              color: BambooInk.ink900,
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 650),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, progress, _) => SizedBox(
+                    width: 132,
+                    height: 132,
+                    child: CustomPaint(
+                      painter: _CategoryPiePainter(
+                        values: chartValues,
+                        colors: _colors,
+                        progress: progress,
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Rewards',
+                              style: BambooFonts.ui(11, color: BambooInk.ink500),
                             ),
-                            hidePaise: true,
-                            showConfidenceIcon: false,
-                          ),
-                        ],
+                            SizedBox(
+                              width: 76,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: MoneyText(
+                                  widget.earnedTotal,
+                                  confidence: Confidence.confirmed,
+                                  style: BambooFonts.money(
+                                    17,
+                                    color: BambooInk.ink900,
+                                  ),
+                                  hidePaise: true,
+                                  showConfidenceIcon: false,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -956,8 +968,13 @@ class _CategoryLegend extends StatelessWidget {
 class _CategoryPiePainter extends CustomPainter {
   final List<double> values;
   final List<Color> colors;
+  final double progress;
 
-  const _CategoryPiePainter({required this.values, required this.colors});
+  const _CategoryPiePainter({
+    required this.values,
+    required this.colors,
+    required this.progress,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -968,7 +985,7 @@ class _CategoryPiePainter extends CustomPainter {
     final rect = Rect.fromCircle(center: center, radius: radius);
     var start = -math.pi / 2;
     for (var i = 0; i < values.length; i++) {
-      final sweep = values[i] / total * math.pi * 2;
+      final sweep = values[i] / total * math.pi * 2 * progress;
       canvas.drawArc(
         rect,
         start,
@@ -987,7 +1004,9 @@ class _CategoryPiePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CategoryPiePainter oldDelegate) =>
-      oldDelegate.values != values || oldDelegate.colors != colors;
+      oldDelegate.values != values ||
+      oldDelegate.colors != colors ||
+      oldDelegate.progress != progress;
 }
 
 /// Design 04's "Missed opportunities · See all" preview — the three

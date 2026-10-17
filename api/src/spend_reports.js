@@ -21,7 +21,7 @@
  *      They are reported, on their own lines, by [periodTotals].
  */
 
-const PERIODS = ['week', 'month', 'quarter', 'year'];
+const PERIODS = ['week', 'month', 'quarter', 'year', 'custom'];
 
 /** Local-midnight date, so period maths never drifts on a DST-free tz. */
 function startOfDay(d) {
@@ -83,6 +83,42 @@ function shiftCalendarDate(parts, days) {
   const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
   date.setUTCDate(date.getUTCDate() + days);
   return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+}
+
+function parseDateOnly(value, field) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${field} must be a date in YYYY-MM-DD format`);
+  }
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new Error(`${field} is not a valid calendar date`);
+  }
+  return { year, month, day };
+}
+
+/** Inclusive date-only range in the user's calendar, returned half-open. */
+function customPeriodBounds(from, to, options = {}) {
+  const startDate = parseDateOnly(from, 'from');
+  const finishDate = parseDateOnly(to, 'to');
+  const nextDate = shiftCalendarDate(finishDate, 1);
+  const start = options.timeZone
+    ? zonedMidnight(startDate.year, startDate.month, startDate.day, options.timeZone)
+    : new Date(startDate.year, startDate.month - 1, startDate.day);
+  const end = options.timeZone
+    ? zonedMidnight(nextDate.year, nextDate.month, nextDate.day, options.timeZone)
+    : new Date(nextDate.year, nextDate.month - 1, nextDate.day);
+  if (end <= start) throw new Error('to must be on or after from');
+  return { start, end };
+}
+
+/** The equal-length range immediately before a custom range. */
+function previousCustomPeriodBounds(current) {
+  const duration = current.end.getTime() - current.start.getTime();
+  return {
+    start: new Date(current.start.getTime() - duration),
+    end: current.start,
+  };
 }
 
 function periodBoundsInTimeZone(period, anchor, timeZone) {
@@ -614,6 +650,8 @@ function periodElapsedFraction({ start, end }, now = new Date()) {
 
 module.exports = {
   PERIODS,
+  customPeriodBounds,
+  previousCustomPeriodBounds,
   periodBounds,
   previousPeriodBounds,
   periodTotals,

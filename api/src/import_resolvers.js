@@ -62,6 +62,7 @@ async function resolveUserCardForImport(client, userId, {
   last4,
   patternIssuerId,
   instrument,
+  messageText,
 }) {
   const cardType = cardTypeForInstrument(instrument);
   if (last4 && /^[0-9]{4}$/.test(last4)) {
@@ -86,9 +87,45 @@ async function resolveUserCardForImport(client, userId, {
     if (byLast4.rows.length > 1) return null;
     // If the parser pattern had no issuer, a unique last4 is still useful.
     // When an issuer is known and no card of that issuer has this last4,
-    // don't attach the SMS to a same-number card from another bank.
-    if (patternIssuerId) return null;
+    // don't attach the SMS to a same-number card from another bank. A
+    // product-name match below is still allowed: historical statement SMS
+    // often omit the suffix, while a named product such as MoneyBack+ is
+    // strong evidence when it resolves to exactly one owned card.
   }
+
+  // Historical statement reminders are not always parser-pattern matches,
+  // and some omit the last four digits entirely. When the SMS names a
+  // distinctive product, use it as a second independent card signal. The
+  // query deliberately requires one matching owned card and ignores generic
+  // words (bank/card/credit/network) so an issuer-wide reminder cannot be
+  // attached to an arbitrary card.
+  if (messageText) {
+    const byProduct = await client.query(
+      `SELECT uc.id
+         FROM user_cards uc
+         JOIN card_products cp ON cp.id = uc.card_product_id
+        WHERE uc.profile_id = $1
+          AND uc.is_archived = false
+          AND ($2::text IS NULL OR cp.card_type::text = $2::text)
+          AND ($3::uuid IS NULL OR cp.issuer_id = $3::uuid)
+          AND EXISTS (
+            SELECT 1
+              FROM regexp_split_to_table(lower(cp.name), '[^a-z0-9]+') AS tokens(product_token)
+             WHERE length(product_token) >= 5
+               AND product_token NOT IN ('credit', 'debit', 'cards', 'card', 'bank', 'visa', 'rupay', 'mastercard')
+               AND position(product_token in regexp_replace(lower($4), '[^a-z0-9]', '', 'g')) > 0
+          )`,
+      [userId, cardType, patternIssuerId || null, messageText]
+    );
+    if (byProduct.rows.length === 1) {
+      return { userCardId: byProduct.rows[0].id, basis: 'product-name' };
+    }
+  }
+
+  // If a suffix was present but did not resolve, do not weaken the evidence
+  // to issuer-only matching. A same-issuer card without that suffix may be a
+  // different physical card.
+  if (last4 && /^[0-9]{4}$/.test(last4) && patternIssuerId) return null;
 
   if (patternIssuerId) {
     const byIssuer = await client.query(
@@ -181,6 +218,7 @@ async function syncDueDayFromSms(client, userId, { body, patternIssuerId }) {
     last4: extractLast4(body),
     patternIssuerId,
     instrument: 'credit_card',
+    messageText: body,
   });
   if (!card) return { detected, updated: false, reason: 'card_not_unambiguous' };
 

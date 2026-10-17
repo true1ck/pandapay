@@ -90,8 +90,31 @@ void main() {
         find.text('Mark as ignored (refund / reversal / transfer)'),
         findsOneWidget,
       );
+      expect(find.text('Edit transaction'), findsOneWidget);
     },
   );
+
+  testWidgets('opens the edit page from the transaction detail action', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository(
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(750),
+        occurredAt: DateTime(2026, 3, 1),
+        merchantName: 'Corner Store',
+        userCardId: 'uc1',
+        source: 'sms',
+        status: 'active',
+      ),
+    );
+    await _pump(tester, repo: repo);
+
+    await tester.tap(find.text('Edit transaction'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('edit screen'), findsOneWidget);
+  });
 
   testWidgets(
     'an ignored transaction shows the exclusion banner and no ignore action',

@@ -70,6 +70,36 @@ void main() {
     expect(draft.userCardId, 'card-1');
   });
 
+  test(
+    'recognizes Google Pay and UPI as a bank payment, not a credit card',
+    () {
+      final draft = VoiceActionParser.parse(
+        'I spent 100 rupees on Google Pay using my UPI to buy some chocolates',
+        cards: const [],
+        categories: categories,
+      );
+
+      expect(draft.amount, 100);
+      expect(draft.instrument.wireValue, 'upi_bank');
+      expect(draft.merchant, 'Chocolates');
+      expect(draft.issues, isEmpty);
+    },
+  );
+
+  test('splits a long dictation into independently editable spends', () {
+    final drafts = VoiceActionParser.parseMany(
+      'I spent ₹100 on chocolates and then paid 250 rupees for groceries',
+      cards: const [],
+      categories: categories,
+    );
+
+    expect(drafts, hasLength(2));
+    expect(drafts[0].amount, 100);
+    expect(drafts[1].amount, 250);
+    expect(drafts[0].transcript, contains('chocolates'));
+    expect(drafts[1].transcript, contains('groceries'));
+  });
+
   test('refuses card creation or linking by voice', () {
     final draft = VoiceActionParser.parse(
       'Add my new debit card to the wallet',

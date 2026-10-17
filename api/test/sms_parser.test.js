@@ -357,6 +357,7 @@ test('account debit without explicit UPI is imported automatically as bank spend
   assert.equal(result.fields.accountLast4, '8565');
   assert.equal(result.fields.entryKind, 'spend');
   assert.equal(result.fields.reference, '4987654321');
+  assert.equal(result.fields.availableBalanceInr, 900);
 });
 
 test('account-to-account transfer is recorded as a transfer, not spending', () => {
@@ -392,6 +393,7 @@ test('named mobile-banking beneficiary debit is imported as a cardless spend', (
   assert.equal(result.fields.entryKind, 'spend');
   assert.equal(result.fields.date, '13-10-2026');
   assert.equal(result.fields.reference, '104241294136');
+  assert.equal(result.fields.availableBalanceInr, 28995.92);
 });
 
 test('transaction matrix auto-classifies bank, UPI, debit-card and credit-card alerts', () => {

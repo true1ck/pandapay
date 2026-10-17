@@ -31,89 +31,125 @@ class VoiceInputSheet extends ConsumerStatefulWidget {
 
 class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
   final _speech = stt.SpeechToText();
-  final _amountController = TextEditingController();
-  final _pointsController = TextEditingController();
-  final _merchantController = TextEditingController();
-  final _noteController = TextEditingController();
-  VoiceActionDraft? _draft;
+  final _editors = <_VoiceDraftEditor>[];
+  List<VoiceActionDraft> _drafts = const [];
   String _transcript = '';
-  String? _selectedCardId;
-  String? _selectedCategoryId;
+  String _interimTranscript = '';
   bool _available = false;
   bool _listening = false;
   bool _speechSessionCompleted = false;
+  bool _keepListening = false;
+  bool _speechInitialized = false;
+  int _listenGeneration = 0;
   Timer? _completionTimer;
+  Timer? _restartTimer;
   bool _saving = false;
   String? _error;
 
   @override
   void dispose() {
     _completionTimer?.cancel();
-    _speech.stop();
-    _amountController.dispose();
-    _pointsController.dispose();
-    _merchantController.dispose();
-    _noteController.dispose();
+    _restartTimer?.cancel();
+    _keepListening = false;
+    unawaited(_stopSpeechSafely());
+    for (final editor in _editors) {
+      editor.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _toggleListening() async {
     if (_listening) {
-      await _speech.stop();
+      _keepListening = false;
+      await _stopSpeechSafely();
       // Android can deliver the final recognition result just after stop()
       // completes. Give that callback a brief window before interpreting the
       // transcript; otherwise a valid utterance can open an empty review.
       await Future<void>.delayed(const Duration(milliseconds: 500));
-      _completeListening();
+      _scheduleListeningCompletion();
       return;
     }
     setState(() {
       _error = null;
       _transcript = '';
-      _draft = null;
+      _interimTranscript = '';
+      _drafts = const [];
     });
+    for (final editor in _editors) {
+      editor.dispose();
+    }
+    _editors.clear();
+    _keepListening = true;
     _speechSessionCompleted = false;
+    final generation = ++_listenGeneration;
+    await _startSpeech(generation);
+  }
+
+  void _scheduleListeningCompletion() {
+    if (!mounted || _speechSessionCompleted || _keepListening) return;
+    _completionTimer?.cancel();
+    _completionTimer = Timer(
+      const Duration(milliseconds: 500),
+      _completeListening,
+    );
+  }
+
+  Future<void> _startSpeech(int generation) async {
+    if (!mounted || !_keepListening || generation != _listenGeneration) return;
     try {
-      _available = await _speech.initialize(
-        onStatus: (status) {
-          if (status == 'done') _scheduleListeningCompletion();
-        },
-        onError: (error) {
-          if (!mounted || _speechSessionCompleted) return;
-          _speechSessionCompleted = true;
-          setState(() {
-            _listening = false;
-            _error = error.errorMsg.trim().isEmpty
-                ? 'Speech recognition stopped. Try again.'
-                : error.errorMsg;
-          });
-        },
-      );
-    } catch (error) {
-      if (mounted) {
-        _speechSessionCompleted = true;
-        setState(() {
-          _listening = false;
-          _error = 'Speech recognition could not start. Try again.';
-        });
-      }
-      return;
-    }
-    if (!_available) {
-      if (mounted) {
-        setState(
-          () => _error = 'Microphone or speech recognition is unavailable.',
+      if (!_speechInitialized) {
+        _available = await _speech.initialize(
+          // The app does not use Bluetooth audio. Disabling this optional
+          // path prevents Android 12+ from requesting an undeclared Bluetooth
+          // permission together with the first microphone prompt.
+          options: [stt.SpeechToText.androidNoBluetooth],
+          onStatus: (status) {
+            if (status == stt.SpeechToText.doneStatus) {
+              if (_keepListening) {
+                _scheduleSpeechRestart(generation);
+              } else {
+                _scheduleListeningCompletion();
+              }
+            }
+          },
+          onError: (error) {
+            if (!mounted || !_keepListening) return;
+            _keepListening = false;
+            setState(() {
+              _listening = false;
+              _error = error.errorMsg.trim().isEmpty
+                  ? 'Speech recognition stopped. Try again.'
+                  : error.errorMsg;
+            });
+          },
         );
+        _speechInitialized = _available;
       }
-      return;
-    }
-    setState(() => _listening = true);
-    try {
+      if (!_available) {
+        _keepListening = false;
+        if (mounted) {
+          setState(
+            () => _error = 'Microphone or speech recognition is unavailable.',
+          );
+        }
+        return;
+      }
+      if (mounted) setState(() => _listening = true);
       await _speech.listen(
         onResult: (result) {
-          if (!mounted) return;
-          setState(() => _transcript = result.recognizedWords);
-          if (result.finalResult) _completeListening();
+          if (!mounted || generation != _listenGeneration) return;
+          final words = result.recognizedWords.trim();
+          if (words.isEmpty) return;
+          if (result.finalResult) {
+            _appendFinalTranscript(words);
+            if (_keepListening) {
+              _scheduleSpeechRestart(generation);
+            } else {
+              _scheduleListeningCompletion();
+            }
+          } else {
+            setState(() => _interimTranscript = words);
+          }
         },
         listenOptions: stt.SpeechListenOptions(
           partialResults: true,
@@ -122,33 +158,58 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
           listenMode: stt.ListenMode.dictation,
         ),
       );
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
-        _speechSessionCompleted = true;
+        _keepListening = false;
         setState(() {
           _listening = false;
-          _error = 'Speech recognition could not start. Try again.';
+          _error =
+              'Speech recognition could not start. Check microphone permission and try again.';
         });
       }
     }
   }
 
-  void _scheduleListeningCompletion() {
-    if (!mounted || _speechSessionCompleted) return;
+  void _appendFinalTranscript(String words) {
     _completionTimer?.cancel();
-    _completionTimer = Timer(
-      const Duration(milliseconds: 500),
-      _completeListening,
+    _interimTranscript = '';
+    if (_transcript.isEmpty) {
+      _transcript = words;
+    } else if (_transcript.toLowerCase() != words.toLowerCase() &&
+        !_transcript.toLowerCase().endsWith(words.toLowerCase())) {
+      _transcript = '$_transcript $words';
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _scheduleSpeechRestart(int generation) {
+    if (!mounted || !_keepListening || generation != _listenGeneration) return;
+    _restartTimer?.cancel();
+    _restartTimer = Timer(
+      const Duration(milliseconds: 180),
+      () => _startSpeech(generation),
     );
   }
 
+  Future<void> _stopSpeechSafely() async {
+    try {
+      await _speech.stop();
+    } catch (_) {
+      // Permission/recognizer teardown errors must never crash the sheet.
+    }
+  }
+
   void _completeListening() {
-    if (!mounted || _speechSessionCompleted) return;
+    if (!mounted || _speechSessionCompleted || _keepListening) return;
     _completionTimer?.cancel();
     _completionTimer = null;
     _speechSessionCompleted = true;
-    final transcript = _transcript.trim();
-    setState(() => _listening = false);
+    final transcript = _visibleTranscript.trim();
+    setState(() {
+      _listening = false;
+      _interimTranscript = '';
+      _transcript = transcript;
+    });
     if (transcript.isEmpty) {
       setState(
         () => _error =
@@ -156,102 +217,142 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
       );
       return;
     }
-    _makeDraft();
+    _makeDrafts();
   }
 
-  void _makeDraft() {
+  void _makeDrafts() {
     final cards = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
     final categories =
         ref.read(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
-    final draft = VoiceActionParser.parse(
+    final drafts = VoiceActionParser.parseMany(
       _transcript,
       cards: cards,
       categories: categories,
     );
-    _amountController.text = draft.amount?.toStringAsFixed(2) ?? '';
-    _pointsController.text = draft.points?.toString() ?? '';
-    _merchantController.text = draft.merchant ?? '';
-    _noteController.text = draft.transcript;
+    for (final editor in _editors) {
+      editor.dispose();
+    }
+    _editors
+      ..clear()
+      ..addAll(drafts.map(_VoiceDraftEditor.new));
     setState(() {
-      _draft = draft;
-      _selectedCardId = draft.userCardId;
-      _selectedCategoryId = draft.categoryId;
+      _drafts = drafts;
     });
   }
 
+  String get _visibleTranscript => [
+    _transcript.trim(),
+    _interimTranscript.trim(),
+  ].where((part) => part.isNotEmpty).join(' ');
+
   Future<void> _save() async {
-    final draft = _draft;
-    if (draft == null || draft.type == VoiceActionType.unsupported) return;
+    if (_drafts.isEmpty ||
+        _drafts.any((draft) => draft.type == VoiceActionType.unsupported)) {
+      return;
+    }
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null) {
       setState(() => _error = 'Sign in before saving a voice entry.');
       return;
     }
     final cards = ref.read(userCardsProvider).valueOrNull ?? const <UserCard>[];
-    final amount = double.tryParse(_amountController.text.replaceAll(',', ''));
-    final points = int.tryParse(_pointsController.text.replaceAll(',', ''));
-    if (draft.type == VoiceActionType.expense &&
-        (amount == null || amount <= 0)) {
-      setState(() => _error = 'Enter an amount greater than ₹0.');
-      return;
-    }
-    if (draft.type == VoiceActionType.pointsRedemption &&
-        (points == null || points <= 0)) {
-      setState(() => _error = 'Enter the number of points to redeem.');
-      return;
-    }
-    final card = _selectedCardId == null
-        ? null
-        : cards.where((item) => item.id == _selectedCardId).firstOrNull;
-    if (draft.instrument == TxnInstrument.creditCard && card == null) {
-      setState(
-        () => _error = 'Choose the exact wallet card before confirming.',
+    final values =
+        <
+          ({
+            VoiceActionDraft draft,
+            _VoiceDraftEditor editor,
+            double? amount,
+            int? points,
+            UserCard? card,
+          })
+        >[];
+    for (var index = 0; index < _drafts.length; index++) {
+      final draft = _drafts[index];
+      final editor = _editors[index];
+      final amount = double.tryParse(
+        editor.amountController.text.replaceAll(',', ''),
       );
-      return;
+      final points = int.tryParse(
+        editor.pointsController.text.replaceAll(',', ''),
+      );
+      final card = editor.selectedCardId == null
+          ? null
+          : cards.where((item) => item.id == editor.selectedCardId).firstOrNull;
+      if (draft.type == VoiceActionType.expense &&
+          (amount == null || amount <= 0)) {
+        setState(
+          () => _error = 'Entry ${index + 1}: enter an amount greater than ₹0.',
+        );
+        return;
+      }
+      if (draft.type == VoiceActionType.pointsRedemption &&
+          (points == null || points <= 0)) {
+        setState(
+          () => _error =
+              'Entry ${index + 1}: enter the number of points to redeem.',
+        );
+        return;
+      }
+      if ((draft.type == VoiceActionType.pointsRedemption ||
+              editor.instrument == TxnInstrument.creditCard) &&
+          card == null) {
+        setState(
+          () => _error =
+              'Entry ${index + 1}: choose the exact wallet card before confirming.',
+        );
+        return;
+      }
+      values.add((
+        draft: draft,
+        editor: editor,
+        amount: amount,
+        points: points,
+        card: card,
+      ));
     }
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
-      if (draft.type == VoiceActionType.pointsRedemption) {
-        if (card == null) {
-          throw StateError(
-            'Choose the wallet card used for the points redemption.',
+      for (final value in values) {
+        final draft = value.draft;
+        final editor = value.editor;
+        if (draft.type == VoiceActionType.pointsRedemption) {
+          final card = value.card!;
+          final ledger = await repo.fetchPointsLedger(card.id);
+          final current =
+              (card.pointsBalance ?? 0) +
+              ledger.fold<double>(0, (sum, row) => sum + row.deltaPoints);
+          if (value.points! > current) {
+            throw StateError(
+              'This card has ${current.toStringAsFixed(0)} points available, so the entry was not saved.',
+            );
+          }
+          await repo.adjustPointsBalance(
+            card.id,
+            newBalance: current - value.points!,
+            reason:
+                'Voice points redemption${editor.merchantController.text.trim().isEmpty ? '' : ': ${editor.merchantController.text.trim()}'}',
+          );
+        } else {
+          await repo.logTransaction(
+            userCardId: editor.instrument == TxnInstrument.creditCard
+                ? editor.selectedCardId
+                : null,
+            amount: Money.fromRupees(value.amount!),
+            categoryId: editor.selectedCategoryId,
+            merchantName: editor.merchantController.text.trim().isEmpty
+                ? null
+                : editor.merchantController.text.trim(),
+            note: editor.noteController.text.trim().isEmpty
+                ? null
+                : editor.noteController.text.trim(),
+            occurredAt: DateTime.now(),
+            instrument: editor.instrument,
+            clientMutationId: const Uuid().v4(),
           );
         }
-        final ledger = await repo.fetchPointsLedger(card.id);
-        final current =
-            (card.pointsBalance ?? 0) +
-            ledger.fold<double>(0, (sum, row) => sum + row.deltaPoints);
-        if (points! > current) {
-          throw StateError(
-            'This card has ${current.toStringAsFixed(0)} points available, so the entry was not saved.',
-          );
-        }
-        await repo.adjustPointsBalance(
-          card.id,
-          newBalance: current - points,
-          reason:
-              'Voice points redemption${_merchantController.text.trim().isEmpty ? '' : ': ${_merchantController.text.trim()}'}',
-        );
-      } else {
-        await repo.logTransaction(
-          userCardId: draft.instrument == TxnInstrument.creditCard
-              ? _selectedCardId
-              : null,
-          amount: Money.fromRupees(amount!),
-          categoryId: _selectedCategoryId,
-          merchantName: _merchantController.text.trim().isEmpty
-              ? null
-              : _merchantController.text.trim(),
-          note: _noteController.text.trim().isEmpty
-              ? null
-              : _noteController.text.trim(),
-          occurredAt: DateTime.now(),
-          instrument: draft.instrument,
-          clientMutationId: const Uuid().v4(),
-        );
       }
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
@@ -263,9 +364,11 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              draft.type == VoiceActionType.pointsRedemption
-                  ? 'Points entry saved.'
-                  : 'Spend saved.',
+              _drafts.length == 1
+                  ? (_drafts.single.type == VoiceActionType.pointsRedemption
+                        ? 'Points entry saved.'
+                        : 'Spend saved.')
+                  : '${_drafts.length} entries saved.',
             ),
           ),
         );
@@ -287,7 +390,6 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
         ref.watch(userCardsProvider).valueOrNull ?? const <UserCard>[];
     final categories =
         ref.watch(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
-    final draft = _draft;
     return Material(
       color: BambooInk.paper,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
@@ -300,9 +402,9 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
           20 + MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: SingleChildScrollView(
-          child: draft == null
+          child: _drafts.isEmpty
               ? _recordView()
-              : _reviewView(draft, cards, categories),
+              : _reviewView(cards, categories),
         ),
       ),
     );
@@ -366,9 +468,17 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
           'Listening… tap again when finished',
           style: BambooFonts.ui(13, color: BambooInk.jade),
         ),
-      if (_transcript.isNotEmpty && !_listening) ...[
+      if (_visibleTranscript.isNotEmpty) ...[
         const SizedBox(height: 14),
-        _quote(_transcript),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _listening ? 'Live transcription' : 'Transcription',
+            style: BambooFonts.ui(12, color: BambooInk.ink500),
+          ),
+        ),
+        const SizedBox(height: 6),
+        _quote(_visibleTranscript),
       ],
       if (_error != null) ...[
         const SizedBox(height: 12),
@@ -382,12 +492,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
     ],
   );
 
-  Widget _reviewView(
-    VoiceActionDraft draft,
-    List<UserCard> cards,
-    List<SpendCategory> categories,
-  ) {
-    final unsupported = draft.type == VoiceActionType.unsupported;
+  Widget _reviewView(List<UserCard> cards, List<SpendCategory> categories) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -396,149 +501,205 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
             const Icon(Icons.fact_check_rounded, color: BambooInk.jade),
             const SizedBox(width: 10),
             Text(
-              'Review voice entry',
+              _drafts.length == 1
+                  ? 'Review voice entry'
+                  : 'Review ${_drafts.length} voice entries',
               style: BambooFonts.heading(20, color: BambooInk.ink900),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        _quote(draft.transcript),
+        _quote(_transcript),
         const SizedBox(height: 16),
-        if (unsupported) ...[
+        for (var index = 0; index < _drafts.length; index++) ...[
+          _entryEditor(
+            _drafts[index],
+            _editors[index],
+            cards,
+            categories,
+            index,
+          ),
+          if (index + 1 < _drafts.length) const Divider(height: 32),
+        ],
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Text(_error!, style: BambooFonts.ui(13, color: BambooInk.clay)),
+        ],
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _saving ? null : _resetToRecord,
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Confirm & save'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _entryEditor(
+    VoiceActionDraft draft,
+    _VoiceDraftEditor editor,
+    List<UserCard> cards,
+    List<SpendCategory> categories,
+    int index,
+  ) {
+    if (draft.type == VoiceActionType.unsupported) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Entry ${index + 1} could not be interpreted',
+            style: BambooFonts.heading(16, color: BambooInk.clay),
+          ),
+          const SizedBox(height: 6),
+          _quote(draft.transcript),
+          const SizedBox(height: 8),
           Text(
             draft.issues.join('\n'),
             style: BambooFonts.ui(14, color: BambooInk.clay),
           ),
-          const SizedBox(height: 20),
-          OutlinedButton(
-            onPressed: () => setState(() => _draft = null),
-            child: const Text('Try again'),
-          ),
-        ] else ...[
-          DropdownButtonFormField<VoiceActionType>(
-            initialValue: draft.type,
-            decoration: const InputDecoration(
-              labelText: 'What should be recorded',
-            ),
-            items: const [
-              DropdownMenuItem(
-                value: VoiceActionType.expense,
-                child: Text('Spend'),
-              ),
-              DropdownMenuItem(
-                value: VoiceActionType.pointsRedemption,
-                child: Text('Points redeemed'),
-              ),
-            ],
-            onChanged: null,
-          ),
-          const SizedBox(height: 12),
-          if (draft.type == VoiceActionType.expense)
-            TextField(
-              controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(labelText: 'Amount (₹)'),
-            )
-          else
-            TextField(
-              controller: _pointsController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Points'),
-            ),
-          const SizedBox(height: 12),
+        ],
+      );
+    }
+    final requiresWalletCard =
+        draft.type == VoiceActionType.pointsRedemption ||
+        editor.instrument == TxnInstrument.creditCard;
+    final hasWalletCard =
+        editor.selectedCardId != null &&
+        cards.any((card) => card.id == editor.selectedCardId);
+    final visibleIssues = draft.issues.where((issue) {
+      final isWalletCardIssue =
+          issue ==
+              'Choose the exact wallet card; more than one card matched.' ||
+          issue == 'Choose the wallet card used for this entry.';
+      if (!isWalletCardIssue) return true;
+      return requiresWalletCard && !hasWalletCard;
+    }).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _drafts.length == 1 ? 'Spend details' : 'Entry ${index + 1}',
+          style: BambooFonts.heading(16, color: BambooInk.ink900),
+        ),
+        const SizedBox(height: 10),
+        if (draft.type == VoiceActionType.expense)
           TextField(
-            controller: _merchantController,
-            decoration: const InputDecoration(
-              labelText: 'Merchant or what it was for',
-            ),
+            controller: editor.amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Amount (₹)'),
+          )
+        else
+          TextField(
+            controller: editor.pointsController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Points'),
           ),
-          const SizedBox(height: 12),
-          if (draft.type == VoiceActionType.expense) ...[
-            DropdownButtonFormField<String>(
-              initialValue: _selectedCategoryId,
-              decoration: const InputDecoration(labelText: 'Category'),
-              items: [
-                for (final category in categories)
-                  DropdownMenuItem(
-                    value: category.id,
-                    child: Text(category.name),
-                  ),
-              ],
-              onChanged: (value) => setState(() => _selectedCategoryId = value),
-            ),
-            const SizedBox(height: 12),
-          ],
+        const SizedBox(height: 12),
+        TextField(
+          controller: editor.merchantController,
+          decoration: const InputDecoration(
+            labelText: 'Merchant or what it was for',
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (draft.type == VoiceActionType.expense) ...[
           DropdownButtonFormField<String>(
-            initialValue: _selectedCardId,
-            decoration: InputDecoration(
-              labelText:
-                  draft.type == VoiceActionType.pointsRedemption ||
-                      draft.instrument == TxnInstrument.creditCard
-                  ? 'Wallet card'
-                  : 'Wallet card (optional)',
-            ),
+            initialValue: editor.selectedCategoryId,
+            decoration: const InputDecoration(labelText: 'Category'),
             items: [
-              for (final card in cards)
+              for (final category in categories)
                 DropdownMenuItem(
-                  value: card.id,
-                  child: Text(
-                    '${card.nickname?.isNotEmpty == true ? card.nickname : card.cardName}${card.last4 == null ? '' : ' ••${card.last4}'}',
-                  ),
+                  value: category.id,
+                  child: Text(category.name),
                 ),
             ],
-            onChanged: (value) => setState(() => _selectedCardId = value),
+            onChanged: (value) =>
+                setState(() => editor.selectedCategoryId = value),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _noteController,
-            minLines: 2,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Note / original voice text',
-            ),
-          ),
-          if (draft.issues.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              draft.issues.join('\n'),
-              style: BambooFonts.ui(13, color: BambooInk.clay),
-            ),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: BambooFonts.ui(13, color: BambooInk.clay)),
-          ],
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _saving
-                      ? null
-                      : () => setState(() => _draft = null),
-                  child: const Text('Cancel'),
+          DropdownButtonFormField<TxnInstrument>(
+            initialValue: editor.instrument,
+            decoration: const InputDecoration(labelText: 'Paid with'),
+            items: [
+              for (final instrument in TxnInstrument.values)
+                DropdownMenuItem(
+                  value: instrument,
+                  child: Text(instrument.label),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Confirm & save'),
-                ),
-              ),
             ],
+            onChanged: (value) {
+              if (value != null) setState(() => editor.instrument = value);
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
+        DropdownButtonFormField<String>(
+          initialValue: editor.selectedCardId,
+          decoration: InputDecoration(
+            labelText:
+                draft.type == VoiceActionType.pointsRedemption ||
+                    editor.instrument == TxnInstrument.creditCard
+                ? 'Wallet card'
+                : 'Wallet card (optional)',
+          ),
+          items: [
+            for (final card in cards)
+              DropdownMenuItem(
+                value: card.id,
+                child: Text(
+                  '${card.nickname?.isNotEmpty == true ? card.nickname : card.cardName}${card.last4 == null ? '' : ' ••${card.last4}'}',
+                ),
+              ),
+          ],
+          onChanged: (value) => setState(() => editor.selectedCardId = value),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: editor.noteController,
+          minLines: 2,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Note / original voice text',
+          ),
+        ),
+        if (visibleIssues.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            visibleIssues.join('\n'),
+            style: BambooFonts.ui(13, color: BambooInk.clay),
           ),
         ],
       ],
     );
+  }
+
+  void _resetToRecord() {
+    for (final editor in _editors) {
+      editor.dispose();
+    }
+    _editors.clear();
+    setState(() {
+      _drafts = const [];
+      _error = null;
+    });
   }
 
   Widget _quote(String value) => Container(
@@ -553,6 +714,36 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
       style: BambooFonts.ui(13.5, color: BambooInk.ink500),
     ),
   );
+}
+
+class _VoiceDraftEditor {
+  _VoiceDraftEditor(VoiceActionDraft draft)
+    : amountController = TextEditingController(
+        text: draft.amount?.toStringAsFixed(2) ?? '',
+      ),
+      pointsController = TextEditingController(
+        text: draft.points?.toString() ?? '',
+      ),
+      merchantController = TextEditingController(text: draft.merchant ?? ''),
+      noteController = TextEditingController(text: draft.transcript),
+      selectedCardId = draft.userCardId,
+      selectedCategoryId = draft.categoryId,
+      instrument = draft.instrument;
+
+  final TextEditingController amountController;
+  final TextEditingController pointsController;
+  final TextEditingController merchantController;
+  final TextEditingController noteController;
+  String? selectedCardId;
+  String? selectedCategoryId;
+  TxnInstrument instrument;
+
+  void dispose() {
+    amountController.dispose();
+    pointsController.dispose();
+    merchantController.dispose();
+    noteController.dispose();
+  }
 }
 
 extension on Iterable<UserCard> {

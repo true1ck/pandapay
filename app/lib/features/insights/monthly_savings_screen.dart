@@ -70,7 +70,10 @@ final _monthlyExtrasProvider = FutureProvider.family<_MonthlyExtras, DateTime>((
     periodMonth.month + 1,
     1,
   ).subtract(const Duration(days: 1));
-  final transactions = await repo.fetchTransactions(
+  final transactions = await loadTransactionsWithOfflineCache(
+    ref,
+    repo: repo,
+    cacheKey: 'transactions:monthly_savings:${periodMonth.year}-${periodMonth.month}',
     from: monthStart,
     to: monthEnd,
   );

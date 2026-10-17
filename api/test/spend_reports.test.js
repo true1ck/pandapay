@@ -3,6 +3,8 @@ const assert = require('node:assert');
 const {
   periodBounds,
   previousPeriodBounds,
+  customPeriodBounds,
+  previousCustomPeriodBounds,
   budgetPeriodBounds,
   budgetSpend,
   periodElapsedFraction,
@@ -78,6 +80,32 @@ test('timezone-aware week bounds start on Monday in India', () => {
   const bounds = periodBounds('week', new Date('2026-10-01T18:45:00.000Z'), { timeZone: 'Asia/Kolkata' });
   assert.strictEqual(bounds.start.toISOString(), '2026-09-27T18:30:00.000Z');
   assert.strictEqual(bounds.end.toISOString(), '2026-10-04T18:30:00.000Z');
+});
+
+test('custom bounds include both selected calendar dates and compare equal-length previous dates', () => {
+  const current = customPeriodBounds('2026-08-03', '2026-08-14');
+  assert.strictEqual(iso(current.start), '2026-08-03');
+  assert.strictEqual(iso(current.end), '2026-08-15');
+
+  const previous = previousCustomPeriodBounds(current);
+  assert.strictEqual(iso(previous.start), '2026-07-22');
+  assert.strictEqual(iso(previous.end), '2026-08-03');
+});
+
+test('timezone-aware custom bounds use local midnight and reject invalid dates', () => {
+  const bounds = customPeriodBounds('2026-10-02', '2026-10-02', {
+    timeZone: 'Asia/Kolkata',
+  });
+  assert.strictEqual(bounds.start.toISOString(), '2026-10-01T18:30:00.000Z');
+  assert.strictEqual(bounds.end.toISOString(), '2026-10-02T18:30:00.000Z');
+  assert.throws(
+    () => customPeriodBounds('2026-02-30', '2026-03-01'),
+    /valid calendar date/,
+  );
+  assert.throws(
+    () => customPeriodBounds('2026-08-15', '2026-08-14'),
+    /on or after/,
+  );
 });
 
 test('the previous period is the one immediately before, across unequal lengths', () => {

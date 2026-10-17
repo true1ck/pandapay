@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -11,11 +12,15 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
-import '../../data/user_cards_repository.dart' show UserCard;
+import '../../data/spend_by_category_repository.dart' show CategorySpend;
+import '../../data/user_cards_repository.dart'
+    show BankAccountSummary, TransactionEntry, TxnEntryKind, UserCard;
 import '../../main.dart' show MoneyText;
 import '../comparison/comparison_view_screen.dart';
 import '../insights/credit_utilization_screen.dart';
 import '../insights/credit_utilization_ui.dart';
+import '../insights/payments_due_screen.dart' show DuePayment, paymentsDueProvider;
+import '../insights/spending_visuals.dart' show spendingCategoryVisual;
 import '../overrides/manual_overrides_screen.dart';
 import '../quickadd/quick_add_screen.dart';
 import '../cards/card_visual.dart';
@@ -114,6 +119,7 @@ class HomeScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
               child: _BrandHeader(greeting: _greetingFor(now)),
             ),
+            const _HomeAccountSnapshot(),
             Padding(
               padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 0),
               child: Text(
@@ -170,6 +176,8 @@ class HomeScreen extends ConsumerWidget {
               child: _RankedSection(ranked: ranked, tutorialKeys: tutorialKeys),
             ),
             const _UtilizationWarningBanner(),
+            const _HomeCategories(),
+            const _HomeDuesAndReminders(),
             const SizedBox(height: AppSpace.lg),
           ],
         ),
@@ -360,6 +368,67 @@ class _PurchaseTypeSelector extends StatelessWidget {
     required this.onChanged,
   });
 
+  Future<void> _openMenu(BuildContext context) async {
+    final anchor = context.findRenderObject()! as RenderBox;
+    final origin = anchor.localToGlobal(Offset.zero);
+    final size = anchor.size;
+    final selected = await showGeneralDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: Duration.zero,
+      pageBuilder: (menuContext, _, _) => LayoutBuilder(
+        builder: (context, constraints) {
+          final media = MediaQuery.of(context);
+          final top = origin.dy + size.height + 4;
+          // Limit the list to the space below the selector; never flip upward.
+          final height = (constraints.maxHeight -
+                  top -
+                  media.padding.bottom -
+                  media.viewInsets.bottom -
+                  8)
+              .clamp(0.0, 360.0)
+              .toDouble();
+          return Stack(
+            children: [
+              Positioned(
+                top: top,
+                left: origin.dx,
+                width: size.width,
+                child: Material(
+                  color: BambooInk.paper,
+                  elevation: 8,
+                  borderRadius: BorderRadius.circular(16),
+                  clipBehavior: Clip.antiAlias,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: height),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final (slug, label, icon) in HomeScreen._categories)
+                            ListTile(
+                              selected: slug == selectedCategory,
+                              leading: Icon(icon, color: BambooInk.ink500),
+                              title: Text(label),
+                              onTap: () => Navigator.of(menuContext).pop(slug),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (selected != null) onChanged(selected);
+  }
+
   @override
   Widget build(BuildContext context) {
     final selected = HomeScreen._categories.where(
@@ -416,42 +485,34 @@ class _PurchaseTypeSelector extends StatelessWidget {
               ),
               const SizedBox(width: AppSpace.sm),
               Expanded(
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
+                child: Builder(
+                  builder: (anchorContext) => InkWell(
                     key: const ValueKey('home-purchase-type'),
-                    value: selectedEntry?.$1,
-                    isExpanded: true,
-                    isDense: true,
-                    icon: const Icon(
-                      Icons.expand_more_rounded,
-                      color: BambooInk.ink500,
-                    ),
-                    hint: Text(
-                      'Choose purchase type',
-                      style: BambooFonts.ui(14, color: BambooInk.ink500),
-                    ),
-                    style: BambooFonts.ui(
-                      15,
-                      weight: FontWeight.w700,
-                      color: BambooInk.ink900,
-                    ),
-                    dropdownColor: BambooInk.paper,
-                    borderRadius: BorderRadius.circular(16),
-                    menuMaxHeight: 360,
-                    items: [
-                      for (final (slug, label, icon) in HomeScreen._categories)
-                        DropdownMenuItem<String>(
-                          value: slug,
-                          child: Row(
-                            children: [
-                              Icon(icon, size: 18, color: BambooInk.ink500),
-                              const SizedBox(width: AppSpace.sm),
-                              Text(label),
-                            ],
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _openMenu(anchorContext),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 36),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              selectedEntry?.$2 ?? 'Choose purchase type',
+                              style: BambooFonts.ui(
+                                selectedEntry == null ? 14 : 15,
+                                weight: FontWeight.w700,
+                                color: selectedEntry == null
+                                    ? BambooInk.ink500
+                                    : BambooInk.ink900,
+                              ),
+                            ),
                           ),
-                        ),
-                    ],
-                    onChanged: onChanged,
+                          const Icon(
+                            Icons.expand_more_rounded,
+                            color: BambooInk.ink500,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1581,6 +1642,522 @@ class _CapBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A compact, truthful account snapshot for Home. The server only supplies a
+/// balance when a picked-up bank SMS explicitly contained one; otherwise the
+/// account is still counted, but its balance is left unavailable.
+class _HomeAccountSnapshot extends ConsumerWidget {
+  const _HomeAccountSnapshot();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accounts = ref.watch(bankAccountSummariesProvider).valueOrNull ??
+        const <BankAccountSummary>[];
+    final observedAccountLast4 = <String>{};
+    for (final transaction in
+        ref.watch(transactionsProvider).valueOrNull ?? const <TransactionEntry>[]) {
+      final last4 = transaction.accountLast4;
+      if (last4 != null && last4.isNotEmpty) observedAccountLast4.add(last4);
+    }
+    final accountLast4s = accounts.isNotEmpty
+        ? accounts.map((account) => account.accountLast4).toList()
+        : (observedAccountLast4.toList()..sort());
+    final accountCount = accounts.isNotEmpty
+        ? accounts.length
+        : accountLast4s.length;
+
+    var total = const Money.zero();
+    var balancesFound = 0;
+    for (final account in accounts) {
+      final balance = account.availableBalance;
+      if (balance == null) continue;
+      total += balance;
+      balancesFound += 1;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        HomeScreen._gutter,
+        AppSpace.md,
+        HomeScreen._gutter,
+        0,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: BoxDecoration(
+          color: BambooInk.slate,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.account_balance_rounded,
+                  size: 18,
+                  color: BambooInk.lime,
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    'Your bank accounts',
+                    style: BambooFonts.heading(16, color: BambooInk.onSlate),
+                  ),
+                ),
+                Text(
+                  accountCount == 0
+                      ? 'No accounts yet'
+                      : '$accountCount ${accountCount == 1 ? 'account' : 'accounts'}',
+                  style: BambooFonts.ui(12, color: BambooInk.onSlateMuted),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            if (balancesFound > 0) ...[
+              Text(
+                'Latest available balance from SMS',
+                style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
+              ),
+              const SizedBox(height: 2),
+              MoneyText(
+                total,
+                confidence: Confidence.estimated,
+                style: BambooFonts.money(28, color: BambooInk.lime),
+                hidePaise: true,
+                showConfidenceIcon: false,
+              ),
+              const SizedBox(height: AppSpace.xs),
+              Text(
+                balancesFound == accounts.length
+                    ? 'Based on the latest balance SMS for each account.'
+                    : 'Some accounts have no balance reported in their SMS yet.',
+                style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
+              ),
+            ] else if (accountCount > 0)
+              Text(
+                'Account balances will appear when a bank SMS includes an available balance.',
+                style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle),
+              )
+            else
+              Text(
+                'No bank accounts detected from imported SMS yet.',
+                style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle),
+              ),
+            if (accountLast4s.isNotEmpty) ...[
+              const SizedBox(height: AppSpace.md),
+              Wrap(
+                spacing: AppSpace.xs,
+                runSpacing: AppSpace.xs,
+                children: [
+                  for (final last4 in accountLast4s)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: BambooInk.slateRaised,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: Text(
+                        '•••• $last4',
+                        style: BambooFonts.ui(
+                          11.5,
+                          weight: FontWeight.w600,
+                          color: BambooInk.onSlate,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeCategories extends ConsumerWidget {
+  const _HomeCategories();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final apiRows =
+        ref.watch(categorySpendProvider).valueOrNull ?? const <CategorySpend>[];
+    final transactions =
+        ref.watch(transactionsProvider).valueOrNull ?? const <TransactionEntry>[];
+    final rows = apiRows.isNotEmpty
+        ? apiRows
+        : _categorySpendFromTransactions(transactions);
+    final sorted = [...rows]
+      ..sort((a, b) => b.totalSpend.rupees.compareTo(a.totalSpend.rupees));
+    final visible = sorted.take(6).toList();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: HomeScreen._gutter),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Categories',
+                    style: BambooFonts.heading(20, color: BambooInk.ink900),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => context.push(AppRoute.spendTrends),
+                  child: const Text('View all'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          if (visible.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: HomeScreen._gutter,
+              ),
+              child: Container(
+                height: 96,
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpace.md),
+                decoration: BoxDecoration(
+                  color: BambooInk.glassFillOnPaper,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: BambooInk.hairlineOnPaper),
+                ),
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Categories will appear after PandaPay picks up your first spend SMS.',
+                  style: BambooFonts.ui(13, color: BambooInk.ink500),
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 132,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: HomeScreen._gutter,
+                ),
+                scrollDirection: Axis.horizontal,
+                itemCount: visible.length,
+                separatorBuilder: (_, _) => const SizedBox(width: AppSpace.sm),
+                itemBuilder: (context, index) =>
+                    _HomeCategoryCard(row: visible[index]),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              HomeScreen._gutter,
+              AppSpace.xs,
+              HomeScreen._gutter,
+              0,
+            ),
+            child: Text(
+              visible.isEmpty
+                  ? 'Waiting for categorized spends from SMS'
+                  : 'Last 12 months · imported and logged spends',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+List<CategorySpend> _categorySpendFromTransactions(
+  List<TransactionEntry> transactions,
+) {
+  final totals = <String, Money>{};
+  final counts = <String, int>{};
+  for (final transaction in transactions) {
+    if (transaction.status != 'active' ||
+        transaction.entryKind != TxnEntryKind.spend) {
+      continue;
+    }
+    final label = transaction.categoryName ?? 'Other spending';
+    totals[label] = (totals[label] ?? const Money.zero()) + transaction.amount;
+    counts[label] = (counts[label] ?? 0) + 1;
+  }
+  return [
+    for (final entry in totals.entries)
+      CategorySpend(
+        categoryId: null,
+        categorySlug: null,
+        categoryName: entry.key == 'Other spending' ? null : entry.key,
+        totalSpend: entry.value,
+        txnCount: counts[entry.key] ?? 0,
+      ),
+  ];
+}
+
+class _HomeCategoryCard extends StatelessWidget {
+  final CategorySpend row;
+
+  const _HomeCategoryCard({required this.row});
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = spendingCategoryVisual(row.displayName);
+    return SizedBox(
+      width: 232,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: visual.surface,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(visual.icon, size: 19, color: visual.accent),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    row.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(
+                      14,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            MoneyText(
+              row.totalSpend,
+              confidence: Confidence.estimated,
+              style: BambooFonts.money(20, color: BambooInk.ink900),
+              hidePaise: true,
+              showConfidenceIcon: false,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${row.txnCount} ${row.txnCount == 1 ? 'spend' : 'spends'}',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeDuesAndReminders extends ConsumerWidget {
+  const _HomeDuesAndReminders();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rows =
+        ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
+    var total = const Money.zero();
+    for (final row in rows) {
+      total += row.loggedThisCycle;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.xl),
+      child: Container(
+        padding: const EdgeInsets.only(top: AppSpace.md, bottom: AppSpace.md),
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: HomeScreen._gutter),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Dues & reminders',
+                      style: BambooFonts.heading(20, color: BambooInk.ink900),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Manage due dates',
+                    onPressed: () => context.push(AppRoute.dueDateCalendar),
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpace.xs),
+            if (rows.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: HomeScreen._gutter,
+                ),
+                child: Container(
+                  height: 96,
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpace.md),
+                  decoration: BoxDecoration(
+                    color: BambooInk.paperMuted,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.event_available_outlined,
+                        color: BambooInk.ink500,
+                      ),
+                      const SizedBox(width: AppSpace.sm),
+                      Expanded(
+                        child: Text(
+                          'No due dates set yet. Add due dates to see upcoming payments here.',
+                          style: BambooFonts.ui(13, color: BambooInk.ink500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else ...[
+              SizedBox(
+                height: 148,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: HomeScreen._gutter,
+                  ),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: AppSpace.sm),
+                  itemBuilder: (context, index) =>
+                      _HomeDueCard(row: rows[index]),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  HomeScreen._gutter,
+                  AppSpace.sm,
+                  HomeScreen._gutter,
+                  0,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      'Tracked spend on these cards',
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                    const Spacer(),
+                    MoneyText(
+                      total,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.money(16, color: BambooInk.ink900),
+                      hidePaise: true,
+                      showConfidenceIcon: false,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeDueCard extends StatelessWidget {
+  final DuePayment row;
+
+  const _HomeDueCard({required this.row});
+
+  @override
+  Widget build(BuildContext context) {
+    final urgent = row.daysUntilDue <= 5;
+    final name = row.card.nickname?.isNotEmpty == true
+        ? row.card.nickname!
+        : row.card.cardName;
+    return SizedBox(
+      width: 236,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: BoxDecoration(
+          color: urgent ? BambooInk.warningBg : BambooInk.paperMuted,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: urgent ? BambooInk.warningBorder : BambooInk.hairlineOnPaper,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.event_rounded,
+                  size: 17,
+                  color: urgent ? BambooInk.clayInk : BambooInk.ink500,
+                ),
+                const SizedBox(width: AppSpace.xs),
+                Text(
+                  row.daysUntilDue == 0
+                      ? 'Due today'
+                      : DateFormat('dd MMM').format(row.dueOn),
+                  style: BambooFonts.ui(
+                    12,
+                    weight: FontWeight.w700,
+                    color: urgent ? BambooInk.clayInk : BambooInk.ink500,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: BambooFonts.ui(
+                14,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              'Logged spend this cycle',
+              style: BambooFonts.ui(11, color: BambooInk.ink500),
+            ),
+            MoneyText(
+              row.loggedThisCycle,
+              confidence: Confidence.estimated,
+              style: BambooFonts.money(18, color: BambooInk.ink900),
+              hidePaise: true,
+              showConfidenceIcon: false,
+            ),
+          ],
+        ),
       ),
     );
   }

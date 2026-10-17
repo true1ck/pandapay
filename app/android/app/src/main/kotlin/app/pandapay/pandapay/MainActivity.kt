@@ -7,6 +7,8 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
+import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest
+import com.google.android.gms.auth.api.identity.Identity
 import com.shounakmulay.telephony.sms.IncomingSmsReceiver
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -29,11 +31,14 @@ class MainActivity : FlutterFragmentActivity() {
     private companion object {
         const val CHANNEL = "app.pandapay/upi"
         const val ASSISTANT_CHANNEL = "app.pandapay/assistant"
+        const val PHONE_NUMBER_HINT_CHANNEL = "app.pandapay/phone_number_hint"
         const val REQUEST_CODE = 0x5091 // arbitrary, local to this Activity
+        const val PHONE_NUMBER_HINT_REQUEST_CODE = 0x5092
         const val MAX_ICON_PX = 96
     }
 
     private var pendingResult: MethodChannel.Result? = null
+    private var pendingPhoneHintResult: MethodChannel.Result? = null
     private var assistantChannel: MethodChannel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,6 +73,15 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            PHONE_NUMBER_HINT_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "request" -> requestPhoneNumberHint(result)
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getInstalledUpiApps" -> result.success(installedUpiApps())
@@ -83,6 +97,43 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun requestPhoneNumberHint(result: MethodChannel.Result) {
+        if (pendingPhoneHintResult != null) {
+            result.error("busy", "A phone-number chooser is already open", null)
+            return
+        }
+
+        pendingPhoneHintResult = result
+        val request = GetPhoneNumberHintIntentRequest.builder().build()
+        Identity.getSignInClient(this)
+            .getPhoneNumberHintIntent(request)
+            .addOnSuccessListener { pendingIntent ->
+                try {
+                    startIntentSenderForResult(
+                        pendingIntent.intentSender,
+                        PHONE_NUMBER_HINT_REQUEST_CODE,
+                        null,
+                        0,
+                        0,
+                        0,
+                    )
+                } catch (_: Exception) {
+                    finishPhoneNumberHint(null)
+                }
+            }
+            .addOnFailureListener {
+                // No saved number or compatible Play services: the Dart
+                // field remains available for normal manual entry.
+                finishPhoneNumberHint(null)
+            }
+    }
+
+    private fun finishPhoneNumberHint(phoneNumber: String?) {
+        val result = pendingPhoneHintResult
+        pendingPhoneHintResult = null
+        result?.success(phoneNumber)
     }
 
     private fun upiViewIntent(): Intent = Intent(Intent.ACTION_VIEW, Uri.parse("upi://pay"))
@@ -127,6 +178,17 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == PHONE_NUMBER_HINT_REQUEST_CODE) {
+            if (resultCode != RESULT_OK || data == null) {
+                finishPhoneNumberHint(null)
+                return
+            }
+            val phoneNumber = runCatching {
+                Identity.getSignInClient(this).getPhoneNumberFromIntent(data)
+            }.getOrNull()
+            finishPhoneNumberHint(phoneNumber)
+            return
+        }
         if (requestCode != REQUEST_CODE) {
             super.onActivityResult(requestCode, resultCode, data)
             return

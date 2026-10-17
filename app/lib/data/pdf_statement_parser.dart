@@ -3,11 +3,6 @@ import 'dart:typed_data';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
-/// F2 (ui-spec Statement PDF Import, GAP_ANALYSIS.md §3). Thrown for a
-/// wrong/missing password on an encrypted PDF, or a file that isn't a
-/// readable PDF at all — [StatementPdfImportScreen] shows this message
-/// directly, so it's already user-facing plain language, not a raw
-/// exception string.
 class StatementParseException implements Exception {
   final String message;
   const StatementParseException(this.message);
@@ -15,49 +10,37 @@ class StatementParseException implements Exception {
   String toString() => message;
 }
 
-/// Bridges syncfusion_flutter_pdf's byte-level API to plain text. Kept
-/// separate from [parseStatementText] below so the actual line-extraction
-/// heuristic stays a pure function, unit-testable with plain strings
-/// instead of a real PDF file.
+/// Extracts a PDF text layer on-device. An empty result is intentional: it
+/// lets the caller try the image/OCR path for scanned statements.
 class PdfStatementReader {
-  /// Decrypts (if [password] is given) and extracts all text from the PDF
-  /// at [bytes]. Never touches the network — entirely on-device, matching
-  /// this screen's existing security note (the password is used only
-  /// in-memory here, never sent anywhere, never logged).
   String extractText(Uint8List bytes, {String? password}) {
     late final PdfDocument document;
     try {
       document = PdfDocument(inputBytes: bytes, password: password);
     } catch (_) {
-      // syncfusion throws a variety of internal exception types for "wrong
-      // password" vs "not a valid PDF" vs "corrupted" — none of them are
-      // meant to be shown to a user verbatim, and this screen only has one
-      // actionable next step regardless (retry the password or pick a
-      // different file), so they're collapsed into one message rather than
-      // guessing which internal type means what.
-      throw const StatementParseException("That password didn't work for this statement.");
+      throw const StatementParseException(
+        "That password didn't work for this statement.",
+      );
     }
     try {
-      final text = PdfTextExtractor(document).extractText();
-      if (text.trim().isEmpty) {
-        throw const StatementParseException(
-          "Couldn't read any text from this PDF — it may be a scanned image.",
-        );
-      }
-      return text;
+      return PdfTextExtractor(document).extractText();
     } finally {
       document.dispose();
     }
   }
 }
 
-/// One transaction line detected in the statement text.
 class ParsedStatementLine {
   final DateTime date;
   final String description;
   final Money amount;
   final bool isCredit;
-  const ParsedStatementLine({required this.date, required this.description, required this.amount, this.isCredit = false});
+  const ParsedStatementLine({
+    required this.date,
+    required this.description,
+    required this.amount,
+    this.isCredit = false,
+  });
 }
 
 class ParsedStatement {
@@ -66,77 +49,190 @@ class ParsedStatement {
   const ParsedStatement({required this.transactions, this.closingBalance});
 }
 
-/// `DD/MM/YYYY` or `DD-MM-YYYY` (2- or 4-digit year) at the start of a
-/// line, then a description, then an amount with optional thousands
-/// commas and exactly 2 decimal places, then an optional Dr/Cr/DR/CR
-/// suffix (ignored — this screen doesn't yet distinguish debits from
-/// credits, matching its own "every detected line treated the same" scope
-/// note in confirmStatementImport's caller).
-final _transactionLine = RegExp(
-  r'^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\s+(.+?)\s+([\d,]+\.\d{2})\s*(Dr|Cr)?\s*$',
+// PDF text extraction commonly prefixes a row with a serial number or a
+// table marker. Keep the same capture groups as [_dateAtStart], but allow the
+// date to occur after that prefix instead of assuming a fixed table layout.
+final _dateAnywhere = RegExp(
+  r'(?:(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})|(\d{4})[./-](\d{1,2})[./-](\d{1,2})|(\d{1,2})[\s./-]+([A-Za-z]{3,9})[\s,./-]+(\d{2,4})|([A-Za-z]{3,9})[\s-]+(\d{1,2}),?[\s-]+(\d{2,4}))\b',
   caseSensitive: false,
 );
 
-final _closingBalanceLine = RegExp(r'closing\s*balance\D*([\d,]+\.\d{2})', caseSensitive: false);
+// Currency symbols/codes and decimal numbers make a strong candidate. Plain
+// integers are also accepted because many bank PDFs omit .00.
+final _amountToken = RegExp(
+  r'(?:(?:₹|rs\.?|inr)\s*)?[\(\-]?\s*\d[\d,]*(?:\.\d{1,2})?\s*\)?\s*(?:dr|cr|debit|credit)?\b',
+  caseSensitive: false,
+);
 
-DateTime? _parseDate(String d, String m, String y) {
-  final day = int.tryParse(d);
-  final month = int.tryParse(m);
-  var year = int.tryParse(y);
+final _closingBalanceLine = RegExp(
+  r'\b(?:closing|ending)\s+balance\b',
+  caseSensitive: false,
+);
+final _monthNames = <String, int>{
+  'jan': 1,
+  'january': 1,
+  'feb': 2,
+  'february': 2,
+  'mar': 3,
+  'march': 3,
+  'apr': 4,
+  'april': 4,
+  'may': 5,
+  'jun': 6,
+  'june': 6,
+  'jul': 7,
+  'july': 7,
+  'aug': 8,
+  'august': 8,
+  'sep': 9,
+  'sept': 9,
+  'september': 9,
+  'oct': 10,
+  'october': 10,
+  'nov': 11,
+  'november': 11,
+  'dec': 12,
+  'december': 12,
+};
+
+DateTime? _dateFromMatch(RegExpMatch match) {
+  int? day;
+  int? month;
+  int? year;
+  if (match.group(1) != null) {
+    day = int.tryParse(match.group(1)!);
+    month = int.tryParse(match.group(2)!);
+    year = int.tryParse(match.group(3)!);
+  } else if (match.group(4) != null) {
+    year = int.tryParse(match.group(4)!);
+    month = int.tryParse(match.group(5)!);
+    day = int.tryParse(match.group(6)!);
+  } else if (match.group(7) != null) {
+    day = int.tryParse(match.group(7)!);
+    month = _monthNames[match.group(8)!.toLowerCase()];
+    year = int.tryParse(match.group(9)!);
+  } else {
+    month = _monthNames[match.group(10)!.toLowerCase()];
+    day = int.tryParse(match.group(11)!);
+    year = int.tryParse(match.group(12)!);
+  }
   if (day == null || month == null || year == null) return null;
   if (year < 100) year += 2000;
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-  try {
-    return DateTime(year, month, day);
-  } catch (_) {
-    return null;
-  }
+  if (day < 1 || day > 31 || month < 1 || month > 12) return null;
+  final date = DateTime(year, month, day);
+  return date.year == year && date.month == month && date.day == day
+      ? date
+      : null;
 }
 
 Money? _parseAmount(String raw) {
-  final cleaned = raw.replaceAll(',', '');
-  final value = double.tryParse(cleaned);
-  if (value == null) return null;
-  return Money.fromRupees(value);
+  var cleaned = raw.toLowerCase().replaceAll(
+    RegExp(r'₹|rs\.?|inr|dr|cr|debit|credit'),
+    '',
+  );
+  cleaned = cleaned.replaceAll(',', '').replaceAll(' ', '').trim();
+  if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+    cleaned = cleaned.substring(1, cleaned.length - 1);
+  }
+  final value = double.tryParse(cleaned.replaceFirst('-', ''));
+  return value == null ? null : Money.fromRupees(value.abs());
 }
 
-/// Heuristic, best-effort line extraction — deliberately NOT issuer-
-/// specific column parsing (ui-spec F2's "issuer-specific column-layout
-/// parsing per bank" is out of scope here, same as this screen's own
-/// original doc-comment flagged; PDF table layouts vary far more than
-/// SMS/email text ever does). A line that doesn't match the pattern is
-/// silently skipped rather than surfaced as a parse error — a statement
-/// with a mix of header/footer/summary text alongside transaction rows is
-/// the normal case, not a failure, so only "found zero transactions at
-/// all" is treated as worth surfacing (by the caller checking
-/// `.transactions.isEmpty`, not by this function throwing).
+String _cleanDescription(String value) {
+  return value
+      .replaceAll(RegExp(r'[|:_\-]+\s*$'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+ParsedStatementLine? _parseTransactionBlock(String block) {
+  final dateMatch = _dateAnywhere.firstMatch(block);
+  if (dateMatch == null) return null;
+  final date = _dateFromMatch(dateMatch);
+  if (date == null) return null;
+
+  final afterDate = block.substring(dateMatch.end).trim();
+  final candidates = _amountToken.allMatches(afterDate).toList();
+  if (candidates.isEmpty) return null;
+
+  // In common bank table extraction, debit/credit is followed by a running
+  // balance. With three numeric columns the middle value is the spend.
+  final selected = candidates.length >= 3
+      ? candidates[candidates.length - 2]
+      : candidates.first;
+  final amount = _parseAmount(selected.group(0)!);
+  if (amount == null) return null;
+
+  // Narration is the text before the first monetary column. This avoids
+  // importing reference numbers or running balances as merchant names.
+  final description = _cleanDescription(
+    afterDate.substring(0, candidates.first.start),
+  );
+  if (description.isEmpty) return null;
+  final isCredit = RegExp(
+    r'\b(?:cr|credit)\b',
+    caseSensitive: false,
+  ).hasMatch(block);
+  return ParsedStatementLine(
+    date: date,
+    description: description,
+    amount: amount,
+    isCredit: isCredit,
+  );
+}
+
+/// Generic, conservative parser for bank/card statement text layers and OCR.
+/// It supports common numeric/date variants, multi-line narrations, and the
+/// usual debit/credit + running-balance column layout. Unsupported or
+/// ambiguous lines are skipped instead of becoming invented transactions.
 ParsedStatement parseStatementText(String text) {
   final transactions = <ParsedStatementLine>[];
   Money? closingBalance;
+  String? block;
 
-  for (final rawLine in text.split('\n')) {
-    final line = rawLine.trim();
-    if (line.isEmpty) continue;
-
-    final balanceMatch = _closingBalanceLine.firstMatch(line);
-    if (balanceMatch != null) {
-      closingBalance = _parseAmount(balanceMatch.group(1)!) ?? closingBalance;
-      continue;
-    }
-
-    final match = _transactionLine.firstMatch(line);
-    if (match == null) continue;
-    final date = _parseDate(match.group(1)!, match.group(2)!, match.group(3)!);
-    final amount = _parseAmount(match.group(5)!);
-    if (date == null || amount == null) continue;
-
-    transactions.add(ParsedStatementLine(
-      date: date,
-      description: match.group(4)!.trim(),
-      amount: amount,
-      isCredit: match.group(6)?.toLowerCase() == 'cr',
-    ));
+  void flush() {
+    final candidate = block;
+    block = null;
+    if (candidate == null) return;
+    final parsed = _parseTransactionBlock(candidate);
+    if (parsed != null) transactions.add(parsed);
   }
 
-  return ParsedStatement(transactions: transactions, closingBalance: closingBalance);
+  for (final raw in text.replaceAll('\r', '').split('\n')) {
+    final line = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (line.isEmpty) {
+      flush();
+      continue;
+    }
+    if (_closingBalanceLine.hasMatch(line)) {
+      flush();
+      final amounts = _amountToken.allMatches(line).toList();
+      if (amounts.isNotEmpty)
+        closingBalance = _parseAmount(amounts.last.group(0)!);
+      continue;
+    }
+    // Header rows such as "Statement Period" and "Card Number" can contain
+    // date-like and numeric tokens. They are metadata, never transactions.
+    if (RegExp(
+      r'\b(?:statement\s+period|card\s+number|account\s+number|opening\s+balance)\b',
+      caseSensitive: false,
+    ).hasMatch(line)) {
+      flush();
+      continue;
+    }
+    if (_dateAnywhere.hasMatch(line)) {
+      flush();
+      block = line;
+    } else if (block != null) {
+      // Table extraction often puts narration and numeric columns on separate
+      // lines. Keep continuation text attached to the preceding date row.
+      block = '$block $line';
+    }
+  }
+  flush();
+
+  return ParsedStatement(
+    transactions: transactions,
+    closingBalance: closingBalance,
+  );
 }

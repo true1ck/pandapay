@@ -23,7 +23,11 @@ import '../import/gmail_connect_service.dart';
 final _consentsApiProvider = Provider<ConsentsApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
-  return ConsentsApi(apiBaseUrl: Env.apiBaseUrl, accessToken: token);
+  return ConsentsApi(
+    apiBaseUrl: Env.apiBaseUrl,
+    accessToken: token,
+    client: ref.read(authenticatedHttpClientProvider),
+  );
 });
 
 final _consentHistoryProvider = FutureProvider.autoDispose<List<ConsentRecord>>((ref) async {

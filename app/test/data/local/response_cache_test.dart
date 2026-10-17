@@ -48,4 +48,14 @@ void main() {
     expect(await cache.get('user_cards'), isNull);
     expect(await cache.get('catalogue'), 'cat');
   });
+
+  test('clearPrefix removes only the scoped account snapshot', () async {
+    await cache.put('user:user-1:user_cards', 'cards');
+    await cache.put('user:user-1:transactions:all', 'transactions');
+    await cache.put('user:user-2:user_cards', 'other-cards');
+    await cache.clearPrefix('user:user-1:');
+    expect(await cache.get('user:user-1:user_cards'), isNull);
+    expect(await cache.get('user:user-1:transactions:all'), isNull);
+    expect(await cache.get('user:user-2:user_cards'), 'other-cards');
+  });
 }

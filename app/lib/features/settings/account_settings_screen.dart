@@ -169,11 +169,8 @@ Future<void> _signOut(WidgetRef ref) async {
 const _biometricLockKey = 'biometric_lock_enabled_v1';
 
 /// Same load/toggle shape as providers.dart's OnboardingController — a
-/// local SharedPreferences-backed bool, nothing server-side. Gates
-/// app-open per the caption below; actual biometric-prompt enforcement at
-/// launch is a separate follow-up not built here (this ships the toggle +
-/// persisted state only, matching this codebase's existing "toggle is
-/// real, enforcement is a documented follow-up" pattern).
+/// local SharedPreferences-backed bool, nothing server-side. It controls the
+/// app-open lock and is also used by the first-run enrollment prompt.
 final biometricLockProvider =
     StateNotifierProvider<BiometricLockController, AsyncValue<bool>>(
       (ref) => BiometricLockController(),
@@ -285,6 +282,7 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
       final api = AccountApi(
         apiBaseUrl: _accountApiBaseUrl,
         accessToken: token,
+        client: ref.read(authenticatedHttpClientProvider),
       );
       final dueAt = await api.requestDeletion();
       // Deletion is scheduled, not immediate — the account is not gone
@@ -318,6 +316,7 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
       final api = AccountApi(
         apiBaseUrl: _accountApiBaseUrl,
         accessToken: token,
+        client: ref.read(authenticatedHttpClientProvider),
       );
       await api.cancelDeletion();
       if (!mounted) return;

@@ -87,6 +87,20 @@ test('extracts a due date when payment is made by a date', () => {
   assert.equal(result.day, 16);
 });
 
+test('extracts HDFC MoneyBack-style historical statement wording', () => {
+  const messages = [
+    'Your HDFC Bank MoneyBack+ Credit Card ending XX1234 statement is generated. Payment due date of your card is 16/10/2026.',
+    'Payment due date for your HDFC Bank MoneyBack Credit Card ending XX1234 is 16 Oct 2026.',
+    'Your HDFC Bank Credit Card ending XX1234 statement is generated. Please keep sufficient funds in your account for payment on 16/10/2026.',
+  ];
+
+  for (const body of messages) {
+    const result = extractDueDate(body);
+    assert.equal(result?.day, 16, body);
+    assert.equal(extractLast4(body), '1234', body);
+  }
+});
+
 test('does not interpret an ordinary transaction date as a due date', () => {
   assert.equal(
     extractDueDate('Spent Rs. 210 at QUALITY FUEL STATION on 02/10/2026.'),

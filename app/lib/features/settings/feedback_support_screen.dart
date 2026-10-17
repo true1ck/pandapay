@@ -138,7 +138,11 @@ class _FeedbackFormState extends ConsumerState<_FeedbackForm> {
       _error = null;
     });
     try {
-      final api = SupportApi(apiBaseUrl: supportApiBaseUrl, accessToken: widget.accessToken);
+      final api = SupportApi(
+        apiBaseUrl: supportApiBaseUrl,
+        accessToken: widget.accessToken,
+        client: ref.read(authenticatedHttpClientProvider),
+      );
       await api.submitTicket(
         kind: _kind,
         message: message,

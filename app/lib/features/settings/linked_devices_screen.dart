@@ -26,7 +26,12 @@ import '../../data/devices_api.dart';
 final linkedDevicesProvider = FutureProvider.autoDispose<List<LinkedDevice>>((ref) async {
   final api = ref.watch(devicesApiProvider);
   if (api == null) return const [];
-  return api.fetchDevices();
+  try {
+    return await api.fetchDevices();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return const [];
+    rethrow;
+  }
 });
 
 class LinkedDevicesScreen extends ConsumerStatefulWidget {

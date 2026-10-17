@@ -21,12 +21,79 @@ enum SpendPeriod {
   week('week', 'This week', 'Last week'),
   month('month', 'This month', 'Last month'),
   quarter('quarter', 'This quarter', 'Last quarter'),
-  year('year', 'This year', 'Last year');
+  year('year', 'This year', 'Last year'),
+  custom('custom', 'Custom dates', 'Previous period');
 
   final String wireValue;
   final String label;
   final String previousLabel;
   const SpendPeriod(this.wireValue, this.label, this.previousLabel);
+}
+
+/// The selected range for the Spending screen.
+///
+/// Presets keep their existing server-side calendar semantics. A custom
+/// selection is date-only and inclusive at the UI boundary; the API turns it
+/// into a half-open range so transactions on the selected end date are kept.
+class SpendReportQuery {
+  final SpendPeriod period;
+  final DateTime? from;
+  final DateTime? to;
+
+  const SpendReportQuery.preset(this.period) : from = null, to = null;
+
+  const SpendReportQuery.custom({required this.from, required this.to})
+    : period = SpendPeriod.custom;
+
+  bool get isCustom => period == SpendPeriod.custom;
+
+  String get cacheKey {
+    if (!isCustom) return period.wireValue;
+    return '${period.wireValue}:${_dateOnly(from!)}:${_dateOnly(to!)}';
+  }
+
+  String get shortLabel {
+    if (!isCustom) return period.label;
+    return '${_shortDate(from!)} – ${_shortDate(to!)}';
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is SpendReportQuery &&
+      other.period == period &&
+      _sameDay(other.from, from) &&
+      _sameDay(other.to, to);
+
+  @override
+  int get hashCode => Object.hash(period, _dateOnly(from), _dateOnly(to));
+}
+
+String _dateOnly(DateTime? date) => date == null
+    ? ''
+    : '${date.year.toString().padLeft(4, '0')}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.day.toString().padLeft(2, '0')}';
+
+bool _sameDay(DateTime? a, DateTime? b) =>
+    a == null && b == null ||
+    a != null && b != null && _dateOnly(a) == _dateOnly(b);
+
+String _shortDate(DateTime date) {
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${months[date.month - 1]} ${date.day}';
 }
 
 /// Totals for one entry kind. Spend, income and investment are carried
@@ -209,6 +276,15 @@ class SpendReport {
     this.byCardCategory = const [],
     required this.series,
   });
+
+  String get displayLabel => period == SpendPeriod.custom
+      ? '${_shortDate(periodStart.toLocal())} – '
+            '${_shortDate(periodEnd.subtract(const Duration(days: 1)).toLocal())}'
+      : period.label;
+
+  String get previousDisplayLabel => period == SpendPeriod.custom
+      ? 'previous period'
+      : period.previousLabel.toLowerCase();
 
   /// Change against the previous period as a fraction (0.12 == +12%).
   ///
@@ -432,6 +508,22 @@ class BudgetStatus {
         ? null
         : _money(json['projectedInr']),
   );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'scope': scope.wireValue,
+    'scopeRefId': scopeRefId,
+    'label': label,
+    'period': period.wireValue,
+    'amountInr': amount.rupees,
+    'spentInr': spent.rupees,
+    'txnCount': txnCount,
+    'periodStart': periodStart.toIso8601String(),
+    'periodEnd': periodEnd.toIso8601String(),
+    'consumedFraction': consumedFraction,
+    'elapsedFraction': elapsedFraction,
+    'projectedInr': projected?.rupees,
+  };
 }
 
 class SpendReportsRepository {
@@ -453,6 +545,8 @@ class SpendReportsRepository {
   Future<SpendReport> fetchReport({
     SpendPeriod period = SpendPeriod.month,
     DateTime? anchor,
+    DateTime? from,
+    DateTime? to,
     int buckets = 12,
     String? timeZone,
   }) async {
@@ -460,6 +554,8 @@ class SpendReportsRepository {
       await fetchReportJson(
         period: period,
         anchor: anchor,
+        from: from,
+        to: to,
         buckets: buckets,
         timeZone: timeZone,
       ),
@@ -472,13 +568,29 @@ class SpendReportsRepository {
   Future<Map<String, dynamic>> fetchReportJson({
     SpendPeriod period = SpendPeriod.month,
     DateTime? anchor,
+    DateTime? from,
+    DateTime? to,
     int buckets = 12,
     String? timeZone,
   }) async {
+    if (period == SpendPeriod.custom && (from == null || to == null)) {
+      throw ArgumentError(
+        'Custom spend reports require both from and to dates',
+      );
+    }
+    if (period != SpendPeriod.custom && (from != null || to != null)) {
+      throw ArgumentError(
+        'from/to dates are only valid for custom spend reports',
+      );
+    }
     final query = {
       'period': period.wireValue,
       'buckets': '$buckets',
       if (anchor != null) 'anchor': anchor.toIso8601String(),
+      if (period == SpendPeriod.custom) ...{
+        'from': _dateOnly(from),
+        'to': _dateOnly(to),
+      },
       if (timeZone != null && timeZone.isNotEmpty) 'tz': timeZone,
     };
     final response = await _client.get(
@@ -682,6 +794,21 @@ class RecurringSeries {
         isMandate:
             json['isMandate'] == true || json['detectionSource'] == 'mandate',
       );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'displayName': displayName,
+    'typicalAmountInr': typicalAmount.rupees,
+    'cadenceDays': cadenceDays,
+    'occurrenceCount': occurrenceCount,
+    'annualCostInr': annualCost.rupees,
+    'nextExpectedOn': nextExpectedOn?.toIso8601String(),
+    'categoryName': categoryName,
+    'cardName': cardName,
+    'paymentMethod': paymentMethod,
+    'detectionSource': detectionSource,
+    'isMandate': isMandate,
+  };
 }
 
 /// Every detected subscription, plus what they cost together.
@@ -690,4 +817,9 @@ class RecurringReport {
   final Money totalAnnual;
 
   const RecurringReport({required this.series, required this.totalAnnual});
+
+  Map<String, dynamic> toJson() => {
+    'series': series.map((item) => item.toJson()).toList(),
+    'totalAnnualInr': totalAnnual.rupees,
+  };
 }

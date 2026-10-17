@@ -37,7 +37,8 @@ Manual / SMS / forwarded email / IMAP / statement
 | SMS backup XML | Yes | Same message hash | Yes | `sms` and `sms_bulk` are one source family, so repeat backup imports rely on exact identity rather than a risky heuristic. |
 | Email forwarding webhook | Yes | Profile-salted normalized-content hash | Yes | A provider retry or second forwarding of the same content stays one transaction; only a one-way hash of provider message ID is provenance, not identity. One canonical webhook route; the old shadow route was removed. |
 | IMAP poller | Yes when the poller is enabled | Connection ID + IMAP UID, server-hashed | Yes | Requires deployment configuration and an active connection. |
-| Statement PDF | Yes | Server-wrapped SHA-256 of local PDF bytes, plus line index | Yes | PDF and password stay on-device; only reviewed structured rows are uploaded. Credit (`Cr`) rows are not imported as spend. |
+| Statement PDF | Yes | Server-wrapped SHA-256 of local PDF bytes, plus line index | Yes | Text-layer and scanned/image-only PDFs are parsed locally; scanned pages use on-device OCR. PDF and password stay on-device; only reviewed structured rows are uploaded. Credit (`Cr`) rows are not imported as spend. |
+| Spending screenshots | Yes | Server-wrapped SHA-256 of selected local image bytes, plus line index | Yes | Settings-only import uses on-device OCR for row-level screenshots. Summary/category screenshots are rejected as summary-only so totals are never fabricated into transactions. |
 | Direct Gmail OAuth | Card discovery only | Not applicable yet | Not applicable yet | Raw messages and token currently stay on-device by explicit consent. See the planned work below. |
 
 ## Exact retries
@@ -49,6 +50,7 @@ Exact identity handles network retries and repeated imports without heuristics:
 - Forwarded email identity uses normalized sender, subject, and body, so it is stable across webhook retries, line-ending/whitespace-only transport changes, and a different provider ID on re-forwarding.
 - IMAP identity uses mailbox connection plus UID.
 - Statement identity starts with a digest of the local file and adds a stable line index.
+- Screenshot imports use a separate `imported` source family so they can be compared with statement rows for cross-source duplicate review, while exact screenshot retries remain idempotent.
 
 The database enforces exact uniqueness with `transactions(profile_id, source_key)` and records each source in `transaction_observations`.
 

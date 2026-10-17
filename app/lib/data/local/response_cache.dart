@@ -82,4 +82,14 @@ class ResponseCache {
   Future<void> clear(String key) async {
     _db.db.execute('DELETE FROM cached_responses WHERE key = ?', [key]);
   }
+
+  /// Removes every cached response under [prefix]. Private response keys are
+  /// namespaced by account, so sign-out can erase the whole account snapshot
+  /// without maintaining a separate endpoint list.
+  Future<void> clearPrefix(String prefix) async {
+    _db.db.execute(
+      'DELETE FROM cached_responses WHERE key LIKE ?',
+      ['$prefix%'],
+    );
+  }
 }

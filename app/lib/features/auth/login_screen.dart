@@ -7,6 +7,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/phone_number_hint.dart';
 import '../settings/feedback_support_screen.dart';
 import 'account_recovery_screen.dart';
 
@@ -52,10 +53,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   /// account's existing phone linkage.
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
+  final _phoneFocusNode = FocusNode();
 
   bool _otpRequested = false;
   bool _loading = false;
   String? _error;
+  bool _autoPhoneHintRequested = false;
 
   /// A4's three purpose-specific checkboxes — sign-up only. [_acceptedTerms]
   /// is required (gates submit); the other two default OFF and are optional.
@@ -66,10 +69,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool get _isSignUp => widget.mode == AuthMode.signUp;
 
   @override
+  void initState() {
+    super.initState();
+    _phoneFocusNode.addListener(_onPhoneFocusChanged);
+  }
+
+  void _onPhoneFocusChanged() {
+    if (_phoneFocusNode.hasFocus &&
+        _phoneController.text.trim().isEmpty &&
+        !_autoPhoneHintRequested) {
+      _autoPhoneHintRequested = true;
+      _requestPhoneNumberHint();
+    }
+  }
+
+  Future<void> _requestPhoneNumberHint() async {
+    final phoneNumber = await PhoneNumberHint.request();
+    if (!mounted || phoneNumber == null || phoneNumber.trim().isEmpty) return;
+    final trimmed = phoneNumber.trim();
+    _phoneController.value = TextEditingValue(
+      text: trimmed,
+      selection: TextSelection.collapsed(offset: trimmed.length),
+    );
+    setState(() => _error = null);
+  }
+
+  @override
   void dispose() {
     _identifierController.dispose();
     _phoneController.dispose();
     _codeController.dispose();
+    _phoneFocusNode
+      ..removeListener(_onPhoneFocusChanged)
+      ..dispose();
     super.dispose();
   }
 
@@ -340,8 +372,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         isLight: isLight,
                         identifierController: _identifierController,
                         phoneController: _phoneController,
+                        phoneFocusNode: _phoneFocusNode,
                         loading: _loading,
                         onSubmit: _requestOtp,
+                        onRequestPhoneHint: _requestPhoneNumberHint,
                         acceptedTerms: _acceptedTerms,
                         optInCrowdsource: _optInCrowdsource,
                         optInMarketing: _optInMarketing,
@@ -431,8 +465,10 @@ class _IdentifierStep extends StatelessWidget {
   final bool isLight;
   final TextEditingController identifierController;
   final TextEditingController phoneController;
+  final FocusNode phoneFocusNode;
   final bool loading;
   final VoidCallback onSubmit;
+  final VoidCallback onRequestPhoneHint;
 
   /// A4 — sign-up only. See _LoginScreenState's own fields for what each
   /// means; this widget just renders/reports them, LoginScreen owns state.
@@ -448,8 +484,10 @@ class _IdentifierStep extends StatelessWidget {
     required this.isLight,
     required this.identifierController,
     required this.phoneController,
+    required this.phoneFocusNode,
     required this.loading,
     required this.onSubmit,
+    required this.onRequestPhoneHint,
     required this.acceptedTerms,
     required this.optInCrowdsource,
     required this.optInMarketing,
@@ -528,15 +566,23 @@ class _IdentifierStep extends StatelessWidget {
         const SizedBox(height: AppSpace.sm),
         TextField(
           controller: phoneController,
+          focusNode: phoneFocusNode,
           keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.telephoneNumber],
           onSubmitted: (_) => loading ? null : onSubmit(),
           style: BambooFonts.ui(15, color: textColor),
-          decoration: _fieldDecoration(
-            hint: '+91 98765 43210',
-            icon: Icons.phone_outlined,
-          ),
+          decoration:
+              _fieldDecoration(
+                hint: '+91 98765 43210',
+                icon: Icons.phone_outlined,
+              ).copyWith(
+                suffixIcon: IconButton(
+                  tooltip: 'Use a saved phone number',
+                  onPressed: onRequestPhoneHint,
+                  icon: Icon(Icons.contacts_outlined, color: bodyColor),
+                ),
+              ),
         ),
         const SizedBox(height: AppSpace.sm),
         Row(

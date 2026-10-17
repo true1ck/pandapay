@@ -550,6 +550,98 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                   ),
                 ],
                 const SizedBox(height: AppSpace.xl),
+                Text(
+                  'FEE FOR THIS CARD',
+                  style: BambooFonts.ui(
+                    11,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink500,
+                  ).copyWith(letterSpacing: 1),
+                ),
+                const SizedBox(height: AppSpace.sm),
+                Container(
+                  padding: const EdgeInsets.all(AppSpace.md),
+                  decoration: BoxDecoration(
+                    color: BambooInk.glassFillOnPaper,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    border: Border.all(color: BambooInk.hairlineOnPaper),
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            'Override annual fee for me',
+                            style: BambooFonts.ui(
+                              14,
+                              weight: FontWeight.w700,
+                              color: BambooInk.ink900,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Use this when your bank gave you a lifetime-free or custom-fee offer.',
+                            style: BambooFonts.ui(
+                              12.5,
+                              color: BambooInk.ink500,
+                            ),
+                          ),
+                          value: _feeOverrideEnabled,
+                          onChanged: (value) => setState(() {
+                            _feeOverrideEnabled = value;
+                            if (!value) {
+                              _lifetimeFree = false;
+                              _annualFeeController.clear();
+                            } else if (_annualFeeController.text
+                                .trim()
+                                .isEmpty) {
+                              _annualFeeController.text = '0';
+                            }
+                          }),
+                          activeThumbColor: BambooInk.jade,
+                          activeTrackColor: BambooInk.jade.withValues(
+                            alpha: 0.35,
+                          ),
+                        ),
+                        if (_feeOverrideEnabled) ...[
+                          const Divider(height: AppSpace.lg),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Lifetime free (LTF)',
+                              style: BambooFonts.ui(
+                                13.5,
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                            value: _lifetimeFree,
+                            onChanged: (value) => setState(() {
+                              _lifetimeFree = value ?? false;
+                              if (_lifetimeFree) {
+                                _annualFeeController.text = '0';
+                              }
+                            }),
+                            activeColor: BambooInk.jade,
+                          ),
+                          if (!_lifetimeFree)
+                            TextField(
+                              controller: _annualFeeController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Your annual fee (₹)',
+                                helperText:
+                                    'Leave the catalogue fee unchanged by switching the override off.',
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpace.xl),
                 FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: BambooInk.slate,
@@ -572,7 +664,6 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                         )
                       : const Text('Save'),
                 ),
-                const SizedBox(height: AppSpace.xl),
                 // Design 23 "Card actions": set as default / remove.
                 Text(
                   'CARD ACTIONS',
@@ -665,98 +756,6 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                   "Removing keeps this card's full transaction history — nothing is deleted, and you can restore it any time from Wallet → Archived.",
                   style: BambooFonts.ui(12, color: BambooInk.ink500),
                   textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: AppSpace.xl),
-                Text(
-                  'FEE FOR THIS CARD',
-                  style: BambooFonts.ui(
-                    11,
-                    weight: FontWeight.w600,
-                    color: BambooInk.ink500,
-                  ).copyWith(letterSpacing: 1),
-                ),
-                const SizedBox(height: AppSpace.sm),
-                Container(
-                  padding: const EdgeInsets.all(AppSpace.md),
-                  decoration: BoxDecoration(
-                    color: BambooInk.glassFillOnPaper,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: BambooInk.hairlineOnPaper),
-                  ),
-                  child: Material(
-                    type: MaterialType.transparency,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      children: [
-                        SwitchListTile.adaptive(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            'Override annual fee for me',
-                            style: BambooFonts.ui(
-                              14,
-                              weight: FontWeight.w700,
-                              color: BambooInk.ink900,
-                            ),
-                          ),
-                          subtitle: Text(
-                            'Use this when your bank gave you a lifetime-free or custom-fee offer.',
-                            style: BambooFonts.ui(
-                              12.5,
-                              color: BambooInk.ink500,
-                            ),
-                          ),
-                          value: _feeOverrideEnabled,
-                          onChanged: (value) => setState(() {
-                            _feeOverrideEnabled = value;
-                            if (!value) {
-                              _lifetimeFree = false;
-                              _annualFeeController.clear();
-                            } else if (_annualFeeController.text
-                                .trim()
-                                .isEmpty) {
-                              _annualFeeController.text = '0';
-                            }
-                          }),
-                          activeThumbColor: BambooInk.jade,
-                          activeTrackColor: BambooInk.jade.withValues(
-                            alpha: 0.35,
-                          ),
-                        ),
-                        if (_feeOverrideEnabled) ...[
-                          const Divider(height: AppSpace.lg),
-                          CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              'Lifetime free (LTF)',
-                              style: BambooFonts.ui(
-                                13.5,
-                                color: BambooInk.ink900,
-                              ),
-                            ),
-                            value: _lifetimeFree,
-                            onChanged: (value) => setState(() {
-                              _lifetimeFree = value ?? false;
-                              if (_lifetimeFree) {
-                                _annualFeeController.text = '0';
-                              }
-                            }),
-                            activeColor: BambooInk.jade,
-                          ),
-                          if (!_lifetimeFree)
-                            TextField(
-                              controller: _annualFeeController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Your annual fee (₹)',
-                                helperText:
-                                    'Leave the catalogue fee unchanged by switching the override off.',
-                              ),
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
                 ),
               ],
             );

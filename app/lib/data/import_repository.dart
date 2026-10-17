@@ -143,6 +143,7 @@ class ImportRepository {
     required int txnCount,
     required int reconciledCount,
     String? issuerFormatId,
+    String importSource = 'statement',
     required String importKey,
     required List<StatementTransactionInput> transactions,
   }) async {
@@ -158,6 +159,7 @@ class ImportRepository {
         'txnCount': txnCount,
         'reconciledCount': reconciledCount,
         'issuerFormatId': ?issuerFormatId,
+        'importSource': importSource,
         'importKey': importKey,
         'transactions': [for (final transaction in transactions) transaction.toJson()],
       }),

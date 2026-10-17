@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../data/user_cards_repository.dart';
 
 /// A recognisable, catalogue-driven card face used wherever PandaPay shows a
 /// card. Catalogue art is optional, so the fallback is deliberately generated
@@ -13,6 +14,10 @@ import '../../app/design/app_theme.dart';
 class CardVisual extends StatelessWidget {
   final CardProduct product;
   final bool showProductName;
+  final bool silver;
+  final UserCard? userCard;
+  final Money? cycleSpend;
+  final TransactionEntry? latestSpend;
   final double? width;
   final double? height;
 
@@ -20,13 +25,17 @@ class CardVisual extends StatelessWidget {
     super.key,
     required this.product,
     this.showProductName = true,
+    this.silver = false,
+    this.userCard,
+    this.cycleSpend,
+    this.latestSpend,
     this.width,
     this.height,
   });
 
   @override
   Widget build(BuildContext context) {
-    final palette = _paletteFor(product);
+    final palette = _paletteFor(product, silver: silver);
     return LayoutBuilder(
       builder: (context, constraints) {
         // Picker rows and capability headers intentionally use a tiny card
@@ -39,6 +48,7 @@ class CardVisual extends StatelessWidget {
             (width != null && width! < 132) ||
             (height != null && height! < 96) ||
             constraints.maxWidth < 132;
+        final detailed = !compact && userCard != null;
         final card = ClipRRect(
           borderRadius: BorderRadius.circular(compact ? 12 : 18),
           child: DecoratedBox(
@@ -84,6 +94,136 @@ class CardVisual extends StatelessWidget {
                       small: true,
                     ),
                   ),
+                ] else if (detailed) ...[
+                  Positioned(
+                    top: 16,
+                    left: 20,
+                    right: 20,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _issuerLabel(product),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: BambooFonts.ui(
+                              12,
+                              weight: FontWeight.w800,
+                              color: palette.foreground,
+                            ).copyWith(letterSpacing: 1.25),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        _NetworkMark(
+                          network: product.network,
+                          color: palette.foreground,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    top: 38,
+                    left: 20,
+                    right: 20,
+                    child: Text(
+                      (userCard!.nickname?.trim().isNotEmpty == true
+                              ? userCard!.nickname
+                              : product.name)!
+                          .toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(
+                        10,
+                        weight: FontWeight.w600,
+                        color: palette.foregroundMuted,
+                      ).copyWith(letterSpacing: 0.7),
+                    ),
+                  ),
+                  Positioned(
+                    top: 62,
+                    left: 20,
+                    child: _CardChip(
+                      gold: palette.chip,
+                      foreground: palette.chipInk,
+                    ),
+                  ),
+                  Positioned(
+                    top: 93,
+                    left: 20,
+                    right: 20,
+                    child: Text(
+                      _maskedNumber(userCard!.last4),
+                      maxLines: 1,
+                      style: BambooFonts.ui(
+                        17,
+                        weight: FontWeight.w600,
+                        color: palette.foreground,
+                      ).copyWith(letterSpacing: 2.2),
+                    ),
+                  ),
+                  Positioned(
+                    left: 20,
+                    right: 20,
+                    bottom: 12,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _CardDataPoint(
+                                  label: 'BILLING DAY',
+                                  value: _dayLabel(userCard!.statementDay),
+                                  foreground: palette.foreground,
+                                  muted: palette.foregroundMuted,
+                                ),
+                              ),
+                              Expanded(
+                                child: _CardDataPoint(
+                                  label: 'DUE DAY',
+                                  value: _dayLabel(userCard!.dueDay),
+                                  foreground: palette.foreground,
+                                  muted: palette.foregroundMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (cycleSpend != null) ...[
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: _CardDataPoint(
+                              label: 'SPENT THIS CYCLE',
+                              value: cycleSpend!.format(hidePaise: true),
+                              foreground: palette.foreground,
+                              muted: palette.foregroundMuted,
+                              alignEnd: true,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (latestSpend != null)
+                    Positioned(
+                      left: 20,
+                      right: 20,
+                      bottom: 2,
+                      child: Text(
+                        'Latest ${_latestSpendLabel(latestSpend!)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
+                        style: BambooFonts.ui(
+                          8.5,
+                          weight: FontWeight.w600,
+                          color: palette.foregroundMuted,
+                        ),
+                      ),
+                    ),
                 ] else ...[
                   Positioned(
                     top: 11,
@@ -186,6 +326,7 @@ class _CardPalette {
   final Color chip;
   final Color chipInk;
   final Color foreground;
+  final Color foregroundMuted;
 
   const _CardPalette({
     required this.primary,
@@ -193,10 +334,22 @@ class _CardPalette {
     required this.chip,
     required this.chipInk,
     required this.foreground,
+    required this.foregroundMuted,
   });
 }
 
-_CardPalette _paletteFor(CardProduct product) {
+_CardPalette _paletteFor(CardProduct product, {bool silver = false}) {
+  if (silver) {
+    return const _CardPalette(
+      primary: Color(0xFFF0F2F4),
+      secondary: Color(0xFF9FA7B0),
+      chip: Color(0xFFD8A83E),
+      chipInk: Color(0xFF6D4E16),
+      foreground: Color(0xFF20262D),
+      foregroundMuted: Color(0xFF5D6873),
+    );
+  }
+
   final custom = _parseHexColor(product.artPrimaryColor);
   final text = '${product.issuerName ?? ''} ${product.name}'.toLowerCase();
 
@@ -214,8 +367,95 @@ _CardPalette _paletteFor(CardProduct product) {
         : const Color(0xFFE6C46A),
     chipInk: const Color(0xFF6D4E16),
     foreground: foreground,
+    foregroundMuted: foreground.withValues(alpha: 0.72),
   );
 }
+
+class _CardDataPoint extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color foreground;
+  final Color muted;
+  final bool alignEnd;
+
+  const _CardDataPoint({
+    required this.label,
+    required this.value,
+    required this.foreground,
+    required this.muted,
+    this.alignEnd = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: alignEnd
+        ? CrossAxisAlignment.end
+        : CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: BambooFonts.ui(
+          8,
+          weight: FontWeight.w700,
+          color: muted,
+        ).copyWith(letterSpacing: 0.8),
+      ),
+      const SizedBox(height: 2),
+      Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+        style: BambooFonts.ui(11, weight: FontWeight.w700, color: foreground),
+      ),
+    ],
+  );
+}
+
+String _maskedNumber(String? last4) {
+  final suffix = last4?.trim();
+  return suffix == null || suffix.isEmpty
+      ? '••••  ••••  ••••  ••••'
+      : '••••  ••••  ••••  $suffix';
+}
+
+String _dayLabel(int? day) {
+  if (day == null) return 'Not set';
+  final suffix = switch (day % 100) {
+    11 || 12 || 13 => 'th',
+    _ => switch (day % 10) {
+      1 => 'st',
+      2 => 'nd',
+      3 => 'rd',
+      _ => 'th',
+    },
+  };
+  return '$day$suffix monthly';
+}
+
+String _latestSpendLabel(TransactionEntry transaction) {
+  final local = transaction.occurredAt.toLocal();
+  final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+  return '${transaction.amount.format(hidePaise: true)} · ${local.day} ${_monthShort(local.month)} · $hour:$minute $period';
+}
+
+String _monthShort(int month) => const [
+  '',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+][month.clamp(1, 12).toInt()];
 
 Color _issuerBaseColor(String text, String productId) {
   if (text.contains('swiggy')) return const Color(0xFFE75D4F);

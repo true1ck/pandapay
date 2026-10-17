@@ -53,6 +53,15 @@ The original release keystore is required for a genuine production update. If
 build wrapper intentionally refuses this case so a debug-signed APK cannot be
 mistaken for a production release.
 
+For a local physical-device regression test over an already debug-signed
+installation, the wrapper has one explicit exception:
+`-AllowDebugSigningForDeviceTest`. It is accepted only for the `prod` flavor,
+only when the release keystore is absent, and only with an explicit build
+number. This keeps the package ID and hosted endpoints identical for testing
+while making it impossible to accidentally use debug signing when the release
+keystore is available. Such an APK must not be distributed as a production
+release.
+
 ## 4. Version-code rule
 
 The generated Android `versionCode` must be higher than the installed APK's
@@ -71,7 +80,7 @@ x86_64: 10013
 
 The version code must be checked from every generated APK before delivery.
 
-Verified phone baseline on 2026-10-16:
+Verified phone baseline before this update on 2026-10-16:
 
 | Device | ABI | Installed package version | Signing certificate |
 | --- | --- | ---: | --- |
@@ -84,13 +93,25 @@ must match the installed signing certificate. The earlier `8013` APK is lower
 than this phone's actual installed `12026` baseline and must not be delivered
 to this phone.
 
+Verified update on 2026-10-17:
+
+| Device | ABI | Installed package version | APK SHA-256 | Signing certificate |
+| --- | --- | ---: | --- | --- |
+| Motorola edge 50 fusion (`ZA222MS4SF`) | `arm64-v8a` | `14029` | `7A3D03EDB71EB44347BEDCA3190670A2ABC6258FD0BFFA735773137581340B8B` | Android Debug, SHA-256 `3dda2588c1eb6c14f19dddf3b0af1a6c798bb5c0f81a72b1878d7c39431c1042` |
+
+The update was installed with `adb install -r`; local app data was preserved and
+the app launched afterward. Future update builds for this phone must have an
+ARM64 version code greater than `14029` and must match the same certificate.
+The matching build command used `-BuildNumber 12029`, which produced ARM64
+`14029`, ARMv7 `13029`, and x86_64 `16029`.
+
 ## 5. Canonical build command
 
 Use the repository wrapper; do not assemble a production APK with an ad-hoc
 command:
 
 ```powershell
-.\scripts\build_app.ps1 prod apk `
+.\scripts\build_app.ps1 prod -Target apk `
   -SplitPerAbi `
   -BuildNumber N `
   -ApiBaseUrl https://api.pandapath.site `
@@ -100,6 +121,15 @@ command:
 
 Replace `N` only after completing the pre-build version check. Never reuse a
 version number for a new delivery.
+
+For the currently connected debug-signed test phone only, append:
+
+```powershell
+  -AllowDebugSigningForDeviceTest
+```
+
+This does not change the production signing requirement for distributable
+builds.
 
 For a temporary nearby-merchant test build only, add
 `-NearbyRadiusMeters 5000`. The app defaults back to the production radius of

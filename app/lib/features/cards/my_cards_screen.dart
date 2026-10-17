@@ -334,6 +334,7 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
       return _UnresolvedCardTile(busy: _archiving, onRemove: _removeUnresolved);
     }
     final utilization = ref.watch(creditUtilizationProvider)[card.id];
+    final spendSummary = ref.watch(cardSpendSummaryProvider)[card.id];
     final badges = <String>[
       if (card.totalPointsEarned > 0)
         '${card.totalPointsEarned.toStringAsFixed(0)} pts earned',
@@ -394,10 +395,15 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                   ],
                 )
               else ...[
-                SizedBox(
-                  width: double.infinity,
-                  height: 122,
-                  child: CardVisual(product: product, showProductName: false),
+                AspectRatio(
+                  aspectRatio: 1.586,
+                  child: CardVisual(
+                    product: product,
+                    showProductName: false,
+                    userCard: card,
+                    cycleSpend: spendSummary?.cycleTotal,
+                    latestSpend: spendSummary?.latestSpend,
+                  ),
                 ),
                 const SizedBox(height: AppSpace.md),
                 Row(

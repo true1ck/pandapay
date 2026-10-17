@@ -278,6 +278,11 @@ final _cardTxnCountProvider = FutureProvider.family<int, String>((
 ) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return 0;
-  final txns = await repo.fetchTransactions(cardId: cardId);
+  final txns = await loadTransactionsWithOfflineCache(
+    ref,
+    repo: repo,
+    cacheKey: 'transactions:portfolio:$cardId',
+    cardId: cardId,
+  );
   return txns.length;
 });

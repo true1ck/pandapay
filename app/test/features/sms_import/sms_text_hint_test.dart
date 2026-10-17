@@ -87,6 +87,16 @@ void main() {
       );
     });
 
+    test('true for an issuer funds-ready reminder used to learn a due day', () {
+      expect(
+        looksLikeTransactionSms(
+          'HDFC Bank Credit Card ending XX1234. Please keep sufficient funds '
+          'in your account for payment on 16/10/2026.',
+        ),
+        true,
+      );
+    });
+
     test('false for an unrelated promotional message', () {
       expect(looksLikeTransactionSms('Flat 50% off on your next order! Shop now.'), false);
     });

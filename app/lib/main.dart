@@ -223,7 +223,7 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
           (candidate) => candidate.wireValue == request.period,
           orElse: () => SpendPeriod.month,
         );
-        ref.read(selectedSpendPeriodProvider.notifier).state = period;
+        ref.read(selectedSpendQueryProvider.notifier).state = SpendReportQuery.preset(period);
         router.go(AppRoute.assistantSpending);
       case AssistantAction.addSpend:
         router.go(
@@ -368,7 +368,9 @@ class MoneyText extends ConsumerWidget {
           if (showConfidenceIcon) ...[
             const SizedBox(width: 6),
             Icon(
-              confidence.isConfirmed ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+              confidence.isConfirmed
+                  ? Icons.check_circle_rounded
+                  : Icons.hourglass_top_rounded,
               size: 14,
               color: confidence.isConfirmed ? BambooInk.jade : BambooInk.amber,
             ),

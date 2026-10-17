@@ -131,4 +131,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Android's permissionless system phone-number chooser for the auth form.
+    implementation("com.google.android.gms:play-services-auth:22.0.0")
 }

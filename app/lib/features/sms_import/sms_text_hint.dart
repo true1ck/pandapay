@@ -151,6 +151,9 @@ bool looksLikeTransactionSms(String smsBody) {
     'statement generated',
     'statement is generated',
     'bill generated',
+    'keep sufficient funds',
+    'maintain sufficient balance',
+    'clear funds',
   ];
   return dueDateWords.any(lower.contains);
 }

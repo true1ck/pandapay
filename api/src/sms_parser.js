@@ -14,7 +14,10 @@
  * extra keys without breaking older parser code.
  */
 
-const KNOWN_FIELDS = ['amount', 'merchant', 'last4', 'date', 'instrument', 'reference', 'direction', 'mcc'];
+const KNOWN_FIELDS = [
+  'amount', 'merchant', 'last4', 'date', 'instrument', 'reference',
+  'direction', 'mcc', 'availableBalance', 'balance',
+];
 const MAX_MESSAGE_LENGTH = 20000;
 
 // OTP/security alerts can contain the same words as a transaction alert
@@ -78,6 +81,27 @@ function extractAccountLast4(body) {
   return match ? match[1] : null;
 }
 
+// Only accept an explicitly labelled available/current balance. The spend
+// amount and the balance are often both present in one bank SMS; taking the
+// first or last currency value would silently turn the spend into a balance.
+function extractAvailableBalance(body) {
+  const match = String(body || '').match(
+    /\b(?:available|avail|avl)\s*(?:balance|bal)\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i,
+  ) || String(body || '').match(
+    /\b(?:current|closing)\s*balance\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i,
+  ) || String(body || '').match(
+    /\b(?:bal|balance)\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i,
+  );
+  if (!match) return null;
+  const amount = Number(match[1].replace(/,/g, ''));
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+function withAvailableBalance(fields, body) {
+  const balance = extractAvailableBalance(body);
+  return balance === null ? fields : { ...fields, availableBalanceInr: balance };
+}
+
 // A few issuers describe an account-to-account transfer as
 // "Sent ... From <bank> A/C *1797 To <recipient>". This is a money
 // movement, not merchant spend. The explicit source-account-then-recipient
@@ -111,7 +135,7 @@ function parseBuiltInAccountTransfer(sms) {
     ok: true,
     patternId: null,
     parserKind: 'builtin_account_transfer',
-    fields: {
+    fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
       merchant: 'Transfer to ' + transferParty,
       transferParty,
@@ -121,7 +145,7 @@ function parseBuiltInAccountTransfer(sms) {
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       instrument: 'upi_bank',
       entryKind: 'transfer',
-    },
+    }, body),
   };
 }
 
@@ -153,7 +177,7 @@ function parseBuiltInBeneficiaryDebit(sms) {
     ok: true,
     patternId: null,
     parserKind: 'builtin_beneficiary_debit',
-    fields: {
+    fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
       merchant: beneficiaryMatch[1].trim(),
       ...(dateMatch ? { date: dateMatch[1] } : {}),
@@ -164,7 +188,7 @@ function parseBuiltInBeneficiaryDebit(sms) {
       // source-account grouping.
       instrument: 'upi_bank',
       entryKind: 'spend',
-    },
+    }, body),
   };
 }
 
@@ -195,7 +219,7 @@ function parseBuiltInAccountDebit(sms) {
     ok: true,
     patternId: null,
     parserKind: 'builtin_account_debit',
-    fields: {
+    fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
       merchant: 'Bank transfer',
       ...(accountLast4 ? { accountLast4 } : {}),
@@ -203,7 +227,7 @@ function parseBuiltInAccountDebit(sms) {
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       instrument: 'upi_bank',
       entryKind: 'spend',
-    },
+    }, body),
   };
 }
 
@@ -261,13 +285,13 @@ function parseBuiltInCardBillPayment(sms) {
     ok: true,
     patternId: null,
     parserKind: 'builtin_card_bill_payment',
-    fields: {
+    fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
       ...(last4Match ? { last4: last4Match[1] } : {}),
       merchant: 'Credit card bill payment',
       instrument,
       entryKind: 'transfer',
-    },
+    }, body),
   };
 }
 
@@ -287,7 +311,7 @@ function parseBuiltInUpiDebit(sms) {
   return {
     ok: true,
     patternId: null,
-    fields: {
+    fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
       ...(merchantMatch ? { merchant: merchantMatch[1].trim() } : {}),
       ...(dateMatch ? { date: dateMatch[1] } : {}),
@@ -295,7 +319,7 @@ function parseBuiltInUpiDebit(sms) {
       ...(extractMcc(body) ? { mcc: extractMcc(body) } : {}),
       instrument,
       entryKind: 'spend',
-    },
+    }, body),
   };
 }
 
@@ -423,6 +447,13 @@ function parseSms(pattern, sms) {
       const mcc = raw.trim();
       if (!/^\d{4}$/.test(mcc)) return { ok: false, reason: 'unparseable_mcc' };
       fields.mcc = mcc;
+    } else if (fieldName === 'availableBalance' || fieldName === 'balance') {
+      const cleaned = raw.replace(/,/g, '').trim();
+      const balance = Number(cleaned);
+      if (!Number.isFinite(balance) || balance < 0) {
+        return { ok: false, reason: 'unparseable_available_balance' };
+      }
+      fields.availableBalanceInr = balance;
     } else if (fieldName === 'instrument' || fieldName === 'reference' || fieldName === 'direction') {
       const value = raw.trim();
       if (!value) return { ok: false, reason: `unparseable_${fieldName}` };
@@ -451,6 +482,8 @@ function parseSms(pattern, sms) {
     fields.instrument = 'upi_bank';
     const accountLast4 = extractAccountLast4(sms.body);
     if (accountLast4) fields.accountLast4 = accountLast4;
+    const availableBalance = extractAvailableBalance(sms.body);
+    if (availableBalance !== null) fields.availableBalanceInr = availableBalance;
   } else {
     // Raw-message evidence is stronger than a pattern's mapped instrument.
     // This prevents a stale/broad pattern from turning a debit-card alert
@@ -723,4 +756,5 @@ module.exports = {
   parseTransactionDate,
   isAmbiguousAccountDebit,
   KNOWN_FIELDS,
+  extractAvailableBalance,
 };

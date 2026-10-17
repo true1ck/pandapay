@@ -49,6 +49,21 @@ CREATE TABLE IF NOT EXISTS transaction_outbox_entries (
   last_error TEXT
 );
 
+-- Receipt/bill files are private device attachments by default. The database
+-- stores metadata and the application-documents path; raw files are never
+-- uploaded as a side effect of viewing or editing a transaction.
+CREATE TABLE IF NOT EXISTS transaction_attachments (
+  id TEXT PRIMARY KEY,
+  transaction_id TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  local_path TEXT NOT NULL,
+  mime_type TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_transaction_attachments_transaction
+  ON transaction_attachments (transaction_id, created_at);
+
 -- Guest/no-account mode (ui-spec.md A3): the on-device wallet for a user
 -- who never signs in. Deliberately just card ownership + ordering, not a
 -- relational mirror of the signed-in schema's cap/points/transaction

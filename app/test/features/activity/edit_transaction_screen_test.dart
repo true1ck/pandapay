@@ -23,6 +23,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     String? merchantName,
     TxnRail? rail,
     String? userCardId,
+    TxnInstrument? instrument,
+    TxnEntryKind? entryKind,
   }) async {
     lastEditArgs = {
       'id': id,
@@ -30,6 +32,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
       'merchantName': merchantName,
       'categoryId': categoryId,
       'userCardId': userCardId,
+      'instrument': instrument,
+      'entryKind': entryKind,
     };
   }
 
@@ -113,5 +117,29 @@ void main() {
     expect(repo.lastEditArgs?['id'], 't1');
     expect(repo.lastEditArgs?['amountInr'], 2000.0);
     expect(repo.lastEditArgs?['merchantName'], 'New Merchant');
+  });
+
+  testWidgets('income transactions keep their kind editable without a card', (tester) async {
+    final repo = _FakeUserCardsRepository(TransactionEntry(
+      id: 't1',
+      amount: Money.fromRupees(90000),
+      occurredAt: DateTime(2026, 3, 1),
+      merchantName: 'Employer',
+      instrument: TxnInstrument.upiBank,
+      entryKind: TxnEntryKind.income,
+      source: 'manual',
+      status: 'active',
+    ));
+    await _pump(tester, repo: repo);
+
+    expect(find.text('Money in'), findsOneWidget);
+    expect(find.text('Card'), findsNothing);
+    await tester.enterText(find.byType(TextField).first, '95000');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastEditArgs?['amountInr'], 95000.0);
+    expect(repo.lastEditArgs?['entryKind'], TxnEntryKind.income);
+    expect(repo.lastEditArgs?['instrument'], TxnInstrument.upiBank);
   });
 }

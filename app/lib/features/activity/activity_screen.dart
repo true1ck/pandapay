@@ -86,7 +86,7 @@ class ActivityScreen extends ConsumerWidget {
                         : 'No activity yet',
                     message: filter.isActive
                         ? null
-                        : 'Spend you log from the Cards tab shows up here.',
+                        : 'Transactions you log from the Cards tab show up here.',
                   );
                 }
                 final grouped = _groupByDay(entries);
@@ -247,7 +247,10 @@ final _filteredTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   final filter = ref.watch(_activityFilterProvider);
-  return repo.fetchTransactions(
+  return loadTransactionsWithOfflineCache(
+    ref,
+    repo: repo,
+    cacheKey: 'transactions:activity',
     from: filter.from,
     to: filter.to,
     cardId: filter.cardId,
@@ -529,7 +532,10 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isIncome = entry.entryKind == TxnEntryKind.income;
+    final entryLabel = isIncome ? 'Income' : entry.entryKind.label;
     final subtitleParts = <String>[
+      if (entry.entryKind != TxnEntryKind.spend) entryLabel,
       if (entry.cardDisplayName != null) entry.cardDisplayName!,
       if (entry.cardDisplayName == null &&
           entry.instrument == TxnInstrument.creditCard)
@@ -566,8 +572,8 @@ class _TransactionTile extends StatelessWidget {
                 color: BambooInk.paperMuted,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(
-                Icons.shopping_bag_outlined,
+              child: Icon(
+                isIncome ? Icons.south_west_rounded : Icons.shopping_bag_outlined,
                 size: 18,
                 color: BambooInk.ink900,
               ),
@@ -578,7 +584,7 @@ class _TransactionTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    entry.merchantName ?? 'Spend',
+                    entry.merchantName ?? entryLabel,
                     style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                     overflow: TextOverflow.ellipsis,
                   ),

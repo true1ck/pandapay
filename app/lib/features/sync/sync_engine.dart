@@ -162,6 +162,10 @@ class SyncEngine {
   }
 
   void _invalidateFor(Set<String> entities) {
+    // A pull changes the server-side source of truth. The global display
+    // refresh watcher then writes the new response snapshots locally, so a
+    // later offline launch sees the same data that was just pulled.
+    _ref.invalidate(homeDataRefreshProvider);
     if (entities.contains('transactions')) {
       _ref.invalidate(transactionsProvider);
       _ref.invalidate(utilizationTransactionsProvider);

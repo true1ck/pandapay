@@ -84,6 +84,18 @@ function extractDueDate(body) {
     // Keep punctuation separate from the connector so issuer formats such as
     // "Due on: 02-11-26" and "Due by - 02/11/2026" are both accepted.
     new RegExp(`\\b(?:payment|amount|minimum|bill|total)?\\s*(?:is\\s+)?due\\s*(?:date\\s*)?(?:is|on|by)?\\s*[:\\-]?\\s*(${DATE_TOKEN})`, 'i'),
+    // HDFC and other issuers sometimes place a relationship word between
+    // "due date" and the date: "payment due date for your card is ..." or
+    // "payment due date of your card is ...".  The older rule stopped at
+    // "due date" and consequently missed the historical statement SMS that
+    // is most useful for learning a recurring due day.
+    new RegExp(`\\b(?:payment|bill|amount|minimum|total)\\s+due\\s+date\\s+(?:for|of)\\s+(?:your\\s+)?(?:credit\\s+|debit\\s+)?card(?:\\s+payment)?\\s*(?:is|on|by|:)\\s*[:\\-]?\\s*(${DATE_TOKEN})`, 'i'),
+    new RegExp(`\\bdue\\s+date\\s+(?:for|of)\\s+(?:your\\s+)?(?:payment|bill|amount|card(?:\\s+payment)?)\\s*(?:is|on|by|:)\\s*[:\\-]?\\s*(${DATE_TOKEN})`, 'i'),
+    // The card name/suffix may sit between the relationship word and the
+    // copula: "due date for your HDFC Bank Card ending XX1234 is ...".
+    // Keep the window bounded so a later unrelated date in a long message is
+    // not promoted to a due date.
+    new RegExp(`\\b(?:payment|bill|amount|minimum|total)\\s+due\\s+date\\b[\\s\\S]{0,120}?\\b(?:is|on|by)\\b\\s*[:\\-]?\\s*(${DATE_TOKEN})`, 'i'),
     // A few templates put the noun after the due phrase: "payment due on",
     // "bill payable by", or "minimum amount due date is". Keep this bounded
     // and explicit so a transaction's "paid on 02/10/2026" is not accepted.
@@ -93,7 +105,7 @@ function extractDueDate(body) {
     // customer to pay/keep/arrange the amount by a date instead. Restrict
     // this to payment-intent verbs so an ordinary transaction date cannot be
     // mistaken for a due date.
-    new RegExp(`\\b(?:please\\s+)?(?:pay|keep|maintain|arrange|settle|clear|make\\s+(?:the\\s+)?payment)\\b[\\s\\S]{0,120}?\\b(?:on\\s+or\\s+before|on\\/before|latest\\s+by|by|before)\\s+(?:the\\s+)?(?:date\\s*)?(?:is\\s*)?(${DATE_TOKEN})`, 'i'),
+    new RegExp(`\\b(?:please\\s+)?(?:pay|keep|maintain|arrange|settle|clear|make\\s+(?:the\\s+)?payment)\\b[\\s\\S]{0,120}?\\b(?:on\\s+or\\s+before|on\\/before|latest\\s+by|by|before|on)\\s+(?:the\\s+)?(?:date\\s*)?(?:is\\s*)?(${DATE_TOKEN})`, 'i'),
     new RegExp(`\\b(?:payment|amount|minimum|bill|total)\\b[\\s\\S]{0,100}?\\b(?:must|should|needs?\\s+to|is)(?:\\s+to)?\\s+(?:be\\s+)?(?:paid|made|cleared|settled)\\s+(?:on\\s+or\\s+before|by|before|on)\\s+(${DATE_TOKEN})`, 'i'),
     new RegExp(`\\blast\\s+date\\s+(?:for\\s+)?(?:payment|paying|pay)\\s*(?:is|on|by|:)\\s*(${DATE_TOKEN})`, 'i'),
     new RegExp(`\\b(?:payment|bill)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s*[:\\-]?\\s*(${DATE_TOKEN})`, 'i'),

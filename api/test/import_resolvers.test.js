@@ -97,6 +97,33 @@ test('syncs the due day from an Axis statement to the matched active card', asyn
   assert.match(client.calls[1].sql, /SET due_day = \$1/);
 });
 
+test('uses a distinctive MoneyBack product name when a historical alert has no suffix', async () => {
+  const body = 'HDFC Bank MoneyBack+ Credit Card statement. Payment due date is 16/10/2026.';
+  const client = fakeClient([[{ id: 'moneyback-card' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    if (client.calls.length === 1) return { rows: [{ id: 'moneyback-card' }] };
+    return { rows: [{ id: 'moneyback-card' }], rowCount: 1 };
+  };
+
+  const result = await syncDueDayFromSms(client, 'user-1', {
+    body,
+    patternIssuerId: 'issuer-hdfc',
+  });
+
+  assert.equal(result.updated, true);
+  assert.equal(result.detected.day, 16);
+  assert.equal(result.userCardId, 'moneyback-card');
+  assert.equal(result.basis, 'product-name');
+  assert.deepEqual(client.calls[0].params, [
+    'user-1',
+    'credit',
+    'issuer-hdfc',
+    body,
+  ]);
+  assert.deepEqual(client.calls[1].params, [16, 'moneyback-card', 'user-1']);
+});
+
 test('category fallback recognises a fuel-station merchant when no rule exists', async () => {
   const client = fakeClient([[], [], [{ id: 'fuel-category' }]]);
   const result = await resolveCategoryForImport(client, 'user-1', {

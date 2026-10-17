@@ -436,6 +436,15 @@ class PointsLedgerEntry {
       occurredAt: DateTime.parse(json['occurred_at'] as String),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'delta_points': deltaPoints,
+    'reason': reason,
+    'state': state == Confidence.confirmed ? 'confirmed' : 'estimated',
+    'expires_on': expiresOn?.toIso8601String(),
+    'occurred_at': occurredAt.toIso8601String(),
+  };
 }
 
 /// E6 Lounge Access — one row in `lounge_usage`, either logged manually by
@@ -469,6 +478,15 @@ class LoungeVisit {
       loggedManually: json['logged_manually'] as bool? ?? true,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'user_card_id': userCardId,
+    'benefit_id': benefitId,
+    'used_on': usedOn.toIso8601String(),
+    'airport': airport,
+    'logged_manually': loggedManually,
+  };
 }
 
 /// E9 Monthly Savings Report. `baselineSingleCard`/`valueMissed` are always
@@ -503,6 +521,15 @@ class MonthlyReport {
       extraEarned: _nonNegativeMoney(json['extra_earned_inr']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'period_month': periodMonth.toIso8601String(),
+    'total_spend_inr': totalSpend.rupees,
+    'rewards_earned_inr': rewardsEarned.rupees,
+    'baseline_single_card_inr': baselineSingleCard.rupees,
+    'value_missed_inr': valueMissed.rupees,
+    'extra_earned_inr': extraEarned.rupees,
+  };
 }
 
 /// E12 My Contributions — see GET /my-contributions' own doc-comment
@@ -558,6 +585,37 @@ class HomeSummary {
   }
 }
 
+/// One masked bank account observed in an imported SMS. A balance is only
+/// present when the bank explicitly included an available/current balance in
+/// that message, so the UI must describe it as a latest SMS snapshot rather
+/// than a live bank balance.
+class BankAccountSummary {
+  final String accountLast4;
+  final Money? availableBalance;
+  final DateTime? latestSmsAt;
+  final int smsCount;
+
+  const BankAccountSummary({
+    required this.accountLast4,
+    required this.availableBalance,
+    required this.latestSmsAt,
+    required this.smsCount,
+  });
+
+  factory BankAccountSummary.fromJson(Map<String, dynamic> json) {
+    return BankAccountSummary(
+      accountLast4: json['accountLast4'] as String,
+      availableBalance: json['availableBalanceInr'] == null
+          ? null
+          : Money.fromRupees(_num(json['availableBalanceInr'])),
+      latestSmsAt: json['latestSmsAt'] == null
+          ? null
+          : DateTime.parse(json['latestSmsAt'] as String),
+      smsCount: int.tryParse((json['smsCount'] ?? 0).toString()) ?? 0,
+    );
+  }
+}
+
 /// One row of design 19's notification inbox (`GET /notifications`).
 class AppNotification {
   final String id;
@@ -599,6 +657,17 @@ class AppNotification {
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'category': category,
+    'severity': severity,
+    'title': title,
+    'body': body,
+    'deep_link': deepLink,
+    'read_at': readAt?.toIso8601String(),
+    'created_at': createdAt.toIso8601String(),
+  };
 }
 
 /// Design 25's Invite friends payload (`GET /referrals`).
@@ -1340,6 +1409,8 @@ class UserCardsRepository {
     String? merchantName,
     TxnRail? rail,
     String? userCardId,
+    TxnInstrument? instrument,
+    TxnEntryKind? entryKind,
   }) async {
     final body = <String, dynamic>{
       'amountInr': ?amountInr,
@@ -1348,6 +1419,8 @@ class UserCardsRepository {
       'merchantName': ?merchantName,
       if (rail != null) 'rail': _railToJson(rail),
       'userCardId': ?userCardId,
+      if (instrument != null) 'instrument': instrument.wireValue,
+      if (entryKind != null) 'entryKind': entryKind.wireValue,
     };
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/transactions/$id'),
@@ -1650,6 +1723,25 @@ class UserCardsRepository {
     return summary == null
         ? null
         : HomeSummary.fromJson(summary as Map<String, dynamic>);
+  }
+
+  /// Returns distinct masked bank accounts observed in SMS imports and the
+  /// latest explicitly reported available balance for each one.
+  Future<List<BankAccountSummary>> fetchBankAccountSummaries() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/account-summaries'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /account-summaries failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return ((body['accounts'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>()
+        .map(BankAccountSummary.fromJson)
+        .toList();
   }
 
   /// Task E9: GET /monthly-reports. Null [month] means "the current month."

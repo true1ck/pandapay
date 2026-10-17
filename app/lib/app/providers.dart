@@ -30,6 +30,7 @@ import '../data/local/app_database.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/sync_queue.dart';
 import '../data/local/transaction_outbox_repository.dart';
+import '../data/local/transaction_attachments_repository.dart';
 import '../data/local_user_cards_repository.dart';
 import '../data/merchant_search_repository.dart';
 import '../data/needs_review_repository.dart';
@@ -233,7 +234,43 @@ final spendByCategoryRepositoryProvider = Provider<SpendByCategoryRepository?>((
 final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
   final repo = ref.watch(spendByCategoryRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchSpendByCategory();
+  final cache = await _cacheOrNull(ref);
+  final key = _scopedCacheKey(ref, 'category_spend:12');
+  final cached = await _readCacheOrNull(cache, key);
+  List<CategorySpend> decode(CachedResponse snapshot) =>
+      ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['categories']
+              as List)
+          .cast<Map<String, dynamic>>()
+          .map(CategorySpend.fromJson)
+          .toList();
+
+  if (_isKnownOffline() && cached != null) return decode(cached);
+
+  try {
+    final rows = await repo.fetchSpendByCategory(months: 12);
+    try {
+      await cache?.put(
+        key,
+        jsonEncode({'categories': rows.map((row) => row.toJson()).toList()}),
+      );
+    } catch (_) {}
+    return rows;
+  } catch (error) {
+    if (!_canUseReadCache(error) || cached == null) {
+      // Recommendations are a read-only display surface. If the session is
+      // being recovered and this is the first uncached request, an empty
+      // spend profile is still a valid input for the catalogue recommender;
+      // surfacing the auth transport error would blank the whole page.
+      if (_isAuthenticationFailure(error)) return const [];
+      rethrow;
+    }
+    try {
+      return decode(cached);
+    } catch (_) {
+      await cache?.clear(key);
+      rethrow;
+    }
+  }
 });
 
 final acquisitionRecommenderProvider = Provider<CardAcquisitionRecommender>((
@@ -406,7 +443,12 @@ final recoveryStatusProvider = FutureProvider.autoDispose<RecoveryStatus?>((
 ) async {
   final api = ref.watch(recoveryApiProvider);
   if (api == null) return null;
-  return api.fetchStatus();
+  try {
+    return await api.fetchStatus();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return null;
+    rethrow;
+  }
 });
 
 /// Plan Phase 1.4 — linked-device management. Points at `authBaseUrl`, not
@@ -804,7 +846,33 @@ final needsReviewCountProvider = Provider<int>((ref) {
 final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final api = ref.watch(profileApiProvider);
   if (api == null) return null;
-  return api.fetchProfile();
+  const profileCacheKey = 'profile';
+  final cache = await _cacheOrNull(ref);
+  final key = _scopedCacheKey(ref, profileCacheKey);
+  final cached = await _readCacheOrNull(cache, key);
+
+  Map<String, dynamic>? decodeCached() {
+    if (cached == null) return null;
+    final body = jsonDecode(cached.rawJson) as Map<String, dynamic>;
+    return body['profile'] as Map<String, dynamic>?;
+  }
+
+  try {
+    final profile = await api.fetchProfile();
+    try {
+      await cache?.put(key, jsonEncode({'profile': profile}));
+    } catch (_) {}
+    return profile;
+  } catch (error) {
+    if (!_canUseReadCache(error) || cached == null) {
+      // Profile is display-only here. Account/settings screens can render
+      // their signed-in shell with a missing profile while the token refresh
+      // is retried, instead of showing "Missing or invalid access token".
+      if (_isAuthenticationFailure(error)) return null;
+      rethrow;
+    }
+    return decodeCached();
+  }
 });
 
 /// Task C-7/C-8: null when signed out, same pattern as every other
@@ -847,78 +915,156 @@ final spendReportsRepositoryProvider = Provider<SpendReportsRepository?>((ref) {
 
 /// The Trends screen's data, for the selected period.
 ///
-/// A family over [SpendPeriod] rather than a provider plus a separate
-/// "selected period" StateProvider: switching period is a different fetch,
-/// and keying the cache by period means flipping back to a period already
-/// looked at is instant instead of re-fetching.
-final spendReportProvider = FutureProvider.family<SpendReport?, SpendPeriod>((
-  ref,
-  period,
-) async {
-  final repo = ref.watch(spendReportsRepositoryProvider);
-  if (repo == null) return null;
-  final anchor = DateTime.now().toUtc();
-  final timeZone = ref.watch(deviceTimeZoneProvider);
-  final bucket = _spendReportBucket(period, DateTime.now());
-  final key = _scopedCacheKey(
-    ref,
-    '$_spendReportCacheKey:${period.wireValue}:${_cacheDate(bucket)}:$timeZone',
-  );
-  final cache = await _cacheOrNull(ref);
-  final cached = await _readCacheOrNull(cache, key);
-  if (_isKnownOffline() && cached != null) {
-    return SpendReport.fromJson(
-      jsonDecode(cached.rawJson) as Map<String, dynamic>,
+/// A family over [SpendReportQuery] rather than a provider plus a separate
+/// "selected period" fetch: switching period or custom dates is a different
+/// request, and keying the cache by query means flipping back to a selection
+/// already looked at is instant instead of re-fetching.
+final spendReportProvider = FutureProvider.family<SpendReport?, SpendReportQuery>(
+  (ref, query) async {
+    final repo = ref.watch(spendReportsRepositoryProvider);
+    if (repo == null) return null;
+    final anchor = query.isCustom ? null : DateTime.now().toUtc();
+    final timeZone = ref.watch(deviceTimeZoneProvider);
+    final bucket = query.isCustom
+        ? query.from!
+        : _spendReportBucket(query.period, DateTime.now());
+    final key = _scopedCacheKey(
+      ref,
+      '$_spendReportCacheKey:${query.cacheKey}:${_cacheDate(bucket)}:$timeZone',
     );
-  }
-  try {
-    final raw = await repo.fetchReportJson(
-      period: period,
-      // Periods are about the user's device calendar. Sending the device
-      // instant prevents a server clock that is a few hours/days behind from
-      // reporting September when the user is already in October.
-      anchor: anchor,
-      timeZone: timeZone,
-    );
-    try {
-      await cache?.put(key, jsonEncode(raw));
-    } catch (_) {
-      // A disk/cache failure must never make a successful report unusable.
-    }
-    return SpendReport.fromJson(raw);
-  } catch (error) {
-    if (!_canUseStaleCache(error)) rethrow;
-    if (cached == null) rethrow;
-    try {
+    final cache = await _cacheOrNull(ref);
+    final cached = await _readCacheOrNull(cache, key);
+    SpendReport decodeCached() {
+      if (cached == null) throw StateError('No cached spend report available');
       return SpendReport.fromJson(
         jsonDecode(cached.rawJson) as Map<String, dynamic>,
       );
-    } catch (_) {
-      try {
-        await cache?.clear(key);
-      } catch (_) {}
-      rethrow;
     }
-  }
-});
 
-/// The period the Trends screen is currently showing.
-final selectedSpendPeriodProvider = StateProvider<SpendPeriod>(
-  (ref) => SpendPeriod.month,
+    if (_isKnownOffline() && cached != null) return decodeCached();
+
+    try {
+      final raw = await repo.fetchReportJson(
+        period: query.period,
+        // Periods are about the user's device calendar. Sending the device
+        // instant prevents a server clock that is a few hours/days behind from
+        // reporting September when the user is already in October.
+        anchor: anchor,
+        from: query.from,
+        to: query.to,
+        timeZone: timeZone,
+      );
+      try {
+        await cache?.put(key, jsonEncode(raw));
+      } catch (_) {
+        // A disk/cache failure must never make a successful report unusable.
+      }
+      return SpendReport.fromJson(raw);
+    } catch (error) {
+      if (!_canUseReadCache(error)) {
+        if (_isAuthenticationFailure(error)) return null;
+        rethrow;
+      }
+      if (cached == null) {
+        if (_isAuthenticationFailure(error)) return null;
+        rethrow;
+      }
+      try {
+        return decodeCached();
+      } catch (_) {
+        try {
+          await cache?.clear(key);
+        } catch (_) {}
+        rethrow;
+      }
+    }
+  },
+);
+
+/// The period or custom range the Trends screen is currently showing.
+final selectedSpendQueryProvider = StateProvider<SpendReportQuery>(
+  (ref) => const SpendReportQuery.preset(SpendPeriod.month),
 );
 
 /// Every active budget with its current-period progress.
 final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
   final repo = ref.watch(spendReportsRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchBudgets();
+  final cache = await _cacheOrNull(ref);
+  final key = _scopedCacheKey(ref, 'budgets');
+  final cached = await _readCacheOrNull(cache, key);
+  List<BudgetStatus> decode(CachedResponse snapshot) =>
+      ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['budgets']
+              as List)
+          .cast<Map<String, dynamic>>()
+          .map(BudgetStatus.fromJson)
+          .toList();
+  if (_isKnownOffline() && cached != null) return decode(cached);
+  try {
+    final budgets = await repo.fetchBudgets();
+    try {
+      await cache?.put(
+        key,
+        jsonEncode({
+          'budgets': budgets.map((budget) => budget.toJson()).toList(),
+        }),
+      );
+    } catch (_) {}
+    return budgets;
+  } catch (error) {
+    if (!_canUseReadCache(error) || cached == null) {
+      if (_isAuthenticationFailure(error)) return const [];
+      rethrow;
+    }
+    try {
+      return decode(cached);
+    } catch (_) {
+      await cache?.clear(key);
+      rethrow;
+    }
+  }
 });
 
 /// Detected subscriptions, biggest annual cost first.
 final recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
   final repo = ref.watch(spendReportsRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchRecurring();
+  final cache = await _cacheOrNull(ref);
+  final key = _scopedCacheKey(ref, 'recurring_report');
+  final cached = await _readCacheOrNull(cache, key);
+  RecurringReport decode(CachedResponse snapshot) => RecurringReport(
+    series:
+        ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['series']
+                as List)
+            .cast<Map<String, dynamic>>()
+            .map(RecurringSeries.fromJson)
+            .toList(),
+    totalAnnual: Money.fromRupees(
+      (((jsonDecode(snapshot.rawJson)
+                  as Map<String, dynamic>)['totalAnnualInr'])
+              as num)
+          .toDouble(),
+    ),
+  );
+  if (_isKnownOffline() && cached != null) return decode(cached);
+  try {
+    final report = await repo.fetchRecurring();
+    try {
+      await cache?.put(key, jsonEncode(report.toJson()));
+    } catch (_) {}
+    return report;
+  } catch (error) {
+    if (!_canUseReadCache(error) || cached == null) {
+      if (_isAuthenticationFailure(error)) return null;
+      rethrow;
+    }
+    try {
+      return decode(cached);
+    } catch (_) {
+      await cache?.clear(key);
+      rethrow;
+    }
+  }
 });
 
 /// Budgets that need saying something about, worst first.
@@ -1025,7 +1171,10 @@ Future<List<UserCard>> _loadUserCardsWithOfflineCache(
     }
     return visibleCards(cards);
   } catch (error) {
-    if (!_canUseStaleCache(error) || cached == null) rethrow;
+    if (!_canUseStaleCache(error) || cached == null) {
+      if (_isAuthenticationFailure(error)) return const [];
+      rethrow;
+    }
     return visibleCards(decodeCached());
   }
 }
@@ -1062,6 +1211,60 @@ final utilizationTransactionsProvider = FutureProvider<List<TransactionEntry>>((
     cacheKey: '$_transactionsCacheKey:utilization:${_cacheDate(from)}',
     from: from,
   );
+});
+
+/// The compact per-card spend snapshot used by card surfaces. This deliberately
+/// shares the same definition as credit utilization: active credit-card spend
+/// since the current statement cycle (or the current calendar month when the
+/// statement day is not known). Keeping this in one provider prevents the
+/// amount shown on a card from disagreeing with the utilization and detail
+/// screens.
+class CardSpendSummary {
+  final Money cycleTotal;
+  final TransactionEntry? latestSpend;
+
+  const CardSpendSummary({
+    required this.cycleTotal,
+    required this.latestSpend,
+  });
+}
+
+final cardSpendSummaryProvider = Provider<Map<String, CardSpendSummary>>((
+  ref,
+) {
+  final cards = ref.watch(myCardsProvider).valueOrNull ?? const <UserCard>[];
+  final transactions =
+      ref.watch(utilizationTransactionsProvider).valueOrNull ?? const [];
+  final now = ref.watch(clockProvider).now();
+  final result = <String, CardSpendSummary>{};
+
+  for (final card in cards) {
+    final cycleStart = card.statementDay == null
+        ? DateTime(now.year, now.month, 1)
+        : _previousStatementOccurrence(card.statementDay!, now);
+    var total = const Money.zero();
+    TransactionEntry? latest;
+
+    for (final txn in transactions) {
+      if (txn.status != 'active' || txn.userCardId != card.id) continue;
+      if (txn.entryKind != TxnEntryKind.spend ||
+          txn.instrument != TxnInstrument.creditCard ||
+          txn.occurredAt.isBefore(cycleStart)) {
+        continue;
+      }
+      total += txn.amount;
+      if (latest == null || txn.occurredAt.isAfter(latest.occurredAt)) {
+        latest = txn;
+      }
+    }
+
+    result[card.id] = CardSpendSummary(
+      cycleTotal: total,
+      latestSpend: latest,
+    );
+  }
+
+  return result;
 });
 
 final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((
@@ -1210,12 +1413,63 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     } catch (_) {}
   }
 
+  Future<void> refreshTransactions() async {
+    if (userRepo == null) return;
+    try {
+      final transactions = await userRepo.fetchTransactions().timeout(
+        _homeRequestTimeout,
+      );
+      await cache.put(
+        _scopedCacheKey(ref, '$_transactionsCacheKey:all'),
+        jsonEncode({
+          'transactions': transactions
+              .map((transaction) => transaction.toJson())
+              .toList(),
+        }),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> refreshSecondaryDisplayData() async {
+    // These providers own their response-cache writes. Invalidate before
+    // reading so a resume/online transition actually refreshes an already
+    // loaded provider instead of returning its previous in-memory value.
+    ref.invalidate(categorySpendProvider);
+    ref.invalidate(bankAccountSummariesProvider);
+    ref.invalidate(budgetsProvider);
+    ref.invalidate(recurringReportProvider);
+    ref.invalidate(loungeUsageProvider);
+    ref.invalidate(currentMonthlyReportProvider);
+    ref.invalidate(notificationsProvider);
+
+    Future<void> warm<T>(Future<T> future) async {
+      try {
+        await future;
+      } catch (_) {
+        // Offline or an expired session is handled by each provider's cache
+        // fallback. A failed warm-up must never fail Home's refresh.
+      }
+    }
+
+    await Future.wait([
+      warm(ref.read(categorySpendProvider.future)),
+      warm(ref.read(bankAccountSummariesProvider.future)),
+      warm(ref.read(budgetsProvider.future)),
+      warm(ref.read(recurringReportProvider.future)),
+      warm(ref.read(loungeUsageProvider.future)),
+      warm(ref.read(currentMonthlyReportProvider.future)),
+      warm(ref.read(notificationsProvider.future)),
+    ]);
+  }
+
   await Future.wait([
     refreshUserCards(),
     refreshCatalogue(),
     refreshCategories(),
     refreshOverrides(),
     refreshHomeSummary(),
+    refreshTransactions(),
+    refreshSecondaryDisplayData(),
   ]);
   ref.invalidate(userCardsProvider);
   ref.invalidate(catalogueProvider);
@@ -1223,6 +1477,40 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
   ref.invalidate(cardOverridesProvider);
   ref.invalidate(homeSummaryProvider);
   ref.invalidate(lastSyncedAtProvider);
+});
+
+/// Keeps the same core snapshot refresh alive while the user is on a
+/// secondary tab. Home used to be the only screen that watched this refresh,
+/// so opening Wallet/Insights after a long pause could leave the app showing
+/// a live-only error until Home was visited again.
+final displayDataSyncLifecycleProvider = Provider<void>((ref) {
+  Future<void> refreshWhenPossible() async {
+    if (ref.read(cacheNamespaceProvider) == 'signed-out') return;
+    if (ref.read(isOnlineProvider).valueOrNull == false) return;
+    ref.invalidate(homeDataRefreshProvider);
+    try {
+      await ref.read(homeDataRefreshProvider.future);
+    } catch (_) {
+      // The individual refresh tasks are best-effort. A transient failure
+      // must not surface as a lifecycle error or interrupt navigation.
+    }
+  }
+
+  ref.listen<String>(cacheNamespaceProvider, (previous, next) {
+    if (previous == 'signed-out' && next != 'signed-out') {
+      unawaited(refreshWhenPossible());
+    }
+  });
+  ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) {
+    final cameOnline =
+        previous?.valueOrNull == false && next.valueOrNull == true;
+    if (cameOnline) unawaited(refreshWhenPossible());
+  });
+
+  final lifecycle = AppLifecycleListener(
+    onResume: () => unawaited(refreshWhenPossible()),
+  );
+  ref.onDispose(lifecycle.dispose);
 });
 
 /// Privacy: user_cards/card_overrides cache entries are per-signed-in-user
@@ -1235,9 +1523,7 @@ final cacheLifecycleProvider = Provider<void>((ref) {
     if (previous != 'signed-out' && next == 'signed-out') {
       final cache = await _cacheOrNull(ref);
       final namespace = previous;
-      await cache?.clear('$namespace:$_userCardsCacheKey');
-      await cache?.clear('$namespace:$_userCardsWithArchivedCacheKey');
-      await cache?.clear('$namespace:$_cardOverridesCacheKey');
+      await cache?.clearPrefix('$namespace:');
     }
   });
 });
@@ -1266,6 +1552,21 @@ final outboxRepositoryProvider = FutureProvider<TransactionOutboxRepository>((
     await ref.watch(appDatabaseProvider.future),
   );
 });
+
+final transactionAttachmentsRepositoryProvider =
+    FutureProvider<TransactionAttachmentsRepository>((ref) async {
+      return TransactionAttachmentsRepository(
+        await ref.watch(appDatabaseProvider.future),
+      );
+    });
+
+final transactionAttachmentsProvider =
+    FutureProvider.family<List<TransactionAttachment>, String>((ref, id) async {
+      final repository = await ref.watch(
+        transactionAttachmentsRepositoryProvider.future,
+      );
+      return repository.list(id);
+    });
 
 final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
   final items = await (await ref.watch(
@@ -1303,7 +1604,12 @@ final duplicateCandidatesProvider = FutureProvider<List<DuplicateCandidate>>((
 ) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchDuplicateCandidates();
+  try {
+    return await repo.fetchDuplicateCandidates();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return const [];
+    rethrow;
+  }
 });
 
 /// Task C-1 (C1 My Cards' active/archived filter). Deliberately a SEPARATE
@@ -1327,12 +1633,48 @@ final myCardsProvider = FutureProvider<List<UserCard>>((ref) async {
     );
     return cards.where((card) => card.isArchived == includeArchived).toList();
   }
+
+  // Keep Wallet consistent with Home: render the cached account snapshot
+  // first. Card mutations clear it before invalidating this provider, so this
+  // cannot replay a card that was just removed or replaced.
+  final cached = await _readUserCardsCache(
+    ref,
+    includeArchived: includeArchived,
+  );
+  if (cached != null) return cached;
+
   return _loadUserCardsWithOfflineCache(
     ref,
     repo,
     includeArchived: includeArchived,
   );
 });
+
+Future<List<UserCard>?> _readUserCardsCache(
+  Ref ref, {
+  required bool includeArchived,
+}) async {
+  final cache = await _cacheOrNull(ref);
+  final cacheKey = _scopedCacheKey(
+    ref,
+    includeArchived ? _userCardsWithArchivedCacheKey : _userCardsCacheKey,
+  );
+  final cached = await cache?.get(cacheKey);
+  if (cached == null) return null;
+  try {
+    final body = jsonDecode(cached) as Map<String, dynamic>;
+    final cards = (body['userCards'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(UserCard.fromJson)
+        .toList();
+    return cards.where((card) => card.isArchived == includeArchived).toList();
+  } catch (_) {
+    try {
+      await cache?.clear(cacheKey);
+    } catch (_) {}
+    return null;
+  }
+}
 
 /// Task C-1/C-2: same join as ownedCardsWithProductProvider, but sourced
 /// from myCardsProvider so C1 (with its archived toggle on) and C2 (deep-
@@ -1615,7 +1957,39 @@ final emergencyContactsProvider = FutureProvider<EmergencyContactsResult>((
 final loungeUsageProvider = FutureProvider<List<LoungeVisit>>((ref) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchLoungeUsage();
+  final cache = await _cacheOrNull(ref);
+  final key = _scopedCacheKey(ref, 'lounge_usage');
+  final cached = await _readCacheOrNull(cache, key);
+  List<LoungeVisit> decode(CachedResponse snapshot) =>
+      ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['loungeUsage']
+              as List)
+          .cast<Map<String, dynamic>>()
+          .map(LoungeVisit.fromJson)
+          .toList();
+  if (_isKnownOffline() && cached != null) return decode(cached);
+  try {
+    final visits = await repo.fetchLoungeUsage();
+    try {
+      await cache?.put(
+        key,
+        jsonEncode({
+          'loungeUsage': visits.map((visit) => visit.toJson()).toList(),
+        }),
+      );
+    } catch (_) {}
+    return visits;
+  } catch (error) {
+    if (!_canUseReadCache(error) || cached == null) {
+      if (_isAuthenticationFailure(error)) return const [];
+      rethrow;
+    }
+    try {
+      return decode(cached);
+    } catch (_) {
+      await cache?.clear(key);
+      rethrow;
+    }
+  }
 });
 
 /// Task C-6: per-card points ledger, family-keyed by userCardId — C6 shows
@@ -1629,7 +2003,36 @@ final pointsLedgerProvider =
     ) async {
       final repo = ref.watch(userCardsRepositoryProvider);
       if (repo == null) return const [];
-      return repo.fetchPointsLedger(userCardId);
+      final cache = await _cacheOrNull(ref);
+      final key = _scopedCacheKey(ref, 'points_ledger:$userCardId');
+      final cached = await _readCacheOrNull(cache, key);
+      List<PointsLedgerEntry> decode(CachedResponse snapshot) =>
+          ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['entries']
+                  as List)
+              .cast<Map<String, dynamic>>()
+              .map(PointsLedgerEntry.fromJson)
+              .toList();
+      if (_isKnownOffline() && cached != null) return decode(cached);
+      try {
+        final entries = await repo.fetchPointsLedger(userCardId);
+        try {
+          await cache?.put(
+            key,
+            jsonEncode({
+              'entries': entries.map((entry) => entry.toJson()).toList(),
+            }),
+          );
+        } catch (_) {}
+        return entries;
+      } catch (error) {
+        if (!_canUseReadCache(error) || cached == null) rethrow;
+        try {
+          return decode(cached);
+        } catch (_) {
+          await cache?.clear(key);
+          rethrow;
+        }
+      }
     });
 
 /// Task E9: current month's report, recomputed on demand server-side each
@@ -1640,7 +2043,41 @@ final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((
 ) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchMonthlyReport();
+  final cache = await _cacheOrNull(ref);
+  final now = DateTime.now();
+  final key = _scopedCacheKey(
+    ref,
+    'monthly_report:${now.year}-${now.month.toString().padLeft(2, '0')}',
+  );
+  final cached = await _readCacheOrNull(cache, key);
+  MonthlyReport? decode(CachedResponse snapshot) {
+    final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
+    final raw = body['monthlyReport'];
+    return raw == null
+        ? null
+        : MonthlyReport.fromJson(raw as Map<String, dynamic>);
+  }
+
+  if (_isKnownOffline() && cached != null) return decode(cached);
+
+  try {
+    final report = await repo.fetchMonthlyReport();
+    try {
+      await cache?.put(key, jsonEncode({'monthlyReport': report?.toJson()}));
+    } catch (_) {}
+    return report;
+  } catch (error) {
+    if (!_canUseReadCache(error) || cached == null) {
+      if (_isAuthenticationFailure(error)) return null;
+      rethrow;
+    }
+    try {
+      return decode(cached);
+    } catch (_) {
+      await cache?.clear(key);
+      rethrow;
+    }
+  }
 });
 
 /// Design 01's header figures (this month / all time / streak) — see
@@ -1695,6 +2132,60 @@ final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
   }
 });
 
+/// Bank-account snapshots derived from SMS observations. Empty when signed
+/// out or when no imported SMS has exposed a masked source account yet.
+final bankAccountSummariesProvider =
+    FutureProvider<List<BankAccountSummary>>((ref) async {
+      final repo = ref.watch(userCardsRepositoryProvider);
+      if (repo == null) return const [];
+      const cacheKey = 'bank_account_summaries';
+      final cache = await _cacheOrNull(ref);
+      final key = _scopedCacheKey(ref, cacheKey);
+      final cached = await _readCacheOrNull(cache, key);
+      List<BankAccountSummary> decode(CachedResponse snapshot) =>
+          ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['accounts']
+                  as List)
+              .cast<Map<String, dynamic>>()
+              .map(BankAccountSummary.fromJson)
+              .toList();
+
+      if (_isKnownOffline() && cached != null) return decode(cached);
+      try {
+        final accounts = await repo
+            .fetchBankAccountSummaries()
+            .timeout(_homeRequestTimeout);
+        try {
+          await cache?.put(
+            key,
+            jsonEncode({
+              'accounts': accounts
+                  .map(
+                    (account) => {
+                      'accountLast4': account.accountLast4,
+                      'availableBalanceInr': account.availableBalance?.rupees,
+                      'latestSmsAt': account.latestSmsAt?.toIso8601String(),
+                      'smsCount': account.smsCount,
+                    },
+                  )
+                  .toList(),
+            }),
+          );
+        } catch (_) {}
+        return accounts;
+      } catch (error) {
+    if (!_canUseReadCache(error) || cached == null) {
+      if (_isAuthenticationFailure(error)) return const [];
+      rethrow;
+    }
+        try {
+          return decode(cached);
+        } catch (_) {
+          await cache?.clear(key);
+          rethrow;
+        }
+      }
+    });
+
 /// Design 19's notification inbox. Empty (not an error) when signed out —
 /// the inbox lives server-side, so guest mode simply has none.
 final notificationsProvider =
@@ -1705,7 +2196,47 @@ final notificationsProvider =
       if (repo == null) {
         return (items: const <AppNotification>[], unreadCount: 0);
       }
-      return repo.fetchNotifications();
+      final cache = await _cacheOrNull(ref);
+      final key = _scopedCacheKey(ref, 'notifications');
+      final cached = await _readCacheOrNull(cache, key);
+      ({List<AppNotification> items, int unreadCount}) decode(
+        CachedResponse snapshot,
+      ) {
+        final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
+        return (
+          items: ((body['notifications'] as List?) ?? const [])
+              .cast<Map<String, dynamic>>()
+              .map(AppNotification.fromJson)
+              .toList(),
+          unreadCount: (body['unreadCount'] as num?)?.toInt() ?? 0,
+        );
+      }
+
+      if (_isKnownOffline() && cached != null) return decode(cached);
+
+      try {
+        final inbox = await repo.fetchNotifications();
+        try {
+          await cache?.put(
+            key,
+            jsonEncode({
+              'notifications': inbox.items
+                  .map((item) => item.toJson())
+                  .toList(),
+              'unreadCount': inbox.unreadCount,
+            }),
+          );
+        } catch (_) {}
+        return inbox;
+      } catch (error) {
+        if (!_canUseReadCache(error) || cached == null) rethrow;
+        try {
+          return decode(cached);
+        } catch (_) {
+          await cache?.clear(key);
+          rethrow;
+        }
+      }
     });
 
 /// Records an inbox entry for something the app itself just observed, and
@@ -1772,7 +2303,12 @@ final notificationPreferencesProvider =
     FutureProvider<NotificationPreferences?>((ref) async {
       final repo = ref.watch(notificationPreferencesRepositoryProvider);
       if (repo == null) return null;
-      return repo.fetch();
+      try {
+        return await repo.fetch();
+      } catch (error) {
+        if (isAuthenticationFailure(error)) return null;
+        rethrow;
+      }
     });
 
 /// Design 25's Invite friends payload. Null when signed out — an invite
@@ -1780,7 +2316,12 @@ final notificationPreferencesProvider =
 final referralsProvider = FutureProvider<ReferralInfo?>((ref) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchReferrals();
+  try {
+    return await repo.fetchReferrals();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return null;
+    rethrow;
+  }
 });
 
 /// The device's IANA zone name, overridable in tests. `DateTime.now()`'s
@@ -1795,7 +2336,36 @@ final contributionNetworkStatsProvider =
     FutureProvider<ContributionNetworkStats?>((ref) async {
       final repo = ref.watch(userCardsRepositoryProvider);
       if (repo == null) return null;
-      return repo.fetchContributionNetworkStats();
+      const statsCacheKey = 'contribution_network_stats';
+      final cache = await _cacheOrNull(ref);
+      final key = _scopedCacheKey(ref, statsCacheKey);
+      final cached = await _readCacheOrNull(cache, key);
+
+      ContributionNetworkStats decodeCached() {
+        if (cached == null) {
+          throw StateError('No cached contribution stats available');
+        }
+        return ContributionNetworkStats.fromJson(
+          jsonDecode(cached.rawJson) as Map<String, dynamic>,
+        );
+      }
+
+      try {
+        final stats = await repo.fetchContributionNetworkStats();
+        try {
+          await cache?.put(
+            key,
+            jsonEncode({
+              'published_merchant_count': stats.publishedMerchantCount,
+              'contributing_device_count': stats.contributingDeviceCount,
+            }),
+          );
+        } catch (_) {}
+        return stats;
+      } catch (error) {
+        if (!_canUseReadCache(error) || cached == null) rethrow;
+        return decodeCached();
+      }
     });
 
 /// Task E12: this profile's own opt-in flag, read off profileProvider's
@@ -1825,7 +2395,12 @@ final forwardingAddressProvider = FutureProvider<ForwardingAddress?>((
 ) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchForwardingAddress();
+  try {
+    return await repo.fetchForwardingAddress();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return null;
+    rethrow;
+  }
 });
 
 /// Task F-8: the forwarding confirmation code/link a provider sent to the
@@ -1837,7 +2412,12 @@ final forwardingVerificationProvider = FutureProvider<ForwardingVerification?>((
 ) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchForwardingVerification();
+  try {
+    return await repo.fetchForwardingVerification();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return null;
+    rethrow;
+  }
 });
 
 /// F3: this profile's recently received forwarded emails, newest first.
@@ -1846,7 +2426,12 @@ final forwardingVerificationProvider = FutureProvider<ForwardingVerification?>((
 final inboundEmailsProvider = FutureProvider<List<InboundEmail>>((ref) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchInboundEmails();
+  try {
+    return await repo.fetchInboundEmails();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return const [];
+    rethrow;
+  }
 });
 
 /// F2/F1: recent statement imports, newest first.
@@ -1855,7 +2440,12 @@ final statementImportsProvider = FutureProvider<List<StatementImport>>((
 ) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchStatementImports();
+  try {
+    return await repo.fetchStatementImports();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return const [];
+    rethrow;
+  }
 });
 
 /// F4/F1: recent SMS backup-file import batches.
@@ -1864,21 +2454,36 @@ final smsImportBatchesProvider = FutureProvider<List<SmsImportBatch>>((
 ) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return const [];
-  return repo.fetchSmsImportBatches();
+  try {
+    return await repo.fetchSmsImportBatches();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return const [];
+    rethrow;
+  }
 });
 
 /// F5: backup/restore status + this user's sync-conflict log.
 final backupStatusProvider = FutureProvider<BackupStatus?>((ref) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchBackupStatus();
+  try {
+    return await repo.fetchBackupStatus();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return null;
+    rethrow;
+  }
 });
 
 /// F7/F1: this profile's IMAP connection, or null if never configured.
 final imapConnectionProvider = FutureProvider<ImapConnection?>((ref) async {
   final repo = ref.watch(importRepositoryProvider);
   if (repo == null) return null;
-  return repo.fetchImapConnection();
+  try {
+    return await repo.fetchImapConnection();
+  } catch (error) {
+    if (isAuthenticationFailure(error)) return null;
+    rethrow;
+  }
 });
 
 final catalogueRepositoryProvider = Provider<CatalogueRepository>((ref) {
@@ -1977,6 +2582,24 @@ String _scopedCacheKey(Ref ref, String key) =>
 bool _canUseStaleCache(Object error) =>
     error is! ApiException ||
     (error.statusCode != 401 && error.statusCode != 403);
+
+/// Read-only account snapshots remain safe to show after a token rejection:
+/// they are scoped to the current account namespace and are erased on explicit
+/// sign-out. This covers an expired access token, a refresh race, or a
+/// temporary API/auth deployment mismatch without hiding the user's data.
+bool _canUseReadCache(Object error) =>
+    _canUseStaleCache(error) ||
+    (error is ApiException &&
+        (error.statusCode == 401 || error.statusCode == 403));
+
+/// A rejected access token is different from a malformed response or a
+/// failed write. Read-only surfaces can safely keep showing their account-
+/// scoped snapshot—or an honest empty state when no snapshot exists—while the
+/// shared client retries refresh. This predicate is deliberately narrow so a
+/// real parsing/data error is still visible to tests and to the user.
+bool _isAuthenticationFailure(Object error) {
+  return isAuthenticationFailure(error);
+}
 
 bool _lastKnownOffline = false;
 
@@ -2086,6 +2709,10 @@ DateTime _spendReportBucket(SpendPeriod period, DateTime now) {
       return DateTime(now.year, firstMonth);
     case SpendPeriod.year:
       return DateTime(now.year);
+    case SpendPeriod.custom:
+      // Custom queries use their selected start date as the cache bucket and
+      // never call this helper. Keep the switch exhaustive for future callers.
+      return DateTime(now.year, now.month, now.day);
   }
 }
 
@@ -2107,22 +2734,43 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   final key = _scopedCacheKey(ref, cacheKey);
   final cache = await _cacheOrNull(ref);
   final cached = await _readCacheOrNull(cache, key);
+  final allTransactionsCached = cached == null
+      ? await _readCacheOrNull(
+          cache,
+          _scopedCacheKey(ref, '$_transactionsCacheKey:all'),
+        )
+      : null;
 
-  Future<List<TransactionEntry>> decodeCached() async {
-    if (cached == null) {
+  Future<List<TransactionEntry>> decodeCached(CachedResponse? snapshot) async {
+    if (snapshot == null) {
       throw StateError('No cached transactions available');
     }
-    final body = jsonDecode(cached.rawJson) as Map<String, dynamic>;
-    return (body['transactions'] as List)
+    final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
+    final rows = (body['transactions'] as List)
         .cast<Map<String, dynamic>>()
         .map(TransactionEntry.fromJson)
         .toList();
+    return rows.where((transaction) {
+      if (from != null && transaction.occurredAt.isBefore(from)) return false;
+      if (to != null && !transaction.occurredAt.isBefore(to)) return false;
+      if (cardId != null && transaction.userCardId != cardId) return false;
+      if (categoryId != null && transaction.categoryId != categoryId) {
+        return false;
+      }
+      if (source != null && transaction.source != source) return false;
+      if (query != null && query.trim().isNotEmpty) {
+        final needle = query.trim().toLowerCase();
+        final merchant = transaction.merchantName?.toLowerCase() ?? '';
+        if (!merchant.contains(needle)) return false;
+      }
+      return true;
+    }).toList();
   }
 
   // Interface loss is a known offline state. Use the local snapshot
   // immediately instead of waiting for a mobile socket timeout.
-  if (_isKnownOffline() && cached != null) {
-    return decodeCached();
+  if (_isKnownOffline() && (cached != null || allTransactionsCached != null)) {
+    return decodeCached(cached ?? allTransactionsCached);
   }
   try {
     final transactions = await repo.fetchTransactions(
@@ -2147,19 +2795,52 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     }
     return transactions;
   } catch (error) {
-    if (!_canUseStaleCache(error)) rethrow;
-    if (cached == null) rethrow;
+    if (!_canUseReadCache(error)) {
+      if (_isAuthenticationFailure(error)) return const [];
+      rethrow;
+    }
+    if (cached == null && allTransactionsCached == null) {
+      if (_isAuthenticationFailure(error)) return const [];
+      rethrow;
+    }
     try {
-      return await decodeCached();
+      return await decodeCached(cached ?? allTransactionsCached);
     } catch (_) {
       // A partial/corrupt local row should be discarded rather than trapping
       // every future request in the same parse failure.
       try {
-        await cache?.clear(key);
+        await cache?.clear(
+          cached != null
+              ? key
+              : _scopedCacheKey(ref, '$_transactionsCacheKey:all'),
+        );
       } catch (_) {}
       rethrow;
     }
   }
+}
+
+/// Returns one transaction from the last successful Activity snapshot without
+/// making a network request. Detail screens use this before their live fetch,
+/// so opening a row remains useful when the access token or connection is
+/// temporarily unavailable.
+Future<TransactionEntry?> cachedTransactionById(Ref ref, String id) async {
+  final cache = await _cacheOrNull(ref);
+  final snapshot = await _readCacheOrNull(
+    cache,
+    _scopedCacheKey(ref, '$_transactionsCacheKey:all'),
+  );
+  if (snapshot == null) return null;
+  try {
+    final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
+    for (final raw in (body['transactions'] as List).cast<Map<String, dynamic>>()) {
+      final entry = TransactionEntry.fromJson(raw);
+      if (entry.id == id) return entry;
+    }
+  } catch (_) {
+    // A corrupt snapshot must never make a detail route crash.
+  }
+  return null;
 }
 
 /// UA-0.3 offline step: live fetch first, caching the raw response on

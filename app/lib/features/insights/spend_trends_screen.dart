@@ -1,12 +1,9 @@
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -18,29 +15,32 @@ import '../../data/spend_reports_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../cards/card_summary.dart';
+import '../import/data_transfer_screen.dart';
 import 'spending_visuals.dart';
 
 /// Rows for the same calendar period as the aggregate report. The report
 /// endpoint remains the source of truth for totals; this companion request
 /// only supplies the transaction-level rows needed by expandable details.
 final spendPeriodTransactionsProvider =
-    FutureProvider.family<List<TransactionEntry>, SpendPeriod>((
+    FutureProvider.family<List<TransactionEntry>, SpendReportQuery>((
       ref,
-      period,
+      query,
     ) async {
       final repo = ref.watch(userCardsRepositoryProvider);
       if (repo == null) return const [];
 
-      final report = await ref.watch(spendReportProvider(period).future);
+      final report = await ref.watch(spendReportProvider(query).future);
       if (report == null) return const [];
 
       return loadTransactionsWithOfflineCache(
         ref,
         repo: repo,
         cacheKey:
-            'spend_detail:${period.wireValue}:${report.periodStart.toIso8601String()}:${report.periodEnd.toIso8601String()}',
-        from: report.periodStart,
-        to: report.periodEnd.subtract(const Duration(days: 1)),
+            'spend_detail:${query.cacheKey}:${report.periodStart.toIso8601String()}:${report.periodEnd.toIso8601String()}',
+        from: query.isCustom ? query.from : report.periodStart,
+        to: query.isCustom
+            ? query.to
+            : report.periodEnd.subtract(const Duration(days: 1)),
       );
     });
 
@@ -64,9 +64,9 @@ class SpendTrendsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final period = ref.watch(selectedSpendPeriodProvider);
-    final report = ref.watch(spendReportProvider(period));
-    final transactions = ref.watch(spendPeriodTransactionsProvider(period));
+    final query = ref.watch(selectedSpendQueryProvider);
+    final report = ref.watch(spendReportProvider(query));
+    final transactions = ref.watch(spendPeriodTransactionsProvider(query));
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -78,27 +78,25 @@ class SpendTrendsScreen extends ConsumerWidget {
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
         actions: [
-          // Export the period on screen, not "everything": someone sharing
-          // a report with an accountant wants the quarter they're looking
-          // at, and GET /export already covers the whole-account case.
-          if (report.valueOrNull != null)
-            IconButton(
-              icon: const Icon(Icons.ios_share_rounded, size: 20),
-              color: BambooInk.ink900,
-              tooltip: 'Export as CSV',
-              onPressed: () => _exportCsv(context, ref, report.valueOrNull!),
+          IconButton(
+            icon: const Icon(Icons.ios_share_rounded, size: 20),
+            color: BambooInk.ink900,
+            tooltip: 'Import or export data',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DataTransferScreen()),
             ),
+          ),
         ],
       ),
       body: AppBackground(
         child: Column(
           children: [
-            _PeriodSelector(selected: period),
+            _PeriodSelector(selected: query),
             OfflineBanner(
               gutter: AppSpace.lg,
               onRetry: () {
-                ref.invalidate(spendReportProvider(period));
-                ref.invalidate(spendPeriodTransactionsProvider(period));
+                ref.invalidate(spendReportProvider(query));
+                ref.invalidate(spendPeriodTransactionsProvider(query));
               },
             ),
             Expanded(
@@ -106,7 +104,7 @@ class SpendTrendsScreen extends ConsumerWidget {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, _) => ErrorState(
                   message: userFacingErrorMessage(err),
-                  onRetry: () => ref.invalidate(spendReportProvider(period)),
+                  onRetry: () => ref.invalidate(spendReportProvider(query)),
                 ),
                 data: (data) {
                   if (data == null) {
@@ -120,9 +118,9 @@ class SpendTrendsScreen extends ConsumerWidget {
                   }
                   if (data.spend.txnCount == 0 && data.income.txnCount == 0) {
                     return _NoSpendingReportState(
-                      period: period,
+                      report: data,
                       onRefresh: () async =>
-                          ref.invalidate(spendReportProvider(period)),
+                          ref.invalidate(spendReportProvider(query)),
                     );
                   }
                   return _ReportBody(
@@ -130,8 +128,8 @@ class SpendTrendsScreen extends ConsumerWidget {
                     transactions: transactions.valueOrNull ?? const [],
                     transactionDetailsLoading: transactions.isLoading,
                     onRefresh: () {
-                      ref.invalidate(spendReportProvider(period));
-                      ref.invalidate(spendPeriodTransactionsProvider(period));
+                      ref.invalidate(spendReportProvider(query));
+                      ref.invalidate(spendPeriodTransactionsProvider(query));
                     },
                   );
                 },
@@ -145,10 +143,10 @@ class SpendTrendsScreen extends ConsumerWidget {
 }
 
 class _NoSpendingReportState extends StatelessWidget {
-  final SpendPeriod period;
+  final SpendReport report;
   final Future<void> Function() onRefresh;
 
-  const _NoSpendingReportState({required this.period, required this.onRefresh});
+  const _NoSpendingReportState({required this.report, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +179,7 @@ class _NoSpendingReportState extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${period.label} spending',
+                  '${report.displayLabel} spending',
                   style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
                 ),
                 const SizedBox(height: AppSpace.xs),
@@ -210,49 +208,8 @@ class _NoSpendingReportState extends StatelessWidget {
   }
 }
 
-/// Writes the period's transactions to a temporary CSV and opens the
-/// platform share sheet.
-///
-/// A temp file plus the share sheet, rather than a download: on both
-/// platforms that is how a file reaches Drive, Mail, WhatsApp or a
-/// spreadsheet app, and it's the same pattern the Savings Report already
-/// uses to share its image.
-Future<void> _exportCsv(
-  BuildContext context,
-  WidgetRef ref,
-  SpendReport report,
-) async {
-  final repo = ref.read(spendReportsRepositoryProvider);
-  if (repo == null) return;
-  final messenger = ScaffoldMessenger.of(context);
-  try {
-    // `periodEnd` is exclusive; the export's `to` is inclusive, so the
-    // last day of the period would otherwise be silently dropped.
-    final bytes = await repo.fetchTransactionsCsv(
-      from: report.periodStart,
-      to: report.periodEnd.subtract(const Duration(days: 1)),
-    );
-    final dir = await getTemporaryDirectory();
-    final stamp =
-        '${report.periodStart.year}-'
-        '${report.periodStart.month.toString().padLeft(2, '0')}';
-    final file = File('${dir.path}/pandapay-spending-$stamp.csv');
-    await file.writeAsBytes(bytes);
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile(file.path)],
-        text: 'My PandaPay spending report',
-      ),
-    );
-  } catch (e) {
-    messenger.showSnackBar(
-      SnackBar(content: Text('Could not export. ${userFacingErrorMessage(e)}')),
-    );
-  }
-}
-
 class _PeriodSelector extends ConsumerWidget {
-  final SpendPeriod selected;
+  final SpendReportQuery selected;
   const _PeriodSelector({required this.selected});
 
   @override
@@ -265,16 +222,23 @@ class _PeriodSelector extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          for (final p in SpendPeriod.values) ...[
+          for (final p in SpendPeriod.values.where(
+            (period) => period != SpendPeriod.custom,
+          )) ...[
             ChoiceChip(
               label: Text(p.label),
-              selected: p == selected,
+              selected: !selected.isCustom && p == selected.period,
               onSelected: (_) =>
-                  ref.read(selectedSpendPeriodProvider.notifier).state = p,
+                  ref.read(selectedSpendQueryProvider.notifier).state =
+                      SpendReportQuery.preset(p),
               labelStyle: BambooFonts.ui(
                 13,
-                weight: p == selected ? FontWeight.w700 : FontWeight.w500,
-                color: p == selected ? BambooInk.onSlate : BambooInk.ink900,
+                weight: !selected.isCustom && p == selected.period
+                    ? FontWeight.w700
+                    : FontWeight.w500,
+                color: !selected.isCustom && p == selected.period
+                    ? BambooInk.onSlate
+                    : BambooInk.ink900,
               ),
               selectedColor: BambooInk.slate,
               backgroundColor: BambooInk.paperMuted,
@@ -283,9 +247,44 @@ class _PeriodSelector extends ConsumerWidget {
             ),
             const SizedBox(width: AppSpace.sm),
           ],
+          ChoiceChip(
+            avatar: const Icon(Icons.date_range_rounded, size: 17),
+            label: Text(
+              selected.isCustom ? selected.shortLabel : 'Custom dates',
+            ),
+            selected: selected.isCustom,
+            onSelected: (_) => _chooseCustomRange(context, ref),
+            labelStyle: BambooFonts.ui(
+              13,
+              weight: selected.isCustom ? FontWeight.w700 : FontWeight.w500,
+              color: selected.isCustom ? BambooInk.onSlate : BambooInk.ink900,
+            ),
+            selectedColor: BambooInk.slate,
+            backgroundColor: BambooInk.paperMuted,
+            side: BorderSide.none,
+            showCheckmark: false,
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _chooseCustomRange(BuildContext context, WidgetRef ref) async {
+    final now = DateTime.now();
+    final existing = selected.isCustom
+        ? DateTimeRange(start: selected.from!, end: selected.to!)
+        : null;
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDateRange: existing,
+      helpText: 'Choose spending dates',
+      saveText: 'Apply dates',
+    );
+    if (picked == null || !context.mounted) return;
+    ref.read(selectedSpendQueryProvider.notifier).state =
+        SpendReportQuery.custom(from: picked.start, to: picked.end);
   }
 }
 
@@ -481,7 +480,7 @@ class _HeadlineCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${report.period.label} · ${report.spend.txnCount} transaction'
+            '${report.displayLabel} · ${report.spend.txnCount} transaction'
             '${report.spend.txnCount == 1 ? '' : 's'}',
             style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
           ),
@@ -509,7 +508,7 @@ class _HeadlineCard extends StatelessWidget {
                 Flexible(
                   child: Text(
                     '${(change.abs() * 100).toStringAsFixed(0)}% '
-                    '${change >= 0 ? 'more' : 'less'} than ${report.period.previousLabel.toLowerCase()}'
+                    '${change >= 0 ? 'more' : 'less'} than ${report.previousDisplayLabel}'
                     ' (${report.previousSpend.total.format(hidePaise: true)})',
                     style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
                     overflow: TextOverflow.ellipsis,
@@ -522,7 +521,7 @@ class _HeadlineCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               'On track for about ${projected.format(compact: true)} by '
-              '${report.period.label.toLowerCase().replaceFirst('this ', 'the end of this ')}',
+              '${report.displayLabel.toLowerCase().replaceFirst('this ', 'the end of this ')}',
               style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
             ),
           ],
@@ -692,30 +691,45 @@ class _SpendingMixCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpace.lg),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _SpendingDonut(rows: rows, total: report.spend.total),
-              const SizedBox(width: AppSpace.lg),
-              Expanded(
-                child: Column(
-                  children: [
-                    for (final row in visibleRows)
-                      _MixLegendRow(row: row, total: report.spend.total),
-                    if (remaining > 0) ...[
-                      const SizedBox(height: AppSpace.xs),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '+$remaining more ${remaining == 1 ? 'category' : 'categories'} below',
-                          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                        ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 360;
+              final legend = Column(
+                children: [
+                  for (final row in visibleRows)
+                    _MixLegendRow(row: row, total: report.spend.total),
+                  if (remaining > 0) ...[
+                    const SizedBox(height: AppSpace.xs),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '+$remaining more ${remaining == 1 ? 'category' : 'categories'} below',
+                        style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                       ),
-                    ],
+                    ),
                   ],
-                ),
-              ),
-            ],
+                ],
+              );
+
+              if (compact) {
+                return Column(
+                  children: [
+                    _SpendingDonut(rows: rows, total: report.spend.total),
+                    const SizedBox(height: AppSpace.lg),
+                    legend,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _SpendingDonut(rows: rows, total: report.spend.total),
+                  const SizedBox(width: AppSpace.lg),
+                  Expanded(child: legend),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -731,37 +745,44 @@ class _SpendingDonut extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 132,
-      height: 132,
-      child: Stack(
-        alignment: Alignment.center,
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 650),
+      curve: Curves.easeOutCubic,
+      builder: (context, progress, child) => SizedBox(
+        width: 132,
+        height: 132,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            CustomPaint(
+              size: const Size.square(132),
+              painter: _SpendingDonutPainter(rows: rows, progress: progress),
+            ),
+            child!,
+          ],
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          CustomPaint(
-            size: const Size.square(132),
-            painter: _SpendingDonutPainter(rows: rows),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: MoneyText(
-                  total,
-                  confidence: Confidence.estimated,
-                  style: BambooFonts.ui(
-                    16,
-                    weight: FontWeight.w800,
-                    color: BambooInk.ink900,
-                  ),
+          SizedBox(
+            width: 82,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: MoneyText(
+                total,
+                confidence: Confidence.estimated,
+                showConfidenceIcon: false,
+                style: BambooFonts.ui(
+                  16,
+                  weight: FontWeight.w800,
+                  color: BambooInk.ink900,
                 ),
               ),
-              Text(
-                'spent',
-                style: BambooFonts.ui(10.5, color: BambooInk.ink500),
-              ),
-            ],
+            ),
           ),
+          Text('spent', style: BambooFonts.ui(10.5, color: BambooInk.ink500)),
         ],
       ),
     );
@@ -770,8 +791,9 @@ class _SpendingDonut extends StatelessWidget {
 
 class _SpendingDonutPainter extends CustomPainter {
   final List<SpendBreakdownRow> rows;
+  final double progress;
 
-  const _SpendingDonutPainter({required this.rows});
+  const _SpendingDonutPainter({required this.rows, required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -787,7 +809,7 @@ class _SpendingDonutPainter extends CustomPainter {
 
     var start = -math.pi / 2;
     for (final row in rows) {
-      final sweep = math.pi * 2 * row.total.paise / totalPaise;
+      final sweep = math.pi * 2 * row.total.paise / totalPaise * progress;
       final paint = Paint()
         ..color = spendingCategoryVisual(row.label).accent
         ..style = PaintingStyle.stroke
@@ -799,7 +821,7 @@ class _SpendingDonutPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SpendingDonutPainter oldDelegate) =>
-      oldDelegate.rows != rows;
+      oldDelegate.rows != rows || oldDelegate.progress != progress;
 }
 
 class _MixLegendRow extends StatelessWidget {
@@ -829,10 +851,11 @@ class _MixLegendRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpace.xs),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              MoneyText(
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: MoneyText(
                 row.total,
                 confidence: Confidence.estimated,
                 style: BambooFonts.ui(
@@ -841,8 +864,7 @@ class _MixLegendRow extends StatelessWidget {
                   color: BambooInk.ink900,
                 ),
               ),
-              const SizedBox.shrink(),
-            ],
+            ),
           ),
         ],
       ),
@@ -875,10 +897,7 @@ class _BreakdownPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              _SpendingVisualBadge(
-                visual: visual,
-                size: 34,
-              ),
+              _SpendingVisualBadge(visual: visual, size: 34),
               const SizedBox(width: AppSpace.md),
               Text(
                 title.toUpperCase(),
@@ -1307,10 +1326,7 @@ class _CardRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              _SpendingVisualBadge(
-                visual: visual,
-                size: 34,
-              ),
+              _SpendingVisualBadge(visual: visual, size: 34),
               const SizedBox(width: AppSpace.sm),
               Expanded(
                 child: Text(

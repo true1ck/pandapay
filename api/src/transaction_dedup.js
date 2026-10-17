@@ -7,7 +7,11 @@ const REVIEW_THRESHOLD = 0.72;
 /** Sources that are different transports for the same logical channel. */
 function sourceFamily(source) {
   if (source === 'sms' || source === 'sms_bulk') return 'sms';
-  if (source === 'statement' || source === 'imported') return 'statement';
+  // A screenshot import is a separate transport so it can be compared with
+  // a statement import for cross-source duplication, while repeated rows
+  // from the same transport remain protected by their exact source key.
+  if (source === 'statement') return 'statement';
+  if (source === 'imported') return 'imported';
   return source || 'manual';
 }
 
@@ -49,7 +53,11 @@ function evaluateDuplicate(incoming, candidate) {
 
   const incomingSource = sourceFamily(incoming.source);
   const candidateSource = sourceFamily(candidate.source);
-  if (incomingSource === candidateSource) return null;
+  // Repeated SMS observations are intentionally one family and rely on
+  // exact message identity. Screenshot files can overlap without having the
+  // same file hash (for example, two cropped pages), so imported rows still
+  // need row-level duplicate detection within their family.
+  if (incomingSource === candidateSource && incomingSource !== 'imported') return null;
 
   const incomingInstrument = incoming.instrument || 'credit_card';
   const candidateInstrument = candidate.instrument || 'credit_card';
@@ -83,7 +91,7 @@ function evaluateDuplicate(incoming, candidate) {
   else if (timeDifferenceMs <= 2 * 60 * 60 * 1000) score += 0.20;
   else if (timeDifferenceMs <= 24 * 60 * 60 * 1000) score += 0.12;
   else score += 0.08;
-  score += 0.05; // independent-source evidence
+  if (incomingSource !== candidateSource) score += 0.05; // independent-source evidence
   score = Math.min(0.999, Number(score.toFixed(3)));
 
   if (score < REVIEW_THRESHOLD) return null;

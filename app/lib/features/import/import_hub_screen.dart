@@ -6,10 +6,11 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../sms_import/sms_backup_import_screen.dart';
 import '../sms_import/sms_import_screen.dart';
-import 'data_export_screen.dart';
+import 'data_transfer_screen.dart';
 import 'email_forwarding_screen.dart';
 import 'imap_connection_screen.dart';
 import 'statement_pdf_import_screen.dart';
+import 'screenshot_spending_import_screen.dart';
 import 'sync_backup_screen.dart';
 
 /// ui-spec.md F1 Import Hub — implementation-plan-group-e-f-g.md §3, "build
@@ -33,7 +34,10 @@ class ImportHubScreen extends ConsumerWidget {
     // working feature, only a deliberate flag flip should.
     final smsBackupEnabled = ref
         .watch(appStatusProvider)
-        .maybeWhen(data: (s) => s?.smsBackupImportEnabled ?? true, orElse: () => true);
+        .maybeWhen(
+          data: (s) => s?.smsBackupImportEnabled ?? true,
+          orElse: () => true,
+        );
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -42,7 +46,10 @@ class ImportHubScreen extends ConsumerWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Import & Sync', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Import & Sync',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: ListView(
@@ -69,17 +76,25 @@ class ImportHubScreen extends ConsumerWidget {
                 title: 'Import SMS backup file',
                 status: smsBatches.when(
                   data: (batches) => batches.isEmpty
-                      ? const _Status('One-off action — tap to import a backup export', BambooInk.ink500)
+                      ? const _Status(
+                          'One-off action — tap to import a backup export',
+                          BambooInk.ink500,
+                        )
                       : _Status(
                           'Imported ${batches.length} time${batches.length == 1 ? '' : 's'}',
                           BambooInk.jade,
                         ),
                   loading: () => const _Status('Checking…', BambooInk.ink500),
-                  error: (_, _) => const _Status('One-off action — tap to import a backup export', BambooInk.ink500),
+                  error: (_, _) => const _Status(
+                    'One-off action — tap to import a backup export',
+                    BambooInk.ink500,
+                  ),
                 ),
-                onTap: () => Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const SmsBackupImportScreen())),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SmsBackupImportScreen(),
+                  ),
+                ),
               ),
               const SizedBox(height: AppSpace.md),
             ],
@@ -98,17 +113,37 @@ class ImportHubScreen extends ConsumerWidget {
                 loading: () => const _Status('Checking…', BambooInk.ink500),
                 error: (_, _) => const _Status('Error', BambooInk.clay),
               ),
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SmsImportScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             _ChannelCard(
               icon: Icons.picture_as_pdf_outlined,
               title: 'Statement PDF import',
-              status: const _Status('One-off action — tap to import a statement', BambooInk.ink500),
-              onTap: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const StatementPdfImportScreen())),
+              status: const _Status(
+                'One-off action — tap to import a statement',
+                BambooInk.ink500,
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const StatementPdfImportScreen(),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            _ChannelCard(
+              icon: Icons.image_search_outlined,
+              title: 'Import spending screenshots',
+              status: const _Status(
+                'On-device OCR — transaction rows only',
+                BambooInk.ink500,
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SpendingScreenshotImportScreen(),
+                ),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             _ChannelCard(
@@ -116,18 +151,27 @@ class ImportHubScreen extends ConsumerWidget {
               title: 'Email forwarding',
               status: forwarding.when(
                 data: (addr) {
-                  if (addr == null) return const _Status('Not set up', BambooInk.ink500);
+                  if (addr == null)
+                    return const _Status('Not set up', BambooInk.ink500);
                   if (addr.emailCount > 0) {
-                    return _Status('Connected — ${addr.emailCount} received', BambooInk.jade);
+                    return _Status(
+                      'Connected — ${addr.emailCount} received',
+                      BambooInk.jade,
+                    );
                   }
-                  return const _Status('Waiting for first email…', BambooInk.amber);
+                  return const _Status(
+                    'Waiting for first email…',
+                    BambooInk.amber,
+                  );
                 },
                 loading: () => const _Status('Checking…', BambooInk.ink500),
                 error: (_, _) => const _Status('Error', BambooInk.clay),
               ),
-              onTap: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const EmailForwardingScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const EmailForwardingScreen(),
+                ),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             // Task F-10: this tile used to read "IMAP connection
@@ -144,38 +188,61 @@ class ImportHubScreen extends ConsumerWidget {
               title: 'IMAP connection (test only)',
               status: imap.when(
                 data: (conn) {
-                  if (conn == null) return const _Status('Not set up — use Email forwarding instead', BambooInk.ink500);
+                  if (conn == null)
+                    return const _Status(
+                      'Not set up — use Email forwarding instead',
+                      BambooInk.ink500,
+                    );
                   if (conn.verifiedAt != null) {
-                    return const _Status('Login verified — does not sync mail', BambooInk.ink500);
+                    return const _Status(
+                      'Login verified — does not sync mail',
+                      BambooInk.ink500,
+                    );
                   }
-                  return const _Status('Set up — not yet verified', BambooInk.amber);
+                  return const _Status(
+                    'Set up — not yet verified',
+                    BambooInk.amber,
+                  );
                 },
                 loading: () => const _Status('Checking…', BambooInk.ink500),
                 error: (_, _) => const _Status('Error', BambooInk.clay),
               ),
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImapConnectionScreen())),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ImapConnectionScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.xxl),
             Text(
               'Data',
-              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              style: BambooFonts.ui(
+                12.5,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             _ChannelCard(
               icon: Icons.cloud_sync_outlined,
               title: 'Sync & backup',
-              status: const _Status('Backup status & conflict log', BambooInk.ink500),
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SyncBackupScreen())),
+              status: const _Status(
+                'Backup status & conflict log',
+                BambooInk.ink500,
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SyncBackupScreen()),
+              ),
             ),
             const SizedBox(height: AppSpace.md),
             _ChannelCard(
-              icon: Icons.download_outlined,
-              title: 'Export your data',
-              status: const _Status('Your data is yours', BambooInk.ink500),
-              onTap: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DataExportScreen())),
+              icon: Icons.ios_share_rounded,
+              title: 'Import or export data',
+              status: const _Status(
+                'CSV and PDF · your data is yours',
+                BambooInk.ink500,
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const DataTransferScreen()),
+              ),
             ),
           ],
         ),
@@ -196,7 +263,12 @@ class _ChannelCard extends StatelessWidget {
   final _Status status;
   final VoidCallback onTap;
 
-  const _ChannelCard({required this.icon, required this.title, required this.status, required this.onTap});
+  const _ChannelCard({
+    required this.icon,
+    required this.title,
+    required this.status,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -217,7 +289,10 @@ class _ChannelCard extends StatelessWidget {
               Container(
                 width: 40,
                 height: 40,
-                decoration: const BoxDecoration(color: BambooInk.slate, shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                  color: BambooInk.slate,
+                  shape: BoxShape.circle,
+                ),
                 child: Icon(icon, size: 20, color: BambooInk.lime),
               ),
               const SizedBox(width: AppSpace.md),
@@ -225,15 +300,25 @@ class _ChannelCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                    Text(
+                      title,
+                      style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                    ),
                     const SizedBox(height: 2),
                     // Never colour-alone: status text always carries the
                     // word itself, colour is a reinforcement only.
-                    Text(status.label, style: BambooFonts.ui(12.5, color: status.color)),
+                    Text(
+                      status.label,
+                      style: BambooFonts.ui(12.5, color: status.color),
+                    ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, size: 20, color: BambooInk.ink300),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: BambooInk.ink300,
+              ),
             ],
           ),
         ),

@@ -121,6 +121,8 @@ class CardDetailScreen extends ConsumerWidget {
                     );
                   }
                   final (userCard, product) = match;
+                  final spendSummary =
+                      ref.watch(cardSpendSummaryProvider)[userCard.id];
                   final sections = [
                     (
                       label: 'Rewards',
@@ -188,7 +190,13 @@ class CardDetailScreen extends ConsumerWidget {
                       AppSpace.xl,
                     ),
                     children: [
-                      CardVisual(product: product, height: 112),
+                      CardVisual(
+                        product: product,
+                        height: 190,
+                        userCard: userCard,
+                        cycleSpend: spendSummary?.cycleTotal,
+                        latestSpend: spendSummary?.latestSpend,
+                      ),
                       const SizedBox(height: AppSpace.lg),
                       for (final section in ordered) ...[
                         _CardDetailSection(
@@ -316,7 +324,8 @@ class _SpendTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final report = ref.watch(spendReportProvider(SpendPeriod.month));
+    final monthQuery = const SpendReportQuery.preset(SpendPeriod.month);
+    final report = ref.watch(spendReportProvider(monthQuery));
 
     return report.when(
       loading: () => const Padding(
@@ -325,7 +334,7 @@ class _SpendTab extends ConsumerWidget {
       ),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),
-        onRetry: () => ref.invalidate(spendReportProvider(SpendPeriod.month)),
+        onRetry: () => ref.invalidate(spendReportProvider(monthQuery)),
       ),
       data: (data) {
         if (data == null) {

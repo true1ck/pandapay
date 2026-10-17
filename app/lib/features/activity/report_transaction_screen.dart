@@ -84,7 +84,11 @@ class _ReportTransactionScreenState extends ConsumerState<ReportTransactionScree
 
     setState(() => _submitting = true);
     try {
-      await SupportApi(apiBaseUrl: supportApiBaseUrl, accessToken: token).submitTicket(
+      await SupportApi(
+        apiBaseUrl: supportApiBaseUrl,
+        accessToken: token,
+        client: ref.read(authenticatedHttpClientProvider),
+      ).submitTicket(
         kind: kind.ticketKind,
         // The chip label leads the message so a human triaging the queue
         // sees design 26's taxonomy even though it is stored under the

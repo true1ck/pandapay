@@ -3080,7 +3080,8 @@ async function recordTransactionObservation(client, userId, transactionId, {
      DO UPDATE SET transaction_id = EXCLUDED.transaction_id,
                    observed_at = LEAST(transaction_observations.observed_at, EXCLUDED.observed_at),
                    external_ref = COALESCE(transaction_observations.external_ref, EXCLUDED.external_ref),
-                   payload_hash = COALESCE(transaction_observations.payload_hash, EXCLUDED.payload_hash)`,
+                   payload_hash = COALESCE(transaction_observations.payload_hash, EXCLUDED.payload_hash),
+                   metadata = transaction_observations.metadata || EXCLUDED.metadata`,
     [
       userId,
       transactionId,
@@ -3352,6 +3353,9 @@ async function importParsedMessage(client, userId, {
     ...(parsed.fields.reference ? { bankReference: parsed.fields.reference } : {}),
     ...(parsed.fields.transferParty ? { transferParty: parsed.fields.transferParty } : {}),
     ...(parsed.fields.transferKind ? { transferKind: parsed.fields.transferKind } : {}),
+    ...(parsed.fields.accountLast4 && parsed.fields.availableBalanceInr != null
+      ? { availableBalanceInr: parsed.fields.availableBalanceInr }
+      : {}),
   };
   // A QR payment can produce either a credit-card alert or a bank-account
   // UPI debit alert. Account-number suffixes are not card last-4 digits and
@@ -4772,6 +4776,59 @@ app.get('/transactions/sms-import-state', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /account-summaries — masked bank accounts observed in SMS imports.
+ *
+ * Account balances are only returned when an SMS explicitly included an
+ * available/current balance. They are therefore latest-known snapshots, not
+ * live bank balances; accounts with no balance-bearing SMS remain visible
+ * with a null balance.
+ */
+app.get('/account-summaries', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `WITH account_observations AS (
+           SELECT o.metadata->>'accountLast4' AS account_last4,
+                  CASE
+                    WHEN o.metadata->>'availableBalanceInr' ~ '^[0-9]+(\\.[0-9]+)?$'
+                    THEN (o.metadata->>'availableBalanceInr')::numeric
+                    ELSE NULL
+                  END AS available_balance_inr,
+                  o.observed_at
+             FROM transaction_observations o
+            WHERE o.profile_id = $1
+              AND o.source IN ('sms', 'sms_bulk')
+              AND o.metadata->>'accountLast4' ~ '^[0-9]{4}$'
+         )
+         SELECT account_last4,
+                (array_agg(available_balance_inr ORDER BY observed_at DESC)
+                  FILTER (WHERE available_balance_inr IS NOT NULL))[1]
+                  AS available_balance_inr,
+                MAX(observed_at) AS latest_sms_at,
+                COUNT(*) AS sms_count
+           FROM account_observations
+          GROUP BY account_last4
+          ORDER BY account_last4`,
+        [req.userId],
+      ),
+    );
+    res.json({
+      accounts: result.rows.map((row) => ({
+        accountLast4: row.account_last4,
+        availableBalanceInr: row.available_balance_inr == null
+          ? null
+          : Number(row.available_balance_inr),
+        latestSmsAt: row.latest_sms_at,
+        smsCount: Number(row.sms_count ?? 0),
+      })),
+    });
+  } catch (err) {
+    console.error('GET /account-summaries error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
  * GET /transactions?from=&to=&cardId=&categoryId=&source=&q=&limit= — E10/E11/D1's shared gap
  * (implementation-plan-group-e-f-g.md: "third consumer of the same missing
  * query param — build it once"). All three are optional; omitting them
@@ -5165,7 +5222,16 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
  * ignored).
  */
 app.patch('/transactions/:id', requireAuth, async (req, res) => {
-  const { amountInr, occurredAt, categoryId, rail, merchantName, userCardId } = req.body || {};
+  const {
+    amountInr, occurredAt, categoryId, rail, merchantName, userCardId,
+    instrument, entryKind,
+  } = req.body || {};
+  if (instrument !== undefined && !TXN_INSTRUMENTS.includes(instrument)) {
+    return res.status(400).json({ error: `instrument must be one of ${TXN_INSTRUMENTS.join(', ')}` });
+  }
+  if (entryKind !== undefined && !TXN_ENTRY_KINDS.includes(entryKind)) {
+    return res.status(400).json({ error: `entryKind must be one of ${TXN_ENTRY_KINDS.join(', ')}` });
+  }
   if (amountInr !== undefined && (!Number.isFinite(Number(amountInr)) || Number(amountInr) <= 0)) {
     return res.status(400).json({ error: 'amountInr must be a positive number' });
   }
@@ -5192,39 +5258,79 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         return { status: 409, error: `cannot edit a transaction with status '${old.status}'` };
       }
 
-      const oldCard = await loadUserCardForState(client, req.userId, old.user_card_id);
-      if (!oldCard) return { status: 404, error: 'user_card for this transaction not found or archived' };
+      const oldMovesCardState = old.instrument === 'credit_card'
+        && old.entry_kind === 'spend'
+        && Boolean(old.user_card_id);
+      const oldCard = oldMovesCardState
+        ? await loadUserCardForState(client, req.userId, old.user_card_id)
+        : null;
+      if (oldMovesCardState && !oldCard) {
+        return { status: 404, error: 'user_card for this transaction not found or archived' };
+      }
       // state_applied=false is authoritative for new suppressed/backfill
       // rows. Null is a legacy row, for which the pre-migration safe
       // assumption remains that state was applied.
-      if (old.state_applied !== false) {
+      if (old.state_applied !== false && oldMovesCardState) {
         await reverseTransactionState(client, req.userId, oldCard, old);
       }
 
+      const newInstrument = instrument ?? old.instrument;
+      const newEntryKind = entryKind ?? old.entry_kind;
+      const newMovesCardState = newInstrument === 'credit_card'
+        && newEntryKind === 'spend';
+      const newUserCardId = newMovesCardState || newInstrument === 'debit_card'
+        ? (userCardId !== undefined ? userCardId : old.user_card_id)
+        : null;
+      if (newInstrument === 'credit_card' && !newUserCardId) {
+        return { status: 400, error: 'userCardId is required for a credit-card transaction' };
+      }
+      if (newUserCardId && (newInstrument === 'credit_card' || newInstrument === 'debit_card')) {
+        const compatible = await importResolvers.userCardMatchesInstrument(
+          client,
+          req.userId,
+          newUserCardId,
+          newInstrument,
+        );
+        if (!compatible) {
+          return {
+            status: 400,
+            error: `userCardId does not match the ${newInstrument === 'debit_card' ? 'debit' : 'credit'}-card instrument`,
+          };
+        }
+      }
+
       const newValues = {
-        userCardId: userCardId ?? old.user_card_id,
+        userCardId: newUserCardId,
         amount: amountInr !== undefined ? Number(amountInr) : Number(old.amount_inr),
         occurred: occurredAt !== undefined ? new Date(occurredAt) : old.occurred_at,
         categoryId: categoryId !== undefined ? categoryId : old.category_id,
         rail: rail ?? old.rail,
         merchantName: merchantName !== undefined ? merchantName : old.merchant_name,
+        instrument: newInstrument,
+        entryKind: newEntryKind,
       };
 
-      const newCard = await loadUserCardForState(client, req.userId, newValues.userCardId);
-      if (!newCard) return { status: 404, error: 'target user_card not found or archived' };
+      const newCard = newMovesCardState
+        ? await loadUserCardForState(client, req.userId, newValues.userCardId)
+        : null;
+      if (newMovesCardState && !newCard) {
+        return { status: 404, error: 'target user_card not found or archived' };
+      }
 
       const updated = await client.query(
         `UPDATE transactions
-            SET user_card_id = $1, amount_inr = $2, occurred_at = $3, category_id = $4, rail = $5, merchant_name = $6
-          WHERE id = $7
-          RETURNING id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name, status`,
+            SET user_card_id = $1, amount_inr = $2, occurred_at = $3, category_id = $4, rail = $5,
+                merchant_name = $6, instrument = $7, entry_kind = $8
+          WHERE id = $9
+          RETURNING id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name,
+                    instrument, entry_kind, status`,
         [
           newValues.userCardId, newValues.amount, newValues.occurred, newValues.categoryId,
-          newValues.rail, newValues.merchantName, old.id,
+          newValues.rail, newValues.merchantName, newValues.instrument, newValues.entryKind, old.id,
         ]
       );
 
-      const stateUpdates = old.is_backfill
+      const stateUpdates = old.is_backfill || !newMovesCardState
         ? {}
         : await applyTransactionState(client, req.userId, newCard, {
             txnId: old.id, userCardId: newValues.userCardId, amount: newValues.amount,
@@ -5743,8 +5849,10 @@ app.get('/spend-by-category', requireAuth, async (req, res) => {
  * GET /spend-report — everything the Trends screen shows, in one round trip.
  *
  * `?period=week|month|quarter|year` (default month), `?anchor=<ISO date>`
- * to look at a period other than the current one, `?buckets=N` for how many
- * points the chart series carries (default 12).
+ * to look at a period other than the current one, or
+ * `?period=custom&from=YYYY-MM-DD&to=YYYY-MM-DD` for an inclusive custom
+ * calendar range. `?buckets=N` controls how many points the chart series
+ * carries (default 12).
  *
  * One endpoint rather than five because every figure on that screen has to
  * agree with every other one — a category breakdown fetched a second after
@@ -5769,6 +5877,13 @@ app.get('/spend-report', requireAuth, async (req, res) => {
   if (!Number.isInteger(buckets) || buckets < 1 || buckets > 60) {
     return res.status(400).json({ error: 'buckets must be an integer between 1 and 60' });
   }
+  if (period === 'custom') {
+    try {
+      spendReports.customPeriodBounds(req.query.from, req.query.to);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+  }
   const requestedTimeZone = typeof req.query.tz === 'string' && req.query.tz.length > 0
     ? req.query.tz
     : 'Asia/Kolkata';
@@ -5781,8 +5896,12 @@ app.get('/spend-report', requireAuth, async (req, res) => {
       const tzOk = await client.query(`SELECT 1 FROM pg_timezone_names WHERE name = $1`, [requestedTimeZone]);
       const timeZone = tzOk.rowCount > 0 ? requestedTimeZone : 'Asia/Kolkata';
       const calendarOptions = { timeZone };
-      const current = spendReports.periodBounds(period, anchor, calendarOptions);
-      const previous = spendReports.previousPeriodBounds(period, anchor, calendarOptions);
+      const current = period === 'custom'
+        ? spendReports.customPeriodBounds(req.query.from, req.query.to, calendarOptions)
+        : spendReports.periodBounds(period, anchor, calendarOptions);
+      const previous = period === 'custom'
+        ? spendReports.previousCustomPeriodBounds(current)
+        : spendReports.previousPeriodBounds(period, anchor, calendarOptions);
 
       const [totals, previousTotals, byCategory, byMerchant, byCard, byInstrument, byCardCategory, series] = await Promise.all([
         spendReports.periodTotals(client, req.userId, current),
@@ -5792,7 +5911,9 @@ app.get('/spend-report', requireAuth, async (req, res) => {
         spendReports.spendByCard(client, req.userId, current),
         spendReports.spendByInstrument(client, req.userId, current),
         spendReports.spendByCardCategory(client, req.userId, current),
-        spendReports.spendSeries(client, req.userId, period, buckets, anchor, calendarOptions),
+        period === 'custom'
+          ? Promise.resolve([])
+          : spendReports.spendSeries(client, req.userId, period, buckets, anchor, calendarOptions),
       ]);
 
       return {
@@ -5830,7 +5951,7 @@ app.get('/spend-report', requireAuth, async (req, res) => {
  */
 app.get('/assistant/spending-summary', requireAuth, async (req, res) => {
   const period = req.query.period || 'month';
-  if (!spendReports.PERIODS.includes(period)) {
+  if (!spendReports.PERIODS.includes(period) || period === 'custom') {
     return res.status(400).json({ error: `period must be one of ${spendReports.PERIODS.join(', ')}` });
   }
   const anchor = req.query.anchor ? new Date(req.query.anchor) : new Date();
@@ -8484,6 +8605,7 @@ app.post('/statement-imports', requireAuth, async (req, res) => {
     txnCount,
     reconciledCount,
     issuerFormatId,
+    importSource = 'statement',
     importKey,
     transactions: structuredTransactions,
   } = req.body || {};
@@ -8492,6 +8614,9 @@ app.post('/statement-imports', requireAuth, async (req, res) => {
   }
   if (!statementFrom || !statementTo) {
     return res.status(400).json({ error: 'statementFrom and statementTo are required' });
+  }
+  if (!['statement', 'screenshot'].includes(importSource)) {
+    return res.status(400).json({ error: 'importSource must be statement or screenshot' });
   }
   if (structuredTransactions !== undefined && !Array.isArray(structuredTransactions)) {
     return res.status(400).json({ error: 'transactions must be an array when given' });
@@ -8522,6 +8647,7 @@ app.post('/statement-imports', requireAuth, async (req, res) => {
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      const transactionSource = importSource === 'screenshot' ? 'imported' : 'statement';
       const statementSourceKey = importKey
         ? clientMutationSourceKey(req.userId, 'statement', importKey)
         : null;
@@ -8571,7 +8697,7 @@ app.post('/statement-imports', requireAuth, async (req, res) => {
         });
         const sourceKey = clientMutationSourceKey(
           req.userId,
-          'statement',
+          transactionSource,
           `${importKey}:${index}`,
         );
         const outcome = await insertTransactionAndUpdateState(client, req.userId, {
@@ -8581,10 +8707,10 @@ app.post('/statement-imports', requireAuth, async (req, res) => {
           categoryId,
           rail: transaction.rail || 'unknown',
           merchantName,
-          source: 'statement',
+          source: transactionSource,
           sourceKey,
           backfill: true,
-          observationMetadata: { statementImportId: statementImport.id, line: index },
+          observationMetadata: { statementImportId: statementImport.id, line: index, importSource },
         });
         if (outcome.status !== 200 && outcome.status !== 201) {
           throw new Error(`statement transaction ${index} failed: ${outcome.error || outcome.status}`);

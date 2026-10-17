@@ -34,6 +34,14 @@ class CategorySpend {
     txnCount: json['txnCount'] as int,
   );
 
+  Map<String, dynamic> toJson() => {
+    'categoryId': categoryId,
+    'categorySlug': categorySlug,
+    'categoryName': categoryName,
+    'totalSpendInr': totalSpend.rupees,
+    'txnCount': txnCount,
+  };
+
   /// Display label for the "why" breakdown — "Dining" for a real category,
   /// "Other spending" for the uncategorized bucket, never a bare `null`.
   String get displayName => categoryName ?? 'Other spending';
@@ -44,8 +52,11 @@ class SpendByCategoryRepository {
   final String accessToken;
   final http.Client _client;
 
-  SpendByCategoryRepository({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-    : _client = client ?? http.Client();
+  SpendByCategoryRepository({
+    required this.apiBaseUrl,
+    required this.accessToken,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   Future<List<CategorySpend>> fetchSpendByCategory({int months = 12}) async {
     final response = await _client.get(
@@ -53,9 +64,14 @@ class SpendByCategoryRepository {
       headers: {'Authorization': 'Bearer $accessToken'},
     );
     if (response.statusCode != 200) {
-      throw ApiException('GET /spend-by-category failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /spend-by-category failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['categories'] as List).cast<Map<String, dynamic>>().map(CategorySpend.fromJson).toList();
+    return (body['categories'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(CategorySpend.fromJson)
+        .toList();
   }
 }

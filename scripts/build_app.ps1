@@ -11,7 +11,8 @@ param(
   [string]$ApiBaseUrl,
   [string]$AuthBaseUrl,
   [string]$LegalBaseUrl,
-  [string]$NearbyRadiusMeters
+  [string]$NearbyRadiusMeters,
+  [switch]$AllowDebugSigningForDeviceTest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,8 +20,16 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $appRoot = Join-Path $repoRoot 'app'
 $keyProperties = Join-Path $appRoot 'android\key.properties'
 
-if ($Environment -eq 'prod' -and -not (Test-Path -LiteralPath $keyProperties)) {
+if ($Environment -eq 'prod' -and -not (Test-Path -LiteralPath $keyProperties) -and -not $AllowDebugSigningForDeviceTest) {
   throw "Production builds require app/android/key.properties. Refusing to use the Android debug signing key, because it cannot update an installed release signed with the original release key."
+}
+
+if ($AllowDebugSigningForDeviceTest -and $Environment -ne 'prod') {
+  throw "-AllowDebugSigningForDeviceTest is only valid with the prod flavor."
+}
+
+if ($AllowDebugSigningForDeviceTest -and (Test-Path -LiteralPath $keyProperties)) {
+  throw "The release keystore is available; do not override it with debug signing for a device test."
 }
 
 if ($Environment -eq 'prod' -and [string]::IsNullOrWhiteSpace($BuildNumber)) {
@@ -83,6 +92,9 @@ Write-Host "Building $Environment $Target with hosted endpoints:" -ForegroundCol
 Write-Host "  API:   $ApiBaseUrl"
 Write-Host "  Auth:  $AuthBaseUrl"
 Write-Host "  Legal: $LegalBaseUrl"
+if ($AllowDebugSigningForDeviceTest) {
+  Write-Warning "This is a physical-device test build signed with the Android debug key. Do not distribute it as a production release."
+}
 
 Push-Location $appRoot
 try {

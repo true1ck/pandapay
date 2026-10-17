@@ -201,7 +201,12 @@ final _missedOpportunitiesProvider = FutureProvider<List<_MissedOpportunity>>((
   final allProducts = [for (final (_, p) in pairs) p];
 
   final since = DateTime.now().subtract(const Duration(days: 90));
-  final transactions = await repo.fetchTransactions(from: since);
+  final transactions = await loadTransactionsWithOfflineCache(
+    ref,
+    repo: repo,
+    cacheKey: 'transactions:missed_opportunities',
+    from: since,
+  );
 
   final results = <_MissedOpportunity>[];
   for (final txn in transactions) {

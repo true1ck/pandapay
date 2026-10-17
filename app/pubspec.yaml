@@ -178,6 +178,9 @@ dependencies:
   # determination made here). Verified resolving cleanly against this
   # exact dependency graph with `dart pub get` before landing it.
   syncfusion_flutter_pdf: ^34.2.2
+  # Renders scanned/image-only PDF pages locally so the existing ML Kit OCR
+  # path can parse statements that have no text layer.
+  pdfx: ^2.11.0
   # F2: real file picking for statement PDF import — named in the original
   # plan's package table alongside share_plus (F6), which isn't added here;
   # F6's own screen already made a documented judgment call to use

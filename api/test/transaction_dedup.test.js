@@ -22,6 +22,23 @@ test('SMS and SMS bulk are one source family, so backup re-imports rely on exact
   assert.equal(evaluateDuplicate(base, { ...base, source: 'sms_bulk' }), null);
 });
 
+test('statement and screenshot imports remain distinct families for cross-source matching', () => {
+  assert.equal(sourceFamily('statement'), 'statement');
+  assert.equal(sourceFamily('imported'), 'imported');
+  const match = evaluateDuplicate({ ...base, source: 'imported' }, { ...base, source: 'statement' });
+  assert.ok(match);
+  assert.deepEqual(match.sourceFamilies.sort(), ['imported', 'statement']);
+});
+
+test('overlapping screenshot imports with different files still match row-level duplicates', () => {
+  const match = evaluateDuplicate(
+    { ...base, source: 'imported' },
+    { ...base, source: 'imported', occurred: '2026-09-09T10:04:00.000Z' },
+  );
+  assert.ok(match);
+  assert.deepEqual(match.sourceFamilies, ['imported', 'imported']);
+});
+
 test('same purchase from SMS and email clears the review threshold', () => {
   const match = evaluateDuplicate(base, {
     ...base,

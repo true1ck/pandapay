@@ -12,6 +12,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/import_repository.dart';
 import '../../data/pdf_statement_parser.dart';
+import '../../data/pdf_statement_ocr.dart';
 import '../../main.dart' show MoneyText;
 
 enum _Step { pickFile, password, parsing, preview, done, error }
@@ -90,7 +91,22 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
     try {
       final password = _passwordController.text.trim().isEmpty ? null : _passwordController.text.trim();
       final text = await Future(() => PdfStatementReader().extractText(bytes, password: password));
-      final parsed = parseStatementText(text);
+      var parsed = parseStatementText(text);
+      if (parsed.transactions.isEmpty) {
+        // A large number of bank statements are image-only PDFs. Try the
+        // same local ML Kit engine used by the card scanner after rendering
+        // each page on-device; raw PDF bytes and OCR text are never uploaded.
+        final ocr = PdfStatementOcr();
+        try {
+          final ocrText = await ocr.extractText(bytes);
+          parsed = parseStatementText(ocrText);
+        } catch (_) {
+          // Keep the user-facing message below actionable and independent of
+          // platform/plugin exception details.
+        } finally {
+          await ocr.dispose();
+        }
+      }
       if (!mounted) return;
       if (parsed.transactions.isEmpty) {
         setState(() {
@@ -144,6 +160,7 @@ class _StatementPdfImportScreenState extends ConsumerState<StatementPdfImportScr
         // "list each detected transaction for review" is satisfied by the
         // preview list below, not a per-row accept/reject control).
         reconciledCount: spends.length,
+        importSource: 'statement',
         importKey: sha256.convert(fileBytes).toString(),
         transactions: [
           for (final transaction in spends)

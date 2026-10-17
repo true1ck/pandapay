@@ -58,6 +58,7 @@ import '../features/sync/sync_engine.dart';
 import '../features/settings/account_settings_screen.dart'
     show biometricLockProvider;
 import '../features/system/biometric_lock_screen.dart';
+import '../features/system/biometric_setup_prompt.dart';
 import '../features/system/forced_upgrade_screen.dart';
 import '../features/system/maintenance_screen.dart';
 import '../features/tools/emergency_card_info_screen.dart';
@@ -941,6 +942,12 @@ class _AppShellState extends ConsumerState<_AppShell> {
     // Plan Phase 4 — pushes queued local edits and pulls other devices'
     // changes on sign-in and on regaining connectivity.
     ref.watch(syncLifecycleProvider);
+    // Keep the persistent display snapshot fresh even when the user is on
+    // Wallet/Insights/You rather than Home. Secondary screens can therefore
+    // render their last local snapshot offline and receive a background
+    // refresh when the app resumes or connectivity returns.
+    ref.watch(displayDataSyncLifecycleProvider);
+    ref.watch(homeDataRefreshProvider);
     // UA-8.3 (B3) — the trigger sweep for caps/milestones/fee-waivers/bills/
     // points-expiry/monthly-report/needs-review notifications. Same "read
     // once from the shell" reasoning as everything else on this list.
@@ -979,6 +986,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
           // and the bar. Each tab pays the clearance itself as bottom scroll
           // padding — AppShell.navClearance.
           widget.child,
+          const BiometricSetupPrompt(),
           if (showTutorial) const TutorialOverlay(),
           // `bottom: 26` measured from the physical bottom of the 390×844
           // frame, exactly as the mockup positions it — NOT 26 above the
@@ -1014,7 +1022,8 @@ class _AppShellState extends ConsumerState<_AppShell> {
             bottom: 104,
             child: ValueListenableBuilder<bool>(
               valueListenable: _shellStackNotEmpty,
-              builder: (context, pushedOnTop, child) => pushedOnTop ? const SizedBox.shrink() : child!,
+              builder: (context, pushedOnTop, child) =>
+                  pushedOnTop ? const SizedBox.shrink() : child!,
               child: FloatingActionButton(
                 heroTag: 'voiceCapture',
                 mini: true,

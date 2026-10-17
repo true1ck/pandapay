@@ -353,7 +353,7 @@ void main() {
   );
 
   testWidgets('switching period refetches for that period', (tester) async {
-    final requested = <SpendPeriod>[];
+    final requested = <SpendReportQuery>[];
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -366,10 +366,38 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(requested, [SpendPeriod.month], reason: 'month is the default');
+    expect(requested, [
+      const SpendReportQuery.preset(SpendPeriod.month),
+    ], reason: 'month is the default');
 
     await tester.tap(find.text('This week'));
     await tester.pumpAndSettle();
-    expect(requested, contains(SpendPeriod.week));
+    expect(
+      requested,
+      contains(const SpendReportQuery.preset(SpendPeriod.week)),
+    );
+  });
+
+  testWidgets('custom dates are shown as the selected range', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => SpendReportQuery.custom(
+              from: DateTime(2026, 8, 3),
+              to: DateTime(2026, 8, 14),
+            ),
+          ),
+          spendReportProvider.overrideWith((ref, query) async => _report()),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => const [],
+          ),
+        ],
+        child: const MaterialApp(home: SpendTrendsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aug 3 – Aug 14'), findsOneWidget);
   });
 }

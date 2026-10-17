@@ -65,7 +65,12 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
   final earliestCycleStart = DateTime(now.year, now.month - 2, 1);
   final transactions = repo == null
       ? const <TransactionEntry>[]
-      : await repo.fetchTransactions(from: earliestCycleStart);
+      : await loadTransactionsWithOfflineCache(
+          ref,
+          repo: repo,
+          cacheKey: 'transactions:payments_due',
+          from: earliestCycleStart,
+        );
 
   final rows = <DuePayment>[];
   for (final card in active) {

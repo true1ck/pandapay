@@ -346,7 +346,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              'Logged ${Money.fromRupees(amount).format()} spend',
+              'Logged ${Money.fromRupees(amount).format()} ${_entryKind == TxnEntryKind.income ? 'income' : 'spend'}',
             ),
             action: SnackBarAction(
               label: 'Undo',
@@ -478,7 +478,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                decoration: inputDecoration('Amount', prefix: '₹ ', error: _amountError),
+                decoration: inputDecoration(
+                  _entryKind == TxnEntryKind.income ? 'Amount credited' : 'Amount',
+                  prefix: '₹ ',
+                  error: _amountError,
+                ),
                 onChanged: (_) => setState(() => _amountError = null),
               ),
               const SizedBox(height: AppSpace.md),
@@ -487,7 +491,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 focusNode: _merchantFocusNode,
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                 decoration: inputDecoration(
-                  'Merchant (optional)',
+                  _entryKind == TxnEntryKind.income ? 'Received from (optional)' : 'Merchant (optional)',
                   suffixIcon: _merchantSearching
                       ? const Padding(
                           padding: EdgeInsets.all(12),

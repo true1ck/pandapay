@@ -67,6 +67,7 @@ class _RecordingImportRepository extends ImportRepository {
     required int txnCount,
     required int reconciledCount,
     String? issuerFormatId,
+    String importSource = 'statement',
     required String importKey,
     required List<StatementTransactionInput> transactions,
   }) async {
