@@ -39,6 +39,39 @@ void main() {
   );
 
   test(
+    'can recover a request when the live access token is temporarily missing',
+    () async {
+      var requests = 0;
+      final client = AuthenticatedHttpClient(
+        currentAccessToken: () => null,
+        refreshAccessToken: () async => 'restored-token',
+        inner: MockClient((request) async {
+          requests++;
+          if (requests == 1) {
+            expect(request.headers['authorization'], isNull);
+            return http.Response(
+              jsonEncode({'error': 'Missing or invalid access token'}),
+              401,
+            );
+          }
+          expect(request.headers['authorization'], 'Bearer restored-token');
+          return http.Response('ok', 200);
+        }),
+      );
+
+      final response = await client.patch(
+        Uri.parse('https://api.example.test/transactions/t1'),
+        headers: {'Authorization': 'Bearer stale-token'},
+        body: '{}',
+      );
+
+      expect(response.statusCode, 200);
+      expect(requests, 2);
+      client.close();
+    },
+  );
+
+  test(
     'shares one refresh when multiple requests receive 401 together',
     () async {
       var refreshes = 0;

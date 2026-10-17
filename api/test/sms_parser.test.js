@@ -213,6 +213,47 @@ test('credit-card bill payment receipts become transfers, not spending', () => {
   assert.equal(result.fields.entryKind, 'transfer');
 });
 
+test('bank-account credits become incoming income entries', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Your HDFC Bank A/c XX1797 is credited with Rs. 45,000.00 by SALARY on 30-09-26. UTR 123456789012. Avl Bal Rs. 98,000.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'builtin_account_credit');
+  assert.equal(result.fields.amountInr, 45000);
+  assert.equal(result.fields.entryKind, 'income');
+  assert.equal(result.fields.instrument, 'upi_bank');
+  assert.equal(result.fields.accountLast4, '1797');
+  assert.equal(result.fields.merchant, 'Salary');
+  assert.equal(result.fields.reference, '123456789012');
+});
+
+test('refunds and cashbacks are incoming, while credit-card bill receipts stay transfers', () => {
+  const refund = parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'Refund of Rs. 250 received in your savings account ending 5799 from AMAZON on 02-10-26.',
+  });
+  assert.equal(refund.ok, true);
+  assert.equal(refund.fields.entryKind, 'income');
+  assert.equal(refund.fields.merchant, 'Refund');
+
+  const cashback = parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'Cashback of INR 80 credited to your wallet on 03-10-26.',
+  });
+  assert.equal(cashback.ok, true);
+  assert.equal(cashback.fields.entryKind, 'income');
+  assert.equal(cashback.fields.instrument, 'wallet');
+});
+
+test('credit-limit and balance notices are not treated as incoming money', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'Your account credit limit is Rs. 50,000. Available balance is Rs. 12,000.',
+  });
+  assert.equal(result.ok, false);
+});
+
 test('an actual purchase on a credit card remains spend', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'HDFCBK',

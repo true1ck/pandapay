@@ -166,6 +166,76 @@ void main() {
       final result = engine.rank(ctx, [snapshot]).first;
       expect(result.expectedValue, Money.fromRupees(1000) * 0.01);
     });
+
+    test('ranking prefers a lower headline card when the higher rate cap is exhausted', () {
+      final capped = _cashbackCard(
+        id: 'capped-10',
+        rate: 10,
+        caps: [
+          CapRule(
+            id: 'cap-10',
+            rewardRuleId: 'capped-10-rule',
+            label: '10% cashback cap',
+            capValue: Money.fromRupees(4000),
+            measure: CapMeasure.rewardValue,
+            period: CapPeriod.quarter,
+            postCapUnit: RewardUnit.cashbackPercent,
+            postCapRate: 1,
+          ),
+        ],
+      );
+      final steady = _cashbackCard(id: 'steady-5', rate: 5);
+
+      final results = engine.rank(
+        RecommendationContext(
+          amount: Money.fromRupees(1000),
+          rail: TxnRail.swipe,
+        ),
+        [
+          CardSnapshot(
+            product: capped,
+            capRemaining: {'cap-10': const Money.zero()},
+          ),
+          CardSnapshot(product: steady),
+        ],
+      );
+
+      expect(results.first.card.id, 'steady-5');
+      expect(results.first.expectedValue, Money.fromRupees(50));
+      expect(results.last.expectedValue, Money.fromRupees(10));
+    });
+
+    test('point rewards are ranked by their rupee value, not raw point count', () {
+      final pointsCard = CardProduct(
+        id: 'points-card',
+        name: 'points-card',
+        network: CardNetwork.visa,
+        pointValueInr: 0.25,
+        rewardRules: [
+          const RewardRule(
+            id: 'points-rule',
+            unit: RewardUnit.pointsPer100,
+            rate: 10,
+          ),
+        ],
+      );
+      final cashbackCard = _cashbackCard(id: 'cashback-3', rate: 3);
+
+      final results = engine.rank(
+        RecommendationContext(
+          amount: Money.fromRupees(1000),
+          rail: TxnRail.swipe,
+        ),
+        [
+          CardSnapshot(product: pointsCard),
+          CardSnapshot(product: cashbackCard),
+        ],
+      );
+
+      // 10 points/₹100 × ₹0.25 = ₹2.50 per ₹100 = 2.5% effective value.
+      expect(results.first.card.id, 'cashback-3');
+      expect(results.last.expectedValue, Money.fromRupees(25));
+    });
   });
 
   group('UA-2.2.3b cap blending — reward_value measure (Chunk 9 fix)', () {
@@ -434,6 +504,36 @@ void main() {
       expect(result.breakdown?.fuelWaiver, Money.fromRupees(10));
       expect(result.reasonLines.first, contains('Fuel surcharge waiver'));
     });
+
+    test('fuel waiver honours the advertised transaction band', () {
+      const fuelUuid = 'fuel-category-uuid';
+      final card = CardProduct(
+        id: 'axis-cb',
+        name: 'Axis Cashback',
+        network: CardNetwork.visa,
+        excludedCategoryIds: const [fuelUuid],
+        fuelRule: FuelSurchargeRule(
+          surchargePercent: 1.0,
+          waiverPercent: 1.0,
+          minTxn: Money.fromRupees(400),
+          maxTxn: Money.fromRupees(4000),
+        ),
+      );
+
+      Recommendation evaluate(double amount) => engine.rank(
+            RecommendationContext(
+              amount: Money.fromRupees(amount),
+              categoryId: fuelUuid,
+              categorySlug: 'fuel',
+              rail: TxnRail.swipe,
+            ),
+            [CardSnapshot(product: card)],
+          ).first;
+
+      expect(evaluate(400).expectedValue, const Money.zero());
+      expect(evaluate(401).expectedValue, Money.fromRupees(4.01));
+      expect(evaluate(4000).expectedValue, Money.fromRupees(40));
+      expect(evaluate(4001).expectedValue, const Money.zero());
+    });
   });
 }
-

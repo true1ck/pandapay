@@ -137,13 +137,21 @@ where cp.slug = 'axis-flipkart' and sc.slug = 'online'
   and not exists (select 1 from reward_rules r where r.card_product_id = cp.id and r.category_id = sc.id);
 
 insert into cap_rules (card_product_id, reward_rule_id, category_id, label, measure, period, cap_value, post_cap_unit, post_cap_rate)
-select cp.id, rr.id, sc.id, '5% on Flipkart/Myntra — capped at ₹4,000 cashback/statement',
-       'reward_value', 'statement_cycle', 4000, 'cashback_percent', 1.5
+select cp.id, rr.id, sc.id, '5% online cashback — capped at ₹4,000/quarter',
+       'reward_value', 'quarter', 4000, 'cashback_percent', 1.5
 from card_products cp
 join reward_rules rr on rr.card_product_id = cp.id
 join spend_categories sc on sc.id = rr.category_id and sc.slug = 'online'
 where cp.slug = 'axis-flipkart'
   and not exists (select 1 from cap_rules c where c.reward_rule_id = rr.id);
+
+insert into fuel_surcharge_rules (card_product_id, surcharge_percent, waiver_percent, min_txn_inr, max_txn_inr)
+select id, 1.0, 1.0, 400, 4000
+from card_products
+where slug = 'axis-flipkart'
+  and not exists (
+    select 1 from fuel_surcharge_rules f where f.card_product_id = card_products.id
+  );
 
 -- >>> Card 10: Axis Magnus — super-premium travel, high milestone ----------
 insert into card_products (

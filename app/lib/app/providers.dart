@@ -262,7 +262,7 @@ final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
       // spend profile is still a valid input for the catalogue recommender;
       // surfacing the auth transport error would blank the whole page.
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        return const [];
       }
       rethrow;
     }
@@ -871,7 +871,13 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       // their signed-in shell with a missing profile while the token refresh
       // is retried, instead of showing "Missing or invalid access token".
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        // A profile row is optional display metadata, not the account
+        // session itself. When the API rejects a stale access token and no
+        // profile snapshot exists yet, return null so You/settings can still
+        // render their local card and transaction data. Treating this as a
+        // page-fatal error made the whole tab look broken even though the
+        // account was still signed in locally and its cached data was safe.
+        return null;
       }
       rethrow;
     }
@@ -967,13 +973,13 @@ final spendReportProvider = FutureProvider.family<SpendReport?, SpendReportQuery
     } catch (error) {
       if (!_canUseReadCache(error)) {
         if (_isAuthenticationFailure(error)) {
-          throw const AuthenticationUnavailableException();
+          return null;
         }
         rethrow;
       }
       if (cached == null) {
         if (_isAuthenticationFailure(error)) {
-          throw const AuthenticationUnavailableException();
+          return null;
         }
         rethrow;
       }
@@ -1022,7 +1028,7 @@ final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
   } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        return const [];
       }
       rethrow;
     }
@@ -1066,7 +1072,7 @@ final recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
   } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        return null;
       }
       rethrow;
     }
@@ -1185,7 +1191,7 @@ Future<List<UserCard>> _loadUserCardsWithOfflineCache(
   } catch (error) {
     if (!_canUseStaleCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        return const [];
       }
       rethrow;
     }
@@ -1237,15 +1243,10 @@ class CardSpendSummary {
   final Money cycleTotal;
   final TransactionEntry? latestSpend;
 
-  const CardSpendSummary({
-    required this.cycleTotal,
-    required this.latestSpend,
-  });
+  const CardSpendSummary({required this.cycleTotal, required this.latestSpend});
 }
 
-final cardSpendSummaryProvider = Provider<Map<String, CardSpendSummary>>((
-  ref,
-) {
+final cardSpendSummaryProvider = Provider<Map<String, CardSpendSummary>>((ref) {
   final cardsValue = ref.watch(myCardsProvider);
   final transactionsValue = ref.watch(utilizationTransactionsProvider);
   final cards = cardsValue.valueOrNull ?? const <UserCard>[];
@@ -1341,6 +1342,7 @@ final cardOverridesProvider = FutureProvider<List<CardOverride>>((ref) async {
     }
     return overrides;
   } catch (error) {
+    if (isAuthenticationFailure(error)) return const [];
     if (!_canUseStaleCache(error)) rethrow;
     // Overrides are an enhancement to ranking, not a prerequisite for
     // showing the wallet. If this is the first signed-in request and there is
@@ -1482,7 +1484,9 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
       warm(ref.read(categorySpendProvider.future)),
       warm(
         ref.read(
-          spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)).future,
+          spendReportProvider(
+            const SpendReportQuery.preset(SpendPeriod.month),
+          ).future,
         ),
       ),
       warm(ref.read(bankAccountSummariesProvider.future)),
@@ -1998,7 +2002,7 @@ final loungeUsageProvider = FutureProvider<List<LoungeVisit>>((ref) async {
   } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        return const [];
       }
       rethrow;
     }
@@ -2044,6 +2048,7 @@ final pointsLedgerProvider =
         } catch (_) {}
         return entries;
       } catch (error) {
+        if (isAuthenticationFailure(error)) return const [];
         if (!_canUseReadCache(error) || cached == null) rethrow;
         try {
           return decode(cached);
@@ -2088,7 +2093,7 @@ final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((
   } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        return null;
       }
       rethrow;
     }
@@ -2145,6 +2150,7 @@ final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
     }
     return summary;
   } catch (error) {
+    if (isAuthenticationFailure(error)) return null;
     if (!_canUseStaleCache(error)) rethrow;
     if (cached == null) rethrow;
     return HomeSummary.fromJson(
@@ -2155,59 +2161,64 @@ final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
 
 /// Bank-account snapshots derived from SMS observations. Empty when signed
 /// out or when no imported SMS has exposed a masked source account yet.
-final bankAccountSummariesProvider =
-    FutureProvider<List<BankAccountSummary>>((ref) async {
-      final repo = ref.watch(userCardsRepositoryProvider);
-      if (repo == null) return const [];
-      const cacheKey = 'bank_account_summaries';
-      final cache = await _cacheOrNull(ref);
-      final key = _scopedCacheKey(ref, cacheKey);
-      final cached = await _readCacheOrNull(ref, cache, key);
-      List<BankAccountSummary> decode(CachedResponse snapshot) =>
-          ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['accounts']
-                  as List)
-              .cast<Map<String, dynamic>>()
-              .map(BankAccountSummary.fromJson)
-              .toList();
+final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
+  ref,
+) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  if (repo == null) return const [];
+  const cacheKey = 'bank_account_summaries';
+  final cache = await _cacheOrNull(ref);
+  final key = _scopedCacheKey(ref, cacheKey);
+  final cached = await _readCacheOrNull(ref, cache, key);
+  List<BankAccountSummary> decode(CachedResponse snapshot) =>
+      ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['accounts']
+              as List)
+          .cast<Map<String, dynamic>>()
+          .map(BankAccountSummary.fromJson)
+          .toList();
 
-      if (_isKnownOffline() && cached != null) return decode(cached);
-      try {
-        final accounts = await repo
-            .fetchBankAccountSummaries()
-            .timeout(_homeRequestTimeout);
-        try {
-          await cache?.put(
-            key,
-            jsonEncode({
-              'accounts': accounts
-                  .map(
-                    (account) => {
-                      'accountLast4': account.accountLast4,
-                      'availableBalanceInr': account.availableBalance?.rupees,
-                      'latestSmsAt': account.latestSmsAt?.toIso8601String(),
-                      'smsCount': account.smsCount,
-                    },
-                  )
-                  .toList(),
-            }),
-          );
-        } catch (_) {}
-        return accounts;
-      } catch (error) {
+  if (_isKnownOffline() && cached != null) return decode(cached);
+  try {
+    final accounts = await repo.fetchBankAccountSummaries().timeout(
+      _homeRequestTimeout,
+    );
+    try {
+      await cache?.put(
+        key,
+        jsonEncode({
+          'accounts': accounts
+              .map(
+                (account) => {
+                  'accountLast4': account.accountLast4,
+                  'availableBalanceInr': account.availableBalance?.rupees,
+                  'latestSmsAt': account.latestSmsAt?.toIso8601String(),
+                  'smsCount': account.smsCount,
+                  'issuerSlug': account.issuerSlug,
+                  'issuerName': account.issuerName,
+                  'issuerShortName': account.issuerShortName,
+                  'issuerLogoUrl': account.issuerLogoUrl,
+                },
+              )
+              .toList(),
+        }),
+      );
+    } catch (_) {}
+    return accounts;
+  } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        return const [];
       }
       rethrow;
     }
-        try {
-          return decode(cached);
-        } catch (_) {
-          await cache?.clear(key);
-          rethrow;
-        }
-      }
-    });
+    try {
+      return decode(cached);
+    } catch (_) {
+      await cache?.clear(key);
+      rethrow;
+    }
+  }
+});
 
 /// Design 19's notification inbox. Empty (not an error) when signed out —
 /// the inbox lives server-side, so guest mode simply has none.
@@ -2252,6 +2263,9 @@ final notificationsProvider =
         } catch (_) {}
         return inbox;
       } catch (error) {
+        if (isAuthenticationFailure(error)) {
+          return (items: const <AppNotification>[], unreadCount: 0);
+        }
         if (!_canUseReadCache(error) || cached == null) rethrow;
         try {
           return decode(cached);
@@ -2386,6 +2400,7 @@ final contributionNetworkStatsProvider =
         } catch (_) {}
         return stats;
       } catch (error) {
+        if (isAuthenticationFailure(error)) return null;
         if (!_canUseReadCache(error) || cached == null) rethrow;
         return decodeCached();
       }
@@ -2740,6 +2755,11 @@ const _homeRequestTimeout = Duration(seconds: 15);
 const _spendReportCacheKey = 'spend_report';
 const _transactionsCacheKey = 'transactions';
 
+// A report may be opened by more than one surface while the app is syncing.
+// Keep one quiet refresh per cache key so local-first rendering never creates
+// a burst of identical network requests.
+final _backgroundTransactionRefreshes = <String, Future<void>>{};
+
 String _cacheDate(DateTime value) => value.toIso8601String();
 
 DateTime _spendReportBucket(SpendPeriod period, DateTime now) {
@@ -2774,10 +2794,18 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   String? categoryId,
   String? source,
   String? query,
+  bool preferCached = false,
+  FutureOr<void> Function()? onBackgroundRefresh,
 }) async {
   final key = _scopedCacheKey(ref, cacheKey);
   final cache = await _cacheOrNull(ref);
   final cached = await _readCacheOrNull(ref, cache, key);
+  // UserCardsRepository.fetchTransactions() takes inclusive calendar dates.
+  // Keep the cache filter on the same contract instead of accidentally
+  // dropping the whole final day when [to] is midnight.
+  final toExclusive = to == null
+      ? null
+      : DateTime(to.year, to.month, to.day + 1);
   final allTransactionsCached = cached == null
       ? await _readCacheOrNull(
           ref,
@@ -2797,7 +2825,10 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
         .toList();
     return rows.where((transaction) {
       if (from != null && transaction.occurredAt.isBefore(from)) return false;
-      if (to != null && !transaction.occurredAt.isBefore(to)) return false;
+      if (toExclusive != null &&
+          !transaction.occurredAt.isBefore(toExclusive)) {
+        return false;
+      }
       if (cardId != null && transaction.userCardId != cardId) return false;
       if (categoryId != null && transaction.categoryId != categoryId) {
         return false;
@@ -2812,12 +2843,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     }).toList();
   }
 
-  // Interface loss is a known offline state. Use the local snapshot
-  // immediately instead of waiting for a mobile socket timeout.
-  if (_isKnownOffline() && (cached != null || allTransactionsCached != null)) {
-    return decodeCached(cached ?? allTransactionsCached);
-  }
-  try {
+  Future<List<TransactionEntry>> fetchAndCache() async {
     final transactions = await repo.fetchTransactions(
       from: from,
       to: to,
@@ -2839,21 +2865,58 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
       // A cache write must never turn a successful online read into an error.
     }
     return transactions;
+  }
+
+  final cachedSnapshot = cached ?? allTransactionsCached;
+
+  // Insights can calculate the whole visible report from this snapshot. Show
+  // it immediately and refresh quietly in the background, so a server round
+  // trip cannot replace stable content with a skeleton. The freshness window
+  // prevents the refresh callback from causing an invalidate loop.
+  if (preferCached && cachedSnapshot != null) {
+    final age = DateTime.now().difference(cachedSnapshot.fetchedAt);
+    if (age >= const Duration(seconds: 15) &&
+        !_backgroundTransactionRefreshes.containsKey(key)) {
+      final backgroundRefresh = fetchAndCache()
+          .then((_) async {
+            if (onBackgroundRefresh != null) {
+              await onBackgroundRefresh();
+            }
+          })
+          // Background refresh is best-effort; the cached report remains the
+          // valid fallback when the network is unavailable.
+          .catchError((_) {})
+          .whenComplete(() {
+            _backgroundTransactionRefreshes.remove(key);
+          });
+      _backgroundTransactionRefreshes[key] = backgroundRefresh;
+      unawaited(backgroundRefresh);
+    }
+    return decodeCached(cachedSnapshot);
+  }
+
+  // Interface loss is a known offline state. Use the local snapshot
+  // immediately instead of waiting for a mobile socket timeout.
+  if (_isKnownOffline() && cachedSnapshot != null) {
+    return decodeCached(cachedSnapshot);
+  }
+  try {
+    return await fetchAndCache();
   } catch (error) {
     if (!_canUseReadCache(error)) {
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        return const [];
       }
       rethrow;
     }
-    if (cached == null && allTransactionsCached == null) {
+    if (cachedSnapshot == null) {
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        return const [];
       }
       rethrow;
     }
     try {
-      return await decodeCached(cached ?? allTransactionsCached);
+      return await decodeCached(cachedSnapshot);
     } catch (_) {
       // A partial/corrupt local row should be discarded rather than trapping
       // every future request in the same parse failure.
@@ -2883,7 +2946,8 @@ Future<TransactionEntry?> cachedTransactionById(Ref ref, String id) async {
   if (snapshot == null) return null;
   try {
     final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
-    for (final raw in (body['transactions'] as List).cast<Map<String, dynamic>>()) {
+    for (final raw
+        in (body['transactions'] as List).cast<Map<String, dynamic>>()) {
       final entry = TransactionEntry.fromJson(raw);
       if (entry.id == id) return entry;
     }

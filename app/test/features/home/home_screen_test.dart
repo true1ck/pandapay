@@ -186,11 +186,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Expand card A (currently at rank 0) — both cards have a toggle, so
-      // scope to the first one found (rank order == visual top-to-bottom
-      // order, so this is card A's).
-      await tester.ensureVisible(find.text('Why this card?').first);
-      await tester.tap(find.text('Why this card?').first);
+      // The ranked list is collapsed by default. Open it before exercising
+      // the per-card expansion state.
+      await tester.ensureVisible(find.text('Show 1 more card'));
+      await tester.tap(find.text('Show 1 more card'));
+      await tester.pumpAndSettle();
+
+      // Expand card A (currently at rank 0) — scope to the first toggle found
+      // (rank order == visual top-to-bottom order, so this is card A's).
+      final cardAWhy = find.byKey(const ValueKey('why-card-a'));
+      await tester.ensureVisible(cardAWhy);
+      await tester.tap(cardAWhy);
       await tester.pumpAndSettle();
       expect(find.textContaining('A reason two'), findsOneWidget);
 

@@ -76,7 +76,7 @@ function isAmbiguousAccountDebit(body) {
 // masked identifier; the full account number is never stored or inferred.
 function extractAccountLast4(body) {
   const match = String(body || '').match(
-    /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*(\d{4})\b/i,
+    /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX-]*\s*(\d{4})\b/i,
   );
   return match ? match[1] : null;
 }
@@ -145,6 +145,63 @@ function parseBuiltInAccountTransfer(sms) {
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       instrument: 'upi_bank',
       entryKind: 'transfer',
+    }, body),
+  };
+}
+
+// Bank-account credit alerts are the incoming counterpart to the debit
+// parsers above. Keep this deliberately conservative: a positive credit must
+// be explicit, tied to an account/bank (or a named refund/cashback), and must
+// not mention a credit-card bill. This prevents balances, card offers, and
+// generic "credit" language from becoming fake income.
+function parseBuiltInAccountCredit(sms) {
+  const body = String(sms?.body || '');
+  if (isSecurityOrOtpMessage(body)) return { ok: false, reason: 'security_message' };
+  if (/\b(?:credit|debit)\s+card\b/i.test(body)) {
+    return { ok: false, reason: 'credit_card_message' };
+  }
+
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_account_credit_match' };
+
+  const incomingMarker = /\b(?:credited|received|deposited|deposit|salary|cashback|refund(?:ed)?|reversal)\b/i.test(body);
+  const accountEvidence = /\b(?:a\/?c\.?|account|savings|bank|wallet)\b/i.test(body);
+  const namedIncoming = /\b(?:money|amount|payment|funds?)\b[\s\S]{0,40}\b(?:received|credited|deposited)\b/i.test(body);
+  if (!incomingMarker || (!accountEvidence && !namedIncoming)) {
+    return { ok: false, reason: 'no_account_credit_match' };
+  }
+
+  // A balance announcement is not itself an incoming transaction.
+  if (/\b(?:available|closing|current|available\s+balance|bal(?:ance)?)\b[\s\S]{0,30}\b(?:is|:|of)\b/i.test(body)
+      && !/\b(?:credited|received|deposited|salary|cashback|refund|reversal)\b/i.test(body)) {
+    return { ok: false, reason: 'balance_only_alert' };
+  }
+
+  const accountLast4 = extractAccountLast4(body);
+  const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?|utr)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
+  const partyMatch = body.match(/\b(?:from|by|via)\s+([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:on|for|ref(?:erence)?|txn|utr|a\/?c\.?|account|bal(?:ance)?|avl|available)\b|[.,;]|$)/i);
+  const lower = body.toLowerCase();
+  const merchant = /\bsalary\b/i.test(body)
+    ? 'Salary'
+    : /\bcashback\b/i.test(body)
+      ? 'Cashback'
+      : /\brefund(?:ed)?\b/i.test(body)
+        ? 'Refund'
+        : partyMatch?.[1]?.trim() || 'Money received';
+
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: 'builtin_account_credit',
+    fields: withAvailableBalance({
+      amountInr: Number(amountMatch[1].replace(/,/g, '')),
+      merchant,
+      ...(accountLast4 ? { accountLast4 } : {}),
+      ...(dateMatch ? { date: dateMatch[1] } : {}),
+      ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
+      instrument: /\b(?:wallet|cashback)\b/i.test(lower) ? 'wallet' : 'upi_bank',
+      entryKind: 'income',
     }, body),
   };
 }
@@ -582,6 +639,8 @@ function parseSmsAgainstPatterns(patterns, sms) {
   // receipt is intentionally retained as a non-spend transfer.
   const billPayment = parseBuiltInCardBillPayment(sms);
   if (billPayment.ok) return billPayment;
+  const accountCredit = parseBuiltInAccountCredit(sms);
+  if (accountCredit.ok) return accountCredit;
   if (isRejectedTransaction(sms?.body)) {
     return { ok: false, reason: 'not_a_successful_spend' };
   }
@@ -751,6 +810,7 @@ module.exports = {
   parseSmsAgainstPatterns,
   parseConservativeBankSpend,
   parseBuiltInCardBillPayment,
+  parseBuiltInAccountCredit,
   senderMatches,
   redactSmsShape,
   parseTransactionDate,

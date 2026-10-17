@@ -2,10 +2,39 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  boundingBox,
   buildOverpassQuery,
+  categoryForPlaceSearchResult,
   createNearbyDiscovery,
+  parsePlaceSearchResults,
   parseOverpassElements,
 } = require('../src/nearby_discovery');
+
+test('builds a bounded search box for a location-biased manual lookup', () => {
+  const box = boundingBox({ lat: 15.49, lng: 73.83, radiusM: 2000 });
+  const parts = box.split(',').map(Number);
+  assert.equal(parts.length, 4);
+  assert.ok(parts[0] < 73.83 && parts[2] > 73.83);
+  assert.ok(parts[1] > 15.49 && parts[3] < 15.49);
+});
+
+test('normalizes manual petrol-pump search results as unverified fuel candidates', () => {
+  const result = parsePlaceSearchResults([
+    {
+      osm_type: 'node',
+      osm_id: 7,
+      name: 'Example Petrol Pump',
+      display_name: 'Example Petrol Pump, Panaji, India',
+      lat: '15.49',
+      lon: '73.83',
+      type: 'fuel',
+    },
+  ], { query: 'petrol pump' });
+  assert.equal(result.length, 1);
+  assert.equal(result[0].category_id, 'fuel');
+  assert.equal(result[0].source, 'osm_search_candidate');
+  assert.equal(categoryForPlaceSearchResult({ type: 'fuel' }, 'test'), 'fuel');
+});
 
 test('builds a location-scoped free discovery query', () => {
   const query = buildOverpassQuery({ lat: 15.49, lng: 73.83, radiusM: 2000, categoryId: 'fuel' });
@@ -69,6 +98,39 @@ test('coalesces concurrent searches and reuses the location cache', async () => 
   currentTime += 10 * 60 * 1000 + 1;
   await provider.discover(args);
   assert.equal(calls, 2);
+});
+
+test('fails over to the next Overpass provider after a provider error', async () => {
+  const calls = [];
+  const provider = createNearbyDiscovery({
+    endpoints: ['https://first.test/interpreter', 'https://second.test/interpreter'],
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url.includes('first')) return { ok: false, status: 503 };
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            elements: [{
+              type: 'node',
+              id: 10,
+              lat: 15.49,
+              lon: 73.83,
+              tags: { name: 'Fallback Fuel', amenity: 'fuel' },
+            }],
+          };
+        },
+      };
+    },
+  });
+
+  const result = await provider.discover({ lat: 15.49, lng: 73.83, radiusM: 2000 });
+  assert.equal(result[0].display_name, 'Fallback Fuel');
+  assert.deepEqual(calls, [
+    'https://first.test/interpreter',
+    'https://second.test/interpreter',
+  ]);
 });
 
 test('rejects invalid radius before contacting the provider', async () => {

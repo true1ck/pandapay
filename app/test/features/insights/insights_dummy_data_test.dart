@@ -34,7 +34,10 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   }) async =>
       transactions.where((t) {
         if (from != null && t.occurredAt.isBefore(from)) return false;
-        if (to != null && !t.occurredAt.isBefore(to)) return false;
+        if (to != null &&
+            !t.occurredAt.isBefore(DateTime(to.year, to.month, to.day + 1))) {
+          return false;
+        }
         return true;
       }).toList();
 
@@ -154,6 +157,33 @@ void main() {
     final c = await _container(_thisMonth);
     final o = await c.read(insightsOverviewProvider(InsightsPeriod.lastMonth).future);
     expect(o.transactionCount, 0);
+  });
+
+  test('calendar presets use Monday weeks, calendar quarters, and years', () {
+    final now = DateTime(2026, 8, 15);
+    expect(InsightsPeriod.week.range(now), (
+      DateTime(2026, 8, 10),
+      DateTime(2026, 8, 17),
+    ));
+    expect(InsightsPeriod.thisQuarter.range(now), (
+      DateTime(2026, 7, 1),
+      DateTime(2026, 10, 1),
+    ));
+    expect(InsightsPeriod.thisYear.range(now), (
+      DateTime(2026, 1, 1),
+      DateTime(2027, 1, 1),
+    ));
+  });
+
+  test('custom Insights dates include the selected end date', () async {
+    final c = await _container(_thisMonth);
+    c.read(insightsCustomRangeProvider.notifier).state = InsightsDateRange(
+      from: DateTime(2026, 8, 3),
+      to: DateTime(2026, 8, 8),
+    );
+    final o = await c.read(insightsOverviewProvider(InsightsPeriod.custom).future);
+    expect(o.transactionCount, 2);
+    expect(o.spend, Money.fromRupees(7000));
   });
 
   test('excludes active income from spending and rewards totals', () async {

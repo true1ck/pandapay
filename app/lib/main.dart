@@ -305,6 +305,10 @@ class MoneyText extends ConsumerWidget {
   final Confidence confidence;
   final TextStyle? style;
 
+  /// Optional sign or symbol rendered as part of the accessible money value,
+  /// for example "+₹4,500" for incoming money or "−₹850" for spending.
+  final String? prefix;
+
   /// Trailing words that belong to the figure and must wrap/ellipsize with
   /// it — "₹1,842 earned", "₹24,180 all-time ›". Set here rather than as a
   /// sibling `Text` so the whole phrase stays one line box, and so the
@@ -328,6 +332,7 @@ class MoneyText extends ConsumerWidget {
     super.key,
     required this.confidence,
     this.style,
+    this.prefix,
     this.suffix,
     this.showConfidenceIcon = true,
     this.hidePaise = false,
@@ -337,7 +342,7 @@ class MoneyText extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final baseStyle = style ?? Theme.of(context).textTheme.titleMedium;
     final numberFormat = ref.watch(numberFormatProvider);
-    final formatted = '${amount.format(format: numberFormat, hidePaise: hidePaise)}${suffix ?? ''}';
+    final formatted = '${prefix ?? ''}${amount.format(format: numberFormat, hidePaise: hidePaise)}${suffix ?? ''}';
 
     // One Semantics wrapper here covers every money figure in the app —
     // 40+ call sites — rather than each screen remembering to label its

@@ -16,7 +16,7 @@ import '../auth/login_screen.dart';
 
 /// D1 Transaction List (ui-spec Group D, implementation-plan-group-c-d.md)
 /// — extends the original flat list (UA-3+/Chunk 18) with date grouping,
-/// card/category filters, a spend summary for whatever's currently
+/// card/category/type filters, a money-in/money-out summary for whatever's currently
 /// filtered in, tap-through to D2 Transaction Detail, and free-text search
 /// over merchant and note (`GET /transactions?q=`, debounced — see
 /// [_SearchField]). Search was previously flagged here as a real gap
@@ -41,7 +41,7 @@ class ActivityScreen extends ConsumerWidget {
     if (token == null) return const LoginScreen();
 
     final filter = ref.watch(_activityFilterProvider);
-    final transactions = ref.watch(_filteredTransactionsProvider);
+    final transactions = ref.watch(activityTransactionsProvider);
 
     return AppBackground(
       child: Column(
@@ -63,7 +63,7 @@ class ActivityScreen extends ConsumerWidget {
           ),
           OfflineBanner(
             gutter: AppSpace.lg,
-            onRetry: () => ref.invalidate(_filteredTransactionsProvider),
+          onRetry: () => ref.invalidate(activityTransactionsProvider),
           ),
           Expanded(
             child: transactions.when(
@@ -75,7 +75,7 @@ class ActivityScreen extends ConsumerWidget {
               ),
               error: (err, _) => ErrorState(
                 message: userFacingErrorMessage(err),
-                onRetry: () => ref.invalidate(_filteredTransactionsProvider),
+              onRetry: () => ref.invalidate(activityTransactionsProvider),
               ),
               data: (entries) {
                 if (entries.isEmpty) {
@@ -90,8 +90,13 @@ class ActivityScreen extends ConsumerWidget {
                   );
                 }
                 final grouped = _groupByDay(entries);
-                final spendEntries = entries.where(_isSpendEntry).toList();
-                final totalSpend = spendEntries.fold<Money>(
+                final incomingEntries = entries.where(_isMoneyInEntry).toList();
+                final outgoingEntries = entries.where(_isMoneyOutEntry).toList();
+                final totalIncoming = incomingEntries.fold<Money>(
+                  const Money.zero(),
+                  (a, e) => a + e.amount,
+                );
+                final totalOutgoing = outgoingEntries.fold<Money>(
                   const Money.zero(),
                   (a, e) => a + e.amount,
                 );
@@ -105,8 +110,9 @@ class ActivityScreen extends ConsumerWidget {
                   ),
                   children: [
                     _SummaryCard(
-                      totalSpend: totalSpend,
-                      count: spendEntries.length,
+                      totalIncoming: totalIncoming,
+                      totalOutgoing: totalOutgoing,
+                      count: entries.length,
                     ),
                     const SizedBox(height: AppSpace.lg),
                     for (final group in grouped) ...[
@@ -125,7 +131,10 @@ class ActivityScreen extends ConsumerWidget {
                           padding: const EdgeInsets.only(bottom: AppSpace.sm),
                           child: _TransactionTile(
                             entry,
-                            onTap: () => context.push('/activity/${entry.id}'),
+                            onTap: () => context.push(
+                              '/activity/${entry.id}',
+                              extra: entry,
+                            ),
                           ),
                         ),
                       const SizedBox(height: AppSpace.sm),
@@ -177,9 +186,15 @@ class ActivityScreen extends ConsumerWidget {
     return '${day.day} ${months[day.month - 1]} ${day.year}';
   }
 
-  static bool _isSpendEntry(TransactionEntry entry) =>
+  static bool _isMoneyInEntry(TransactionEntry entry) =>
       entry.status == 'active' &&
-      entry.entryKind == TxnEntryKind.spend &&
+      entry.entryKind == TxnEntryKind.income &&
+      entry.amount.paise > 0;
+
+  static bool _isMoneyOutEntry(TransactionEntry entry) =>
+      entry.status == 'active' &&
+      (entry.entryKind == TxnEntryKind.spend ||
+          entry.entryKind == TxnEntryKind.investment) &&
       entry.amount.paise > 0;
 }
 
@@ -204,6 +219,7 @@ class ActivityFilter {
   /// documented gap rather than a box that quietly searched the last 50
   /// transactions.
   final String? query;
+  final _ActivityTypeFilter type;
 
   const ActivityFilter({
     this.cardId,
@@ -211,6 +227,7 @@ class ActivityFilter {
     this.from,
     this.to,
     this.query,
+    this.type = _ActivityTypeFilter.all,
   });
 
   bool get isActive =>
@@ -218,7 +235,10 @@ class ActivityFilter {
       categoryId != null ||
       from != null ||
       to != null ||
-      (query != null && query!.isNotEmpty);
+      (query != null && query!.isNotEmpty) ||
+      hasTypeFilter;
+
+  bool get hasTypeFilter => type != _ActivityTypeFilter.all;
 
   ActivityFilter copyWith({
     String? Function()? cardId,
@@ -226,6 +246,7 @@ class ActivityFilter {
     DateTime? Function()? from,
     DateTime? Function()? to,
     String? Function()? query,
+    _ActivityTypeFilter? type,
   }) {
     return ActivityFilter(
       cardId: cardId != null ? cardId() : this.cardId,
@@ -233,6 +254,7 @@ class ActivityFilter {
       from: from != null ? from() : this.from,
       to: to != null ? to() : this.to,
       query: query != null ? query() : this.query,
+      type: type ?? this.type,
     );
   }
 }
@@ -241,13 +263,13 @@ final _activityFilterProvider = StateProvider<ActivityFilter>(
   (ref) => const ActivityFilter(),
 );
 
-final _filteredTransactionsProvider = FutureProvider<List<TransactionEntry>>((
+final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   ref,
 ) async {
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   final filter = ref.watch(_activityFilterProvider);
-  return loadTransactionsWithOfflineCache(
+  final entries = await loadTransactionsWithOfflineCache(
     ref,
     repo: repo,
     cacheKey: 'transactions:activity',
@@ -257,7 +279,37 @@ final _filteredTransactionsProvider = FutureProvider<List<TransactionEntry>>((
     categoryId: filter.categoryId,
     query: filter.query,
   );
+  return entries.where((entry) => filter.type.matches(entry)).toList();
 });
+
+enum _ActivityTypeFilter { all, moneyIn, moneyOut, transfers, investments }
+
+extension on _ActivityTypeFilter {
+  String get label => switch (this) {
+    _ActivityTypeFilter.all => 'All activity',
+    _ActivityTypeFilter.moneyIn => 'Money in',
+    _ActivityTypeFilter.moneyOut => 'Money out',
+    _ActivityTypeFilter.transfers => 'Transfers',
+    _ActivityTypeFilter.investments => 'Investments',
+  };
+
+  bool matches(TransactionEntry entry) => switch (this) {
+    _ActivityTypeFilter.all => true,
+    _ActivityTypeFilter.moneyIn => entry.entryKind == TxnEntryKind.income,
+    _ActivityTypeFilter.moneyOut => entry.entryKind == TxnEntryKind.spend ||
+        entry.entryKind == TxnEntryKind.investment,
+    _ActivityTypeFilter.transfers => entry.entryKind == TxnEntryKind.transfer,
+    _ActivityTypeFilter.investments => entry.entryKind == TxnEntryKind.investment,
+  };
+}
+
+IconData _typeIcon(_ActivityTypeFilter type) => switch (type) {
+  _ActivityTypeFilter.all => Icons.receipt_long_outlined,
+  _ActivityTypeFilter.moneyIn => Icons.arrow_downward_rounded,
+  _ActivityTypeFilter.moneyOut => Icons.arrow_upward_rounded,
+  _ActivityTypeFilter.transfers => Icons.swap_horiz_rounded,
+  _ActivityTypeFilter.investments => Icons.trending_up_rounded,
+};
 
 /// D1's search box. Debounced, because every keystroke would otherwise be
 /// a round trip — and the ILIKE behind it scans, so a burst of them on a
@@ -349,6 +401,32 @@ class _FilterRow extends ConsumerWidget {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
+          _FilterChipButton(
+            label: filter.type.label,
+            active: filter.hasTypeFilter,
+            onTap: () async {
+              final picked = await showModalBottomSheet<_ActivityTypeFilter>(
+                context: context,
+                builder: (context) => ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final type in _ActivityTypeFilter.values)
+                      ListTile(
+                        leading: Icon(_typeIcon(type)),
+                        title: Text(type.label),
+                        selected: type == filter.type,
+                        onTap: () => Navigator.of(context).pop(type),
+                      ),
+                  ],
+                ),
+              );
+              if (picked != null) {
+                ref.read(_activityFilterProvider.notifier).state = filter
+                    .copyWith(type: picked);
+              }
+            },
+          ),
+          const SizedBox(width: AppSpace.xs),
           _FilterChipButton(
             label: filter.cardId == null
                 ? 'Card'
@@ -479,9 +557,14 @@ class _FilterChipButton extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  final Money totalSpend;
+  final Money totalIncoming;
+  final Money totalOutgoing;
   final int count;
-  const _SummaryCard({required this.totalSpend, required this.count});
+  const _SummaryCard({
+    required this.totalIncoming,
+    required this.totalOutgoing,
+    required this.count,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -495,32 +578,88 @@ class _SummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Text(
+            'All activity',
+            style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Row(
             children: [
-              Text(
-                'Spend',
-                style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+              Expanded(
+                child: _SummaryMetric(
+                  label: 'Money in',
+                  amount: totalIncoming,
+                  prefix: '+',
+                  color: BambooInk.jade,
+                ),
               ),
-              const SizedBox(height: 2),
-              MoneyText(
-                totalSpend,
-                confidence: Confidence.estimated,
-                style: BambooFonts.money(26, color: BambooInk.lime),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: _SummaryMetric(
+                  label: 'Money out',
+                  amount: totalOutgoing,
+                  prefix: '−',
+                  color: BambooInk.clay,
+                ),
               ),
             ],
           ),
-          Text(
-            count == 0
-                ? 'No spending'
-                : '$count transaction${count == 1 ? '' : 's'}',
-            style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+          const SizedBox(height: AppSpace.sm),
+          Row(
+            children: [
+              Text(
+                count == 0
+                    ? 'No activity'
+                    : '$count transaction${count == 1 ? '' : 's'}',
+                style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+              ),
+              if (totalOutgoing.paise == 0) ...[
+                const SizedBox(width: AppSpace.sm),
+                Text(
+                  'No spending',
+                  style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+                ),
+              ],
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  final String label;
+  final Money amount;
+  final String prefix;
+  final Color color;
+
+  const _SummaryMetric({
+    required this.label,
+    required this.amount,
+    required this.prefix,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: BambooFonts.ui(12, color: BambooInk.onSlateMuted)),
+        const SizedBox(height: 2),
+        MoneyText(
+          amount,
+          prefix: prefix,
+          confidence: Confidence.estimated,
+          style: BambooFonts.money(21, color: color),
+          showConfidenceIcon: false,
+          hidePaise: true,
+        ),
+      ],
     );
   }
 }
@@ -533,7 +672,15 @@ class _TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isIncome = entry.entryKind == TxnEntryKind.income;
-    final entryLabel = isIncome ? 'Income' : entry.entryKind.label;
+    final entryLabel = entry.entryKind.label;
+    final isMoneyOut = entry.entryKind == TxnEntryKind.spend ||
+        entry.entryKind == TxnEntryKind.investment;
+    final amountPrefix = isIncome ? '+' : isMoneyOut ? '−' : null;
+    final directionColor = isIncome
+        ? BambooInk.jade
+        : isMoneyOut
+            ? BambooInk.clay
+            : BambooInk.ink900;
     final subtitleParts = <String>[
       if (entry.entryKind != TxnEntryKind.spend) entryLabel,
       if (entry.cardDisplayName != null) entry.cardDisplayName!,
@@ -569,13 +716,19 @@ class _TransactionTile extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: BambooInk.paperMuted,
+                color: directionColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                isIncome ? Icons.south_west_rounded : Icons.shopping_bag_outlined,
+                isIncome
+                    ? Icons.arrow_downward_rounded
+                    : isMoneyOut
+                        ? Icons.arrow_upward_rounded
+                        : entry.entryKind == TxnEntryKind.transfer
+                            ? Icons.swap_horiz_rounded
+                            : Icons.trending_up_rounded,
                 size: 18,
-                color: BambooInk.ink900,
+                color: directionColor,
               ),
             ),
             const SizedBox(width: AppSpace.md),
@@ -601,8 +754,9 @@ class _TransactionTile extends StatelessWidget {
             const SizedBox(width: AppSpace.sm),
             MoneyText(
               entry.amount,
+              prefix: amountPrefix,
               confidence: Confidence.estimated,
-              style: BambooFonts.money(15, color: BambooInk.ink900),
+              style: BambooFonts.money(15, color: directionColor),
             ),
           ],
         ),

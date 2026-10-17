@@ -259,6 +259,10 @@ class InsightsHubScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpace.lg),
           overview.when(
+            // Keep the last report visible while a background sync refreshes
+            // the provider. The skeleton is only for the first load with no
+            // local snapshot to render.
+            skipLoadingOnRefresh: true,
             loading: () => const SkeletonList(count: 3),
             error: (err, _) => ErrorState(
               message: userFacingErrorMessage(err),
@@ -340,7 +344,7 @@ class _ActivityLink extends StatelessWidget {
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Text(
-                  'See every transaction',
+                  'All activity · money in and out',
                   style: BambooFonts.ui(
                     13.5,
                     weight: FontWeight.w600,
@@ -474,19 +478,24 @@ class _PeriodChips extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(insightsPeriodProvider);
+    final customRange = ref.watch(insightsCustomRangeProvider);
     return SizedBox(
       height: 38,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          for (final period in InsightsPeriod.values)
+          for (final period in InsightsPeriod.selectorValues)
             Padding(
               padding: const EdgeInsets.only(right: AppSpace.sm),
               child: Pressable(
                 enforceMinTarget: false,
-                onTap: () =>
-                    ref.read(insightsPeriodProvider.notifier).state = period,
-                semanticLabel: period.label,
+                onTap: () => period == InsightsPeriod.custom
+                    ? _chooseCustomRange(context, ref)
+                    : ref.read(insightsPeriodProvider.notifier).state = period,
+                semanticLabel:
+                    period == InsightsPeriod.custom && customRange != null
+                    ? customRange.shortLabel
+                    : period.label,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   curve: Curves.easeOut,
@@ -504,7 +513,9 @@ class _PeriodChips extends ConsumerWidget {
                     ),
                   ),
                   child: Text(
-                    period.label,
+                    period == InsightsPeriod.custom && customRange != null
+                        ? customRange.shortLabel
+                        : period.label,
                     style: BambooFonts.ui(
                       13.5,
                       weight: FontWeight.w600,
@@ -519,6 +530,31 @@ class _PeriodChips extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _chooseCustomRange(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final now = ref.read(clockProvider).now();
+    final current = ref.read(insightsCustomRangeProvider);
+    final existing = current == null
+        ? null
+        : DateTimeRange(start: current.from, end: current.to);
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDateRange: existing,
+      helpText: 'Choose insight dates',
+      saveText: 'Apply dates',
+    );
+    if (picked == null || !context.mounted) return;
+    ref.read(insightsCustomRangeProvider.notifier).state = InsightsDateRange(
+      from: picked.start,
+      to: picked.end,
+    );
+    ref.read(insightsPeriodProvider.notifier).state = InsightsPeriod.custom;
   }
 }
 

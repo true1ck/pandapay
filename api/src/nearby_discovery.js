@@ -10,7 +10,13 @@
 const DISCOVERY_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 256;
 const MAX_RESULTS = 40;
-const DEFAULT_TIMEOUT_MS = 8000;
+const DEFAULT_TIMEOUT_MS = 6500;
+const DEFAULT_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+const DEFAULT_SEARCH_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
 
 const CATEGORY_TAGS = {
   groceries: [
@@ -105,13 +111,74 @@ function parseOverpassElements(elements = [], { categoryId } = {}) {
   return output;
 }
 
+function categoryForPlaceSearchResult(result, query) {
+  const text = [
+    query,
+    result.name,
+    result.display_name,
+    result.category,
+    result.type,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  if (/\b(fuel|petrol|gas station|diesel|bpcl|hpcl|indianoil|bharat petroleum|shell)\b/.test(text)) {
+    return 'fuel';
+  }
+  if (/\b(pharmacy|chemist|hospital|clinic)\b/.test(text)) return 'health';
+  if (/\b(cafe|restaurant|food|dining|hotel)\b/.test(text)) return 'dining';
+  if (/\b(supermarket|grocery|market|mart|store|mall)\b/.test(text)) return 'groceries';
+  return 'other';
+}
+
+function parsePlaceSearchResults(results = [], { query } = {}) {
+  const output = [];
+  const seen = new Set();
+  for (const result of results) {
+    const lat = safeNumber(result.lat);
+    const lng = safeNumber(result.lon);
+    if (!validCoordinates(lat, lng)) continue;
+    const name = String(result.name || result.display_name || '').trim();
+    if (!name) continue;
+    const key = `${String(result.osm_type || 'place')}:${String(result.osm_id || `${lat}:${lng}:${name}`)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push({
+      merchant_id: `osm_search:${key}`,
+      display_name: name,
+      category_id: categoryForPlaceSearchResult(result, query),
+      grid_lat: lat,
+      grid_lng: lng,
+      source: 'osm_search_candidate',
+      confidence: 'low',
+      address: result.display_name || null,
+    });
+    if (output.length >= MAX_RESULTS) break;
+  }
+  return output;
+}
+
+function boundingBox({ lat, lng, radiusM }) {
+  const latDelta = radiusM / 111320;
+  const lngDelta = radiusM / (111320 * Math.max(0.1, Math.cos(lat * Math.PI / 180)));
+  return `${lng - lngDelta},${lat + latDelta},${lng + lngDelta},${lat - latDelta}`;
+}
+
 function createNearbyDiscovery({
   fetchImpl = globalThis.fetch,
   now = () => Date.now(),
-  endpoint = 'https://overpass-api.de/api/interpreter',
+  endpoint,
+  endpoints,
+  searchEndpoint = DEFAULT_SEARCH_ENDPOINT,
   ttlMs = DISCOVERY_TTL_MS,
 } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('A fetch implementation is required');
+  const providerEndpoints = [...new Set(
+    (endpoints || [endpoint, ...DEFAULT_ENDPOINTS])
+      .filter((value) => typeof value === 'string' && value.trim())
+      .map((value) => value.trim()),
+  )];
+  if (providerEndpoints.length === 0) throw new Error('At least one discovery endpoint is required');
   const cache = new Map();
   const inflight = new Map();
 
@@ -139,29 +206,36 @@ function createNearbyDiscovery({
     if (inflight.has(key)) return inflight.get(key);
 
     const promise = (async () => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-      try {
-        const response = await fetchImpl(endpoint, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/x-www-form-urlencoded',
-            'user-agent': 'PandaPay nearby merchant discovery',
-          },
-          body: new URLSearchParams({
-            data: buildOverpassQuery({ lat, lng, radiusM, categoryId }),
-          }),
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error(`OpenStreetMap discovery failed: ${response.status}`);
-        const body = await response.json();
-        const value = parseOverpassElements(body.elements, { categoryId });
-        cache.set(key, { expiresAt: now() + ttlMs, value });
-        prune();
-        return value;
-      } finally {
-        clearTimeout(timeout);
+      let lastError;
+      for (const providerEndpoint of providerEndpoints) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+        try {
+          const response = await fetchImpl(providerEndpoint, {
+            method: 'POST',
+            headers: {
+              accept: 'application/json',
+              'content-type': 'application/x-www-form-urlencoded',
+              'user-agent': 'PandaPay nearby merchant discovery',
+            },
+            body: new URLSearchParams({
+              data: buildOverpassQuery({ lat, lng, radiusM, categoryId }),
+            }),
+            signal: controller.signal,
+          });
+          if (!response.ok) throw new Error(`OpenStreetMap discovery failed: ${response.status}`);
+          const body = await response.json();
+          const value = parseOverpassElements(body.elements, { categoryId });
+          cache.set(key, { expiresAt: now() + ttlMs, value });
+          prune();
+          return value;
+        } catch (error) {
+          lastError = error;
+        } finally {
+          clearTimeout(timeout);
+        }
       }
+      throw lastError || new Error('OpenStreetMap discovery failed');
     })();
 
     inflight.set(key, promise);
@@ -172,13 +246,65 @@ function createNearbyDiscovery({
     }
   }
 
-  return { discover, cache, inflight };
+  async function search({ query, lat, lng, radiusM = 5000, limit = 20 }) {
+    const cleanQuery = typeof query === 'string' ? query.trim() : '';
+    if (cleanQuery.length < 2 || cleanQuery.length > 120) {
+      throw new Error('query must be between 2 and 120 characters');
+    }
+    if (lat !== undefined && (!Number.isFinite(lat) || lat < -90 || lat > 90)) {
+      throw new Error('lat must be between -90 and 90');
+    }
+    if (lng !== undefined && (!Number.isFinite(lng) || lng < -180 || lng > 180)) {
+      throw new Error('lng must be between -180 and 180');
+    }
+    if ((lat === undefined) !== (lng === undefined)) {
+      throw new Error('lat and lng must be supplied together');
+    }
+    if (!Number.isFinite(radiusM) || radiusM <= 0 || radiusM > 50000) {
+      throw new Error('radiusM must be between 1 and 50000');
+    }
+
+    const params = new URLSearchParams({
+      format: 'jsonv2',
+      addressdetails: '1',
+      dedupe: '1',
+      limit: String(Math.min(Math.max(Math.round(limit), 1), MAX_RESULTS)),
+      q: cleanQuery,
+    });
+    if (lat !== undefined && lng !== undefined) {
+      params.set('lat', String(lat));
+      params.set('lon', String(lng));
+      params.set('viewbox', boundingBox({ lat, lng, radiusM }));
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    try {
+      const response = await fetchImpl(`${searchEndpoint}?${params.toString()}`, {
+        headers: {
+          accept: 'application/json',
+          'user-agent': 'PandaPay nearby merchant search',
+        },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`OpenStreetMap place search failed: ${response.status}`);
+      const body = await response.json();
+      return parsePlaceSearchResults(body, { query: cleanQuery });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  return { discover, search, cache, inflight };
 }
 
 module.exports = {
   buildOverpassQuery,
+  boundingBox,
+  categoryForPlaceSearchResult,
   classifyTags,
   createNearbyDiscovery,
   normalizeCategory,
+  parsePlaceSearchResults,
   parseOverpassElements,
 };

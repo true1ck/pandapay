@@ -60,6 +60,9 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        selectedSpendQueryProvider.overrideWith(
+          (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+        ),
         spendReportProvider.overrideWith((ref, period) async => report),
         spendPeriodTransactionsProvider.overrideWith(
           (ref, period) async => transactions,
@@ -103,7 +106,8 @@ void main() {
       await _pump(tester, _report(spend: 42000, previousSpend: 35000));
 
       expect(find.textContaining('42,000'), findsWidgets);
-      expect(find.textContaining('20% more than last month'), findsOneWidget);
+      expect(find.text('20%'), findsOneWidget);
+      expect(find.text('vs last month'), findsOneWidget);
     },
   );
 
@@ -111,7 +115,8 @@ void main() {
     tester,
   ) async {
     await _pump(tester, _report(spend: 28000, previousSpend: 35000));
-    expect(find.textContaining('20% less than last month'), findsOneWidget);
+    expect(find.text('20%'), findsOneWidget);
+    expect(find.text('vs last month'), findsOneWidget);
   });
 
   testWidgets('no comparison is shown when the previous period had no spend', (
@@ -253,9 +258,18 @@ void main() {
       transactions: transactions,
     );
 
+    // The category list follows the headline/mix cards and may be lazily
+    // built below the initial viewport.
+    await tester.scrollUntilVisible(
+      find.text('Dining'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('Dining'), findsOneWidget);
     expect(find.text('Swiggy'), findsNothing);
 
+    await tester.ensureVisible(find.text('Dining'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Dining'));
     await tester.pumpAndSettle();
 
@@ -357,6 +371,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+          ),
           spendReportProvider.overrideWith((ref, period) async {
             requested.add(period);
             return _report();
@@ -370,6 +387,8 @@ void main() {
       const SpendReportQuery.preset(SpendPeriod.month),
     ], reason: 'month is the default');
 
+    await tester.tap(find.text('Oct 2026'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('This week'));
     await tester.pumpAndSettle();
     expect(
@@ -398,6 +417,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Aug 3 – Aug 14'), findsOneWidget);
+    expect(find.text('Custom dates'), findsOneWidget);
   });
 }

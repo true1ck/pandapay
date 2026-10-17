@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -13,13 +14,16 @@ import '../../app/router.dart';
 import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
 import '../../data/spend_by_category_repository.dart' show CategorySpend;
+import '../../data/spend_reports_repository.dart'
+    show SpendPeriod, SpendReportQuery;
 import '../../data/user_cards_repository.dart'
     show BankAccountSummary, TransactionEntry, TxnEntryKind, UserCard;
 import '../../main.dart' show MoneyText;
 import '../comparison/comparison_view_screen.dart';
 import '../insights/credit_utilization_screen.dart';
 import '../insights/credit_utilization_ui.dart';
-import '../insights/payments_due_screen.dart' show DuePayment, paymentsDueProvider;
+import '../insights/payments_due_screen.dart'
+    show DuePayment, paymentsDueProvider;
 import '../insights/spending_visuals.dart' show spendingCategoryVisual;
 import '../overrides/manual_overrides_screen.dart';
 import '../quickadd/quick_add_screen.dart';
@@ -100,9 +104,10 @@ class HomeScreen extends ConsumerWidget {
 
     // Section order is design 01's, top to bottom: header, "What are you
     // paying for?", purchase selector, amount, the verdict,
-    // backups, utilisation warning. It used to run header → action icons →
-    // rewards strip → amount → chips, which buried the question the screen
-    // exists to answer under two strips of chrome.
+    // backups, utilisation warning, categories, dues, then the protected
+    // bank-account snapshot. It used to run header → action icons → rewards
+    // strip → amount → chips, which buried the question the screen exists to
+    // answer under two strips of chrome.
     return AppBackground(
       child: SingleChildScrollView(
         // 58pt top / 128pt bottom, the mockup's own scroll padding — the
@@ -119,7 +124,6 @@ class HomeScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
               child: _BrandHeader(greeting: _greetingFor(now)),
             ),
-            const _HomeAccountSnapshot(),
             Padding(
               padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 0),
               child: Text(
@@ -178,6 +182,7 @@ class HomeScreen extends ConsumerWidget {
             const _UtilizationWarningBanner(),
             const _HomeCategories(),
             const _HomeDuesAndReminders(),
+            const _HomeAccountSnapshot(),
             const SizedBox(height: AppSpace.lg),
           ],
         ),
@@ -383,13 +388,14 @@ class _PurchaseTypeSelector extends StatelessWidget {
           final media = MediaQuery.of(context);
           final top = origin.dy + size.height + 4;
           // Limit the list to the space below the selector; never flip upward.
-          final height = (constraints.maxHeight -
-                  top -
-                  media.padding.bottom -
-                  media.viewInsets.bottom -
-                  8)
-              .clamp(0.0, 360.0)
-              .toDouble();
+          final height =
+              (constraints.maxHeight -
+                      top -
+                      media.padding.bottom -
+                      media.viewInsets.bottom -
+                      8)
+                  .clamp(0.0, 360.0)
+                  .toDouble();
           return Stack(
             children: [
               Positioned(
@@ -408,7 +414,8 @@ class _PurchaseTypeSelector extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (final (slug, label, icon) in HomeScreen._categories)
+                          for (final (slug, label, icon)
+                              in HomeScreen._categories)
                             ListTile(
                               selected: slug == selectedCategory,
                               leading: Icon(icon, color: BambooInk.ink500),
@@ -958,14 +965,22 @@ class _QuickAmountChip extends StatelessWidget {
 /// underlying reason for it (a reorder must move each card's `Element` —
 /// and its `_expanded` state — WITH it, not reset it) still applies, so
 /// every card keeps its `ValueKey(card.id)` exactly as before.
-class _RankedSection extends ConsumerWidget {
+class _RankedSection extends StatefulWidget {
   final AsyncValue<List<Recommendation>> ranked;
   final TutorialKeys tutorialKeys;
   const _RankedSection({required this.ranked, required this.tutorialKeys});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ranked.when(
+  State<_RankedSection> createState() => _RankedSectionState();
+}
+
+class _RankedSectionState extends State<_RankedSection> {
+  bool _expanded = false;
+  final Set<String> _expandedRecommendationIds = <String>{};
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.ranked.when(
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),
         child: Center(child: CircularProgressIndicator()),
@@ -985,6 +1000,7 @@ class _RankedSection extends ConsumerWidget {
         final backup = recommendations
             .skip(1)
             .firstWhereOrNull((r) => !r.isExcluded);
+        final hasMoreCards = recommendations.length > 1;
         return Column(
           children: [
             Padding(
@@ -997,32 +1013,130 @@ class _RankedSection extends ConsumerWidget {
                 ],
               ),
             ),
-            for (var i = 0; i < recommendations.length; i++) ...[
+            _rankedCard(recommendations.first, 0),
+            if (backup != null)
               Padding(
-                key: ValueKey(recommendations[i].card.id),
                 padding: const EdgeInsets.only(bottom: AppSpace.md),
-                // NOTE: the tutorial anchor GlobalKey is passed in as a
-                // plain constructor field (cardAnchorKey), not attached as
-                // this widget's own Key — see _RecommendationCard's
-                // doc-comment for why a rank-based GlobalKey must never be
-                // this widget's identity key.
-                child: _RecommendationCard(
-                  recommendations[i],
-                  rank: i,
-                  cardAnchorKey: i == 0
-                      ? tutorialKeys.firstRecommendationCard
-                      : null,
-                ),
+                child: _BackupCardRow(backup),
               ),
-              if (i == 0 && backup != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.md),
-                  child: _BackupCardRow(backup),
-                ),
+            if (hasMoreCards) ...[
+              _CardListToggle(
+                expanded: _expanded,
+                hiddenCount: recommendations.length - 1,
+                onPressed: () => setState(() => _expanded = !_expanded),
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: _expanded
+                    ? Padding(
+                        key: const ValueKey('ranked-cards-expanded'),
+                        padding: const EdgeInsets.only(top: AppSpace.md),
+                        child: Column(
+                          children: [
+                            for (var i = 1; i < recommendations.length; i++)
+                              _rankedCard(recommendations[i], i),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ],
           ],
         );
       },
+    );
+  }
+
+  Widget _rankedCard(Recommendation recommendation, int rank) {
+    return Padding(
+      key: ValueKey(recommendation.card.id),
+      padding: const EdgeInsets.only(bottom: AppSpace.md),
+      // NOTE: the tutorial anchor GlobalKey is passed in as a plain
+      // constructor field (cardAnchorKey), not attached as this widget's own
+      // Key — see _RecommendationCard's doc-comment for why a rank-based
+      // GlobalKey must never be this widget's identity key.
+      child: _RecommendationCard(
+        recommendation,
+        rank: rank,
+        expanded: _expandedRecommendationIds.contains(recommendation.card.id),
+        onReasonToggle: () => setState(() {
+          final id = recommendation.card.id;
+          if (!_expandedRecommendationIds.add(id)) {
+            _expandedRecommendationIds.remove(id);
+          }
+        }),
+        cardAnchorKey: rank == 0
+            ? widget.tutorialKeys.firstRecommendationCard
+            : null,
+      ),
+    );
+  }
+}
+
+class _CardListToggle extends StatelessWidget {
+  final bool expanded;
+  final int hiddenCount;
+  final VoidCallback onPressed;
+
+  const _CardListToggle({
+    required this.expanded,
+    required this.hiddenCount,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = expanded
+        ? 'Hide other cards'
+        : 'Show $hiddenCount more ${hiddenCount == 1 ? 'card' : 'cards'}';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+          decoration: BoxDecoration(
+            color: BambooInk.paperMuted,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, animation) =>
+                    FadeTransition(opacity: animation, child: child),
+                child: Text(
+                  label,
+                  key: ValueKey(label),
+                  style: BambooFonts.ui(
+                    13,
+                    weight: FontWeight.w600,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpace.xs),
+              AnimatedRotation(
+                turns: expanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                child: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: BambooInk.ink500,
+                  size: 22,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1086,6 +1200,8 @@ class _BackupCardRow extends StatelessWidget {
 class _RecommendationCard extends ConsumerStatefulWidget {
   final Recommendation recommendation;
   final int rank;
+  final bool expanded;
+  final VoidCallback onReasonToggle;
   // Anchor GlobalKey for the onboarding tutorial overlay to measure this
   // card's position when it's the rank-0 (hero) card. Deliberately NOT
   // this widget's own `key` — this widget's identity (and thus its
@@ -1097,6 +1213,8 @@ class _RecommendationCard extends ConsumerStatefulWidget {
   const _RecommendationCard(
     this.recommendation, {
     required this.rank,
+    required this.expanded,
+    required this.onReasonToggle,
     this.cardAnchorKey,
   });
 
@@ -1106,8 +1224,6 @@ class _RecommendationCard extends ConsumerStatefulWidget {
 }
 
 class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
-  bool _expanded = false;
-
   @override
   Widget build(BuildContext context) {
     final recommendation = widget.recommendation;
@@ -1391,7 +1507,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                 ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 48),
                   child: InkWell(
-                    onTap: () => setState(() => _expanded = !_expanded),
+                    onTap: widget.onReasonToggle,
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Padding(
@@ -1400,9 +1516,10 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              _expanded
+                              widget.expanded
                                   ? 'Hide the full breakdown'
                                   : 'Why this card?',
+                              key: ValueKey('why-${recommendation.card.id}'),
                               style: BambooFonts.ui(
                                 12,
                                 weight: FontWeight.w600,
@@ -1410,7 +1527,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                               ),
                             ),
                             Icon(
-                              _expanded
+                              widget.expanded
                                   ? Icons.expand_less_rounded
                                   : Icons.expand_more_rounded,
                               size: 16,
@@ -1422,7 +1539,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                     ),
                   ),
                 ),
-                if (_expanded)
+                if (widget.expanded)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Column(
@@ -1647,28 +1764,123 @@ class _CapBadge extends StatelessWidget {
   }
 }
 
-/// A compact, truthful account snapshot for Home. The server only supplies a
-/// balance when a picked-up bank SMS explicitly contained one; otherwise the
-/// account is still counted, but its balance is left unavailable.
-class _HomeAccountSnapshot extends ConsumerWidget {
+/// A compact, truthful account snapshot for Home. It is deliberately at the
+/// bottom of the page because it is supporting context, not the payment
+/// decision. Account suffixes and issuer marks can be shown without revealing
+/// money; every balance stays masked until the device biometric/PIN succeeds.
+class _HomeAccountSnapshot extends ConsumerStatefulWidget {
   const _HomeAccountSnapshot();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final accounts = ref.watch(bankAccountSummariesProvider).valueOrNull ??
-        const <BankAccountSummary>[];
-    final observedAccountLast4 = <String>{};
-    for (final transaction in
-        ref.watch(transactionsProvider).valueOrNull ?? const <TransactionEntry>[]) {
-      final last4 = transaction.accountLast4;
-      if (last4 != null && last4.isNotEmpty) observedAccountLast4.add(last4);
+  ConsumerState<_HomeAccountSnapshot> createState() =>
+      _HomeAccountSnapshotState();
+}
+
+class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
+  final _localAuth = LocalAuthentication();
+  bool _expanded = false;
+  bool _unlocked = false;
+  bool _authenticating = false;
+  String? _authError;
+
+  Future<void> _authenticate() async {
+    if (_authenticating) return;
+    setState(() {
+      _authenticating = true;
+      _authError = null;
+    });
+    try {
+      final supported = await _localAuth.isDeviceSupported();
+      if (!supported) {
+        if (mounted) {
+          setState(() {
+            _authError =
+                'Set up a fingerprint, face unlock, or device PIN to reveal balances.';
+          });
+        }
+        return;
+      }
+      final authenticated = await _localAuth.authenticate(
+        localizedReason: 'Reveal bank balances in PandaPay',
+        biometricOnly: false,
+      );
+      if (!mounted) return;
+      setState(() {
+        _unlocked = authenticated;
+        _authError = authenticated
+            ? null
+            : 'Authentication was cancelled. Balances remain hidden.';
+      });
+    } on LocalAuthException catch (error) {
+      if (!mounted) return;
+      final unavailable =
+          error.code == LocalAuthExceptionCode.noCredentialsSet ||
+          error.code == LocalAuthExceptionCode.noBiometricsEnrolled ||
+          error.code == LocalAuthExceptionCode.noBiometricHardware;
+      setState(() {
+        _authError = unavailable
+            ? 'Set up a fingerprint, face unlock, or device PIN to reveal balances.'
+            : 'Could not verify. Your balances are still hidden.';
+      });
+    } on PlatformException {
+      if (mounted) {
+        setState(
+          () =>
+              _authError = 'Could not verify. Your balances are still hidden.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () =>
+              _authError = 'Could not verify. Your balances are still hidden.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _authenticating = false);
     }
-    final accountLast4s = accounts.isNotEmpty
-        ? accounts.map((account) => account.accountLast4).toList()
-        : (observedAccountLast4.toList()..sort());
-    final accountCount = accounts.isNotEmpty
-        ? accounts.length
-        : accountLast4s.length;
+  }
+
+  void _hideBalances() {
+    setState(() {
+      _unlocked = false;
+      _authError = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accounts =
+        ref.watch(bankAccountSummariesProvider).valueOrNull ??
+        const <BankAccountSummary>[];
+    final summariesByLast4 = <String, BankAccountSummary>{
+      for (final account in accounts) account.accountLast4: account,
+    };
+    final accountLast4s = <String>{...summariesByLast4.keys};
+
+    // The Spending report is the canonical categorized view. Include its
+    // bank-account rows too, so Home cannot disagree with a report that has
+    // already identified an account outside the latest 50 activity items.
+    final spendReport = ref
+        .watch(
+          spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
+        )
+        .valueOrNull;
+    final accountLabelPattern = RegExp(r'^Bank account ending (\d{4})$');
+    for (final row in spendReport?.byCard ?? const []) {
+      final match = accountLabelPattern.firstMatch(row.cardName);
+      if (match != null) accountLast4s.add(match.group(1)!);
+    }
+    for (final transaction
+        in ref.watch(transactionsProvider).valueOrNull ??
+            const <TransactionEntry>[]) {
+      final last4 = transaction.accountLast4;
+      if (last4 != null && RegExp(r'^\d{4}$').hasMatch(last4)) {
+        accountLast4s.add(last4);
+      }
+    }
+    final sortedAccountLast4s = accountLast4s.toList()..sort();
+    final accountCount = sortedAccountLast4s.length;
 
     var total = const Money.zero();
     var balancesFound = 0;
@@ -1679,10 +1891,11 @@ class _HomeAccountSnapshot extends ConsumerWidget {
       balancesFound += 1;
     }
 
+    final hasBalances = balancesFound > 0;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         HomeScreen._gutter,
-        AppSpace.md,
+        AppSpace.xl,
         HomeScreen._gutter,
         0,
       ),
@@ -1695,88 +1908,300 @@ class _HomeAccountSnapshot extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.account_balance_rounded,
-                  size: 18,
-                  color: BambooInk.lime,
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: accountCount == 0
+                    ? null
+                    : () => setState(() => _expanded = !_expanded),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.account_balance_rounded,
+                        size: 20,
+                        color: BambooInk.lime,
+                      ),
+                      const SizedBox(width: AppSpace.sm),
+                      Expanded(
+                        child: Text(
+                          'Your bank accounts',
+                          style: BambooFonts.heading(
+                            16,
+                            color: BambooInk.onSlate,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        accountCount == 0
+                            ? 'No accounts yet'
+                            : '$accountCount ${accountCount == 1 ? 'account' : 'accounts'}',
+                        style: BambooFonts.ui(
+                          12,
+                          color: BambooInk.onSlateMuted,
+                        ),
+                      ),
+                      if (accountCount > 0) ...[
+                        const SizedBox(width: AppSpace.xs),
+                        AnimatedRotation(
+                          turns: _expanded ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 240),
+                          curve: Curves.easeOutCubic,
+                          child: const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 22,
+                            color: BambooInk.onSlateMuted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-                const SizedBox(width: AppSpace.sm),
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Expanded(
-                  child: Text(
-                    'Your bank accounts',
-                    style: BambooFonts.heading(16, color: BambooInk.onSlate),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        hasBalances
+                            ? 'Total detected balance'
+                            : 'Balance from SMS',
+                        style: BambooFonts.ui(
+                          11.5,
+                          color: BambooInk.onSlateMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      if (hasBalances)
+                        _unlocked
+                            ? MoneyText(
+                                total,
+                                confidence: Confidence.estimated,
+                                style: BambooFonts.money(
+                                  28,
+                                  color: BambooInk.lime,
+                                ),
+                                hidePaise: true,
+                                showConfidenceIcon: false,
+                              )
+                            : Text(
+                                '₹••••',
+                                style: BambooFonts.money(
+                                  28,
+                                  color: BambooInk.onSlate,
+                                ),
+                              )
+                      else
+                        Text(
+                          accountCount == 0 ? 'Not available' : 'Not found yet',
+                          style: BambooFonts.ui(
+                            16,
+                            weight: FontWeight.w600,
+                            color: BambooInk.onSlateSubtle,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (hasBalances)
+                  IconButton(
+                    tooltip: _unlocked ? 'Hide balances' : 'Reveal balances',
+                    onPressed: _authenticating
+                        ? null
+                        : (_unlocked ? _hideBalances : _authenticate),
+                    icon: _authenticating
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: BambooInk.lime,
+                            ),
+                          )
+                        : Icon(
+                            _unlocked
+                                ? Icons.visibility_off_rounded
+                                : Icons.visibility_rounded,
+                            color: BambooInk.lime,
+                          ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.xs),
+            Text(
+              'Detected from categorized spending. A balance will appear when a bank SMS includes one.',
+              style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
+            ),
+            if (hasBalances) ...[
+              const SizedBox(height: 3),
+              Text(
+                'Balance shown is the latest one found in SMS, not a live bank balance.',
+                style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
+              ),
+            ],
+            if (_authError != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                _authError!,
+                style: BambooFonts.ui(11.5, color: BambooInk.clay),
+              ),
+            ],
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: _expanded && sortedAccountLast4s.isNotEmpty
+                  ? Padding(
+                      key: const ValueKey('home-bank-accounts-expanded'),
+                      padding: const EdgeInsets.only(top: AppSpace.md),
+                      child: Column(
+                        children: [
+                          Container(height: 1, color: BambooInk.slateHairline),
+                          const SizedBox(height: AppSpace.sm),
+                          for (final last4 in sortedAccountLast4s)
+                            _HomeBankAccountRow(
+                              last4: last4,
+                              summary: summariesByLast4[last4],
+                              revealed: _unlocked,
+                            ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeBankAccountRow extends StatelessWidget {
+  final String last4;
+  final BankAccountSummary? summary;
+  final bool revealed;
+
+  const _HomeBankAccountRow({
+    required this.last4,
+    required this.summary,
+    required this.revealed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final issuer = summary?.issuerShortName ?? summary?.issuerName;
+    final balance = summary?.availableBalance;
+    final logoLabel = issuer == null || issuer.trim().isEmpty ? 'Bank' : issuer;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.sm),
+      child: Row(
+        children: [
+          _HomeBankLogo(summary: summary, label: logoLabel),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  issuer ?? 'Bank account',
+                  style: BambooFonts.ui(
+                    13,
+                    weight: FontWeight.w600,
+                    color: BambooInk.onSlate,
                   ),
                 ),
                 Text(
-                  accountCount == 0
-                      ? 'No accounts yet'
-                      : '$accountCount ${accountCount == 1 ? 'account' : 'accounts'}',
-                  style: BambooFonts.ui(12, color: BambooInk.onSlateMuted),
+                  'Account ending $last4',
+                  style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
                 ),
               ],
             ),
-            const SizedBox(height: AppSpace.md),
-            if (balancesFound > 0) ...[
-              Text(
-                'Latest available balance from SMS',
-                style: BambooFonts.ui(11.5, color: BambooInk.onSlateMuted),
+          ),
+          if (balance == null)
+            Text(
+              'No balance in SMS',
+              style: BambooFonts.ui(11, color: BambooInk.onSlateMuted),
+              textAlign: TextAlign.end,
+            )
+          else if (!revealed)
+            const Icon(
+              Icons.lock_outline_rounded,
+              size: 17,
+              color: BambooInk.onSlateMuted,
+            )
+          else
+            MoneyText(
+              balance,
+              confidence: Confidence.estimated,
+              style: BambooFonts.ui(
+                13,
+                weight: FontWeight.w700,
+                color: BambooInk.lime,
               ),
-              const SizedBox(height: 2),
-              MoneyText(
-                total,
-                confidence: Confidence.estimated,
-                style: BambooFonts.money(28, color: BambooInk.lime),
-                hidePaise: true,
-                showConfidenceIcon: false,
-              ),
-              const SizedBox(height: AppSpace.xs),
-              Text(
-                balancesFound == accounts.length
-                    ? 'Based on the latest balance SMS for each account.'
-                    : 'Some accounts have no balance reported in their SMS yet.',
-                style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
-              ),
-            ] else if (accountCount > 0)
-              Text(
-                'Account balances will appear when a bank SMS includes an available balance.',
-                style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle),
-              )
-            else
-              Text(
-                'No bank accounts detected from imported SMS yet.',
-                style: BambooFonts.ui(12.5, color: BambooInk.onSlateSubtle),
-              ),
-            if (accountLast4s.isNotEmpty) ...[
-              const SizedBox(height: AppSpace.md),
-              Wrap(
-                spacing: AppSpace.xs,
-                runSpacing: AppSpace.xs,
-                children: [
-                  for (final last4 in accountLast4s)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: BambooInk.slateRaised,
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                      ),
-                      child: Text(
-                        '•••• $last4',
-                        style: BambooFonts.ui(
-                          11.5,
-                          weight: FontWeight.w600,
-                          color: BambooInk.onSlate,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ],
+              hidePaise: true,
+              showConfidenceIcon: false,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeBankLogo extends StatelessWidget {
+  final BankAccountSummary? summary;
+  final String label;
+
+  const _HomeBankLogo({required this.summary, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final logoUrl = summary?.issuerLogoUrl;
+    if (logoUrl != null && logoUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          logoUrl,
+          width: 36,
+          height: 36,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => _fallback(),
+        ),
+      );
+    }
+    return _fallback();
+  }
+
+  Widget _fallback() {
+    final short = label.trim().isEmpty
+        ? 'BK'
+        : label
+              .trim()
+              .split(RegExp(r'\s+'))
+              .where((part) => part.isNotEmpty)
+              .take(2)
+              .map((part) => part[0].toUpperCase())
+              .join();
+    return Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: BambooInk.slateRaised,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        short,
+        style: BambooFonts.ui(
+          11,
+          weight: FontWeight.w800,
+          color: BambooInk.lime,
         ),
       ),
     );
@@ -1788,13 +2213,31 @@ class _HomeCategories extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final report = ref
+        .watch(
+          spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
+        )
+        .valueOrNull;
     final apiRows =
         ref.watch(categorySpendProvider).valueOrNull ?? const <CategorySpend>[];
     final transactions =
-        ref.watch(transactionsProvider).valueOrNull ?? const <TransactionEntry>[];
-    final rows = apiRows.isNotEmpty
-        ? apiRows
-        : _categorySpendFromTransactions(transactions);
+        ref.watch(transactionsProvider).valueOrNull ??
+        const <TransactionEntry>[];
+    final reportRows = report?.byCategory ?? const [];
+    final rows = reportRows.isNotEmpty
+        ? [
+            for (final row in reportRows)
+              CategorySpend(
+                categoryId: row.categoryId,
+                categorySlug: null,
+                categoryName: row.label == 'Other' ? null : row.label,
+                totalSpend: row.total,
+                txnCount: row.txnCount,
+              ),
+          ]
+        : (apiRows.isNotEmpty
+              ? apiRows
+              : _categorySpendFromTransactions(transactions));
     final sorted = [...rows]
       ..sort((a, b) => b.totalSpend.rupees.compareTo(a.totalSpend.rupees));
     final visible = sorted.take(6).toList();
@@ -1838,7 +2281,7 @@ class _HomeCategories extends ConsumerWidget {
                 ),
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Categories will appear after PandaPay picks up your first spend SMS.',
+                  'Categories will appear after your first categorized spend.',
                   style: BambooFonts.ui(13, color: BambooInk.ink500),
                 ),
               ),
@@ -1866,8 +2309,8 @@ class _HomeCategories extends ConsumerWidget {
             ),
             child: Text(
               visible.isEmpty
-                  ? 'Waiting for categorized spends from SMS'
-                  : 'Last 12 months · imported and logged spends',
+                  ? 'Waiting for categorized spends'
+                  : 'This month · tap a category for details',
               style: BambooFonts.ui(11.5, color: BambooInk.ink500),
             ),
           ),
@@ -1913,56 +2356,62 @@ class _HomeCategoryCard extends StatelessWidget {
     final visual = spendingCategoryVisual(row.displayName);
     return SizedBox(
       width: 232,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpace.md),
-        decoration: BoxDecoration(
-          color: BambooInk.glassFillOnPaper,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: BambooInk.hairlineOnPaper),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => context.push(
+          '${AppRoute.spendTrends}?category=${Uri.encodeComponent(row.categoryId ?? row.categoryName ?? 'Other')}',
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: visual.surface,
-                    shape: BoxShape.circle,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpace.md),
+          decoration: BoxDecoration(
+            color: BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: visual.surface,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(visual.icon, size: 19, color: visual.accent),
                   ),
-                  child: Icon(visual.icon, size: 19, color: visual.accent),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                Expanded(
-                  child: Text(
-                    row.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: BambooFonts.ui(
-                      14,
-                      weight: FontWeight.w700,
-                      color: BambooInk.ink900,
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: Text(
+                      row.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(
+                        14,
+                        weight: FontWeight.w700,
+                        color: BambooInk.ink900,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            MoneyText(
-              row.totalSpend,
-              confidence: Confidence.estimated,
-              style: BambooFonts.money(20, color: BambooInk.ink900),
-              hidePaise: true,
-              showConfidenceIcon: false,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '${row.txnCount} ${row.txnCount == 1 ? 'spend' : 'spends'}',
-              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-            ),
-          ],
+                ],
+              ),
+              const Spacer(),
+              MoneyText(
+                row.totalSpend,
+                confidence: Confidence.estimated,
+                style: BambooFonts.money(20, color: BambooInk.ink900),
+                hidePaise: true,
+                showConfidenceIcon: false,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${row.txnCount} ${row.txnCount == 1 ? 'spend' : 'spends'}',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1976,6 +2425,7 @@ class _HomeDuesAndReminders extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rows =
         ref.watch(paymentsDueProvider).valueOrNull ?? const <DuePayment>[];
+    final catalogue = ref.watch(catalogueProvider).valueOrNull ?? const [];
     var total = const Money.zero();
     for (final row in rows) {
       total += row.loggedThisCycle;
@@ -1994,7 +2444,9 @@ class _HomeDuesAndReminders extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: HomeScreen._gutter),
+              padding: const EdgeInsets.symmetric(
+                horizontal: HomeScreen._gutter,
+              ),
               child: Row(
                 children: [
                   Expanded(
@@ -2044,16 +2496,21 @@ class _HomeDuesAndReminders extends ConsumerWidget {
               )
             else ...[
               SizedBox(
-                height: 148,
+                height: 190,
                 child: ListView.separated(
                   padding: const EdgeInsets.symmetric(
                     horizontal: HomeScreen._gutter,
                   ),
                   scrollDirection: Axis.horizontal,
                   itemCount: rows.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: AppSpace.sm),
-                  itemBuilder: (context, index) =>
-                      _HomeDueCard(row: rows[index]),
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(width: AppSpace.sm),
+                  itemBuilder: (context, index) => _HomeDueCard(
+                    row: rows[index],
+                    product: catalogue.firstWhereOrNull(
+                      (product) => product.id == rows[index].card.cardProductId,
+                    ),
+                  ),
                 ),
               ),
               Padding(
@@ -2090,8 +2547,9 @@ class _HomeDuesAndReminders extends ConsumerWidget {
 
 class _HomeDueCard extends StatelessWidget {
   final DuePayment row;
+  final CardProduct? product;
 
-  const _HomeDueCard({required this.row});
+  const _HomeDueCard({required this.row, required this.product});
 
   @override
   Widget build(BuildContext context) {
@@ -2113,6 +2571,20 @@ class _HomeDueCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (product != null) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 58,
+                child: CardVisual(
+                  product: product!,
+                  userCard: row.card,
+                  width: double.infinity,
+                  height: 58,
+                  showProductName: false,
+                ),
+              ),
+              const SizedBox(height: AppSpace.sm),
+            ],
             Row(
               children: [
                 Icon(

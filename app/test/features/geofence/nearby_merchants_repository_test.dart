@@ -116,6 +116,41 @@ void main() {
       },
     );
 
+    test('manual place search requests the place-search endpoint', () async {
+      final client = MockClient((request) async {
+        expect(request.url.path, '/merchants/nearby/search');
+        expect(request.url.queryParameters['q'], 'petrol pump');
+        return http.Response(
+          jsonEncode({
+            'source': 'openstreetmap',
+            'merchants': [
+              {
+                'merchant_id': 'osm_search:node:7',
+                'display_name': 'Example Petrol Pump',
+                'category_id': 'fuel',
+                'source': 'osm_search_candidate',
+                'confidence': 'low',
+                'grid_lat': '15.4900',
+                'grid_lng': '73.8300',
+              },
+            ],
+          }),
+          200,
+        );
+      });
+
+      final repo = HttpNearbyMerchantsRepository(
+        baseUrl: 'http://localhost:4000',
+        client: client,
+      );
+      final result = await repo.searchPlaces(query: 'petrol pump');
+
+      expect(result, hasLength(1));
+      expect(result.first.displayName, 'Example Petrol Pump');
+      expect(result.first.categoryId, 'fuel');
+      expect(result.first.source, 'osm_search_candidate');
+    });
+
     test(
       'an empty merchants list parses to an empty list, not an error',
       () async {

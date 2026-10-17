@@ -1020,14 +1020,58 @@ app.get('/merchants/nearby/discover', async (req, res) => {
       merchants,
     });
   } catch (err) {
-    // Discovery is optional. The app can still show its existing published
-    // merchant result or a safe empty state when the public provider is down.
+    // Discovery is optional, but do not turn a provider outage into a false
+    // "no merchants nearby" result. The app can still show its existing
+    // published merchant result and will render an honest retry/search state.
     console.warn('GET /merchants/nearby/discover unavailable', err.message);
+    res.status(503).json({
+      error: 'nearby_discovery_unavailable',
+      message: 'The public nearby-place provider is temporarily unavailable',
+    });
+  }
+});
+
+/**
+ * GET /merchants/nearby/search — a manual place lookup for testing the
+ * location flow without depending on the handset's current GPS fix. Results
+ * are OSM candidates only; they are never published as PandaPay merchants or
+ * written to payment data. `lat`/`lng` are optional and only bias the search
+ * toward the tester's current area when supplied.
+ */
+app.get('/merchants/nearby/search', async (req, res) => {
+  const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const lat = req.query.lat === undefined ? undefined : Number(req.query.lat);
+  const lng = req.query.lng === undefined ? undefined : Number(req.query.lng);
+  const radiusM = req.query.radiusM !== undefined ? Number(req.query.radiusM) : 5000;
+
+  if (query.length < 2 || query.length > 120) {
+    return res.status(400).json({ error: 'q must be between 2 and 120 characters' });
+  }
+  if (lat !== undefined && (!Number.isFinite(lat) || lat < -90 || lat > 90)) {
+    return res.status(400).json({ error: 'lat must be between -90 and 90' });
+  }
+  if (lng !== undefined && (!Number.isFinite(lng) || lng < -180 || lng > 180)) {
+    return res.status(400).json({ error: 'lng must be between -180 and 180' });
+  }
+  if ((lat === undefined) !== (lng === undefined)) {
+    return res.status(400).json({ error: 'lat and lng must be supplied together' });
+  }
+  if (!Number.isFinite(radiusM) || radiusM <= 0 || radiusM > 50000) {
+    return res.status(400).json({ error: 'radiusM must be between 1 and 50000' });
+  }
+
+  try {
+    const merchants = await nearbyDiscovery.search({ query, lat, lng, radiusM });
     res.json({
       source: 'openstreetmap',
       attribution: '© OpenStreetMap contributors',
-      merchants: [],
-      unavailable: true,
+      merchants,
+    });
+  } catch (err) {
+    console.warn('GET /merchants/nearby/search unavailable', err.message);
+    res.status(502).json({
+      error: 'place_search_unavailable',
+      message: 'The public place search provider is temporarily unavailable',
     });
   }
 });
@@ -4776,7 +4820,8 @@ app.get('/transactions/sms-import-state', requireAuth, async (req, res) => {
 });
 
 /**
- * GET /account-summaries — masked bank accounts observed in SMS imports.
+ * GET /account-summaries — masked bank accounts observed in SMS imports or
+ * persisted on categorized cardless transactions.
  *
  * Account balances are only returned when an SMS explicitly included an
  * available/current balance. They are therefore latest-known snapshots, not
@@ -4789,26 +4834,58 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
       client.query(
         `WITH account_observations AS (
            SELECT o.metadata->>'accountLast4' AS account_last4,
+                  o.metadata->>'patternIssuerId' AS issuer_id,
                   CASE
                     WHEN o.metadata->>'availableBalanceInr' ~ '^[0-9]+(\\.[0-9]+)?$'
                     THEN (o.metadata->>'availableBalanceInr')::numeric
                     ELSE NULL
                   END AS available_balance_inr,
-                  o.observed_at
+                  o.observed_at,
+                  'sms' AS source_kind
              FROM transaction_observations o
             WHERE o.profile_id = $1
               AND o.source IN ('sms', 'sms_bulk')
               AND o.metadata->>'accountLast4' ~ '^[0-9]{4}$'
+         ), transaction_accounts AS (
+           SELECT t.source_account_last4 AS account_last4,
+                  NULL::text AS issuer_id,
+                  NULL::numeric AS available_balance_inr,
+                  NULL::timestamptz AS observed_at,
+                  'transaction' AS source_kind
+             FROM transactions t
+            WHERE t.profile_id = $1
+              AND t.status = 'active'
+              AND t.source_account_last4 ~ '^[0-9]{4}$'
+            GROUP BY t.source_account_last4
+         ), account_sources AS (
+           SELECT account_last4, issuer_id, available_balance_inr, observed_at, source_kind
+             FROM account_observations
+           UNION ALL
+           SELECT account_last4, issuer_id, available_balance_inr, observed_at, source_kind
+             FROM transaction_accounts
+         ), account_rollup AS (
+           SELECT account_last4,
+                  (array_agg(issuer_id ORDER BY observed_at DESC)
+                    FILTER (WHERE issuer_id IS NOT NULL))[1] AS issuer_id,
+                  (array_agg(available_balance_inr ORDER BY observed_at DESC)
+                    FILTER (WHERE available_balance_inr IS NOT NULL))[1]
+                    AS available_balance_inr,
+                  MAX(observed_at) FILTER (WHERE source_kind = 'sms') AS latest_sms_at,
+                  COUNT(*) FILTER (WHERE source_kind = 'sms') AS sms_count
+             FROM account_sources
+            GROUP BY account_last4
          )
-         SELECT account_last4,
-                (array_agg(available_balance_inr ORDER BY observed_at DESC)
-                  FILTER (WHERE available_balance_inr IS NOT NULL))[1]
-                  AS available_balance_inr,
-                MAX(observed_at) AS latest_sms_at,
-                COUNT(*) AS sms_count
-           FROM account_observations
-          GROUP BY account_last4
-          ORDER BY account_last4`,
+         SELECT r.account_last4,
+                r.available_balance_inr,
+                r.latest_sms_at,
+                r.sms_count,
+                i.slug AS issuer_slug,
+                i.name AS issuer_name,
+                i.short_name AS issuer_short_name,
+                i.logo_url AS issuer_logo_url
+           FROM account_rollup r
+           LEFT JOIN issuers i ON i.id::text = r.issuer_id
+          ORDER BY r.account_last4`,
         [req.userId],
       ),
     );
@@ -4820,6 +4897,10 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
           : Number(row.available_balance_inr),
         latestSmsAt: row.latest_sms_at,
         smsCount: Number(row.sms_count ?? 0),
+        issuerSlug: row.issuer_slug,
+        issuerName: row.issuer_name,
+        issuerShortName: row.issuer_short_name,
+        issuerLogoUrl: row.issuer_logo_url,
       })),
     });
   } catch (err) {
@@ -4882,10 +4963,11 @@ app.get('/transactions', requireAuth, async (req, res) => {
     params.push(source);
     conditions.push(`t.source = $${params.length}`);
   }
-  // No hard cap when a date range is given (a month's worth of spend is the
-  // whole point of E11); the original unfiltered "last 50" behaviour is
-  // preserved for existing callers that pass neither.
-  const limitClause = from || to || cardId || categoryId || source ? '' : 'LIMIT 50';
+  // Activity is the canonical transaction-history surface. Do not silently
+  // hide older incoming or outgoing movements behind an unfiltered "last 50"
+  // cap; callers can still constrain the result with date/card/category/source
+  // filters when they need a narrower view.
+  const limitClause = '';
 
   try {
     const result = await withUserClient(req.userId, (client) =>

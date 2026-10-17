@@ -7,6 +7,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../data/api_exception.dart';
 import '../data/app_status_repository.dart' show isVersionOlderThan;
+import '../data/user_cards_repository.dart' show TransactionEntry;
 import 'design/app_theme.dart';
 import 'error_handling.dart';
 import '../features/account/account_screen.dart';
@@ -557,13 +558,21 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.transactionDetail,
-        builder: (context, state) =>
-            TransactionDetailScreen(transactionId: state.pathParameters['id']!),
+        builder: (context, state) => TransactionDetailScreen(
+          transactionId: state.pathParameters['id']!,
+          initialEntry: state.extra is TransactionEntry
+              ? state.extra as TransactionEntry
+              : null,
+        ),
       ),
       GoRoute(
         path: '/activity/:id/edit',
-        builder: (context, state) =>
-            EditTransactionScreen(transactionId: state.pathParameters['id']!),
+        builder: (context, state) => EditTransactionScreen(
+          transactionId: state.pathParameters['id']!,
+          initialEntry: state.extra is TransactionEntry
+              ? state.extra as TransactionEntry
+              : null,
+        ),
       ),
       GoRoute(
         path: AppRoute.creditUtilization,
@@ -612,11 +621,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // button and their own period chips under the title.
       GoRoute(
         path: AppRoute.spendTrends,
-        builder: (context, state) => const SpendTrendsScreen(),
+        builder: (context, state) => SpendTrendsScreen(
+          initialCategory: state.uri.queryParameters['category'],
+        ),
       ),
       GoRoute(
         path: AppRoute.assistantSpending,
-        builder: (context, state) => const SpendTrendsScreen(),
+        builder: (context, state) => SpendTrendsScreen(
+          initialCategory: state.uri.queryParameters['category'],
+        ),
       ),
       GoRoute(
         path: AppRoute.assistantAddSpend,

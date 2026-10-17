@@ -129,7 +129,8 @@ void main() {
       expect(find.text('My Test Card'), findsOneWidget);
       expect(find.byType(TabBar), findsNothing);
       expect(find.text('REWARDS'), findsOneWidget);
-      expect(find.text('SPEND'), findsOneWidget);
+      expect(find.text('Spend'), findsOneWidget);
+      expect(find.text('Spent this month'), findsNothing);
     },
   );
 

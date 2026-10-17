@@ -162,6 +162,10 @@ void main() {
     // still content rather than a wall of navigation tiles.
     expect(find.text('Insights'), findsWidgets);
     expect(find.text('This month'), findsOneWidget);
+    expect(find.text('This week'), findsOneWidget);
+    expect(find.text('This quarter'), findsOneWidget);
+    expect(find.text('This year'), findsOneWidget);
+    expect(find.text('Custom dates'), findsOneWidget);
     // The overview is intentionally backed by a deterministic empty fixture
     // in this shell test.  The async empty-state card can be replaced by the
     // shell's signed-in loading state while lifecycle providers settle; the

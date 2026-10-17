@@ -167,6 +167,34 @@ void main() {
     expect(find.text('₹10,148.00'), findsOneWidget);
   });
 
+  testWidgets('shows incoming and outgoing totals with direction signs', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'income',
+        amount: Money.fromRupees(9000),
+        occurredAt: DateTime.now(),
+        merchantName: 'Salary',
+        entryKind: TxnEntryKind.income,
+      ),
+      _txn(
+        id: 'spend',
+        amount: Money.fromRupees(1250),
+        occurredAt: DateTime.now(),
+        merchantName: 'Cafe',
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    expect(find.text('Money in'), findsOneWidget);
+    expect(find.text('Money out'), findsOneWidget);
+    expect(find.text('+₹9,000'), findsOneWidget);
+    expect(find.text('−₹1,250'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_downward_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_upward_rounded), findsOneWidget);
+  });
+
   testWidgets('tapping a transaction navigates to its detail route', (
     tester,
   ) async {

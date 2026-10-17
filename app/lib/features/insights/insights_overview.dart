@@ -6,26 +6,64 @@ import '../../data/user_cards_repository.dart';
 
 /// The period chips across the top of design 04 Insights.
 ///
-/// Three, not a free date range: the deck shows a short chip row, and every
-/// figure on the screen is a "what did this stretch of time do for me"
-/// summary rather than an audit tool. E11 Spending Overview already owns
-/// arbitrary month selection for anyone who needs it.
+/// The visible selector mirrors Spending so the same question has the same
+/// answer whichever entry point the user takes: this week, this month, this
+/// quarter, this year, or a custom inclusive date range.
 enum InsightsPeriod {
+  week('This week'),
   thisMonth('This month'),
+  thisQuarter('This quarter'),
+  thisYear('This year'),
+  custom('Custom dates'),
+
+  // Kept for compatibility with older deep links and cached callers. They
+  // are intentionally not part of [selectorValues], which is the product
+  // surface shown to users going forward.
   lastMonth('Last month'),
   last3Months('3 months');
 
   final String label;
   const InsightsPeriod(this.label);
 
+  static const selectorValues = <InsightsPeriod>[
+    week,
+    thisMonth,
+    thisQuarter,
+    thisYear,
+    custom,
+  ];
+
   /// Inclusive start / exclusive end for this period, relative to [now].
-  (DateTime, DateTime) range(DateTime now) {
+  ///
+  /// [customRange] is inclusive at the UI boundary. The returned end is the
+  /// following local midnight so a transaction occurring at any time on the
+  /// selected final date is retained by the shared transaction loader.
+  (DateTime, DateTime) range(DateTime now, {InsightsDateRange? customRange}) {
+    if (this == InsightsPeriod.custom && customRange != null) {
+      return (
+        _dateOnly(customRange.from),
+        _dateOnly(customRange.to).add(const Duration(days: 1)),
+      );
+    }
+
+    final startOfToday = _dateOnly(now);
     final startOfThisMonth = DateTime(now.year, now.month);
     return switch (this) {
+      InsightsPeriod.week => (
+        startOfToday.subtract(Duration(days: startOfToday.weekday - 1)),
+        startOfToday
+            .subtract(Duration(days: startOfToday.weekday - 1))
+            .add(const Duration(days: 7)),
+      ),
       InsightsPeriod.thisMonth => (
         startOfThisMonth,
         DateTime(now.year, now.month + 1),
       ),
+      InsightsPeriod.thisQuarter => (
+        DateTime(now.year, ((now.month - 1) ~/ 3) * 3 + 1),
+        DateTime(now.year, ((now.month - 1) ~/ 3) * 3 + 4),
+      ),
+      InsightsPeriod.thisYear => (DateTime(now.year), DateTime(now.year + 1)),
       InsightsPeriod.lastMonth => (
         DateTime(now.year, now.month - 1),
         startOfThisMonth,
@@ -34,8 +72,51 @@ enum InsightsPeriod {
         DateTime(now.year, now.month - 2),
         DateTime(now.year, now.month + 1),
       ),
+      // A custom query without dates is only possible for a programmatic
+      // caller; fall back to this month rather than issuing an invalid range.
+      InsightsPeriod.custom => (
+        startOfThisMonth,
+        DateTime(now.year, now.month + 1),
+      ),
     };
   }
+}
+
+/// Inclusive, date-only bounds selected by the Insights date picker.
+class InsightsDateRange {
+  final DateTime from;
+  final DateTime to;
+
+  InsightsDateRange({required DateTime from, required DateTime to})
+    : from = _dateOnly(from),
+      to = _dateOnly(to) {
+    if (this.to.isBefore(this.from)) {
+      throw ArgumentError.value(to, 'to', 'must be on or after from');
+    }
+  }
+
+  String get shortLabel => '${_shortDate(from)} – ${_shortDate(to)}';
+}
+
+DateTime _dateOnly(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
+
+String _shortDate(DateTime date) {
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${months[date.month - 1]} ${date.day}';
 }
 
 /// One bar in design 04's "where it came from" breakdown, or one row of
@@ -138,127 +219,141 @@ class InsightsOverview {
 /// period, this resolves to [InsightsOverview.empty] rather than an error —
 /// "you haven't spent anything this month" is a real answer, and the screen
 /// renders its own empty state from the zero counts.
-final insightsOverviewProvider =
-    FutureProvider.family<InsightsOverview, InsightsPeriod>((
-      ref,
-      period,
-    ) async {
-      final repo = ref.watch(userCardsRepositoryProvider);
-      if (repo == null) return InsightsOverview.empty;
+final FutureProviderFamily<InsightsOverview, InsightsPeriod>
+insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPeriod>((
+  ref,
+  period,
+) async {
+  final repo = ref.watch(userCardsRepositoryProvider);
+  if (repo == null) return InsightsOverview.empty;
 
-      final now = ref.watch(clockProvider).now();
-      final (from, to) = period.range(now);
+  final now = ref.watch(clockProvider).now();
+  final customRange = ref.watch(insightsCustomRangeProvider);
+  final (from, toExclusive) = period.range(now, customRange: customRange);
+  // UserCardsRepository's transaction endpoint accepts an inclusive
+  // calendar date, while the period model uses a half-open end. Convert
+  // once at the boundary so online and cached reads agree.
+  final toInclusive = toExclusive.subtract(const Duration(days: 1));
 
-      final pairs =
-          ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
-      final productsByUserCardId = {for (final (uc, p) in pairs) uc.id: p};
-      final allProducts = [for (final (_, p) in pairs) p];
+  final pairs =
+      ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+  final productsByUserCardId = {for (final (uc, p) in pairs) uc.id: p};
+  final allProducts = [for (final (_, p) in pairs) p];
 
-      final transactions = await loadTransactionsWithOfflineCache(
-        ref,
-        repo: repo,
-        cacheKey:
-            'insights_transactions:${period.name}:${from.toIso8601String()}:${to.toIso8601String()}',
-        from: from,
-        to: to,
-      );
-      // Insights is a spending/rewards view. Keep income, investments and
-      // transfers out of both the spend total and the reward/card comparisons.
-      // The API exposes entry_kind so this remains correct for SMS-imported rows
-      // as well as manually logged rows.
-      final active = transactions
-          .where(
-            (t) =>
-                t.status == 'active' &&
-                t.entryKind == TxnEntryKind.spend &&
-                t.amount.paise > 0,
-          )
-          .toList();
-      if (active.isEmpty) return InsightsOverview.empty;
+  final transactions = await loadTransactionsWithOfflineCache(
+    ref,
+    repo: repo,
+    cacheKey:
+        'insights_transactions:${period.name}:${from.toIso8601String()}:${toExclusive.toIso8601String()}',
+    from: from,
+    to: toInclusive,
+    preferCached: true,
+    onBackgroundRefresh: () => ref.invalidate(insightsOverviewProvider(period)),
+  );
+  // Insights is a spending/rewards view. Keep income, investments and
+  // transfers out of both the spend total and the reward/card comparisons.
+  // The API exposes entry_kind so this remains correct for SMS-imported rows
+  // as well as manually logged rows.
+  final active = transactions
+      .where(
+        (t) =>
+            t.status == 'active' &&
+            t.entryKind == TxnEntryKind.spend &&
+            t.amount.paise > 0,
+      )
+      .toList();
+  if (active.isEmpty) return InsightsOverview.empty;
 
-      var earned = const Money.zero();
-      var spend = const Money.zero();
-      var missed = const Money.zero();
-      var missedCount = 0;
-      final byCategory = <String, Money>{};
-      final byCard = <String, Money>{};
-      final missedRows = <MissedEarning>[];
+  var earned = const Money.zero();
+  var spend = const Money.zero();
+  var missed = const Money.zero();
+  var missedCount = 0;
+  final byCategory = <String, Money>{};
+  final byCard = <String, Money>{};
+  final missedRows = <MissedEarning>[];
 
-      for (final txn in active) {
-        spend += txn.amount;
+  for (final txn in active) {
+    spend += txn.amount;
 
-        // Null reward means "not known", not "earned nothing" — such a row is
-        // left out of the earned total and its category bar entirely rather
-        // than dragging both down towards zero.
-        final reward = txn.rewardValue;
-        if (reward != null && !reward.isNegative) {
-          earned += reward;
-          final categoryLabel = txn.categoryName ?? 'Other';
-          byCategory[categoryLabel] =
-              (byCategory[categoryLabel] ?? const Money.zero()) + reward;
-          final cardLabel = txn.cardDisplayName;
-          if (cardLabel != null) {
-            byCard[cardLabel] =
-                (byCard[cardLabel] ?? const Money.zero()) + reward;
-          }
-        }
-
-        // Needs at least two owned cards to mean anything — with one card there
-        // was nothing else to have chosen. Same guard D6 Missed Opportunities
-        // applies.
-        if (allProducts.length < 2) {
-          continue;
-        }
-        if (txn.userCardId == null) {
-          continue;
-        }
-        final usedProduct = productsByUserCardId[txn.userCardId!];
-        if (usedProduct == null) {
-          continue; // card since archived — nothing to compare against
-        }
-
-        final comparison = compareToOwnedCards(
-          usedCard: usedProduct,
-          ownedCards: allProducts,
-          amount: txn.amount,
-          categoryId: txn.categoryId,
-        );
-        if (!comparison.hadBetterOption) continue;
-        missed += comparison.missedValue;
-        missedCount++;
-        missedRows.add(
-          MissedEarning(
-            entry: txn,
-            betterCard: comparison.betterCard!,
-            missed: comparison.missedValue,
-          ),
-        );
+    // Null reward means "not known", not "earned nothing" — such a row is
+    // left out of the earned total and its category bar entirely rather
+    // than dragging both down towards zero.
+    final reward = txn.rewardValue;
+    if (reward != null && !reward.isNegative) {
+      earned += reward;
+      final categoryLabel = txn.categoryName ?? 'Other';
+      byCategory[categoryLabel] =
+          (byCategory[categoryLabel] ?? const Money.zero()) + reward;
+      final cardLabel = txn.cardDisplayName;
+      if (cardLabel != null) {
+        byCard[cardLabel] = (byCard[cardLabel] ?? const Money.zero()) + reward;
       }
+    }
 
-      List<CategoryEarning> ranked(Map<String, Money> totals) => [
-        for (final entry in totals.entries)
-          CategoryEarning(label: entry.key, earned: entry.value),
-      ]..sort((a, b) => b.earned.paise.compareTo(a.earned.paise));
+    // Needs at least two owned cards to mean anything — with one card there
+    // was nothing else to have chosen. Same guard D6 Missed Opportunities
+    // applies.
+    if (allProducts.length < 2) {
+      continue;
+    }
+    if (txn.userCardId == null) {
+      continue;
+    }
+    final usedProduct = productsByUserCardId[txn.userCardId!];
+    if (usedProduct == null) {
+      continue; // card since archived — nothing to compare against
+    }
 
-      final categories = ranked(byCategory);
-      final cards = ranked(byCard);
+    final comparison = compareToOwnedCards(
+      usedCard: usedProduct,
+      ownedCards: allProducts,
+      amount: txn.amount,
+      categoryId: txn.categoryId,
+    );
+    if (!comparison.hadBetterOption) continue;
+    missed += comparison.missedValue;
+    missedCount++;
+    missedRows.add(
+      MissedEarning(
+        entry: txn,
+        betterCard: comparison.betterCard!,
+        missed: comparison.missedValue,
+      ),
+    );
+  }
 
-      missedRows.sort((a, b) => b.missed.paise.compareTo(a.missed.paise));
+  List<CategoryEarning> ranked(Map<String, Money> totals) => [
+    for (final entry in totals.entries)
+      CategoryEarning(label: entry.key, earned: entry.value),
+  ]..sort((a, b) => b.earned.paise.compareTo(a.earned.paise));
 
-      return InsightsOverview(
-        earned: earned,
-        spend: spend,
-        missed: missed,
-        missedCount: missedCount,
-        transactionCount: active.length,
-        byCategory: categories,
-        byCard: cards,
-        topMissed: missedRows.take(3).toList(),
-      );
-    });
+  final categories = ranked(byCategory);
+  final cards = ranked(byCard);
+
+  missedRows.sort((a, b) => b.missed.paise.compareTo(a.missed.paise));
+
+  return InsightsOverview(
+    earned: earned,
+    spend: spend,
+    missed: missed,
+    missedCount: missedCount,
+    transactionCount: active.length,
+    byCategory: categories,
+    byCard: cards,
+    topMissed: missedRows.take(3).toList(),
+  );
+});
 
 /// Which period chip is selected. A plain [StateProvider] like Home's own
 /// category selection — session state, not persisted.
 final insightsPeriodProvider = StateProvider<InsightsPeriod>(
   (ref) => InsightsPeriod.thisMonth,
+);
+
+/// The currently selected custom range, kept separately because an enum is
+/// the right key for preset periods but cannot carry two dates. The overview
+/// provider watches this state, so changing either endpoint recomputes every
+/// card, category, and missed-opportunity figure together.
+final insightsCustomRangeProvider = StateProvider<InsightsDateRange?>(
+  (ref) => null,
 );

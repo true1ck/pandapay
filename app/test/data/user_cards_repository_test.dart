@@ -165,6 +165,29 @@ void main() {
     expect(state.smsObservationCount, isNull);
   });
 
+  test('updates a transaction note through the dedicated note endpoint', () async {
+    late http.Request request;
+    final repository = UserCardsRepository(
+      apiBaseUrl: 'https://api.test',
+      accessToken: 'token',
+      client: MockClient((incoming) async {
+        request = incoming;
+        return http.Response(
+          jsonEncode({
+            'transaction': {'id': 'txn-1', 'note': 'remember this'},
+          }),
+          200,
+        );
+      }),
+    );
+
+    await repository.updateTransactionNote('txn-1', 'remember this');
+
+    expect(request.method, 'PATCH');
+    expect(request.url.path, '/transactions/txn-1/note');
+    expect(jsonDecode(request.body), {'note': 'remember this'});
+  });
+
   test('accepts a 200 when discovery links an existing card placeholder', () async {
     final repository = UserCardsRepository(
       apiBaseUrl: 'https://api.test',

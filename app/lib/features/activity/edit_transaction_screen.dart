@@ -16,7 +16,13 @@ import '../../data/user_cards_repository.dart';
 /// job is collecting the new values correctly.
 class EditTransactionScreen extends ConsumerStatefulWidget {
   final String transactionId;
-  const EditTransactionScreen({super.key, required this.transactionId});
+  final TransactionEntry? initialEntry;
+
+  const EditTransactionScreen({
+    super.key,
+    required this.transactionId,
+    this.initialEntry,
+  });
 
   @override
   ConsumerState<EditTransactionScreen> createState() =>
@@ -58,6 +64,13 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
               ? TxnInstrument.creditCard
               : TxnInstrument.upiBank);
     _rail = entry.rail;
+    // The bottom action is built before the body's AsyncValue builder runs.
+    // Request one safe rebuild after the first frame so Save is enabled for
+    // the loaded row instead of remaining disabled until another provider
+    // happens to change.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _save() async {
@@ -71,21 +84,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       _error = null;
     });
     try {
-      await ref
-          .read(userCardsRepositoryProvider)!
-          .editTransaction(
-            widget.transactionId,
-            amountInr: amount,
-            occurredAt: _occurredAt,
-            categoryId: _categoryId,
-            merchantName: _merchantController.text.trim().isEmpty
-                ? null
-                : _merchantController.text.trim(),
-            userCardId: _userCardId,
-            instrument: _instrument,
-            entryKind: _entryKind,
-            rail: _rail,
-          );
+      await _submitEdit(amount);
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       ref.invalidate(transactionsProvider);
@@ -132,15 +131,66 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         }
         return;
       }
+      if (isAuthenticationFailure(e)) {
+        try {
+          final refreshed = await ref
+              .read(sessionRefreshCoordinatorProvider)
+              .refresh();
+          if (refreshed != null && refreshed.isNotEmpty) {
+            await _submitEdit(amount);
+            ref.invalidate(userCardsProvider);
+            ref.invalidate(myCardsProvider);
+            ref.invalidate(transactionsProvider);
+            ref.invalidate(utilizationTransactionsProvider);
+            ref.invalidate(homeSummaryProvider);
+            if (mounted) context.pop(true);
+            return;
+          }
+        } catch (_) {
+          // Fall through to the explicit session-recovery message below.
+        }
+        if (mounted) {
+          setState(
+            () => _error =
+                'Your session has expired. Reconnect and sign in again, then try saving this edit.',
+          );
+        }
+        return;
+      }
       setState(() => _error = userFacingErrorMessage(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
+  Future<void> _submitEdit(double amount) async {
+    final repo = ref.read(userCardsRepositoryProvider);
+    if (repo == null) {
+      throw const AuthenticationUnavailableException();
+    }
+    await repo.editTransaction(
+      widget.transactionId,
+      amountInr: amount,
+      occurredAt: _occurredAt,
+      categoryId: _categoryId,
+      merchantName: _merchantController.text.trim().isEmpty
+          ? null
+          : _merchantController.text.trim(),
+      userCardId: _userCardId,
+      instrument: _instrument,
+      entryKind: _entryKind,
+      rail: _rail,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final txn = ref.watch(_editTransactionProvider(widget.transactionId));
+    final txn = ref.watch(
+      _editTransactionProvider((
+        id: widget.transactionId,
+        initialEntry: widget.initialEntry,
+      )),
+    );
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
 
@@ -200,7 +250,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
               ),
               textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
             ),
-            onPressed: _saving ? null : _save,
+            // Never offer Save while the transaction itself failed to load;
+            // the screenshot's blank form was allowing exactly that state.
+            onPressed: _saving || !_initialized ? null : _save,
             child: _saving
                 ? const SizedBox(
                     width: 18,
@@ -418,17 +470,37 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 }
 
 final _editTransactionProvider =
-    FutureProvider.family<TransactionEntry, String>((ref, id) async {
+    FutureProvider.family<
+      TransactionEntry,
+      ({String id, TransactionEntry? initialEntry})
+    >((ref, request) async {
+      final id = request.id;
       final repo = ref.watch(userCardsRepositoryProvider);
-      final cached = await cachedTransactionById(ref, id);
+      // Activity already has the row the user tapped. Prefer that row, then
+      // the in-memory list/cache, so an expired token cannot turn a usable
+      // edit screen into a blank form.
+      final loaded = ref.read(transactionsProvider).valueOrNull;
+      TransactionEntry? fromLoaded;
+      if (loaded != null) {
+        for (final entry in loaded) {
+          if (entry.id == id) {
+            fromLoaded = entry;
+            break;
+          }
+        }
+      }
+      final cached =
+          request.initialEntry ??
+          fromLoaded ??
+          await cachedTransactionById(ref, id);
       if (repo == null) {
         if (cached != null) return cached;
         throw ApiException('Not signed in');
       }
       try {
         return await repo.fetchTransaction(id);
-      } catch (error) {
-        if (isAuthenticationFailure(error) && cached != null) return cached;
+      } catch (_) {
+        if (cached != null) return cached;
         rethrow;
       }
     });

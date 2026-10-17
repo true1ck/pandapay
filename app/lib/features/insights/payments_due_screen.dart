@@ -49,6 +49,10 @@ class DuePayment {
 /// a guessed date — the same rule E8's calendar already follows. That is a
 /// real gap the user can close from Edit Card, not something to paper over.
 final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
+  // Transaction writes invalidate this shared provider, so due cards refresh
+  // immediately after a spend is logged or edited instead of waiting for a
+  // lifecycle refresh.
+  ref.watch(transactionsProvider);
   final repo = ref.watch(userCardsRepositoryProvider);
   // Await the source provider. Reading valueOrNull here made this screen
   // briefly see the provider's loading state as an empty wallet and then keep
@@ -83,6 +87,10 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
     if (cycleStart != null) {
       for (final txn in transactions) {
         if (txn.status != 'active') continue;
+        if (txn.entryKind != TxnEntryKind.spend ||
+            txn.instrument != TxnInstrument.creditCard) {
+          continue;
+        }
         if (txn.userCardId != card.id) continue;
         if (txn.occurredAt.isBefore(cycleStart)) continue;
         logged += txn.amount;

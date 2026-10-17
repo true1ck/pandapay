@@ -378,6 +378,17 @@ class RecommendationEngine {
     return unit.effectiveRatePerRupee(rate, pointValueInr: card.pointValueInr);
   }
 
+  /// Fuel waivers are transaction bands, not unconditional reward rates.
+  /// For example, "above ₹400 up to ₹4,000" does not waive the surcharge on
+  /// a ₹300 or ₹4,001 fuel transaction.
+  static bool fuelRuleApplies(FuelSurchargeRule rule, Money amount) {
+    final minTxn = rule.minTxn;
+    if (minTxn != null && amount <= minTxn) return false;
+    final maxTxn = rule.maxTxn;
+    if (maxTxn != null && amount > maxTxn) return false;
+    return true;
+  }
+
   List<Recommendation> rank(
     RecommendationContext context,
     List<CardSnapshot> cards,
@@ -475,7 +486,9 @@ class RecommendationEngine {
       // the *resolved* rate rather than the nominal one keeps such a card
       // honestly excluded instead of advertising "Base rate 0.0%".
       final ratePerRupee = isCategoryExcluded ? 0.0 : card.baseRatePerRupee;
-      if (context.isFuel && card.fuelRule != null) {
+      if (context.isFuel &&
+          card.fuelRule != null &&
+          fuelRuleApplies(card.fuelRule!, context.amount)) {
         final waiverFraction = card.fuelRule!.waiverPercent / 100;
         final waiverValue = context.amount * waiverFraction;
         final baseRewardValue = context.amount * ratePerRupee;
@@ -753,7 +766,9 @@ class RecommendationEngine {
     }
 
     // UA-2.2.7 fuel surcharge waiver, additive.
-    if (context.isFuel && card.fuelRule != null) {
+    if (context.isFuel &&
+        card.fuelRule != null &&
+        fuelRuleApplies(card.fuelRule!, context.amount)) {
       final waiverFraction = card.fuelRule!.waiverPercent / 100;
       final waiverValue = context.amount * waiverFraction;
       fuelWaiver = waiverValue;
@@ -806,7 +821,9 @@ class RecommendationEngine {
       // ran low. This is the rate the headline badge is naming.
       effectiveRatePerRupee: baseRatePerRupee > 0
           ? baseRatePerRupee
-          : (context.isFuel && card.fuelRule != null
+          : (context.isFuel &&
+                  card.fuelRule != null &&
+                  fuelRuleApplies(card.fuelRule!, context.amount)
                 ? card.fuelRule!.waiverPercent / 100
                 : null),
       reasonLines: reasons,

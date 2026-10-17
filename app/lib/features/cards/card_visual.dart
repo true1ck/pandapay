@@ -14,7 +14,6 @@ import '../../data/user_cards_repository.dart';
 class CardVisual extends StatelessWidget {
   final CardProduct product;
   final bool showProductName;
-  final bool silver;
   final UserCard? userCard;
   final Money? cycleSpend;
   final TransactionEntry? latestSpend;
@@ -25,7 +24,6 @@ class CardVisual extends StatelessWidget {
     super.key,
     required this.product,
     this.showProductName = true,
-    this.silver = false,
     this.userCard,
     this.cycleSpend,
     this.latestSpend,
@@ -35,7 +33,10 @@ class CardVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = _paletteFor(product, silver: silver);
+    // Card colour is always derived from the catalogue product/issuer. There
+    // is intentionally no neutral/silver override: the same HDFC, Axis,
+    // Kotak, etc. palette must follow the card everywhere in the app.
+    final palette = _paletteFor(product);
     return LayoutBuilder(
       builder: (context, constraints) {
         // Picker rows and capability headers intentionally use a tiny card
@@ -338,18 +339,7 @@ class _CardPalette {
   });
 }
 
-_CardPalette _paletteFor(CardProduct product, {bool silver = false}) {
-  if (silver) {
-    return const _CardPalette(
-      primary: Color(0xFFF0F2F4),
-      secondary: Color(0xFF9FA7B0),
-      chip: Color(0xFFD8A83E),
-      chipInk: Color(0xFF6D4E16),
-      foreground: Color(0xFF20262D),
-      foregroundMuted: Color(0xFF5D6873),
-    );
-  }
-
+_CardPalette _paletteFor(CardProduct product) {
   final custom = _parseHexColor(product.artPrimaryColor);
   final text = '${product.issuerName ?? ''} ${product.name}'.toLowerCase();
 

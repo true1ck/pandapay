@@ -189,12 +189,17 @@ void main() {
       // fold depends on how much content the hub has above the grid, which
       // differs between the signed-out empty state and a wallet with data.
       await tester.scrollUntilVisible(
-        find.text('See every transaction'),
+        find.text('All activity · money in and out'),
         300,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('insightsScroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('See every transaction'));
+      await tester.tap(find.text('All activity · money in and out'));
       await tester.pumpAndSettle();
 
       expect(find.text('Activity'), findsWidgets);
@@ -258,20 +263,23 @@ void main() {
       // fold depends on how much content the hub has above the grid, which
       // differs between the signed-out empty state and a wallet with data.
       await tester.scrollUntilVisible(
-        find.text('See every transaction'),
+        find.text('All activity · money in and out'),
         300,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('insightsScroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('See every transaction'));
+      await tester.tap(find.text('All activity · money in and out'));
       await tester.pumpAndSettle();
 
       expect(find.text('Test RuPay Card · Online'), findsOneWidget);
-      // The D1 summary card's total-spend header shows the same figure as
-      // the sole transaction tile below it when there's only one entry, so
-      // both legitimately render '₹1,000.00' — this only checks it appears
-      // (not exactly once).
-      expect(find.text('₹1,000.00'), findsWidgets);
+      // Spending rows include the explicit money-out sign. Keep this tied to
+      // the user-visible amount rather than the card/category metadata.
+      expect(find.text('−₹1,000.00'), findsWidgets);
     },
   );
 

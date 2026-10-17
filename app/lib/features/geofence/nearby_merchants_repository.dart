@@ -52,6 +52,18 @@ abstract class NearbyMerchantDiscoveryRepository
   }) => fetchNearby(lat: lat, lng: lng, radiusM: radiusM);
 }
 
+/// Manual place lookup used to test the proximity flow without relying on a
+/// fresh handset GPS fix. Results are unverified OSM candidates and must stay
+/// visibly separate from PandaPay's published merchant directory.
+abstract class NearbyPlaceSearchRepository {
+  Future<List<NearbyMerchantCandidate>> searchPlaces({
+    required String query,
+    double? lat,
+    double? lng,
+    double radiusM = 5000,
+  });
+}
+
 class NearbyMerchantCacheSnapshot {
   final DateTime fetchedAt;
   final List<NearbyMerchantCandidate> candidates;
@@ -138,7 +150,8 @@ class SharedPreferencesNearbyMerchantCache {
 class HttpNearbyMerchantsRepository
     implements
         NearbyMerchantDiscoveryRepository,
-        NearbyMerchantCacheRepository {
+        NearbyMerchantCacheRepository,
+        NearbyPlaceSearchRepository {
   final String baseUrl;
   final http.Client _client;
   final SharedPreferencesNearbyMerchantCache? localCache;
@@ -203,6 +216,30 @@ class HttpNearbyMerchantsRepository
     if (response.statusCode != 200) {
       throw ApiException(
         'GET /merchants/nearby/discover failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    return parseNearbyMerchantsPayload(response.body);
+  }
+
+  @override
+  Future<List<NearbyMerchantCandidate>> searchPlaces({
+    required String query,
+    double? lat,
+    double? lng,
+    double radiusM = 5000,
+  }) async {
+    final uri = Uri.parse('$baseUrl/merchants/nearby/search').replace(
+      queryParameters: {
+        'q': query.trim(),
+        if (lat != null) 'lat': lat.toString(),
+        if (lng != null) 'lng': lng.toString(),
+        'radiusM': radiusM.toString(),
+      },
+    );
+    final response = await _client.get(uri);
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /merchants/nearby/search failed: ${response.statusCode} ${response.body}',
       );
     }
     return parseNearbyMerchantsPayload(response.body);

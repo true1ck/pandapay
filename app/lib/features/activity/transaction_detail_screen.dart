@@ -40,11 +40,20 @@ import 'report_transaction_screen.dart';
 /// this schema does not retain (see historical_comparison.dart).
 class TransactionDetailScreen extends ConsumerWidget {
   final String transactionId;
-  const TransactionDetailScreen({super.key, required this.transactionId});
+  final TransactionEntry? initialEntry;
+
+  const TransactionDetailScreen({
+    super.key,
+    required this.transactionId,
+    this.initialEntry,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final txn = ref.watch(_transactionProvider(transactionId));
+    // Activity and Spending already hold the complete row that was tapped.
+    // Use it immediately while a live refresh is pending or unavailable.
+    final entry = txn.valueOrNull ?? initialEntry;
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -57,13 +66,14 @@ class TransactionDetailScreen extends ConsumerWidget {
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
         actions: [
-          if (txn.valueOrNull?.status == 'active')
+          if (entry?.status == 'active')
             IconButton(
               tooltip: 'Edit',
               icon: const Icon(Icons.edit_outlined),
               onPressed: () async {
                 final changed = await context.push<bool>(
                   '/activity/$transactionId/edit',
+                  extra: entry,
                 );
                 if (changed == true) {
                   ref.invalidate(_transactionProvider(transactionId));
@@ -73,21 +83,21 @@ class TransactionDetailScreen extends ConsumerWidget {
         ],
       ),
       body: AppBackground(
-        child: txn.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => ErrorState(
-            message: userFacingErrorMessage(err),
-            onRetry: () => ref.invalidate(_transactionProvider(transactionId)),
-          ),
-          data: (entry) => entry == null
-              ? const EmptyState(
+        child: entry != null
+            ? _DetailBody(entry: entry)
+            : txn.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) => ErrorState(
+                  message: userFacingErrorMessage(err),
+                  onRetry: () =>
+                      ref.invalidate(_transactionProvider(transactionId)),
+                ),
+                data: (_) => const EmptyState(
                   icon: Icons.receipt_long_outlined,
                   title: 'Transaction not available offline',
-                  message:
-                      'Reconnect and try again to load this transaction.',
-                )
-              : _DetailBody(entry: entry),
-        ),
+                  message: 'Reconnect and try again to load this transaction.',
+                ),
+              ),
       ),
     );
   }
@@ -98,15 +108,27 @@ final _transactionProvider = FutureProvider.family<TransactionEntry?, String>((
   id,
 ) async {
   final repo = ref.watch(userCardsRepositoryProvider);
+  final loaded = ref.read(transactionsProvider).valueOrNull;
+  final fromLoaded = loaded == null
+      ? null
+      : loaded.where((entry) => entry.id == id).firstOrNull;
   final cached = await cachedTransactionById(ref, id);
-  if (repo == null) return cached;
+  final fallback = fromLoaded ?? cached;
+  if (repo == null) return fallback;
   try {
     return await repo.fetchTransaction(id);
   } catch (error) {
-    if (isAuthenticationFailure(error) || cached != null) return cached;
+    if (isAuthenticationFailure(error) || fallback != null) return fallback;
     rethrow;
   }
 });
+
+extension _TransactionFirstOrNull on Iterable<TransactionEntry> {
+  TransactionEntry? get firstOrNull {
+    final iterator = this.iterator;
+    return iterator.moveNext() ? iterator.current : null;
+  }
+}
 
 class _DetailBody extends ConsumerStatefulWidget {
   final TransactionEntry entry;
@@ -126,6 +148,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   /// Seeded from the entry; splits are loaded once on init.
   late String? _note = widget.entry.note;
   List<TransactionSplit> _splits = const [];
+  String? _splitLoadError;
+  bool _loadingSplits = true;
+  bool _savingSplits = false;
 
   @override
   void initState() {
@@ -135,14 +160,35 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   Future<void> _loadSplits() async {
     final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null) return;
+    if (repo == null) {
+      if (mounted) {
+        setState(() {
+          _loadingSplits = false;
+          _splitLoadError = const AuthenticationUnavailableException().message;
+        });
+      }
+      return;
+    }
     try {
       final splits = await repo.fetchSplits(widget.entry.id);
-      if (mounted) setState(() => _splits = splits);
-    } catch (_) {
-      // A failed split fetch must not take down the detail screen — the
-      // row simply reads "Split this expense" as if there were none, and
-      // opening it will surface the error properly.
+      if (mounted) {
+        setState(() {
+          _splits = splits;
+          _splitLoadError = null;
+          _loadingSplits = false;
+        });
+      }
+    } catch (error) {
+      // Keep the transaction detail usable, but do not silently present a
+      // failed split read as an unsplit transaction. The retry affordance
+      // makes an older API deployment, an expired session, or a temporary
+      // network failure diagnosable from the screen.
+      if (mounted) {
+        setState(() {
+          _loadingSplits = false;
+          _splitLoadError = userFacingErrorMessage(error);
+        });
+      }
     }
   }
 
@@ -212,9 +258,35 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         widget.entry.id,
         note.isEmpty ? null : note,
       );
+      // The detail provider is refreshed below, but Activity, Home, and
+      // Spending can still be holding the same transaction in their own
+      // provider/cache. Invalidate the shared list as well so reopening the
+      // transaction or searching for its note reads the value just saved.
+      ref.invalidate(transactionsProvider);
       ref.invalidate(_transactionProvider(widget.entry.id));
     } catch (e) {
       if (mounted) setState(() => _note = previous);
+      final offline = ref.read(isOnlineProvider).valueOrNull == false;
+      if (offline) {
+        final queue = await ref.read(syncQueueProvider.future);
+        queue.enqueueUpdate(
+          entity: 'transactions',
+          entityId: widget.entry.id,
+          fields: {'note': note.isEmpty ? null : note},
+        );
+        ref.invalidate(pendingSyncCountProvider);
+        if (mounted) {
+          setState(() => _note = note.isEmpty ? null : note);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Note saved offline — will sync when you reconnect.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -228,6 +300,20 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _showSplitSheet() async {
+    if (_savingSplits) return;
+    // A detail row can be opened before the one-time split read has settled.
+    // Finish that read before opening the editor so an existing split is not
+    // accidentally presented as a new split and then overwritten.
+    if (_loadingSplits) await _loadSplits();
+    if (!mounted) return;
+    if (_splitLoadError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Retry loading the current split before editing it.'),
+        ),
+      );
+      return;
+    }
     final result = await showModalBottomSheet<List<TransactionSplit>>(
       context: context,
       isScrollControlled: true,
@@ -241,10 +327,23 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     if (result == null) return;
 
     final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null) return;
+    if (repo == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sign in again to save this split.')),
+        );
+      }
+      return;
+    }
+    if (mounted) setState(() => _savingSplits = true);
     try {
       final saved = await repo.saveSplits(widget.entry.id, result);
-      if (mounted) setState(() => _splits = saved);
+      if (mounted) {
+        setState(() {
+          _splits = saved;
+          _splitLoadError = null;
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -255,6 +354,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _savingSplits = false);
     }
   }
 
@@ -544,7 +645,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         const SizedBox(height: AppSpace.xs),
                         Text(
                           entry.merchantName ??
-                              (entry.entryKind == TxnEntryKind.income ? 'Income' : entry.entryKind.label),
+                              (entry.entryKind == TxnEntryKind.income
+                                  ? 'Income'
+                                  : entry.entryKind.label),
                           style: BambooFonts.ui(13.5, color: BambooInk.ink500),
                         ),
                       ],
@@ -628,11 +731,36 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   const SizedBox(height: AppSpace.sm),
                   AccountTile(
                     icon: Icons.call_split_rounded,
-                    label: _splits.isEmpty
+                    label: _savingSplits
+                        ? 'Saving split…'
+                        : _splits.isEmpty
                         ? 'Split this expense'
                         : 'Split across ${_splits.length} ${_splits.length == 1 ? 'share' : 'shares'}',
                     onTap: _showSplitSheet,
                   ),
+                  if (_loadingSplits) ...[
+                    const SizedBox(height: AppSpace.sm),
+                    const LinearProgressIndicator(minHeight: 2),
+                  ] else if (_splitLoadError != null) ...[
+                    const SizedBox(height: AppSpace.xs),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Could not load split details: $_splitLoadError',
+                            style: BambooFonts.ui(12, color: BambooInk.clayInk),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _loadSplits,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ] else if (_splits.isNotEmpty) ...[
+                    const SizedBox(height: AppSpace.sm),
+                    _SplitSummary(splits: _splits, total: widget.entry.amount),
+                  ],
                   const SizedBox(height: AppSpace.sm),
                   // Design 18's third row, landing on design 26 with this payment
                   // already attached — not the catalogue-correction screen (C7) and
@@ -867,6 +995,78 @@ class _ReceiptSection extends StatelessWidget {
 /// a bill is a real thing ("₹400 of this ₹1,000 was Priya's") and the
 /// remainder is simply yours. Totalling *more* is always a mistake and is
 /// blocked here as well as server-side.
+class _SplitSummary extends StatelessWidget {
+  final List<TransactionSplit> splits;
+  final Money total;
+
+  const _SplitSummary({required this.splits, required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    final splitTotal = splits.fold(
+      const Money.zero(),
+      (sum, split) => sum + split.amount,
+    );
+    final remaining = total - splitTotal;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpace.md),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Split details',
+            style: BambooFonts.ui(
+              12.5,
+              weight: FontWeight.w700,
+              color: BambooInk.ink900,
+            ),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          for (final split in splits)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpace.xs),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      split.note?.trim().isNotEmpty == true
+                          ? split.note!.trim()
+                          : 'Unlabelled share',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(13, color: BambooInk.ink500),
+                    ),
+                  ),
+                  MoneyText(
+                    split.amount,
+                    confidence: Confidence.confirmed,
+                    style: BambooFonts.money(14, color: BambooInk.ink900),
+                  ),
+                ],
+              ),
+            ),
+          const Divider(height: AppSpace.md),
+          Text(
+            'Your share: ${remaining.format(hidePaise: false)}',
+            style: BambooFonts.ui(
+              12,
+              weight: FontWeight.w600,
+              color: BambooInk.ink500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SplitSheet extends StatefulWidget {
   final Money total;
   final List<TransactionSplit> initial;
@@ -906,12 +1106,25 @@ class _SplitSheetState extends State<_SplitSheet> {
     super.dispose();
   }
 
-  double get _enteredTotal => _amounts.fold(
-    0.0,
-    (sum, c) => sum + (double.tryParse(c.text.trim()) ?? 0),
-  );
+  Money _amount(TextEditingController controller) {
+    final parsed = double.tryParse(controller.text.trim());
+    return parsed == null || !parsed.isFinite || parsed <= 0
+        ? const Money.zero()
+        : Money.fromRupees(parsed);
+  }
 
-  bool get _overAllocated => (_enteredTotal - widget.total.rupees) > 0.005;
+  int get _enteredPaise =>
+      _amounts.fold(0, (sum, controller) => sum + _amount(controller).paise);
+
+  bool get _overAllocated => _enteredPaise > widget.total.paise;
+
+  bool get _hasShares =>
+      _amounts.any((controller) => !_amount(controller).isZero);
+
+  // An existing split can be cleared intentionally by removing every row.
+  // A brand-new split still needs at least one positive share.
+  bool get _canSave =>
+      !_overAllocated && (_hasShares || widget.initial.isNotEmpty);
 
   void _addShare() {
     setState(() {
@@ -930,22 +1143,20 @@ class _SplitSheetState extends State<_SplitSheet> {
   void _save() {
     final splits = <TransactionSplit>[];
     for (var i = 0; i < _amounts.length; i++) {
-      final amount = double.tryParse(_amounts[i].text.trim()) ?? 0;
-      if (amount <= 0) continue; // a blank row is not an error, just skipped
+      final amount = _amount(_amounts[i]);
+      if (amount.isZero) continue; // a blank row is not an error, just skipped
       final note = _notes[i].text.trim();
       splits.add(
-        TransactionSplit(
-          amount: Money.fromRupees(amount),
-          note: note.isEmpty ? null : note,
-        ),
+        TransactionSplit(amount: amount, note: note.isEmpty ? null : note),
       );
     }
+    if (splits.isEmpty && widget.initial.isEmpty) return;
     Navigator.of(context).pop(splits);
   }
 
   @override
   Widget build(BuildContext context) {
-    final remaining = widget.total.rupees - _enteredTotal;
+    final remaining = Money.fromPaise(widget.total.paise - _enteredPaise);
     return Padding(
       padding: EdgeInsets.only(
         left: AppSpace.lg,
@@ -959,7 +1170,7 @@ class _SplitSheetState extends State<_SplitSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Split this expense',
+              'Split details',
               style: BambooFonts.heading(18, color: BambooInk.ink900),
             ),
             const SizedBox(height: AppSpace.xs),
@@ -1025,8 +1236,8 @@ class _SplitSheetState extends State<_SplitSheet> {
             const SizedBox(height: AppSpace.sm),
             Text(
               _overAllocated
-                  ? 'That is ${Money.fromRupees(-remaining).format()} more than the payment.'
-                  : 'Unallocated: ${Money.fromRupees(remaining).format()} — still yours.',
+                  ? 'That is ${(-remaining).format()} more than the payment.'
+                  : 'Unallocated: ${remaining.format()} — still yours.',
               style: BambooFonts.ui(
                 12.5,
                 weight: FontWeight.w600,
@@ -1043,9 +1254,17 @@ class _SplitSheetState extends State<_SplitSheet> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              onPressed: _overAllocated ? null : _save,
-              child: const Text('Save split'),
+              onPressed: _canSave ? _save : null,
+              child: Text('Save split'),
             ),
+            if (widget.initial.isNotEmpty) ...[
+              const SizedBox(height: AppSpace.xs),
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(const <TransactionSplit>[]),
+                child: const Text('Clear split'),
+              ),
+            ],
           ],
         ),
       ),

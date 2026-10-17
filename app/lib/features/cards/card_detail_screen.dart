@@ -121,8 +121,9 @@ class CardDetailScreen extends ConsumerWidget {
                     );
                   }
                   final (userCard, product) = match;
-                  final spendSummary =
-                      ref.watch(cardSpendSummaryProvider)[userCard.id];
+                  final spendSummary = ref.watch(
+                    cardSpendSummaryProvider,
+                  )[userCard.id];
                   final sections = [
                     (
                       label: 'Rewards',
@@ -130,11 +131,7 @@ class CardDetailScreen extends ConsumerWidget {
                     ),
                     (
                       label: 'Spend',
-                      body: _SpendTab(
-                        userCard: userCard,
-                        product: product,
-                        embedded: true,
-                      ),
+                      body: _SpendSection(userCard: userCard, product: product),
                     ),
                     (
                       label: 'Caps',
@@ -312,15 +309,10 @@ class _CardDetailSection extends StatelessWidget {
 /// `GET /spend-report` already returns a per-card breakdown, so filtering
 /// it here keeps one definition of "spend on this card" instead of two that
 /// can drift.
-class _SpendTab extends ConsumerWidget {
+class _SpendSection extends ConsumerWidget {
   final UserCard userCard;
   final CardProduct product;
-  final bool embedded;
-  const _SpendTab({
-    required this.userCard,
-    required this.product,
-    this.embedded = false,
-  });
+  const _SpendSection({required this.userCard, required this.product});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -328,22 +320,37 @@ class _SpendTab extends ConsumerWidget {
     final report = ref.watch(spendReportProvider(monthQuery));
 
     return report.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
-        child: SkeletonList(count: 3),
+      loading: () => const _SpendDisclosure(
+        trailing: 'Loading',
+        details: [
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpace.sm),
+            child: SkeletonList(count: 3),
+          ),
+        ],
       ),
-      error: (err, _) => ErrorState(
-        message: userFacingErrorMessage(err),
-        onRetry: () => ref.invalidate(spendReportProvider(monthQuery)),
+      error: (err, _) => _SpendDisclosure(
+        trailing: 'Retry',
+        details: [
+          ErrorState(
+            message: userFacingErrorMessage(err),
+            onRetry: () => ref.invalidate(spendReportProvider(monthQuery)),
+          ),
+        ],
       ),
       data: (data) {
         if (data == null) {
-          return const EmptyState(
-            icon: Icons.lock_outline_rounded,
-            title: 'Sign in to see this card\'s spending',
-            message:
-                'Per-card reports are built from your transaction history, which lives with '
-                'your account.',
+          return const _SpendDisclosure(
+            trailing: 'Open',
+            details: [
+              EmptyState(
+                icon: Icons.lock_outline_rounded,
+                title: 'Sign in to see this card\'s spending',
+                message:
+                    'Per-card reports are built from your transaction history, which lives with '
+                    'your account.',
+              ),
+            ],
           );
         }
         final row = data.byCard
@@ -353,12 +360,17 @@ class _SpendTab extends ConsumerWidget {
           final suffix = userCard.last4 == null
               ? ''
               : ' ending ${userCard.last4}';
-          return EmptyState(
-            icon: Icons.show_chart_rounded,
-            title: 'Nothing on ${userCard.cardName}$suffix this month',
-            message:
-                'Once spend is logged against this card, you\'ll see what it earned and the '
-                'rate it really paid.',
+          return _SpendDisclosure(
+            trailing: '₹0',
+            details: [
+              EmptyState(
+                icon: Icons.show_chart_rounded,
+                title: 'Nothing on ${userCard.cardName}$suffix this month',
+                message:
+                    'Once spend is logged against this card, you\'ll see what it earned and the '
+                    'rate it really paid.',
+              ),
+            ],
           );
         }
 
@@ -371,13 +383,9 @@ class _SpendTab extends ConsumerWidget {
         // wrong by a factor of twelve.
         final annualisedRewards = row.rewards * 12;
 
-        return ListView(
-          padding: embedded
-              ? EdgeInsets.zero
-              : const EdgeInsets.all(AppSpace.lg),
-          shrinkWrap: embedded,
-          physics: embedded ? const NeverScrollableScrollPhysics() : null,
-          children: [
+        return _SpendDisclosure(
+          trailing: row.total.format(compact: true),
+          details: [
             _SpendStatCard(
               label: 'Spent this month',
               value: row.total,
@@ -409,6 +417,23 @@ class _SpendTab extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _SpendDisclosure extends StatelessWidget {
+  final String trailing;
+  final List<Widget> details;
+
+  const _SpendDisclosure({required this.trailing, required this.details});
+
+  @override
+  Widget build(BuildContext context) {
+    return _CompactDisclosure(
+      title: 'Spend',
+      subtitle: 'This month · actual spend and effective reward rate',
+      trailing: trailing,
+      details: details,
     );
   }
 }
@@ -569,8 +594,16 @@ class _RewardsTab extends ConsumerWidget {
             ? '$waiver% waiver'
             : '${_rate(group.first.rate)}% + $waiver% waiver';
       }
-      return group.length == 1 ? _rateLabel(group.first) : 'Multiple';
+      return group.length == 1 ? _rateLabel(group.first, product) : 'Multiple';
     }
+
+    CapRule? capFor(RewardRule rule) => uniqueCapRules(product.capRules)
+        .where(
+          (cap) =>
+              (cap.rewardRuleId != null && cap.rewardRuleId == rule.id) ||
+              (cap.categoryId != null && cap.categoryId == rule.categoryId),
+        )
+        .firstOrNull;
 
     return ListView(
       padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(AppSpace.lg),
@@ -598,7 +631,10 @@ class _RewardsTab extends ConsumerWidget {
                 : rateFor(entry.key, entry.value),
             details: entry.value.isEmpty
                 ? [_fuelDetail(product.fuelRule!)]
-                : [for (final rule in entry.value) _rewardRuleDetail(rule)],
+                : [
+                    for (final rule in entry.value)
+                      _rewardRuleDetail(rule, product, cap: capFor(rule)),
+                  ],
           ),
       ],
     );
@@ -613,7 +649,11 @@ class _RewardsTab extends ConsumerWidget {
     return qualifiers.isEmpty ? 'Base category rate' : qualifiers.join(' · ');
   }
 
-  static Widget _rewardRuleDetail(RewardRule rule) => Padding(
+  static Widget _rewardRuleDetail(
+    RewardRule rule,
+    CardProduct product, {
+    CapRule? cap,
+  }) => Padding(
     padding: const EdgeInsets.only(top: AppSpace.sm),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -622,7 +662,7 @@ class _RewardsTab extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              _rateLabel(rule),
+              _rateLabel(rule, product),
               style: BambooFonts.ui(
                 13.5,
                 weight: FontWeight.w700,
@@ -646,6 +686,23 @@ class _RewardsTab extends ConsumerWidget {
             '${rule.minTxn == null ? '' : 'From ${rule.minTxn!.format()}'}${rule.minTxn != null && rule.maxTxn != null ? ' · ' : ''}${rule.maxTxn == null ? '' : 'Up to ${rule.maxTxn!.format()} per transaction'}',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
+        if (rule.unit != RewardUnit.cashbackPercent &&
+            rule.unit != RewardUnit.discountPercent &&
+            rule.unit != RewardUnit.flatPoints &&
+            product.pointValueInr > 0)
+          Text(
+            'Conversion used: ₹${product.pointValueInr.toStringAsFixed(2)} per ${rule.unit == RewardUnit.milesPer100 ? 'mile' : 'point'} · ${_effectiveValueLabel(rule, product)}',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+        if (cap != null)
+          Text(
+            'Cap: ${_capValueLabel(cap)} · ${_periodLabel(cap.period)}',
+            style: BambooFonts.ui(
+              12.5,
+              weight: FontWeight.w600,
+              color: BambooInk.amber,
+            ),
+          ),
       ],
     ),
   );
@@ -661,14 +718,50 @@ class _RewardsTab extends ConsumerWidget {
   static String _rate(double rate) =>
       rate == rate.roundToDouble() ? rate.toStringAsFixed(0) : rate.toString();
 
-  static String _rateLabel(RewardRule rule) => switch (rule.unit) {
+  static String _rateLabel(
+    RewardRule rule,
+    CardProduct product,
+  ) => switch (rule.unit) {
     RewardUnit.cashbackPercent ||
     RewardUnit.discountPercent => '${_rate(rule.rate)}%',
-    RewardUnit.pointsPer100 => '${_rate(rule.rate)} pts/₹100',
-    RewardUnit.pointsPer150 => '${_rate(rule.rate)} pts/₹150',
-    RewardUnit.pointsPer200 => '${_rate(rule.rate)} pts/₹200',
-    RewardUnit.milesPer100 => '${_rate(rule.rate)} miles/₹100',
+    RewardUnit.pointsPer100 =>
+      '${_rate(rule.rate)} pts/₹100 · ${_effectiveValueLabel(rule, product)}',
+    RewardUnit.pointsPer150 =>
+      '${_rate(rule.rate)} pts/₹150 · ${_effectiveValueLabel(rule, product)}',
+    RewardUnit.pointsPer200 =>
+      '${_rate(rule.rate)} pts/₹200 · ${_effectiveValueLabel(rule, product)}',
+    RewardUnit.milesPer100 =>
+      '${_rate(rule.rate)} miles/₹100 · ${_effectiveValueLabel(rule, product)}',
     RewardUnit.flatPoints => '${_rate(rule.rate)} pts flat',
+  };
+
+  static String _effectiveValueLabel(RewardRule rule, CardProduct product) {
+    final percent =
+        rule.unit.effectiveRatePerRupee(
+          rule.rate,
+          pointValueInr: product.pointValueInr,
+        ) *
+        100;
+    final formatted = percent == percent.roundToDouble()
+        ? percent.toStringAsFixed(0)
+        : percent.toStringAsFixed(2);
+    return '$formatted% value';
+  }
+
+  static String _capValueLabel(CapRule cap) => switch (cap.measure) {
+    CapMeasure.rewardValue => '${cap.capValue.format()} reward value',
+    CapMeasure.spendAmount => '${cap.capValue.format()} eligible spend',
+    CapMeasure.txnCount =>
+      '${cap.capValue.rupees.toStringAsFixed(0)} transactions',
+  };
+
+  static String _periodLabel(CapPeriod period) => switch (period) {
+    CapPeriod.statementCycle => 'each statement cycle',
+    CapPeriod.calendarMonth => 'each calendar month',
+    CapPeriod.quarter => 'each quarter',
+    CapPeriod.halfYear => 'each half-year',
+    CapPeriod.annual => 'each year',
+    CapPeriod.lifetime => 'lifetime',
   };
 
   static String _railLabel(TxnRail rail) => switch (rail) {

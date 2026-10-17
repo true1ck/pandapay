@@ -594,12 +594,20 @@ class BankAccountSummary {
   final Money? availableBalance;
   final DateTime? latestSmsAt;
   final int smsCount;
+  final String? issuerSlug;
+  final String? issuerName;
+  final String? issuerShortName;
+  final String? issuerLogoUrl;
 
   const BankAccountSummary({
     required this.accountLast4,
     required this.availableBalance,
     required this.latestSmsAt,
     required this.smsCount,
+    this.issuerSlug,
+    this.issuerName,
+    this.issuerShortName,
+    this.issuerLogoUrl,
   });
 
   factory BankAccountSummary.fromJson(Map<String, dynamic> json) {
@@ -612,6 +620,10 @@ class BankAccountSummary {
           ? null
           : DateTime.parse(json['latestSmsAt'] as String),
       smsCount: int.tryParse((json['smsCount'] ?? 0).toString()) ?? 0,
+      issuerSlug: json['issuerSlug'] as String?,
+      issuerName: json['issuerName'] as String?,
+      issuerShortName: json['issuerShortName'] as String?,
+      issuerLogoUrl: json['issuerLogoUrl'] as String?,
     );
   }
 }

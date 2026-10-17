@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
+import '../geofence/nearby_merchants_repository.dart';
 
 enum _ContextState { locating, found, noPermission, noMatch, offlineOrError }
 
@@ -83,18 +84,21 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
       );
       final repo = ref.read(nearbyMerchantsRepositoryProvider);
       final candidates = await repo.fetchNearby(
         lat: position.latitude,
         lng: position.longitude,
-        radiusM: 500,
+        radiusM: nearbyMerchantSearchRadiusMeters,
       );
       final matches = findNearbyMerchants(
         origin: GeoPoint(lat: position.latitude, lng: position.longitude),
         candidates: candidates,
-        radiusMeters: 500,
+        radiusMeters: nearbyMerchantSearchRadiusMeters,
       );
       if (!mounted) return;
       if (matches.isEmpty) {
