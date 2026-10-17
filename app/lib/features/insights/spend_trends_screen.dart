@@ -70,6 +70,7 @@ class SpendTrendsScreen extends ConsumerStatefulWidget {
 
 class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
   final reportBodyKey = GlobalKey<_ReportBodyState>();
+  bool _filtersActive = false;
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +110,7 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
           children: [
             _PeriodSelector(
               selected: query,
-              filtersActive: false,
+              filtersActive: _filtersActive,
               onFilters: () => reportBodyKey.currentState?.openFilters(),
             ),
             OfflineBanner(
@@ -149,6 +150,8 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
                     transactions: transactions.valueOrNull ?? const [],
                     transactionDetailsLoading: transactions.isLoading,
                     initialCategory: widget.initialCategory,
+                    onFiltersActiveChanged: (active) =>
+                        setState(() => _filtersActive = active),
                     onRefresh: () {
                       ref.invalidate(spendReportProvider(query));
                       ref.invalidate(spendPeriodTransactionsProvider(query));
@@ -328,7 +331,17 @@ class _PeriodSelector extends ConsumerWidget {
       'Dec',
     ];
     if (selected.isCustom) {
-      return 'Custom dates';
+      final from = selected.from!;
+      final to = selected.to!;
+      if (from.year == to.year) {
+        if (from.month == to.month) {
+          return '${months[from.month - 1]} ${from.year}';
+        }
+        return '${months[from.month - 1]} – ${months[to.month - 1]} '
+            '${from.year}';
+      }
+      return '${months[from.month - 1]} ${from.year} – '
+          '${months[to.month - 1]} ${to.year}';
     }
     return switch (selected.period) {
       SpendPeriod.month => '${months[now.month - 1]} ${now.year}',
@@ -477,19 +490,61 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
     return 'Custom range';
   }
 
+  ({DateTime from, DateTime to}) _boundsForQuery(SpendReportQuery query) {
+    if (query.isCustom) {
+      return (from: query.from!, to: query.to!);
+    }
+    switch (query.period) {
+      case SpendPeriod.week:
+        return (from: _weekStart(), to: _weekEnd());
+      case SpendPeriod.month:
+        return (
+          from: _monthStart(widget.now.year, widget.now.month),
+          to: _monthEnd(widget.now.year, widget.now.month),
+        );
+      case SpendPeriod.quarter:
+        final startMonth = ((widget.now.month - 1) ~/ 3) * 3 + 1;
+        return (
+          from: _monthStart(widget.now.year, startMonth),
+          to: _monthEnd(widget.now.year, startMonth + 2),
+        );
+      case SpendPeriod.year:
+        return (
+          from: DateTime(widget.now.year, 1, 1),
+          to: DateTime(widget.now.year, 12, 31),
+        );
+      case SpendPeriod.custom:
+        return (from: _customFrom, to: _customTo);
+    }
+  }
+
   String _selectedDescription() {
-    final from = _draft.isCustom ? _draft.from! : _customFrom;
-    final to = _draft.isCustom ? _draft.to! : _customTo;
+    final bounds = _boundsForQuery(_draft);
+    final from = bounds.from;
+    final to = bounds.to;
     return '${_shortDate(from)} – ${_shortDate(to)} '
         '(${_monthCount(from, to)} ${_monthCount(from, to) == 1 ? 'month' : 'months'})';
   }
 
   Future<void> _pickDate({required bool from}) async {
+    final firstDate = DateTime(2020);
+    final today = DateTime(widget.now.year, widget.now.month, widget.now.day);
+    // Presets use complete calendar months, so a selected range can end
+    // after today (for example, 31 Oct while the clock is 17 Oct). Keep that
+    // existing boundary selectable instead of handing showDatePicker an
+    // invalid initial date.
+    final lastDate = _customTo.isAfter(today) ? _customTo : today;
+    final requestedInitial = from ? _customFrom : _customTo;
+    final initialDate = requestedInitial.isBefore(firstDate)
+        ? firstDate
+        : requestedInitial.isAfter(lastDate)
+        ? lastDate
+        : requestedInitial;
     final picked = await showDatePicker(
       context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(widget.now.year, widget.now.month, widget.now.day),
-      initialDate: from ? _customFrom : _customTo,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      initialDate: initialDate,
       helpText: from ? 'Select start date' : 'Select end date',
     );
     if (picked == null) return;
@@ -548,12 +603,6 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
         query: const SpendReportQuery.preset(SpendPeriod.month),
       ),
       _SpendRangeOption(
-        icon: Icons.date_range_rounded,
-        title: 'This week',
-        subtitle: '${_shortDate(_weekStart())} – ${_shortDate(_weekEnd())}',
-        query: const SpendReportQuery.preset(SpendPeriod.week),
-      ),
-      _SpendRangeOption(
         icon: Icons.calendar_month_rounded,
         title: 'Last month',
         subtitle: _monthLabel(DateTime(widget.now.year, widget.now.month - 1)),
@@ -595,10 +644,12 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
       return Expanded(
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () => Navigator.pop(
-            context,
-            _SpendDateRangeChoice(option.query),
-          ),
+          onTap: () => setState(() {
+            _draft = option.query;
+            final bounds = _boundsForQuery(option.query);
+            _customFrom = bounds.from;
+            _customTo = bounds.to;
+          }),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             constraints: const BoxConstraints(minHeight: 66),
@@ -855,6 +906,7 @@ class _ReportBody extends StatefulWidget {
   final List<TransactionEntry> transactions;
   final bool transactionDetailsLoading;
   final String? initialCategory;
+  final ValueChanged<bool> onFiltersActiveChanged;
   final VoidCallback onRefresh;
   const _ReportBody({
     super.key,
@@ -862,6 +914,7 @@ class _ReportBody extends StatefulWidget {
     required this.transactions,
     required this.transactionDetailsLoading,
     this.initialCategory,
+    required this.onFiltersActiveChanged,
     required this.onRefresh,
   });
 
@@ -1103,8 +1156,7 @@ class _ReportBodyState extends State<_ReportBody> {
     return start.year != end.year || start.month != end.month;
   }
 
-  String _seriesRangeLabel(List<SpendSeriesPoint> series) {
-    if (series.isEmpty) return '';
+  String _reportRangeLabel(SpendReport report) {
     const months = <String>[
       'Jan',
       'Feb',
@@ -1119,8 +1171,8 @@ class _ReportBodyState extends State<_ReportBody> {
       'Nov',
       'Dec',
     ];
-    final first = series.first.periodStart.toLocal();
-    final last = series.last.periodStart.toLocal();
+    final first = report.periodStart.toLocal();
+    final last = report.periodEnd.subtract(const Duration(days: 1)).toLocal();
     return first.year == last.year
         ? '${months[first.month - 1]}–${months[last.month - 1]}'
         : '${months[first.month - 1]} ${first.year}–${months[last.month - 1]} ${last.year}';
@@ -1137,8 +1189,15 @@ class _ReportBodyState extends State<_ReportBody> {
     final selection = await showModalBottomSheet<_SpendFilterSelection>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
+      backgroundColor: BambooInk.paper,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (_) => _SpendFilterSheet(
+        report: widget.report,
         transactions: _spendEntries,
         categories: _categoryOptions,
         merchants: _merchantOptions,
@@ -1158,6 +1217,7 @@ class _ReportBodyState extends State<_ReportBody> {
       _merchantFilter = selection.merchant;
       _cardFilter = selection.card;
     });
+    widget.onFiltersActiveChanged(_filtersActive);
   }
 
   @override
@@ -1199,7 +1259,7 @@ class _ReportBodyState extends State<_ReportBody> {
               rows: categoryRows,
               total: total,
               compact: multiMonth,
-              rangeLabel: multiMonth ? _seriesRangeLabel(series) : null,
+              rangeLabel: multiMonth ? _reportRangeLabel(report) : null,
             ),
             const SizedBox(height: AppSpace.lg),
           ],
@@ -1498,6 +1558,7 @@ class _SpendFilterSelection {
 }
 
 class _SpendFilterSheet extends StatefulWidget {
+  final SpendReport report;
   final List<TransactionEntry> transactions;
   final List<String> categories;
   final List<String> merchants;
@@ -1505,6 +1566,7 @@ class _SpendFilterSheet extends StatefulWidget {
   final _SpendFilterSelection initial;
 
   const _SpendFilterSheet({
+    required this.report,
     required this.transactions,
     required this.categories,
     required this.merchants,
@@ -1553,202 +1615,431 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
     (sum, entry) => sum + entry.amount,
   );
 
-  bool get _active =>
-      _payment != null ||
-      _categories.isNotEmpty ||
-      _merchant != null ||
-      _card != null;
-
   @override
   Widget build(BuildContext context) {
+    final footer = Container(
+      padding: EdgeInsets.fromLTRB(
+        28,
+        AppSpace.md,
+        28,
+        MediaQuery.viewInsetsOf(context).bottom + AppSpace.xs,
+      ),
+      decoration: const BoxDecoration(
+        color: BambooInk.paper,
+        border: Border(top: BorderSide(color: BambooInk.hairlineOnPaper)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          RichText(
+            text: TextSpan(
+              style: BambooFonts.ui(14, color: BambooInk.ink900),
+              children: [
+                TextSpan(
+                  text:
+                      '${_matching.length} matching ${_matching.length == 1 ? 'transaction' : 'transactions'} · ',
+                ),
+                TextSpan(
+                  text: _total.format(hidePaise: true),
+                  style: BambooFonts.ui(
+                    14,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.pop(
+                context,
+                _SpendFilterSelection(
+                  payment: _payment,
+                  categories: {..._categories},
+                  merchant: _merchant,
+                  card: _card,
+                ),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.lime,
+                foregroundColor: BambooInk.slate,
+                minimumSize: const Size.fromHeight(52),
+                textStyle: BambooFonts.ui(16, weight: FontWeight.w700),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: const Text('Show results'),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: BambooInk.jade,
+              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+            ),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          AppSpace.lg,
-          0,
-          AppSpace.lg,
-          MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.97,
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'Filter spending',
-                    style: BambooFonts.heading(19, color: BambooInk.ink900),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => setState(() {
-                      _payment = null;
-                      _categories = {};
-                      _merchant = null;
-                      _card = null;
-                    }),
-                    child: const Text('Reset'),
-                  ),
-                ],
-              ),
-              Text(
-                'Applies across Categories, Merchants and Cards',
-                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              _FilterLabel('Payment method'),
-              Wrap(
-                spacing: AppSpace.xs,
-                runSpacing: AppSpace.xs,
-                children: [
-                  _filterChip(
-                    label: 'All',
-                    selected: _payment == null,
-                    onSelected: () => setState(() => _payment = null),
-                  ),
-                  for (final instrument in TxnInstrument.values)
-                    _filterChip(
-                      label: _filterInstrumentLabel(instrument),
-                      selected: _payment == instrument,
-                      onSelected: () => setState(() => _payment = instrument),
-                    ),
-                ],
-              ),
-              if (widget.categories.isNotEmpty) ...[
-                const SizedBox(height: AppSpace.lg),
-                _FilterLabel('Category'),
-                Wrap(
-                  spacing: AppSpace.xs,
-                  runSpacing: AppSpace.xs,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(28, 0, 28, AppSpace.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final category in widget.categories)
-                      _filterChip(
-                        label: category,
-                        selected: _categories.contains(category.toLowerCase()),
-                        onSelected: () => setState(() {
-                          final key = category.toLowerCase();
-                          if (!_categories.add(key)) _categories.remove(key);
-                        }),
+                    Row(
+                      children: [
+                        Text(
+                          'Filter spending',
+                          style: BambooFonts.heading(
+                            22,
+                            color: BambooInk.ink900,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => setState(() {
+                            _payment = null;
+                            _categories = {};
+                            _merchant = null;
+                            _card = null;
+                          }),
+                          style: TextButton.styleFrom(
+                            foregroundColor: BambooInk.jade,
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            textStyle: BambooFonts.ui(
+                              15,
+                              weight: FontWeight.w700,
+                            ),
+                          ),
+                          child: const Text('Reset'),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'Applies across all views',
+                      style: BambooFonts.ui(14.5, color: BambooInk.ink500),
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+                    _FilterLabel('Date range'),
+                    _selectionField(
+                      icon: Icons.calendar_today_outlined,
+                      label: _dateRangeLabel,
+                      trailing: const Icon(Icons.keyboard_arrow_down_rounded),
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+                    _FilterLabel('Payment method'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _paymentButton(
+                            'All',
+                            _payment == null,
+                            () => setState(() => _payment = null),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpace.sm),
+                        Expanded(
+                          child: _paymentButton(
+                            'Credit cards',
+                            _payment == TxnInstrument.creditCard,
+                            () => setState(
+                              () => _payment = TxnInstrument.creditCard,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpace.sm),
+                        Expanded(
+                          child: _paymentButton(
+                            'UPI bank',
+                            _payment == TxnInstrument.upiBank,
+                            () => setState(
+                              () => _payment = TxnInstrument.upiBank,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+                    _FilterLabel('Category'),
+                    _selectionField(
+                      icon: Icons.shopping_bag_outlined,
+                      onTap: widget.categories.isEmpty
+                          ? null
+                          : () => _chooseCategory(),
+                      child: Row(
+                        children: [
+                          if (_categories.isNotEmpty)
+                            ..._categories.map(
+                              (category) => Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: _valueChip(
+                                  _displayCategory(category),
+                                  onRemove: () => setState(
+                                    () => _categories.remove(category),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          const Spacer(),
+                          const Icon(
+                            Icons.add_rounded,
+                            color: BambooInk.jade,
+                            size: 23,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Add category',
+                            style: BambooFonts.ui(14, color: BambooInk.ink500),
+                          ),
+                        ],
                       ),
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+                    _FilterLabel('Merchant'),
+                    _selectionField(
+                      icon: Icons.storefront_outlined,
+                      label: _merchant ?? 'All merchants',
+                      trailing: const Icon(Icons.keyboard_arrow_down_rounded),
+                      onTap: widget.merchants.isEmpty
+                          ? null
+                          : () => _chooseMerchant(),
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+                    _FilterLabel('Card / account'),
+                    _selectionField(
+                      icon: Icons.credit_card_outlined,
+                      child: _card == null
+                          ? Text(
+                              'All cards and accounts',
+                              style: BambooFonts.ui(
+                                14,
+                                color: BambooInk.ink500,
+                              ),
+                            )
+                          : _valueChip(
+                              _card!,
+                              onRemove: () => setState(() => _card = null),
+                            ),
+                      trailing: _card == null
+                          ? const Icon(Icons.keyboard_arrow_down_rounded)
+                          : null,
+                      onTap: widget.cards.isEmpty ? null : () => _chooseCard(),
+                    ),
                   ],
                 ),
-              ],
-              if (widget.merchants.isNotEmpty) ...[
-                const SizedBox(height: AppSpace.lg),
-                _FilterLabel('Merchant'),
-                _dropdownField(
-                  value: _merchant,
-                  hint: 'All merchants',
-                  items: widget.merchants,
-                  onChanged: (value) => setState(() => _merchant = value),
-                ),
-              ],
-              if (widget.cards.isNotEmpty) ...[
-                const SizedBox(height: AppSpace.lg),
-                _FilterLabel('Card / account'),
-                _dropdownField(
-                  value: _card,
-                  hint: 'All cards and accounts',
-                  items: widget.cards,
-                  onChanged: (value) => setState(() => _card = value),
-                ),
-              ],
-              const SizedBox(height: AppSpace.lg),
-              Center(
-                child: Text(
-                  _active
-                      ? '${_matching.length} matching ${_matching.length == 1 ? 'transaction' : 'transactions'} · ${_total.format(hidePaise: true)}'
-                      : 'All transactions · ${_total.format(hidePaise: true)}',
-                  style: BambooFonts.ui(13, color: BambooInk.ink500),
-                ),
               ),
-              const SizedBox(height: AppSpace.sm),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(
-                    context,
-                    _SpendFilterSelection(
-                      payment: _payment,
-                      categories: {..._categories},
-                      merchant: _merchant,
-                      card: _card,
-                    ),
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: BambooInk.lime,
-                    foregroundColor: BambooInk.ink900,
-                    minimumSize: const Size.fromHeight(50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                  ),
-                  child: const Text('Show results'),
-                ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-            ],
-          ),
+            ),
+            footer,
+          ],
         ),
       ),
     );
   }
 
-  Widget _filterChip({
-    required String label,
-    required bool selected,
-    required VoidCallback onSelected,
-  }) => ChoiceChip(
-    label: Text(label),
-    selected: selected,
-    onSelected: (_) => onSelected(),
-    showCheckmark: false,
-    selectedColor: BambooInk.lime,
-    backgroundColor: BambooInk.paperMuted,
-    side: BorderSide(
-      color: selected ? BambooInk.lime : BambooInk.hairlineOnPaper,
+  String get _dateRangeLabel {
+    final start = widget.report.periodStart.toLocal();
+    final end = widget.report.periodEnd
+        .subtract(const Duration(days: 1))
+        .toLocal();
+    const months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    if (start.year == end.year && start.month == end.month) {
+      return '${months[start.month - 1]} ${start.year}';
+    }
+    return '${months[start.month - 1]} ${start.year} – '
+        '${months[end.month - 1]} ${end.year}';
+  }
+
+  String _displayCategory(String key) => widget.categories.firstWhere(
+    (category) => category.toLowerCase() == key,
+    orElse: () => key,
+  );
+
+  Widget _selectionField({
+    IconData? icon,
+    String? label,
+    Widget? child,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(16),
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+      decoration: BoxDecoration(
+        color: BambooInk.paper,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 23, color: BambooInk.ink900),
+            const SizedBox(width: 15),
+          ],
+          Expanded(
+            child:
+                child ??
+                Text(
+                  label ?? '',
+                  style: BambooFonts.ui(14.5, color: BambooInk.ink500),
+                  overflow: TextOverflow.ellipsis,
+                ),
+          ),
+          if (trailing != null) trailing,
+        ],
+      ),
     ),
   );
 
-  Widget _dropdownField({
-    required String? value,
-    required String hint,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) => DropdownButtonFormField<String>(
-    value: value,
-    isExpanded: true,
-    decoration: InputDecoration(
-      hintText: hint,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+  Widget _paymentButton(String label, bool selected, VoidCallback onTap) =>
+      InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          height: 52,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? BambooInk.lime : BambooInk.paper,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? BambooInk.lime : BambooInk.hairlineOnPaper,
+            ),
+          ),
+          child: Text(
+            label,
+            style: BambooFonts.ui(
+              14,
+              weight: FontWeight.w600,
+              color: BambooInk.ink900,
+            ),
+          ),
+        ),
+      );
+
+  Widget _valueChip(String label, {required VoidCallback onRemove}) =>
+      Container(
+        padding: const EdgeInsets.only(left: 12, right: 5),
+        height: 38,
+        decoration: BoxDecoration(
+          color: BambooInk.rankBadgeBg,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(
+                  14,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: onRemove,
+              icon: const Icon(Icons.close_rounded, size: 18),
+              color: BambooInk.ink900,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+              splashRadius: 16,
+            ),
+          ],
+        ),
+      );
+
+  Future<void> _chooseCategory() async {
+    final category = await _chooseOption(
+      title: 'Add category',
+      options: widget.categories,
+    );
+    if (!mounted || category == null) return;
+    setState(() => _categories.add(category.toLowerCase()));
+  }
+
+  Future<void> _chooseMerchant() async {
+    final value = await _chooseOption(
+      title: 'Merchant',
+      options: widget.merchants,
+      clearLabel: 'All merchants',
+    );
+    if (!mounted || value == null) return;
+    setState(() => _merchant = value.isEmpty ? null : value);
+  }
+
+  Future<void> _chooseCard() async {
+    final value = await _chooseOption(
+      title: 'Card / account',
+      options: widget.cards,
+      clearLabel: 'All cards and accounts',
+    );
+    if (!mounted || value == null) return;
+    setState(() => _card = value.isEmpty ? null : value);
+  }
+
+  Future<String?> _chooseOption({
+    required String title,
+    required List<String> options,
+    String? clearLabel,
+  }) => showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: BambooInk.paper,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        children: [
+          Text(title, style: BambooFonts.heading(20)),
+          if (clearLabel != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(clearLabel, style: BambooFonts.ui(15)),
+              onTap: () => Navigator.pop(context, ''),
+            ),
+          for (final option in options)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(option, style: BambooFonts.ui(15)),
+              onTap: () => Navigator.pop(context, option),
+            ),
+        ],
       ),
     ),
-    items: [
-      DropdownMenuItem<String>(value: null, child: Text(hint)),
-      for (final item in items)
-        DropdownMenuItem<String>(value: item, child: Text(item)),
-    ],
-    onChanged: onChanged,
   );
-
-  static String _filterInstrumentLabel(TxnInstrument instrument) =>
-      switch (instrument) {
-        TxnInstrument.creditCard => 'Credit cards',
-        TxnInstrument.debitCard => 'Debit cards',
-        TxnInstrument.upiBank => 'UPI bank',
-        TxnInstrument.cash => 'Cash',
-        TxnInstrument.wallet => 'Wallet',
-        TxnInstrument.other => 'Other',
-      };
 }
 
 class _FilterLabel extends StatelessWidget {
@@ -1761,8 +2052,8 @@ class _FilterLabel extends StatelessWidget {
     child: Text(
       label,
       style: BambooFonts.ui(
-        13.5,
-        weight: FontWeight.w700,
+        15.5,
+        weight: FontWeight.w600,
         color: BambooInk.ink900,
       ),
     ),

@@ -389,11 +389,11 @@ void main() {
 
     await tester.tap(find.text('Oct 2026'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('This week'));
+    await tester.tap(find.text('This quarter'));
     await tester.pumpAndSettle();
     expect(
       requested,
-      contains(const SpendReportQuery.preset(SpendPeriod.week)),
+      contains(const SpendReportQuery.preset(SpendPeriod.quarter)),
     );
   });
 
@@ -417,6 +417,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Custom dates'), findsOneWidget);
+    expect(find.text('Aug 2026'), findsOneWidget);
   });
 }
