@@ -1856,7 +1856,13 @@ router.post('/validate-token', async (req, res) => {
 
     // Use the auth middleware logic to validate token
     const jwt = require('jsonwebtoken');
-    const { getKeySecret, getAllKeys, validateTokenClaims } = require('../services/jwtKeys');
+    const {
+      getKeySecret,
+      getAllKeys,
+      getIssuer,
+      getAudience,
+      validateTokenClaims,
+    } = require('../services/jwtKeys');
     const db = require('../db');
 
     // Decode token to get key ID from header
@@ -1890,7 +1896,10 @@ router.post('/validate-token', async (req, res) => {
       if (secret) {
         console.log(`[Auth Service] Attempting verification with key ID: ${keyId}`);
         try {
-          payload = jwt.verify(token, secret);
+          payload = jwt.verify(token, secret, {
+            issuer: getIssuer(),
+            audience: getAudience(),
+          });
           verified = true;
           verificationMethod = `keyId: ${keyId}`;
           console.log(`[Auth Service] ✅ Token verified successfully using key ID: ${keyId}`);
@@ -1911,7 +1920,10 @@ router.post('/validate-token', async (req, res) => {
       console.log(`[Auth Service] Attempting verification with ${Object.keys(allKeys).length} available keys`);
       for (const [kid, keySecret] of Object.entries(allKeys)) {
         try {
-          payload = jwt.verify(token, keySecret);
+          payload = jwt.verify(token, keySecret, {
+            issuer: getIssuer(),
+            audience: getAudience(),
+          });
           verified = true;
           verificationMethod = `allKeys: ${kid}`;
           console.log(`[Auth Service] ✅ Token verified successfully using key: ${kid}`);

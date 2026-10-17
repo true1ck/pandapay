@@ -2,10 +2,11 @@
 const express = require('express');
 const cors = require('cors');
 const config = require('./config');
+const db = require('./db');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 // === ADDED FOR RATE LIMITING ===
-const { initRedis } = require('./services/redisClient');
+const { initRedis, closeRedis } = require('./services/redisClient');
 // === ADMIN SECURITY VISUALIZER ===
 const adminRoutes = require('./routes/adminRoutes');
 const authMiddleware = require('./middleware/authMiddleware');
@@ -119,6 +120,19 @@ app.get('/health', (req, res) => {
   res.json({ ok: true });
 });
 
+// Liveness is dependency-free; readiness proves this instance can reach the
+// auth database before a load balancer sends it authenticated traffic.
+app.get('/ready', async (req, res) => {
+  try {
+    const pool = await db.getPool();
+    await pool.query('SELECT 1');
+    res.json({ ok: true, database: 'ready' });
+  } catch (err) {
+    console.error('GET /ready error', err.message);
+    res.status(503).json({ ok: false, database: 'unavailable' });
+  }
+});
+
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 
@@ -172,6 +186,31 @@ initRedis().catch((err) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Auth service running at http://localhost:${PORT}`);
 });
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Auth service shutting down (${signal})`);
+
+  const forceExit = setTimeout(() => process.exit(1), 10000);
+  forceExit.unref();
+  try {
+    await new Promise((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
+    await db.closeDb();
+    await closeRedis();
+    clearTimeout(forceExit);
+    process.exit(0);
+  } catch (err) {
+    console.error('Auth service graceful shutdown failed', err.message);
+    process.exit(1);
+  }
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));

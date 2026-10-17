@@ -73,8 +73,8 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 for i in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:4000/health >/dev/null 2>&1 && \
-     curl -fsS http://127.0.0.1:3210/health >/dev/null 2>&1; then
+  if curl -fsS http://127.0.0.1:4000/ready >/dev/null 2>&1 && \
+     curl -fsS http://127.0.0.1:3210/ready >/dev/null 2>&1; then
     printf 'Local PandaPay backend is running.\nAPI:  http://127.0.0.1:4000 (emulator: http://10.0.2.2:4000)\nAuth: http://127.0.0.1:3210 (emulator: http://10.0.2.2:3210)\nPIDs: %s %s\nLogs: %s\n' "$API_PID" "$AUTH_PID" "$LOG_DIR"
     wait "$API_PID" "$AUTH_PID"
     exit $?

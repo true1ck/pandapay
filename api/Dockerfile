@@ -42,10 +42,10 @@ USER node
 
 EXPOSE 4000
 
-# The orchestrator needs a liveness signal that exercises the process rather
-# than just the port. GET /health is a real route in src/index.js.
+# The orchestrator needs a readiness signal that exercises the database, not
+# just the process. GET /ready is a real route in src/index.js.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "src/index.js"]

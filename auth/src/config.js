@@ -41,12 +41,14 @@ const REQUIRED_ENV = [
   'JWT_REFRESH_SECRET',
 ];
 
-// If using AWS SSM, DATABASE_URL is optional (credentials come from SSM)
-if (process.env.USE_AWS_SSM !== 'true' && process.env.USE_AWS_SSM !== '1') {
-  REQUIRED_ENV.push('DATABASE_URL');
-}
-
+// If using AWS SSM, a database URL is optional (credentials come from SSM).
+// Outside SSM the root configuration may name auth's URL explicitly.
+const requiresDatabaseUrl =
+  process.env.USE_AWS_SSM !== 'true' && process.env.USE_AWS_SSM !== '1';
 const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
+if (requiresDatabaseUrl && !process.env.AUTH_DATABASE_URL && !process.env.DATABASE_URL) {
+  missing.push('AUTH_DATABASE_URL or DATABASE_URL');
+}
 if (missing.length > 0) {
   throw new Error(
     `Missing required environment variables: ${missing.join(', ')}`
@@ -71,11 +73,25 @@ if (isProduction && corsAllowedOrigins.length === 0) {
 }
 
 module.exports = {
-  databaseUrl: process.env.DATABASE_URL,
+  // Compose gives each service its own explicit URL. DATABASE_URL remains a
+  // fallback for the standalone auth-service workflow, but a root .env can
+  // now contain both service URLs without ambiguity.
+  databaseUrl: process.env.AUTH_DATABASE_URL || process.env.DATABASE_URL,
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
   jwtAccessTtl: process.env.JWT_ACCESS_TTL || '15m',
   jwtRefreshTtl: process.env.JWT_REFRESH_TTL || '7d',
+  jwtIssuer: process.env.JWT_ISSUER || 'pandapay-auth',
+  jwtAudience: process.env.JWT_AUDIENCE || 'mobile-app',
+  dbPoolMax: Math.min(100, Math.max(1, Number(process.env.DB_POOL_MAX) || 10)),
+  dbIdleTimeoutMs: Math.max(
+    1000,
+    Number(process.env.DB_IDLE_TIMEOUT_MS) || 10000,
+  ),
+  dbConnectionTimeoutMs: Math.max(
+    1000,
+    Number(process.env.DB_CONNECTION_TIMEOUT_MS) || 5000,
+  ),
   corsAllowedOrigins,
   isProduction,
   refreshMaxIdleMinutes,

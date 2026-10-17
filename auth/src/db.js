@@ -9,6 +9,7 @@ const { getDbCredentials, buildDatabaseUrl } = require('./utils/awsSsm');
 // Initialize database connection
 let pool = null;
 let dbInitPromise = null;
+const isTestEnvironment = process.env.NODE_ENV === 'test';
 
 /**
  * Initialize database connection
@@ -54,7 +55,10 @@ async function initializeDb() {
     const useSsl = process.env.USE_AWS_SSM === 'true' || process.env.USE_AWS_SSM === '1';
     pool = new Pool({
       connectionString,
-      ssl: useSsl ? { rejectUnauthorized: false } : false
+      ssl: useSsl ? { rejectUnauthorized: false } : false,
+      max: config.dbPoolMax,
+      idleTimeoutMillis: config.dbIdleTimeoutMs,
+      connectionTimeoutMillis: config.dbConnectionTimeoutMs,
     });
 
     pool.on('error', (err) => {
@@ -100,7 +104,11 @@ async function initializeDb() {
 }
 
 // Auto-initialize on module load
-if (process.env.USE_AWS_SSM === 'true' || process.env.USE_AWS_SSM === '1') {
+if (isTestEnvironment) {
+  // Unit tests that only exercise token/configuration logic must not open a
+  // real database connection or terminate the test process on connection
+  // failure. Tests that need SQL should inject/mock the pool explicitly.
+} else if (process.env.USE_AWS_SSM === 'true' || process.env.USE_AWS_SSM === '1') {
   initializeDb().catch((err) => {
     console.error('Failed to initialize database:', err);
     process.exit(1);
@@ -111,7 +119,10 @@ if (process.env.USE_AWS_SSM === 'true' || process.env.USE_AWS_SSM === '1') {
 
   pool = new Pool({
     connectionString: config.databaseUrl,
-    ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false }
+    ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
+    max: config.dbPoolMax,
+    idleTimeoutMillis: config.dbIdleTimeoutMs,
+    connectionTimeoutMillis: config.dbConnectionTimeoutMs,
   });
 
   pool.on('error', (err) => {
@@ -145,6 +156,18 @@ async function getPool() {
     }
   }
   return pool;
+}
+
+async function closeDb() {
+  if (dbInitPromise) {
+    await dbInitPromise.catch(() => {});
+  }
+  if (pool) {
+    const currentPool = pool;
+    pool = null;
+    dbInitPromise = null;
+    await currentPool.end();
+  }
 }
 
 /**
@@ -199,5 +222,6 @@ module.exports = {
   },
   createContextFromRequest,
   initializeDb, // Export for explicit initialization if needed
+  closeDb,
 };
 ``

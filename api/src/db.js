@@ -4,6 +4,17 @@ const config = require('./config');
 const pool = new Pool({
   connectionString: config.databaseUrl,
   ssl: config.dbSslEnabled ? { rejectUnauthorized: false } : false,
+  max: config.dbPoolMax,
+  idleTimeoutMillis: config.dbIdleTimeoutMs,
+  connectionTimeoutMillis: config.dbConnectionTimeoutMs,
+});
+
+pool.on('error', (err) => {
+  // Keep the process alive so the readiness probe can recover after a
+  // transient idle-client failure. In-flight requests still receive their
+  // own database error and the supervisor can restart only if readiness stays
+  // unavailable.
+  console.error('Unexpected PG pool error', err.message);
 });
 
 /**

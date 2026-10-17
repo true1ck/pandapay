@@ -146,6 +146,19 @@ app.use(requestLogger);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+// Liveness stays dependency-free for the process supervisor. Readiness is the
+// deployment/load-balancer probe: it must prove that this instance can reach
+// the database before traffic is sent to it.
+app.get('/ready', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ ok: true, database: 'ready' });
+  } catch (err) {
+    console.error('GET /ready error', err.message);
+    res.status(503).json({ ok: false, database: 'unavailable' });
+  }
+});
+
 /**
  * GET /profile — proves RLS is reachable end to end: an authenticated user
  * can only ever see their own profiles row, by construction (0011's
@@ -1033,10 +1046,10 @@ app.get('/merchants/nearby/discover', async (req, res) => {
 
 /**
  * GET /merchants/nearby/search — a manual place lookup for testing the
- * location flow without depending on the handset's current GPS fix. Results
- * are OSM candidates only; they are never published as PandaPay merchants or
- * written to payment data. `lat`/`lng` are optional and only bias the search
- * toward the tester's current area when supplied.
+ * location flow without depending on the handset's current GPS fix. The route
+ * prefers published PandaPay directory matches and otherwise returns OSM
+ * candidates; neither path writes to payment data. `lat`/`lng` are optional
+ * and only bias the external search toward the tester's current area.
  */
 app.get('/merchants/nearby/search', async (req, res) => {
   const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
@@ -1061,6 +1074,44 @@ app.get('/merchants/nearby/search', async (req, res) => {
   }
 
   try {
+    // Prefer the first-party directory. It is faster, works when public map
+    // providers are rate-limited, and gives the user a verified PandaPay
+    // merchant whenever one matches the typed name. The external provider is
+    // still used below for places that are not in our directory yet.
+    let directoryRows = [];
+    try {
+      const directory = await withUserClient(null, (client) =>
+        client.query(
+          `SELECT m.id AS merchant_id, m.display_name, m.category_id, m.confidence,
+                  l.grid_lat, l.grid_lng
+             FROM merchants m
+             LEFT JOIN LATERAL (
+               SELECT grid_lat, grid_lng FROM merchant_locations
+                WHERE merchant_id = m.id ORDER BY confirmation_count DESC LIMIT 1
+             ) l ON true
+            WHERE m.is_published = true AND m.display_name ILIKE $1
+            ORDER BY m.confirmation_count DESC
+            LIMIT 50`,
+          [`%${query}%`],
+        ),
+      );
+      directoryRows = directory.rows;
+    } catch (directoryError) {
+      // Map search is still useful when the directory is temporarily down.
+      // The outer route catch should only represent failure of every source.
+      console.warn('GET /merchants/nearby/search directory unavailable', directoryError.message);
+    }
+    if (directoryRows.length > 0) {
+      return res.json({
+        source: 'pandapay',
+        attribution: 'PandaPay published merchant directory',
+        merchants: directoryRows.map((row) => ({
+          ...row,
+          source: 'published',
+        })),
+      });
+    }
+
     const merchants = await nearbyDiscovery.search({ query, lat, lng, radiusM });
     res.json({
       source: 'openstreetmap',
@@ -9214,7 +9265,7 @@ const PORT = config.port;
 // blocks miss, including a rejected async handler under Express 5.
 app.use(errorHandler);
 
-app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));
+const server = app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));
 
 // The background IMAP poller (F7). Off unless IMAP_POLL_INTERVAL_MINUTES is
 // set, so a development or test process never opens TLS connections to real
@@ -9227,7 +9278,7 @@ app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${P
 // importParsedMessage path SMS and forwarded email already take, so an IMAP
 // discovery gets identical card resolution, categorisation, deduplication
 // and reward treatment — there is no second implementation to keep in sync.
-startImapPoller(
+const stopImapPoller = startImapPoller(
   {
     pool,
     withUserClient,
@@ -9241,3 +9292,28 @@ startImapPoller(
   },
   { intervalMinutes: Number(process.env.IMAP_POLL_INTERVAL_MINUTES) || 0 }
 );
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`pandapay-api shutting down (${signal})`);
+  stopImapPoller();
+
+  const forceExit = setTimeout(() => process.exit(1), 10000);
+  forceExit.unref();
+  try {
+    await new Promise((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
+    await pool.end();
+    clearTimeout(forceExit);
+    process.exit(0);
+  } catch (err) {
+    console.error('pandapay-api graceful shutdown failed', err.message);
+    process.exit(1);
+  }
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));

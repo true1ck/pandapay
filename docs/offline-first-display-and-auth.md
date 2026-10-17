@@ -38,12 +38,25 @@ values from the same root `.env` file:
 - `JWT_ACCESS_SECRET` must be identical in `api` and `auth`.
 - `JWT_REFRESH_SECRET` must be present in `auth` and must be different from
   the access secret.
+- `JWT_ISSUER` and `JWT_AUDIENCE` must be identical in both services. The
+  production Compose files pass the defaults (`pandapay-auth` and
+  `mobile-app`) explicitly.
+- If `JWT_KEYS_JSON` is used, `JWT_ACTIVE_KEY_ID` and the complete key set must
+  be identical in both services. Auth signs with the active key and API keeps
+  previous keys available for verification during rotation.
 - `JWT_ACCESS_TTL` must remain comfortably longer than the client refresh
   interval. The current defaults are 15 minutes and a five-minute client
   keep-alive.
 - Do not deploy an archived/alternate env file. In particular, do not use the
   old `auth/.env Working` file without comparing its values to the production
   `.env`.
+
+When both services are started directly from one checkout, use explicit
+`API_DATABASE_URL` and `AUTH_DATABASE_URL` rather than two `DATABASE_URL`
+entries. Most dotenv loaders retain the *first* duplicate key whereas Compose
+interpolation can use the later one; that disagreement can make the two
+services start against unintended databases or credentials. `DATABASE_URL`
+is supported only as a one-service, backwards-compatible fallback.
 
 The mobile client restores its last access token immediately, refreshes in the
 background, shares one in-flight refresh among concurrent 401 responses, and
@@ -56,7 +69,9 @@ from the scoped cache and a later retry can recover the session.
 Before a production build is distributed:
 
 1. Deploy `api` and `auth` together from the same commit and root env file.
-2. Confirm both services start successfully and `/health` responds.
+2. Confirm both services start successfully and `/health` responds. Before
+   routing traffic, also require `/ready` from both services; it checks the
+   database connection and returns 503 while the instance is not ready.
 3. Sign in on one device, open Wallet, Insights, and You, then background and
    resume the app after the access-token TTL boundary.
 4. Confirm the auth log shows one successful refresh and the API accepts the

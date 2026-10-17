@@ -38,6 +38,46 @@ cd "$APP_DIR"
 echo "==> Preflight: .env must exist (it is gitignored and host-only)"
 test -s .env || { echo "FATAL: $APP_DIR/.env missing — refusing to deploy"; exit 1; }
 
+echo "==> Preflight: validating service configuration keys"
+check_single_env_key() {
+  local key="$1"
+  local count
+  count="$(awk -v key="$key" 'index($0, key "=") == 1 { count++ } END { print count + 0 }' .env)"
+  if [ "$count" -ne 1 ]; then
+    echo "FATAL: .env must contain exactly one $key entry (found $count)"
+    exit 1
+  fi
+  if ! grep -Eq "^${key}=.+" .env; then
+    echo "FATAL: .env has an empty $key entry"
+    exit 1
+  fi
+}
+
+# Compose checks presence later, but these checks must happen before the
+# backup/migration steps so a legacy or ambiguous .env cannot start a partial
+# deployment. JWT_KEYS_JSON, when used, is validated by both services at
+# startup, including its active key id and JSON shape.
+for key in \
+  ADMIN_DATABASE_URL \
+  APP_USER_PASSWORD \
+  API_DATABASE_URL \
+  AUTH_DATABASE_URL \
+  JWT_ACCESS_SECRET \
+  JWT_REFRESH_SECRET \
+  INBOUND_EMAIL_WEBHOOK_SECRET \
+  PARTNER_WEBHOOK_SECRET \
+  IMAP_ENCRYPTION_KEY \
+  CORS_ALLOWED_ORIGINS \
+  ENCRYPTION_KEY; do
+  check_single_env_key "$key"
+done
+
+for key in DATABASE_URL JWT_ISSUER JWT_AUDIENCE JWT_ACTIVE_KEY_ID; do
+  if grep -Eq "^${key}=" .env; then
+    check_single_env_key "$key"
+  fi
+done
+
 # The notification provider is a server-side integration. Keep its project
 # key out of the repository and the mobile app, but make the auto-deploy path
 # able to provision the two host-only values from GitHub environment secrets.
@@ -126,8 +166,8 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d --build api auth
 
 echo "==> Waiting for health"
 for i in $(seq 1 30); do
-  if curl -fsS -m 5 http://127.0.0.1:4000/health >/dev/null 2>&1 \
-     && curl -fsS -m 5 http://127.0.0.1:3210/health >/dev/null 2>&1; then
+  if curl -fsS -m 5 http://127.0.0.1:4000/ready >/dev/null 2>&1 \
+     && curl -fsS -m 5 http://127.0.0.1:3210/ready >/dev/null 2>&1; then
     echo "    healthy after ${i}0s"
     break
   fi

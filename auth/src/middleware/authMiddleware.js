@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const {
   getKeySecret,
   getAllKeys,
+  getIssuer,
+  getAudience,
   validateTokenClaims,
 } = require('../services/jwtKeys');
 
@@ -36,7 +38,10 @@ async function authMiddleware(req, res, next) {
     const secret = getKeySecret(keyId);
     if (secret) {
       try {
-        payload = jwt.verify(token, secret);
+        payload = jwt.verify(token, secret, {
+          issuer: getIssuer(),
+          audience: getAudience(),
+        });
         verified = true;
       } catch (err) {
         // Key ID specified but verification failed
@@ -50,7 +55,10 @@ async function authMiddleware(req, res, next) {
     const allKeys = getAllKeys();
     for (const [kid, keySecret] of Object.entries(allKeys)) {
       try {
-        payload = jwt.verify(token, keySecret);
+        payload = jwt.verify(token, keySecret, {
+          issuer: getIssuer(),
+          audience: getAudience(),
+        });
         verified = true;
         break;
       } catch (err) {

@@ -1,20 +1,28 @@
 const jwt = require('jsonwebtoken');
 const config = require('./config');
 
-// config.js already throws at load if this is unset — no separate check
-// needed here, but the name stays local since the comment below is about
-// jwt.verify's options, not about where the secret comes from.
-const ACCESS_SECRET = config.jwtAccessSecret;
+function verifyAccessToken(token) {
+  const decoded = jwt.decode(token, { complete: true });
+  if (!decoded || !decoded.header) throw new Error('Invalid token format');
 
-// auth/src/services/tokenService.js signs with jwt.sign(payload, ACCESS_SECRET,
-// { expiresIn }) and no `issuer` option — despite payload.aud being the literal
-// string 'authenticated' (a leftover Supabase-shaped claim, not a verified JWT
-// `aud` registered claim), jsonwebtoken's `issuer`/`audience` verify options
-// check the real `iss`/`aud` claims, which were never set at sign time. So
-// this API intentionally does NOT pass issuer/audience to jwt.verify — doing
-// so silently rejects every real token auth/ issues. Trust boundary here is
-// "signed with our shared secret", full stop; add issuer/audience back only
-// if tokenService.js is changed to actually set them.
+  const keyId = decoded.header.kid;
+  const keyedSecret = keyId ? config.jwtKeys[keyId] : null;
+  const secrets = keyedSecret ? [keyedSecret] : Object.values(config.jwtKeys);
+  let lastError = null;
+
+  for (const secret of secrets) {
+    try {
+      return jwt.verify(token, secret, {
+        issuer: config.jwtIssuer,
+        audience: config.jwtAudience,
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Invalid access token');
+}
 
 /**
  * Verifies the access token issued by auth/ (same secret — that service is
@@ -32,7 +40,7 @@ function optionalAuth(req, res, next) {
     return next();
   }
   try {
-    const payload = jwt.verify(header.slice(7), ACCESS_SECRET);
+    const payload = verifyAccessToken(header.slice(7));
     req.userId = payload.sub;
   } catch (err) {
     req.userId = null;
@@ -47,5 +55,5 @@ function requireAuth(req, res, next) {
   next();
 }
 
-module.exports = { optionalAuth, requireAuth };
+module.exports = { optionalAuth, requireAuth, verifyAccessToken };
 

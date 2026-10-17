@@ -98,8 +98,15 @@ def main():
     if not check("api /health", code == 200, f"got {code}"):
         print("\napi/ is not reachable — is the stack running?")
         return 1
+    code, _ = call(API, "GET", "/ready")
+    if not check("api /ready", code == 200, f"got {code}"):
+        return 1
     code, _ = call(AUTH, "GET", "/health")
-    check("auth /health", code == 200, f"got {code}")
+    if not check("auth /health", code == 200, f"got {code}"):
+        return 1
+    code, _ = call(AUTH, "GET", "/ready")
+    if not check("auth /ready", code == 200, f"got {code}"):
+        return 1
 
     print("=== catalogue is populated ===")
     code, cat = call(API, "GET", "/catalogue")

@@ -101,4 +101,4 @@ jobs:
           DEPLOY_USER: ${{ secrets.PROD_USER }}
         run: |
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
-            'curl -fsS -m 10 http://127.0.0.1:4000/health && echo && curl -fsS -m 10 http://127.0.0.1:3210/health'
+            'curl -fsS -m 10 http://127.0.0.1:4000/ready && echo && curl -fsS -m 10 http://127.0.0.1:3210/ready'

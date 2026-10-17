@@ -4,8 +4,12 @@ const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const db = require('../db');
 const config = require('../config');
+const {
+  getActiveKey,
+  getIssuer,
+  getAudience,
+} = require('./jwtKeys');
 
-const ACCESS_SECRET = config.jwtAccessSecret;
 const REFRESH_SECRET = config.jwtRefreshSecret;
 const ACCESS_TTL = config.jwtAccessTtl;
 const REFRESH_TTL = config.jwtRefreshTtl;
@@ -15,8 +19,9 @@ function signAccessToken(user, options = {}) {
   const payload = {
     sub: user.id,
     phone_number: user.phone_number,
-    // Supabase native RLS requirements:
-    aud: 'authenticated',
+    // authMiddleware verifies these claims on protected auth-service routes.
+    // Hard-coding `authenticated` here contradicted its `mobile-app` default.
+    aud: getAudience(),
     role: 'authenticated',
     // Our custom app role:
     user_role: user.role,
@@ -43,7 +48,13 @@ function signAccessToken(user, options = {}) {
   // Allow custom expiration time (defaults to ACCESS_TTL for backward compatibility)
   const expiresIn = options.expiresIn || ACCESS_TTL;
 
-  const token = jwt.sign(payload, ACCESS_SECRET, { expiresIn });
+  const activeKey = getActiveKey();
+  const token = jwt.sign(payload, activeKey.secret, {
+    expiresIn,
+    issuer: getIssuer(),
+    audience: getAudience(),
+    keyid: activeKey.keyId,
+  });
   console.log(
     `[TOKEN_SERVICE] signAccessToken: Generated access token - userId=${user.id}, tokenVersion=${payload.token_version}, deviceId=${payload.device_id || 'none'}, isGuest=${payload.is_guest}, expiresIn=${expiresIn}`
   );

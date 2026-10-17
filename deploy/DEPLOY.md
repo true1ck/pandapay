@@ -77,6 +77,14 @@ one value to both services, just don't hand-edit them differently later.
 role and `pandapay`/`pandapay_auth` database names that the migration step
 below creates.
 
+For JWT rotation, set `JWT_KEYS_JSON` and `JWT_ACTIVE_KEY_ID` together. The
+same key set, active key id, `JWT_ISSUER`, and `JWT_AUDIENCE` must be supplied
+to both services. The containers now fail at startup if the JSON is malformed
+or the active key id is absent, which prevents a partial deployment from
+minting tokens that the API cannot verify. Keep the previous key in the set
+until all existing access tokens have expired, then remove it in a later
+deployment.
+
 ## 4. Run migrations
 
 ```bash
@@ -143,6 +151,8 @@ sudo ufw enable
 
 ```bash
 curl https://api.yourapp.com/health
+# Liveness is process-only; readiness must be green before serving traffic.
+curl https://api.yourapp.com/ready
 curl -i https://auth.yourapp.com/   # any response, not a connection failure
 ```
 
