@@ -44,6 +44,9 @@ class SubscriptionsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final report = ref.watch(recurringReportProvider);
+    // Keep the signed-out copy tied to the app-wide session, not to a
+    // report's temporary null value while that session is being restored.
+    final signedIn = ref.watch(cacheNamespaceProvider) != 'signed-out';
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -64,6 +67,16 @@ class SubscriptionsScreen extends ConsumerWidget {
           ),
           data: (data) {
             if (data == null) {
+              if (signedIn) {
+                return RefreshableEmptyState(
+                  icon: Icons.sync_problem_rounded,
+                  title: 'Subscriptions are still loading',
+                  message:
+                      'Your account is signed in, but the subscription report is not available yet.',
+                  onRefresh: () async =>
+                      ref.invalidate(recurringReportProvider),
+                );
+              }
               return const EmptyState(
                 icon: Icons.lock_outline_rounded,
                 title: 'Sign in to find your subscriptions',

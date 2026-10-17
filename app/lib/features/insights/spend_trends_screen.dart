@@ -328,17 +328,7 @@ class _PeriodSelector extends ConsumerWidget {
       'Dec',
     ];
     if (selected.isCustom) {
-      final from = selected.from!.toLocal();
-      final to = selected.to!.toLocal();
-      if (from.day == 1 &&
-          to.day == DateTime(to.year, to.month + 1, 0).day) {
-        if (from.year == to.year && from.month == to.month) {
-          return '${months[from.month - 1]} ${from.year}';
-        }
-        return '${months[from.month - 1]} – ${months[to.month - 1]} ${to.year}';
-      }
-      return '${months[from.month - 1]} ${from.day} – '
-          '${months[to.month - 1]} ${to.day}, ${to.year}';
+      return 'Custom dates';
     }
     return switch (selected.period) {
       SpendPeriod.month => '${months[now.month - 1]} ${now.year}',
@@ -355,64 +345,165 @@ class _PeriodSelector extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _SpendDateRangeSheet(
-        selected: selected,
-        now: now,
+      backgroundColor: BambooInk.paper,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
+      builder: (_) => _SpendDateRangeSheet(selected: selected, now: now),
     );
     if (choice == null || !context.mounted) return;
-    if (choice.custom) {
-      await _chooseCustomRange(context, ref);
-    } else {
-      ref.read(selectedSpendQueryProvider.notifier).state =
-          choice.query!;
-    }
-  }
-
-  Future<void> _chooseCustomRange(BuildContext context, WidgetRef ref) async {
-    final now = ref.read(clockProvider).now();
-    final existing = selected.isCustom
-        ? DateTimeRange(start: selected.from!, end: selected.to!)
-        : null;
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year, now.month, now.day),
-      initialDateRange: existing,
-      helpText: 'Choose spending dates',
-      saveText: 'Apply dates',
-    );
-    if (picked == null || !context.mounted) return;
-    ref.read(selectedSpendQueryProvider.notifier).state =
-        SpendReportQuery.custom(from: picked.start, to: picked.end);
+    ref.read(selectedSpendQueryProvider.notifier).state = choice.query;
   }
 }
 
 class _SpendDateRangeChoice {
-  final SpendReportQuery? query;
-  final bool custom;
+  final SpendReportQuery query;
 
-  const _SpendDateRangeChoice.query(this.query) : custom = false;
-  const _SpendDateRangeChoice.custom() : query = null, custom = true;
+  const _SpendDateRangeChoice(this.query);
 }
 
-class _SpendDateRangeSheet extends StatelessWidget {
+class _SpendRangeOption {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final SpendReportQuery query;
+
+  const _SpendRangeOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.query,
+  });
+}
+
+class _SpendDateRangeSheet extends StatefulWidget {
   final SpendReportQuery selected;
   final DateTime now;
 
   const _SpendDateRangeSheet({required this.selected, required this.now});
 
+  @override
+  State<_SpendDateRangeSheet> createState() => _SpendDateRangeSheetState();
+}
+
+class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
+  late SpendReportQuery _draft;
+  late DateTime _customFrom;
+  late DateTime _customTo;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = widget.selected;
+    _customFrom = widget.selected.isCustom
+        ? widget.selected.from!
+        : DateTime(widget.now.year, widget.now.month, 1);
+    _customTo = widget.selected.isCustom
+        ? widget.selected.to!
+        : DateTime(widget.now.year, widget.now.month + 1, 0);
+  }
+
   DateTime _monthStart(int year, int month) => DateTime(year, month, 1);
 
   DateTime _monthEnd(int year, int month) => DateTime(year, month + 1, 0);
 
+  DateTime _weekStart() {
+    final date = DateTime(widget.now.year, widget.now.month, widget.now.day);
+    return date.subtract(Duration(days: date.weekday - DateTime.monday));
+  }
+
+  DateTime _weekEnd() => _weekStart().add(const Duration(days: 6));
+
   SpendReportQuery _custom(DateTime from, DateTime to) =>
       SpendReportQuery.custom(from: from, to: to);
 
+  bool _sameDay(DateTime? a, DateTime? b) =>
+      a == null && b == null ||
+      a != null &&
+          b != null &&
+          a.year == b.year &&
+          a.month == b.month &&
+          a.day == b.day;
+
   bool _matches(SpendReportQuery query) =>
-      query.period == selected.period &&
-      query.from == selected.from &&
-      query.to == selected.to;
+      query.period == _draft.period &&
+      _sameDay(query.from, _draft.from) &&
+      _sameDay(query.to, _draft.to);
+
+  String _shortDate(DateTime date) {
+    const months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  String _monthLabel(DateTime date) {
+    const months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.year}';
+  }
+
+  int _monthCount(DateTime from, DateTime to) =>
+      (to.year - from.year) * 12 + to.month - from.month + 1;
+
+  String _selectedTitle(List<_SpendRangeOption> options) {
+    for (final option in options) {
+      if (_matches(option.query)) return option.title;
+    }
+    return 'Custom range';
+  }
+
+  String _selectedDescription() {
+    final from = _draft.isCustom ? _draft.from! : _customFrom;
+    final to = _draft.isCustom ? _draft.to! : _customTo;
+    return '${_shortDate(from)} – ${_shortDate(to)} '
+        '(${_monthCount(from, to)} ${_monthCount(from, to) == 1 ? 'month' : 'months'})';
+  }
+
+  Future<void> _pickDate({required bool from}) async {
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(widget.now.year, widget.now.month, widget.now.day),
+      initialDate: from ? _customFrom : _customTo,
+      helpText: from ? 'Select start date' : 'Select end date',
+    );
+    if (picked == null) return;
+    setState(() {
+      if (from) {
+        _customFrom = picked;
+        if (_customFrom.isAfter(_customTo)) _customTo = picked;
+      } else {
+        _customTo = picked;
+        if (_customTo.isBefore(_customFrom)) _customFrom = picked;
+      }
+      _draft = _custom(_customFrom, _customTo);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -433,41 +524,87 @@ class _SpendDateRangeSheet extends StatelessWidget {
     String monthLabel(DateTime date) =>
         '${months[date.month - 1]} ${date.year}';
     final lastMonth = _custom(
-      _monthStart(now.year, now.month - 1),
-      _monthEnd(now.year, now.month - 1),
+      _monthStart(widget.now.year, widget.now.month - 1),
+      _monthEnd(widget.now.year, widget.now.month - 1),
     );
     final lastThreeMonths = _custom(
-      _monthStart(now.year, now.month - 2),
-      _monthEnd(now.year, now.month),
+      _monthStart(widget.now.year, widget.now.month - 2),
+      _monthEnd(widget.now.year, widget.now.month),
     );
     final yearToDate = _custom(
-      DateTime(now.year, 1, 1),
-      DateTime(now.year, now.month, now.day),
+      DateTime(widget.now.year, 1, 1),
+      DateTime(widget.now.year, widget.now.month, widget.now.day),
     );
     final lastTwelveMonths = _custom(
-      _monthStart(now.year, now.month - 11),
-      _monthEnd(now.year, now.month),
+      _monthStart(widget.now.year, widget.now.month - 11),
+      _monthEnd(widget.now.year, widget.now.month),
     );
 
-    Widget option({
-      required IconData icon,
-      required String title,
-      required String subtitle,
-      required _SpendDateRangeChoice choice,
-      bool selectedOption = false,
-    }) {
+    final options = <_SpendRangeOption>[
+      _SpendRangeOption(
+        icon: Icons.calendar_month_rounded,
+        title: 'This month',
+        subtitle: _monthLabel(widget.now),
+        query: const SpendReportQuery.preset(SpendPeriod.month),
+      ),
+      _SpendRangeOption(
+        icon: Icons.date_range_rounded,
+        title: 'This week',
+        subtitle: '${_shortDate(_weekStart())} – ${_shortDate(_weekEnd())}',
+        query: const SpendReportQuery.preset(SpendPeriod.week),
+      ),
+      _SpendRangeOption(
+        icon: Icons.calendar_month_rounded,
+        title: 'Last month',
+        subtitle: _monthLabel(DateTime(widget.now.year, widget.now.month - 1)),
+        query: lastMonth,
+      ),
+      _SpendRangeOption(
+        icon: Icons.bar_chart_rounded,
+        title: 'Last 3 months',
+        subtitle:
+            '${_monthLabel(DateTime(widget.now.year, widget.now.month - 2))} – ${_monthLabel(widget.now)}',
+        query: lastThreeMonths,
+      ),
+      _SpendRangeOption(
+        icon: Icons.pie_chart_outline_rounded,
+        title: 'This quarter',
+        subtitle:
+            'Q${((widget.now.month - 1) ~/ 3) + 1} ${widget.now.year}\n'
+            '(${_monthLabel(DateTime(widget.now.year, ((widget.now.month - 1) ~/ 3) * 3 + 1))} – '
+            '${_monthLabel(DateTime(widget.now.year, ((widget.now.month - 1) ~/ 3) * 3 + 3))})',
+        query: const SpendReportQuery.preset(SpendPeriod.quarter),
+      ),
+      _SpendRangeOption(
+        icon: Icons.date_range_rounded,
+        title: 'Year to date',
+        subtitle: 'Jan – ${_monthLabel(widget.now)}',
+        query: yearToDate,
+      ),
+      _SpendRangeOption(
+        icon: Icons.bar_chart_rounded,
+        title: 'Last 12 months',
+        subtitle:
+            '${_monthLabel(DateTime(widget.now.year, widget.now.month - 11))} – ${_monthLabel(widget.now)}',
+        query: lastTwelveMonths,
+      ),
+    ];
+
+    Widget optionCard(_SpendRangeOption option) {
+      final selectedOption = _matches(option.query);
       return Expanded(
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () => Navigator.pop(context, choice),
+          onTap: () => Navigator.pop(
+            context,
+            _SpendDateRangeChoice(option.query),
+          ),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
-            constraints: const BoxConstraints(minHeight: 82),
-            padding: const EdgeInsets.all(AppSpace.md),
+            constraints: const BoxConstraints(minHeight: 66),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
-              color: selectedOption
-                  ? const Color(0xFFF0FBDD)
-                  : BambooInk.paper,
+              color: selectedOption ? const Color(0xFFF1FFDF) : BambooInk.paper,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: selectedOption
@@ -478,25 +615,25 @@ class _SpendDateRangeSheet extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(icon, color: BambooInk.ink900, size: 24),
-                const SizedBox(width: AppSpace.sm),
+                Icon(option.icon, color: BambooInk.ink900, size: 21),
+                const SizedBox(width: 7),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        title,
+                        option.title,
                         style: BambooFonts.ui(
-                          12.5,
+                          11.5,
                           weight: FontWeight.w700,
                           color: BambooInk.ink900,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       Text(
-                        subtitle,
-                        style: BambooFonts.ui(11, color: BambooInk.ink500),
+                        option.subtitle,
+                        style: BambooFonts.ui(9.5, color: BambooInk.ink500),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -507,7 +644,7 @@ class _SpendDateRangeSheet extends StatelessWidget {
                   const Icon(
                     Icons.check_circle_rounded,
                     color: BambooInk.jade,
-                    size: 21,
+                    size: 18,
                   ),
               ],
             ),
@@ -516,91 +653,52 @@ class _SpendDateRangeSheet extends StatelessWidget {
       );
     }
 
-    final choices = <Widget>[
-      option(
-        icon: Icons.calendar_month_rounded,
-        title: 'This month',
-        subtitle: monthLabel(now),
-        choice: const _SpendDateRangeChoice.query(
-          SpendReportQuery.preset(SpendPeriod.month),
-        ),
-        selectedOption:
-            !selected.isCustom && selected.period == SpendPeriod.month,
-      ),
-      option(
-        icon: Icons.calendar_month_rounded,
-        title: 'Last month',
-        subtitle: monthLabel(DateTime(now.year, now.month - 1)),
-        choice: _SpendDateRangeChoice.query(lastMonth),
-        selectedOption: _matches(lastMonth),
-      ),
-      option(
-        icon: Icons.bar_chart_rounded,
-        title: 'Last 3 months',
-        subtitle:
-            '${monthLabel(DateTime(now.year, now.month - 2))} – ${monthLabel(now)}',
-        choice: _SpendDateRangeChoice.query(lastThreeMonths),
-        selectedOption: _matches(lastThreeMonths),
-      ),
-      option(
-        icon: Icons.pie_chart_outline_rounded,
-        title: 'This quarter',
-        subtitle:
-            'Q${((now.month - 1) ~/ 3) + 1} ${now.year} · current quarter',
-        choice: const _SpendDateRangeChoice.query(
-          SpendReportQuery.preset(SpendPeriod.quarter),
-        ),
-        selectedOption:
-            !selected.isCustom && selected.period == SpendPeriod.quarter,
-      ),
-      option(
-        icon: Icons.date_range_rounded,
-        title: 'Year to date',
-        subtitle: 'Jan – ${monthLabel(now)}',
-        choice: _SpendDateRangeChoice.query(yearToDate),
-        selectedOption: _matches(yearToDate),
-      ),
-      option(
-        icon: Icons.bar_chart_rounded,
-        title: 'Last 12 months',
-        subtitle:
-            '${monthLabel(DateTime(now.year, now.month - 11))} – ${monthLabel(now)}',
-        choice: _SpendDateRangeChoice.query(lastTwelveMonths),
-        selectedOption: _matches(lastTwelveMonths),
-      ),
-    ];
-
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpace.lg,
-          0,
-          AppSpace.lg,
-          AppSpace.lg,
-        ),
+        padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Choose date range',
-              style: BambooFonts.heading(20, color: BambooInk.ink900),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Choose date range',
+                    style: BambooFonts.heading(20, color: BambooInk.ink900),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, size: 28),
+                  color: BambooInk.ink900,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpace.xs),
             Text(
-              selected.isCustom
-                  ? 'Selected: ${selected.shortLabel}'
-                  : 'Selected: ${selected.period.label}',
+              'Selected: ${_selectedTitle(options)}',
+              style: BambooFonts.ui(13, color: BambooInk.ink900),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              _selectedDescription(),
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.lg),
-            for (var index = 0; index < choices.length; index += 2) ...[
+            for (var index = 0; index < options.length; index += 2) ...[
               Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                // The sheet is inside a SingleChildScrollView, so its height
+                // is unbounded. Stretching the row children asks each card
+                // to use an infinite height and makes the range options fail
+                // layout on real/test devices.
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  choices[index],
+                  optionCard(options[index]),
                   const SizedBox(width: AppSpace.sm),
-                  if (index + 1 < choices.length)
-                    choices[index + 1]
+                  if (index + 1 < options.length)
+                    optionCard(options[index + 1])
                   else
                     const Expanded(child: SizedBox()),
                 ],
@@ -608,28 +706,143 @@ class _SpendDateRangeSheet extends StatelessWidget {
               const SizedBox(height: AppSpace.sm),
             ],
             const Divider(height: AppSpace.lg),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.date_range_rounded),
-              title: Text(
-                'Custom range',
-                style: BambooFonts.ui(
-                  13,
-                  weight: FontWeight.w700,
-                  color: BambooInk.ink900,
+            Row(
+              children: [
+                const Icon(Icons.calendar_month_rounded, size: 25),
+                const SizedBox(width: AppSpace.sm),
+                Text(
+                  'Custom range',
+                  style: BambooFonts.ui(
+                    14,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
                 ),
-              ),
-              subtitle: const Text('Pick exact start and end dates'),
-              onTap: () => Navigator.pop(
-                context,
-                const _SpendDateRangeChoice.custom(),
+              ],
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: _DateField(
+                    label: 'From',
+                    value: _customFrom,
+                    onTap: () => _pickDate(from: true),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: _DateField(
+                    label: 'To',
+                    value: _customTo,
+                    onTap: () => _pickDate(from: false),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () =>
+                    Navigator.pop(context, _SpendDateRangeChoice(_draft)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: BambooInk.lime,
+                  foregroundColor: BambooInk.ink900,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                ),
+                child: const Text('Apply range'),
               ),
             ),
-            const SizedBox(height: AppSpace.xs),
-            Text(
-              'For ranges over one month, spending is grouped by month.',
-              style: BambooFonts.ui(11, color: BambooInk.ink500),
+            const SizedBox(height: AppSpace.sm),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 19,
+                  color: BambooInk.ink500,
+                ),
+                const SizedBox(width: AppSpace.xs),
+                Expanded(
+                  child: Text(
+                    'For ranges over one month, spending is grouped by month.',
+                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                  ),
+                ),
+              ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DateField extends StatelessWidget {
+  final String label;
+  final DateTime value;
+  final VoidCallback onTap;
+
+  const _DateField({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  String _format(DateTime date) {
+    const months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+        decoration: BoxDecoration(
+          color: BambooInk.paper,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _format(value),
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink900),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.calendar_month_rounded, size: 21),
           ],
         ),
       ),
@@ -890,6 +1103,29 @@ class _ReportBodyState extends State<_ReportBody> {
     return start.year != end.year || start.month != end.month;
   }
 
+  String _seriesRangeLabel(List<SpendSeriesPoint> series) {
+    if (series.isEmpty) return '';
+    const months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final first = series.first.periodStart.toLocal();
+    final last = series.last.periodStart.toLocal();
+    return first.year == last.year
+        ? '${months[first.month - 1]}–${months[last.month - 1]}'
+        : '${months[first.month - 1]} ${first.year}–${months[last.month - 1]} ${last.year}';
+  }
+
   List<TransactionEntry> _transactionsForCategory(SpendBreakdownRow row) {
     return _visibleEntries.where((entry) {
       if (row.categoryId != null) return entry.categoryId == row.categoryId;
@@ -933,6 +1169,7 @@ class _ReportBodyState extends State<_ReportBody> {
     final instrumentRows = _instrumentRows();
     final total = _visibleTotal();
     final series = _seriesFor(report);
+    final multiMonth = _isMultiMonth(report, series);
     final categoryEntries = _transactionsForCategory;
     final showFilteredLoading =
         _filtersActive &&
@@ -953,12 +1190,17 @@ class _ReportBodyState extends State<_ReportBody> {
             report: _filtersActive ? _filteredReport(report, total) : report,
           ),
           const SizedBox(height: AppSpace.lg),
-          if (_isMultiMonth(report, series)) ...[
+          if (multiMonth) ...[
             _MonthlyComparisonCard(series: series),
             const SizedBox(height: AppSpace.lg),
           ],
           if (categoryRows.isNotEmpty) ...[
-            _SpendingMixCard(rows: categoryRows, total: total),
+            _SpendingMixCard(
+              rows: categoryRows,
+              total: total,
+              compact: multiMonth,
+              rangeLabel: multiMonth ? _seriesRangeLabel(series) : null,
+            ),
             const SizedBox(height: AppSpace.lg),
           ],
           _SpendingTabs(
@@ -1542,7 +1784,8 @@ class _HeadlineCard extends StatelessWidget {
     final projected = report.projectedSpend;
     final start = report.periodStart.toLocal();
     final end = report.periodEnd.subtract(const Duration(days: 1)).toLocal();
-    final multiMonth = report.series.length > 1 ||
+    final multiMonth =
+        report.series.length > 1 ||
         start.year != end.year ||
         start.month != end.month;
     final monthCount = report.series.length > 1
@@ -1830,12 +2073,7 @@ class _MonthlyComparisonCard extends StatelessWidget {
               '(${(comparison.abs() * 100).toStringAsFixed(0)}%).';
 
     return CardSummaryPanel(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpace.lg,
-        AppSpace.md,
-        AppSpace.lg,
-        AppSpace.md,
-      ),
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1844,40 +2082,53 @@ class _MonthlyComparisonCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Monthly comparison',
-                  style: BambooFonts.heading(15, color: BambooInk.ink900),
+                  style: BambooFonts.heading(13, color: BambooInk.ink900),
                 ),
               ),
-              Icon(Icons.info_outline_rounded, color: BambooInk.ink500, size: 22),
+              Icon(
+                Icons.info_outline_rounded,
+                color: BambooInk.ink500,
+                size: 18,
+              ),
             ],
           ),
-          const SizedBox(height: AppSpace.sm),
+          const SizedBox(height: 2),
           SizedBox(
-            height: 190,
+            height: 145,
             child: CustomPaint(
               painter: _MonthlyBarChartPainter(series: series),
             ),
           ),
-          const SizedBox(height: AppSpace.sm),
+          const SizedBox(height: 5),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(AppSpace.md),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0FBDD),
-              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFFF1FFDF),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.trending_up_rounded,
-                  color: BambooInk.jade,
-                  size: 25,
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5FBCB),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.trending_up_rounded,
+                    color: BambooInk.jade,
+                    size: 18,
+                  ),
                 ),
-                const SizedBox(width: AppSpace.sm),
+                const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    comparisonText,
-                    style: BambooFonts.ui(12, color: BambooInk.ink900),
+                    '$comparisonText\nTap a bar to see that month’s category mix.',
+                    style: BambooFonts.ui(10.5, color: BambooInk.ink900),
                   ),
                 ),
               ],
@@ -1893,6 +2144,13 @@ class _MonthlyBarChartPainter extends CustomPainter {
   final List<SpendSeriesPoint> series;
 
   const _MonthlyBarChartPainter({required this.series});
+
+  String _axisLabel(int paise) {
+    final rupees = paise / 100;
+    if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
+    if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(0)}K';
+    return '₹${rupees.toStringAsFixed(0)}';
+  }
 
   static String _monthLabel(DateTime date) {
     const months = <String>[
@@ -1945,9 +2203,8 @@ class _MonthlyBarChartPainter extends CustomPainter {
     final chartHeight = math.max(1.0, size.height - top - bottom).toDouble();
     final maxPaise = series.fold<int>(
       1,
-      (maxValue, point) => maxValue > point.spend.paise
-          ? maxValue
-          : point.spend.paise,
+      (maxValue, point) =>
+          maxValue > point.spend.paise ? maxValue : point.spend.paise,
     );
     final gridPaint = Paint()
       ..color = BambooInk.hairlineOnPaper
@@ -1958,11 +2215,14 @@ class _MonthlyBarChartPainter extends CustomPainter {
 
     for (final fraction in <double>[0, 0.5, 1]) {
       final y = top + chartHeight * (1 - fraction);
-      canvas.drawLine(Offset(left, y), Offset(size.width - right, y), gridPaint);
-      final value = Money.fromPaise((maxPaise * fraction).round());
+      canvas.drawLine(
+        Offset(left, y),
+        Offset(size.width - right, y),
+        gridPaint,
+      );
       _text(
         canvas,
-        value.format(hidePaise: true),
+        _axisLabel((maxPaise * fraction).round()),
         Offset(0, y - 7),
         left - 7,
         BambooFonts.ui(10.5, color: BambooInk.ink500),
@@ -2005,11 +2265,7 @@ class _MonthlyBarChartPainter extends CustomPainter {
         point.spend.format(hidePaise: true),
         Offset(left + slot * index, math.max(0, y - 19)),
         slot,
-        BambooFonts.ui(
-          10.5,
-          weight: FontWeight.w700,
-          color: BambooInk.ink900,
-        ),
+        BambooFonts.ui(10.5, weight: FontWeight.w700, color: BambooInk.ink900),
         align: TextAlign.center,
       );
       _text(
@@ -2034,75 +2290,100 @@ class _MonthlyBarChartPainter extends CustomPainter {
 class _SpendingMixCard extends StatelessWidget {
   final List<SpendBreakdownRow> rows;
   final Money total;
+  final bool compact;
+  final String? rangeLabel;
 
-  const _SpendingMixCard({required this.rows, required this.total});
+  const _SpendingMixCard({
+    required this.rows,
+    required this.total,
+    this.compact = false,
+    this.rangeLabel,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final visibleRows = rows.where((row) => !row.total.isZero).take(4).toList();
-    final remaining =
-        rows.where((row) => !row.total.isZero).length - visibleRows.length;
+    final nonZeroRows = rows.where((row) => !row.total.isZero).toList();
+    final visibleRows = nonZeroRows.take(compact ? 5 : 4).toList();
+    final remaining = nonZeroRows.length - visibleRows.length;
 
     return CardSummaryPanel(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpace.lg,
-        AppSpace.md,
-        AppSpace.lg,
-        AppSpace.lg,
-      ),
+      padding: compact
+          ? const EdgeInsets.fromLTRB(10, 8, 10, 10)
+          : const EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              AppSpace.md,
+              AppSpace.lg,
+              AppSpace.lg,
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              _SpendingVisualBadge(
-                visual: const SpendingVisual(
-                  icon: Icons.pie_chart_rounded,
-                  accent: BambooChartColors.teal,
+              if (!compact) ...[
+                _SpendingVisualBadge(
+                  visual: const SpendingVisual(
+                    icon: Icons.pie_chart_rounded,
+                    accent: BambooChartColors.teal,
+                  ),
+                  size: 38,
                 ),
-                size: 38,
-              ),
-              const SizedBox(width: AppSpace.md),
+                const SizedBox(width: AppSpace.md),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Spending mix',
-                      style: BambooFonts.heading(15, color: BambooInk.ink900),
+                      compact && rangeLabel != null
+                          ? 'Spending mix · $rangeLabel'
+                          : 'Spending mix',
+                      style: BambooFonts.heading(
+                        compact ? 13 : 15,
+                        color: BambooInk.ink900,
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${rows.length} ${rows.length == 1 ? 'category' : 'categories'} · tap a row below for details',
-                      style: BambooFonts.ui(12, color: BambooInk.ink500),
-                    ),
+                    if (!compact) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${rows.length} ${rows.length == 1 ? 'category' : 'categories'} · tap a row below for details',
+                        style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpace.lg),
+          SizedBox(height: compact ? 6 : AppSpace.lg),
           LayoutBuilder(
             builder: (context, constraints) {
-              final compact = constraints.maxWidth < 360;
+              final stack = !compact && constraints.maxWidth < 360;
               final legend = Column(
                 children: [
                   for (final row in visibleRows)
-                    _MixLegendRow(row: row, total: total),
+                    _MixLegendRow(row: row, total: total, compact: compact),
                   if (remaining > 0) ...[
-                    const SizedBox(height: AppSpace.xs),
+                    SizedBox(height: compact ? 2 : AppSpace.xs),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        '+$remaining more ${remaining == 1 ? 'category' : 'categories'} below',
-                        style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                        compact
+                            ? '$remaining smaller ${remaining == 1 ? 'category' : 'categories'} · View all  ›'
+                            : '+$remaining more ${remaining == 1 ? 'category' : 'categories'} below',
+                        style: BambooFonts.ui(
+                          compact ? 9.5 : 11.5,
+                          color: compact
+                              ? BambooChartColors.violet
+                              : BambooInk.ink500,
+                        ),
                       ),
                     ),
                   ],
                 ],
               );
 
-              if (compact) {
+              if (stack) {
                 return Column(
                   children: [
                     _SpendingDonut(rows: rows, total: total),
@@ -2115,8 +2396,13 @@ class _SpendingMixCard extends StatelessWidget {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  _SpendingDonut(rows: rows, total: total),
-                  const SizedBox(width: AppSpace.lg),
+                  _SpendingDonut(
+                    rows: rows,
+                    total: total,
+                    size: compact ? 106 : 132,
+                    compact: compact,
+                  ),
+                  SizedBox(width: compact ? 7 : AppSpace.lg),
                   Expanded(child: legend),
                 ],
               );
@@ -2131,8 +2417,15 @@ class _SpendingMixCard extends StatelessWidget {
 class _SpendingDonut extends StatelessWidget {
   final List<SpendBreakdownRow> rows;
   final Money total;
+  final double size;
+  final bool compact;
 
-  const _SpendingDonut({required this.rows, required this.total});
+  const _SpendingDonut({
+    required this.rows,
+    required this.total,
+    this.size = 132,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2141,14 +2434,18 @@ class _SpendingDonut extends StatelessWidget {
       duration: const Duration(milliseconds: 650),
       curve: Curves.easeOutCubic,
       builder: (context, progress, child) => SizedBox(
-        width: 132,
-        height: 132,
+        width: size,
+        height: size,
         child: Stack(
           alignment: Alignment.center,
           children: [
             CustomPaint(
-              size: const Size.square(132),
-              painter: _SpendingDonutPainter(rows: rows, progress: progress),
+              size: Size.square(size),
+              painter: _SpendingDonutPainter(
+                rows: rows,
+                progress: progress,
+                strokeWidth: compact ? 12 : 18,
+              ),
             ),
             child!,
           ],
@@ -2158,7 +2455,7 @@ class _SpendingDonut extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            width: 82,
+            width: size * 0.7,
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: MoneyText(
@@ -2166,14 +2463,20 @@ class _SpendingDonut extends StatelessWidget {
                 confidence: Confidence.estimated,
                 showConfidenceIcon: false,
                 style: BambooFonts.ui(
-                  16,
+                  compact ? 12 : 16,
                   weight: FontWeight.w800,
                   color: BambooInk.ink900,
                 ),
               ),
             ),
           ),
-          Text('spent', style: BambooFonts.ui(10.5, color: BambooInk.ink500)),
+          Text(
+            compact ? 'Total spent' : 'spent',
+            style: BambooFonts.ui(
+              compact ? 8.5 : 10.5,
+              color: BambooInk.ink500,
+            ),
+          ),
         ],
       ),
     );
@@ -2183,8 +2486,13 @@ class _SpendingDonut extends StatelessWidget {
 class _SpendingDonutPainter extends CustomPainter {
   final List<SpendBreakdownRow> rows;
   final double progress;
+  final double strokeWidth;
 
-  const _SpendingDonutPainter({required this.rows, required this.progress});
+  const _SpendingDonutPainter({
+    required this.rows,
+    required this.progress,
+    this.strokeWidth = 18,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2193,7 +2501,7 @@ class _SpendingDonutPainter extends CustomPainter {
     final track = Paint()
       ..color = BambooChartColors.chartTrack
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 18;
+      ..strokeWidth = strokeWidth;
     canvas.drawArc(rect.deflate(10), 0, math.pi * 2, false, track);
 
     if (totalPaise == 0) return;
@@ -2204,7 +2512,7 @@ class _SpendingDonutPainter extends CustomPainter {
       final paint = Paint()
         ..color = spendingCategoryVisual(row.label).accent
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 18;
+        ..strokeWidth = strokeWidth;
       canvas.drawArc(rect.deflate(10), start, sweep, false, paint);
       start += sweep;
     }
@@ -2212,14 +2520,21 @@ class _SpendingDonutPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SpendingDonutPainter oldDelegate) =>
-      oldDelegate.rows != rows || oldDelegate.progress != progress;
+      oldDelegate.rows != rows ||
+      oldDelegate.progress != progress ||
+      oldDelegate.strokeWidth != strokeWidth;
 }
 
 class _MixLegendRow extends StatelessWidget {
   final SpendBreakdownRow row;
   final Money total;
+  final bool compact;
 
-  const _MixLegendRow({required this.row, required this.total});
+  const _MixLegendRow({
+    required this.row,
+    required this.total,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2228,20 +2543,33 @@ class _MixLegendRow extends StatelessWidget {
         : (row.total.paise / total.paise).clamp(0.0, 1.0);
     final visual = spendingCategoryVisual(row.label);
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpace.sm),
+      padding: EdgeInsets.only(bottom: compact ? 4 : AppSpace.sm),
       child: Row(
         children: [
-          _SpendingVisualBadge(visual: visual, size: 27),
-          const SizedBox(width: AppSpace.sm),
+          if (compact)
+            Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: visual.accent,
+              ),
+            )
+          else
+            _SpendingVisualBadge(visual: visual, size: 27),
+          SizedBox(width: compact ? 5 : AppSpace.sm),
           Expanded(
             child: Text(
               '${row.label} · ${(ratio * 100).toStringAsFixed(0)}%',
-              style: BambooFonts.ui(12, color: BambooInk.ink900),
+              style: BambooFonts.ui(
+                compact ? 9.5 : 12,
+                color: compact ? BambooInk.ink500 : BambooInk.ink900,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: AppSpace.xs),
+          SizedBox(width: compact ? 3 : AppSpace.xs),
           Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,
@@ -2250,7 +2578,7 @@ class _MixLegendRow extends StatelessWidget {
                 row.total,
                 confidence: Confidence.estimated,
                 style: BambooFonts.ui(
-                  12,
+                  compact ? 9.5 : 12,
                   weight: FontWeight.w700,
                   color: BambooInk.ink900,
                 ),

@@ -108,7 +108,7 @@ abstract final class AppRoute {
   /// Task 7: no longer a bottom-nav destination — Material's 5-item ceiling
   /// meant Insights displaced it, not joined it, once a 4th non-Home/Cards/
   /// Account destination was needed. Still a real route, reached only via
-  /// Insights Hub's "All Activity" tile now.
+  /// Insights Hub's "Transactions" tile now.
   static const activity = '/activity';
   static const caps = '/insights/caps';
   static const milestones = '/insights/milestones';

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/transaction_detail_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -10,12 +11,14 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 class _FakeUserCardsRepository implements UserCardsRepository {
   TransactionEntry entry;
   final bool failFetch;
+  final bool failSplits;
   String? lastIgnoreReason;
   String? lastNote;
   List<TransactionSplit> splits;
   _FakeUserCardsRepository(
     this.entry, {
     this.failFetch = false,
+    this.failSplits = false,
     this.splits = const [],
   });
 
@@ -61,8 +64,14 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   }
 
   @override
-  Future<List<TransactionSplit>> fetchSplits(String transactionId) async =>
-      splits;
+  Future<List<TransactionSplit>> fetchSplits(String transactionId) async {
+    if (failSplits) {
+      throw ApiException(
+        'GET splits failed: 401 {"error":"Missing or invalid access token"}',
+      );
+    }
+    return splits;
+  }
 
   @override
   Future<List<TransactionSplit>> saveSplits(
@@ -280,6 +289,34 @@ void main() {
     expect(repo.splits, isEmpty);
     expect(find.text('Split this expense'), findsOneWidget);
   });
+
+  testWidgets(
+    'does not expose the raw token error when split loading is rejected',
+    (tester) async {
+      final repo = _FakeUserCardsRepository(
+        TransactionEntry(
+          id: 't1',
+          amount: Money.fromRupees(1000),
+          occurredAt: DateTime(2026, 3, 1),
+          userCardId: 'uc1',
+          source: 'sms',
+          status: 'active',
+        ),
+        failSplits: true,
+      );
+      await _pump(tester, repo: repo);
+
+      expect(
+        find.textContaining('Missing or invalid access token'),
+        findsNothing,
+      );
+      expect(
+        find.textContaining('Your session could not be refreshed'),
+        findsOneWidget,
+      );
+      expect(find.text('Retry'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'an ignored transaction shows the exclusion banner and no ignore action',

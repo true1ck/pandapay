@@ -973,13 +973,13 @@ final spendReportProvider = FutureProvider.family<SpendReport?, SpendReportQuery
     } catch (error) {
       if (!_canUseReadCache(error)) {
         if (_isAuthenticationFailure(error)) {
-          return null;
+          throw const AuthenticationUnavailableException();
         }
         rethrow;
       }
       if (cached == null) {
         if (_isAuthenticationFailure(error)) {
-          return null;
+          throw const AuthenticationUnavailableException();
         }
         rethrow;
       }
@@ -1072,7 +1072,7 @@ final recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
   } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
-        return null;
+        throw const AuthenticationUnavailableException();
       }
       rethrow;
     }
@@ -2093,7 +2093,7 @@ final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((
   } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
-        return null;
+        throw const AuthenticationUnavailableException();
       }
       rethrow;
     }
@@ -2800,19 +2800,43 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   final key = _scopedCacheKey(ref, cacheKey);
   final cache = await _cacheOrNull(ref);
   final cached = await _readCacheOrNull(ref, cache, key);
+
+  bool hasTransactions(CachedResponse? snapshot) {
+    if (snapshot == null) return false;
+    try {
+      final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
+      final rows = body['transactions'];
+      return rows is List && rows.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // UserCardsRepository.fetchTransactions() takes inclusive calendar dates.
   // Keep the cache filter on the same contract instead of accidentally
   // dropping the whole final day when [to] is midnight.
   final toExclusive = to == null
       ? null
       : DateTime(to.year, to.month, to.day + 1);
-  final allTransactionsCached = cached == null
+  final allTransactionsCached = !hasTransactions(cached)
       ? await _readCacheOrNull(
           ref,
           cache,
           _scopedCacheKey(ref, '$_transactionsCacheKey:all'),
         )
       : null;
+
+  // Activity historically used its own cache key while Home warmed the
+  // canonical all-transactions snapshot. If Activity was opened during a
+  // transient auth/network failure, that scoped key could contain a valid
+  // empty response and hide the still-valid all-transactions snapshot. Prefer
+  // whichever account-scoped snapshot actually contains rows; both keys are
+  // safe because they use the same user namespace.
+  final cachedSnapshot = hasTransactions(cached)
+      ? cached
+      : hasTransactions(allTransactionsCached)
+      ? allTransactionsCached
+      : cached ?? allTransactionsCached;
 
   Future<List<TransactionEntry>> decodeCached(CachedResponse? snapshot) async {
     if (snapshot == null) {
@@ -2852,6 +2876,22 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
       source: source,
       query: query,
     );
+
+    // A successful HTTP 200 with no rows can still be a transient backend
+    // state during auth/session recovery. Never destroy the last non-empty
+    // account snapshot for an unfiltered history request in that case. A
+    // genuinely empty account still gets cached as empty because there is no
+    // prior non-empty snapshot to preserve.
+    final unfiltered =
+        from == null &&
+        to == null &&
+        cardId == null &&
+        categoryId == null &&
+        source == null &&
+        (query == null || query.trim().isEmpty);
+    if (transactions.isEmpty && unfiltered && hasTransactions(cachedSnapshot)) {
+      return decodeCached(cachedSnapshot);
+    }
     try {
       await cache?.put(
         key,
@@ -2866,8 +2906,6 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     }
     return transactions;
   }
-
-  final cachedSnapshot = cached ?? allTransactionsCached;
 
   // Insights can calculate the whole visible report from this snapshot. Show
   // it immediately and refresh quietly in the background, so a server round

@@ -7,6 +7,25 @@ import 'package:pandapay/features/insights/subscriptions_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 void main() {
+  testWidgets(
+    'does not ask a signed-in user to sign in when the report is unavailable',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            accessTokenProvider.overrideWith((ref) => 'restored-session'),
+            recurringReportProvider.overrideWith((ref) async => null),
+          ],
+          child: const MaterialApp(home: SubscriptionsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sign in to find your subscriptions'), findsNothing);
+      expect(find.text('Subscriptions are still loading'), findsOneWidget);
+    },
+  );
+
   testWidgets('shows only named subscriptions with a renewal date', (
     tester,
   ) async {

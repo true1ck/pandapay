@@ -175,6 +175,46 @@ void main() {
     expect(find.text('Spending'), findsOneWidget);
   });
 
+  testWidgets('keeps its scroll position in page storage', (tester) async {
+    await _openInsights(tester);
+
+    final scrollFinder = find.byKey(
+      const PageStorageKey<String>('insightsScroll'),
+    );
+    await tester.drag(scrollFinder, const Offset(0, -2000));
+    await tester.pump(const Duration(milliseconds: 100));
+    final scrollableFinder = find.descendant(
+      of: scrollFinder,
+      matching: find.byType(Scrollable),
+    ).first;
+    final before = tester
+        .state<ScrollableState>(scrollableFinder)
+        .position
+        .pixels;
+    expect(before, greaterThan(0));
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('appShellNavBar')),
+        matching: find.text('Home'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('appShellNavBar')),
+        matching: find.text('Insights'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final after = tester
+        .state<ScrollableState>(scrollableFinder)
+        .position
+        .pixels;
+    expect(after, greaterThan(0));
+  });
+
   testWidgets('Limits & perks opens as one vertical card-capability view', (
     tester,
   ) async {

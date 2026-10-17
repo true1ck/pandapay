@@ -189,17 +189,17 @@ void main() {
       // fold depends on how much content the hub has above the grid, which
       // differs between the signed-out empty state and a wallet with data.
       await tester.scrollUntilVisible(
-        find.text('All activity · money in and out'),
+        find.text('Transactions'),
         300,
         scrollable: find
             .descendant(
-              of: find.byKey(const ValueKey('insightsScroll')),
+              of: find.byKey(const PageStorageKey<String>('insightsScroll')),
               matching: find.byType(Scrollable),
             )
             .first,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('All activity · money in and out'));
+      await tester.tap(find.text('Transactions'));
       await tester.pumpAndSettle();
 
       expect(find.text('Activity'), findsWidgets);
@@ -263,17 +263,17 @@ void main() {
       // fold depends on how much content the hub has above the grid, which
       // differs between the signed-out empty state and a wallet with data.
       await tester.scrollUntilVisible(
-        find.text('All activity · money in and out'),
+        find.text('Transactions'),
         300,
         scrollable: find
             .descendant(
-              of: find.byKey(const ValueKey('insightsScroll')),
+              of: find.byKey(const PageStorageKey<String>('insightsScroll')),
               matching: find.byType(Scrollable),
             )
             .first,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('All activity · money in and out'));
+      await tester.tap(find.text('Transactions'));
       await tester.pumpAndSettle();
 
       expect(find.text('Test RuPay Card · Online'), findsOneWidget);

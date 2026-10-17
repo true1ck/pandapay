@@ -233,7 +233,11 @@ class InsightsHubScreen extends ConsumerWidget {
         // Named so tests can target this scroll view specifically — the
         // period chip row is a second, horizontal Scrollable on this screen,
         // so a bare find.byType(Scrollable) is ambiguous here.
-        key: const ValueKey('insightsScroll'),
+        // Keep the offset in the route's PageStorage bucket. Insights is
+        // intentionally local-first and its providers can refresh in the
+        // background; if that refresh causes the route subtree to be rebuilt,
+        // the user's position must survive instead of snapping to the top.
+        key: const PageStorageKey<String>('insightsScroll'),
         // Status bar above (the shell draws no AppBar), nav-pill clearance
         // below (the pill floats over this content) — see AppShell.
         padding: EdgeInsets.fromLTRB(
@@ -344,7 +348,7 @@ class _ActivityLink extends StatelessWidget {
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Text(
-                  'All activity · money in and out',
+                  'Transactions',
                   style: BambooFonts.ui(
                     13.5,
                     weight: FontWeight.w600,

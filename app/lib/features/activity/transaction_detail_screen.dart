@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -12,6 +13,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/local/response_cache.dart';
 import '../../data/local/transaction_attachments_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
@@ -158,19 +160,74 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     _loadSplits();
   }
 
+  String get _splitCacheKey =>
+      '${ref.read(cacheNamespaceProvider)}:transaction_splits:${widget.entry.id}';
+
+  static List<TransactionSplit>? _decodeCachedSplits(String? rawJson) {
+    if (rawJson == null) return null;
+    try {
+      final body = jsonDecode(rawJson) as Map<String, dynamic>;
+      final rows = body['splits'];
+      if (rows is! List) return null;
+      return rows
+          .cast<Map<String, dynamic>>()
+          .map(TransactionSplit.fromJson)
+          .toList();
+    } catch (_) {
+      // A corrupt optional snapshot must never break the transaction detail.
+      return null;
+    }
+  }
+
+  static String _encodeSplits(List<TransactionSplit> splits) => jsonEncode({
+    'splits': [
+      for (final split in splits)
+        {
+          'id': split.id,
+          'user_card_id': split.userCardId,
+          'category_id': split.categoryId,
+          'category_name': split.categoryName,
+          'amount_inr': split.amount.rupees,
+          'note': split.note,
+        },
+    ],
+  });
+
+  Future<(ResponseCache?, List<TransactionSplit>?)> _readCachedSplits() async {
+    ResponseCache? cache;
+    try {
+      cache = await ref.read(responseCacheProvider.future);
+      final raw = await cache?.get(_splitCacheKey);
+      return (cache, _decodeCachedSplits(raw));
+    } catch (_) {
+      // The local cache is best-effort. A database/platform failure must not
+      // prevent the live request or the normal retry state from rendering.
+      return (cache, null);
+    }
+  }
+
   Future<void> _loadSplits() async {
+    final (cache, cachedSplits) = await _readCachedSplits();
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null) {
       if (mounted) {
         setState(() {
+          if (cachedSplits != null) _splits = cachedSplits;
           _loadingSplits = false;
-          _splitLoadError = const AuthenticationUnavailableException().message;
+          _splitLoadError = cachedSplits == null
+              ? const AuthenticationUnavailableException().message
+              : null;
         });
       }
       return;
     }
     try {
       final splits = await repo.fetchSplits(widget.entry.id);
+      try {
+        await cache?.put(_splitCacheKey, _encodeSplits(splits));
+      } catch (_) {
+        // Rendering a successful live response must not depend on cache I/O.
+      }
       if (mounted) {
         setState(() {
           _splits = splits;
@@ -179,14 +236,19 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         });
       }
     } catch (error) {
-      // Keep the transaction detail usable, but do not silently present a
-      // failed split read as an unsplit transaction. The retry affordance
-      // makes an older API deployment, an expired session, or a temporary
-      // network failure diagnosable from the screen.
+      // Keep the transaction detail usable without silently presenting a
+      // failed split read as an unsplit transaction. A successful cached
+      // response is account-scoped and safe to show while the session or
+      // connection recovers.
       if (mounted) {
         setState(() {
+          if (cachedSplits != null) _splits = cachedSplits;
           _loadingSplits = false;
-          _splitLoadError = userFacingErrorMessage(error);
+          _splitLoadError = cachedSplits != null
+              ? null
+              : isAuthenticationFailure(error)
+              ? const AuthenticationUnavailableException().message
+              : userFacingErrorMessage(error);
         });
       }
     }
@@ -338,6 +400,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     if (mounted) setState(() => _savingSplits = true);
     try {
       final saved = await repo.saveSplits(widget.entry.id, result);
+      try {
+        final cache = await ref.read(responseCacheProvider.future);
+        await cache.put(_splitCacheKey, _encodeSplits(saved));
+      } catch (_) {
+        // The server write remains authoritative; cache persistence is only
+        // an offline/readability enhancement.
+      }
       if (mounted) {
         setState(() {
           _splits = saved;
