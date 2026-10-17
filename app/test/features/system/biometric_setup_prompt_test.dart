@@ -14,7 +14,7 @@ class _FakeLocalAuth extends LocalAuthentication {
   final bool authResult;
   int authenticateCalls = 0;
 
-  _FakeLocalAuth({this.deviceSupported = true, this.authResult = true});
+  _FakeLocalAuth({required this.deviceSupported, required this.authResult});
 
   @override
   Future<bool> isDeviceSupported() async => deviceSupported;
@@ -40,7 +40,7 @@ void main() {
     (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      final auth = _FakeLocalAuth();
+      final auth = _FakeLocalAuth(deviceSupported: true, authResult: true);
 
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -71,7 +71,7 @@ void main() {
   ) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    final auth = _FakeLocalAuth();
+    final auth = _FakeLocalAuth(deviceSupported: true, authResult: true);
 
     await tester.pumpWidget(
       UncontrolledProviderScope(

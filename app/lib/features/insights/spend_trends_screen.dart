@@ -562,22 +562,6 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
 
   @override
   Widget build(BuildContext context) {
-    const months = <String>[
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    String monthLabel(DateTime date) =>
-        '${months[date.month - 1]} ${date.year}';
     final lastMonth = _custom(
       _monthStart(widget.now.year, widget.now.month - 1),
       _monthEnd(widget.now.year, widget.now.month - 1),
@@ -1489,58 +1473,6 @@ class _EmptyTabState extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _TransactionSummaryRow extends StatelessWidget {
-  final TransactionEntry entry;
-  const _TransactionSummaryRow({required this.entry});
-
-  @override
-  Widget build(BuildContext context) {
-    final merchant = entry.merchantName?.trim().isNotEmpty == true
-        ? entry.merchantName!.trim()
-        : 'Unknown merchant';
-    final category = entry.categoryName?.trim().isNotEmpty == true
-        ? entry.categoryName!.trim()
-        : 'Other';
-    final date = entry.occurredAt.toLocal();
-    return CardSummaryPanel(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: 4),
-      margin: const EdgeInsets.only(bottom: AppSpace.xs),
-      elevated: false,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: _SpendingVisualBadge(
-          visual: spendingCategoryVisual(category),
-          size: 36,
-        ),
-        title: Text(
-          merchant,
-          style: BambooFonts.ui(
-            13,
-            weight: FontWeight.w600,
-            color: BambooInk.ink900,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} · ${entry.cardDisplayName ?? entry.instrument.label}',
-          style: BambooFonts.ui(11, color: BambooInk.ink500),
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: MoneyText(
-          entry.amount,
-          confidence: Confidence.estimated,
-          style: BambooFonts.ui(
-            13,
-            weight: FontWeight.w700,
-            color: BambooInk.ink900,
-          ),
-        ),
-        onTap: () => context.push('/activity/${entry.id}', extra: entry),
-      ),
-    );
-  }
 }
 
 class _SpendFilterSelection {

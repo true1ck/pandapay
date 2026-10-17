@@ -124,8 +124,10 @@ app.get('/health', (req, res) => {
 // auth database before a load balancer sends it authenticated traffic.
 app.get('/ready', async (req, res) => {
   try {
-    const pool = await db.getPool();
-    await pool.query('SELECT 1');
+    // Use the database module's public query API rather than reaching into
+    // its private pool initializer. This also keeps readiness consistent with
+    // the same pool/configuration used by request handlers.
+    await db.query('SELECT 1');
     res.json({ ok: true, database: 'ready' });
   } catch (err) {
     console.error('GET /ready error', err.message);
