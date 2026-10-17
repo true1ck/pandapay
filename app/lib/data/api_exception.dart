@@ -63,6 +63,23 @@ class ApiException implements Exception {
   }
 }
 
+/// A protected read could not be completed because the locally restored
+/// session was rejected and there was no valid account-scoped snapshot to
+/// render. This is deliberately distinct from an honest empty result: the
+/// UI must never tell a signed-in user that their budgets or reports do not
+/// exist merely because refresh/auth is temporarily unavailable.
+class AuthenticationUnavailableException implements Exception {
+  final String message;
+
+  const AuthenticationUnavailableException([
+    this.message =
+        'Your session could not be refreshed. Your saved data is safe; try again when connected.',
+  ]);
+
+  @override
+  String toString() => message;
+}
+
 /// Converts any caught error into UI-safe copy. Use this at every screen's
 /// catch site instead of `e.toString()`.
 ///
@@ -71,6 +88,7 @@ class ApiException implements Exception {
 /// purpose (see nearby_merchants_screen.dart's location-permission checks).
 String userFacingErrorMessage(Object error) {
   if (error is ApiException) return error.userMessage;
+  if (error is AuthenticationUnavailableException) return error.message;
   if (error is CardAlreadyAddedException) return error.message;
   if (error is StateError) return error.message;
   return 'Something went wrong. Please check your connection and try again.';

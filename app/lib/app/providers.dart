@@ -236,7 +236,7 @@ final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
   if (repo == null) return const [];
   final cache = await _cacheOrNull(ref);
   final key = _scopedCacheKey(ref, 'category_spend:12');
-  final cached = await _readCacheOrNull(cache, key);
+  final cached = await _readCacheOrNull(ref, cache, key);
   List<CategorySpend> decode(CachedResponse snapshot) =>
       ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['categories']
               as List)
@@ -261,7 +261,9 @@ final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
       // being recovered and this is the first uncached request, an empty
       // spend profile is still a valid input for the catalogue recommender;
       // surfacing the auth transport error would blank the whole page.
-      if (_isAuthenticationFailure(error)) return const [];
+      if (_isAuthenticationFailure(error)) {
+        throw const AuthenticationUnavailableException();
+      }
       rethrow;
     }
     try {
@@ -849,7 +851,7 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   const profileCacheKey = 'profile';
   final cache = await _cacheOrNull(ref);
   final key = _scopedCacheKey(ref, profileCacheKey);
-  final cached = await _readCacheOrNull(cache, key);
+  final cached = await _readCacheOrNull(ref, cache, key);
 
   Map<String, dynamic>? decodeCached() {
     if (cached == null) return null;
@@ -868,7 +870,9 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       // Profile is display-only here. Account/settings screens can render
       // their signed-in shell with a missing profile while the token refresh
       // is retried, instead of showing "Missing or invalid access token".
-      if (_isAuthenticationFailure(error)) return null;
+      if (_isAuthenticationFailure(error)) {
+        throw const AuthenticationUnavailableException();
+      }
       rethrow;
     }
     return decodeCached();
@@ -933,7 +937,7 @@ final spendReportProvider = FutureProvider.family<SpendReport?, SpendReportQuery
       '$_spendReportCacheKey:${query.cacheKey}:${_cacheDate(bucket)}:$timeZone',
     );
     final cache = await _cacheOrNull(ref);
-    final cached = await _readCacheOrNull(cache, key);
+    final cached = await _readCacheOrNull(ref, cache, key);
     SpendReport decodeCached() {
       if (cached == null) throw StateError('No cached spend report available');
       return SpendReport.fromJson(
@@ -962,11 +966,15 @@ final spendReportProvider = FutureProvider.family<SpendReport?, SpendReportQuery
       return SpendReport.fromJson(raw);
     } catch (error) {
       if (!_canUseReadCache(error)) {
-        if (_isAuthenticationFailure(error)) return null;
+        if (_isAuthenticationFailure(error)) {
+          throw const AuthenticationUnavailableException();
+        }
         rethrow;
       }
       if (cached == null) {
-        if (_isAuthenticationFailure(error)) return null;
+        if (_isAuthenticationFailure(error)) {
+          throw const AuthenticationUnavailableException();
+        }
         rethrow;
       }
       try {
@@ -992,7 +1000,7 @@ final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
   if (repo == null) return const [];
   final cache = await _cacheOrNull(ref);
   final key = _scopedCacheKey(ref, 'budgets');
-  final cached = await _readCacheOrNull(cache, key);
+  final cached = await _readCacheOrNull(ref, cache, key);
   List<BudgetStatus> decode(CachedResponse snapshot) =>
       ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['budgets']
               as List)
@@ -1013,7 +1021,9 @@ final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
     return budgets;
   } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
-      if (_isAuthenticationFailure(error)) return const [];
+      if (_isAuthenticationFailure(error)) {
+        throw const AuthenticationUnavailableException();
+      }
       rethrow;
     }
     try {
@@ -1031,7 +1041,7 @@ final recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
   if (repo == null) return null;
   final cache = await _cacheOrNull(ref);
   final key = _scopedCacheKey(ref, 'recurring_report');
-  final cached = await _readCacheOrNull(cache, key);
+  final cached = await _readCacheOrNull(ref, cache, key);
   RecurringReport decode(CachedResponse snapshot) => RecurringReport(
     series:
         ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['series']
@@ -1055,7 +1065,9 @@ final recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
     return report;
   } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
-      if (_isAuthenticationFailure(error)) return null;
+      if (_isAuthenticationFailure(error)) {
+        throw const AuthenticationUnavailableException();
+      }
       rethrow;
     }
     try {
@@ -1172,7 +1184,9 @@ Future<List<UserCard>> _loadUserCardsWithOfflineCache(
     return visibleCards(cards);
   } catch (error) {
     if (!_canUseStaleCache(error) || cached == null) {
-      if (_isAuthenticationFailure(error)) return const [];
+      if (_isAuthenticationFailure(error)) {
+        throw const AuthenticationUnavailableException();
+      }
       rethrow;
     }
     return visibleCards(decodeCached());
@@ -1232,40 +1246,50 @@ class CardSpendSummary {
 final cardSpendSummaryProvider = Provider<Map<String, CardSpendSummary>>((
   ref,
 ) {
-  final cards = ref.watch(myCardsProvider).valueOrNull ?? const <UserCard>[];
-  final transactions =
-      ref.watch(utilizationTransactionsProvider).valueOrNull ?? const [];
+  final cardsValue = ref.watch(myCardsProvider);
+  final transactionsValue = ref.watch(utilizationTransactionsProvider);
+  final cards = cardsValue.valueOrNull ?? const <UserCard>[];
+  // Do not flash a misleading ₹0 while the transaction window is still
+  // loading. An empty map makes the card omit spend metadata until the real
+  // snapshot is available; once loaded, a genuine zero is shown correctly.
+  if (!cardsValue.hasValue || !transactionsValue.hasValue) return const {};
+  final transactions = transactionsValue.requireValue;
   final now = ref.watch(clockProvider).now();
   final result = <String, CardSpendSummary>{};
 
   for (final card in cards) {
-    final cycleStart = card.statementDay == null
-        ? DateTime(now.year, now.month, 1)
-        : _previousStatementOccurrence(card.statementDay!, now);
-    var total = const Money.zero();
-    TransactionEntry? latest;
-
-    for (final txn in transactions) {
-      if (txn.status != 'active' || txn.userCardId != card.id) continue;
-      if (txn.entryKind != TxnEntryKind.spend ||
-          txn.instrument != TxnInstrument.creditCard ||
-          txn.occurredAt.isBefore(cycleStart)) {
-        continue;
-      }
-      total += txn.amount;
-      if (latest == null || txn.occurredAt.isAfter(latest.occurredAt)) {
-        latest = txn;
-      }
-    }
-
-    result[card.id] = CardSpendSummary(
-      cycleTotal: total,
-      latestSpend: latest,
-    );
+    result[card.id] = _cardSpendSummary(card, transactions, now);
   }
 
   return result;
 });
+
+CardSpendSummary _cardSpendSummary(
+  UserCard card,
+  List<TransactionEntry> transactions,
+  DateTime now,
+) {
+  final cycleStart = card.statementDay == null
+      ? DateTime(now.year, now.month, 1)
+      : _previousStatementOccurrence(card.statementDay!, now);
+  var total = const Money.zero();
+  TransactionEntry? latest;
+
+  for (final txn in transactions) {
+    if (txn.status != 'active' || txn.userCardId != card.id) continue;
+    if (txn.entryKind != TxnEntryKind.spend ||
+        txn.instrument != TxnInstrument.creditCard ||
+        txn.occurredAt.isBefore(cycleStart)) {
+      continue;
+    }
+    total += txn.amount;
+    if (latest == null || txn.occurredAt.isAfter(latest.occurredAt)) {
+      latest = txn;
+    }
+  }
+
+  return CardSpendSummary(cycleTotal: total, latestSpend: latest);
+}
 
 final cardOverridesRepositoryProvider = Provider<CardOverridesRepository?>((
   ref,
@@ -1435,6 +1459,9 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     // reading so a resume/online transition actually refreshes an already
     // loaded provider instead of returning its previous in-memory value.
     ref.invalidate(categorySpendProvider);
+    ref.invalidate(
+      spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
+    );
     ref.invalidate(bankAccountSummariesProvider);
     ref.invalidate(budgetsProvider);
     ref.invalidate(recurringReportProvider);
@@ -1453,6 +1480,11 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
 
     await Future.wait([
       warm(ref.read(categorySpendProvider.future)),
+      warm(
+        ref.read(
+          spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)).future,
+        ),
+      ),
       warm(ref.read(bankAccountSummariesProvider.future)),
       warm(ref.read(budgetsProvider.future)),
       warm(ref.read(recurringReportProvider.future)),
@@ -1769,22 +1801,7 @@ Money _trackedCreditCardSpend(
   UserCard card,
   List<TransactionEntry> transactions,
   DateTime now,
-) {
-  final cycleStart = card.statementDay == null
-      ? DateTime(now.year, now.month, 1)
-      : _previousStatementOccurrence(card.statementDay!, now);
-  var total = const Money.zero();
-  for (final txn in transactions) {
-    if (txn.status != 'active' || txn.userCardId != card.id) continue;
-    if (txn.entryKind != TxnEntryKind.spend ||
-        txn.instrument != TxnInstrument.creditCard ||
-        txn.occurredAt.isBefore(cycleStart)) {
-      continue;
-    }
-    total += txn.amount;
-  }
-  return total;
-}
+) => _cardSpendSummary(card, transactions, now).cycleTotal;
 
 DateTime _previousStatementOccurrence(int day, DateTime from) {
   final thisMonth = DateTime(
@@ -1959,7 +1976,7 @@ final loungeUsageProvider = FutureProvider<List<LoungeVisit>>((ref) async {
   if (repo == null) return const [];
   final cache = await _cacheOrNull(ref);
   final key = _scopedCacheKey(ref, 'lounge_usage');
-  final cached = await _readCacheOrNull(cache, key);
+  final cached = await _readCacheOrNull(ref, cache, key);
   List<LoungeVisit> decode(CachedResponse snapshot) =>
       ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['loungeUsage']
               as List)
@@ -1980,7 +1997,9 @@ final loungeUsageProvider = FutureProvider<List<LoungeVisit>>((ref) async {
     return visits;
   } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
-      if (_isAuthenticationFailure(error)) return const [];
+      if (_isAuthenticationFailure(error)) {
+        throw const AuthenticationUnavailableException();
+      }
       rethrow;
     }
     try {
@@ -2005,7 +2024,7 @@ final pointsLedgerProvider =
       if (repo == null) return const [];
       final cache = await _cacheOrNull(ref);
       final key = _scopedCacheKey(ref, 'points_ledger:$userCardId');
-      final cached = await _readCacheOrNull(cache, key);
+      final cached = await _readCacheOrNull(ref, cache, key);
       List<PointsLedgerEntry> decode(CachedResponse snapshot) =>
           ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['entries']
                   as List)
@@ -2049,7 +2068,7 @@ final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((
     ref,
     'monthly_report:${now.year}-${now.month.toString().padLeft(2, '0')}',
   );
-  final cached = await _readCacheOrNull(cache, key);
+  final cached = await _readCacheOrNull(ref, cache, key);
   MonthlyReport? decode(CachedResponse snapshot) {
     final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
     final raw = body['monthlyReport'];
@@ -2068,7 +2087,9 @@ final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((
     return report;
   } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
-      if (_isAuthenticationFailure(error)) return null;
+      if (_isAuthenticationFailure(error)) {
+        throw const AuthenticationUnavailableException();
+      }
       rethrow;
     }
     try {
@@ -2090,7 +2111,7 @@ final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
   if (repo == null) return null;
   final key = _scopedCacheKey(ref, 'home_summary');
   final cache = await _cacheOrNull(ref);
-  final cached = await _readCacheOrNull(cache, key);
+  final cached = await _readCacheOrNull(ref, cache, key);
   if (cached != null) {
     try {
       return HomeSummary.fromJson(
@@ -2141,7 +2162,7 @@ final bankAccountSummariesProvider =
       const cacheKey = 'bank_account_summaries';
       final cache = await _cacheOrNull(ref);
       final key = _scopedCacheKey(ref, cacheKey);
-      final cached = await _readCacheOrNull(cache, key);
+      final cached = await _readCacheOrNull(ref, cache, key);
       List<BankAccountSummary> decode(CachedResponse snapshot) =>
           ((jsonDecode(snapshot.rawJson) as Map<String, dynamic>)['accounts']
                   as List)
@@ -2174,7 +2195,9 @@ final bankAccountSummariesProvider =
         return accounts;
       } catch (error) {
     if (!_canUseReadCache(error) || cached == null) {
-      if (_isAuthenticationFailure(error)) return const [];
+      if (_isAuthenticationFailure(error)) {
+        throw const AuthenticationUnavailableException();
+      }
       rethrow;
     }
         try {
@@ -2198,7 +2221,7 @@ final notificationsProvider =
       }
       final cache = await _cacheOrNull(ref);
       final key = _scopedCacheKey(ref, 'notifications');
-      final cached = await _readCacheOrNull(cache, key);
+      final cached = await _readCacheOrNull(ref, cache, key);
       ({List<AppNotification> items, int unreadCount}) decode(
         CachedResponse snapshot,
       ) {
@@ -2339,7 +2362,7 @@ final contributionNetworkStatsProvider =
       const statsCacheKey = 'contribution_network_stats';
       final cache = await _cacheOrNull(ref);
       final key = _scopedCacheKey(ref, statsCacheKey);
-      final cached = await _readCacheOrNull(cache, key);
+      final cached = await _readCacheOrNull(ref, cache, key);
 
       ContributionNetworkStats decodeCached() {
         if (cached == null) {
@@ -2651,11 +2674,32 @@ Future<void> clearUserCardsCache(WidgetRef ref) async {
 }
 
 Future<CachedResponse?> _readCacheOrNull(
+  Ref ref,
   ResponseCache? cache,
   String key,
 ) async {
   try {
-    return await cache?.read(key);
+    final current = await cache?.read(key);
+    if (current != null || cache == null) return current;
+
+    // Older builds keyed private snapshots by a hash of the access token.
+    // Refreshing a token must not make those snapshots look deleted. Migrate
+    // the legacy key to the subject-scoped key before returning it. The
+    // legacy key is derived from the currently restored credential, so this
+    // cannot make another account's snapshot visible.
+    final namespace = ref.read(cacheNamespaceProvider);
+    final token = ref.read(accessTokenProvider);
+    if (token == null || !namespace.startsWith('user:')) return null;
+    final prefix = '$namespace:';
+    if (!key.startsWith(prefix)) return null;
+    final legacyNamespace =
+        'session:${sha256.convert(utf8.encode(token)).toString()}';
+    final legacyKey = '$legacyNamespace:${key.substring(prefix.length)}';
+    final legacy = await cache.read(legacyKey);
+    if (legacy == null) return null;
+    await cache.put(key, legacy.rawJson);
+    await cache.clear(legacyKey);
+    return legacy;
   } catch (_) {
     return null;
   }
@@ -2733,9 +2777,10 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
 }) async {
   final key = _scopedCacheKey(ref, cacheKey);
   final cache = await _cacheOrNull(ref);
-  final cached = await _readCacheOrNull(cache, key);
+  final cached = await _readCacheOrNull(ref, cache, key);
   final allTransactionsCached = cached == null
       ? await _readCacheOrNull(
+          ref,
           cache,
           _scopedCacheKey(ref, '$_transactionsCacheKey:all'),
         )
@@ -2796,11 +2841,15 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     return transactions;
   } catch (error) {
     if (!_canUseReadCache(error)) {
-      if (_isAuthenticationFailure(error)) return const [];
+      if (_isAuthenticationFailure(error)) {
+        throw const AuthenticationUnavailableException();
+      }
       rethrow;
     }
     if (cached == null && allTransactionsCached == null) {
-      if (_isAuthenticationFailure(error)) return const [];
+      if (_isAuthenticationFailure(error)) {
+        throw const AuthenticationUnavailableException();
+      }
       rethrow;
     }
     try {
@@ -2827,6 +2876,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
 Future<TransactionEntry?> cachedTransactionById(Ref ref, String id) async {
   final cache = await _cacheOrNull(ref);
   final snapshot = await _readCacheOrNull(
+    ref,
     cache,
     _scopedCacheKey(ref, '$_transactionsCacheKey:all'),
   );
@@ -3136,6 +3186,18 @@ final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((
     ),
   );
 });
+
+/// Manual place search shares the nearby repository when the production HTTP
+/// implementation is installed. The fallback keeps this test surface usable
+/// with a deliberately minimal fake nearby repository in widget tests.
+final nearbyPlaceSearchRepositoryProvider =
+    Provider<NearbyPlaceSearchRepository>((ref) {
+      final nearby = ref.watch(nearbyMerchantsRepositoryProvider);
+      // The concrete HTTP repository implements both public nearby contracts;
+      // test fakes may implement only the original merchant interface.
+      if (nearby is HttpNearbyMerchantsRepository) return nearby;
+      return HttpNearbyMerchantsRepository(baseUrl: _apiBaseUrl);
+    });
 
 /// UA-8.3 (B1): one FlutterLocalNotificationsPlugin instance for the whole
 /// app. Previously GeofenceMonitorService was the only caller and
