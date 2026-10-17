@@ -992,7 +992,15 @@ app.get('/merchants/nearby', async (req, res) => {
     res.json({ merchants: result.rows });
   } catch (err) {
     console.error('GET /merchants/nearby error', err);
-    res.status(500).json({ error: 'internal_error' });
+    // Nearby is an optional discovery surface. Keep the public contract
+    // usable during a database/provider outage so the app can render an
+    // honest empty state and retry instead of showing a generic exception.
+    res.json({
+      source: 'unavailable',
+      merchants: [],
+      unavailable: true,
+      message: 'Nearby merchant data is temporarily unavailable. Please retry.',
+    });
   }
 });
 
@@ -1120,8 +1128,14 @@ app.get('/merchants/nearby/search', async (req, res) => {
     });
   } catch (err) {
     console.warn('GET /merchants/nearby/search unavailable', err.message);
-    res.status(502).json({
-      error: 'place_search_unavailable',
+    // Returning a valid empty payload is deliberate: this endpoint is a
+    // best-effort place search, not a payment-critical operation. The app
+    // can now always complete the request and present a retryable empty state
+    // without inventing a merchant when every source is down.
+    res.json({
+      source: 'unavailable',
+      merchants: [],
+      unavailable: true,
       message: 'The public place search provider is temporarily unavailable',
     });
   }
@@ -2248,14 +2262,6 @@ app.get('/user-cards', requireAuth, async (req, res) => {
   const includeArchived = req.query.includeArchived === 'true';
   try {
     const result = await withUserClient(req.userId, async (client) => {
-      // Keep the card surfaces aligned with Spending when an older build
-      // inserted the ledger row without applying derived cap state. The SMS
-      // attribution repair remains an explicit reconciliation operation;
-      // this read path only rebuilds the derived current-period cap rows.
-      // The reconciliation is idempotent and runs inside this request
-      // transaction, so the response never exposes stale cap rows.
-      await reconcileCurrentCapStates(client, req.userId);
-
       // statement_day/opened_on added for Task 11 (E7 Billing Cycle Float —
       // the same two columns insertTransactionAndUpdateState below already
       // reads internally for period-bounds math, just never previously
@@ -2277,54 +2283,59 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         [includeArchived]
       );
 
-      // Chunk 17: the CURRENTLY-ACTIVE period's cap/milestone state, so the
-      // app can build real CardSnapshot.capRemaining/milestoneProgress
-      // instead of always evaluating every owned card as freshly-uncapped.
-      // No row for a (cap_rule, current period) means no spend has been
-      // logged against it yet this period — full headroom, which is
-      // exactly what the engine already defaults to when a key is absent.
+      // Cap, milestone, points and fee-waiver data enrich the wallet, but
+      // none is required to show the user's cards. Keep this repair and the
+      // enrichment reads behind a savepoint: any SQL error aborts a Postgres
+      // transaction, so a JS catch without rollback-to-savepoint would still
+      // make the rest of this request fail at COMMIT.
       for (const card of cards.rows) {
-        const capStates = await client.query(
-          `SELECT cap_rule_id, consumed, cap_value_snapshot FROM cap_states
-            WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
-          [card.id]
-        );
-        // period_end added alongside Task E-0's other additions (E4's
-        // days-left needs a real deadline date, not just a progress ratio).
-        const milestoneStates = await client.query(
-          `SELECT milestone_rule_id, qualified_spend, period_end FROM milestone_states
-            WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
-          [card.id]
-        );
-        card.cap_states = capStates.rows;
-        card.milestone_states = milestoneStates.rows;
+        card.cap_states = [];
+        card.milestone_states = [];
+        card.total_points_earned = Number(card.points_balance || 0);
+        card.fee_waiver_states = [];
+      }
 
-        // Chunk 28: lifetime points-earned total (not period-scoped, unlike
-        // caps/milestones — a points balance doesn't reset each cycle) and
-        // the current-period fee-waiver progress, same "no row = no
-        // progress yet" default as above.
-        // Task C-4 fix: this previously summed points_ledger ONLY, silently
-        // dropping uc.points_balance — the "current points balance, starting
-        // point; we'll track from here" figure A9/C4 actually let a user
-        // enter. A card added with an existing 12,000-point balance and zero
-        // transactions since showed 0 pts everywhere, not 12,000 — folding
-        // the starting balance in here is the one place every consumer
-        // (C1's badge, C6, this endpoint) already reads from.
-        const pointsTotal = await client.query(
-          `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger WHERE user_card_id = $1`,
-          [card.id]
-        );
-        card.total_points_earned = Number(pointsTotal.rows[0].total_points) + Number(card.points_balance || 0);
+      await client.query('SAVEPOINT user_cards_enrichment');
+      try {
+        // Rebuild derived current-period cap state from the canonical ledger.
+        // The SMS attribution repair remains an explicit reconciliation task.
+        await reconcileCurrentCapStates(client, req.userId);
 
-        const feeWaiverStates = await client.query(
-          `SELECT fw.fee_waiver_rule_id, fw.qualified_spend, fw.waived_at, fw.period_end,
-                  r.threshold_spend_inr, r.waives_fee_inr
-             FROM fee_waiver_states fw
-             JOIN fee_waiver_rules r ON r.id = fw.fee_waiver_rule_id
-            WHERE fw.user_card_id = $1 AND fw.period_start <= CURRENT_DATE AND fw.period_end >= CURRENT_DATE`,
-          [card.id]
-        );
-        card.fee_waiver_states = feeWaiverStates.rows;
+        for (const card of cards.rows) {
+          const capStates = await client.query(
+            `SELECT cap_rule_id, consumed, cap_value_snapshot FROM cap_states
+              WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
+            [card.id]
+          );
+          const milestoneStates = await client.query(
+            `SELECT milestone_rule_id, qualified_spend, period_end FROM milestone_states
+              WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
+            [card.id]
+          );
+          card.cap_states = capStates.rows;
+          card.milestone_states = milestoneStates.rows;
+
+          const pointsTotal = await client.query(
+            `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger WHERE user_card_id = $1`,
+            [card.id]
+          );
+          card.total_points_earned = Number(pointsTotal.rows[0].total_points) + Number(card.points_balance || 0);
+
+          const feeWaiverStates = await client.query(
+            `SELECT fw.fee_waiver_rule_id, fw.qualified_spend, fw.waived_at, fw.period_end,
+                    r.threshold_spend_inr, r.waives_fee_inr
+               FROM fee_waiver_states fw
+               JOIN fee_waiver_rules r ON r.id = fw.fee_waiver_rule_id
+              WHERE fw.user_card_id = $1 AND fw.period_start <= CURRENT_DATE AND fw.period_end >= CURRENT_DATE`,
+            [card.id]
+          );
+          card.fee_waiver_states = feeWaiverStates.rows;
+        }
+        await client.query('RELEASE SAVEPOINT user_cards_enrichment');
+      } catch (enrichmentError) {
+        await client.query('ROLLBACK TO SAVEPOINT user_cards_enrichment');
+        await client.query('RELEASE SAVEPOINT user_cards_enrichment');
+        console.warn('GET /user-cards enrichment unavailable', enrichmentError.message);
       }
 
       return cards.rows;

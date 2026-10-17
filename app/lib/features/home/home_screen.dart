@@ -373,159 +373,42 @@ class _PurchaseTypeSelector extends StatelessWidget {
     required this.onChanged,
   });
 
-  Future<void> _openMenu(BuildContext context) async {
-    final anchor = context.findRenderObject()! as RenderBox;
-    final origin = anchor.localToGlobal(Offset.zero);
-    final size = anchor.size;
-    final selected = await showGeneralDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.transparent,
-      transitionDuration: Duration.zero,
-      pageBuilder: (menuContext, _, _) => LayoutBuilder(
-        builder: (context, constraints) {
-          final media = MediaQuery.of(context);
-          final top = origin.dy + size.height + 4;
-          // Limit the list to the space below the selector; never flip upward.
-          final height =
-              (constraints.maxHeight -
-                      top -
-                      media.padding.bottom -
-                      media.viewInsets.bottom -
-                      8)
-                  .clamp(0.0, 360.0)
-                  .toDouble();
-          return Stack(
-            children: [
-              Positioned(
-                top: top,
-                left: origin.dx,
-                width: size.width,
-                child: Material(
-                  color: BambooInk.paper,
-                  elevation: 8,
-                  borderRadius: BorderRadius.circular(16),
-                  clipBehavior: Clip.antiAlias,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: height),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (final (slug, label, icon)
-                              in HomeScreen._categories)
-                            ListTile(
-                              selected: slug == selectedCategory,
-                              leading: Icon(icon, color: BambooInk.ink500),
-                              title: Text(label),
-                              onTap: () => Navigator.of(menuContext).pop(slug),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-    if (selected != null) onChanged(selected);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final selected = HomeScreen._categories.where(
-      (entry) => entry.$1 == selectedCategory,
-    );
-    final selectedEntry = selected.isEmpty ? null : selected.first;
+    // Keep the reference order stable: the remaining categories continue to
+    // be available by horizontal scrolling without adding another row.
+    final orderedCategories = [
+      for (final slug in const [
+        'online',
+        'groceries',
+        'dining',
+        'fuel',
+        'travel',
+        'bills',
+        'rent',
+      ])
+        for (final entry in HomeScreen._categories)
+          if (entry.$1 == slug) entry,
+    ];
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-        boxShadow: [
-          BoxShadow(
-            color: BambooInk.ink900.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              for (final (slug, label, icon) in HomeScreen._categories)
-                Expanded(
-                  child: _PurchaseTypeIconButton(
-                    slug: slug,
-                    label: label,
-                    icon: icon,
-                    selected: slug == selectedCategory,
-                    onTap: () => onChanged(slug),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: BambooInk.slate,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  selectedEntry?.$3 ?? Icons.shopping_bag_outlined,
-                  color: BambooInk.lime,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: AppSpace.sm),
-              Expanded(
-                child: Builder(
-                  builder: (anchorContext) => InkWell(
-                    key: const ValueKey('home-purchase-type'),
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => _openMenu(anchorContext),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 36),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              selectedEntry?.$2 ?? 'Choose purchase type',
-                              style: BambooFonts.ui(
-                                selectedEntry == null ? 14 : 15,
-                                weight: FontWeight.w700,
-                                color: selectedEntry == null
-                                    ? BambooInk.ink500
-                                    : BambooInk.ink900,
-                              ),
-                            ),
-                          ),
-                          const Icon(
-                            Icons.expand_more_rounded,
-                            color: BambooInk.ink500,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+    return SizedBox(
+      key: const ValueKey('home-purchase-type'),
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        itemCount: orderedCategories.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (context, index) {
+          final (slug, label, icon) = orderedCategories[index];
+          return _PurchaseTypeIconButton(
+            slug: slug,
+            label: label,
+            icon: icon,
+            selected: slug == selectedCategory,
+            onTap: () => onChanged(slug),
+          );
+        },
       ),
     );
   }
@@ -548,35 +431,45 @@ class _PurchaseTypeIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = selected ? BambooInk.slate : BambooInk.ink500;
+    final foreground = selected ? BambooInk.lime : BambooInk.ink500;
     return Tooltip(
       message: label,
       child: Semantics(
         button: true,
         selected: selected,
         label: label,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              key: ValueKey('home-category-icon-$slug'),
-              borderRadius: BorderRadius.circular(12),
-              onTap: onTap,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                curve: Curves.easeOut,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: selected ? BambooInk.lime : BambooInk.paperMuted,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: selected
-                        ? BambooInk.lime
-                        : BambooInk.hairlineOnPaper,
-                  ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: ValueKey('home-category-icon-$slug'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 11),
+              decoration: BoxDecoration(
+                color: selected ? BambooInk.slate : BambooInk.paper,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: selected ? BambooInk.slate : BambooInk.hairlineOnPaper,
                 ),
-                child: Icon(icon, size: 20, color: foreground),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 17, color: foreground),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: BambooFonts.ui(
+                      11.5,
+                      weight: FontWeight.w600,
+                      color: selected ? BambooInk.onSlate : BambooInk.ink900,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -801,83 +694,82 @@ class _AmountCard extends ConsumerStatefulWidget {
 
 class _AmountCardState extends ConsumerState<_AmountCard> {
   late final TextEditingController _controller;
+  late final FocusNode _amountFocusNode;
 
   static const _quickAmounts = [500.0, 1000.0, 2000.0, 5000.0];
+
+  String _formatAmount(double rupees) =>
+      NumberFormat('#,##0.##', 'en_IN').format(rupees);
 
   @override
   void initState() {
     super.initState();
     final initial = ref.read(enteredAmountProvider);
-    _controller = TextEditingController(
-      text: initial.rupees.toStringAsFixed(0),
-    );
+    _amountFocusNode = FocusNode();
+    _controller = TextEditingController(text: _formatAmount(initial.rupees));
   }
 
   @override
   void dispose() {
+    _amountFocusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   void _setAmount(double rupees) {
-    setState(() => _controller.text = rupees.toStringAsFixed(0));
+    setState(() {
+      _controller.text = _formatAmount(rupees);
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+    });
     ref.read(enteredAmountProvider.notifier).state = Money.fromRupees(rupees);
   }
 
   @override
   Widget build(BuildContext context) {
+    final currentAmount = ref.watch(enteredAmountProvider);
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: BambooInk.hairlineOnPaper),
-        boxShadow: [
-          BoxShadow(
-            color: BambooInk.ink900.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Flexible(
-                child: Text(
-                  'How much are you spending?',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: BambooFonts.ui(
-                    12.5,
-                    weight: FontWeight.w500,
-                    color: BambooInk.ink500,
-                  ),
-                ),
+              Text(
+                'Spending amount',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
               ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  'Tap to change',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: BambooFonts.ui(12, color: BambooInk.ink300),
+              IconButton(
+                tooltip: 'Edit spending amount',
+                icon: const Icon(Icons.edit_outlined),
+                iconSize: 15,
+                color: BambooInk.ink500,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: 24,
+                  height: 24,
                 ),
+                onPressed: () => _amountFocusNode.requestFocus(),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 1),
           TextField(
             controller: _controller,
+            focusNode: _amountFocusNode,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+              FilteringTextInputFormatter.allow(RegExp(r'^[\d,]*\.?\d{0,2}')),
             ],
-            style: BambooFonts.money(40),
+            style: BambooFonts.money(31),
             decoration: InputDecoration(
               // filled: false — without this, the ambient InputDecorationTheme
               // (app_theme.dart's AppTheme.light()/.dark(), still applied
@@ -890,18 +782,25 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
-              prefixText: '₹ ',
-              prefixStyle: BambooFonts.money(28, color: BambooInk.ink500),
+              prefixText: '₹',
+              prefixStyle: BambooFonts.money(31, color: BambooInk.ink900),
             ),
             onChanged: (value) {
-              final parsed = double.tryParse(value);
+              final parsed = double.tryParse(value.replaceAll(',', ''));
               if (parsed != null && parsed >= 0) {
                 ref.read(enteredAmountProvider.notifier).state =
                     Money.fromRupees(parsed);
               }
             },
           ),
-          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () => _amountFocusNode.requestFocus(),
+            child: Text(
+              'Tap to edit',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               for (var i = 0; i < _quickAmounts.length; i++)
@@ -911,7 +810,8 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
                       right: i == _quickAmounts.length - 1 ? 0 : 8,
                     ),
                     child: _QuickAmountChip(
-                      label: '₹${_quickAmounts[i].toStringAsFixed(0)}',
+                      label: '₹${_formatAmount(_quickAmounts[i])}',
+                      selected: currentAmount.rupees == _quickAmounts[i],
                       onTap: () => _setAmount(_quickAmounts[i]),
                     ),
                   ),
@@ -926,8 +826,13 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
 
 class _QuickAmountChip extends StatelessWidget {
   final String label;
+  final bool selected;
   final VoidCallback onTap;
-  const _QuickAmountChip({required this.label, required this.onTap});
+  const _QuickAmountChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -935,11 +840,11 @@ class _QuickAmountChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
+        padding: const EdgeInsets.symmetric(vertical: 7),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: BambooInk.paperMuted,
-          borderRadius: BorderRadius.circular(14),
+          color: selected ? BambooInk.lime : BambooInk.paperMuted,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           label,
@@ -1006,10 +911,18 @@ class _RankedSectionState extends State<_RankedSection> {
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpace.sm),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const PandaMark(size: 22),
-                  const SizedBox(width: 8),
-                  Text('Best card', style: BambooFonts.heading(15)),
+                  Expanded(
+                    child: Text(
+                      'Best from your wallet',
+                      style: BambooFonts.heading(18, color: BambooInk.ink900),
+                    ),
+                  ),
+                  Text(
+                    '${recommendations.length} cards compared',
+                    style: BambooFonts.ui(11, color: BambooInk.ink500),
+                  ),
                 ],
               ),
             ),
@@ -1141,6 +1054,13 @@ class _CardListToggle extends StatelessWidget {
   }
 }
 
+String _issuerLabel(CardProduct product) {
+  final issuer = product.issuerName?.trim();
+  if (issuer != null && issuer.isNotEmpty) return issuer;
+  final words = product.name.trim().split(RegExp(r'\s+'));
+  return words.isEmpty ? 'Card issuer' : words.first;
+}
+
 /// ui-spec B1.4 backup card row. Unchanged in behaviour from before this
 /// pass — see the original file's doc-comment (preserved in git history)
 /// for why this is the next-best ranked card, not real crowdsourced
@@ -1152,44 +1072,83 @@ class _BackupCardRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
       decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(16),
+        color: BambooInk.paper,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.swap_horiz_rounded,
-            size: 16,
-            color: BambooInk.ink500,
+          Text(
+            'Alternative',
+            style: BambooFonts.ui(10.5, color: BambooInk.ink500),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              SizedBox(
+                width: 64,
+                height: 36,
+                child: CardVisual(
+                  product: backup.card,
+                  width: 64,
+                  height: 36,
+                  showProductName: false,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      backup.card.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(
+                        13,
+                        weight: FontWeight.w700,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                    Text(
+                      _issuerLabel(backup.card),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(11, color: BambooInk.ink500),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const TextSpan(text: 'If not accepted: '),
-                  TextSpan(
-                    text: backup.card.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
+                  MoneyText(
+                    backup.expectedValue,
+                    confidence: backup.confidence,
+                    style: BambooFonts.ui(
+                      14,
+                      weight: FontWeight.w700,
                       color: BambooInk.ink900,
                     ),
+                    hidePaise: true,
+                    showConfidenceIcon: false,
+                  ),
+                  Text(
+                    'Est. rewards',
+                    style: BambooFonts.ui(10, color: BambooInk.ink500),
                   ),
                 ],
               ),
-            ),
-          ),
-          MoneyText(
-            backup.expectedValue,
-            confidence: backup.confidence,
-            style: BambooFonts.ui(
-              12.5,
-              weight: FontWeight.w600,
-              color: BambooInk.ink900,
-            ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 21,
+                color: BambooInk.ink500,
+              ),
+            ],
           ),
         ],
       ),
@@ -1226,6 +1185,17 @@ class _RecommendationCard extends ConsumerStatefulWidget {
 class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
   @override
   Widget build(BuildContext context) {
+    // Keep the compact visual for the leading recommendation. Once the user
+    // expands the ranked list, retain the established detail-rich card for
+    // additional choices instead of presenting every alternative as another
+    // "BEST PICK" hero.
+    if (widget.rank > 0) return _legacyBuild(context);
+    return _buildReplica(context);
+  }
+
+  // Kept as a local fallback while the compact recommendation surface is
+  // refined. It is intentionally not used by the normal build path.
+  Widget _legacyBuild(BuildContext context) {
     final recommendation = widget.recommendation;
     final excluded = recommendation.isExcluded;
     final isHero = widget.rank == 0 && !excluded;
@@ -1683,6 +1653,274 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
         card,
       ],
     );
+  }
+
+  Widget _buildReplica(BuildContext context) {
+    final recommendation = widget.recommendation;
+    if (recommendation.isExcluded) return _legacyBuild(context);
+
+    final amount = ref.watch(enteredAmountProvider);
+    final selectedCategory = ref.watch(selectedCategoryProvider);
+    final category = HomeScreen.categoryLabelFor(selectedCategory);
+    final categoryText = category == 'Online'
+        ? 'Online shopping'
+        : (category ?? 'Recommended spend');
+    final rateLabel = _rateAmountLabel(recommendation, amount);
+
+    final hero = Container(
+      key: widget.cardAnchorKey,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [BambooInk.slateRaised, BambooInk.slateLow],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: BambooInk.slate.withValues(alpha: 0.24),
+            blurRadius: 14,
+            offset: const Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: BambooInk.lime,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Text(
+                  'BEST PICK',
+                  style: BambooFonts.ui(
+                    9.5,
+                    weight: FontWeight.w800,
+                    color: BambooInk.slate,
+                  ).copyWith(letterSpacing: 0.7),
+                ),
+              ),
+              const Spacer(),
+              const Icon(
+                Icons.shopping_cart_outlined,
+                size: 15,
+                color: BambooInk.onSlateMuted,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                categoryText,
+                style: BambooFonts.ui(11, color: BambooInk.onSlateMuted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              SizedBox(
+                width: 96,
+                height: 52,
+                child: CardVisual(
+                  product: recommendation.card,
+                  width: 96,
+                  height: 52,
+                  showProductName: false,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      recommendation.card.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(
+                        15,
+                        weight: FontWeight.w700,
+                        color: BambooInk.onSlate,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _issuerLabel(recommendation.card),
+                      style: BambooFonts.ui(
+                        11.5,
+                        color: BambooInk.onSlateMuted,
+                      ),
+                    ),
+                    if (recommendation.isOverride)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Semantics(
+                          button: true,
+                          label: 'Override active. Manage manual overrides.',
+                          child: InkWell(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ManualOverridesScreen(),
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 4,
+                                horizontal: 2,
+                              ),
+                              child: Text(
+                                'Override active',
+                                style: BambooFonts.ui(
+                                  10.5,
+                                  weight: FontWeight.w700,
+                                  color: BambooInk.lime,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              MoneyText(
+                recommendation.expectedValue,
+                confidence: recommendation.confidence,
+                style: BambooFonts.money(31, color: BambooInk.lime),
+                hidePaise: true,
+                showConfidenceIcon: false,
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      'Estimated rewards',
+                      style: BambooFonts.ui(11, color: BambooInk.onSlateMuted),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.info_outline_rounded,
+                      size: 13,
+                      color: BambooInk.onSlateMuted,
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  rateLabel,
+                  style: BambooFonts.ui(11, color: BambooInk.onSlateMuted),
+                ),
+              ),
+            ],
+          ),
+          if (recommendation.breakdown != null &&
+              recommendation.breakdown!.capStatus != CapStatus.none)
+            _CapBadge(
+              breakdown: recommendation.breakdown!,
+              onDarkSurface: true,
+            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: () {
+                    final wallet =
+                        ref.read(userCardsProvider).valueOrNull ?? const [];
+                    final owned = wallet.firstWhereOrNull(
+                      (w) => w.cardProductId == recommendation.card.id,
+                    );
+                    primaryActionHaptic();
+                    final categories =
+                        ref.read(categoriesProvider).valueOrNull ?? const [];
+                    final categoryId = categories
+                        .firstWhereOrNull((c) => c.slug == selectedCategory)
+                        ?.id;
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => QuickAddScreen(
+                          initialAmount: amount,
+                          initialCategoryId: categoryId,
+                          initialUserCardId: owned?.id,
+                        ),
+                      ),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.lime,
+                    foregroundColor: BambooInk.slate,
+                    minimumSize: const Size(0, 36),
+                    padding: EdgeInsets.zero,
+                    textStyle: BambooFonts.ui(13, weight: FontWeight.w700),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                  ),
+                  child: const Text('Pay with this card'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              InkWell(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ComparisonViewScreen(),
+                  ),
+                ),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    'Details ↗',
+                    style: BambooFonts.ui(
+                      11.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.lime,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    return hero;
+  }
+
+  String _rateAmountLabel(Recommendation recommendation, Money amount) {
+    final headline = recommendation.effectiveRatePerRupee;
+    if (headline == null || headline <= 0) return 'Estimated rate';
+    final breakdown = recommendation.breakdown;
+    final rate = breakdown != null && breakdown.capStatus != CapStatus.none
+        ? breakdown.effectiveRatePerRupee
+        : headline;
+    final pct = rate * 100;
+    final formatted = pct >= 10 || pct == pct.roundToDouble()
+        ? pct.toStringAsFixed(0)
+        : pct.toStringAsFixed(1);
+    return '$formatted% on ${amount.format(hidePaise: true)}';
   }
 
   /// Design 01's rate line beside the BEST PICK badge — "5% on Online".

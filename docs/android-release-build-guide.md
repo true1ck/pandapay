@@ -105,6 +105,20 @@ ARM64 version code greater than `14029` and must match the same certificate.
 The matching build command used `-BuildNumber 12029`, which produced ARM64
 `14029`, ARMv7 `13029`, and x86_64 `16029`.
 
+Verified update on 2026-10-18:
+
+| Device | ABI | Installed package version | APK SHA-256 | Signing certificate |
+| --- | --- | ---: | --- | --- |
+| Motorola edge 50 fusion (`ZA222MS4SF`) | `arm64-v8a` | `18036` | `911FD22C2F884F9ACEEB90BFB6363B05665E75194512095CF2FA25A3AAADD953` | Android Debug, SHA-256 `3dda2588c1eb6c14f19dddf3b0af1a6c798bb5c0f81a72b1878d7c39431c1042` |
+
+The ARM64 split was installed with `adb install -r` and launched; app data was
+preserved. The build used `-BuildNumber 16036` and produced ARM64 `18036`,
+ARMv7 `17036`, and x86_64 `20036`. All three APKs were verified to use the
+expected package ID and the same Android Debug certificate. The debug-signed
+APK is for this connected-device test only and is not distributable. Future
+updates for this phone must have an ARM64 version code greater than `18036`
+and match the same certificate.
+
 ## 5. Canonical build command
 
 Use the repository wrapper; do not assemble a production APK with an ad-hoc

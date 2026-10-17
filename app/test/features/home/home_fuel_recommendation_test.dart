@@ -93,18 +93,10 @@ void main() {
       expect(find.text('MoneyBack+ Credit Card'), findsOneWidget);
       expect(find.text('₹30'), findsOneWidget);
 
-      // The icon shortcuts should select the same category as the dropdown.
-      await tester.tap(
-        find.byKey(const ValueKey('home-category-icon-fuel')),
-      );
+      // The compact category chip selects the same provider used by ranking.
+      await tester.tap(find.byKey(const ValueKey('home-category-icon-fuel')));
       await tester.pumpAndSettle();
       expect(container.read(selectedCategoryProvider), 'fuel');
-
-      // Switch to Fuel through the purchase-type selector.
-      await tester.tap(find.byKey(const ValueKey('home-purchase-type')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Fuel').last);
-      await tester.pumpAndSettle();
 
       // Verify recommendations provider
       final recsAsync = container.read(rankedRecommendationsProvider);
@@ -120,7 +112,9 @@ void main() {
 
       // On screen: expected value should be ₹15, NOT ₹0
       expect(find.text('₹15'), findsOneWidget);
-      expect(find.text('1% on Fuel'), findsOneWidget);
+      // The compact hero shows the effective percentage against the entered
+      // amount (as in the design reference), not the category name.
+      expect(find.text('1% on ₹1,500'), findsOneWidget);
     },
   );
 }

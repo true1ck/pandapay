@@ -9,10 +9,13 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('foreground search radius is positive and within the discovery limit', () {
-    expect(nearbyMerchantSearchRadiusMeters, greaterThan(0));
-    expect(nearbyMerchantSearchRadiusMeters, lessThanOrEqualTo(5000));
-  });
+  test(
+    'foreground search radius is positive and within the discovery limit',
+    () {
+      expect(nearbyMerchantSearchRadiusMeters, greaterThan(0));
+      expect(nearbyMerchantSearchRadiusMeters, lessThanOrEqualTo(5000));
+    },
+  );
 
   group('HttpNearbyMerchantsRepository', () {
     test(
@@ -152,6 +155,72 @@ void main() {
     });
 
     test(
+      'an unavailable provider returns a valid empty search result',
+      () async {
+        final client = MockClient((request) async {
+          expect(request.url.path, '/merchants/nearby/search');
+          return http.Response(
+            jsonEncode({
+              'source': 'unavailable',
+              'merchants': [],
+              'unavailable': true,
+              'message':
+                  'The public place search provider is temporarily unavailable',
+            }),
+            200,
+          );
+        });
+
+        final repo = HttpNearbyMerchantsRepository(
+          baseUrl: 'http://localhost:4000',
+          client: client,
+        );
+        final result = await repo.searchPlacesWithStatus(query: 'panda');
+
+        expect(result.candidates, isEmpty);
+        expect(result.unavailable, isTrue);
+        expect(result.message, contains('temporarily unavailable'));
+      },
+    );
+
+    test(
+      'manual search falls back to the published directory on an old API',
+      () async {
+        final client = MockClient((request) async {
+          if (request.url.path == '/merchants/nearby/search') {
+            return http.Response('not found', 404);
+          }
+          expect(request.url.path, '/merchants/search');
+          expect(request.url.queryParameters['q'], 'panda');
+          return http.Response(
+            jsonEncode({
+              'merchants': [
+                {
+                  'merchant_id': 'm1',
+                  'display_name': 'Panda Cafe',
+                  'category_id': 'dining',
+                  'grid_lat': null,
+                  'grid_lng': null,
+                },
+              ],
+            }),
+            200,
+          );
+        });
+
+        final repo = HttpNearbyMerchantsRepository(
+          baseUrl: 'http://localhost:4000',
+          client: client,
+        );
+        final result = await repo.searchPlaces(query: 'panda');
+
+        expect(result.single.displayName, 'Panda Cafe');
+        expect(result.single.location.lat, 0);
+        expect(result.single.source, 'published');
+      },
+    );
+
+    test(
       'an empty merchants list parses to an empty list, not an error',
       () async {
         final client = MockClient(
@@ -166,6 +235,30 @@ void main() {
         expect(result, isEmpty);
       },
     );
+
+    test('a directory result without a confirmed location still parses', () {
+      final result = parseNearbyMerchantsPayload(
+        jsonEncode({
+          'merchants': [
+            {
+              'merchant_id': 'm2',
+              'display_name': 'Panda Cafe',
+              'category_id': 'dining',
+              'confidence': 'medium',
+              'grid_lat': null,
+              'grid_lng': null,
+              'source': 'published',
+            },
+          ],
+        }),
+        defaultSource: 'published',
+      );
+
+      expect(result.single.displayName, 'Panda Cafe');
+      expect(result.single.location.lat, 0);
+      expect(result.single.location.lng, 0);
+      expect(result.single.source, 'published');
+    });
 
     test(
       'device cache round-trips nearby candidates within a session namespace',

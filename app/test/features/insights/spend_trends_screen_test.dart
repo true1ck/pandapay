@@ -391,6 +391,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('This quarter'));
     await tester.pumpAndSettle();
+    // Preset selection is staged in the range sheet; the query changes only
+    // after the user confirms it, so this also covers the explicit commit
+    // step before expecting a new report request.
+    await tester.tap(find.text('Apply range'));
+    await tester.pumpAndSettle();
     expect(
       requested,
       contains(const SpendReportQuery.preset(SpendPeriod.quarter)),

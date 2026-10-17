@@ -41,6 +41,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   List<NearbyMerchantCandidate>? _placeResults;
   bool _placeSearching = false;
   String? _placeSearchError;
+  bool _placeSearchUnavailable = false;
   Position? _lastPosition;
 
   @override
@@ -155,10 +156,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
             radiusM: nearbyMerchantSearchRadiusMeters,
           );
           matches = findNearbyMerchants(
-            origin: GeoPoint(
-              lat: position.latitude,
-              lng: position.longitude,
-            ),
+            origin: GeoPoint(lat: position.latitude, lng: position.longitude),
             candidates: discovered,
             radiusMeters: nearbyMerchantSearchRadiusMeters,
           );
@@ -209,20 +207,36 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     setState(() {
       _placeSearching = true;
       _placeSearchError = null;
+      _placeSearchUnavailable = false;
       _placeResults = null;
     });
     try {
       final position = _lastPosition;
-      final results = await ref
+      final result = await ref
           .read(nearbyPlaceSearchRepositoryProvider)
-          .searchPlaces(
+          .searchPlacesWithStatus(
             query: query,
             lat: position?.latitude,
             lng: position?.longitude,
           );
-      if (mounted) setState(() => _placeResults = results);
-    } catch (err) {
-      if (mounted) setState(() => _placeSearchError = userFacingErrorMessage(err));
+      if (mounted) {
+        setState(() {
+          _placeResults = result.candidates;
+          _placeSearchUnavailable = result.unavailable;
+          _placeSearchError = result.unavailable ? result.message : null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          // Complete the interaction locally even when the API process is
+          // unreachable, instead of leaving the previous screen state active.
+          _placeResults = const [];
+          _placeSearchUnavailable = true;
+          _placeSearchError =
+              'Place search is unavailable right now. Please check your connection and try again.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _placeSearching = false);
     }
@@ -373,7 +387,10 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                           isDense: true,
                           border: InputBorder.none,
                           hintText: 'Test a place or petrol pump',
-                          hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+                          hintStyle: BambooFonts.ui(
+                            14,
+                            color: BambooInk.ink500,
+                          ),
                         ),
                         onSubmitted: (_) => _searchPlace(),
                       ),
@@ -400,7 +417,8 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                     style: BambooFonts.ui(12, color: BambooInk.clay),
                   ),
                 ),
-              if (_placeResults != null)
+              if (_placeResults != null &&
+                  !_placeResults!.any((result) => result.source == 'published'))
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
@@ -434,7 +452,9 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
       if (placeResults.isEmpty) {
         return Center(
           child: Text(
-            'No map place found for this search.',
+            _placeSearchUnavailable
+                ? 'Place search is temporarily unavailable. Please try again.'
+                : 'No map place found for this search.',
             textAlign: TextAlign.center,
             style: BambooFonts.ui(13.5, color: BambooInk.ink500),
           ),
@@ -506,7 +526,9 @@ class _ManualPlaceTile extends ConsumerWidget {
           ),
           const SizedBox(height: 3),
           Text(
-            'Map candidate · ${candidate.categoryId ?? 'other'}',
+            candidate.source == 'published'
+                ? 'PandaPay merchant · ${candidate.categoryId ?? 'other'}'
+                : 'Map candidate · ${candidate.categoryId ?? 'other'}',
             style: BambooFonts.ui(12, color: BambooInk.ink500),
           ),
           const SizedBox(height: 7),

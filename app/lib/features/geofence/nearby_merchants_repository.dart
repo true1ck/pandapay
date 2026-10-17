@@ -62,6 +62,34 @@ abstract class NearbyPlaceSearchRepository {
     double? lng,
     double radiusM = 5000,
   });
+
+  Future<NearbyPlaceSearchResult> searchPlacesWithStatus({
+    required String query,
+    double? lat,
+    double? lng,
+    double radiusM = 5000,
+  }) async {
+    return NearbyPlaceSearchResult(
+      candidates: await searchPlaces(
+        query: query,
+        lat: lat,
+        lng: lng,
+        radiusM: radiusM,
+      ),
+    );
+  }
+}
+
+class NearbyPlaceSearchResult {
+  final List<NearbyMerchantCandidate> candidates;
+  final bool unavailable;
+  final String? message;
+
+  const NearbyPlaceSearchResult({
+    required this.candidates,
+    this.unavailable = false,
+    this.message,
+  });
 }
 
 class NearbyMerchantCacheSnapshot {
@@ -228,6 +256,22 @@ class HttpNearbyMerchantsRepository
     double? lng,
     double radiusM = 5000,
   }) async {
+    final result = await searchPlacesWithStatus(
+      query: query,
+      lat: lat,
+      lng: lng,
+      radiusM: radiusM,
+    );
+    return result.candidates;
+  }
+
+  @override
+  Future<NearbyPlaceSearchResult> searchPlacesWithStatus({
+    required String query,
+    double? lat,
+    double? lng,
+    double radiusM = 5000,
+  }) async {
     final uri = Uri.parse('$baseUrl/merchants/nearby/search').replace(
       queryParameters: {
         'q': query.trim(),
@@ -238,11 +282,34 @@ class HttpNearbyMerchantsRepository
     );
     final response = await _client.get(uri);
     if (response.statusCode != 200) {
+      // Keep builds compatible with an API deployment from before the manual
+      // place-search route was added. The first-party directory is still a
+      // useful answer for queries such as "panda", and avoids turning an
+      // otherwise recoverable 404 into the generic error shown by the screen.
+      if (response.statusCode == 404) {
+        final directoryUri = Uri.parse(
+          '$baseUrl/merchants/search',
+        ).replace(queryParameters: {'q': query.trim()});
+        final directoryResponse = await _client.get(directoryUri);
+        if (directoryResponse.statusCode == 200) {
+          return NearbyPlaceSearchResult(
+            candidates: parseNearbyMerchantsPayload(
+              directoryResponse.body,
+              defaultSource: 'published',
+            ),
+          );
+        }
+      }
       throw ApiException(
         'GET /merchants/nearby/search failed: ${response.statusCode} ${response.body}',
       );
     }
-    return parseNearbyMerchantsPayload(response.body);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return NearbyPlaceSearchResult(
+      candidates: parseNearbyMerchantsPayload(response.body),
+      unavailable: decoded['unavailable'] == true,
+      message: decoded['message'] as String?,
+    );
   }
 
   @override
@@ -257,7 +324,10 @@ class HttpNearbyMerchantsRepository
   }
 }
 
-List<NearbyMerchantCandidate> parseNearbyMerchantsPayload(String body) {
+List<NearbyMerchantCandidate> parseNearbyMerchantsPayload(
+  String body, {
+  String? defaultSource,
+}) {
   final decoded = jsonDecode(body) as Map<String, dynamic>;
   final merchants = (decoded['merchants'] as List).cast<Map<String, dynamic>>();
   return merchants.map((json) {
@@ -266,13 +336,21 @@ List<NearbyMerchantCandidate> parseNearbyMerchantsPayload(String body) {
       displayName: json['display_name'] as String?,
       categoryId: json['category_id'] as String?,
       location: GeoPoint(
-        lat: double.parse(json['grid_lat'].toString()),
-        lng: double.parse(json['grid_lng'].toString()),
+        // Directory matches are allowed to have no confirmed location yet.
+        // Search results do not use distance math, so (0, 0) is a safe
+        // placeholder; a nearby lookup never returns null coordinates.
+        lat: _coordinateValue(json['grid_lat']),
+        lng: _coordinateValue(json['grid_lng']),
       ),
-      source: json['source'] as String?,
+      source: json['source'] as String? ?? defaultSource,
       confidence: _confidenceValue(json['confidence']),
     );
   }).toList();
+}
+
+double _coordinateValue(Object? value) {
+  if (value == null) return 0;
+  return double.tryParse(value.toString()) ?? 0;
 }
 
 double? _confidenceValue(Object? value) {

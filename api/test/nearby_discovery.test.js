@@ -58,6 +58,29 @@ test('normalizes OSM nodes and ways into PandaPay candidates', () => {
   assert.equal(result[1].grid_lat, 15.491);
 });
 
+test('normalizes Photon GeoJSON results into the same candidate shape', () => {
+  const result = parsePlaceSearchResults({
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [73.83, 15.49] },
+      properties: {
+        osm_type: 'N',
+        osm_id: 11,
+        name: 'Panda Cafe',
+        city: 'Panaji',
+        type: 'cafe',
+      },
+    }],
+  }, { query: 'panda' });
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].display_name, 'Panda Cafe');
+  assert.equal(result[0].grid_lat, 15.49);
+  assert.equal(result[0].grid_lng, 73.83);
+  assert.equal(result[0].category_id, 'dining');
+});
+
 test('coalesces concurrent searches and reuses the location cache', async () => {
   let calls = 0;
   let currentTime = 1000;
@@ -131,6 +154,38 @@ test('fails over to the next Overpass provider after a provider error', async ()
     'https://first.test/interpreter',
     'https://second.test/interpreter',
   ]);
+});
+
+test('fails over place search and caches successful results', async () => {
+  const calls = [];
+  const provider = createNearbyDiscovery({
+    searchEndpoints: ['https://nominatim.test/search', 'https://photon.komoot.io/api/'],
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url.includes('nominatim')) return { ok: false, status: 429 };
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            type: 'FeatureCollection',
+            features: [{
+              geometry: { coordinates: [73.83, 15.49] },
+              properties: { osm_type: 'N', osm_id: 12, name: 'Panda Market' },
+            }],
+          };
+        },
+      };
+    },
+  });
+
+  const first = await provider.search({ query: 'panda' });
+  const second = await provider.search({ query: 'panda' });
+  assert.equal(first[0].display_name, 'Panda Market');
+  assert.deepEqual(second, first);
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /nominatim/);
+  assert.match(calls[1], /photon/);
 });
 
 test('rejects invalid radius before contacting the provider', async () => {

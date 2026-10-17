@@ -17,6 +17,10 @@ const DEFAULT_ENDPOINTS = [
   'https://overpass.private.coffee/api/interpreter',
 ];
 const DEFAULT_SEARCH_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
+const DEFAULT_SEARCH_ENDPOINTS = [
+  DEFAULT_SEARCH_ENDPOINT,
+  'https://photon.komoot.io/api/',
+];
 
 const CATEGORY_TAGS = {
   groceries: [
@@ -132,9 +136,28 @@ function categoryForPlaceSearchResult(result, query) {
 }
 
 function parsePlaceSearchResults(results = [], { query } = {}) {
+  // Nominatim returns an array, while Photon returns GeoJSON. Keeping the
+  // normalisation here means the provider failover below cannot change the
+  // mobile API contract.
+  const records = Array.isArray(results)
+    ? results
+    : results && Array.isArray(results.features)
+      ? results.features.map((feature) => {
+        const coordinates = feature.geometry?.coordinates;
+        const properties = feature.properties || {};
+        return {
+          ...properties,
+          display_name: properties.name || properties.city || properties.street,
+          lat: Array.isArray(coordinates) ? coordinates[1] : undefined,
+          lon: Array.isArray(coordinates) ? coordinates[0] : undefined,
+          osm_type: properties.osm_type || feature.properties?.osm_type,
+          osm_id: properties.osm_id || feature.properties?.osm_id,
+        };
+      })
+      : [];
   const output = [];
   const seen = new Set();
-  for (const result of results) {
+  for (const result of records) {
     const lat = safeNumber(result.lat);
     const lng = safeNumber(result.lon);
     if (!validCoordinates(lat, lng)) continue;
@@ -170,6 +193,7 @@ function createNearbyDiscovery({
   endpoint,
   endpoints,
   searchEndpoint = DEFAULT_SEARCH_ENDPOINT,
+  searchEndpoints,
   ttlMs = DISCOVERY_TTL_MS,
 } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('A fetch implementation is required');
@@ -179,8 +203,16 @@ function createNearbyDiscovery({
       .map((value) => value.trim()),
   )];
   if (providerEndpoints.length === 0) throw new Error('At least one discovery endpoint is required');
+  const placeSearchEndpoints = [...new Set(
+    (searchEndpoints || [searchEndpoint, ...DEFAULT_SEARCH_ENDPOINTS])
+      .filter((value) => typeof value === 'string' && value.trim())
+      .map((value) => value.trim()),
+  )];
+  if (placeSearchEndpoints.length === 0) throw new Error('At least one place-search endpoint is required');
   const cache = new Map();
   const inflight = new Map();
+  const searchCache = new Map();
+  const searchInflight = new Map();
 
   function cacheKey({ lat, lng, radiusM, categoryId }) {
     // Three decimal places is roughly 100m in latitude. It lets nearby users
@@ -264,38 +296,69 @@ function createNearbyDiscovery({
       throw new Error('radiusM must be between 1 and 50000');
     }
 
-    const params = new URLSearchParams({
-      format: 'jsonv2',
-      addressdetails: '1',
-      dedupe: '1',
-      limit: String(Math.min(Math.max(Math.round(limit), 1), MAX_RESULTS)),
-      q: cleanQuery,
-    });
-    if (lat !== undefined && lng !== undefined) {
-      params.set('lat', String(lat));
-      params.set('lon', String(lng));
-      params.set('viewbox', boundingBox({ lat, lng, radiusM }));
-    }
+    const key = [cleanQuery.toLowerCase(), lat ?? '', lng ?? '', Math.round(radiusM), limit].join(':');
+    const cached = searchCache.get(key);
+    if (cached && cached.expiresAt > now()) return cached.value;
+    if (searchInflight.has(key)) return searchInflight.get(key);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const promise = (async () => {
+      let lastError;
+      for (const endpointUrl of placeSearchEndpoints) {
+        const isPhoton = endpointUrl.toLowerCase().includes('photon');
+        const params = new URLSearchParams({
+          ...(isPhoton
+            ? { q: cleanQuery, limit: String(Math.min(Math.max(Math.round(limit), 1), MAX_RESULTS)) }
+            : {
+              format: 'jsonv2',
+              addressdetails: '1',
+              dedupe: '1',
+              limit: String(Math.min(Math.max(Math.round(limit), 1), MAX_RESULTS)),
+              q: cleanQuery,
+            }),
+        });
+        if (!isPhoton && lat !== undefined && lng !== undefined) {
+          params.set('lat', String(lat));
+          params.set('lon', String(lng));
+          params.set('viewbox', boundingBox({ lat, lng, radiusM }));
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+        try {
+          const response = await fetchImpl(`${endpointUrl}?${params.toString()}`, {
+            headers: {
+              accept: 'application/json',
+              // Public OSM providers require an identifying client header.
+              'user-agent': 'PandaPay/1.0 (nearby merchant search)',
+            },
+            signal: controller.signal,
+          });
+          if (!response.ok) throw new Error(`OpenStreetMap place search failed: ${response.status}`);
+          const body = await response.json();
+          const value = parsePlaceSearchResults(body, { query: cleanQuery });
+          searchCache.set(key, { expiresAt: now() + ttlMs, value });
+          while (searchCache.size > MAX_CACHE_ENTRIES) {
+            searchCache.delete(searchCache.keys().next().value);
+          }
+          return value;
+        } catch (error) {
+          lastError = error;
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+      throw lastError || new Error('OpenStreetMap place search failed');
+    })();
+
+    searchInflight.set(key, promise);
     try {
-      const response = await fetchImpl(`${searchEndpoint}?${params.toString()}`, {
-        headers: {
-          accept: 'application/json',
-          'user-agent': 'PandaPay nearby merchant search',
-        },
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error(`OpenStreetMap place search failed: ${response.status}`);
-      const body = await response.json();
-      return parsePlaceSearchResults(body, { query: cleanQuery });
+      return await promise;
     } finally {
-      clearTimeout(timeout);
+      searchInflight.delete(key);
     }
   }
 
-  return { discover, search, cache, inflight };
+  return { discover, search, cache, inflight, searchCache, searchInflight };
 }
 
 module.exports = {

@@ -106,7 +106,9 @@ void main() {
 
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(find.text('Test RuPay Card'), findsOneWidget);
-      expect(find.textContaining('Base rate 5.0%'), findsOneWidget);
+      // The replica surfaces the computed effective reward rate against the
+      // current amount rather than the legacy explanatory "Base rate" line.
+      expect(find.text('5% on ₹1,000'), findsOneWidget);
     },
   );
 

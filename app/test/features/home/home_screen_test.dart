@@ -12,44 +12,33 @@ CardProduct _card(String id) =>
     CardProduct(id: id, name: 'Card $id', network: CardNetwork.visa);
 
 void main() {
-  testWidgets(
-    'rank-0 recommendation gets hero styling and a "Why this card?" toggle',
-    (tester) async {
-      final recs = [
-        Recommendation(
-          card: _card('c1'),
-          expectedValue: Money.fromRupees(120),
-          confidence: Confidence.estimated,
-          reasonLines: const [
-            'Base rate 5.0% on ₹2,400',
-            'Cap headroom: ₹8,600 remaining',
-          ],
-        ),
-      ];
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            rankedRecommendationsProvider.overrideWithValue(
-              AsyncValue.data(recs),
-            ),
-          ],
-          child: const MaterialApp(home: Scaffold(body: HomeScreen())),
-        ),
-      );
-      await tester.pumpAndSettle();
+  testWidgets('rank-0 recommendation gets the compact best-card surface', (
+    tester,
+  ) async {
+    final recs = [
+      Recommendation(
+        card: _card('c1'),
+        expectedValue: Money.fromRupees(120),
+        confidence: Confidence.estimated,
+        reasonLines: const ['Base rate 5.0% on ₹2,400'],
+      ),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          rankedRecommendationsProvider.overrideWithValue(
+            AsyncValue.data(recs),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('BEST PICK'), findsOneWidget);
-      expect(find.text('Why this card?'), findsOneWidget);
-      expect(find.textContaining('Cap headroom'), findsNothing);
-
-      await tester.ensureVisible(find.text('Why this card?'));
-      await tester.tap(find.text('Why this card?'));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('Cap headroom'), findsOneWidget);
-      expect(find.text('Hide the full breakdown'), findsOneWidget);
-    },
-  );
+    expect(find.text('BEST PICK'), findsOneWidget);
+    expect(find.text('Estimated rewards'), findsOneWidget);
+    expect(find.text('Pay with this card'), findsOneWidget);
+  });
 
   // Merchant Search moved off Home to You -> Tools when Home was rebuilt to
   // design 01, which has no action-icon row (see ToolsHubScreen). Home's own
@@ -192,30 +181,24 @@ void main() {
       await tester.tap(find.text('Show 1 more card'));
       await tester.pumpAndSettle();
 
-      // Expand card A (currently at rank 0) — scope to the first toggle found
-      // (rank order == visual top-to-bottom order, so this is card A's).
-      final cardAWhy = find.byKey(const ValueKey('why-card-a'));
-      await tester.ensureVisible(cardAWhy);
-      await tester.tap(cardAWhy);
+      // The compact hero has no per-card disclosure. Expand the detail-rich
+      // runner-up and then reorder it into the hero position.
+      final cardBWhy = find.byKey(const ValueKey('why-card-b'));
+      await tester.ensureVisible(cardBWhy);
+      await tester.tap(cardBWhy);
       await tester.pumpAndSettle();
-      expect(find.textContaining('A reason two'), findsOneWidget);
+      expect(find.textContaining('B reason two'), findsOneWidget);
 
-      // Reorder: card B now occupies rank 0 (previously held by card A).
+      // Reorder: card B now occupies the compact hero position and card A
+      // moves to the detail-rich runner-up position.
       final container = ProviderScope.containerOf(
         tester.element(find.byType(HomeScreen)),
       );
       container.read(recsProvider.notifier).state = [cardB, cardA];
       await tester.pumpAndSettle();
 
-      // Card B (new rank 0) must render collapsed, not inherit the expanded
-      // state that used to belong to whatever card was previously at that
-      // index — its own second reason line must stay hidden until tapped.
-      expect(find.textContaining('B reason two'), findsNothing);
-      expect(find.text('Why this card?'), findsWidgets);
-
-      // Card A moved from rank 0 to rank 1 — its Element (and thus its own
-      // _expanded flag) must move WITH it, not be reset by the reorder.
-      expect(find.textContaining('A reason two'), findsOneWidget);
+      // Card A must not inherit card B's expanded disclosure state.
+      expect(find.textContaining('A reason two'), findsNothing);
     },
   );
 
@@ -248,7 +231,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('If not accepted:'), findsOneWidget);
+    expect(find.text('Alternative'), findsOneWidget);
     expect(find.textContaining('Card c2'), findsWidgets);
   });
 
@@ -291,7 +274,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('If not accepted:'), findsOneWidget);
+      expect(find.text('Alternative'), findsOneWidget);
       expect(find.textContaining('Card c3'), findsWidgets);
     },
   );
@@ -326,49 +309,48 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('If not accepted:'), findsNothing);
+    expect(find.text('Alternative'), findsNothing);
   });
 
-  testWidgets(
-    'hero card\'s "See the math" link opens the B4 comparison screen',
-    (tester) async {
-      final recs = [
-        Recommendation(
-          card: _card('c1'),
-          expectedValue: Money.fromRupees(120),
-          confidence: Confidence.estimated,
-          reasonLines: const ['Base rate 5.0%'],
-        ),
-        Recommendation(
-          card: _card('c2'),
-          expectedValue: Money.fromRupees(80),
-          confidence: Confidence.estimated,
-          reasonLines: const ['Base rate 2.0%'],
-        ),
-      ];
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            rankedRecommendationsProvider.overrideWithValue(
-              AsyncValue.data(recs),
-            ),
-          ],
-          child: const MaterialApp(home: Scaffold(body: HomeScreen())),
-        ),
-      );
-      await tester.pumpAndSettle();
+  testWidgets('hero card\'s Details link opens the B4 comparison screen', (
+    tester,
+  ) async {
+    final recs = [
+      Recommendation(
+        card: _card('c1'),
+        expectedValue: Money.fromRupees(120),
+        confidence: Confidence.estimated,
+        reasonLines: const ['Base rate 5.0%'],
+      ),
+      Recommendation(
+        card: _card('c2'),
+        expectedValue: Money.fromRupees(80),
+        confidence: Confidence.estimated,
+        reasonLines: const ['Base rate 2.0%'],
+      ),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          rankedRecommendationsProvider.overrideWithValue(
+            AsyncValue.data(recs),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      // Only the hero (rank 0) card gets the entry point, not every row.
-      expect(find.text('See the math'), findsOneWidget);
+    // Only the hero (rank 0) card gets the entry point, not every row.
+    expect(find.text('Details ↗'), findsOneWidget);
 
-      await tester.ensureVisible(find.text('See the math'));
-      await tester.tap(find.text('See the math'));
-      await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Details ↗'));
+    await tester.tap(find.text('Details ↗'));
+    await tester.pumpAndSettle();
 
-      expect(find.byType(ComparisonViewScreen), findsOneWidget);
-      expect(find.text('Compare cards'), findsOneWidget);
-    },
-  );
+    expect(find.byType(ComparisonViewScreen), findsOneWidget);
+    expect(find.text('Compare cards'), findsOneWidget);
+  });
 
   testWidgets(
     'hero card\'s "Pay with this card" button opens Quick Add prefilled',
