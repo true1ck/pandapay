@@ -128,6 +128,7 @@ abstract final class BambooInk {
 
   // Text/icon colors on paper.
   static const ink900 = Color(0xFF2B313A);
+  static const ink700 = Color(0xFF59636C);
   static const ink500 = Color(0xFF8B8F94);
   static const ink300 = Color(0xFF6E7379);
   static const hairlineOnPaper = Color(0x1F2B313A); // rgba(43,49,58,.12)

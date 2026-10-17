@@ -79,7 +79,8 @@ void main() {
 
     await container.read(sessionInitProvider.future);
     // Startup restores the cached token without waiting on auth/. A refresh
-    // rejection must not erase the local session asynchronously.
+    // rejection must not erase the local session asynchronously: the account
+    // may still have useful cached data and the auth deployment can recover.
     await Future<void>.delayed(const Duration(milliseconds: 20));
 
     expect(container.read(accessTokenProvider), 'stale-access');

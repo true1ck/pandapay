@@ -164,10 +164,16 @@ class MonthlySavingsScreen extends ConsumerWidget {
     final report = ref.watch(currentMonthlyReportProvider);
     return report.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => ErrorState(
-        message: userFacingErrorMessage(err),
-        onRetry: () => ref.invalidate(currentMonthlyReportProvider),
-      ),
+      error: (err, stack) {
+        assert(() {
+          debugPrint('Rewards report failed: $err\n$stack');
+          return true;
+        }());
+        return ErrorState(
+          message: userFacingErrorMessage(err),
+          onRetry: () => ref.invalidate(currentMonthlyReportProvider),
+        );
+      },
       data: (r) {
         if (r == null || r.totalSpend.isZero) {
           return const EmptyState(

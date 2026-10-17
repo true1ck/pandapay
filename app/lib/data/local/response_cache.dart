@@ -42,6 +42,23 @@ class ResponseCache {
     );
   }
 
+  /// Account-scoped transaction snapshots may be stored for different
+  /// Insights date ranges. Return them newest first so report fallbacks can
+  /// combine the rows without depending on one particular screen's cache key.
+  Future<List<CachedResponse>> readPrefix(String prefix) async {
+    final rows = _db.db.select(
+      'SELECT raw_json, fetched_at FROM cached_responses WHERE substr(key, 1, length(?)) = ? ORDER BY fetched_at DESC',
+      [prefix, prefix],
+    );
+    return [
+      for (final row in rows)
+        CachedResponse(
+          rawJson: row['raw_json'] as String,
+          fetchedAt: DateTime.fromMillisecondsSinceEpoch(row['fetched_at'] as int),
+        ),
+    ];
+  }
+
   /// When [key] was last written, or null if it was never cached.
   ///
   /// [put] has always recorded `fetched_at`; nothing read it until design

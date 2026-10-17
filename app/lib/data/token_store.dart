@@ -30,20 +30,32 @@ class TokenStore {
     var accessToken = await secureStorage.read(key: _accessKey);
     var refreshToken = await secureStorage.read(key: _refreshKey);
 
-    if (accessToken == null && refreshToken == null) {
-      final prefs = await SharedPreferences.getInstance();
-      final legacyAccess = prefs.getString(_accessKey);
-      final legacyRefresh = prefs.getString(_refreshKey);
-      if (legacyAccess != null || legacyRefresh != null) {
-        if (legacyAccess != null)
-          await secureStorage.write(key: _accessKey, value: legacyAccess);
-        if (legacyRefresh != null)
-          await secureStorage.write(key: _refreshKey, value: legacyRefresh);
-        await prefs.remove(_accessKey);
-        await prefs.remove(_refreshKey);
-        accessToken = legacyAccess;
-        refreshToken = legacyRefresh;
-      }
+    // Migrate each credential independently. An interrupted first migration
+    // can leave the access token in secure storage while the refresh token is
+    // still in SharedPreferences (or vice versa). The old all-or-nothing gate
+    // skipped migration in that state, leaving the app with an access token
+    // that eventually expired and no way to refresh it. Remove the plaintext
+    // copy only after the corresponding secure write has succeeded.
+    final prefs = await SharedPreferences.getInstance();
+    final legacyAccess = prefs.getString(_accessKey);
+    final legacyRefresh = prefs.getString(_refreshKey);
+
+    if (accessToken == null && legacyAccess != null) {
+      await secureStorage.write(key: _accessKey, value: legacyAccess);
+      accessToken = legacyAccess;
+    }
+    if (refreshToken == null && legacyRefresh != null) {
+      await secureStorage.write(key: _refreshKey, value: legacyRefresh);
+      refreshToken = legacyRefresh;
+    }
+
+    // Even when secure storage already had the value, delete any duplicate
+    // legacy copy so a stale plaintext credential cannot survive the upgrade.
+    if (accessToken != null && legacyAccess != null) {
+      await prefs.remove(_accessKey);
+    }
+    if (refreshToken != null && legacyRefresh != null) {
+      await prefs.remove(_refreshKey);
     }
 
     return TokenStore(

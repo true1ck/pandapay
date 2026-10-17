@@ -485,7 +485,8 @@ final userSettingsApiProvider = Provider<UserSettingsApi?>((ref) {
 /// is not the same thing as an explicit sign-out: the auth service can reject
 /// a rotated/stale token after a process restart, deployment, database restore,
 /// or temporary device/network condition. Clearing secure credentials here
-/// would turn that recoverable state into the "Welcome back" screen.
+/// would turn that recoverable state into the "Welcome back" screen and make
+/// the account-scoped offline cache inaccessible.
 String? _jwtSubject(String token) {
   try {
     final parts = token.split('.');
@@ -971,14 +972,29 @@ final spendReportProvider = FutureProvider.family<SpendReport?, SpendReportQuery
       }
       return SpendReport.fromJson(raw);
     } catch (error) {
+      // A refresh attempt can fail as a transport exception before the
+      // repository receives a 401. The local transaction snapshot is still
+      // usable for this read-only report.
+      if (cached == null) {
+        final local = await _buildLocalSpendReport(ref, query);
+        if (local != null) return local;
+      }
       if (!_canUseReadCache(error)) {
         if (_isAuthenticationFailure(error)) {
+          final local = await _buildLocalSpendReport(ref, query);
+          if (local != null) {
+            return local;
+          }
           throw const AuthenticationUnavailableException();
         }
         rethrow;
       }
       if (cached == null) {
         if (_isAuthenticationFailure(error)) {
+          final local = await _buildLocalSpendReport(ref, query);
+          if (local != null) {
+            return local;
+          }
           throw const AuthenticationUnavailableException();
         }
         rethrow;
@@ -1070,9 +1086,21 @@ final recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
     } catch (_) {}
     return report;
   } catch (error) {
+    if (cached == null) {
+      final local = await _buildLocalRecurringReport(ref);
+      if (local != null) return local;
+    }
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        final local = await _buildLocalRecurringReport(ref);
+        if (local != null) {
+          return local;
+        }
+        // A signed-in user with no local transaction snapshot has a truthful
+        // empty result, not a page-fatal transport error. Once transactions
+        // have been synced, the local detector above supplies a useful
+        // offline result until the server report is available again.
+        return const RecurringReport(series: [], totalAnnual: Money.zero());
       }
       rethrow;
     }
@@ -1442,17 +1470,12 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
   Future<void> refreshTransactions() async {
     if (userRepo == null) return;
     try {
-      final transactions = await userRepo.fetchTransactions().timeout(
-        _homeRequestTimeout,
-      );
-      await cache.put(
-        _scopedCacheKey(ref, '$_transactionsCacheKey:all'),
-        jsonEncode({
-          'transactions': transactions
-              .map((transaction) => transaction.toJson())
-              .toList(),
-        }),
-      );
+      // Refresh the canonical provider instead of writing around it. Activity
+      // watches this provider, so resume/online refreshes now publish the
+      // freshly fetched rows to every consumer rather than leaving an older
+      // in-memory Activity result alive beside a newer SQLite snapshot.
+      ref.invalidate(transactionsProvider);
+      await ref.read(transactionsProvider.future).timeout(_homeRequestTimeout);
     } catch (_) {}
   }
 
@@ -2091,9 +2114,20 @@ final currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((
     } catch (_) {}
     return report;
   } catch (error) {
+    if (cached == null) {
+      final local = await _buildLocalMonthlyReport(ref, now);
+      if (local != null) return local;
+    }
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
-        throw const AuthenticationUnavailableException();
+        final local = await _buildLocalMonthlyReport(ref, now);
+        if (local != null) {
+          return local;
+        }
+        // There is no trustworthy local history yet. The reward screen will
+        // show its existing "building your first report" state rather than a
+        // generic session error.
+        return null;
       }
       rethrow;
     }
@@ -2780,6 +2814,459 @@ DateTime _spendReportBucket(SpendPeriod period, DateTime now) {
   }
 }
 
+/// Reads the canonical transaction snapshot without making another network
+/// request. Report screens use this only after their aggregate endpoint has
+/// failed; the normal online path remains server-authoritative.
+Future<List<TransactionEntry>?> _cachedTransactionsForReports(Ref ref) async {
+  final cache = await _cacheOrNull(ref);
+  if (cache == null) return null;
+  // Insights keeps its period-filtered transactions under a different key
+  // from Activity. A user may have a complete Insights snapshot without
+  // ever having opened Activity, so read both stores for local reports.
+  final snapshots = <CachedResponse>[
+    ...await cache.readPrefix(_scopedCacheKey(ref, 'spend_detail:')),
+    ...await cache.readPrefix(_scopedCacheKey(ref, 'insights_transactions:')),
+    ...await cache.readPrefix(_scopedCacheKey(ref, '$_transactionsCacheKey:')),
+  ]..sort((a, b) => b.fetchedAt.compareTo(a.fetchedAt));
+  if (snapshots.isEmpty) return null;
+  final byId = <String, TransactionEntry>{};
+  var decodedAny = false;
+  for (final snapshot in snapshots) {
+    try {
+      final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
+      final rows = body['transactions'];
+      if (rows is! List) continue;
+      decodedAny = true;
+      for (final raw in rows) {
+        final row = TransactionEntry.fromJson(raw as Map<String, dynamic>);
+        // The newest snapshot wins if an edit changed a row's status or
+        // amount. Overlapping date ranges must never double count a charge.
+        byId.putIfAbsent(row.id, () => row);
+      }
+    } catch (_) {
+      // Ignore a malformed snapshot; a different range can still be valid.
+    }
+  }
+  return decodedAny ? byId.values.toList() : null;
+}
+
+({DateTime from, DateTime to, DateTime previousFrom, DateTime previousTo})
+_localReportBounds(SpendReportQuery query, DateTime now) {
+  late DateTime from;
+  late DateTime to;
+  if (query.isCustom) {
+    from = DateTime(query.from!.year, query.from!.month, query.from!.day);
+    to = DateTime(query.to!.year, query.to!.month, query.to!.day + 1);
+  } else {
+    switch (query.period) {
+      case SpendPeriod.week:
+        final today = DateTime(now.year, now.month, now.day);
+        from = today.subtract(Duration(days: today.weekday - 1));
+        to = from.add(const Duration(days: 7));
+      case SpendPeriod.month:
+        from = DateTime(now.year, now.month);
+        to = DateTime(now.year, now.month + 1);
+      case SpendPeriod.quarter:
+        final firstMonth = ((now.month - 1) ~/ 3) * 3 + 1;
+        from = DateTime(now.year, firstMonth);
+        to = DateTime(now.year, firstMonth + 3);
+      case SpendPeriod.year:
+        from = DateTime(now.year);
+        to = DateTime(now.year + 1);
+      case SpendPeriod.custom:
+        // Covered by the branch above; retained for exhaustiveness.
+        from = DateTime(now.year, now.month, now.day);
+        to = from.add(const Duration(days: 1));
+    }
+  }
+  final length = to.difference(from);
+  return (
+    from: from,
+    to: to,
+    previousFrom: from.subtract(length),
+    previousTo: from,
+  );
+}
+
+List<TransactionEntry> _activeLocalRows(
+  Iterable<TransactionEntry> rows,
+  DateTime from,
+  DateTime to,
+) => rows
+    .where(
+      (row) =>
+          row.status == 'active' &&
+          !row.occurredAt.isBefore(from) &&
+          row.occurredAt.isBefore(to),
+    )
+    .toList();
+
+Money _sumLocalAmounts(Iterable<TransactionEntry> rows) {
+  var total = const Money.zero();
+  for (final row in rows) {
+    total += row.amount;
+  }
+  return total;
+}
+
+Money _sumLocalRewards(Iterable<TransactionEntry> rows) {
+  var total = const Money.zero();
+  for (final row in rows) {
+    final reward = row.rewardValue;
+    if (reward != null) total += reward;
+  }
+  return total;
+}
+
+EntryKindTotals _localEntryTotals(
+  Iterable<TransactionEntry> rows,
+  TxnEntryKind kind,
+) {
+  final matching = rows.where((row) => row.entryKind == kind).toList();
+  return EntryKindTotals(
+    total: _sumLocalAmounts(matching),
+    txnCount: matching.length,
+    rewards: _sumLocalRewards(matching),
+  );
+}
+
+List<SpendBreakdownRow> _localBreakdownRows(
+  Iterable<TransactionEntry> rows, {
+  required String Function(TransactionEntry) keyFor,
+  required String Function(TransactionEntry) labelFor,
+  String? Function(TransactionEntry)? categoryIdFor,
+}) {
+  final totals = <String, Money>{};
+  final counts = <String, int>{};
+  final labels = <String, String>{};
+  final categoryIds = <String, String?>{};
+  for (final row in rows) {
+    final key = keyFor(row);
+    totals[key] = (totals[key] ?? const Money.zero()) + row.amount;
+    counts[key] = (counts[key] ?? 0) + 1;
+    labels[key] = labelFor(row);
+    categoryIds[key] = categoryIdFor?.call(row);
+  }
+  final keys = totals.keys.toList()
+    ..sort((a, b) => totals[b]!.paise.compareTo(totals[a]!.paise));
+  return [
+    for (final key in keys)
+      SpendBreakdownRow(
+        label: labels[key]!,
+        total: totals[key]!,
+        txnCount: counts[key]!,
+        categoryId: categoryIds[key],
+      ),
+  ];
+}
+
+List<CardSpendRow> _localCardRows(Iterable<TransactionEntry> rows) {
+  final totals = <String, Money>{};
+  final rewards = <String, Money>{};
+  final counts = <String, int>{};
+  final names = <String, String>{};
+  final ids = <String, String?>{};
+  for (final row in rows) {
+    final key =
+        row.userCardId ??
+        'other:${row.cardDisplayName ?? row.instrument.wireValue}';
+    totals[key] = (totals[key] ?? const Money.zero()) + row.amount;
+    rewards[key] =
+        (rewards[key] ?? const Money.zero()) +
+        (row.rewardValue ?? const Money.zero());
+    counts[key] = (counts[key] ?? 0) + 1;
+    names[key] =
+        row.cardDisplayName ??
+        (row.instrumentKnown ? row.instrument.label : 'Cash & other');
+    ids[key] = row.userCardId;
+  }
+  final keys = totals.keys.toList()
+    ..sort((a, b) => totals[b]!.paise.compareTo(totals[a]!.paise));
+  return [
+    for (final key in keys)
+      CardSpendRow(
+        cardId: ids[key],
+        cardName: names[key]!,
+        total: totals[key]!,
+        rewards: rewards[key]!,
+        txnCount: counts[key]!,
+        annualFee: null,
+        effectiveRatePerRupee: totals[key]!.isZero
+            ? null
+            : rewards[key]!.paise / totals[key]!.paise,
+      ),
+  ];
+}
+
+List<InstrumentSpendRow> _localInstrumentRows(Iterable<TransactionEntry> rows) {
+  final totals = <String, Money>{};
+  final counts = <String, int>{};
+  for (final row in rows) {
+    final instrument = row.instrumentKnown ? row.instrument.wireValue : 'other';
+    totals[instrument] =
+        (totals[instrument] ?? const Money.zero()) + row.amount;
+    counts[instrument] = (counts[instrument] ?? 0) + 1;
+  }
+  final keys = totals.keys.toList()
+    ..sort((a, b) => totals[b]!.paise.compareTo(totals[a]!.paise));
+  return [
+    for (final key in keys)
+      InstrumentSpendRow(
+        instrument: key,
+        total: totals[key]!,
+        txnCount: counts[key]!,
+      ),
+  ];
+}
+
+List<CardCategorySpendRow> _localCardCategoryRows(
+  Iterable<TransactionEntry> rows,
+) {
+  final totals = <String, Money>{};
+  final counts = <String, int>{};
+  final names = <String, (String, String)>{};
+  for (final row in rows) {
+    final card =
+        row.cardDisplayName ??
+        (row.instrumentKnown ? row.instrument.label : 'Cash & other');
+    final category = row.categoryName ?? 'Other';
+    final key = '$card\u0000$category';
+    totals[key] = (totals[key] ?? const Money.zero()) + row.amount;
+    counts[key] = (counts[key] ?? 0) + 1;
+    names[key] = (card, category);
+  }
+  final keys = totals.keys.toList()
+    ..sort((a, b) => totals[b]!.paise.compareTo(totals[a]!.paise));
+  return [
+    for (final key in keys)
+      CardCategorySpendRow(
+        cardName: names[key]!.$1,
+        categoryName: names[key]!.$2,
+        total: totals[key]!,
+        txnCount: counts[key]!,
+      ),
+  ];
+}
+
+List<SpendSeriesPoint> _localSpendSeries(
+  List<TransactionEntry> rows,
+  DateTime from,
+  DateTime to,
+  SpendPeriod period,
+) {
+  final bucketCount = switch (period) {
+    SpendPeriod.week => 7,
+    SpendPeriod.month => 12,
+    SpendPeriod.quarter => 12,
+    SpendPeriod.year => 12,
+    SpendPeriod.custom => 12,
+  };
+  final length = to.difference(from).inMicroseconds;
+  DateTime boundary(int index) =>
+      from.add(Duration(microseconds: (length * index) ~/ bucketCount));
+  return [
+    for (var i = 0; i < bucketCount; i++)
+      () {
+        final bucketFrom = boundary(i);
+        final bucketTo = boundary(i + 1);
+        final bucketRows = rows
+            .where(
+              (row) =>
+                  !row.occurredAt.isBefore(bucketFrom) &&
+                  row.occurredAt.isBefore(bucketTo),
+            )
+            .toList();
+        return SpendSeriesPoint(
+          periodStart: bucketFrom,
+          spend: _sumLocalAmounts(
+            bucketRows.where((row) => row.entryKind == TxnEntryKind.spend),
+          ),
+          rewards: _sumLocalRewards(
+            bucketRows.where((row) => row.entryKind == TxnEntryKind.spend),
+          ),
+          txnCount: bucketRows
+              .where((row) => row.entryKind == TxnEntryKind.spend)
+              .length,
+        );
+      }(),
+  ];
+}
+
+SpendReport _makeLocalSpendReport(
+  SpendReportQuery query,
+  DateTime now,
+  List<TransactionEntry> allRows,
+) {
+  final bounds = _localReportBounds(query, now);
+  final current = _activeLocalRows(allRows, bounds.from, bounds.to);
+  final previous = _activeLocalRows(
+    allRows,
+    bounds.previousFrom,
+    bounds.previousTo,
+  );
+  final spendRows = current
+      .where((row) => row.entryKind == TxnEntryKind.spend)
+      .toList();
+  final elapsed = now.isBefore(bounds.from)
+      ? 0.0
+      : now.isAfter(bounds.to)
+      ? 1.0
+      : now.difference(bounds.from).inMicroseconds /
+            bounds.to.difference(bounds.from).inMicroseconds;
+  return SpendReport(
+    period: query.period,
+    periodStart: bounds.from,
+    periodEnd: bounds.to,
+    elapsedFraction: elapsed,
+    spend: _localEntryTotals(current, TxnEntryKind.spend),
+    income: _localEntryTotals(current, TxnEntryKind.income),
+    investment: _localEntryTotals(current, TxnEntryKind.investment),
+    previousSpend: _localEntryTotals(previous, TxnEntryKind.spend),
+    byCategory: _localBreakdownRows(
+      spendRows,
+      keyFor: (row) => row.categoryId ?? row.categoryName ?? 'other',
+      labelFor: (row) => row.categoryName ?? 'Other',
+      categoryIdFor: (row) => row.categoryId,
+    ),
+    byMerchant: _localBreakdownRows(
+      spendRows,
+      keyFor: (row) => row.merchantName ?? row.categoryName ?? 'other',
+      labelFor: (row) => row.merchantName ?? row.categoryName ?? 'Other',
+    ),
+    byCard: _localCardRows(spendRows),
+    byInstrument: _localInstrumentRows(spendRows),
+    byCardCategory: _localCardCategoryRows(spendRows),
+    series: _localSpendSeries(current, bounds.from, bounds.to, query.period),
+  );
+}
+
+Future<SpendReport?> _buildLocalSpendReport(
+  Ref ref,
+  SpendReportQuery query,
+) async {
+  final rows = await _cachedTransactionsForReports(ref);
+  if (rows == null) return null;
+  return _makeLocalSpendReport(query, DateTime.now(), rows);
+}
+
+Future<MonthlyReport?> _buildLocalMonthlyReport(Ref ref, DateTime now) async {
+  final rows = await _cachedTransactionsForReports(ref);
+  if (rows == null) return null;
+  final monthStart = DateTime(now.year, now.month);
+  final monthEnd = DateTime(now.year, now.month + 1);
+  final monthRows = _activeLocalRows(rows, monthStart, monthEnd);
+  final spendRows = monthRows
+      .where((row) => row.entryKind == TxnEntryKind.spend)
+      .toList();
+  var rewards = _sumLocalRewards(spendRows);
+
+  // Older transaction snapshots may not contain expected_value_inr yet. The
+  // home-summary snapshot is still an account-scoped server aggregate for the
+  // same month, so use it when row-level reward values are unavailable.
+  if (spendRows.every((row) => row.rewardValue == null)) {
+    final cache = await _cacheOrNull(ref);
+    final summarySnapshot = await _readCacheOrNull(
+      ref,
+      cache,
+      _scopedCacheKey(ref, 'home_summary'),
+    );
+    if (summarySnapshot != null) {
+      try {
+        rewards = HomeSummary.fromJson(
+          jsonDecode(summarySnapshot.rawJson) as Map<String, dynamic>,
+        ).rewardsThisMonth;
+      } catch (_) {}
+    }
+  }
+  return MonthlyReport(
+    periodMonth: monthStart,
+    totalSpend: _sumLocalAmounts(spendRows),
+    rewardsEarned: rewards,
+    baselineSingleCard: const Money.zero(),
+    valueMissed: const Money.zero(),
+    extraEarned: rewards,
+  );
+}
+
+int _medianInt(List<int> values) {
+  final sorted = [...values]..sort();
+  return sorted[sorted.length ~/ 2];
+}
+
+Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
+  final rows = await _cachedTransactionsForReports(ref);
+  if (rows == null) return null;
+  final groups = <String, List<TransactionEntry>>{};
+  for (final row in rows) {
+    final merchant = row.merchantName?.trim();
+    if (row.status != 'active' ||
+        row.entryKind != TxnEntryKind.spend ||
+        row.amount.paise <= 0 ||
+        merchant == null ||
+        merchant.isEmpty) {
+      continue;
+    }
+    final key = merchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
+    groups.putIfAbsent(key, () => []).add(row);
+  }
+
+  final series = <RecurringSeries>[];
+  for (final entry in groups.entries) {
+    final items = [...entry.value]
+      ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
+    // Match the server screen's confidence rule: two charges can be a
+    // coincidence, while three give a minimally defensible recurrence.
+    if (items.length < 3) continue;
+    final gaps = <int>[];
+    for (var i = 1; i < items.length; i++) {
+      final gap = items[i].occurredAt.difference(items[i - 1].occurredAt);
+      gaps.add((gap.inHours / 24).round());
+    }
+    final cadence = _medianInt(gaps);
+    if (cadence < 6 || cadence > 370) continue;
+    final minGap = (cadence * 0.55).round();
+    final maxGap = (cadence * 1.45).round();
+    if (gaps.any((gap) => gap < minGap || gap > maxGap)) continue;
+
+    final typical = Money.fromPaise(
+      (items.fold<int>(0, (sum, row) => sum + row.amount.paise) / items.length)
+          .round(),
+    );
+    if (typical.isZero) continue;
+    if (items.any(
+      (row) =>
+          (row.amount.paise - typical.paise).abs() * 100 > typical.paise * 40,
+    )) {
+      continue;
+    }
+    final latest = items.last;
+    final annual = Money.fromPaise((typical.paise * 365 / cadence).round());
+    series.add(
+      RecurringSeries(
+        id: 'local-recurring:${entry.key}',
+        displayName: latest.merchantName!.trim(),
+        typicalAmount: typical,
+        cadenceDays: cadence,
+        occurrenceCount: items.length,
+        annualCost: annual,
+        nextExpectedOn: latest.occurredAt.add(Duration(days: cadence)),
+        categoryName: latest.categoryName,
+        cardName: latest.cardDisplayName,
+        paymentMethod: latest.instrumentKnown ? latest.instrument.label : null,
+        detectionSource: 'local_cache',
+      ),
+    );
+  }
+  series.sort((a, b) => b.annualCost.paise.compareTo(a.annualCost.paise));
+  return RecurringReport(
+    series: series,
+    totalAnnual: series.fold(
+      const Money.zero(),
+      (total, item) => total + item.annualCost,
+    ),
+  );
+}
+
 /// Shared stale-safe transaction loader for Activity, Insights, and the
 /// period detail rows in Spending. The server remains authoritative, but a
 /// successful response is persisted before it is rendered so a cold offline
@@ -2818,12 +3305,17 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   final toExclusive = to == null
       ? null
       : DateTime(to.year, to.month, to.day + 1);
-  final allTransactionsCached = !hasTransactions(cached)
-      ? await _readCacheOrNull(
-          ref,
-          cache,
-          _scopedCacheKey(ref, '$_transactionsCacheKey:all'),
-        )
+  final allTransactionsKey = _scopedCacheKey(ref, '$_transactionsCacheKey:all');
+  final activityTransactionsKey = _scopedCacheKey(ref, 'transactions:activity');
+  final allTransactionsCached =
+      !hasTransactions(cached) && key != allTransactionsKey
+      ? await _readCacheOrNull(ref, cache, allTransactionsKey)
+      : null;
+  final activityCached =
+      !hasTransactions(cached) &&
+          !hasTransactions(allTransactionsCached) &&
+          key == allTransactionsKey
+      ? await _readCacheOrNull(ref, cache, activityTransactionsKey)
       : null;
 
   // Activity historically used its own cache key while Home warmed the
@@ -2832,11 +3324,41 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   // empty response and hide the still-valid all-transactions snapshot. Prefer
   // whichever account-scoped snapshot actually contains rows; both keys are
   // safe because they use the same user namespace.
+  final unfiltered =
+      from == null &&
+      to == null &&
+      cardId == null &&
+      categoryId == null &&
+      source == null &&
+      (query == null || query.trim().isEmpty);
+  // Spending may already have saved individual rows for a month while the
+  // all-history Activity cache is absent or empty. Reuse those same-account
+  // rows when the server cannot provide the all-history response.
+  final periodRows = unfiltered &&
+          !hasTransactions(cached) &&
+          !hasTransactions(activityCached)
+      ? await _cachedTransactionsForReports(ref)
+      : null;
+  final periodSnapshot = periodRows != null && periodRows.isNotEmpty
+      ? CachedResponse(
+          rawJson: jsonEncode({
+            'transactions': periodRows.map((row) => row.toJson()).toList(),
+          }),
+          fetchedAt: DateTime.now(),
+        )
+      : null;
   final cachedSnapshot = hasTransactions(cached)
       ? cached
       : hasTransactions(allTransactionsCached)
       ? allTransactionsCached
-      : cached ?? allTransactionsCached;
+      : hasTransactions(activityCached)
+      ? activityCached
+      : periodSnapshot ?? cached ?? allTransactionsCached ?? activityCached;
+  final cachedSnapshotKey = identical(cachedSnapshot, activityCached)
+      ? activityTransactionsKey
+      : identical(cachedSnapshot, allTransactionsCached)
+      ? allTransactionsKey
+      : key;
 
   Future<List<TransactionEntry>> decodeCached(CachedResponse? snapshot) async {
     if (snapshot == null) {
@@ -2882,13 +3404,6 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     // account snapshot for an unfiltered history request in that case. A
     // genuinely empty account still gets cached as empty because there is no
     // prior non-empty snapshot to preserve.
-    final unfiltered =
-        from == null &&
-        to == null &&
-        cardId == null &&
-        categoryId == null &&
-        source == null &&
-        (query == null || query.trim().isEmpty);
     if (transactions.isEmpty && unfiltered && hasTransactions(cachedSnapshot)) {
       return decodeCached(cachedSnapshot);
     }
@@ -2941,16 +3456,11 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   try {
     return await fetchAndCache();
   } catch (error) {
-    if (!_canUseReadCache(error)) {
-      if (_isAuthenticationFailure(error)) {
-        return const [];
-      }
-      rethrow;
+    if (!_canUseReadCache(error)) rethrow;
+    if (_isAuthenticationFailure(error) && !hasTransactions(cachedSnapshot)) {
+      throw const AuthenticationUnavailableException();
     }
     if (cachedSnapshot == null) {
-      if (_isAuthenticationFailure(error)) {
-        return const [];
-      }
       rethrow;
     }
     try {
@@ -2959,11 +3469,9 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
       // A partial/corrupt local row should be discarded rather than trapping
       // every future request in the same parse failure.
       try {
-        await cache?.clear(
-          cached != null
-              ? key
-              : _scopedCacheKey(ref, '$_transactionsCacheKey:all'),
-        );
+        if (cachedSnapshot != periodSnapshot) {
+          await cache?.clear(cachedSnapshotKey);
+        }
       } catch (_) {}
       rethrow;
     }

@@ -146,6 +146,7 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
                   }
                   return _ReportBody(
                     key: reportBodyKey,
+                    query: query,
                     report: data,
                     transactions: transactions.valueOrNull ?? const [],
                     transactionDetailsLoading: transactions.isLoading,
@@ -886,6 +887,7 @@ class _DateField extends StatelessWidget {
 }
 
 class _ReportBody extends StatefulWidget {
+  final SpendReportQuery query;
   final SpendReport report;
   final List<TransactionEntry> transactions;
   final bool transactionDetailsLoading;
@@ -894,6 +896,7 @@ class _ReportBody extends StatefulWidget {
   final VoidCallback onRefresh;
   const _ReportBody({
     super.key,
+    required this.query,
     required this.report,
     required this.transactions,
     required this.transactionDetailsLoading,
@@ -904,6 +907,37 @@ class _ReportBody extends StatefulWidget {
 
   @override
   State<_ReportBody> createState() => _ReportBodyState();
+}
+
+bool _spansMultipleCalendarMonths(SpendReportQuery query) {
+  switch (query.period) {
+    case SpendPeriod.week:
+    case SpendPeriod.month:
+      return false;
+    case SpendPeriod.quarter:
+    case SpendPeriod.year:
+      return true;
+    case SpendPeriod.custom:
+      final from = query.from!;
+      final to = query.to!;
+      return from.year != to.year || from.month != to.month;
+  }
+}
+
+int _selectedMonthCount(SpendReportQuery query) {
+  switch (query.period) {
+    case SpendPeriod.week:
+    case SpendPeriod.month:
+      return 1;
+    case SpendPeriod.quarter:
+      return 3;
+    case SpendPeriod.year:
+      return 12;
+    case SpendPeriod.custom:
+      final from = query.from!;
+      final to = query.to!;
+      return (to.year - from.year) * 12 + to.month - from.month + 1;
+  }
 }
 
 class _ReportBodyState extends State<_ReportBody> {
@@ -1087,8 +1121,15 @@ class _ReportBodyState extends State<_ReportBody> {
       _filtersActive ? _visibleEntries.length : widget.report.spend.txnCount;
 
   List<DateTime> _monthsInReport(SpendReport report) {
-    final start = report.periodStart.toLocal();
-    final end = report.periodEnd.subtract(const Duration(days: 1)).toLocal();
+    // Custom ranges are date-only selections. Use those dates directly
+    // instead of converting the API's UTC boundary back through the device
+    // timezone, which can shift Aug 1 to Jul 31 and create a phantom bar.
+    final start = widget.query.isCustom
+        ? widget.query.from!
+        : report.periodStart.toLocal();
+    final end = widget.query.isCustom
+        ? widget.query.to!
+        : report.periodEnd.subtract(const Duration(days: 1)).toLocal();
     final months = <DateTime>[];
     var cursor = DateTime(start.year, start.month);
     final last = DateTime(end.year, end.month);
@@ -1100,8 +1141,6 @@ class _ReportBodyState extends State<_ReportBody> {
   }
 
   List<SpendSeriesPoint> _seriesFor(SpendReport report) {
-    if (!_filtersActive && report.series.isNotEmpty) return report.series;
-
     final totals = <DateTime, Money>{};
     final counts = <DateTime, int>{};
     for (final entry in _visibleEntries) {
@@ -1111,17 +1150,24 @@ class _ReportBodyState extends State<_ReportBody> {
       counts[month] = (counts[month] ?? 0) + 1;
     }
 
-    final months = report.series.isNotEmpty
-        ? report.series
-              .map((point) {
-                final local = point.periodStart.toLocal();
-                return DateTime(local.year, local.month);
-              })
-              .toSet()
-              .toList()
-        : _monthsInReport(report);
+    final months = _monthsInReport(report);
     months.sort();
-    return months
+    final rangeHasOneMonth = months.length == 1;
+    if (rangeHasOneMonth) {
+      return [
+        SpendSeriesPoint(
+          periodStart: months.single,
+          spend: _filtersActive ? _visibleTotal() : report.spend.total,
+          rewards: const Money.zero(),
+          txnCount: _filtersActive ? _visibleCount() : report.spend.txnCount,
+        ),
+      ];
+    }
+
+    // Custom ranges and active filters have no trustworthy server series.
+    // Bucket the same visible rows used by the totals and category pie chart
+    // so all visualisations respond to the exact same selection.
+    final derived = months
         .map(
           (month) => SpendSeriesPoint(
             periodStart: month,
@@ -1131,13 +1177,17 @@ class _ReportBodyState extends State<_ReportBody> {
           ),
         )
         .toList();
-  }
+    if (_filtersActive || report.period == SpendPeriod.custom) return derived;
 
-  bool _isMultiMonth(SpendReport report, List<SpendSeriesPoint> series) {
-    if (series.length > 1) return true;
-    final start = report.periodStart.toLocal();
-    final end = report.periodEnd.subtract(const Duration(days: 1)).toLocal();
-    return start.year != end.year || start.month != end.month;
+    // Preset quarter/year reports may have a server series at a larger
+    // cadence. Keep only points that belong to the selected range; monthly
+    // comparison itself is intentionally driven by calendar-month buckets.
+    final serverPoints = report.series.where((point) {
+      final local = point.periodStart.toLocal();
+      final month = DateTime(local.year, local.month);
+      return months.contains(month);
+    }).toList();
+    return serverPoints.length == months.length ? serverPoints : derived;
   }
 
   String _reportRangeLabel(SpendReport report) {
@@ -1155,8 +1205,12 @@ class _ReportBodyState extends State<_ReportBody> {
       'Nov',
       'Dec',
     ];
-    final first = report.periodStart.toLocal();
-    final last = report.periodEnd.subtract(const Duration(days: 1)).toLocal();
+    final first = widget.query.isCustom
+        ? widget.query.from!
+        : report.periodStart.toLocal();
+    final last = widget.query.isCustom
+        ? widget.query.to!
+        : report.periodEnd.subtract(const Duration(days: 1)).toLocal();
     return first.year == last.year
         ? '${months[first.month - 1]}–${months[last.month - 1]}'
         : '${months[first.month - 1]} ${first.year}–${months[last.month - 1]} ${last.year}';
@@ -1213,7 +1267,8 @@ class _ReportBodyState extends State<_ReportBody> {
     final instrumentRows = _instrumentRows();
     final total = _visibleTotal();
     final series = _seriesFor(report);
-    final multiMonth = _isMultiMonth(report, series);
+    final multiMonth = _spansMultipleCalendarMonths(widget.query);
+    final monthCount = _selectedMonthCount(widget.query);
     final categoryEntries = _transactionsForCategory;
     final showFilteredLoading =
         _filtersActive &&
@@ -1232,6 +1287,8 @@ class _ReportBodyState extends State<_ReportBody> {
         children: [
           _HeadlineCard(
             report: _filtersActive ? _filteredReport(report, total) : report,
+            multiMonth: multiMonth,
+            monthCount: monthCount,
           ),
           const SizedBox(height: AppSpace.lg),
           if (multiMonth) ...[
@@ -1999,22 +2056,19 @@ class _FilterLabel extends StatelessWidget {
 /// on.
 class _HeadlineCard extends StatelessWidget {
   final SpendReport report;
-  const _HeadlineCard({required this.report});
+  final bool multiMonth;
+  final int monthCount;
+
+  const _HeadlineCard({
+    required this.report,
+    required this.multiMonth,
+    required this.monthCount,
+  });
 
   @override
   Widget build(BuildContext context) {
     final change = report.changeVsPrevious;
     final projected = report.projectedSpend;
-    final start = report.periodStart.toLocal();
-    final end = report.periodEnd.subtract(const Duration(days: 1)).toLocal();
-    final multiMonth =
-        report.series.length > 1 ||
-        start.year != end.year ||
-        start.month != end.month;
-    final monthCount = report.series.length > 1
-        ? report.series.length
-        : ((end.year - start.year) * 12 + end.month - start.month + 1);
-
     return Container(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,

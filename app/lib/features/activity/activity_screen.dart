@@ -269,16 +269,37 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   final filter = ref.watch(_activityFilterProvider);
-  final entries = await loadTransactionsWithOfflineCache(
-    ref,
-    repo: repo,
-    cacheKey: 'transactions:activity',
-    from: filter.from,
-    to: filter.to,
-    cardId: filter.cardId,
-    categoryId: filter.categoryId,
-    query: filter.query,
-  );
+
+  // Keep the unfiltered Activity surface on the same provider as every
+  // other transaction consumer. SMS reconciliation, quick-add, imports and
+  // resume refreshes invalidate [transactionsProvider]; using a second
+  // independently cached request here used to leave Activity showing an old
+  // empty result until the app was restarted or the user tapped Retry.
+  // Type-only filters can still be applied locally without a second fetch.
+  final hasServerFilter =
+      filter.from != null ||
+      filter.to != null ||
+      filter.cardId != null ||
+      filter.categoryId != null ||
+      (filter.query != null && filter.query!.trim().isNotEmpty);
+  final entries = hasServerFilter
+      ? await (() {
+          // Subscribe to the canonical provider as a refresh signal even
+          // while a narrower server query is active. When a new SMS arrives,
+          // its invalidation must cause this filtered view to refetch too.
+          ref.watch(transactionsProvider);
+          return loadTransactionsWithOfflineCache(
+            ref,
+            repo: repo,
+            cacheKey: 'transactions:activity',
+            from: filter.from,
+            to: filter.to,
+            cardId: filter.cardId,
+            categoryId: filter.categoryId,
+            query: filter.query,
+          );
+        })()
+      : await ref.watch(transactionsProvider.future);
   return entries.where((entry) => filter.type.matches(entry)).toList();
 });
 
