@@ -3199,9 +3199,23 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
   final groups = <String, List<TransactionEntry>>{};
   for (final row in rows) {
     final merchant = row.merchantName?.trim();
+    final category = row.categoryName?.toLowerCase() ?? '';
+    // Repeated transfers to a person are not subscriptions. Without a
+    // subscription-like category, cadence alone is insufficient evidence.
+    final serviceCategory = const [
+      'subscription',
+      'streaming',
+      'entertainment',
+      'software',
+      'membership',
+      'telecom',
+      'utilities',
+      'insurance',
+    ].any(category.contains);
     if (row.status != 'active' ||
         row.entryKind != TxnEntryKind.spend ||
         row.amount.paise <= 0 ||
+        !serviceCategory ||
         merchant == null ||
         merchant.isEmpty) {
       continue;
@@ -3282,6 +3296,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   String? source,
   String? query,
   bool preferCached = false,
+  bool useReportSnapshots = false,
   FutureOr<void> Function()? onBackgroundRefresh,
 }) async {
   final key = _scopedCacheKey(ref, cacheKey);
@@ -3334,9 +3349,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   // Spending may already have saved individual rows for a month while the
   // all-history Activity cache is absent or empty. Reuse those same-account
   // rows when the server cannot provide the all-history response.
-  final periodRows = unfiltered &&
-          !hasTransactions(cached) &&
-          !hasTransactions(activityCached)
+  final periodRows = (unfiltered || useReportSnapshots)
       ? await _cachedTransactionsForReports(ref)
       : null;
   final periodSnapshot = periodRows != null && periodRows.isNotEmpty
@@ -3347,13 +3360,18 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
           fetchedAt: DateTime.now(),
         )
       : null;
-  final cachedSnapshot = hasTransactions(cached)
-      ? cached
-      : hasTransactions(allTransactionsCached)
-      ? allTransactionsCached
-      : hasTransactions(activityCached)
-      ? activityCached
-      : periodSnapshot ?? cached ?? allTransactionsCached ?? activityCached;
+  // The merged snapshot includes the older Activity/all-history rows plus
+  // newer Spending period rows. Choosing an old non-empty Activity snapshot
+  // first would preserve the exact date cutoff we are trying to repair.
+  final cachedSnapshot =
+      periodSnapshot ??
+      (hasTransactions(cached)
+          ? cached
+          : hasTransactions(allTransactionsCached)
+          ? allTransactionsCached
+          : hasTransactions(activityCached)
+          ? activityCached
+          : cached ?? allTransactionsCached ?? activityCached);
   final cachedSnapshotKey = identical(cachedSnapshot, activityCached)
       ? activityTransactionsKey
       : identical(cachedSnapshot, allTransactionsCached)

@@ -196,4 +196,38 @@ void main() {
     final rows = await container.read(activityTransactionsProvider.future);
     expect(rows.single.id, 'spending-row-1');
   });
+
+  test('Activity combines older history with newer Spending rows offline', () async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final cache = ResponseCache(database);
+    final container = ProviderContainer(
+      overrides: [
+        accessTokenProvider.overrideWith((ref) => 'test-token'),
+        responseCacheProvider.overrideWith((ref) async => cache),
+        userCardsRepositoryProvider.overrideWithValue(_AuthFailingRepository()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final namespace = container.read(cacheNamespaceProvider);
+    TransactionEntry row(String id, int day) => TransactionEntry(
+      id: id,
+      amount: Money.fromRupees(100),
+      occurredAt: DateTime(2026, 10, day),
+      source: 'sms',
+      status: 'active',
+    );
+    await cache.put(
+      '$namespace:transactions:all',
+      jsonEncode({'transactions': [row('old', 16).toJson()]}),
+    );
+    await cache.put(
+      '$namespace:spend_detail:month:2026-10',
+      jsonEncode({'transactions': [row('new', 17).toJson()]}),
+    );
+
+    final rows = await container.read(activityTransactionsProvider.future);
+    expect(rows.map((row) => row.id).toSet(), {'old', 'new'});
+  });
 }

@@ -34,6 +34,20 @@ void main() {
             source: 'sms',
             status: 'active',
           ),
+        for (final date in [
+          DateTime(now.year, now.month, 2),
+          DateTime(now.year, now.month, 10),
+          DateTime(now.year, now.month, 18),
+        ])
+          TransactionEntry(
+            id: 'person-${date.toIso8601String()}',
+            amount: Money.fromRupees(73),
+            occurredAt: date,
+            merchantName: 'Rohit ramdas naik',
+            categoryName: 'Other',
+            source: 'sms',
+            status: 'active',
+          ),
       ];
       final failingClient = MockClient(
         (_) async => http.Response(
@@ -72,8 +86,9 @@ void main() {
       );
       final recurring = await container.read(recurringReportProvider.future);
 
-      expect(report?.spend.txnCount, 1);
-      expect(report?.spend.total, Money.fromRupees(649));
+      expect(report?.spend.txnCount, 4);
+      expect(report?.spend.total, Money.fromRupees(868));
+      expect(recurring?.series, hasLength(1));
       expect(recurring?.series.single.displayName, 'Streaming Service');
       expect(recurring?.series.single.occurrenceCount, 3);
     },
@@ -126,4 +141,50 @@ void main() {
       expect(report?.rewardsEarned, Money.fromRupees(24));
     },
   );
+
+  test('filtered missed-rewards history reuses Insights snapshots', () async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final cache = ResponseCache(database);
+    final now = DateTime.now();
+    final transaction = TransactionEntry(
+      id: 'missed-cached',
+      amount: Money.fromRupees(500),
+      occurredAt: now.subtract(const Duration(days: 3)),
+      merchantName: 'Local merchant',
+      source: 'sms',
+      status: 'active',
+    );
+    final userCardsRepository = UserCardsRepository(
+      apiBaseUrl: 'http://api.test',
+      accessToken: 'expired-access',
+      client: MockClient((_) async => http.Response('unauthorized', 401)),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        accessTokenProvider.overrideWith((ref) => 'expired-access'),
+        responseCacheProvider.overrideWith((ref) async => cache),
+      ],
+    );
+    addTearDown(container.dispose);
+    final namespace = container.read(cacheNamespaceProvider);
+    await cache.put(
+      '$namespace:insights_transactions:thisMonth:cached-range',
+      jsonEncode({
+        'transactions': [transaction.toJson()],
+      }),
+    );
+    final provider = FutureProvider(
+      (ref) => loadTransactionsWithOfflineCache(
+        ref,
+        repo: userCardsRepository,
+        cacheKey: 'transactions:missed_opportunities',
+        from: now.subtract(const Duration(days: 90)),
+        preferCached: true,
+        useReportSnapshots: true,
+      ),
+    );
+    final rows = await container.read(provider.future);
+    expect(rows.map((row) => row.id), ['missed-cached']);
+  });
 }

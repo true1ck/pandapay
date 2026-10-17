@@ -206,6 +206,8 @@ final _missedOpportunitiesProvider = FutureProvider<List<_MissedOpportunity>>((
     repo: repo,
     cacheKey: 'transactions:missed_opportunities',
     from: since,
+    preferCached: true,
+    useReportSnapshots: true,
   );
 
   final results = <_MissedOpportunity>[];

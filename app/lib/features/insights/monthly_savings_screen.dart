@@ -73,9 +73,12 @@ final _monthlyExtrasProvider = FutureProvider.family<_MonthlyExtras, DateTime>((
   final transactions = await loadTransactionsWithOfflineCache(
     ref,
     repo: repo,
-    cacheKey: 'transactions:monthly_savings:${periodMonth.year}-${periodMonth.month}',
+    cacheKey:
+        'transactions:monthly_savings:${periodMonth.year}-${periodMonth.month}',
     from: monthStart,
     to: monthEnd,
+    preferCached: true,
+    useReportSnapshots: true,
   );
   final active = transactions
       .where(
@@ -164,16 +167,10 @@ class MonthlySavingsScreen extends ConsumerWidget {
     final report = ref.watch(currentMonthlyReportProvider);
     return report.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) {
-        assert(() {
-          debugPrint('Rewards report failed: $err\n$stack');
-          return true;
-        }());
-        return ErrorState(
-          message: userFacingErrorMessage(err),
-          onRetry: () => ref.invalidate(currentMonthlyReportProvider),
-        );
-      },
+      error: (err, _) => ErrorState(
+        message: userFacingErrorMessage(err),
+        onRetry: () => ref.invalidate(currentMonthlyReportProvider),
+      ),
       data: (r) {
         if (r == null || r.totalSpend.isZero) {
           return const EmptyState(
