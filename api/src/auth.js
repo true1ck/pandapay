@@ -6,6 +6,9 @@ function verifyAccessToken(token) {
   if (!decoded || !decoded.header) throw new Error('Invalid token format');
 
   const keyId = decoded.header.kid;
+  if (keyId && !config.jwtKeys[keyId]) {
+    throw new Error('Unknown access token key id');
+  }
   const keyedSecret = keyId ? config.jwtKeys[keyId] : null;
   const secrets = keyedSecret ? [keyedSecret] : Object.values(config.jwtKeys);
   let lastError = null;

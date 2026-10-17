@@ -63,6 +63,11 @@ test('API rejects a token with a wrong issuer or audience', () => {
   assert.throws(() => verifyAccessToken(wrongAudience));
 });
 
+test('API rejects an unknown key id instead of trying every configured key', () => {
+  const unknownKeyId = makeToken('current-access-secret', 'not-configured');
+  assert.throws(() => verifyAccessToken(unknownKeyId), /Unknown access token key id/);
+});
+
 test('optionalAuth and requireAuth share the same verification result', () => {
   const req = {
     headers: {

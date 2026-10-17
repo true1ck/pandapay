@@ -50,12 +50,18 @@ jobs:
           JWT_ACCESS_SECRET: ci_only_not_a_real_secret
         run: npm test
 
+      - name: Install auth dependencies
+        working-directory: auth
+        run: npm install
+
+      - name: Test auth
+        working-directory: auth
+        env:
+          NODE_ENV: test
+        run: npm test
+
       - name: Syntax-check auth
         working-directory: auth
-        # auth/ has no test suite of its own yet. A parse check over every
-        # source file is a genuinely low bar, but it is strictly more than the
-        # zero automated verification this service had before, and it is the
-        # check that would have caught the api/ breakage described above.
         run: |
           find src -name '*.js' -print0 | xargs -0 -n1 node --check
           echo "auth/: all source files parse"

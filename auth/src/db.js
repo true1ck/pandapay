@@ -62,8 +62,10 @@ async function initializeDb() {
     });
 
     pool.on('error', (err) => {
-      console.error('Unexpected PG client error', err);
-      process.exit(-1);
+      // A failure on an idle pooled connection is recoverable: pg removes
+      // that client and creates another on demand. Readiness and request
+      // errors report an actual outage without terminating healthy workers.
+      console.error('Unexpected PG pool error', err.message);
     });
 
     // Test connection and log current user
@@ -126,8 +128,9 @@ if (isTestEnvironment) {
   });
 
   pool.on('error', (err) => {
-    console.error('Unexpected PG client error', err);
-    process.exit(-1);
+    // Match the SSM-backed pool behavior above. An idle client failure should
+    // not take down the whole auth service; /ready reports database outages.
+    console.error('Unexpected PG pool error', err.message);
   });
 
   // Test connection on startup
