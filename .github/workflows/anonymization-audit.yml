@@ -8,14 +8,12 @@ name: Anonymization audit (deploy-blocking gate)
 # audit failure (same reasoning as api/'s POST /admin/anonymization-audit-
 # runs/run doc comment).
 #
-# This is the first CI workflow in this repo (no .github/workflows existed
-# before this file) — added as part of AD-9, not retrofitted onto an
-# existing pipeline this session never touched.
+# Reusable by Build and test so its result is part of that workflow's
+# conclusion. Deploy-to-production listens to Build and test; keeping this
+# audit in a separate push workflow would let deployment race past a failure.
 
 on:
-  push:
-    branches: [main, master]
-  pull_request:
+  workflow_call:
 
 jobs:
   anonymization-audit:

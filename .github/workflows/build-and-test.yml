@@ -134,8 +134,9 @@ jobs:
     # the guarantee deploy/DEPLOY.md claims this workflow provides ("pulling
     # :latest always gets exactly the image this workflow tested"). The build
     # itself (push: false path, PR runs) still runs unconditionally — only
-    # the on-master push gate needed the dependency.
-    needs: [api, flutter]
+    # the push gate needs every validation, including the integration smoke
+    # test and anonymization audit, before publishing a deployable image.
+    needs: [api, flutter, smoke, anonymization-audit]
     # Needed to push to GHCR under GITHUB_TOKEN — this repo's default token
     # permissions may be read-only, so this is explicit rather than assumed.
     permissions:
@@ -213,3 +214,7 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  anonymization-audit:
+    name: Anonymization audit (deploy-blocking gate)
+    uses: ./.github/workflows/anonymization-audit.yml
