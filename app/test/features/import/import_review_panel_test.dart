@@ -60,7 +60,7 @@ void main() {
     expect(find.text('Coffee purchase'), findsNothing);
     expect(find.text('Refund received'), findsOneWidget);
     expect(find.text('Import 2 transactions'), findsOneWidget);
-    await tester.tap(find.text('Edit'));
+    await tester.tap(find.byTooltip('Edit transaction'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Check the original statement'), findsNothing);
   });

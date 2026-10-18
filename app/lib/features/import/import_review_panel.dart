@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/import_models.dart';
@@ -517,69 +519,36 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                 final rowIndex = visible[offset];
                 final row = session.rows[rowIndex];
                 final issue = session.exclusionReason(rowIndex);
-                return ListTile(
-                  leading: Checkbox(
-                    value: selected.contains(rowIndex),
-                    onChanged: locked || !session.eligible(rowIndex)
-                        ? null
-                        : (value) => setState(() {
-                            if (value == true) {
-                              session.excluded.remove(rowIndex);
-                            } else {
-                              session.excluded.add(rowIndex);
-                            }
-                          }),
-                  ),
-                  title: Text(row.description),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${row.isTransfer
-                            ? 'Transfer'
-                            : row.isInvestment
-                            ? 'Investment'
-                            : row.isCredit
-                            ? 'Money in'
-                            : 'Money out'} · ${row.date.toIso8601String().replaceFirst('T', ' ')} · ${session.accountFor(row)}',
-                      ),
-                      Text(row.sourceRowId ?? 'Source row ${rowIndex + 1}'),
-                      Text(issue ?? 'Ready to import'),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 0,
-                        children: [
-                          if (session.savedDuplicates.containsKey(rowIndex))
-                            TextButton(
-                              style: TextButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                              ),
-                              onPressed: locked
-                                  ? null
-                                  : () => setState(
-                                      () => session.confirmSeparate(rowIndex),
-                                    ),
-                              child: const Text('Keep both'),
-                            ),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                            ),
-                            onPressed: locked ? null : () => _edit(rowIndex),
-                            child: const Text('Edit'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  trailing: Text('₹${row.amount.rupees.toStringAsFixed(2)}'),
+                return _ImportTransactionCard(
+                  key: ValueKey('import-row-$rowIndex'),
+                  row: row,
+                  amount: '₹${row.amount.rupees.toStringAsFixed(2)}',
+                  date: DateFormat('d MMM').format(row.date),
+                  sourceLabel: _sourceLabel(session.importSource),
+                  accountLabel: session.accountFor(row),
+                  sourceRow: row.sourceRowId ?? 'Source row ${rowIndex + 1}',
+                  kindLabel: row.isTransfer
+                      ? 'Transfer'
+                      : row.isInvestment
+                      ? 'Investment'
+                      : row.isCredit
+                      ? 'Money in'
+                      : 'Money out',
+                  issue: issue,
+                  selected: selected.contains(rowIndex),
+                  canSelect: session.eligible(rowIndex),
+                  duplicate: session.savedDuplicates.containsKey(rowIndex),
+                  locked: locked,
+                  onSelectionChanged: (value) => setState(() {
+                    if (value) {
+                      session.excluded.remove(rowIndex);
+                    } else {
+                      session.excluded.add(rowIndex);
+                    }
+                  }),
+                  onEdit: () => _edit(rowIndex),
+                  onKeepBoth: () =>
+                      setState(() => session.confirmSeparate(rowIndex)),
                 );
               },
             ),
@@ -641,6 +610,260 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       ),
     );
   }
+}
+
+String _sourceLabel(String source) {
+  final normalized = source.toLowerCase();
+  if (normalized.contains('pdf')) return 'PDF statement';
+  if (normalized.contains('csv')) return 'CSV statement';
+  if (normalized.contains('image') || normalized.contains('screenshot')) {
+    return 'Screenshot';
+  }
+  if (normalized.contains('sheet') || normalized.contains('excel')) {
+    return 'Spreadsheet';
+  }
+  return source.isEmpty ? 'Imported statement' : source;
+}
+
+class _ImportTransactionCard extends StatelessWidget {
+  final ParsedStatementLine row;
+  final String amount, date, sourceLabel, accountLabel, sourceRow, kindLabel;
+  final String? issue;
+  final bool selected, canSelect, duplicate, locked;
+  final ValueChanged<bool> onSelectionChanged;
+  final VoidCallback onEdit, onKeepBoth;
+
+  const _ImportTransactionCard({
+    super.key,
+    required this.row,
+    required this.amount,
+    required this.date,
+    required this.sourceLabel,
+    required this.accountLabel,
+    required this.sourceRow,
+    required this.kindLabel,
+    required this.issue,
+    required this.selected,
+    required this.canSelect,
+    required this.duplicate,
+    required this.locked,
+    required this.onSelectionChanged,
+    required this.onEdit,
+    required this.onKeepBoth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final ready = issue == null;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: Colors.white,
+      elevation: 1,
+      shadowColor: BambooInk.ink900.withValues(alpha: .06),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0xFFF0F1F5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: locked || !canSelect
+                      ? null
+                      : () => onSelectionChanged(!selected),
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 1),
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFF00664F)
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: selected ? const Color(0xFF00664F) : muted,
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: selected
+                        ? const Icon(
+                            Icons.check_rounded,
+                            size: 24,
+                            color: Colors.white,
+                          )
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    row.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.heading(17, color: BambooInk.ink900),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    amount,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: BambooFonts.heading(17, color: BambooInk.ink900),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 42, top: 5),
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 7,
+                runSpacing: 2,
+                children: [
+                  Icon(
+                    sourceLabel == 'Screenshot'
+                        ? Icons.smartphone_rounded
+                        : sourceLabel == 'PDF statement'
+                        ? Icons.picture_as_pdf_outlined
+                        : Icons.receipt_long_outlined,
+                    size: 16,
+                    color: muted,
+                  ),
+                  Text(sourceLabel, style: BambooFonts.ui(14, color: muted)),
+                  Text('•', style: BambooFonts.ui(14, color: muted)),
+                  Text(date, style: BambooFonts.ui(14, color: muted)),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 42, top: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$sourceRow  •  ${ready ? 'Ready to import' : 'Needs review'}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(
+                        12.5,
+                        color: ready
+                            ? BambooInk.ink500
+                            : const Color(0xFFAA3A32),
+                      ),
+                    ),
+                  ),
+                  if (duplicate)
+                    TextButton(
+                      onPressed: locked ? null : onKeepBoth,
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: const Text('Keep both'),
+                    ),
+                ],
+              ),
+            ),
+            if (issue != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 42, top: 2),
+                child: Text(
+                  issue!,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(12.5, color: const Color(0xFFAA3A32)),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(left: 42, top: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        _ImportInfoChip(
+                          label: kindLabel,
+                          foreground: BambooInk.ink900,
+                          background: const Color(0xFFE9EDFF),
+                          icon: row.isTransfer
+                              ? Icons.swap_horiz_rounded
+                              : row.isInvestment
+                              ? Icons.trending_up_rounded
+                              : row.isCredit
+                              ? Icons.south_west_rounded
+                              : Icons.north_east_rounded,
+                        ),
+                        _ImportInfoChip(
+                          label: accountLabel,
+                          foreground: BambooInk.ink700,
+                          background: const Color(0xFFF0F2FA),
+                          icon: Icons.account_balance_wallet_outlined,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Edit transaction',
+                    onPressed: locked ? null : onEdit,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.edit_outlined, size: 22),
+                    color: BambooInk.ink700,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ImportInfoChip extends StatelessWidget {
+  final String label;
+  final Color foreground;
+  final Color background;
+  final IconData icon;
+  const _ImportInfoChip({
+    required this.label,
+    required this.foreground,
+    required this.background,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxWidth: 190),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(
+      color: background,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: foreground),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: BambooFonts.ui(13, color: foreground),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _EditImportRow extends StatefulWidget {
