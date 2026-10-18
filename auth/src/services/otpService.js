@@ -73,7 +73,7 @@ function generateOtpCode() {
  * @param {string} type - 'phone' or 'email'
  * @returns {Promise<{code: string}>} - The generated OTP code
  */
-async function createOtp(identifier, type = 'phone') {
+async function createOtp(identifier, type = 'phone', purpose = 'signin') {
   // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY, see constants above ===
   const normalizedIdentifier = identifier.trim().toLowerCase();
   const isTestIdentifier = TEST_OTP_ENABLED && TEST_IDENTIFIERS.includes(normalizedIdentifier);
@@ -125,7 +125,7 @@ async function createOtp(identifier, type = 'phone') {
 
   // Mark OTP as active in Redis/memory store
   try {
-    await markActiveOtp(identifier, OTP_TTL_SECONDS, inserted.rows[0].id);
+    await markActiveOtp(identifier, OTP_TTL_SECONDS, inserted.rows[0].id, purpose);
   } catch (err) {
     console.error('Failed to mark active OTP in rate limiter:', err);
   }
@@ -360,7 +360,7 @@ async function cleanupExpiredOtps() {
 }
 
 /** Discard an OTP that could not be delivered so the user can retry at once. */
-async function discardUndeliveredOtp(identifier, type, requestId) {
+async function discardUndeliveredOtp(identifier, type, requestId, purpose = 'signin') {
   if (!requestId) throw new Error('OTP request id is required for delivery cleanup');
   const normalizedIdentifier = identifier.trim().toLowerCase();
   if (type === 'email') {
@@ -380,7 +380,7 @@ async function discardUndeliveredOtp(identifier, type, requestId) {
       [requestId, encryptedPhone, identifier]
     );
   }
-  await clearActiveOtp(identifier, requestId);
+  await clearActiveOtp(identifier, requestId, purpose);
 }
 
 module.exports = {

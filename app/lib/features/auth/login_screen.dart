@@ -416,11 +416,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           const SizedBox(height: 14),
                           Center(
                             child: TextButton(
-                              onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const AccountRecoveryScreen(),
-                                ),
-                              ),
+                              onPressed: () async {
+                                final resetFields = await Navigator.of(context)
+                                    .push<bool>(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const AccountRecoveryScreen(),
+                                      ),
+                                    );
+                                if (!mounted || resetFields != true) return;
+                                setState(() {
+                                  _identifierController.clear();
+                                  _phoneController.clear();
+                                  _codeController.clear();
+                                  _otpRequested = false;
+                                  _error = null;
+                                });
+                              },
                               style: TextButton.styleFrom(
                                 foregroundColor: BambooInk.ink700,
                               ),

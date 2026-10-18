@@ -163,11 +163,15 @@ function normalizePhoneForOtp(phone) {
   return p; // fallback
 }
 
+function otpPurpose(req) {
+  return req.body?.recovery_only === true ? 'recovery' : 'signin';
+}
+
 /**
  * === ADDED FOR 2-MIN OTP VALIDITY & NO-RESEND ===
  * Middleware: Check if there's an active OTP for the phone number
  * Prevents sending a new OTP if one is already active (within 2 minutes)
- * This check is GLOBAL per phone number (works across all devices)
+ * This check is shared across devices for the same identifier and OTP purpose.
  */
 async function checkActiveOtpForPhone(req, res, next) {
   try {
@@ -182,7 +186,7 @@ async function checkActiveOtpForPhone(req, res, next) {
       return next(); // Let validation handle this
     }
 
-    const activeOtpKey = `otp_active:phone:${normalizedPhone}`;
+    const activeOtpKey = `otp_active:phone:${normalizedPhone}:${otpPurpose(req)}`;
     const hasActiveOtp = await exists(activeOtpKey);
 
     if (hasActiveOtp) {
@@ -219,7 +223,8 @@ async function rateLimitRequestOtpByPhone(req, res, next) {
     }
 
     // Check 10-minute limit
-    const key10min = `otp_req:phone:${phone}:10min`;
+    const purpose = otpPurpose(req);
+    const key10min = `otp_req:phone:${phone}:${purpose}:10min`;
     const count10min = await incrementCounter(key10min, 600); // 10 minutes = 600 seconds
 
     if (count10min > config.OTP_REQ_PHONE_10MIN_LIMIT) {
@@ -230,7 +235,7 @@ async function rateLimitRequestOtpByPhone(req, res, next) {
     }
 
     // Check 24-hour limit
-    const keyDay = `otp_req:phone:${phone}:day`;
+    const keyDay = `otp_req:phone:${phone}:${purpose}:day`;
     const countDay = await incrementCounter(keyDay, 86400); // 24 hours = 86400 seconds
 
     if (countDay > config.OTP_REQ_PHONE_DAY_LIMIT) {
@@ -257,7 +262,7 @@ async function checkActiveOtpForEmail(req, res, next) {
     if (!email) return next();
 
     const normalizedEmail = email.trim().toLowerCase();
-    const activeOtpKey = `otp_active:email:${normalizedEmail}`;
+    const activeOtpKey = `otp_active:email:${normalizedEmail}:${otpPurpose(req)}`;
     const hasActiveOtp = await exists(activeOtpKey);
 
     if (hasActiveOtp) {
@@ -285,7 +290,8 @@ async function rateLimitRequestOtpByEmail(req, res, next) {
     const normalizedEmail = email.trim().toLowerCase();
 
     // Check 10-minute limit
-    const key10min = `otp_req:email:${normalizedEmail}:10min`;
+    const purpose = otpPurpose(req);
+    const key10min = `otp_req:email:${normalizedEmail}:${purpose}:10min`;
     const count10min = await incrementCounter(key10min, 600); 
 
     if (count10min > config.OTP_REQ_EMAIL_10MIN_LIMIT) {
@@ -296,7 +302,7 @@ async function rateLimitRequestOtpByEmail(req, res, next) {
     }
 
     // Check 24-hour limit
-    const keyDay = `otp_req:email:${normalizedEmail}:day`;
+    const keyDay = `otp_req:email:${normalizedEmail}:${purpose}:day`;
     const countDay = await incrementCounter(keyDay, 86400);
 
     if (countDay > config.OTP_REQ_EMAIL_DAY_LIMIT) {
@@ -371,7 +377,7 @@ async function rateLimitVerifyOtpByPhone(req, res, next) {
     }
 
     // Check failed verification limit per hour
-    const key = `otp_verify_failed:phone:${phone}:hour`;
+    const key = `otp_verify_failed:phone:${phone}:${otpPurpose(req)}:hour`;
     const count = await getCounter(key);
 
     if (count >= config.OTP_VERIFY_FAILED_PER_HOUR_LIMIT) {
@@ -398,7 +404,7 @@ async function rateLimitVerifyOtpByEmail(req, res, next) {
     if (!email) return next();
 
     const normalizedEmail = email.trim().toLowerCase();
-    const key = `otp_verify_failed:email:${normalizedEmail}:hour`;
+    const key = `otp_verify_failed:email:${normalizedEmail}:${otpPurpose(req)}:hour`;
     const count = await getCounter(key);
 
     if (count >= config.OTP_VERIFY_FAILED_PER_HOUR_LIMIT) {
@@ -417,11 +423,11 @@ async function rateLimitVerifyOtpByEmail(req, res, next) {
 
 /**
  * Helper: Mark active OTP (called after OTP is created)
- * This marks the identifier as having an active OTP globally
+ * This marks the identifier as having an active OTP for its purpose
  * @param {string} identifier - Phone number or email
  * @param {number} ttlSeconds - Time to live in seconds
  */
-async function markActiveOtp(identifier, ttlSeconds, requestId = '1') {
+async function markActiveOtp(identifier, ttlSeconds, requestId = '1', purpose = 'signin') {
   const isEmail = identifier.includes('@');
   let normalized = identifier.trim().toLowerCase();
   
@@ -431,12 +437,12 @@ async function markActiveOtp(identifier, ttlSeconds, requestId = '1') {
   }
   
   const type = isEmail ? 'email' : 'phone';
-  const key = `otp_active:${type}:${normalized}`;
+  const key = `otp_active:${type}:${normalized}:${purpose}`;
   await setWithTTL(key, String(requestId), ttlSeconds);
 }
 
 /** Clear an active OTP marker when delivery failed and the code was discarded. */
-async function clearActiveOtp(identifier, requestId) {
+async function clearActiveOtp(identifier, requestId, purpose = 'signin') {
   if (!requestId) return;
   const isEmail = identifier.includes('@');
   let normalized = identifier.trim().toLowerCase();
@@ -446,7 +452,7 @@ async function clearActiveOtp(identifier, requestId) {
   }
 
   const type = isEmail ? 'email' : 'phone';
-  const key = `otp_active:${type}:${normalized}`;
+  const key = `otp_active:${type}:${normalized}:${purpose}`;
   const redis = await getRedisClient();
   if (isRedisReady() && redis) {
     try {
@@ -466,7 +472,7 @@ async function clearActiveOtp(identifier, requestId) {
 /**
  * Helper: Increment failed verification counter
  */
-async function incrementFailedVerify(identifier) {
+async function incrementFailedVerify(identifier, purpose = 'signin') {
   const isEmail = identifier.includes('@');
   let normalized = identifier.trim().toLowerCase();
   
@@ -476,7 +482,7 @@ async function incrementFailedVerify(identifier) {
   }
   
   const type = isEmail ? 'email' : 'phone';
-  const key = `otp_verify_failed:${type}:${normalized}:hour`;
+  const key = `otp_verify_failed:${type}:${normalized}:${purpose}:hour`;
   await incrementCounter(key, 3600); // 1 hour = 3600 seconds
 }
 

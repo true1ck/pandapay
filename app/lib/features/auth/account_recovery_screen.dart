@@ -3,11 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
-import '../../app/env.dart';
 import '../../data/api_exception.dart';
 import '../../data/auth_api.dart';
 import '../../data/recovery_api.dart';
@@ -27,6 +25,7 @@ class AccountRecoveryScreen extends ConsumerStatefulWidget {
 class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
   final _identifierController = TextEditingController();
   final _codeController = TextEditingController();
+  final _contactCheckController = TextEditingController();
   final _replacementController = TextEditingController();
   final _codeFocus = FocusNode();
   bool _otpRequested = false;
@@ -41,12 +40,12 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
   AuthTokens? _pendingTokens;
   bool _replacingContact = false;
   String? _replacementChallenge;
-  String? _newVerifiedContact;
 
   @override
   void dispose() {
     _identifierController.dispose();
     _codeController.dispose();
+    _contactCheckController.dispose();
     _replacementController.dispose();
     _codeFocus.dispose();
     _resendTimer?.cancel();
@@ -112,9 +111,12 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
     try {
       final auth = ref.read(authApiProvider);
       if (_identifierIsEmail) {
-        await auth.requestEmailOtp(_identifierController.text.trim());
+        await auth.requestEmailOtp(
+          _identifierController.text.trim(),
+          recoveryOnly: true,
+        );
       } else {
-        await auth.requestOtp(_normalizedPhone!);
+        await auth.requestOtp(_normalizedPhone!, recoveryOnly: true);
       }
       if (mounted) {
         setState(() {
@@ -207,7 +209,16 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
     });
   }
 
-  Future<void> _continueToApp() async {
+  Future<void> _confirmLinkedContactAndReturn() async {
+    final lastFour = _contactCheckController.text.trim();
+    if (lastFour.length != 4 ||
+        !RegExp(r'^[a-zA-Z0-9]{4}$').hasMatch(lastFour)) {
+      setState(
+        () => _error =
+            'Enter the last 4 letters or digits from the linked contact.',
+      );
+      return;
+    }
     final tokens = _pendingTokens;
     if (tokens == null || _loading) return;
     setState(() {
@@ -215,27 +226,11 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
       _error = null;
     });
     try {
-      await ProfileApi(
-        apiBaseUrl: Env.apiBaseUrl,
-        accessToken: tokens.accessToken,
-      ).ensureProfile(
-        email: _identifierIsEmail
-            ? _identifierController.text.trim()
-            : _newVerifiedContact,
-        phoneNumber: _identifierIsEmail
-            ? _newVerifiedContact
-            : _normalizedPhone,
-      );
-      final store = await ref.read(tokenStoreProvider.future);
-      await store.save(
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      );
-      if (!mounted) return;
-      ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
-      ref.invalidate(profileProvider);
-      ref.invalidate(recoveryStatusProvider);
-      if (mounted) context.go('/home');
+      await ref
+          .read(authApiProvider)
+          .recoveryApiFor(tokens.accessToken)
+          .verifyLinkedContact(lastFour);
+      if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) setState(() => _error = userFacingErrorMessage(error));
     } finally {
@@ -293,7 +288,6 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
         _replacementChallenge!,
         _codeController.text.trim(),
       );
-      _newVerifiedContact = _replacementController.text.trim();
       if (mounted) {
         setState(() {
           _recoveryStatus = status;
@@ -438,6 +432,28 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                     style: BambooFonts.heading(24, color: BambooInk.ink900),
                   ),
                 ],
+                const SizedBox(height: AppSpace.lg),
+                Text(
+                  'To confirm you recognise it, enter the last 4 digits of the linked ${_identifierIsEmail ? 'phone number' : 'email address'}. For an email, use its last 4 letters or digits and ignore punctuation.',
+                  textAlign: TextAlign.center,
+                  style: BambooFonts.ui(
+                    14,
+                    color: BambooInk.ink500,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: AppSpace.md),
+                TextField(
+                  controller: _contactCheckController,
+                  textCapitalization: TextCapitalization.none,
+                  textInputAction: TextInputAction.done,
+                  maxLength: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Last 4 letters or digits',
+                    counterText: '',
+                  ),
+                  onSubmitted: (_) => _confirmLinkedContactAndReturn(),
+                ),
                 const SizedBox(height: AppSpace.xl),
                 FilledButton(
                   style: FilledButton.styleFrom(
@@ -448,8 +464,8 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  onPressed: _loading ? null : _continueToApp,
-                  child: Text(_loading ? 'Signing in…' : 'Continue signing in'),
+                  onPressed: _loading ? null : _confirmLinkedContactAndReturn,
+                  child: Text(_loading ? 'Checking…' : 'Return to sign in'),
                 ),
                 TextButton(
                   onPressed: _loading

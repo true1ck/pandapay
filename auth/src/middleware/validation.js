@@ -131,12 +131,16 @@ function validateBodySize(body, maxSize = 10000) {
  * Middleware: Validate /auth/request-otp request
  */
 function validateRequestOtpBody(req, res, next) {
-  const { phone_number } = req.body;
+  const { phone_number, recovery_only } = req.body;
 
   // Check body size
   const sizeCheck = validateBodySize(req.body, 1000);
   if (!sizeCheck.valid) {
     return res.status(400).json({ error: sizeCheck.error });
+  }
+
+  if (recovery_only !== undefined && typeof recovery_only !== 'boolean') {
+    return res.status(400).json({ error: 'recovery_only must be a boolean' });
   }
 
   // Validate phone
@@ -213,10 +217,14 @@ function validateVerifyOtpBody(req, res, next) {
  * Middleware: Validate /auth/request-email-otp request
  */
 function validateRequestEmailOtpBody(req, res, next) {
-  const { email, phone_number } = req.body;
+  const { email, phone_number, recovery_only } = req.body;
 
   const sizeCheck = validateBodySize(req.body, 1000);
   if (!sizeCheck.valid) return res.status(400).json({ error: sizeCheck.error });
+
+  if (recovery_only !== undefined && typeof recovery_only !== 'boolean') {
+    return res.status(400).json({ error: 'recovery_only must be a boolean' });
+  }
 
   if (!email) return res.status(400).json({ error: 'email is required' });
 

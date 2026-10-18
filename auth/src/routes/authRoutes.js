@@ -177,7 +177,7 @@ router.post(
       // Execute all work with timing protection to prevent enumeration
       // This ensures all requests take similar time regardless of phone existence
       const result = await executeOtpRequestWithTiming(async () => {
-        const { phone_number } = req.body;
+        const { phone_number, recovery_only } = req.body;
         if (!phone_number) {
           return { error: 'phone_number is required', status: 400 };
         }
@@ -222,7 +222,8 @@ router.post(
           };
         }
 
-        const { code, requestId } = await createOtp(normalizedPhone);
+        const purpose = recovery_only === true ? 'recovery' : 'signin';
+        const { code, requestId } = await createOtp(normalizedPhone, 'phone', purpose);
 
         // A generated code is not useful unless the SMS provider accepted it.
         const smsResult = await sendOtpSms(normalizedPhone, code);
@@ -242,7 +243,7 @@ router.post(
 
         if (!smsResult || !smsResult.success) {
           console.warn('⚠️ SMS delivery failed; discarding undelivered OTP');
-          await discardUndeliveredOtp(normalizedPhone, 'phone', requestId);
+          await discardUndeliveredOtp(normalizedPhone, 'phone', requestId, purpose);
           return { error: 'Unable to send a sign-in code right now. Please try again later.', status: 503 };
         }
 
@@ -501,7 +502,7 @@ router.post(
         if (!result.ok) {
           // Increment failed verification counter
           try {
-            await incrementFailedVerify(normalizedPhone);
+            await incrementFailedVerify(normalizedPhone, recovery_only === true ? 'recovery' : 'signin');
           } catch (err) {
             console.error('Failed to increment failed verify counter:', err);
             // Don't fail the request if counter increment fails
@@ -721,7 +722,7 @@ router.post(
         highAssurance: true, deviceId: devId,
         recoveryChannel: recovery_only === true ? 'phone' : undefined,
       });
-      const refreshToken = await issueRefreshToken({
+      const refreshToken = recovery_only === true ? null : await issueRefreshToken({
         userId: user.id,
         deviceId: devId,
         userAgent: req.headers['user-agent'],
@@ -779,7 +780,7 @@ router.post(
 
     try {
       const result = await executeOtpRequestWithTiming(async () => {
-        const { email, phone_number, is_signup } = req.body;
+        const { email, phone_number, is_signup, recovery_only } = req.body;
         const normalizedEmail = email.trim().toLowerCase();
         const normalizedPhone = phone_number ? normalizePhone(phone_number) : null;
 
@@ -834,7 +835,8 @@ router.post(
           }
         }
 
-        const { code, requestId } = await createOtp(normalizedEmail, 'email');
+        const purpose = recovery_only === true ? 'recovery' : 'signin';
+        const { code, requestId } = await createOtp(normalizedEmail, 'email', purpose);
         const emailResult = await sendOtpEmail(normalizedEmail, code);
 
         await logAuthEvent({
@@ -848,7 +850,7 @@ router.post(
 
         if (!emailResult || !emailResult.success) {
           console.warn('⚠️ Email sending failed, but OTP was generated');
-          await discardUndeliveredOtp(normalizedEmail, 'email', requestId);
+          await discardUndeliveredOtp(normalizedEmail, 'email', requestId, purpose);
           return {
             error: 'Unable to send a sign-in code right now. Please try again later.',
             status: 503,
@@ -911,7 +913,7 @@ router.post(
         // path (verify-otp route, above) already correctly does.
         const isValid = await verifyOtp(normalizedEmail, code, 'email');
         if (!isValid.ok) {
-          await incrementFailedVerify(normalizedEmail);
+          await incrementFailedVerify(normalizedEmail, recovery_only === true ? 'recovery' : 'signin');
           return { error: 'Invalid or expired code', status: 400 };
         }
         return { success: true, normalizedEmail, device_id, device_info };
@@ -1066,7 +1068,7 @@ router.post(
         highAssurance: true, deviceId: devId,
         recoveryChannel: recovery_only === true ? 'email' : undefined,
       });
-      const refreshToken = await issueRefreshToken({
+      const refreshToken = recovery_only === true ? null : await issueRefreshToken({
         userId: user.id, deviceId: devId, userAgent: req.headers['user-agent'], ip: clientIp,
       });
 

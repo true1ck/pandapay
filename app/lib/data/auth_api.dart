@@ -32,12 +32,18 @@ class AuthApi {
     client: _client,
   );
 
-  Future<void> requestOtp(String phoneNumber) async {
+  Future<void> requestOtp(
+    String phoneNumber, {
+    bool recoveryOnly = false,
+  }) async {
     final response = await _client
         .post(
           Uri.parse('$authBaseUrl/auth/request-otp'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'phone_number': phoneNumber}),
+          body: jsonEncode({
+            'phone_number': phoneNumber,
+            if (recoveryOnly) 'recovery_only': true,
+          }),
         )
         .timeout(_requestTimeout);
     if (response.statusCode != 200) {
@@ -109,6 +115,7 @@ class AuthApi {
     String email, {
     bool isSignUp = false,
     String? phoneNumber,
+    bool recoveryOnly = false,
   }) async {
     final response = await _client
         .post(
@@ -117,6 +124,7 @@ class AuthApi {
           body: jsonEncode({
             'email': email,
             if (isSignUp) 'is_signup': true,
+            if (recoveryOnly) 'recovery_only': true,
             if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
               'phone_number': phoneNumber.trim(),
           }),

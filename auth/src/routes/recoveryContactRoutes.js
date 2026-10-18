@@ -71,10 +71,10 @@ router.post('/request', async (req, res) => {
     // Keep replacement OTPs separate from sign-in OTPs and bind the code
     // to this account through a short-lived, signed challenge.
     const otpIdentifier = `replacement-${randomUUID()}@recovery.invalid`;
-    const { code, requestId } = await createOtp(otpIdentifier, 'email');
+    const { code, requestId } = await createOtp(otpIdentifier, 'email', 'replacement');
     const delivery = channel === 'email' ? await sendOtpEmail(value, code) : await sendOtpSms(value, code);
     if (!delivery?.success) {
-      await discardUndeliveredOtp(otpIdentifier, 'email', requestId);
+      await discardUndeliveredOtp(otpIdentifier, 'email', requestId, 'replacement');
       return res.status(503).json({ error: 'Unable to send the verification code. Your contact has not been changed.' });
     }
     const active = getActiveKey();

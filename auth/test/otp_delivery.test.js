@@ -122,8 +122,8 @@ async function harness(t, useRedis = false) {
       });
       return { status: response.status, body: await response.json() };
     },
-    request(email) { return this.post('request-email-otp', { email }); },
-    requestPhone(phone_number) { return this.post('request-otp', { phone_number }); },
+    request(email, recovery_only = false) { return this.post('request-email-otp', { email, ...(recovery_only ? { recovery_only } : {}) }); },
+    requestPhone(phone_number, recovery_only = false) { return this.post('request-otp', { phone_number, ...(recovery_only ? { recovery_only } : {}) }); },
   };
 }
 
@@ -165,6 +165,16 @@ test('delivery failures do not bypass the existing request quota', async t => {
   }
   assert.equal((await h.request('quota@example.com')).status, 429);
   assert.equal(h.mailCount, 3);
+});
+
+test('recovery and normal sign-in have independent OTP resend windows', async t => {
+  const h = await harness(t);
+  assert.equal((await h.request('recovery@example.com', true)).status, 200);
+  assert.equal((await h.request('recovery@example.com')).status, 200);
+  assert.equal(h.mailCount, 2);
+  assert.equal((await h.request('recovery@example.com', true)).status, 429);
+  assert.equal((await h.request('recovery@example.com')).status, 429);
+  assert.equal(h.mailCount, 2);
 });
 
 test('failed SMS returns an error, discards the code, and allows retry', async t => {

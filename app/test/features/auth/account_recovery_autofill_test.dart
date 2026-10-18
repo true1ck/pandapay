@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/auth_api.dart';
 import 'package:pandapay/features/auth/account_recovery_screen.dart';
+import 'package:pandapay/features/auth/login_screen.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -96,15 +97,25 @@ void main() {
               200,
             );
           }
+          if (request.url.path == '/users/me/recovery-contact-check') {
+            expect(jsonDecode(request.body)['last_four'], '1234');
+            return jsonResponse({'ok': true});
+          }
+          if (request.url.path == '/auth/request-email-otp') {
+            expect(jsonDecode(request.body)['recovery_only'], true);
+            return jsonResponse({'ok': true});
+          }
           return jsonResponse(
             request.method == 'GET' ? contacts() : {'ok': true},
           );
         }),
       );
-      expect(find.text('Continue signing in'), findsNothing);
+      expect(find.text('Return to sign in'), findsNothing);
       await verify(tester);
       expect(find.text('+91 •••• 1234'), findsOneWidget);
-      expect(find.text('Continue signing in'), findsOneWidget);
+      expect(find.text('Return to sign in'), findsOneWidget);
+      expect(find.text('Last 4 letters or digits'), findsOneWidget);
+      expect(find.text('Continue signing in'), findsNothing);
       expect(
         ProviderScope.containerOf(
           tester.element(find.byType(AccountRecoveryScreen)),
@@ -139,7 +150,7 @@ void main() {
         }),
       );
       await verify(tester);
-      expect(find.text('Continue signing in'), findsNothing);
+      expect(find.text('Return to sign in'), findsNothing);
       await tester.ensureVisible(find.text('Show linked contact'));
       await tester.tap(find.text('Show linked contact'));
       await tester.pumpAndSettle();
@@ -158,6 +169,10 @@ void main() {
         MockClient((request) async {
           if (request.url.path == '/auth/verify-otp') {
             return http.Response(jsonEncode({'access_token': 'pending'}), 200);
+          }
+          if (request.url.path == '/auth/request-otp') {
+            expect(jsonDecode(request.body)['recovery_only'], true);
+            return jsonResponse({'ok': true});
           }
           if (request.url.path.endsWith('/recovery-contact/request')) {
             expect(jsonDecode(request.body)['identifier'], 'new@gmail.com');
@@ -241,6 +256,76 @@ void main() {
     );
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets(
+    'second check returns to sign-in without activating recovery tokens',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            localDeviceIdProvider.overrideWith(
+              (ref) async => 'recovery-device',
+            ),
+            authApiProvider.overrideWithValue(
+              AuthApi(
+                authBaseUrl: 'http://auth.test',
+                client: MockClient((request) async {
+                  if (request.url.path == '/auth/request-email-otp') {
+                    return jsonResponse({'ok': true});
+                  }
+                  if (request.url.path == '/auth/verify-email-otp') {
+                    return jsonResponse({'access_token': 'pending'});
+                  }
+                  if (request.url.path == '/users/me/recovery-status') {
+                    return jsonResponse(contacts());
+                  }
+                  if (request.url.path == '/users/me/recovery-contact-check') {
+                    expect(jsonDecode(request.body)['last_four'], '1234');
+                    return jsonResponse({'ok': true});
+                  }
+                  return jsonResponse({'ok': true});
+                }),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            home: const Scaffold(body: LoginScreen(mode: AuthMode.logIn)),
+          ),
+        ),
+      );
+      final loginFields = find.byType(TextField);
+      await tester.enterText(loginFields.at(0), 'old@example.com');
+      await tester.enterText(loginFields.at(1), '+919876548102');
+      await tester.ensureVisible(find.text('Need help signing in?'));
+      await tester.tap(find.text('Need help signing in?'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'user@example.com');
+      await tester.tap(find.text('Send sign-in code'));
+      await tester.pumpAndSettle();
+      await verify(tester);
+      await tester.enterText(find.byType(TextField), '1234');
+      await tester.ensureVisible(find.text('Return to sign in'));
+      await tester.tap(find.text('Return to sign in'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LoginScreen), findsOneWidget);
+      final returnedFields = find.byType(TextField);
+      expect(returnedFields, findsNWidgets(2));
+      expect(
+        tester.widget<TextField>(returnedFields.at(0)).controller!.text,
+        isEmpty,
+      );
+      expect(
+        tester.widget<TextField>(returnedFields.at(1)).controller!.text,
+        isEmpty,
+      );
+      expect(
+        ProviderScope.containerOf(
+          tester.element(find.byType(LoginScreen)),
+        ).read(accessTokenProvider),
+        isNull,
+      );
+    },
+  );
 
   testWidgets('an active code explains the block and shows the resend timer', (
     tester,

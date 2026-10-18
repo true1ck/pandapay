@@ -88,6 +88,24 @@ class RecoveryApi {
     return RecoveryStatus.fromJson(result);
   }
 
+  Future<void> verifyLinkedContact(String lastFour) async {
+    final response = await _client
+        .post(
+          Uri.parse('$authBaseUrl/users/me/recovery-contact-check'),
+          headers: {
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'last_four': lastFour}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Linked contact check failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> _replacementRequest(
     String action,
     Map<String, dynamic> body,

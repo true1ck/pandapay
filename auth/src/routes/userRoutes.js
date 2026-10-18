@@ -135,6 +135,50 @@ router.get('/me/recovery-status', auth, userRateLimitRead, async (req, res) => {
   }
 });
 
+// The recovery-only OTP proves access to the identifier entered on the
+// previous screen. Before returning to sign-in, require the user to recognise
+// the linked contact as well. This route never returns the contact itself or
+// activates the temporary recovery token as an app session.
+router.post('/me/recovery-contact-check', auth, userRateLimitSensitive, async (req, res) => {
+  const verifiedAt = req.user.recovery_verified_at;
+  if (!['email', 'phone'].includes(req.user.recovery_channel) ||
+      !Number.isInteger(verifiedAt) || verifiedAt > Date.now() / 1000 ||
+      Date.now() / 1000 - verifiedAt > 300) {
+    return res.status(403).json({ error: 'Verify your sign-in contact again before continuing.' });
+  }
+
+  const lastFour = typeof req.body.last_four === 'string'
+    ? req.body.last_four.replace(/[^a-z0-9]/gi, '').toLowerCase()
+    : '';
+  if (lastFour.length !== 4) {
+    return res.status(400).json({ error: 'Enter the last 4 characters of your linked contact.' });
+  }
+
+  try {
+    const { rows } = await db.query(
+      `SELECT email, phone_number FROM users WHERE id = $1 AND deleted = FALSE`,
+      [req.user.id]
+    );
+    const user = rows[0];
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+
+    const linkedValue = req.user.recovery_channel === 'email'
+      ? user.phone_number ? decryptPhoneNumber(user.phone_number) : null
+      : user.email;
+    const normalizedLinked = typeof linkedValue === 'string'
+      ? linkedValue.replace(/[^a-z0-9]/gi, '').slice(-4).toLowerCase()
+      : '';
+    if (normalizedLinked.length !== 4 || normalizedLinked !== lastFour) {
+      return res.status(400).json({ error: 'Those characters do not match the linked contact.' });
+    }
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('recovery contact check failed', error.code || error.name);
+    return res.status(500).json({ error: 'Unable to verify the linked contact. Please try again.' });
+  }
+});
+
 // PUT /users/me
 // Update user profile (name only).
 router.put(
