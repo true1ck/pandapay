@@ -10,6 +10,24 @@ import 'package:pandapay/data/auth_api.dart';
 /// `phone_number` and links it onto the same users row (authRoutes.js), so the
 /// only gap was the app never sending it.
 void main() {
+  group('AuthApi.verifyOtp recovery mode', () {
+    test('marks phone verification as recovery-only when requested', () async {
+      late Map<String, dynamic> sentBody;
+      final client = MockClient((req) async {
+        sentBody = jsonDecode(req.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({'access_token': 'a', 'refresh_token': 'r'}),
+          200,
+        );
+      });
+      final api = AuthApi(authBaseUrl: 'http://auth.test', client: client);
+
+      await api.verifyOtp('+919876543210', '1234', 'dev-1', recoveryOnly: true);
+
+      expect(sentBody['recovery_only'], isTrue);
+    });
+  });
+
   group('AuthApi.requestEmailOtp', () {
     test('marks the request as sign-up and includes the phone', () async {
       late Map<String, dynamic> sentBody;
@@ -123,6 +141,23 @@ void main() {
         expect(sentBody.containsKey('phone_number'), isFalse);
       },
     );
+
+    test('marks verification as recovery-only when requested', () async {
+      late Map<String, dynamic> sentBody;
+      final client = MockClient((req) async {
+        sentBody = jsonDecode(req.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({'access_token': 'a', 'refresh_token': 'r'}),
+          200,
+        );
+      });
+      final api = AuthApi(authBaseUrl: 'http://auth.test', client: client);
+
+      await api.verifyEmailOtp('a@b.com', '1234', 'dev-1', recoveryOnly: true);
+
+      expect(sentBody['recovery_only'], isTrue);
+      expect(sentBody.containsKey('phone_number'), isFalse);
+    });
 
     test('propagates the returned tokens', () async {
       final client = MockClient(

@@ -4,6 +4,7 @@ const db = require('../db');
 const auth = require('../middleware/authMiddleware');
 // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
 const { decryptPhoneNumber } = require('../utils/fieldEncryption');
+const { maskEmail, maskPhone } = require('../utils/recoveryContacts');
 
 // === SECURITY HARDENING: STEP-UP AUTH ===
 const { requireRecentOtpOrReauth } = require('../middleware/stepUpAuth');
@@ -121,7 +122,7 @@ router.get('/me/recovery-status', auth, userRateLimitRead, async (req, res) => {
       has_backup_channel: verifiedCount >= 2,
       // Which channel to offer, so the client doesn't have to re-derive it.
       missing_channel: verifiedCount >= 2 ? null : phoneVerified ? 'email' : 'phone',
-      email_hint: emailVerified ? maskEmail(user.email) : null,
+      email_hint: user.email ? maskEmail(user.email) : null,
       // Masked, and returned whenever a phone is on file at all — not gated on
       // `phoneVerified` — because the Email & phone screen needs to show "we
       // have this number, it just isn't proven" as a distinct state from "no
@@ -133,37 +134,6 @@ router.get('/me/recovery-status', auth, userRateLimitRead, async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-/**
- * Masks an email for display: `aarav.sharma@gmail.com` -> `aa••••••••@gmail.com`.
- * Enough for someone to recognise their own address, not enough for a stolen
- * access token to learn one. The domain is kept because that is what makes it
- * recognisable, and a domain alone is not a contactable identifier.
- */
-function maskEmail(email) {
-  if (!email || !email.includes('@')) return null;
-  const [local, domain] = email.split('@');
-  const head = local.slice(0, Math.min(2, local.length));
-  return `${head}${'•'.repeat(Math.max(local.length - head.length, 1))}@${domain}`;
-}
-
-/**
- * Masks a phone for display: `+919876543210` -> `+91•••••••3210`. Keeps a
- * leading country code (up to the first 3 digits) and the last 4 so the owner
- * recognises it; everything between is bulleted. Like `maskEmail`, this is for
- * recognition only — an ordinary access token must not be able to read the
- * full number back.
- */
-function maskPhone(phone) {
-  if (!phone) return null;
-  const digits = String(phone).replace(/[^\d]/g, '');
-  if (digits.length < 4) return '•'.repeat(digits.length || 1);
-  const last4 = digits.slice(-4);
-  const headLen = digits.length > 10 ? Math.min(3, digits.length - 4) : 0;
-  const head = headLen ? `+${digits.slice(0, headLen)}` : '';
-  const hiddenLen = digits.length - headLen - 4;
-  return `${head}${'•'.repeat(Math.max(hiddenLen, 1))}${last4}`;
-}
 
 // PUT /users/me
 // Update user profile (name only).

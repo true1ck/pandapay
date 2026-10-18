@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'api_exception.dart';
+import 'recovery_api.dart';
 
 /// UA-3: the user app's own OTP login flow against auth/ — mirrors
 /// console/lib/data/admin_api.dart's AuthApi/AuthTokens (same auth/
@@ -25,6 +26,12 @@ class AuthApi {
   AuthApi({required this.authBaseUrl, http.Client? client})
     : _client = client ?? http.Client();
 
+  RecoveryApi recoveryApiFor(String accessToken) => RecoveryApi(
+    authBaseUrl: authBaseUrl,
+    accessToken: accessToken,
+    client: _client,
+  );
+
   Future<void> requestOtp(String phoneNumber) async {
     final response = await _client
         .post(
@@ -43,8 +50,9 @@ class AuthApi {
   Future<AuthTokens> verifyOtp(
     String phoneNumber,
     String code,
-    String deviceId,
-  ) async {
+    String deviceId, {
+    bool recoveryOnly = false,
+  }) async {
     final response = await _client
         .post(
           Uri.parse('$authBaseUrl/auth/verify-otp'),
@@ -53,6 +61,7 @@ class AuthApi {
             'phone_number': phoneNumber,
             'code': code,
             'device_id': deviceId,
+            if (recoveryOnly) 'recovery_only': true,
           }),
         )
         .timeout(_requestTimeout);
@@ -75,7 +84,7 @@ class AuthApi {
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'refresh_token': refreshToken,
-            if (requestId != null) 'refresh_request_id': requestId,
+            'refresh_request_id': ?requestId,
           }),
         )
         .timeout(_requestTimeout);
@@ -130,6 +139,7 @@ class AuthApi {
     String code,
     String deviceId, {
     String? phoneNumber,
+    bool recoveryOnly = false,
   }) async {
     final trimmedPhone = phoneNumber?.trim();
     final response = await _client
@@ -142,6 +152,7 @@ class AuthApi {
             'device_id': deviceId,
             if (trimmedPhone != null && trimmedPhone.isNotEmpty)
               'phone_number': trimmedPhone,
+            if (recoveryOnly) 'recovery_only': true,
           }),
         )
         .timeout(_requestTimeout);

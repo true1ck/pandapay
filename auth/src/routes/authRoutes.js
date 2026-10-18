@@ -222,9 +222,9 @@ router.post(
           };
         }
 
-        const { code } = await createOtp(normalizedPhone);
+        const { code, requestId } = await createOtp(normalizedPhone);
 
-        // Attempt to send SMS (will fallback to safe logging if Twilio fails)
+        // A generated code is not useful unless the SMS provider accepted it.
         const smsResult = await sendOtpSms(normalizedPhone, code);
 
         // === SECURITY HARDENING: AUDIT LOGS & ANOMALY FLAGS ===
@@ -240,13 +240,10 @@ router.post(
           },
         });
 
-        // Even if SMS fails, we still return success because OTP is generated
-        // In production, you may want to return an error if SMS fails
         if (!smsResult || !smsResult.success) {
-          console.warn('⚠️ SMS sending failed, but OTP was generated');
-          // Option 1: Still return success (current behavior - allows testing)
-          // Option 2: Return error (uncomment below for production)
-          // return { error: 'Failed to send OTP via SMS', status: 500 };
+          console.warn('⚠️ SMS delivery failed; discarding undelivered OTP');
+          await discardUndeliveredOtp(normalizedPhone, 'phone', requestId);
+          return { error: 'Unable to send a sign-in code right now. Please try again later.', status: 503 };
         }
 
         return { ok: true, status: 200 };
@@ -720,7 +717,10 @@ router.post(
       // === SECURITY HARDENING: ACCESS TOKEN REPLAY MITIGATION ===
       // Issue access token with high_assurance flag if this is a fresh OTP verification
       // This allows step-up auth for sensitive actions
-      const accessToken = signAccessToken(user, { highAssurance: true, deviceId: devId });
+      const accessToken = signAccessToken(user, {
+        highAssurance: true, deviceId: devId,
+        recoveryChannel: recovery_only === true ? 'phone' : undefined,
+      });
       const refreshToken = await issueRefreshToken({
         userId: user.id,
         deviceId: devId,
@@ -1062,7 +1062,10 @@ router.post(
 
       await checkAnomalies(user.id, 'otp_verify_email', clientIp);
 
-      const accessToken = signAccessToken(user, { highAssurance: true, deviceId: devId });
+      const accessToken = signAccessToken(user, {
+        highAssurance: true, deviceId: devId,
+        recoveryChannel: recovery_only === true ? 'email' : undefined,
+      });
       const refreshToken = await issueRefreshToken({
         userId: user.id, deviceId: devId, userAgent: req.headers['user-agent'], ip: clientIp,
       });

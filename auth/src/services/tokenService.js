@@ -42,6 +42,10 @@ function signAccessToken(user, options = {}) {
   if (options.highAssurance === true) {
     payload.high_assurance = true;
   }
+  if (['email', 'phone'].includes(options.recoveryChannel)) {
+    payload.recovery_channel = options.recoveryChannel;
+    payload.recovery_verified_at = Math.floor(Date.now() / 1000);
+  }
 
   // === GUEST LOGIN SUPPORT ===
   // Allow custom expiration time (defaults to ACCESS_TTL for backward compatibility)

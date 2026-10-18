@@ -137,6 +137,7 @@ app.get('/ready', async (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
+app.use('/users/me/recovery-contact', require('./routes/recoveryContactRoutes'));
 
 // === ADMIN SECURITY VISUALIZER ===
 // Admin dashboard and API endpoints (only enabled if flag is set)

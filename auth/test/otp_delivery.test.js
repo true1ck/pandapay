@@ -41,13 +41,21 @@ async function harness(t, useRedis = false) {
   const db = {
     async query(sql, args) {
       if (sql.includes('INSERT INTO otp_requests')) {
-        const row = { id: String(rows.length + 1), email: args[1], deleted: false };
+        const row = {
+          id: String(rows.length + 1),
+          identifier: args[2] === 'phone' ? args[0] : args[1],
+          type: args[2],
+          deleted: false,
+        };
         rows.push(row);
         return { rows: [{ id: row.id }] };
       }
       if (sql.includes('UPDATE otp_requests')) {
         for (const row of rows) {
-          if (sql.includes('WHERE id =') ? row.id === args[0] && row.email === args[1] : row.email === args[0]) {
+          const matches = sql.includes('WHERE id =')
+            ? row.id === args[0] && (row.identifier === args[1] || row.identifier === args[2])
+            : row.identifier === args[0] || row.identifier === args[1];
+          if (matches) {
             row.deleted = true;
           }
         }
@@ -66,12 +74,15 @@ async function harness(t, useRedis = false) {
   });
   let delivered = true;
   let mailCount = 0;
+  let smsCount = 0;
   const noop = async () => {};
   const router = load('../src/routes/authRoutes.js', {
     '../db': db,
     '../config': config,
     '../middleware/authMiddleware': (_req, _res, next) => next(),
-    '../services/smsService': {},
+    '../services/smsService': {
+      sendOtpSms: async () => { smsCount++; return { success: delivered }; },
+    },
     '../services/emailService': {
       sendOtpEmail: async () => { mailCount++; return { success: delivered }; },
     },
@@ -104,6 +115,7 @@ async function harness(t, useRedis = false) {
     failDelivery() { delivered = false; },
     restoreDelivery() { delivered = true; },
     get mailCount() { return mailCount; },
+    get smsCount() { return smsCount; },
     async post(route, body) {
       const response = await fetch(`http://127.0.0.1:${server.address().port}/auth/${route}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -111,6 +123,7 @@ async function harness(t, useRedis = false) {
       return { status: response.status, body: await response.json() };
     },
     request(email) { return this.post('request-email-otp', { email }); },
+    requestPhone(phone_number) { return this.post('request-otp', { phone_number }); },
   };
 }
 
@@ -152,6 +165,19 @@ test('delivery failures do not bypass the existing request quota', async t => {
   }
   assert.equal((await h.request('quota@example.com')).status, 429);
   assert.equal(h.mailCount, 3);
+});
+
+test('failed SMS returns an error, discards the code, and allows retry', async t => {
+  const h = await harness(t);
+  h.failDelivery();
+  const failed = await h.requestPhone('+919876543210');
+  assert.equal(failed.status, 503);
+  assert.match(failed.body.error, /Unable to send a sign-in code/);
+  assert.equal(h.rows[0].deleted, true);
+  h.restoreDelivery();
+  assert.equal((await h.requestPhone('+919876543210')).status, 200);
+  assert.equal(h.rows[1].deleted, false);
+  assert.equal(h.smsCount, 2);
 });
 
 for (const type of ['email', 'phone']) {

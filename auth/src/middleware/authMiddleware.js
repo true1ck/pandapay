@@ -122,6 +122,8 @@ async function authMiddleware(req, res, next) {
     user_type: payload.user_type,
     // === SECURITY HARDENING: ACCESS TOKEN REPLAY MITIGATION ===
     high_assurance: payload.high_assurance || false,
+    recovery_channel: payload.recovery_channel,
+    recovery_verified_at: payload.recovery_verified_at,
   };
   next();
 }

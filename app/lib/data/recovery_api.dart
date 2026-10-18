@@ -64,19 +64,69 @@ class RecoveryApi {
   final String accessToken;
   final http.Client _client;
 
-  RecoveryApi({required this.authBaseUrl, required this.accessToken, http.Client? client})
-    : _client = client ?? http.Client();
+  RecoveryApi({
+    required this.authBaseUrl,
+    required this.accessToken,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
+
+  Future<String> requestContactReplacement(String identifier) async {
+    final body = await _replacementRequest('request', {
+      'identifier': identifier,
+    });
+    return body['challenge'] as String;
+  }
+
+  Future<RecoveryStatus> verifyContactReplacement(
+    String challenge,
+    String code,
+  ) async {
+    final result = await _replacementRequest('verify', {
+      'challenge': challenge,
+      'code': code,
+    });
+    return RecoveryStatus.fromJson(result);
+  }
+
+  Future<Map<String, dynamic>> _replacementRequest(
+    String action,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await _client
+        .post(
+          Uri.parse('$authBaseUrl/users/me/recovery-contact/$action'),
+          headers: {
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Contact replacement failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
 
   Future<RecoveryStatus> fetchStatus() async {
-    final response = await _client.get(
-      Uri.parse('$authBaseUrl/users/me/recovery-status'),
-      headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
-    );
+    final response = await _client
+        .get(
+          Uri.parse('$authBaseUrl/users/me/recovery-status'),
+          headers: {
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+        )
+        .timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) {
       throw ApiException(
         'GET /users/me/recovery-status failed: ${response.statusCode} ${response.body}',
       );
     }
-    return RecoveryStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return RecoveryStatus.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 }
