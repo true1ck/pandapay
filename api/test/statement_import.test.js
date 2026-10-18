@@ -17,6 +17,13 @@ test('validates all file sources, accounting timezone offsets and legacy clients
   assert.equal(validateStatementImport({ userCardId: cardId, statementFrom: '2026-10-02', statementTo: '2026-10-02', txnCount: 2 }), null);
 });
 
+test('accepts each supported transaction type and rejects unknown types', () => {
+  for (const entryKind of ['spend', 'income', 'investment', 'transfer']) {
+    assert.equal(validateStatementImport(body({ transactions: [{ ...body().transactions[0], entryKind }] })), null);
+  }
+  assert.match(validateStatementImport(body({ transactions: [{ ...body().transactions[0], entryKind: 'refund-ish' }] })), /entryKind/);
+});
+
 test('rejects invalid calendar dates, ranges, decimal precision, nonfinite values and malformed rows', () => {
   for (const value of [null, [], body({ statementFrom: '2026-02-30' }), body({ statementTo: '2026-10-01' }),
     body({ transactions: [] }), body({ importSource: 'xls' }), body({ transactions: [null] }),
@@ -116,4 +123,10 @@ test('automatic duplicate is skipped without modifying the canonical transaction
   assert.deepEqual(response.result.summary, {imported:0, pendingDuplicates:0, exactRetries:1});
   assert.equal(run.updates.length, 0);
   assert.equal(run.written[0].observationMetadata.bankReference, 'ABC123456789');
+});
+
+test('statement import forwards the transaction kind to the shared insert path', async () => {
+  const run = harness();
+  await run.call(body({ transactions: [{ ...body().transactions[0], entryKind: 'income' }] }));
+  assert.equal(run.written[0].entryKind, 'income');
 });

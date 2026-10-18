@@ -471,6 +471,15 @@ ParsedStatementLine? _parseRow(
       : typeIndex != null &&
             typeIndex < row.length &&
             _normalise(row[typeIndex]) == 'transfer';
+  final investment =
+      typeIndex != null &&
+      typeIndex < row.length &&
+      [
+        'investment',
+        'invest',
+        'mutual fund',
+        'sip',
+      ].contains(_normalise(row[typeIndex]));
   final dateText = row[dateIndex].trim().replaceFirst(
     RegExp(r'\s+\d{1,2}:\d{2}.*$'),
     '',
@@ -512,6 +521,7 @@ ParsedStatementLine? _parseRow(
         ? row[accountIndex].trim()
         : null,
     isTransfer: transfer,
+    isInvestment: investment,
     date: date,
     description: description,
     bankReference:

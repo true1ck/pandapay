@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'api_exception.dart';
+import 'user_cards_repository.dart';
 
 double? _numOrNull(dynamic v) {
   if (v == null) return null;
@@ -17,20 +18,26 @@ class StatementTransactionInput {
   final String? importRowKey;
   final String? sourceAccount;
   final String? bankReference;
+  final TxnEntryKind entryKind;
+  final TxnInstrument? instrument;
 
   const StatementTransactionInput({
     required this.occurredAt,
     required this.amount,
     required this.merchantName,
+    this.entryKind = TxnEntryKind.spend,
     this.importRowKey,
     this.sourceAccount,
     this.bankReference,
+    this.instrument,
   });
 
   Map<String, dynamic> toJson() => {
     'occurredAt': occurredAt.toUtc().toIso8601String(),
     'amountInr': amount.rupees,
     'merchantName': merchantName,
+    'entryKind': entryKind.wireValue,
+    if (instrument != null) 'instrument': instrument!.wireValue,
     if (importRowKey != null) 'importRowKey': importRowKey,
     if (sourceAccount != null) 'sourceAccount': sourceAccount,
     if (bankReference != null) 'bankReference': bankReference,
@@ -183,6 +190,7 @@ class ImportRepository {
 
   Future<StatementImport> confirmStatementImport({
     required String? userCardId,
+    TxnInstrument instrument = TxnInstrument.other,
     required DateTime statementFrom,
     required DateTime statementTo,
     Money? closingBalance,
@@ -200,6 +208,7 @@ class ImportRepository {
           headers: _headers,
           body: jsonEncode({
             'userCardId': userCardId,
+            'instrument': instrument.wireValue,
             'statementFrom': _dateOnly(statementFrom),
             'statementTo': _dateOnly(statementTo),
             if (closingBalance != null)

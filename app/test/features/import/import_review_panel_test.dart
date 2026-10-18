@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/import_models.dart';
 import 'package:pandapay/data/import_repository.dart';
@@ -12,6 +13,58 @@ import 'package:pandapay/features/import/import_mapping_dialog.dart';
 import 'package:pandapay/features/import/import_review_panel.dart';
 
 void main() {
+  testWidgets('income appears in the preview and can be corrected', (
+    tester,
+  ) async {
+    final session = TransactionImportSession(
+      fileDigest: 'file',
+      importSource: 'csv',
+      statement: ParsedStatement(
+        transactions: [
+          ParsedStatementLine(
+            date: DateTime(2026, 10, 2),
+            description: 'Coffee purchase',
+            amount: Money.fromRupees(100),
+          ),
+          ParsedStatementLine(
+            date: DateTime(2026, 10, 3),
+            description: 'Refund received',
+            amount: Money.fromRupees(50),
+            isCredit: true,
+          ),
+        ],
+      ),
+    );
+    session.destinations[TransactionImportSession.unknownAccount] = '';
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => const []),
+          userCardsRepositoryProvider.overrideWithValue(null),
+          importRepositoryProvider.overrideWithValue(null),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: ImportReviewPanel(session: session)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Money in'));
+    await tester.pumpAndSettle();
+    final refund = find.text('Refund received');
+    await tester.scrollUntilVisible(
+      refund,
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Coffee purchase'), findsNothing);
+    expect(find.text('Refund received'), findsOneWidget);
+    expect(find.text('Import 2 transactions'), findsOneWidget);
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Check the original statement'), findsNothing);
+  });
+
   testWidgets(
     'unrecognized row can be corrected, validated and imported without a card',
     (tester) async {
@@ -68,7 +121,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Correct'));
+      await tester.scrollUntilVisible(
+        find.text('Correct').hitTestable(),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Correct'));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -96,14 +154,16 @@ void main() {
         const ValueKey('destination:Unspecified account'),
       );
       await tester.ensureVisible(destination);
+      await tester.pumpAndSettle();
       await tester.tap(destination);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Other spending (no card)').last);
+      await tester.tap(find.text('Other account (no linked card)').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Confirm import'));
+      await tester.tap(find.text('Import 1 transactions'));
       await tester.pumpAndSettle();
       expect(payload!['userCardId'], isNull);
       expect((payload!['transactions'] as List).single['amountInr'], 100.25);
+      expect((payload!['transactions'] as List).single['entryKind'], 'spend');
       expect(find.text('Import complete'), findsOneWidget);
       expect(find.textContaining('1 added'), findsOneWidget);
       expect(

@@ -3362,11 +3362,10 @@ async function insertTransactionAndUpdateState(client, userId, {
   // exactly the "same amount+merchant+date across channels" case the spec
   // describes (a bank SMS and a later statement import both recording the
   // same swipe is the canonical example).
-  // Only spend rows are deduped. Two salary credits of the same amount on
-  // the same day are not a double-import, and flagging them as one would
-  // teach the user to ignore the review queue.
-  const duplicates = resolvedEntryKind === 'spend'
-    ? await detectDuplicates(client, userId, {
+  // Spending rows may use conservative cross-source matching. For income,
+  // investments, and transfers the shared matcher requires an exact bank
+  // reference so recurring same-amount transactions are not merged.
+  const duplicates = await detectDuplicates(client, userId, {
         newTxnId: txn.rows[0].id,
         amount,
         occurred,
@@ -3378,8 +3377,7 @@ async function insertTransactionAndUpdateState(client, userId, {
         observedAt: observedAt || occurred,
         instrument: resolvedInstrument,
         entryKind: resolvedEntryKind,
-      })
-    : { candidateId: null };
+      });
 
   // A probable second observation is retained but suppressed before any
   // reward/card state is applied. Every Insights query already counts only
@@ -4071,10 +4069,10 @@ async function detectDuplicates(client, userId, {
        FROM transactions t
       WHERE profile_id = $1 AND status = 'active' AND id != $2
         AND amount_inr BETWEEN $3::numeric - $6::numeric AND $3::numeric + $6::numeric
-        AND entry_kind = 'spend'
+        AND entry_kind = $7
         AND occurred_at BETWEEN $4::timestamptz - ($5::bigint * interval '1 millisecond')
                             AND $4::timestamptz + ($5::bigint * interval '1 millisecond')`,
-    [userId, newTxnId, amount, occurred, MAX_TIME_DISTANCE_MS, AMOUNT_TOLERANCE_INR]
+    [userId, newTxnId, amount, occurred, MAX_TIME_DISTANCE_MS, AMOUNT_TOLERANCE_INR, entryKind || 'spend']
   );
 
   const selected = bestDuplicate(

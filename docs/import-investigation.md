@@ -99,3 +99,16 @@ This improves supported imports substantially; it does not establish reliable re
 - No remote model receives financial files in this implementation. An optional model-assisted parser would need a separate product/privacy decision and must still produce validated, reviewable structured rows.
 
 The durable design is a pipeline: file decoder -> structural extractor -> shared transaction model -> validation/account/date mapping -> review -> shared idempotent ingestion. Different file formats need different decoders; they should share transaction semantics and persistence rather than one increasingly permissive regex.
+
+
+## Import-all transaction history follow-up (18 October 2026)
+
+The screenshot’s six “credits” and two “transfers” were not parser failures. The import page treated every parsed row as a spending candidate, so it intentionally excluded valid incoming and transfer entries. The Activity page and transaction model already support spending, money in, investments, and transfers. The exclusion was therefore a mismatch between the import workflow and the app’s transaction model, not a reason to omit those rows.
+
+The shared import preview now selects recognized transaction kinds by default and sends the kind with every row to the existing transaction API. The API persists the kind in the existing transaction model; spend-only rewards and reporting continue to apply only to spending. CSV type fields can identify investments explicitly, and PDF narrations only do so for clear investment terms. Ambiguous or invalid rows remain held with their parser or field-validation reason. Repeated rows in a statement are no longer treated as duplicates merely because their date, amount, and description match.
+
+The preview has filters for ready rows, needs review, skipped, money in, money out, investments, transfers, and duplicate candidates. Each row shows its transaction type, source location, source account, amount, and review reason. The summary separates incoming and outgoing totals. Users can correct an uncertain row, explicitly keep both sides of a possible duplicate, or leave a row unselected and continue. Unrecognized rows retain their raw cells and reason and can be corrected into transactions.
+
+Before import, the panel fetches active saved transactions from the authenticated repository and flags exact local candidates using date, amount, description, destination, and transaction kind. This is a review aid, not proof: it is not fuzzy matching. The server checks again. Server-side spend matching retains its existing cross-source confidence logic; for income, investments, and transfers, automatic deduplication requires an exact bank reference, matching transaction kind, account evidence, time window, and amount. That avoids merging recurring same-amount salaries or transfers.
+
+Scope: import review, parsers, request payload, and shared import persistence only; no Activity page, database schema, or other product pages changed. API regression coverage passes. Flutter formatting and syntax checks pass, but Flutter analysis/widget tests could not run in this sandbox because the existing Pub cache is outside the permitted filesystem; those checks should be run in the normal development environment before installing the build.

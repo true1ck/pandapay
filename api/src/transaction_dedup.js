@@ -1,7 +1,7 @@
 'use strict';
 
-const AMOUNT_TOLERANCE_INR = 1;
-const MAX_TIME_DISTANCE_MS = 36 * 60 * 60 * 1000;
+const AMOUNT_TOLERANCE_INR = 0.005;
+const MAX_TIME_DISTANCE_MS = 10 * 60 * 1000;
 // SMS delivery timestamps distinguish a duplicated alert from two purchases
 // that happen to have the same bank-supplied calendar date.
 const MAX_SMS_NOTIFICATION_DISTANCE_MS = 15 * 60 * 1000;
@@ -60,8 +60,9 @@ function referenceOf(row) {
  * REVIEW_THRESHOLD, and the user can reactivate it with "keep both".
  */
 function evaluateDuplicate(incoming, candidate) {
-  if ((incoming.entryKind || incoming.entry_kind || 'spend') !== 'spend') return null;
-  if ((candidate.entryKind || candidate.entry_kind || 'spend') !== 'spend') return null;
+  const incomingKind = incoming.entryKind || incoming.entry_kind || 'spend';
+  const candidateKind = candidate.entryKind || candidate.entry_kind || 'spend';
+  if (incomingKind !== candidateKind) return null;
 
   const incomingSource = sourceFamily(incoming.source);
   const candidateSource = sourceFamily(candidate.source);
@@ -73,6 +74,10 @@ function evaluateDuplicate(incoming, candidate) {
   const candidateRef = referenceOf(candidate);
   if (incomingRef && candidateRef && incomingRef !== candidateRef) return null;
   const sameReference = Boolean(incomingRef && incomingRef === candidateRef);
+  // Non-spending rows such as salary credits and transfers repeat legitimately.
+  // Only an exact bank reference, exact amount, and matching account can safely
+  // identify a duplicate for these kinds; never fuzzy-match them by merchant/date.
+  if (incomingKind !== 'spend' && !sameReference) return null;
   const sameSmsFamily = incomingSource === 'sms' && candidateSource === 'sms';
   if (incomingSource === candidateSource && incomingSource !== 'imported' && !sameReference && !sameSmsFamily) return null;
 
@@ -125,7 +130,7 @@ function evaluateDuplicate(incoming, candidate) {
   const candidateTime = asMillis(candidate.occurred ?? candidate.occurred_at);
   if (incomingTime === null || candidateTime === null) return null;
   const timeDifferenceMs = Math.abs(incomingTime - candidateTime);
-  if (timeDifferenceMs > MAX_TIME_DISTANCE_MS) return null;
+  if (timeDifferenceMs > MAX_TIME_DISTANCE_MS && !sameReference) return null;
 
   const merchants = compareMerchants(
     incoming.merchantName ?? incoming.merchant_name,
@@ -158,10 +163,10 @@ function evaluateDuplicate(incoming, candidate) {
     merchantMatch: merchants.kind,
     sourceFamilies: [candidateSource, incomingSource],
     reason: [
-      `amount within INR ${amountDifference.toFixed(2)}`,
+      'exact amount',
       `merchant ${merchants.kind}`,
       incomingCard && candidateCard ? 'same card' : 'card unavailable on one channel',
-      `${Math.round(timeDifferenceMs / 60000)} minutes apart`,
+      `within ${Math.round(timeDifferenceMs / 60000)} minutes`,
       `${candidateSource}+${incomingSource}`,
     ].join('; '),
   };

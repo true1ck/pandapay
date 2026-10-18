@@ -49,6 +49,7 @@ class ParsedStatementLine {
   final String? sourceAccount;
   final String? bankReference;
   final bool isTransfer;
+  final bool isInvestment;
   final String? sourceRowId;
   final List<String> reviewReasons;
   const ParsedStatementLine({
@@ -59,6 +60,7 @@ class ParsedStatementLine {
     this.sourceAccount,
     this.bankReference,
     this.isTransfer = false,
+    this.isInvestment = false,
     this.sourceRowId,
     this.reviewReasons = const [],
   });
@@ -69,6 +71,7 @@ class ParsedStatementLine {
     Money? amount,
     bool? isCredit,
     bool? isTransfer,
+    bool? isInvestment,
     String? sourceRowId,
   }) => ParsedStatementLine(
     date: date ?? this.date,
@@ -76,9 +79,11 @@ class ParsedStatementLine {
     amount: amount ?? this.amount,
     isCredit: isCredit ?? this.isCredit,
     isTransfer: isTransfer ?? this.isTransfer,
+    isInvestment: isInvestment ?? this.isInvestment,
     sourceAccount: sourceAccount,
     bankReference: bankReference,
     sourceRowId: sourceRowId ?? this.sourceRowId,
+    reviewReasons: const [],
   );
 }
 

@@ -1,5 +1,7 @@
 const SOURCES = new Set(['statement', 'screenshot', 'csv', 'xlsx', 'json']);
 const RAILS = new Set(['upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown']);
+const ENTRY_KINDS = new Set(['spend', 'income', 'investment', 'transfer']);
+const INSTRUMENTS = new Set(['credit_card', 'debit_card', 'cash', 'upi_bank', 'wallet', 'other']);
 function maskAccount(value) { return value?.replace(/\d{6,}/g, (digits) => `****${digits.slice(-4)}`) || null; }
 const HASH = /^[a-f0-9]{64}$/i;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -28,6 +30,7 @@ function money(value, { signed = false } = {}) {
 function validateStatementImport(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return 'An import object is required';
   if (body.userCardId != null && (typeof body.userCardId !== 'string' || !UUID.test(body.userCardId))) return 'userCardId must be a card id or null';
+  if (body.instrument != null && !INSTRUMENTS.has(body.instrument)) return 'instrument is invalid';
   if (!calendarDate(body.statementFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(body.statementFrom)
       || !calendarDate(body.statementTo) || !/^\d{4}-\d{2}-\d{2}$/.test(body.statementTo)
       || body.statementFrom > body.statementTo) return 'Choose a valid statement date range';
@@ -48,6 +51,8 @@ function validateStatementImport(body) {
   for (const [index, row] of body.transactions.entries()) {
     const prefix = `transactions[${index}]`;
     if (!row || typeof row !== 'object' || Array.isArray(row)) return `${prefix} must be an object`;
+    if (row.entryKind != null && !ENTRY_KINDS.has(row.entryKind)) return `${prefix}.entryKind is invalid`;
+    if (row.instrument != null && !INSTRUMENTS.has(row.instrument)) return `${prefix}.instrument is invalid`;
     if (!money(row.amountInr) || row.amountInr <= 0) return `${prefix}.amountInr must be positive INR with at most two decimals`;
     if (!timestamp(row.occurredAt)) return `${prefix}.occurredAt must be a valid ISO timestamp with timezone`;
     // The app's date range is in the device's accounting timezone. Allow the
@@ -71,6 +76,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
   return async (req, res) => {
   const {
     userCardId,
+    instrument: requestedInstrument = 'other',
     statementFrom,
     statementTo,
     closingBalanceInr,
@@ -88,7 +94,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const transactionSource = importSource === 'statement' ? 'statement' : 'imported';
-      let instrument = 'other';
+      let instrument = requestedInstrument;
       if (userCardId) {
         const card = await client.query(
           `SELECT cp.card_type FROM user_cards uc
@@ -154,8 +160,9 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
         );
         const outcome = await insertTransactionAndUpdateState(client, req.userId, {
           userCardId,
-          instrument,
+          instrument: userCardId ? instrument : (transaction.instrument || instrument),
           amount: Number(transaction.amountInr),
+          entryKind: transaction.entryKind || 'spend',
           occurred,
           categoryId,
           rail: transaction.rail || 'unknown',

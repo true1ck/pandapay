@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'csv_statement_parser.dart';
 import 'import_models.dart';
 import 'import_repository.dart';
+import 'user_cards_repository.dart';
 import 'pdf_statement_parser.dart'
     show parseStatementText, StatementParseException;
 import 'spreadsheet_statement_parser.dart';
@@ -189,7 +190,70 @@ class TransactionImportSession {
   final ParsedStatement statement;
   late final List<ParsedStatementLine> rows;
   final Set<int> excluded = {};
+  final Map<int, String> savedDuplicates = {};
+  final Set<int> _confirmedSeparate = {};
+
+  /// Candidates are deliberately described as possible matches, never proof.
+  void checkSavedDuplicates(List<TransactionEntry> existing) {
+    savedDuplicates.clear();
+    String merchant(String value) =>
+        value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    const maxTransactionTimeDifference = Duration(minutes: 10);
+    for (var i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      if (_confirmedSeparate.contains(i)) {
+        continue;
+      }
+      final destination = destinations[accountFor(row)];
+      if (destination == null) continue;
+      final instrument = instruments[accountFor(row)];
+      final userCardId =
+          destination.isEmpty || destination.startsWith('instrument:')
+          ? null
+          : destination;
+      final kind = row.isTransfer
+          ? TxnEntryKind.transfer
+          : row.isInvestment
+          ? TxnEntryKind.investment
+          : row.isCredit
+          ? TxnEntryKind.income
+          : TxnEntryKind.spend;
+      final saved = existing.cast<TransactionEntry?>().firstWhere((candidate) {
+        if (candidate == null || candidate.status != 'active') return false;
+        final timeDifference = candidate.occurredAt
+            .toLocal()
+            .difference(row.date)
+            .abs();
+        return candidate.amount.paise == row.amount.paise &&
+            timeDifference <= maxTransactionTimeDifference &&
+            merchant(candidate.merchantName ?? '') ==
+                merchant(row.description) &&
+            candidate.userCardId == userCardId &&
+            (instrument == null || candidate.instrument == instrument) &&
+            candidate.entryKind == kind;
+      }, orElse: () => null);
+      if (saved != null) {
+        savedDuplicates[i] =
+            'Possible duplicate of saved ${saved.entryKind.label.toLowerCase()} transaction ${saved.id}: exact amount, merchant and account, within 10 minutes. Review it, keep both, edit or skip it.';
+      }
+    }
+  }
+
+  String? exclusionReason(int index) {
+    final row = rows[index];
+    final reasons = <String>[
+      if (validateImportedTransaction(row) case final String issue) issue,
+      if (savedDuplicates[index] case final String issue) issue,
+    ];
+    if (reasons.isNotEmpty) return reasons.join('\n');
+    return excluded.contains(index)
+        ? 'Skipped by you. Select this row to include it again.'
+        : null;
+  }
+
   final Map<String, String> destinations = {};
+  final Map<String, String> destinationNotes = {};
+  final Map<String, TxnInstrument> instruments = {};
   final Map<String, StatementImport> _completed = {};
   bool submitting = false;
   bool _submissionStarted = false;
@@ -202,41 +266,27 @@ class TransactionImportSession {
     required this.statement,
   }) {
     rows = List.of(statement.transactions);
-    final seen = <String>{};
     final today = DateTime.now();
     for (var i = 0; i < rows.length; i++) {
       final row = rows[i];
-      final identity =
-          '${row.date.toIso8601String()}|${row.amount.paise}|${row.description.trim().toLowerCase()}|${accountFor(row)}|${row.isCredit}|${row.isTransfer}|${row.bankReference?.toUpperCase()}';
-      final isRepeat = !seen.add(identity);
-      final possibleCredit =
-          !row.isCredit &&
-          !row.isTransfer &&
-          RegExp(
-            r'\b(?:salary|refund|cashback|reversal|account transfer|credit card bill payment|repayment)\b',
-            caseSensitive: false,
-          ).hasMatch(row.description);
       final future = row.date.isAfter(
         DateTime(today.year, today.month, today.day + 1),
       );
-      if (isRepeat || future || possibleCredit) {
+      if (future && row.reviewReasons.isEmpty) {
         rows[i] = ParsedStatementLine(
           date: row.date,
           description: row.description,
           amount: row.amount,
           isCredit: row.isCredit,
           isTransfer: row.isTransfer,
+          isInvestment: row.isInvestment,
           sourceAccount: row.sourceAccount,
           bankReference: row.bankReference,
           sourceRowId: row.sourceRowId,
           reviewReasons: [
             ...row.reviewReasons,
-            if (isRepeat)
-              'Repeated date, amount and merchant. Use Edit to confirm a separate purchase, or leave excluded.',
             if (future)
               'This date is in the future. Verify it using Edit before importing.',
-            if (possibleCredit)
-              'This may be income, a refund or a transfer. Verify its type using Edit.',
           ],
         );
       }
@@ -250,13 +300,120 @@ class TransactionImportSession {
       row.sourceAccount?.trim().isNotEmpty == true
       ? row.sourceAccount!.trim()
       : unknownAccount;
-  Set<String> get accounts => rows
-      .where((row) => !row.isCredit && !row.isTransfer)
-      .map(accountFor)
-      .toSet();
+  Set<String> get accounts => rows.map(accountFor).toSet();
+
+  /// Infer a source instrument conservatively. Card linking requires a unique
+  /// exact last-four match; cash, UPI/bank and wallet labels are safe defaults.
+  /// Ambiguous sources remain editable and import as unlinked "other".
+  void suggestDestinations(
+    List<UserCard> cards, {
+    List<BankAccountSummary> bankAccounts = const [],
+  }) {
+    for (final account in accounts) {
+      if (destinations.containsKey(account)) {
+        if (destinations[account]!.isEmpty) {
+          destinations[account] = 'instrument:other';
+          instruments[account] ??= TxnInstrument.other;
+          destinationNotes[account] ??=
+              'No linked account selected. This will import as an unlinked transaction.';
+        }
+        continue;
+      }
+      final lower = account.toLowerCase();
+      final suffixes = RegExp(
+        r'(?<!\d)\d{4}(?!\d)',
+      ).allMatches(account).map((match) => match.group(0)!).toSet();
+      final matches = cards.where((card) {
+        final last4 = card.last4?.replaceAll(RegExp(r'\D'), '');
+        return last4 != null && suffixes.contains(last4);
+      }).toList();
+      final bankMatches = bankAccounts.where((bank) {
+        final last4 = bank.accountLast4.replaceAll(RegExp(r'\D'), '');
+        if (!suffixes.contains(last4)) return false;
+        final issuers = [bank.issuerName, bank.issuerShortName, bank.issuerSlug]
+            .whereType<String>()
+            .expand(
+              (value) => RegExp(r'[a-z0-9]+').allMatches(value.toLowerCase()),
+            )
+            .map((match) => match.group(0)!)
+            .where((value) => value.length >= 3)
+            .toSet();
+        final sourceTokens = RegExp(
+          r'[a-z0-9]+',
+        ).allMatches(lower).map((match) => match.group(0)!).toSet();
+        return issuers.isEmpty || issuers.intersection(sourceTokens).isNotEmpty;
+      }).toList();
+      if (matches.length == 1) {
+        final card = matches.single;
+        destinations[account] = card.id;
+        instruments[account] = card.cardType == 'credit'
+            ? TxnInstrument.creditCard
+            : TxnInstrument.debitCard;
+        destinationNotes[account] =
+            'Matched to ${card.nickname?.isNotEmpty == true ? card.nickname : card.cardName} by card ending ${card.last4}.';
+      } else if (bankMatches.length == 1) {
+        final bank = bankMatches.single;
+        destinations[account] = 'instrument:upi_bank';
+        instruments[account] = TxnInstrument.upiBank;
+        final issuer = bank.issuerShortName ?? bank.issuerName ?? 'bank';
+        destinationNotes[account] =
+            'Matched to your $issuer account ending ${bank.accountLast4}, seen in your imported bank messages.';
+      } else if (RegExp(r'\bcash\b').hasMatch(lower)) {
+        destinations[account] = 'instrument:cash';
+        instruments[account] = TxnInstrument.cash;
+        destinationNotes[account] = 'Detected cash from the statement source.';
+      } else if (RegExp(r'\b(?:upi|vpa|imps|neft|rtgs)\b').hasMatch(lower)) {
+        destinations[account] = 'instrument:upi_bank';
+        instruments[account] = TxnInstrument.upiBank;
+        destinationNotes[account] =
+            'Detected UPI or bank payment from the statement source.';
+      } else if (RegExp(
+        r'\b(?:wallet|paytm|phonepe wallet|amazon pay)\b',
+      ).hasMatch(lower)) {
+        destinations[account] = 'instrument:wallet';
+        instruments[account] = TxnInstrument.wallet;
+        destinationNotes[account] =
+            'Detected a digital wallet from the statement source.';
+      } else if (matches.isEmpty &&
+          RegExp(r'\b(?:bank|savings|current account|a/c)\b').hasMatch(lower)) {
+        destinations[account] = 'instrument:upi_bank';
+        instruments[account] = TxnInstrument.upiBank;
+        destinationNotes[account] =
+            'Detected a bank account from the statement source. You can change this if it was a card or another payment method.';
+      } else if (matches.isEmpty &&
+          RegExp(
+            r'\b(?:hdfc|sbi|icici|axis|kotak|idfc|indusind|yes bank|union bank|canara|bob|bank of baroda|pnb|punjab national bank)\b',
+          ).hasMatch(lower) &&
+          suffixes.length == 1 &&
+          !RegExp(r'\b(?:credit|debit|card)\b').hasMatch(lower)) {
+        final last4 = suffixes.single;
+        destinations[account] = 'instrument:upi_bank';
+        instruments[account] = TxnInstrument.upiBank;
+        destinationNotes[account] =
+            'Recognized a bank account ending $last4 from the bank name and account number. Change it if this source is something else.';
+      } else if (RegExp(r'\bcredit\b').hasMatch(lower) && matches.isEmpty) {
+        destinations[account] = 'instrument:credit_card';
+        instruments[account] = TxnInstrument.creditCard;
+        destinationNotes[account] =
+            'Detected a credit card, but no saved card matched its ending. It will stay unlinked.';
+      } else if (RegExp(r'\bdebit\b').hasMatch(lower) && matches.isEmpty) {
+        destinations[account] = 'instrument:debit_card';
+        instruments[account] = TxnInstrument.debitCard;
+        destinationNotes[account] =
+            'Detected a debit card, but no saved card matched its ending. It will stay unlinked.';
+      } else {
+        destinations[account] = 'instrument:other';
+        instruments[account] = TxnInstrument.other;
+        destinationNotes[account] = matches.length > 1
+            ? 'More than one card matches. Kept unlinked so you can choose safely.'
+            : 'Could not identify this source confidently. It will be saved as an unlinked account; choose a type if you recognize it.';
+      }
+    }
+  }
+
   bool eligible(int index) =>
-      !rows[index].isCredit &&
-      !rows[index].isTransfer &&
+      !savedDuplicates.containsKey(index) &&
+      rows[index].reviewReasons.isEmpty &&
       validateImportedTransaction(rows[index]) == null;
   List<int> get selected => [
     for (var i = 0; i < rows.length; i++)
@@ -290,6 +447,15 @@ class TransactionImportSession {
     }
   }
 
+  void confirmSeparate(int index) {
+    if (reviewLocked) {
+      throw StateError('Finish or retry this import before editing rows.');
+    }
+    _confirmedSeparate.add(index);
+    savedDuplicates.remove(index);
+    if (eligible(index)) excluded.remove(index);
+  }
+
   void addCorrectedRow(ImportRejectedRow rejected, ParsedStatementLine row) {
     if (reviewLocked) {
       throw StateError('Finish or retry this import before editing rows.');
@@ -306,6 +472,14 @@ class TransactionImportSession {
     occurredAt: rows[index].date,
     amount: rows[index].amount,
     merchantName: rows[index].description,
+    entryKind: rows[index].isTransfer
+        ? TxnEntryKind.transfer
+        : rows[index].isInvestment
+        ? TxnEntryKind.investment
+        : rows[index].isCredit
+        ? TxnEntryKind.income
+        : TxnEntryKind.spend,
+    instrument: instruments[accountFor(rows[index])],
     bankReference: rows[index].bankReference,
     importRowKey: rowKey(index),
     sourceAccount: rows[index].sourceAccount?.replaceAllMapped(
@@ -321,7 +495,7 @@ class TransactionImportSession {
     if (submitting) throw StateError('An import is already in progress.');
     if (!ready) {
       throw StateError(
-        'Select valid spending and map every selected source account.',
+        'Select valid transactions and map every selected source account.',
       );
     }
     _submissionStarted = true;
@@ -393,7 +567,11 @@ class TransactionImportSession {
         if (_completed.containsKey(key)) continue;
         final dates = batch.indices.map((i) => rows[i].date).toList()..sort();
         final imported = await repository.confirmStatementImport(
-          userCardId: destination.isEmpty ? null : destination,
+          userCardId:
+              destination.isEmpty || destination.startsWith('instrument:')
+              ? null
+              : destination,
+          instrument: instruments[batch.account] ?? TxnInstrument.other,
           statementFrom: dates.first,
           statementTo: dates.last,
           closingBalance: batches.length == 1 ? statement.closingBalance : null,

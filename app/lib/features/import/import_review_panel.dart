@@ -6,6 +6,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/import_models.dart';
 import '../../data/transaction_import_pipeline.dart';
+import '../../data/user_cards_repository.dart';
 
 /// All document and screenshot adapters share this review and commit workflow.
 class ImportReviewPanel extends ConsumerStatefulWidget {
@@ -24,6 +25,51 @@ class ImportReviewPanel extends ConsumerStatefulWidget {
 
 class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
   bool _done = false;
+  String _filter = 'All';
+  List<TransactionEntry> _saved = [];
+  bool _checking = false;
+  bool _savedCheckUnavailable = false;
+  bool _destinationsSuggested = false;
+  String? _duplicateError;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(_checkDuplicates);
+  }
+
+  Future<void> _checkDuplicates() async {
+    final repository = ref.read(userCardsRepositoryProvider);
+    if (repository == null) {
+      setState(() => _savedCheckUnavailable = true);
+      return;
+    }
+    setState(() {
+      _checking = true;
+      _duplicateError = null;
+    });
+    try {
+      // Fetch from the database, not the potentially stale Activity cache.
+      final saved = await repository.fetchTransactions();
+      if (!mounted) return;
+      setState(() {
+        _saved = saved;
+        _savedCheckUnavailable = false;
+        session.checkSavedDuplicates(_saved);
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _savedCheckUnavailable = true;
+          _duplicateError =
+              'Saved transactions could not be checked. Retry, or continue with server duplicate checks at import.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
   String? _error;
   TransactionImportSession get session => widget.session;
   bool get locked => session.reviewLocked;
@@ -64,15 +110,22 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
     final row = index == null ? null : session.rows[index];
     final edited = await showDialog<ParsedStatementLine>(
       context: context,
-      builder: (_) =>
-          _EditImportRow(row: row, raw: rejected?.cells.join(' | ')),
+      builder: (_) => _EditImportRow(
+        row: row,
+        raw: rejected?.cells.join(' | '),
+        reason: index == null
+            ? rejected?.reason
+            : session.exclusionReason(index),
+      ),
     );
     if (edited == null || !mounted) return;
     setState(() {
       if (index == null) {
         session.addCorrectedRow(rejected!, edited);
+        session.checkSavedDuplicates(_saved);
       } else {
         session.replaceRow(index, edited);
+        session.checkSavedDuplicates(_saved);
       }
     });
   }
@@ -98,11 +151,11 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
               ),
               Text(session.progress.description, textAlign: TextAlign.center),
               Text(
-                '${session.rows.length - session.selected.length} detected rows were excluded. ${rejected.length} unrecognized rows were not imported.',
+                '${session.rows.length - session.selected.length} detected rows were skipped or held for duplicate review. ${rejected.length} unrecognized rows were not imported.',
               ),
               if (session.progress.duplicates > 0)
                 const Text(
-                  'Possible duplicates are held for review and excluded from spending until resolved.',
+                  'Possible duplicates are held for review until you resolve them.',
                 ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -114,23 +167,80 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       );
     }
     final cards = ref.watch(userCardsProvider);
+    final bankAccounts = ref.watch(bankAccountSummariesProvider);
+    final bankDataResolved = bankAccounts.hasValue || bankAccounts.hasError;
+    if (cards.hasValue && bankDataResolved && !_destinationsSuggested) {
+      _destinationsSuggested = true;
+      session.suggestDestinations(
+        cards.valueOrNull ?? const [],
+        bankAccounts: bankAccounts.valueOrNull ?? const [],
+      );
+      session.checkSavedDuplicates(_saved);
+    } else if (cards.hasError && bankDataResolved && !_destinationsSuggested) {
+      _destinationsSuggested = true;
+      session.suggestDestinations(
+        const [],
+        bankAccounts: bankAccounts.valueOrNull ?? const [],
+      );
+    }
     final selected = session.selected.toSet();
-    final unresolved = session.rows
+    final selectedOutPaise = session.selected
         .where(
-          (r) =>
-              !r.isCredit &&
-              !r.isTransfer &&
-              validateImportedTransaction(r) != null,
+          (i) =>
+              !session.rows[i].isCredit &&
+              !session.rows[i].isTransfer &&
+              !session.rows[i].isInvestment,
         )
-        .length;
+        .fold(0, (sum, i) => sum + session.rows[i].amount.paise);
+    final selectedInPaise = session.selected
+        .where((i) => session.rows[i].isCredit && !session.rows[i].isInvestment)
+        .fold(0, (sum, i) => sum + session.rows[i].amount.paise);
+    final unresolved =
+        session.rows
+            .where(
+              (r) =>
+                  r.reviewReasons.isNotEmpty ||
+                  validateImportedTransaction(r) != null,
+            )
+            .length +
+        session.savedDuplicates.length +
+        rejected.length;
 
+    final excludedCount =
+        session.rows.length - selected.length + rejected.length;
+    final visible = [
+      for (var i = 0; i < session.rows.length; i++)
+        if (_filter == 'All' ||
+            (_filter == 'Ready' && selected.contains(i)) ||
+            (_filter == 'Needs review' &&
+                (session.savedDuplicates.containsKey(i) ||
+                    session.rows[i].reviewReasons.isNotEmpty ||
+                    validateImportedTransaction(session.rows[i]) != null)) ||
+            (_filter == 'Skipped' &&
+                session.excluded.contains(i) &&
+                !session.savedDuplicates.containsKey(i) &&
+                session.rows[i].reviewReasons.isEmpty &&
+                validateImportedTransaction(session.rows[i]) == null) ||
+            (_filter == 'Money in' && session.rows[i].isCredit) ||
+            (_filter == 'Money out' &&
+                !session.rows[i].isCredit &&
+                !session.rows[i].isTransfer &&
+                !session.rows[i].isInvestment) ||
+            (_filter == 'Investments' && session.rows[i].isInvestment) ||
+            (_filter == 'Transfers' && session.rows[i].isTransfer) ||
+            (_filter == 'Duplicates' && session.savedDuplicates.containsKey(i)))
+          i,
+    ];
+    final visibleRejected = ['All', 'Needs review'].contains(_filter)
+        ? rejected
+        : <ImportRejectedRow>[];
     return PopScope(
       canPop: !session.submitting,
       child: Column(
         children: [
           Expanded(
             child: ListView.builder(
-              itemCount: 1 + session.rows.length + rejected.length,
+              itemCount: 1 + visible.length + visibleRejected.length,
               itemBuilder: (context, position) {
                 if (position == 0) {
                   return Column(
@@ -142,14 +252,71 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                       ),
                       Text('${session.rows.length} transactions found'),
                       Text(
-                        '${selected.length} selected · ₹${(session.selectedPaise / 100).toStringAsFixed(2)}',
+                        '${selected.length} selected · money out ₹${(selectedOutPaise / 100).toStringAsFixed(2)} · money in ₹${(selectedInPaise / 100).toStringAsFixed(2)}',
                       ),
                       Text(
-                        '${session.rows.where((r) => r.isCredit).length} credits · ${session.rows.where((r) => !r.isCredit && r.isTransfer).length} transfers excluded · $unresolved need checking · ${rejected.length} unrecognized rows',
+                        '${session.rows.where((r) => !r.isCredit && !r.isTransfer && !r.isInvestment).length} money out · ${session.rows.where((r) => r.isCredit && !r.isInvestment).length} money in · ${session.rows.where((r) => r.isTransfer).length} transfers · ${session.rows.where((r) => r.isInvestment).length} investments · $unresolved need review',
                       ),
-                      const Text(
-                        'Check dates and amounts. Map each source account to its matching card or Other spending. Credits and transfers are excluded from this spending import.',
+                      Card(
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.rule,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          title: Text(
+                            '$unresolved rows need review · $excludedCount not selected',
+                          ),
+                          subtitle: const Text(
+                            'Review the reason, correct the row, keep a possible duplicate, or skip it. Recognized transactions are selected automatically.',
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => setState(() => _filter = 'Needs review'),
+                        ),
                       ),
+                      if (_checking) const LinearProgressIndicator(),
+                      Text(
+                        _checking
+                            ? 'Checking saved transactions…'
+                            : _savedCheckUnavailable
+                            ? 'Saved transaction check unavailable. The server still checks for duplicates during import.'
+                            : 'Possible saved duplicates: ${session.savedDuplicates.length}. Review each match before importing.',
+                      ),
+                      if (_duplicateError != null) Text(_duplicateError!),
+                      TextButton(
+                        onPressed: locked || _checking
+                            ? null
+                            : _checkDuplicates,
+                        child: const Text('Recheck saved transactions'),
+                      ),
+                      Wrap(
+                        spacing: 6,
+                        children: [
+                          for (final filter in [
+                            'All',
+                            'Ready',
+                            'Needs review',
+                            'Skipped',
+                            'Money in',
+                            'Money out',
+                            'Investments',
+                            'Transfers',
+                            'Duplicates',
+                          ])
+                            ChoiceChip(
+                              label: Text(filter),
+                              selected: _filter == filter,
+                              onSelected: (_) =>
+                                  setState(() => _filter = filter),
+                            ),
+                        ],
+                      ),
+                      if (visible.isEmpty && visibleRejected.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                            'No transactions in this filter. Choose All to see the full preview.',
+                          ),
+                        ),
                       for (final warning in session.statement.warnings.toSet())
                         Text(
                           warning,
@@ -163,59 +330,136 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                           icon: const Icon(Icons.tune),
                           label: const Text('Columns and formats'),
                         ),
+                      if (session.accounts.isNotEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8, bottom: 2),
+                          child: Text('Statement accounts'),
+                        ),
                       for (final account in session.accounts)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: DropdownButtonFormField<String>(
-                            key: ValueKey('destination:$account'),
-                            initialValue: session.destinations[account],
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText: 'Destination: $account',
-                            ),
-                            items: [
-                              const DropdownMenuItem(
-                                value: '',
-                                child: Text('Other spending (no card)'),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              DropdownButtonFormField<String>(
+                                key: ValueKey('destination:$account'),
+                                initialValue: session.destinations[account],
+                                isExpanded: true,
+                                decoration: InputDecoration(
+                                  labelText: account,
+                                  helperText: session.destinationNotes[account],
+                                ),
+                                items: [
+                                  const DropdownMenuItem(
+                                    value: '',
+                                    child: Text(
+                                      'Other account (no linked card)',
+                                    ),
+                                  ),
+                                  const DropdownMenuItem(
+                                    value: 'instrument:cash',
+                                    child: Text('Cash (unlinked)'),
+                                  ),
+                                  const DropdownMenuItem(
+                                    value: 'instrument:upi_bank',
+                                    child: Text(
+                                      'Bank account / UPI (unlinked)',
+                                    ),
+                                  ),
+                                  const DropdownMenuItem(
+                                    value: 'instrument:wallet',
+                                    child: Text('Digital wallet (unlinked)'),
+                                  ),
+                                  const DropdownMenuItem(
+                                    value: 'instrument:credit_card',
+                                    child: Text('Credit card (unlinked)'),
+                                  ),
+                                  const DropdownMenuItem(
+                                    value: 'instrument:debit_card',
+                                    child: Text('Debit card (unlinked)'),
+                                  ),
+                                  const DropdownMenuItem(
+                                    value: 'instrument:other',
+                                    child: Text(
+                                      'Other account (no linked card)',
+                                    ),
+                                  ),
+                                  if (session.destinations[account]?.startsWith(
+                                            'instrument:',
+                                          ) !=
+                                          true &&
+                                      session
+                                              .destinations[account]
+                                              ?.isNotEmpty ==
+                                          true &&
+                                      !(cards.valueOrNull ?? []).any(
+                                        (card) =>
+                                            card.id ==
+                                            session.destinations[account],
+                                      ))
+                                    const DropdownMenuItem(
+                                      value: 'missing-card',
+                                      enabled: false,
+                                      child: Text(
+                                        'Previously selected card (unavailable)',
+                                      ),
+                                    ),
+                                  for (final card in cards.valueOrNull ?? [])
+                                    DropdownMenuItem(
+                                      value: card.id,
+                                      child: Text(
+                                        card.nickname?.isNotEmpty == true
+                                            ? card.nickname!
+                                            : card.cardName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                ],
+                                onChanged: locked
+                                    ? null
+                                    : (value) => setState(() {
+                                        if (value == null) return;
+                                        session.destinations[account] = value;
+                                        if (value.startsWith('instrument:')) {
+                                          session.instruments[account] =
+                                              TxnInstrument.values.firstWhere(
+                                                (type) =>
+                                                    type.wireValue ==
+                                                    value.substring(
+                                                      'instrument:'.length,
+                                                    ),
+                                              );
+                                          session.destinationNotes[account] =
+                                              'Saved as ${session.instruments[account]!.label.toLowerCase()} without linking a card.';
+                                        } else {
+                                          final matchingCards =
+                                              (cards.valueOrNull ?? [])
+                                                  .where(
+                                                    (item) => item.id == value,
+                                                  )
+                                                  .toList();
+                                          final card = matchingCards.isEmpty
+                                              ? null
+                                              : matchingCards.first;
+                                          session.instruments[account] =
+                                              card?.cardType == 'credit'
+                                              ? TxnInstrument.creditCard
+                                              : TxnInstrument.debitCard;
+                                          session.destinationNotes[account] =
+                                              card == null
+                                              ? 'The saved card is unavailable. Choose another account type.'
+                                              : 'Linked to ${card.nickname?.isNotEmpty == true ? card.nickname : card.cardName}.';
+                                        }
+                                        session.checkSavedDuplicates(_saved);
+                                      }),
                               ),
-                              if (session.destinations[account]?.isNotEmpty ==
-                                      true &&
-                                  !(cards.valueOrNull ?? []).any(
-                                    (card) =>
-                                        card.id ==
-                                        session.destinations[account],
-                                  ))
-                                DropdownMenuItem(
-                                  value: session.destinations[account],
-                                  enabled: false,
-                                  child: const Text(
-                                    'Previously selected card (unavailable)',
-                                  ),
-                                ),
-                              for (final card in cards.valueOrNull ?? [])
-                                DropdownMenuItem(
-                                  value: card.id,
-                                  child: Text(
-                                    card.nickname?.isNotEmpty == true
-                                        ? card.nickname!
-                                        : card.cardName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
                             ],
-                            onChanged: locked
-                                ? null
-                                : (value) => setState(() {
-                                    if (value != null) {
-                                      session.destinations[account] = value;
-                                    }
-                                  }),
                           ),
                         ),
                       if (cards.hasError)
                         Text(
-                          'Cards could not be loaded. Other spending is available; retry the card list before assigning a card.',
+                          'Cards could not be loaded. An unlinked account is available; retry the card list before assigning a card.',
                         ),
                       if (cards.hasError)
                         TextButton(
@@ -232,7 +476,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                                 : () => setState(() {
                                     session.excluded.clear();
                                   }),
-                            child: const Text('Select valid spending'),
+                            child: const Text('Select all ready transactions'),
                           ),
                           TextButton(
                             onPressed: locked
@@ -252,9 +496,9 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                     ],
                   );
                 }
-                final rowIndex = position - 1;
-                if (rowIndex >= session.rows.length) {
-                  final rejectedRow = rejected[rowIndex - session.rows.length];
+                final offset = position - 1;
+                if (offset >= visible.length) {
+                  final rejectedRow = visibleRejected[offset - visible.length];
                   return ListTile(
                     title: Text('Unrecognized: ${rejectedRow.sourceRowId}'),
                     subtitle: Text(
@@ -270,8 +514,9 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                     ),
                   );
                 }
+                final rowIndex = visible[offset];
                 final row = session.rows[rowIndex];
-                final issue = validateImportedTransaction(row);
+                final issue = session.exclusionReason(rowIndex);
                 return ListTile(
                   leading: Checkbox(
                     value: selected.contains(rowIndex),
@@ -286,36 +531,69 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                           }),
                   ),
                   title: Text(row.description),
-                  subtitle: Text(
-                    '${row.date.toIso8601String().replaceFirst('T', ' ')} · ${session.accountFor(row)}\n'
-                    '${row.isCredit
-                        ? 'Credit, excluded'
-                        : row.isTransfer
-                        ? 'Transfer, excluded'
-                        : issue ?? 'Spending'}',
-                  ),
-                  trailing: Column(
-                    mainAxisSize: MainAxisSize.min,
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('₹${row.amount.rupees.toStringAsFixed(2)}'),
-                      InkWell(
-                        onTap: locked ? null : () => _edit(rowIndex),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Text(
-                            'Edit',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
+                      Text(
+                        '${row.isTransfer
+                            ? 'Transfer'
+                            : row.isInvestment
+                            ? 'Investment'
+                            : row.isCredit
+                            ? 'Money in'
+                            : 'Money out'} · ${row.date.toIso8601String().replaceFirst('T', ' ')} · ${session.accountFor(row)}',
+                      ),
+                      Text(row.sourceRowId ?? 'Source row ${rowIndex + 1}'),
+                      Text(issue ?? 'Ready to import'),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 0,
+                        children: [
+                          if (session.savedDuplicates.containsKey(rowIndex))
+                            TextButton(
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                              ),
+                              onPressed: locked
+                                  ? null
+                                  : () => setState(
+                                      () => session.confirmSeparate(rowIndex),
+                                    ),
+                              child: const Text('Keep both'),
                             ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                            ),
+                            onPressed: locked ? null : () => _edit(rowIndex),
+                            child: const Text('Edit'),
                           ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
+                  trailing: Text('₹${row.amount.rupees.toStringAsFixed(2)}'),
                 );
               },
             ),
           ),
+          if (excludedCount > 0 && !locked)
+            TextButton.icon(
+              onPressed: () => setState(() => _filter = 'Needs review'),
+              icon: const Icon(Icons.edit_note),
+              label: const Text('Review rows needing attention'),
+            ),
+          if (excludedCount > 0)
+            Text(
+              '$unresolved rows need review. $excludedCount rows are not selected; correct, include, or skip them. All selected transaction types will be imported.',
+            ),
           if (_error != null)
             Text(
               _error!,
@@ -343,7 +621,8 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
               width: double.infinity,
               child: FilledButton(
                 onPressed:
-                    session.submitting ||
+                    _checking ||
+                        session.submitting ||
                         !session.ready ||
                         ref.watch(importRepositoryProvider) == null
                     ? null
@@ -351,7 +630,9 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                 child: Text(
                   session.hasCommittedBatches && _error != null
                       ? 'Retry remaining import'
-                      : 'Confirm import',
+                      : excludedCount > 0
+                      ? 'Import ${selected.length} transactions · skip $excludedCount'
+                      : 'Import ${selected.length} transactions',
                 ),
               ),
             ),
@@ -365,7 +646,8 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
 class _EditImportRow extends StatefulWidget {
   final ParsedStatementLine? row;
   final String? raw;
-  const _EditImportRow({this.row, this.raw});
+  final String? reason;
+  const _EditImportRow({this.row, this.raw, this.reason});
   @override
   State<_EditImportRow> createState() => _EditImportRowState();
 }
@@ -380,10 +662,12 @@ class _EditImportRowState extends State<_EditImportRow> {
   late final _amount = TextEditingController(
     text: widget.row?.amount.rupees.toStringAsFixed(2) ?? '',
   );
-  late var _kind = widget.row?.isCredit == true
-      ? 'credit'
-      : widget.row?.isTransfer == true
+  late var _kind = widget.row?.isTransfer == true
       ? 'transfer'
+      : widget.row?.isInvestment == true
+      ? 'investment'
+      : widget.row?.isCredit == true
+      ? 'income'
       : 'spend';
   String? _error;
   @override
@@ -421,9 +705,11 @@ class _EditImportRowState extends State<_EditImportRow> {
       date: date,
       description: _description.text.trim(),
       amount: Money.fromRupees(value),
-      isCredit: _kind == 'credit',
+      isCredit: _kind == 'income',
       isTransfer: _kind == 'transfer',
+      isInvestment: _kind == 'investment',
       sourceAccount: widget.row?.sourceAccount,
+      bankReference: widget.row?.bankReference,
       sourceRowId: widget.row?.sourceRowId,
     );
     final error = validateImportedTransaction(row);
@@ -437,44 +723,59 @@ class _EditImportRowState extends State<_EditImportRow> {
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: const Text('Review transaction'),
-    content: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.raw != null) SelectableText(widget.raw!),
-          TextField(
-            controller: _date,
-            decoration: const InputDecoration(
-              labelText: 'Date (YYYY-MM-DD, optional time)',
-            ),
-          ),
-          TextField(
-            controller: _description,
-            decoration: const InputDecoration(labelText: 'Description'),
-          ),
-          TextField(
-            controller: _amount,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Amount (INR)'),
-          ),
-          DropdownButtonFormField<String>(
-            isExpanded: true,
-            initialValue: _kind,
-            items: const [
-              DropdownMenuItem(value: 'spend', child: Text('Spending')),
-              DropdownMenuItem(
-                value: 'credit',
-                child: Text('Credit / income (excluded)'),
+    content: ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.65,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.reason != null) ...[
+              Text(
+                widget.reason!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
-              DropdownMenuItem(
-                value: 'transfer',
-                child: Text('Transfer / repayment (excluded)'),
+              const SizedBox(height: 12),
+              const Text(
+                'Check the original statement, correct any fields or transaction type, then save. The reviewed row is included automatically. A possible duplicate can also be kept or skipped.',
               ),
             ],
-            onChanged: (v) => _kind = v!,
-          ),
-          if (_error != null) Text(_error!),
-        ],
+            if (widget.raw != null) SelectableText(widget.raw!),
+            TextField(
+              controller: _date,
+              decoration: const InputDecoration(
+                labelText: 'Date (YYYY-MM-DD, optional time)',
+              ),
+            ),
+            TextField(
+              controller: _description,
+              decoration: const InputDecoration(labelText: 'Description'),
+            ),
+            TextField(
+              controller: _amount,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Amount (INR)'),
+            ),
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: _kind,
+              items: const [
+                DropdownMenuItem(value: 'spend', child: Text('Money out')),
+                DropdownMenuItem(value: 'income', child: Text('Money in')),
+                DropdownMenuItem(
+                  value: 'investment',
+                  child: Text('Investment'),
+                ),
+                DropdownMenuItem(value: 'transfer', child: Text('Transfer')),
+              ],
+              onChanged: (v) => _kind = v!,
+            ),
+            if (_error != null) Text(_error!),
+          ],
+        ),
       ),
     ),
     actions: [

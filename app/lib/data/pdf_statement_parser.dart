@@ -222,6 +222,10 @@ ParsedStatementLine? _parseTransactionBlock(
               r'\b(?:TRANSFER|CREDIT CARD BILL PAYMENT|REPAYMENT)\b',
               caseSensitive: false,
             ).hasMatch(description),
+      isInvestment: RegExp(
+        r'\b(?:MUTUAL FUND|SIP|INVESTMENT)\b',
+        caseSensitive: false,
+      ).hasMatch(description),
     );
   }
   final candidates = _amountToken.allMatches(afterDate).toList();
@@ -250,6 +254,10 @@ ParsedStatementLine? _parseTransactionBlock(
     description: description,
     amount: amount,
     isCredit: isCredit,
+    isInvestment: RegExp(
+      r'\b(?:MUTUAL FUND|SIP|INVESTMENT)\b',
+      caseSensitive: false,
+    ).hasMatch(description),
     reviewReasons: [
       ...reasons,
       if (candidates.length > 1)
@@ -285,6 +293,7 @@ ParsedStatement parseStatementText(
           amount: parsed.amount,
           isCredit: parsed.isCredit,
           isTransfer: parsed.isTransfer,
+          isInvestment: parsed.isInvestment,
           sourceAccount: parsed.sourceAccount,
           sourceRowId: sourceRowId,
           reviewReasons: parsed.reviewReasons,

@@ -8,6 +8,7 @@ import 'package:pandapay/data/csv_statement_parser.dart';
 import 'package:pandapay/data/import_models.dart';
 import 'package:pandapay/data/import_repository.dart';
 import 'package:pandapay/data/transaction_import_pipeline.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 ParsedStatementLine line(
@@ -24,6 +25,140 @@ ParsedStatementLine line(
 );
 
 void main() {
+  test('saved duplicate is held by destination and can be explicitly kept', () {
+    final row = line(0);
+    final session = TransactionImportSession(
+      fileDigest: 'file',
+      importSource: 'csv',
+      statement: ParsedStatement(transactions: [row]),
+    );
+    final saved = TransactionEntry(
+      id: 'saved',
+      amount: row.amount,
+      occurredAt: row.date,
+      merchantName: ' SHOP 0 ',
+      userCardId: 'card',
+      source: 'sms',
+      status: 'active',
+    );
+    session.destinations[TransactionImportSession.unknownAccount] = '';
+    session.checkSavedDuplicates([saved]);
+    expect(session.selected, [0]);
+    session.destinations[TransactionImportSession.unknownAccount] = 'card';
+    session.checkSavedDuplicates([saved]);
+    expect(session.selected, isEmpty);
+    expect(
+      session.exclusionReason(0),
+      contains('Possible duplicate of saved spending transaction saved'),
+    );
+    session.confirmSeparate(0);
+    session.checkSavedDuplicates([saved]);
+    expect(session.selected, [0]);
+  });
+
+  test(
+    'same place with a different amount or time is not a saved duplicate',
+    () {
+      final row = ParsedStatementLine(
+        date: DateTime(2026, 10, 11, 20, 59),
+        description: 'KAVLEKAR PETROLEU',
+        amount: Money.fromRupees(500),
+        sourceAccount: 'HDFC credit 8708',
+        sourceRowId: 'pdf:line:680',
+      );
+      final saved = TransactionEntry(
+        id: 'saved-800',
+        amount: Money.fromRupees(800),
+        occurredAt: DateTime(2026, 10, 11, 15, 21),
+        merchantName: 'KAVLEKAR PETROLEU',
+        userCardId: 'card',
+        source: 'statement',
+        status: 'active',
+      );
+      final session = TransactionImportSession(
+        fileDigest: 'file',
+        importSource: 'statement',
+        statement: ParsedStatement(transactions: [row]),
+      );
+      session.destinations['HDFC credit 8708'] = 'card';
+      session.instruments['HDFC credit 8708'] = TxnInstrument.creditCard;
+
+      session.checkSavedDuplicates([saved]);
+
+      expect(session.savedDuplicates, isEmpty);
+      expect(session.selected, [0]);
+    },
+  );
+
+  test('known bank account suffix is matched as a bank account', () {
+    final session = TransactionImportSession(
+      fileDigest: 'file',
+      importSource: 'statement',
+      statement: ParsedStatement(transactions: [line(0, account: 'HDFC 1797')]),
+    );
+
+    session.suggestDestinations(
+      const [],
+      bankAccounts: [
+        const BankAccountSummary(
+          accountLast4: '1797',
+          availableBalance: null,
+          latestSmsAt: null,
+          smsCount: 2,
+          issuerName: 'HDFC Bank',
+          issuerShortName: 'HDFC',
+        ),
+      ],
+    );
+
+    expect(session.destinations['HDFC 1797'], 'instrument:upi_bank');
+    expect(session.instruments['HDFC 1797'], TxnInstrument.upiBank);
+    expect(
+      session.destinationNotes['HDFC 1797'],
+      contains('account ending 1797'),
+    );
+  });
+
+  test('bank name and last four classify an unsaved account as bank', () {
+    final session = TransactionImportSession(
+      fileDigest: 'file',
+      importSource: 'statement',
+      statement: ParsedStatement(transactions: [line(0, account: 'HDFC 1797')]),
+    );
+
+    session.suggestDestinations(const []);
+
+    expect(session.destinations['HDFC 1797'], 'instrument:upi_bank');
+    expect(
+      session.destinationNotes['HDFC 1797'],
+      contains('Recognized a bank account'),
+    );
+  });
+
+  test(
+    'recognized income and transfers are imported; manual skips explain themselves',
+    () {
+      final session = TransactionImportSession(
+        fileDigest: 'file',
+        importSource: 'csv',
+        statement: ParsedStatement(
+          transactions: [
+            line(0).reviewed(isCredit: true),
+            line(1).reviewed(isTransfer: true),
+            line(2),
+          ],
+        ),
+      );
+      expect(session.selected, [0, 1, 2]);
+      expect(session.inputFor(0).entryKind, TxnEntryKind.income);
+      expect(session.inputFor(1).entryKind, TxnEntryKind.transfer);
+      session.excluded.add(2);
+      expect(session.exclusionReason(2), contains('Skipped by you'));
+      session.replaceRow(0, line(0));
+      expect(session.selected, [0, 1]);
+    },
+  );
+
   test(
     'long Unicode descriptions are batched below the API byte limit',
     () async {
@@ -96,7 +231,7 @@ void main() {
     expect(result.rejectedRows, hasLength(2));
   });
 
-  test('possible credits without a direction are held for explicit review', () {
+  test('description keywords alone do not relabel a transaction as income', () {
     final row = ParsedStatementLine(
       date: DateTime(2026, 10, 2),
       description: 'Salary',
@@ -107,8 +242,8 @@ void main() {
       importSource: 'csv',
       statement: ParsedStatement(transactions: [row]),
     );
-    expect(session.selected, isEmpty);
-    expect(session.rows.single.reviewReasons, isNotEmpty);
+    expect(session.selected, [0]);
+    expect(session.rows.single.reviewReasons, isEmpty);
   });
   test(
     'sniffs content, not extensions, and rejects legacy/empty/mismatched files',
@@ -267,7 +402,7 @@ void main() {
   });
 
   test(
-    'repeated rows are retained but require review; distinct purchases survive',
+    'repeated statement rows remain available for import; explicit duplicates can be reviewed',
     () {
       final first = line(1);
       final repeated = first.reviewed(sourceRowId: 'table:row:3');
@@ -277,11 +412,6 @@ void main() {
         statement: ParsedStatement(transactions: [first, repeated, line(2)]),
       );
       expect(session.rows, hasLength(3));
-      expect(session.selected, [0, 2]);
-      session.replaceRow(
-        1,
-        repeated,
-      ); // Explicit review confirms a real second purchase.
       expect(session.selected, [0, 1, 2]);
     },
   );

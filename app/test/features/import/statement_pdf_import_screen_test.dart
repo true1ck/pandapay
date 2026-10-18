@@ -67,6 +67,7 @@ class _RecordingImportRepository extends ImportRepository {
   @override
   Future<StatementImport> confirmStatementImport({
     required String? userCardId,
+    TxnInstrument instrument = TxnInstrument.other,
     required DateTime statementFrom,
     required DateTime statementTo,
     Money? closingBalance,
@@ -145,24 +146,29 @@ void main() {
       expect(
         tester
             .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Confirm import'),
+              find.byType(FilledButton).last,
             )
             .onPressed,
         isNull,
       );
+      await tester.ensureVisible(
+        find.byType(DropdownButtonFormField<String>).first,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byType(DropdownButtonFormField<String>).first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Other spending (no card)').last);
+      await tester.tap(find.text('Other account (no linked card)').last);
       await tester.pumpAndSettle();
       await tester.ensureVisible(
         find.byType(DropdownButtonFormField<String>).last,
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.byType(DropdownButtonFormField<String>).last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Other spending (no card)').last);
+      await tester.tap(find.text('Other account (no linked card)').last);
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Confirm import'));
-      await tester.tap(find.text('Confirm import'));
+      await tester.ensureVisible(find.byType(FilledButton).last);
+      await tester.tap(find.byType(FilledButton).last);
       await tester.pumpAndSettle();
       expect(repo.lastConfirmArgs!['userCardId'], isNull);
       expect(repo.calls, hasLength(2));
@@ -200,6 +206,8 @@ void main() {
       await tester.tap(find.text('Choose file'));
       await waitForParsing(tester);
 
+      await tester.ensureVisible(find.text('Columns and formats'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Columns and formats'));
       await tester.pumpAndSettle();
       await tester.tap(find.byType(DropdownButtonFormField<ImportDateOrder>));
@@ -210,14 +218,21 @@ void main() {
       await waitForParsing(tester);
 
       expect(find.text('1 transactions found'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.textContaining('TEST MERCHANT'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.textContaining('TEST MERCHANT'), findsOneWidget);
 
+      await tester.ensureVisible(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
       await tester.tap(find.byType(DropdownButtonFormField<String>));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Test Card').last);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Confirm import'));
+      await tester.tap(find.byType(FilledButton).last);
       await tester.pumpAndSettle();
 
       expect(find.text('Statement imported'), findsOneWidget);
