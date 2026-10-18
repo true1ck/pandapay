@@ -1,4 +1,5 @@
 import 'pdf_statement_parser.dart';
+import 'receipt_parser.dart';
 
 class ScreenshotCategorySummary {
   final String category;
@@ -83,7 +84,7 @@ ParsedSpendingScreenshot parseSpendingScreenshotText(String text) {
   }
 
   return ParsedSpendingScreenshot(
-    transactions: statement.transactions,
+    transactions: parseReceiptLines(lines) ?? statement.transactions,
     totalSpendRupees: _number(total?.group(1)),
     periodLabel: _firstPeriodLabel(lines),
     categorySummaries: summaries,
