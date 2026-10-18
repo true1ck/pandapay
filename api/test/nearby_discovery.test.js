@@ -43,6 +43,32 @@ test('builds a location-scoped free discovery query', () => {
   assert.doesNotMatch(query, /supermarket/);
 });
 
+test('uses mapped brand/operator instead of generic names without inventing names', () => {
+  const result = parsePlaceSearchResults([
+    { osm_id: 1, lat: 15, lon: 73, name: 'PETROL PUMP',
+      extratags: { brand: 'IndianOil' }, display_name: 'PETROL PUMP, Panaji' },
+    { osm_id: 2, lat: 15, lon: 73, name: 'petrol pump',
+      extratags: { operator: 'Example Fuels' } },
+    { osm_id: 3, lat: 15, lon: 73, name: 'petrol pump' },
+    { osm_id: 4, lat: 15, lon: 73, name: 'Sunrise Service Station',
+      extratags: { brand: 'IndianOil' } },
+  ], { query: 'petrol pump' });
+  assert.deepEqual(result.map((row) => row.display_name),
+    ['IndianOil', 'Example Fuels', 'petrol pump', 'Sunrise Service Station']);
+  assert.equal(result[0].address, 'PETROL PUMP, Panaji');
+});
+
+test('nearby discovery uses brand for generic names and preserves address details', () => {
+  const [result] = parseOverpassElements([
+    { type: 'node', id: 1, lat: 15, lon: 73, tags: {
+      name: 'petrol pump', brand: 'Shell', amenity: 'fuel',
+      'addr:street': 'Main Road', 'addr:city': 'Panaji',
+    } },
+  ]);
+  assert.equal(result.display_name, 'Shell');
+  assert.equal(result.address, 'Main Road, Panaji');
+});
+
 test('normalizes OSM nodes and ways into PandaPay candidates', () => {
   const result = parseOverpassElements([
     { type: 'node', id: 1, lat: 15.49, lon: 73.83, tags: { name: 'Fresh Mart', shop: 'supermarket' } },

@@ -21,6 +21,7 @@ class NearbyMerchantCandidate {
   final String merchantId;
   final String? displayName;
   final String? categoryId;
+  final String? address;
   final GeoPoint location;
   /// Where this candidate came from. Published PandaPay rows leave this null;
   /// discovery providers use a value such as `osm_candidate` so the UI can
@@ -33,6 +34,7 @@ class NearbyMerchantCandidate {
     required this.location,
     this.displayName,
     this.categoryId,
+    this.address,
     this.source,
     this.confidence,
   });

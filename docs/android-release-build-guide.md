@@ -119,6 +119,26 @@ APK is for this connected-device test only and is not distributable. Future
 updates for this phone must have an ARM64 version code greater than `18036`
 and match the same certificate.
 
+Verified nearby-merchant name/address update on 2026-10-18:
+
+| Device | ABI | Installed package version | APK SHA-256 |
+| --- | --- | ---: | --- |
+| Motorola edge 50 fusion (`ZA222MS4SF`) | `arm64-v8a` | `20046` | `121F3D60D4C6A9295482866A837F9812493A824D70826E31628C82723203A35C` |
+
+Built with `-BuildNumber 18046`, the hosted production endpoints, and
+`-AllowDebugSigningForDeviceTest`. The ARM64 package ID and Android Debug
+certificate matched the baseline above. Installed with `adb install -r` over
+version `20045`; existing account and wallet data remained available.
+
+On-device manual searches verified that `Shell Bengaluru` displays station
+names, addresses, and card suggestions, while `petrol pump` explicitly marks
+generic map names as business-name unavailable and displays their addresses.
+These checks used the hosted API before deployment of the metadata enrichment;
+brand/operator substitution is additionally covered by API regression tests.
+All 365 API tests, 10 Flutter repository tests, and analysis of the changed
+Flutter screen/repository passed. This debug-signed build is for the connected
+device only. Future updates must exceed version `20046` and match its certificate.
+
 ## 5. Canonical build command
 
 Use the repository wrapper; do not assemble a production APK with an ad-hoc

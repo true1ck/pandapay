@@ -83,6 +83,22 @@ function classifyTags(tags = {}) {
   return null;
 }
 
+function placeName(...values) {
+  const names = values.filter((value) => typeof value === 'string')
+    .map((value) => value.trim()).filter(Boolean);
+  // A category entered as an OSM name should not hide a mapped brand/operator.
+  const generic = /^(petrol\s*pump|petrol\s*(station|bunk)|fuel(\s*station)?|gas\s*station|shop|store|supermarket|restaurant|cafe|pharmacy)$/i;
+  return names.find((name) => !generic.test(name)) || names[0] || null;
+}
+
+function placeAddress(tags = {}) {
+  return [...new Set([
+    tags['addr:housenumber'], tags['addr:street'], tags['addr:suburb'],
+    tags['addr:city'], tags['addr:postcode'],
+  ].filter((value) => typeof value === 'string' && value.trim())
+    .map((value) => value.trim()))].join(', ') || null;
+}
+
 function parseOverpassElements(elements = [], { categoryId } = {}) {
   const requestedCategory = normalizeCategory(categoryId);
   const output = [];
@@ -90,7 +106,8 @@ function parseOverpassElements(elements = [], { categoryId } = {}) {
 
   for (const element of elements) {
     const tags = element.tags || {};
-    const name = tags.name || tags['name:en'] || tags.brand;
+    const name = placeName(tags.name, tags['name:en'], tags.official_name,
+      tags.brand, tags.operator, tags.short_name);
     const lat = safeNumber(element.lat ?? element.center?.lat);
     const lng = safeNumber(element.lon ?? element.center?.lon);
     const category = classifyTags(tags);
@@ -108,7 +125,7 @@ function parseOverpassElements(elements = [], { categoryId } = {}) {
       grid_lng: lng,
       source: 'osm_candidate',
       confidence: 'low',
-      address: tags['addr:street'] || tags['addr:city'] || null,
+      address: placeAddress(tags),
     });
     if (output.length >= MAX_RESULTS) break;
   }
@@ -147,7 +164,9 @@ function parsePlaceSearchResults(results = [], { query } = {}) {
         const properties = feature.properties || {};
         return {
           ...properties,
-          display_name: properties.name || properties.city || properties.street,
+          display_name: [properties.name, properties.street, properties.district,
+            properties.city, properties.state, properties.postcode]
+            .filter(Boolean).join(', '),
           lat: Array.isArray(coordinates) ? coordinates[1] : undefined,
           lon: Array.isArray(coordinates) ? coordinates[0] : undefined,
           osm_type: properties.osm_type || feature.properties?.osm_type,
@@ -161,7 +180,11 @@ function parsePlaceSearchResults(results = [], { query } = {}) {
     const lat = safeNumber(result.lat);
     const lng = safeNumber(result.lon);
     if (!validCoordinates(lat, lng)) continue;
-    const name = String(result.name || result.display_name || '').trim();
+    const details = result.namedetails || {};
+    const tags = result.extratags || {};
+    const name = placeName(result.name, details.name, details['name:en'],
+      details.official_name, tags.brand, result.brand, tags.operator,
+      result.operator, result.display_name?.split(',')[0]);
     if (!name) continue;
     const key = `${String(result.osm_type || 'place')}:${String(result.osm_id || `${lat}:${lng}:${name}`)}`;
     if (seen.has(key)) continue;
@@ -311,6 +334,8 @@ function createNearbyDiscovery({
             : {
               format: 'jsonv2',
               addressdetails: '1',
+              namedetails: '1',
+              extratags: '1',
               dedupe: '1',
               limit: String(Math.min(Math.max(Math.round(limit), 1), MAX_RESULTS)),
               q: cleanQuery,

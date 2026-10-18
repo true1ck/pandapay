@@ -334,6 +334,7 @@ List<NearbyMerchantCandidate> parseNearbyMerchantsPayload(
     return NearbyMerchantCandidate(
       merchantId: json['merchant_id'] as String,
       displayName: json['display_name'] as String?,
+      address: json['address'] as String?,
       categoryId: json['category_id'] as String?,
       location: GeoPoint(
         // Directory matches are allowed to have no confirmed location yet.
@@ -364,6 +365,7 @@ double? _confidenceValue(Object? value) {
 Map<String, dynamic> _candidateToJson(NearbyMerchantCandidate candidate) => {
   'merchant_id': candidate.merchantId,
   'display_name': candidate.displayName,
+  'address': candidate.address,
   'category_id': candidate.categoryId,
   'source': candidate.source,
   'confidence': candidate.confidence,

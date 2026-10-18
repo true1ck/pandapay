@@ -32,6 +32,7 @@ void main() {
                 {
                   'merchant_id': 'm1',
                   'display_name': 'Test Cafe',
+                  'address': 'Main Road, Panaji',
                   'category_id': 'dining',
                   'confidence': 'high',
                   'grid_lat': '12.9720',
@@ -57,6 +58,7 @@ void main() {
         expect(result, hasLength(1));
         expect(result.first.merchantId, 'm1');
         expect(result.first.displayName, 'Test Cafe');
+        expect(result.first.address, 'Main Road, Panaji');
         expect(result.first.categoryId, 'dining');
         expect(result.first.location.lat, closeTo(12.9720, 0.0001));
         expect(result.first.location.lng, closeTo(77.5950, 0.0001));
@@ -272,6 +274,7 @@ void main() {
         final candidate = NearbyMerchantCandidate(
           merchantId: 'm1',
           displayName: 'Test Cafe',
+          address: 'Main Road, Panaji',
           categoryId: 'dining',
           location: const GeoPoint(lat: 12.9717, lng: 77.5947),
           source: 'published',
@@ -291,6 +294,7 @@ void main() {
 
         expect(snapshot, isNotNull);
         expect(snapshot!.candidates.single.displayName, 'Test Cafe');
+        expect(snapshot.candidates.single.address, 'Main Road, Panaji');
         expect(snapshot.candidates.single.categoryId, 'dining');
         expect(snapshot.candidates.single.source, 'published');
       },

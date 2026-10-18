@@ -501,6 +501,19 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   }
 }
 
+String _placeDisplayName(NearbyMerchantCandidate candidate) {
+  final name = candidate.displayName?.trim();
+  if (name == null || name.isEmpty) return 'Business name unavailable';
+  final isMapCandidate = candidate.source?.startsWith('osm_') ?? false;
+  final generic = RegExp(
+    r'^(petrol\s*pump|petrol\s*(station|bunk)|fuel(\s*station)?|gas\s*station|shop|store|supermarket|restaurant|cafe|pharmacy)$',
+    caseSensitive: false,
+  );
+  return isMapCandidate && generic.hasMatch(name)
+      ? '$name · business name unavailable'
+      : name;
+}
+
 class _ManualPlaceTile extends ConsumerWidget {
   final NearbyMerchantCandidate candidate;
 
@@ -521,9 +534,16 @@ class _ManualPlaceTile extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            candidate.displayName ?? 'Unnamed place',
+            _placeDisplayName(candidate),
             style: BambooFonts.heading(15, color: BambooInk.ink900),
           ),
+          if (candidate.address?.trim().isNotEmpty ?? false) ...[
+            const SizedBox(height: 3),
+            Text(
+              candidate.address!,
+              style: BambooFonts.ui(12, color: BambooInk.ink500),
+            ),
+          ],
           const SizedBox(height: 3),
           Text(
             candidate.source == 'published'
@@ -573,13 +593,18 @@ class _NearbyMerchantTile extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            match.candidate.displayName ?? 'Unnamed merchant',
+            _placeDisplayName(match.candidate),
             style: BambooFonts.heading(15, color: BambooInk.ink900),
           ),
           Text(
             '${match.distanceMeters.toStringAsFixed(0)}m away',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
+          if (match.candidate.address?.trim().isNotEmpty ?? false)
+            Text(
+              match.candidate.address!,
+              style: BambooFonts.ui(12, color: BambooInk.ink500),
+            ),
           if (match.candidate.source == 'osm_candidate')
             Padding(
               padding: const EdgeInsets.only(top: 3),
