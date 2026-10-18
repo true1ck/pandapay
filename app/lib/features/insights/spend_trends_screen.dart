@@ -7,7 +7,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
@@ -122,13 +121,6 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
                 filtersActive: _filtersActive,
                 onFilters: () => reportBodyKey.currentState?.openFilters(),
               ),
-            ),
-            OfflineBanner(
-              gutter: AppSpace.lg,
-              onRetry: () {
-                ref.invalidate(spendReportProvider(query));
-                ref.invalidate(spendPeriodTransactionsProvider(query));
-              },
             ),
             Expanded(
               child: report.when(

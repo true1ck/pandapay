@@ -5,7 +5,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
@@ -142,10 +141,6 @@ class MyCardsScreen extends ConsumerWidget {
                 ),
               ],
             ),
-          ),
-          OfflineBanner(
-            gutter: AppSpace.lg,
-            onRetry: () => ref.invalidate(myCardsProvider),
           ),
           Expanded(
             child: myCards.when(

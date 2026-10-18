@@ -133,7 +133,7 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
       // nag" — this line stays factual and unobtrusive, never a permission
       // prompt/nag of its own.
       _ContextState.noPermission => (Icons.explore_off_rounded, 'Pick a category below.'),
-      _ContextState.offlineOrError => (Icons.wifi_off_rounded, 'Offline — pick a category below.'),
+      _ContextState.offlineOrError => (Icons.explore_off_rounded, 'Pick a category below.'),
     };
 
     return Padding(

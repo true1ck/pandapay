@@ -8,7 +8,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
-import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
@@ -257,10 +256,6 @@ class InsightsHubScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpace.md),
           const _PeriodChips(),
-          OfflineBanner(
-            gutter: 0,
-            onRetry: () => ref.invalidate(insightsOverviewProvider(period)),
-          ),
           const SizedBox(height: AppSpace.lg),
           overview.when(
             // Keep the last report visible while a background sync refreshes

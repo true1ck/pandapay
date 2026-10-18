@@ -7,7 +7,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
@@ -60,10 +59,6 @@ class ActivityScreen extends ConsumerWidget {
                 _FilterRow(filter: filter),
               ],
             ),
-          ),
-          OfflineBanner(
-            gutter: AppSpace.lg,
-          onRetry: () => ref.invalidate(activityTransactionsProvider),
           ),
           Expanded(
             child: transactions.when(

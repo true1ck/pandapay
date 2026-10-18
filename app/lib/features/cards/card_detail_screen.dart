@@ -6,7 +6,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
-import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import 'card_actions_screen.dart';
@@ -96,10 +95,6 @@ class CardDetailScreen extends ConsumerWidget {
       body: AppBackground(
         child: Column(
           children: [
-            OfflineBanner(
-              gutter: AppSpace.lg,
-              onRetry: () => ref.invalidate(myCardsProvider),
-            ),
             Expanded(
               child: pairs.when(
                 loading: () => const Padding(

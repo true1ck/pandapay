@@ -8,7 +8,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../app/tutorial_keys.dart';
@@ -35,7 +34,7 @@ import 'home_context_line.dart';
 /// sizes and the header composition are transcribed from that mockup; the
 /// functionality underneath is the real B1 feature set, nothing mocked:
 ///
-/// - Amount entry, purchase selector, offline banner, alerts strip, the ranked
+/// - Amount entry, purchase selector, alerts strip, the ranked
 ///   list (hero + backup + rest), "Why this card?"/"Compare all cards", and
 ///   the override pill are unchanged in behaviour — only their order and
 ///   visuals moved.
@@ -173,16 +172,6 @@ class HomeScreen extends ConsumerWidget {
                   child: const _AmountCard(),
                 ),
                 const SizedBox(height: AppSpace.sm),
-                OfflineBanner(
-                  gutter: _gutter,
-                  onRetry: () {
-                    ref.invalidate(homeDataRefreshProvider);
-                    ref.invalidate(catalogueProvider);
-                    ref.invalidate(categoriesProvider);
-                    ref.invalidate(userCardsProvider);
-                    ref.invalidate(cardOverridesProvider);
-                  },
-                ),
                 const _AlertsStrip(),
                 const SizedBox(height: AppSpace.xs),
                 Padding(

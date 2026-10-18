@@ -3128,7 +3128,6 @@ final financialSyncStatusProvider = StreamProvider<String>((ref) async* {
     // A background read can get a 401 while the app still has a locally
     // restored account and another refresh is in flight. Neither that nor a
     // transient transport failure warrants a sign-in warning on every page.
-    // OfflineBanner already explains the disconnected case when offline.
     // Pending SMS imports can be a large historical inbox. They are durable
     // and visible in Sync & backup, but a global banner makes a normal app
     // launch look like thousands of urgent failed payments.

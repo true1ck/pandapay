@@ -5,7 +5,6 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../../app/offline_banner.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
@@ -173,10 +172,6 @@ class PaymentsDueScreen extends ConsumerWidget {
       body: AppBackground(
         child: Column(
           children: [
-            OfflineBanner(
-              gutter: AppSpace.lg,
-              onRetry: () => ref.invalidate(paymentsDueProvider),
-            ),
             Expanded(
               child: due.when(
                 loading: () => const Padding(
