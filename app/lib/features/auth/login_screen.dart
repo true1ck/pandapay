@@ -4,11 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
-import '../../app/design/widgets.dart';
+import '../onboarding/entry_brand.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/phone_number_hint.dart';
 import '../settings/feedback_support_screen.dart';
+import '../settings/legal_screen.dart';
 import 'account_recovery_screen.dart';
 
 /// A4: DPDP §8.2 — purpose-specific, unbundled consent, never a single
@@ -180,6 +181,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _verifyOtp() async {
+    if (_codeController.text.trim().length != 4) {
+      setState(() => _error = 'Enter the 4-digit code from your email.');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -272,189 +277,242 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
-  /// Design 06's headline, verbatim, for the first-run/sign-up case:
-  /// "Never pay with the wrong card again." with the last word in lime.
-  /// Log-in keeps its own shorter greeting — the deck only draws first run.
-  String get _title => _isSignUp ? 'Never pay with the wrong card' : 'Welcome';
-
-  /// The lime-accented tail of [_title], set as a separate span.
-  String get _titleAccent => _isSignUp ? ' again.' : ' back.';
-
-  String get _subtitle {
-    if (_otpRequested) {
-      return 'Enter the code we sent to ${_identifierController.text.trim()}';
-    }
-    return _isSignUp
-        ? 'Add your cards once. We rank them at every counter.'
-        : 'Sign in to pick up where you left off.';
-  }
+  String get _title => _otpRequested
+      ? 'Check your email'
+      : _isSignUp
+      ? 'Start saving\non every spend'
+      : 'Welcome back';
 
   @override
-  Widget build(BuildContext context) {
-    // Keep sign-up and sign-in on the same light palette as the rest of the
-    // application. The auth mode changes the copy and flow, not the theme.
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: isLight
-            ? const LinearGradient(
-                begin: Alignment.topRight,
-                end: Alignment.bottomLeft,
-                colors: [BambooInk.wash, BambooInk.paper, BambooInk.paperCool],
-              )
-            : const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  BambooInk.slateRaised,
-                  BambooInk.slate,
-                  BambooInk.slateLow,
-                ],
-              ),
-      ),
-      child: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.xl,
-                AppSpace.xxl,
-                AppSpace.xl,
-                AppSpace.xl,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - AppSpace.xxl - AppSpace.xl,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        tooltip: 'Back',
-                        color: isLight ? BambooInk.ink900 : BambooInk.onSlate,
-                        onPressed: () => context.pop(),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                      ),
-                    ),
-                    // Design 06 sets a bare 76pt mark on the slate, no tile.
-                    // This was a 64pt white-filled Container — but inside a
-                    // CrossAxisAlignment.stretch Column its width was
-                    // ignored, so it painted as a full-bleed white bar
-                    // across the top of the screen.
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: PandaMark(size: 76),
-                    ),
-                    const SizedBox(height: 18),
-                    _Headline(
-                      title: _title,
-                      accent: _titleAccent,
-                      baseColor: isLight ? BambooInk.ink900 : BambooInk.onSlate,
-                      accentColor: isLight ? BambooInk.jade : BambooInk.lime,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      _subtitle,
-                      style: BambooFonts.ui(
-                        13.5,
-                        color: isLight
-                            ? BambooInk.ink500
-                            : BambooInk.onSlateMuted,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpace.xl),
-                    if (!_otpRequested) ...[
-                      _IdentifierStep(
-                        isSignUp: _isSignUp,
-                        isLight: isLight,
-                        identifierController: _identifierController,
-                        phoneController: _phoneController,
-                        phoneFocusNode: _phoneFocusNode,
-                        loading: _loading,
-                        onSubmit: _requestOtp,
-                        onRequestPhoneHint: _requestPhoneNumberHint,
-                        acceptedTerms: _acceptedTerms,
-                        optInCrowdsource: _optInCrowdsource,
-                        optInMarketing: _optInMarketing,
-                        onAcceptedTermsChanged: (v) =>
-                            setState(() => _acceptedTerms = v),
-                        onOptInCrowdsourceChanged: (v) =>
-                            setState(() => _optInCrowdsource = v),
-                        onOptInMarketingChanged: (v) =>
-                            setState(() => _optInMarketing = v),
-                      ),
-                    ],
-                    if (_otpRequested)
-                      _OtpStep(
-                        controller: _codeController,
-                        loading: _loading,
-                        onSubmit: _verifyOtp,
-                        onChangeIdentifier: _changeIdentifier,
-                        onResend: _requestOtp,
-                      ),
-                    if (_error != null) ...[
-                      const SizedBox(height: AppSpace.lg),
-                      _ErrorBanner(message: _error!),
-                    ],
-                    // Design 06: "Includes a link to 24 Account recovery."
-                    // Log-in only — sign-up has no existing account to
-                    // recover into yet.
-                    if (!_isSignUp && !_otpRequested) ...[
-                      const SizedBox(height: AppSpace.md),
-                      Center(
-                        child: TextButton(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const AccountRecoveryScreen(),
+  Widget build(BuildContext context) => EntryBackdrop(
+    waves: !_isSignUp || _otpRequested,
+    child: SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight - 32,
+                  ),
+                  child: _AccountFormHeight(
+                    fill: !_isSignUp || _otpRequested,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            IconButton(
+                              tooltip: 'Back',
+                              onPressed: _loading
+                                  ? null
+                                  : () {
+                                      if (_otpRequested) {
+                                        _changeIdentifier();
+                                      } else if (context.canPop()) {
+                                        context.pop();
+                                      }
+                                    },
+                              icon: const Icon(Icons.arrow_back_rounded),
+                              color: BambooInk.ink900,
+                              padding: EdgeInsets.zero,
+                              alignment: Alignment.centerLeft,
+                            ),
+                            const Spacer(),
+                            const PandaWordmark(size: 18),
+                          ],
+                        ),
+                        if (_otpRequested) ...[
+                          const SizedBox(height: 8),
+                          Center(
+                            child: PandaIllustration(
+                              asset: 'assets/illustrations/panda_mail.png',
+                              size: constraints.maxHeight < 680 ? 126 : 164,
                             ),
                           ),
-                          style: TextButton.styleFrom(
-                            foregroundColor: isLight
-                                ? BambooInk.ink500
-                                : BambooInk.onSlateMuted,
-                          ),
-                          child: const Text(
-                            "Can't sign in? Recover your account",
+                          const SizedBox(height: 20),
+                        ] else
+                          const SizedBox(height: 26),
+                        Text(
+                          _title,
+                          textAlign: _otpRequested
+                              ? TextAlign.center
+                              : TextAlign.left,
+                          style: BambooFonts.heading(
+                            _otpRequested ? 34 : 36,
+                            weight: FontWeight.w800,
+                            height: 1.06,
+                            letterSpacing: -1.3,
                           ),
                         ),
-                      ),
-                    ],
-                    const SizedBox(height: AppSpace.xl),
-                    // Account creation and sign-in are the only ways into
-                    // the app; there is no public/guest bypass from auth.
-                    // A4: the bundled "by continuing you agree..." footer is
-                    // gone for sign-up — the three checkboxes in
-                    // _IdentifierStep are the real, unbundled consent now.
-                    // Log-in has no new consent to collect (the account
-                    // already has one on file from its own sign-up), so it
-                    // keeps a short reference line instead.
-                    if (!_isSignUp) ...[
-                      const SizedBox(height: AppSpace.md),
-                      Center(
-                        child: Text(
-                          'By continuing you agree to PandaPay\'s Terms & Privacy Policy.',
+                        const SizedBox(height: 10),
+                        Text(
+                          _otpRequested
+                              ? 'Enter the 4-digit verification code sent to'
+                              : _isSignUp
+                              ? 'Create your PandaPay account.'
+                              : 'Sign in to your PandaPay account.',
+                          textAlign: _otpRequested
+                              ? TextAlign.center
+                              : TextAlign.left,
                           style: BambooFonts.ui(
-                            12,
-                            color: isLight
-                                ? BambooInk.ink500
-                                : BambooInk.onSlateMuted,
+                            15,
+                            color: BambooInk.ink700,
+                            height: 1.4,
                           ),
-                          textAlign: TextAlign.center,
                         ),
-                      ),
-                    ],
-                  ],
+                        if (_otpRequested) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            _identifierController.text.trim(),
+                            textAlign: TextAlign.center,
+                            style: BambooFonts.ui(15, weight: FontWeight.w600),
+                          ),
+                        ],
+                        SizedBox(height: _otpRequested ? 28 : 34),
+                        if (!_otpRequested)
+                          _IdentifierStep(
+                            isSignUp: _isSignUp,
+                            minHeight:
+                                _isSignUp &&
+                                    MediaQuery.textScalerOf(context).scale(1) <=
+                                        1.2 &&
+                                    constraints.maxHeight > 300
+                                ? constraints.maxHeight - 300
+                                : 0,
+                            identifierController: _identifierController,
+                            phoneController: _phoneController,
+                            phoneFocusNode: _phoneFocusNode,
+                            loading: _loading,
+                            onSubmit: _requestOtp,
+                            onRequestPhoneHint: _requestPhoneNumberHint,
+                            acceptedTerms: _acceptedTerms,
+                            optInCrowdsource: _optInCrowdsource,
+                            optInMarketing: _optInMarketing,
+                            onAcceptedTermsChanged: (v) =>
+                                setState(() => _acceptedTerms = v),
+                            onOptInCrowdsourceChanged: (v) =>
+                                setState(() => _optInCrowdsource = v),
+                            onOptInMarketingChanged: (v) =>
+                                setState(() => _optInMarketing = v),
+                          )
+                        else
+                          _OtpStep(
+                            controller: _codeController,
+                            loading: _loading,
+                            onSubmit: _verifyOtp,
+                            onChangeIdentifier: _changeIdentifier,
+                            onResend: _requestOtp,
+                          ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 16),
+                          _ErrorBanner(message: _error!),
+                        ],
+                        if (!_isSignUp && !_otpRequested) ...[
+                          const SizedBox(height: 14),
+                          Center(
+                            child: TextButton(
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const AccountRecoveryScreen(),
+                                ),
+                              ),
+                              style: TextButton.styleFrom(
+                                foregroundColor: BambooInk.ink700,
+                              ),
+                              child: Text(
+                                'Need help signing in?',
+                                style:
+                                    BambooFonts.ui(
+                                      13,
+                                      color: BambooInk.ink700,
+                                    ).copyWith(
+                                      decoration: TextDecoration.underline,
+                                    ),
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          const SizedBox(height: 22),
+                          const Align(
+                            alignment: Alignment.bottomRight,
+                            child: PandaIllustration(
+                              asset: 'assets/illustrations/panda_peek.png',
+                              size: 190,
+                              halo: false,
+                            ),
+                          ),
+                        ],
+                        if (_isSignUp && !_otpRequested) ...[
+                          const SizedBox(height: 8),
+                          Center(
+                            child: TextButton(
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const LegalScreen(),
+                                ),
+                              ),
+                              style: TextButton.styleFrom(
+                                foregroundColor: BambooInk.ink700,
+                              ),
+                              child: const Text(
+                                'Read our terms & privacy policy',
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (_otpRequested) ...[
+                          const Spacer(),
+                          const SizedBox(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.lock_outline_rounded,
+                                size: 14,
+                                color: BambooInk.jade,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'A small step. A safer account.',
+                                  textAlign: TextAlign.center,
+                                  style: BambooFonts.ui(
+                                    12,
+                                    color: BambooInk.ink700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
+/// Only the short sign-in/OTP forms need to fill the viewport. The long
+/// consent form measures naturally, including wrapped accessibility text.
+class _AccountFormHeight extends StatelessWidget {
+  final bool fill;
+  final Widget child;
+  const _AccountFormHeight({required this.fill, required this.child});
+
+  @override
+  Widget build(BuildContext context) =>
+      fill ? IntrinsicHeight(child: child) : child;
 }
 
 /// The identifier step — design 06: always TWO required fields, email (which
@@ -462,7 +520,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 /// the phone; returning-user login uses the email OTP without changing linkage.
 class _IdentifierStep extends StatelessWidget {
   final bool isSignUp;
-  final bool isLight;
+  final double minHeight;
   final TextEditingController identifierController;
   final TextEditingController phoneController;
   final FocusNode phoneFocusNode;
@@ -481,7 +539,7 @@ class _IdentifierStep extends StatelessWidget {
 
   const _IdentifierStep({
     required this.isSignUp,
-    required this.isLight,
+    this.minHeight = 0,
     required this.identifierController,
     required this.phoneController,
     required this.phoneFocusNode,
@@ -499,212 +557,160 @@ class _IdentifierStep extends StatelessWidget {
   InputDecoration _fieldDecoration({
     required String hint,
     required IconData icon,
-  }) {
-    final hintColor = isLight ? BambooInk.ink500 : BambooInk.onSlateMuted;
-    final fillColor = isLight ? BambooInk.paperMuted : BambooInk.slateLow;
-    final borderColor = isLight
-        ? BambooInk.hairlineOnPaper
-        : BambooInk.slateHairline;
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: BambooFonts.ui(14, color: hintColor),
-      prefixIcon: Icon(icon, color: hintColor),
-      filled: true,
-      fillColor: fillColor,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: borderColor),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: BambooInk.jade, width: 1.5),
-      ),
-    );
-  }
+  }) => InputDecoration(
+    hintText: hint,
+    hintStyle: BambooFonts.ui(15, color: BambooInk.ink500),
+    prefixIcon: Icon(icon, size: 21, color: BambooInk.ink900),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+    filled: true,
+    fillColor: Colors.white.withValues(alpha: .85),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: Color(0xFFDDE1E3)),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: BambooInk.jade, width: 1.5),
+    ),
+  );
 
   @override
-  Widget build(BuildContext context) {
-    final labelColor = isLight ? BambooInk.ink300 : BambooInk.onSlateMuted;
-    final bodyColor = isLight ? BambooInk.ink500 : BambooInk.onSlateMuted;
-    final textColor = isLight ? BambooInk.ink900 : BambooInk.onSlate;
-    final labelStyle = BambooFonts.ui(
-      13,
-      weight: FontWeight.w600,
-      color: labelColor,
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('Email address', style: labelStyle),
-        const SizedBox(height: AppSpace.sm),
-        TextField(
-          controller: identifierController,
-          keyboardType: TextInputType.emailAddress,
-          textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.email],
-          style: BambooFonts.ui(15, color: textColor),
-          decoration: _fieldDecoration(
-            hint: 'you@example.com',
-            icon: Icons.mail_outline_rounded,
-          ),
-        ),
-        const SizedBox(height: AppSpace.lg),
-        Text('Phone number', style: labelStyle),
-        const SizedBox(height: 2),
-        Text(
-          // Sign-up uses this phone for SMS transaction detection. Login keeps
-          // the existing account phone linkage unchanged.
-          isSignUp
-              ? 'Used to detect card transactions from your bank SMS.'
-              : 'The phone number on your account.',
-          style: BambooFonts.ui(12.5, color: bodyColor),
-        ),
-        const SizedBox(height: AppSpace.sm),
-        TextField(
-          controller: phoneController,
-          focusNode: phoneFocusNode,
-          keyboardType: TextInputType.phone,
-          textInputAction: TextInputAction.done,
-          autofillHints: const [AutofillHints.telephoneNumber],
-          onSubmitted: (_) => loading ? null : onSubmit(),
-          style: BambooFonts.ui(15, color: textColor),
-          decoration:
-              _fieldDecoration(
-                hint: '+91 98765 43210',
-                icon: Icons.phone_outlined,
-              ).copyWith(
-                suffixIcon: IconButton(
-                  tooltip: 'Use a saved phone number',
-                  onPressed: onRequestPhoneHint,
-                  icon: Icon(Icons.contacts_outlined, color: bodyColor),
+  Widget build(BuildContext context) => AutofillGroup(
+    child: ConstrainedBox(
+      constraints: BoxConstraints(minHeight: minHeight),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: identifierController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                onSubmitted: (_) => phoneFocusNode.requestFocus(),
+                style: BambooFonts.ui(15),
+                decoration: _fieldDecoration(
+                  hint: 'Email address',
+                  icon: Icons.mail_outline_rounded,
                 ),
               ),
-        ),
-        const SizedBox(height: AppSpace.sm),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.info_outline_rounded, size: 14, color: bodyColor),
-            const SizedBox(width: AppSpace.xs),
-            Expanded(
-              child: Text(
-                'We\'ll send your verification code to your email.',
-                style: BambooFonts.ui(12.5, color: bodyColor),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneController,
+                focusNode: phoneFocusNode,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.telephoneNumber],
+                onSubmitted: (_) => loading ? null : onSubmit(),
+                style: BambooFonts.ui(15),
+                decoration:
+                    _fieldDecoration(
+                      hint: 'Phone number',
+                      icon: Icons.phone_outlined,
+                    ).copyWith(
+                      suffixIcon: IconButton(
+                        tooltip: 'Use a saved phone number',
+                        onPressed: onRequestPhoneHint,
+                        icon: const Icon(
+                          Icons.expand_more_rounded,
+                          size: 19,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                    ),
               ),
+              if (isSignUp) ...[
+                const SizedBox(height: 20),
+                _ConsentCheckbox(
+                  value: acceptedTerms,
+                  onChanged: onAcceptedTermsChanged,
+                  label: 'I agree to the Terms & Privacy Policy',
+                  subtitle: 'Required to create an account.',
+                ),
+                _ConsentCheckbox(
+                  value: optInCrowdsource,
+                  onChanged: onOptInCrowdsourceChanged,
+                  label: 'Help improve PandaPay',
+                  subtitle: 'Share anonymized merchant data. Optional.',
+                ),
+                _ConsentCheckbox(
+                  value: optInMarketing,
+                  onChanged: onOptInMarketingChanged,
+                  label: 'Send me product updates and saving tips',
+                  subtitle: 'Optional. You can change this anytime.',
+                ),
+              ] else ...[
+                const SizedBox(height: 10),
+                Text(
+                  'We’ll send your sign-in code to your email.',
+                  style: BambooFonts.ui(12, color: BambooInk.ink700),
+                ),
+              ],
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: EntryButton(
+              label: isSignUp ? 'Send verification code' : 'Send code',
+              onPressed: onSubmit,
+              loading: loading,
             ),
-          ],
-        ),
-        if (isSignUp) ...[
-          const SizedBox(height: AppSpace.lg),
-          // A4: three separate, purpose-specific checkboxes — DPDP §8.2
-          // forbids bundling these into one "I agree" tick. Only the first
-          // is required; the other two are optional and default off.
-          _ConsentCheckbox(
-            value: acceptedTerms,
-            onChanged: onAcceptedTermsChanged,
-            label: "I accept PandaPay's Terms & Privacy Policy",
-            required: true,
-            isLight: isLight,
-          ),
-          _ConsentCheckbox(
-            value: optInCrowdsource,
-            onChanged: onOptInCrowdsourceChanged,
-            label: 'Contribute anonymized merchant data to improve the app',
-            isLight: isLight,
-          ),
-          _ConsentCheckbox(
-            value: optInMarketing,
-            onChanged: onOptInMarketingChanged,
-            label: 'Send me product update emails',
-            isLight: isLight,
           ),
         ],
-        const SizedBox(height: AppSpace.xl),
-        // Dim the button when the required terms checkbox is not yet ticked.
-        // Opacity communicates "not ready" without fully hiding affordance.
-        AnimatedOpacity(
-          opacity: (!isSignUp || acceptedTerms) ? 1.0 : 0.38,
-          duration: const Duration(milliseconds: 200),
-          child: FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: BambooInk.lime,
-              foregroundColor: BambooInk.slate,
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
-            ),
-            onPressed: loading ? null : onSubmit,
-            child: loading
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      color: BambooInk.slate,
-                    ),
-                  )
-                : const Text('Send code'),
-          ),
-        ),
-      ],
-    );
-  }
+      ),
+    ),
+  );
 }
 
 class _ConsentCheckbox extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
   final String label;
-  final bool required;
-  final bool isLight;
+  final String subtitle;
 
   const _ConsentCheckbox({
     required this.value,
     required this.onChanged,
     required this.label,
-    this.required = false,
-    this.isLight = false,
+    required this.subtitle,
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Explicit Material ancestor: CheckboxListTile paints its background/ink
-    // on the nearest Material, and this widget sits inside a plain Column
-    // with no Material of its own between it and any coloured ancestor —
-    // caught by Flutter's own debug assertion under widget testing, same
-    // class of bug as the ListTile fix elsewhere in this codebase's H7 work.
-    return Material(
-      color: Colors.transparent,
-      child: CheckboxListTile(
-        value: value,
-        onChanged: (v) => onChanged(v ?? false),
-        controlAffinity: ListTileControlAffinity.leading,
-        contentPadding: EdgeInsets.zero,
-        dense: true,
-        activeColor: isLight ? BambooInk.jade : BambooInk.lime,
-        checkColor: isLight ? BambooInk.paper : BambooInk.slate,
-        side: BorderSide(
-          color: isLight ? BambooInk.hairlineOnPaper : BambooInk.slateHairline,
-        ),
-        title: Text(
-          required ? '$label (required)' : '$label (optional)',
-          style: BambooFonts.ui(
-            12.5,
-            color: isLight ? BambooInk.ink500 : BambooInk.onSlateMuted,
-          ),
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: CheckboxListTile(
+      value: value,
+      onChanged: (v) => onChanged(v ?? false),
+      controlAffinity: ListTileControlAffinity.leading,
+      contentPadding: EdgeInsets.zero,
+      visualDensity: const VisualDensity(horizontal: -4, vertical: -2),
+      checkboxShape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4),
+      ),
+      activeColor: const Color(0xFFB0E34D),
+      checkColor: BambooInk.slate,
+      side: const BorderSide(color: Color(0xFFACB2B6), width: 1.5),
+      title: Text(
+        label,
+        style: BambooFonts.ui(13, weight: FontWeight.w500, height: 1.3),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 3),
+        child: Text(
+          subtitle,
+          style: BambooFonts.ui(11.5, color: BambooInk.ink700, height: 1.3),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
-class _OtpStep extends StatelessWidget {
+class _OtpStep extends StatefulWidget {
   final TextEditingController controller;
   final bool loading;
   final VoidCallback onSubmit;
@@ -720,122 +726,176 @@ class _OtpStep extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Verification code',
-          style: BambooFonts.ui(
-            13,
-            weight: FontWeight.w600,
-            color: BambooInk.onSlateMuted,
-          ),
-        ),
-        const SizedBox(height: AppSpace.sm),
-        TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          textInputAction: TextInputAction.done,
-          autofillHints: const [AutofillHints.oneTimeCode],
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          onSubmitted: (_) => loading ? null : onSubmit(),
-          textAlign: TextAlign.center,
-          style: BambooFonts.money(
-            28,
-            color: BambooInk.onSlate,
-            letterSpacing: 8,
-          ),
-          decoration: InputDecoration(
-            hintText: '••••',
-            hintStyle: BambooFonts.money(
-              28,
-              color: BambooInk.onSlateMuted,
-              letterSpacing: 8,
-            ),
-            filled: true,
-            fillColor: BambooInk.slateLow,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: BambooInk.slateHairline),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: BambooInk.lime, width: 1.5),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpace.md),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: BambooInk.onSlateMuted,
-              ),
-              onPressed: loading ? null : onChangeIdentifier,
-              child: const Text('Change'),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: BambooInk.lime),
-              onPressed: loading ? null : onResend,
-              child: const Text('Resend code'),
-            ),
-          ],
-        ),
-        // A6: this app is OTP-only (no password ever exists — see
-        // login_screen.dart's own top-of-file doc comment), so there is no
-        // password-reset screen to build. This is the real, functional
-        // equivalent the spec's "clear re-request path" asks for: a dead
-        // end (code never arrives) gets a route to a human, not a fake
-        // password flow bolted onto a system that doesn't have one.
-        Center(
-          child: TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: BambooInk.onSlateMuted,
-            ),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const FeedbackSupportScreen(
-                  prefilledKind: 'general',
-                  prefilledMessage: "I'm not receiving my OTP code.",
-                ),
-              ),
-            ),
-            child: const Text('Trouble receiving it?'),
-          ),
-        ),
-        const SizedBox(height: AppSpace.lg),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: BambooInk.lime,
-            foregroundColor: BambooInk.slate,
-            minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
-          ),
-          onPressed: loading ? null : onSubmit,
-          child: loading
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    color: BambooInk.slate,
-                  ),
-                )
-              : const Text('Verify & continue'),
-        ),
-      ],
-    );
+  State<_OtpStep> createState() => _OtpStepState();
+}
+
+class _OtpStepState extends State<_OtpStep> {
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_focusChanged);
   }
+
+  void _focusChanged() => setState(() {});
+
+  @override
+  void dispose() {
+    _focus.removeListener(_focusChanged);
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        'Verification code',
+        textAlign: TextAlign.center,
+        style: BambooFonts.ui(13, weight: FontWeight.w600),
+      ),
+      const SizedBox(height: 14),
+      Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 310),
+          child: SizedBox(
+            height: 64,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                TextField(
+                  controller: widget.controller,
+                  focusNode: _focus,
+                  enabled: !widget.loading,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.oneTimeCode],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
+                  onSubmitted: (_) => widget.loading ? null : widget.onSubmit(),
+                  showCursor: false,
+                  enableInteractiveSelection: false,
+                  style: const TextStyle(
+                    color: Colors.transparent,
+                    fontSize: 1,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: '4-digit verification code',
+                    floatingLabelBehavior: FloatingLabelBehavior.never,
+                    labelStyle: TextStyle(
+                      color: Colors.transparent,
+                      fontSize: 1,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
+                  ),
+                ),
+                IgnorePointer(
+                  child: ExcludeSemantics(
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: widget.controller,
+                      builder: (context, value, _) => Row(
+                        children: [
+                          for (var i = 0; i < 4; i++) ...[
+                            if (i > 0) const SizedBox(width: 12),
+                            Expanded(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 160),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(
+                                    color:
+                                        _focus.hasFocus &&
+                                            i == value.text.length.clamp(0, 3)
+                                        ? BambooInk.jade
+                                        : const Color(0xFFDDE1E3),
+                                    width:
+                                        _focus.hasFocus &&
+                                            i == value.text.length.clamp(0, 3)
+                                        ? 1.6
+                                        : 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  i < value.text.length ? value.text[i] : '–',
+                                  style: BambooFonts.heading(
+                                    28,
+                                    weight: FontWeight.w600,
+                                    color: i < value.text.length
+                                        ? BambooInk.ink900
+                                        : const Color(0xFFCDD1CE),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
+      Text(
+        'Your code is valid for 2 minutes.',
+        textAlign: TextAlign.center,
+        style: BambooFonts.ui(12, color: BambooInk.ink700),
+      ),
+      const SizedBox(height: 26),
+      EntryButton(
+        label: 'Verify & continue',
+        onPressed: widget.onSubmit,
+        loading: widget.loading,
+      ),
+      const SizedBox(height: 12),
+      Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          TextButton(
+            onPressed: widget.loading ? null : widget.onChangeIdentifier,
+            style: TextButton.styleFrom(foregroundColor: BambooInk.ink700),
+            child: const Text('Change email'),
+          ),
+          Text('·', style: BambooFonts.ui(13, color: BambooInk.ink700)),
+          TextButton(
+            onPressed: widget.loading ? null : widget.onResend,
+            style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
+            child: const Text('Resend code'),
+          ),
+        ],
+      ),
+      Center(
+        child: TextButton(
+          style: TextButton.styleFrom(foregroundColor: BambooInk.ink700),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const FeedbackSupportScreen(
+                prefilledKind: 'general',
+                prefilledMessage: "I'm not receiving my OTP code.",
+              ),
+            ),
+          ),
+          child: Text(
+            'Trouble receiving it?',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class _ErrorBanner extends StatelessWidget {
@@ -863,46 +923,8 @@ class _ErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: BambooFonts.ui(13, color: BambooInk.onSlate),
+              style: BambooFonts.ui(13, color: BambooInk.clayInk),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Design 06's 30pt headline with its last phrase accented — one of
-/// the very few places the deck sets an accent as text rather than on a chip.
-/// On slate: lime accent. On paper: jade accent (lime has no contrast on white).
-class _Headline extends StatelessWidget {
-  final String title;
-  final String accent;
-  final Color baseColor;
-  final Color accentColor;
-  const _Headline({
-    required this.title,
-    required this.accent,
-    required this.baseColor,
-    required this.accentColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final base = BambooFonts.heading(
-      30,
-      weight: FontWeight.w800,
-      color: baseColor,
-      height: 1.1,
-    );
-    return Text.rich(
-      TextSpan(
-        text: title,
-        style: base,
-        children: [
-          TextSpan(
-            text: accent,
-            style: base.copyWith(color: accentColor),
           ),
         ],
       ),

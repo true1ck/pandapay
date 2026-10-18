@@ -4627,6 +4627,17 @@ final smsListenerServiceProvider = Provider<SmsListenerService>(
   (ref) => const SmsListenerService(),
 );
 
+class SmsInboxOverview {
+  final int bankAlerts;
+  final int spends;
+  final int pendingSync;
+  const SmsInboxOverview({
+    required this.bankAlerts,
+    required this.spends,
+    required this.pendingSync,
+  });
+}
+
 class SmsAutoImportController {
   SmsAutoImportController(this._ref)
     : _service = _ref.read(smsListenerServiceProvider) {
@@ -4634,11 +4645,15 @@ class SmsAutoImportController {
       _disposed = true;
       _retryTimer?.cancel();
       _captureWorker?.dispose();
+      inboxScanProgress.dispose();
     });
   }
 
   final Ref _ref;
   final SmsListenerService _service;
+  final inboxScanProgress = ValueNotifier<SmsInboxScanProgress>(
+    const SmsInboxScanProgress(),
+  );
   bool _registered = false;
   String? _userCardIdOverride;
   Future<SmsInboxSyncSummary>? _activeInboxSync;
@@ -4717,6 +4732,9 @@ class SmsAutoImportController {
       read: (afterId, throughId) =>
           _service.readInboxPage(afterId: afterId, throughId: throughId),
       checkAccount: checkAccount,
+      onProgress: (progress) {
+        if (!_disposed) inboxScanProgress.value = progress;
+      },
       capture: (messages) async {
         checkAccount();
         // Upgrade scans establish row-ID progress once. Already confirmed
@@ -4758,6 +4776,29 @@ class SmsAutoImportController {
       store.notifyExternalChanges(namespace, changed);
     }
     _ref.invalidate(pendingRecoveryStatusProvider);
+  }
+
+  /// Read the same account-scoped store used by Spending. Counts include
+  /// earlier capture passes, including one coalesced with app resume.
+  Future<SmsInboxOverview> inboxOverview() async {
+    final namespace = _ref.read(cacheNamespaceProvider);
+    final cache = await _ref.read(responseCacheProvider.future);
+    if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
+      throw StateError('Account changed during SMS setup');
+    }
+    final store = cache.financialStore;
+    final counts = SmsIntakeRepository(store.database).counts(namespace);
+    final spends =
+        store
+            .transactions(namespace, const TransactionQuery(source: 'sms'))
+            ?.rows
+            .length ??
+        0;
+    return SmsInboxOverview(
+      bankAlerts: counts.captured,
+      spends: spends,
+      pendingSync: counts.pending,
+    );
   }
 
   /// Card discovery uses the same captured messages as every financial view.

@@ -16,6 +16,7 @@ import '../cards/card_visual.dart';
 import '../scan/scan_card_screen.dart';
 import '../sms_import/sms_listener_service.dart';
 import 'all_set_screen.dart';
+import 'first_card_intro.dart';
 import 'request_unsupported_card_screen.dart';
 
 /// ui-spec.md A7 "Add Your First Card". Same picker shape as C3's
@@ -38,6 +39,7 @@ class AddFirstCardScreen extends ConsumerStatefulWidget {
 }
 
 class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
+  bool _showIntroduction = true;
   final _searchController = TextEditingController();
   final _selected = <String>{};
   final _networkFilters = <CardNetwork>{};
@@ -163,10 +165,21 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showIntroduction) {
+      return FirstCardIntroduction(
+        onAdd: () => setState(() => _showIntroduction = false),
+        onSkip: _skip,
+      );
+    }
     final catalogue = ref.watch(catalogueProvider);
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () => setState(() => _showIntroduction = true),
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
         backgroundColor: BambooInk.paper,
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,

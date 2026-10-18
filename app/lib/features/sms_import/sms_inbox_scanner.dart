@@ -1,6 +1,19 @@
 import '../../data/local/app_database.dart';
 import 'sms_listener_service.dart';
 
+/// Actual rows checked and financial candidates captured in this pass.
+/// Provider IDs can contain gaps, so they are never presented as a percentage.
+class SmsInboxScanProgress {
+  final int checked;
+  final int matched;
+  final bool complete;
+  const SmsInboxScanProgress({
+    this.checked = 0,
+    this.matched = 0,
+    this.complete = false,
+  });
+}
+
 /// Device progress is independent of API availability, account tokens and
 /// server row counts. A checkpoint means the page is durably captured locally.
 class SmsInboxProgress {
@@ -52,20 +65,24 @@ class SmsInboxScanner {
   final Future<SmsInboxPage> Function(int afterId, int throughId) read;
   final Future<void> Function(List<InboxSms>) capture;
   final void Function() checkAccount;
+  final void Function(SmsInboxScanProgress)? onProgress;
   SmsInboxScanner({
     required this.progress,
     required this.head,
     required this.read,
     required this.capture,
     required this.checkAccount,
+    this.onProgress,
   });
 
   Future<int> scan(String namespace) async {
     checkAccount();
+    onProgress?.call(const SmsInboxScanProgress());
     final throughId = await head();
     checkAccount();
     var afterId = progress.lastId(namespace);
     var captured = 0;
+    var checked = 0;
     while (afterId < throughId) {
       final page = await read(afterId, throughId);
       checkAccount();
@@ -84,10 +101,17 @@ class SmsInboxScanner {
       progress.commit(namespace, page.lastId);
       afterId = page.lastId;
       captured += page.messages.length;
+      checked += page.rowCount;
+      onProgress?.call(
+        SmsInboxScanProgress(checked: checked, matched: captured),
+      );
       await Future<void>.delayed(Duration.zero);
     }
     // Never rewind automatically if the provider was reset/restored.
     progress.commit(namespace, afterId, complete: true);
+    onProgress?.call(
+      SmsInboxScanProgress(checked: checked, matched: captured, complete: true),
+    );
     return captured;
   }
 }

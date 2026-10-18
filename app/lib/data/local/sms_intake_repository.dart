@@ -108,6 +108,18 @@ class SmsIntakeRepository {
       .map((row) => row['body'] as String)
       .toList();
 
+  ({int captured, int pending}) counts(String namespace) {
+    final row = database.db
+        .select(
+          '''SELECT
+        (SELECT COUNT(*) FROM sms_captured_messages WHERE namespace=?) AS captured,
+        (SELECT COUNT(*) FROM sms_intake WHERE namespace=?) AS pending''',
+          [namespace, namespace],
+        )
+        .single;
+    return (captured: row['captured'] as int, pending: row['pending'] as int);
+  }
+
   List<SmsIntakeEntry> pending(
     String namespace, {
     int limit = 200,

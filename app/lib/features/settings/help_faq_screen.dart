@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import '../onboarding/tour_screen.dart';
+import '../../app/providers.dart';
+import '../../app/router.dart';
 
 /// ui-spec.md H7 Help & FAQ — implementation-plan H7: "fully static,
 /// offline, searchable FAQ screen — no backend, no new providers needed at
@@ -13,19 +15,16 @@ import '../onboarding/tour_screen.dart';
 /// real privacy posture from `product-plan.md` §6 (grid-snapped coords,
 /// opt-in-off-by-default crowdsourcing, on-device SMS/PDF parsing).
 ///
-/// Reached via a plain `Navigator.push` from elsewhere in Settings — this
-/// file intentionally does not touch `router.dart`/`providers.dart` (see
-/// plan note on parallel H-group agents). Zero network calls, zero provider
-/// reads: this screen renders identically signed-in or signed-out, online
-/// or offline.
-class HelpFaqScreen extends StatefulWidget {
+/// Reached via a plain Navigator.push from Settings. The FAQ is static;
+/// Replay restarts the same current app guide used after onboarding.
+class HelpFaqScreen extends ConsumerStatefulWidget {
   const HelpFaqScreen({super.key});
 
   @override
-  State<HelpFaqScreen> createState() => _HelpFaqScreenState();
+  ConsumerState<HelpFaqScreen> createState() => _HelpFaqScreenState();
 }
 
-class _HelpFaqScreenState extends State<HelpFaqScreen> {
+class _HelpFaqScreenState extends ConsumerState<HelpFaqScreen> {
   final _searchController = TextEditingController();
   String _query = '';
 
@@ -61,20 +60,19 @@ class _HelpFaqScreenState extends State<HelpFaqScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // README: "This tour replays any time from You → Help." Pushed
-              // directly with onFinished set — see TourScreen's own doc
-              // comment for why a plain go_router AppRoute.tour navigation
-              // wouldn't work once onboarding is already complete.
               Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(18),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(18),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => TourScreen(onFinished: () => Navigator.of(context).pop()),
-                    ),
-                  ),
+                  onTap: () async {
+                    final router = ref.read(goRouterProvider);
+                    final tutorial = ref.read(tutorialSeenProvider.notifier);
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    router.go(AppRoute.home);
+                    await tutorial.reset();
+                  },
                   child: Container(
                     padding: const EdgeInsets.all(AppSpace.md),
                     decoration: BoxDecoration(
@@ -88,7 +86,7 @@ class _HelpFaqScreenState extends State<HelpFaqScreen> {
                         const SizedBox(width: AppSpace.sm),
                         Expanded(
                           child: Text(
-                            'Replay the tour',
+                            'Replay the 5-step app tour',
                             style: BambooFonts.ui(14.5, weight: FontWeight.w600, color: BambooInk.ink900),
                           ),
                         ),

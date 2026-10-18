@@ -94,7 +94,11 @@ class NotificationGate {
   Future<void> _ensurePluginInitialized() async {
     if (_pluginInitialized) return;
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosInit = DarwinInitializationSettings();
+    const iosInit = DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
     await notifications.initialize(
       const InitializationSettings(android: androidInit, iOS: iosInit),
     );

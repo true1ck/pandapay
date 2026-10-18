@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -17,6 +19,22 @@ const _lastUsedCardKey = 'pandapay_app.quick_add_last_used_card_v1';
 const _recentMerchantsKey = 'pandapay_app.quick_add_recent_merchants_v1';
 const _maxRecentMerchants = 8;
 const _merchantSearchDebounce = Duration(milliseconds: 300);
+
+enum _ReceiptPickOption { camera, gallery, file }
+
+class _PendingReceipt {
+  final String name;
+  final String? path;
+  final List<int>? bytes;
+  final String? mimeType;
+
+  const _PendingReceipt({
+    required this.name,
+    this.path,
+    this.bytes,
+    this.mimeType,
+  });
+}
 
 /// ui-spec B6 — "under 3 taps." Save posts the transaction immediately;
 /// the "Undo" snackbar action is a real undo despite there being no
@@ -46,6 +64,8 @@ class QuickAddScreen extends ConsumerStatefulWidget {
   final String? initialUserCardId;
   final String? initialMerchant;
   final String? initialCategoryName;
+  final bool autofocus;
+  final Key? amountFieldKey;
 
   const QuickAddScreen({
     super.key,
@@ -54,6 +74,8 @@ class QuickAddScreen extends ConsumerStatefulWidget {
     this.initialUserCardId,
     this.initialMerchant,
     this.initialCategoryName,
+    this.autofocus = true,
+    this.amountFieldKey,
   });
 
   @override
@@ -68,6 +90,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   String? _selectedUserCardId;
   String? _selectedCategoryId;
   DateTime? _date;
+  final ImagePicker _imagePicker = ImagePicker();
+  _PendingReceipt? _receipt;
+  bool _pickingReceipt = false;
 
   /// What paid for it, and whether it is spending at all.
   ///
@@ -106,7 +131,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     // us a winning one — _loadLastUsedCard's own membership check still
     // protects against a stale cross-user id either way.
     if (widget.initialUserCardId == null) _loadLastUsedCard();
-    if (widget.initialCategoryId == null && widget.initialCategoryName != null) {
+    if (widget.initialCategoryId == null &&
+        widget.initialCategoryName != null) {
       _resolveInitialCategory(widget.initialCategoryName!);
     }
     _loadRecentMerchants();
@@ -120,7 +146,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       final match = categories.where((category) {
         final label = category.name.trim().toLowerCase();
         final slug = category.slug.trim().toLowerCase();
-        return label == query || slug == query || label.contains(query) || query.contains(label);
+        return label == query ||
+            slug == query ||
+            label.contains(query) ||
+            query.contains(label);
       }).firstOrNull;
       if (mounted && match != null && _selectedCategoryId == null) {
         setState(() => _selectedCategoryId = match.id);
@@ -165,7 +194,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   Future<void> _loadRecentMerchants() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted) setState(() => _recentMerchants = prefs.getStringList(_recentMerchantsKey) ?? const []);
+    if (mounted)
+      setState(
+        () => _recentMerchants =
+            prefs.getStringList(_recentMerchantsKey) ?? const [],
+      );
   }
 
   Future<void> _rememberMerchant(String name) async {
@@ -180,6 +213,128 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     if (mounted) setState(() => _recentMerchants = updated);
   }
 
+  Future<void> _pickReceipt() async {
+    if (_pickingReceipt || _saving) return;
+    final option = await showModalBottomSheet<_ReceiptPickOption>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.lg,
+                AppSpace.lg,
+                AppSpace.sm,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Add a receipt',
+                  style: BambooFonts.heading(17, color: BambooInk.ink900),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.of(context).pop(_ReceiptPickOption.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose a photo'),
+              onTap: () =>
+                  Navigator.of(context).pop(_ReceiptPickOption.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.attach_file_rounded),
+              title: const Text('Choose a file'),
+              subtitle: const Text('Receipt, PDF, or other proof of payment'),
+              onTap: () => Navigator.of(context).pop(_ReceiptPickOption.file),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (option == null || !mounted) return;
+    setState(() => _pickingReceipt = true);
+    try {
+      if (option == _ReceiptPickOption.file) {
+        final selection = await FilePicker.pickFiles(type: FileType.any);
+        if (selection == null || selection.files.isEmpty) return;
+        final file = selection.files.single;
+        final bytes = file.path == null ? await file.readAsBytes() : null;
+        setState(
+          () => _receipt = _PendingReceipt(
+            name: file.name,
+            path: file.path,
+            bytes: bytes,
+            mimeType: file.extension == null ? null : _mimeFor(file.extension!),
+          ),
+        );
+      } else {
+        final image = await _imagePicker.pickImage(
+          source: option == _ReceiptPickOption.camera
+              ? ImageSource.camera
+              : ImageSource.gallery,
+          imageQuality: 95,
+        );
+        if (image == null) return;
+        setState(
+          () => _receipt = _PendingReceipt(
+            name: image.name,
+            path: image.path,
+            mimeType: image.mimeType ?? 'image/jpeg',
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not add that receipt: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pickingReceipt = false);
+    }
+  }
+
+  Future<void> _saveReceipt(String transactionId) async {
+    final receipt = _receipt;
+    if (receipt == null) return;
+    final repository = await ref.read(
+      transactionAttachmentsRepositoryProvider.future,
+    );
+    if (receipt.path != null) {
+      await repository.addFromPath(
+        transactionId: transactionId,
+        sourcePath: receipt.path!,
+        fileName: receipt.name,
+        mimeType: receipt.mimeType,
+      );
+    } else if (receipt.bytes != null) {
+      await repository.addFromBytes(
+        transactionId: transactionId,
+        bytes: receipt.bytes!,
+        fileName: receipt.name,
+        mimeType: receipt.mimeType,
+      );
+    }
+  }
+
+  static String _mimeFor(String extension) => switch (extension.toLowerCase()) {
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    'pdf' => 'application/pdf',
+    _ => 'application/octet-stream',
+  };
+
   void _onMerchantFocusChanged() {
     if (_merchantFocusNode.hasFocus) {
       setState(() => _showMerchantSuggestions = true);
@@ -187,7 +342,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       // Small delay so a tap on a suggestion tile (which also blurs the
       // field) still registers before the list disappears.
       Future.delayed(const Duration(milliseconds: 150), () {
-        if (mounted && !_merchantFocusNode.hasFocus) setState(() => _showMerchantSuggestions = false);
+        if (mounted && !_merchantFocusNode.hasFocus)
+          setState(() => _showMerchantSuggestions = false);
       });
     }
   }
@@ -201,7 +357,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       });
       return;
     }
-    _merchantDebounce = Timer(_merchantSearchDebounce, () => _searchMerchants(value.trim()));
+    _merchantDebounce = Timer(
+      _merchantSearchDebounce,
+      () => _searchMerchants(value.trim()),
+    );
   }
 
   Future<void> _searchMerchants(String query) async {
@@ -237,7 +396,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     // A card is required only for a credit-card entry. Cash, a debit swipe,
     // a salary credit and an SIP have no card by definition, and requiring
     // one here would leave Save permanently disabled for every one of them.
-    if (_instrument == TxnInstrument.creditCard) return _selectedUserCardId != null;
+    if (_instrument == TxnInstrument.creditCard)
+      return _selectedUserCardId != null;
     return true;
   }
 
@@ -257,7 +417,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           title: const Text('This date is in the future'),
           content: const Text('Save it anyway?'),
           actions: [
-            TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Save anyway'),
@@ -272,10 +435,15 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     // A card is required only for a credit-card entry; cash, income and
     // investments have none by definition.
     if (repo == null) return;
-    if (_instrument == TxnInstrument.creditCard && _selectedUserCardId == null) return;
+    if (_instrument == TxnInstrument.creditCard && _selectedUserCardId == null)
+      return;
     setState(() => _saving = true);
-    final merchantName = _merchantController.text.trim().isEmpty ? null : _merchantController.text.trim();
-    final note = _noteController.text.trim().isEmpty ? null : _noteController.text.trim();
+    final merchantName = _merchantController.text.trim().isEmpty
+        ? null
+        : _merchantController.text.trim();
+    final note = _noteController.text.trim().isEmpty
+        ? null
+        : _noteController.text.trim();
     // Reuse the identity when the same submit is retried after a lost HTTP
     // response. If the user changes the form, it is a genuinely new mutation.
     final payloadFingerprint = [
@@ -299,7 +467,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final effectiveOccurredAt = _pendingOccurredAt!;
     try {
       final transactionId = await repo.logTransaction(
-        userCardId: _instrument == TxnInstrument.creditCard ? _selectedUserCardId : null,
+        userCardId: _instrument == TxnInstrument.creditCard
+            ? _selectedUserCardId
+            : null,
         amount: Money.fromRupees(amount),
         categoryId: _selectedCategoryId,
         merchantName: merchantName,
@@ -309,10 +479,20 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         entryKind: _entryKind,
         clientMutationId: clientMutationId,
       );
+      String? receiptError;
+      if (_receipt != null) {
+        try {
+          await _saveReceipt(transactionId);
+        } catch (error) {
+          receiptError =
+              'Transaction saved, but its receipt could not be attached: $error';
+        }
+      }
       _pendingClientMutationId = null;
       _pendingPayloadFingerprint = null;
       _pendingOccurredAt = null;
-      if (_selectedUserCardId != null && _instrument == TxnInstrument.creditCard) {
+      if (_selectedUserCardId != null &&
+          _instrument == TxnInstrument.creditCard) {
         await _rememberLastUsedCard(_selectedUserCardId!);
       }
       // Remembers whatever merchant name was actually used this save, even
@@ -346,7 +526,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              'Logged ${Money.fromRupees(amount).format()} ${_entryKind == TxnEntryKind.income ? 'income' : 'spend'}',
+              receiptError ??
+                  'Logged ${Money.fromRupees(amount).format()} ${_entryKind == TxnEntryKind.income ? 'income' : 'spend'}',
             ),
             action: SnackBarAction(
               label: 'Undo',
@@ -358,15 +539,24 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               // counts anywhere. No DELETE route needed.
               onPressed: () async {
                 try {
-                  await repo.ignoreTransaction(transactionId, reason: 'reversal');
+                  await repo.ignoreTransaction(
+                    transactionId,
+                    reason: 'reversal',
+                  );
                   container.invalidate(userCardsProvider);
                   container.invalidate(transactionsProvider);
                   container.invalidate(utilizationTransactionsProvider);
                   container.invalidate(homeSummaryProvider);
-                  messenger.showSnackBar(const SnackBar(content: Text('Undone.')));
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Undone.')),
+                  );
                 } catch (e) {
                   messenger.showSnackBar(
-                    SnackBar(content: Text('Could not undo. ${userFacingErrorMessage(e)}')),
+                    SnackBar(
+                      content: Text(
+                        'Could not undo. ${userFacingErrorMessage(e)}',
+                      ),
+                    ),
                   );
                 }
               },
@@ -382,6 +572,18 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       // just fail identically on retry.
       final isOnline = ref.read(isOnlineProvider).valueOrNull ?? true;
       if (!isOnline) {
+        if (_receipt != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Connect to the internet to save this transaction with its receipt.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
         // A second try/catch, deliberately nested here rather than left to
         // propagate: this branch is ALREADY inside the outer catch, so an
         // exception from the outbox write itself (a full local queue, a
@@ -394,7 +596,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         try {
           final outbox = await ref.read(outboxRepositoryProvider.future);
           await outbox.enqueue(
-            userCardId: _instrument == TxnInstrument.creditCard ? _selectedUserCardId : null,
+            userCardId: _instrument == TxnInstrument.creditCard
+                ? _selectedUserCardId
+                : null,
             amount: Money.fromRupees(amount),
             categoryId: _selectedCategoryId,
             merchantName: merchantName,
@@ -413,21 +617,25 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             Navigator.of(context).pop();
             messenger.showSnackBar(
               const SnackBar(
-                content: Text("Saved offline — this'll sync automatically once you're back online."),
+                content: Text(
+                  "Saved offline — this'll sync automatically once you're back online.",
+                ),
               ),
             );
           }
         } catch (outboxErr) {
           if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(outboxErr))));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(userFacingErrorMessage(outboxErr))),
+            );
           }
         }
         return;
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(err))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -438,25 +646,32 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   Widget build(BuildContext context) {
     final userCards = ref.watch(userCardsProvider);
     final categories = ref.watch(categoriesProvider);
-    InputDecoration inputDecoration(String label, {String? prefix, String? error, Widget? suffixIcon}) =>
-        InputDecoration(
-          labelText: label,
-          prefixText: prefix,
-          errorText: error,
-          suffixIcon: suffixIcon,
-          labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          filled: true,
-          fillColor: BambooInk.glassFillOnPaper,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-          ),
-        );
+    InputDecoration inputDecoration(
+      String label, {
+      String? prefix,
+      String? error,
+      Widget? suffixIcon,
+    }) => InputDecoration(
+      labelText: label,
+      prefixText: prefix,
+      errorText: error,
+      suffixIcon: suffixIcon,
+      labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+      filled: true,
+      fillColor: BambooInk.glassFillOnPaper,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+      ),
+    );
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -465,7 +680,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Quick add', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        title: Text(
+          'Quick add',
+          style: BambooFonts.heading(18, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: Padding(
@@ -473,13 +691,20 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           child: ListView(
             children: [
               TextField(
+                key: widget.amountFieldKey,
                 controller: _amountController,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
+                autofocus: widget.autofocus,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                ],
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                 decoration: inputDecoration(
-                  _entryKind == TxnEntryKind.income ? 'Amount credited' : 'Amount',
+                  _entryKind == TxnEntryKind.income
+                      ? 'Amount credited'
+                      : 'Amount',
                   prefix: '₹ ',
                   error: _amountError,
                 ),
@@ -491,7 +716,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 focusNode: _merchantFocusNode,
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                 decoration: inputDecoration(
-                  _entryKind == TxnEntryKind.income ? 'Received from (optional)' : 'Merchant (optional)',
+                  _entryKind == TxnEntryKind.income
+                      ? 'Received from (optional)'
+                      : 'Merchant (optional)',
                   suffixIcon: _merchantSearching
                       ? const Padding(
                           padding: EdgeInsets.all(12),
@@ -554,17 +781,21 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                   for (final i in TxnInstrument.values)
                     // A credit card is only offered for spending — you
                     // can't receive a salary on one.
-                    if (i != TxnInstrument.creditCard || _entryKind == TxnEntryKind.spend)
+                    if (i != TxnInstrument.creditCard ||
+                        _entryKind == TxnEntryKind.spend)
                       DropdownMenuItem(value: i, child: Text(i.label)),
                 ],
-                onChanged: (v) => setState(() => _instrument = v ?? TxnInstrument.creditCard),
+                onChanged: (v) =>
+                    setState(() => _instrument = v ?? TxnInstrument.creditCard),
               ),
               if (_instrument == TxnInstrument.creditCard) ...[
                 const SizedBox(height: AppSpace.md),
                 userCards.when(
                   loading: () => const LinearProgressIndicator(),
-                  error: (err, _) =>
-                      Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                  error: (err, _) => Text(
+                    userFacingErrorMessage(err),
+                    style: BambooFonts.ui(13.5, color: BambooInk.clay),
+                  ),
                   data: (cards) => DropdownButtonFormField<String>(
                     initialValue: _selectedUserCardId,
                     style: BambooFonts.ui(14.5, color: BambooInk.ink900),
@@ -573,7 +804,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                         .map(
                           (c) => DropdownMenuItem(
                             value: c.id,
-                            child: Text(c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName),
+                            child: Text(
+                              c.nickname?.isNotEmpty == true
+                                  ? c.nickname!
+                                  : c.cardName,
+                            ),
                           ),
                         )
                         .toList(),
@@ -593,13 +828,20 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               const SizedBox(height: AppSpace.md),
               categories.when(
                 loading: () => const LinearProgressIndicator(),
-                error: (err, _) =>
-                    Text(userFacingErrorMessage(err), style: BambooFonts.ui(13.5, color: BambooInk.clay)),
+                error: (err, _) => Text(
+                  userFacingErrorMessage(err),
+                  style: BambooFonts.ui(13.5, color: BambooInk.clay),
+                ),
                 data: (list) => DropdownButtonFormField<String>(
                   initialValue: _selectedCategoryId,
                   style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                   decoration: inputDecoration('Category (optional)'),
-                  items: list.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                  items: list
+                      .map(
+                        (c) =>
+                            DropdownMenuItem(value: c.id, child: Text(c.name)),
+                      )
+                      .toList(),
                   onChanged: (v) => setState(() => _selectedCategoryId = v),
                 ),
               ),
@@ -618,7 +860,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                         : '${_date!.year}-${_date!.month.toString().padLeft(2, '0')}-${_date!.day.toString().padLeft(2, '0')}',
                     style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                   ),
-                  trailing: const Icon(Icons.calendar_today_rounded, color: BambooInk.ink500),
+                  trailing: const Icon(
+                    Icons.calendar_today_rounded,
+                    color: BambooInk.ink500,
+                  ),
                   onTap: () async {
                     final now = ref.read(clockProvider).now();
                     final picked = await showDatePicker(
@@ -637,13 +882,60 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                 decoration: inputDecoration('Note (optional)'),
               ),
+              const SizedBox(height: AppSpace.md),
+              Material(
+                color: BambooInk.glassFillOnPaper,
+                borderRadius: BorderRadius.circular(16),
+                child: ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: BambooInk.hairlineOnPaper),
+                  ),
+                  leading: const Icon(
+                    Icons.receipt_long_outlined,
+                    color: BambooInk.jade,
+                  ),
+                  title: Text(
+                    _receipt?.name ?? 'Add receipt (optional)',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BambooFonts.ui(14, color: BambooInk.ink900),
+                  ),
+                  subtitle: Text(
+                    _receipt == null
+                        ? 'Photo or file, saved privately on this device'
+                        : 'Ready to attach to this transaction',
+                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                  ),
+                  trailing: _receipt == null
+                      ? (_pickingReceipt
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.add_circle_outline_rounded))
+                      : IconButton(
+                          tooltip: 'Remove receipt',
+                          onPressed: _saving
+                              ? null
+                              : () => setState(() => _receipt = null),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                  onTap: _receipt == null ? _pickReceipt : null,
+                ),
+              ),
               const SizedBox(height: AppSpace.lg),
               FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: BambooInk.slate,
                   foregroundColor: BambooInk.lime,
                   minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
                 ),
                 onPressed: _canSave && !_saving ? _save : null,
@@ -651,7 +943,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.lime),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: BambooInk.lime,
+                        ),
                       )
                     : const Text('Save'),
               ),
@@ -711,20 +1006,34 @@ class _MerchantSuggestions extends StatelessWidget {
               for (final name in items!)
                 ListTile(
                   dense: true,
-                  leading: const Icon(Icons.history_rounded, size: 18, color: BambooInk.ink500),
-                  title: Text(name, style: BambooFonts.ui(13.5, color: BambooInk.ink900)),
+                  leading: const Icon(
+                    Icons.history_rounded,
+                    size: 18,
+                    color: BambooInk.ink500,
+                  ),
+                  title: Text(
+                    name,
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                  ),
                   onTap: () => onPick(name: name),
                 )
             else
               for (final candidate in results)
                 ListTile(
                   dense: true,
-                  leading: const Icon(Icons.storefront_rounded, size: 18, color: BambooInk.ink500),
+                  leading: const Icon(
+                    Icons.storefront_rounded,
+                    size: 18,
+                    color: BambooInk.ink500,
+                  ),
                   title: Text(
                     candidate.displayName ?? 'Unnamed merchant',
                     style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                   ),
-                  onTap: () => onPick(name: candidate.displayName ?? '', categoryId: candidate.categoryId),
+                  onTap: () => onPick(
+                    name: candidate.displayName ?? '',
+                    categoryId: candidate.categoryId,
+                  ),
                 ),
           ],
         ),

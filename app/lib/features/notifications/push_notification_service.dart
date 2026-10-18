@@ -53,7 +53,9 @@ class PushNotificationService {
       // after an app update where the platform may not have created an FCM
       // token by the time the first authenticated shell is rendered.
       await messaging.setAutoInitEnabled(true);
-      await messaging.requestPermission(alert: true, badge: true, sound: true);
+      // Permission is requested from an explained, user-initiated action in
+      // onboarding/settings. Starting token registration must not display an
+      // OS dialog over the SMS disclosure or immediately after sign-in.
       // On iOS, foreground FCM messages are otherwise delivered to Dart but
       // not presented by the OS. Android uses the local notification gate
       // below for foreground delivery; this call is harmless there.

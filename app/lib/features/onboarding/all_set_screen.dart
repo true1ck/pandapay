@@ -4,10 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
-import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../main.dart' show MoneyText;
+import 'entry_brand.dart';
 
 /// Design 31 "You're all set" — the final onboarding screen, reached from
 /// Tracking Setup once onboarding is already marked complete. Pushed
@@ -22,12 +22,16 @@ class AllSetScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final owned = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
-    final cardNames = [for (final (uc, p) in owned) uc.nickname?.isNotEmpty == true ? uc.nickname! : p.name];
+    final owned =
+        ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+    final cardNames = [
+      for (final (uc, p) in owned)
+        uc.nickname?.isNotEmpty == true ? uc.nickname! : p.name,
+    ];
 
     return PopScope(
       canPop: false,
-      child: AppBackground(
+      child: EntryBackdrop(
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(AppSpace.xl),
@@ -35,48 +39,30 @@ class AllSetScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: AppSpace.md),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: const LinearProgressIndicator(
-                          value: 1,
-                          minHeight: 6,
-                          backgroundColor: BambooInk.paperMuted,
-                          color: BambooInk.slate,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpace.sm),
-                    Text(
-                      'Step 3 of 3',
-                      style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.ink500),
-                    ),
-                  ],
-                ),
+                const EntryProgress(step: 3),
                 Expanded(
                   child: Center(
                     child: SingleChildScrollView(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Container(
-                            width: 72,
-                            height: 72,
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: BambooInk.paper,
-                              borderRadius: BorderRadius.circular(24),
+                          const Center(
+                            child: PandaIllustration(
+                              asset: 'assets/illustrations/panda_mail.png',
+                              size: 200,
                             ),
-                            child: const PandaMark(size: 52),
                           ),
                           const SizedBox(height: AppSpace.lg),
                           Text(
                             cardNames.isEmpty
                                 ? "You're all set"
                                 : '${cardNames.length} card${cardNames.length == 1 ? '' : 's'} ready',
-                            style: BambooFonts.heading(26, color: BambooInk.ink900),
+                            textAlign: TextAlign.center,
+                            style: BambooFonts.heading(
+                              32,
+                              weight: FontWeight.w800,
+                              color: BambooInk.ink900,
+                            ),
                           ),
                           const SizedBox(height: AppSpace.xs),
                           Text(
@@ -87,7 +73,8 @@ class AllSetScreen extends ConsumerWidget {
                             cardNames.isEmpty
                                 ? "Add a card any time from Wallet and we'll start ranking for you."
                                 : cardNames.join(' · '),
-                            style: BambooFonts.ui(14, color: BambooInk.ink500),
+                            textAlign: TextAlign.center,
+                            style: BambooFonts.ui(14, color: BambooInk.ink700),
                           ),
                           if (cardNames.isNotEmpty) ...[
                             const SizedBox(height: AppSpace.xl),
@@ -103,14 +90,18 @@ class AllSetScreen extends ConsumerWidget {
                     backgroundColor: BambooInk.slate,
                     foregroundColor: BambooInk.lime,
                     minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
                   ),
                   onPressed: () async {
                     // Onboarding completes HERE, not before this screen —
                     // see TrackingSetupScreen._finish()'s doc comment for
                     // the redirect-guard race this ordering avoids.
-                    await ref.read(onboardingCompleteProvider.notifier).complete();
+                    await ref
+                        .read(onboardingCompleteProvider.notifier)
+                        .complete();
                     if (!context.mounted) return;
                     Navigator.of(context).popUntil((r) => r.isFirst);
                     context.go(AppRoute.home);
@@ -143,15 +134,23 @@ class _TryItNowPreview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final owned = ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
+    final owned =
+        ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
     if (owned.isEmpty) return const SizedBox.shrink();
 
-    final groceriesId = categories.where((c) => c.slug == 'groceries').firstOrNull?.id;
+    final groceriesId = categories
+        .where((c) => c.slug == 'groceries')
+        .firstOrNull
+        ?.id;
     final engine = ref.watch(recommendationEngineProvider);
     final snapshots = [
       for (final (_, product) in owned)
-        CardSnapshot(product: product, capRemaining: const {}, milestoneProgress: const {}),
+        CardSnapshot(
+          product: product,
+          capRemaining: const {},
+          milestoneProgress: const {},
+        ),
     ];
     final recContext = RecommendationContext(
       amount: Money.fromRupees(2500),
@@ -159,7 +158,10 @@ class _TryItNowPreview extends ConsumerWidget {
       rail: TxnRail.swipe,
       now: DateTime.now(),
     );
-    final ranked = engine.rank(recContext, snapshots).where((r) => !r.isExcluded).toList();
+    final ranked = engine
+        .rank(recContext, snapshots)
+        .where((r) => !r.isExcluded)
+        .toList();
     if (ranked.isEmpty) return const SizedBox.shrink();
     final winner = ranked.first;
 
@@ -191,7 +193,10 @@ class _TryItNowPreview extends ConsumerWidget {
             style: BambooFonts.money(32, color: BambooInk.lime),
           ),
           const SizedBox(height: 2),
-          Text('with ${winner.card.name}', style: BambooFonts.ui(13.5, color: BambooInk.onSlateSubtle)),
+          Text(
+            'with ${winner.card.name}',
+            style: BambooFonts.ui(13.5, color: BambooInk.onSlateSubtle),
+          ),
         ],
       ),
     );

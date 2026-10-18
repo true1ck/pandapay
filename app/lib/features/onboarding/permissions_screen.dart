@@ -1,21 +1,25 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:async';
 import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/device_permissions.dart';
+import '../../app/providers.dart';
 import '../../app/router.dart';
-import '../sms_import/sms_listener_service.dart';
+import '../sms_import/sms_inbox_scanner.dart';
+import 'entry_brand.dart';
+import 'permission_art.dart';
 
-/// Design 15 "Onboarding / permissions" — three optional OS grants, asked
-/// up front with plain-language reasons rather than surprising the user with
-/// a bare system dialog the first time each feature is touched. All three
-/// are genuinely optional: this screen's own "Continue" never blocks on
-/// grant state, matching the design's explicit "all three are optional"
-/// copy and this app's existing pattern elsewhere (Tracking Setup's "Set up
-/// later" is likewise always enabled).
+enum _SetupPage { sms, importing, imported, options }
+
+/// Two short disclosure steps. The import between them uses the existing
+/// durable SMS pipeline; Android, rather than this UI, controls every grant.
 class PermissionsScreen extends ConsumerStatefulWidget {
   const PermissionsScreen({super.key});
 
@@ -25,20 +29,30 @@ class PermissionsScreen extends ConsumerStatefulWidget {
 
 class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
     with WidgetsBindingObserver {
-  // Personal-use builds declare SMS permissions in every flavor. Play Store
-  // policy handling is intentionally deferred until the feature is complete.
   bool get _isAndroid => !kIsWeb && Platform.isAndroid;
-
-  bool? _smsGranted;
-  bool _smsPermanentlyDenied = false;
-  bool? _notificationsGranted;
-  bool? _locationGranted;
+  late _SetupPage _page;
+  final _statuses = <Permission, PermissionStatus>{};
+  static const _extraPermissions = [
+    Permission.notification,
+    Permission.locationWhenInUse,
+    Permission.camera,
+    Permission.microphone,
+  ];
+  Permission? _requesting;
+  bool _requestingAll = false;
+  bool _checkingStatuses = true;
+  int _statusRevision = 0;
+  String? _message;
+  bool _waitingForSmsSettings = false;
+  bool _importRunning = false;
+  SmsInboxOverview? _overview;
 
   @override
   void initState() {
     super.initState();
+    _page = _isAndroid ? _SetupPage.sms : _SetupPage.options;
     WidgetsBinding.instance.addObserver(this);
-    _checkInitialStatuses();
+    unawaited(_refreshStatuses());
   }
 
   @override
@@ -49,277 +63,894 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // Android permission settings are changed outside Flutter. Refresh the
-      // row when the user returns so SMS does not remain stuck on "Enable".
-      _checkInitialStatuses();
+    if (state == AppLifecycleState.resumed) unawaited(_refreshStatuses());
+  }
+
+  Future<void> _refreshStatuses() async {
+    if (_requesting != null || _requestingAll) return;
+    final revision = ++_statusRevision;
+    setState(() {
+      _checkingStatuses = true;
+      _statuses.clear();
+    });
+    final statuses = <Permission, PermissionStatus>{};
+    for (final permission in [
+      if (_isAndroid) Permission.sms,
+      ..._extraPermissions,
+    ]) {
+      try {
+        statuses[permission] = await readDevicePermissionStatus(permission);
+      } catch (_) {
+        // An unavailable platform permission must not block account setup.
+      }
+    }
+    // A lifecycle refresh started before a native dialog must not overwrite
+    // its newer grant with an older status when the dialog closes.
+    if (!mounted || revision != _statusRevision || _requestingAll) return;
+    setState(() {
+      _statuses
+        ..clear()
+        ..addAll(statuses);
+      _checkingStatuses = false;
+      if (_page == _SetupPage.options && _extrasEnabled) _message = null;
+    });
+    if (_waitingForSmsSettings && _granted(Permission.sms)) {
+      _waitingForSmsSettings = false;
+      if (_page == _SetupPage.sms) await _importSms();
     }
   }
 
-  Future<void> _checkInitialStatuses() async {
-    if (_isAndroid) {
-      final smsStatus = await Permission.sms.status;
+  bool _granted(Permission permission) =>
+      _statuses[permission]?.isGranted ?? false;
+  bool _blocked(Permission permission) =>
+      _statuses[permission]?.isPermanentlyDenied ?? false;
+  bool get _extrasEnabled => _extraPermissions.every(_granted);
+
+  Future<void> _request(
+    Permission permission, {
+    bool inSequence = false,
+  }) async {
+    if (_requesting != null) return;
+    _statusRevision++;
+    setState(() {
+      _requesting = permission;
+      _checkingStatuses = false;
+      _message = null;
+    });
+    try {
+      final current = await readDevicePermissionStatus(permission);
+      if (!mounted) return;
+      setState(() => _statuses[permission] = current);
+      if (current.isGranted) {
+        if (permission == Permission.sms) unawaited(_importSms());
+        return;
+      }
+      if (current.isRestricted) {
+        if (!inSequence) {
+          setState(
+            () => _message =
+                'This permission is restricted on this device. You can continue without it.',
+          );
+        }
+        return;
+      }
+      if (current.isPermanentlyDenied) {
+        // The combined action only opens native prompts. Settings remains an
+        // explicit choice on each blocked row rather than interrupting the queue.
+        if (inSequence) return;
+        if (permission == Permission.sms) _waitingForSmsSettings = true;
+        final opened = await openAppSettings();
+        if (!opened && mounted) {
+          setState(
+            () => _message =
+                'Open this app’s permissions in your device Settings to enable access.',
+          );
+        }
+        return;
+      }
+      // Geolocator accepts Android's approximate foreground grant. The
+      // combined fine/coarse permission-handler result can report it denied.
+      final status = permission == Permission.locationWhenInUse
+          ? foregroundLocationPermissionStatus(
+              await geo.Geolocator.requestPermission(),
+            )
+          : await permission.request();
+      if (!mounted) return;
+      setState(() => _statuses[permission] = status);
+      if (status.isGranted) {
+        if (permission == Permission.sms) {
+          unawaited(_importSms());
+        }
+      } else {
+        setState(
+          () => _message = status.isRestricted
+              ? 'This permission is restricted on this device. You can continue without it.'
+              : 'That’s okay. You can continue without this and enable it later in Settings.',
+        );
+      }
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _smsGranted = smsStatus.isGranted;
-          _smsPermanentlyDenied = smsStatus.isPermanentlyDenied;
+          _statuses.remove(permission);
+          _message =
+              'We couldn’t open that permission. Try again or continue without it.';
         });
       }
+    } finally {
+      _statusRevision++;
+      if (mounted) {
+        setState(() => _requesting = null);
+        // A resume event can arrive while the native request is still busy.
+        // Read again after it finishes instead of losing that refresh.
+        if (!inSequence) await _refreshStatuses();
+      }
     }
-
-    final notifStatus = await Permission.notification.status;
-    if (mounted) setState(() => _notificationsGranted = notifStatus.isGranted);
-
-    final locStatus = await Permission.locationWhenInUse.status;
-    if (mounted) setState(() => _locationGranted = locStatus.isGranted);
   }
 
-  // All three requests below are wrapped in try/catch for the same reason:
-  // `permission_handler`'s `.request()` can throw on some OEM builds
-  // (a malformed manifest declaration, a request made while another is
-  // still in flight), and none of that was caught. Without it, a thrown
-  // exception left the toggle at its initial `null` — "checking…" —
-  // forever, with no error and no way to tell it hadn't just not finished
-  // yet. Resolving to "not granted" on failure is the same non-alarming
-  // outcome the UI already shows for an ordinary user-denied grant — these
-  // are explicitly optional permissions (this file's own doc-comment),
-  // so treating a request failure as gently as a request decline is
-  // consistent, not a downgrade.
-  Future<void> _requestSms() async {
-    var openSettings = false;
+  Future<void> _requestAll() async {
+    if (_requestingAll || _requesting != null) return;
+    _statusRevision++;
+    setState(() {
+      _requestingAll = true;
+      _message = null;
+    });
     try {
-      final status = await Permission.sms.status;
-      if (!status.isGranted) {
-        if (status.isPermanentlyDenied) {
-          openSettings = true;
-        } else {
-          final granted = await SmsListenerService().requestPermissions();
-          if (!granted) {
-            // Some Android versions/OEM builds report a previously dismissed
-            // SMS dialog as plain `denied`, even though they will not show the
-            // dialog again. In that state the user can only recover the grant
-            // from the app's system settings. Mark the row accordingly instead
-            // of leaving an Enable button that appears to do nothing.
-            openSettings = true;
-          }
+      for (final permission in _extraPermissions) {
+        if (!mounted || _page != _SetupPage.options) return;
+        // Each request rechecks Android, skipping grants already enabled.
+        await _request(permission, inSequence: true);
+        if (!mounted) return;
+        // Paint the Enabled state before showing the next system dialog.
+        await WidgetsBinding.instance.endOfFrame;
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _requestingAll = false);
+        await _refreshStatuses();
+        if (mounted) {
+          setState(() {
+            _message = _extrasEnabled
+                ? null
+                : 'Some permissions are still off. You can continue for now or enable them later in Settings.';
+          });
         }
       }
-    } catch (_) {
-      // A malformed/blocked runtime request is also recoverable through the
-      // system settings page, so do not strand the user on a dead Enable
-      // button.
-      openSettings = true;
     }
+  }
 
-    if (openSettings) {
-      if (mounted) {
-        setState(() => _smsPermanentlyDenied = true);
+  void _continueToCards() => context.push(AppRoute.addFirstCard);
+
+  Future<void> _importSms() async {
+    if (_importRunning) return;
+    setState(() {
+      _importRunning = true;
+      _page = _SetupPage.importing;
+      _message = null;
+    });
+    final controller = ref.read(smsAutoImportProvider);
+    try {
+      // Let the progress view paint before the first local database work.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!await ref.read(smsListenerServiceProvider).hasPermissions()) {
+        throw StateError('SMS access is off');
       }
-      await openAppSettings();
+      await controller.start();
+      await controller.captureExistingInbox();
+      final overview = await controller.inboxOverview();
+      // Local capture is sufficient for Spending. Network retries already
+      // belong to the shared controller and must not hold up onboarding.
+      unawaited(_syncInBackground(controller));
+      if (!mounted) return;
+      setState(() {
+        _overview = overview;
+        _importRunning = false;
+        if (_page == _SetupPage.importing) _page = _SetupPage.imported;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _importRunning = false;
+        _message =
+            'We couldn’t finish reading your inbox. Saved alerts are safe; you can retry or set this up later in Import & Sync.';
+        if (_page == _SetupPage.importing) _page = _SetupPage.imported;
+      });
     }
-    // Read the status again immediately for normal runtime prompts. If the
-    // user was sent to Settings, didChangeAppLifecycleState will refresh it
-    // again when they return.
-    await _checkInitialStatuses();
   }
 
-  Future<void> _requestNotifications() async {
-    bool granted = false;
+  Future<void> _syncInBackground(SmsAutoImportController controller) async {
     try {
-      granted = (await Permission.notification.request()).isGranted;
+      await controller.syncPendingMessages();
+      final overview = await controller.inboxOverview();
+      if (mounted) setState(() => _overview = overview);
     } catch (_) {
-      // fall through to "not granted"
+      // Capture is durable. The shared outbox retries without blocking setup.
     }
-    if (mounted) setState(() => _notificationsGranted = granted);
   }
 
-  Future<void> _requestLocation() async {
-    bool granted = false;
-    try {
-      granted = (await Permission.locationWhenInUse.request()).isGranted;
-    } catch (_) {
-      // fall through to "not granted"
+  void _showOptions() => setState(() {
+    _page = _SetupPage.options;
+    _message = null;
+  });
+
+  void _back() {
+    if (_page == _SetupPage.options && _isAndroid) {
+      setState(() {
+        _page = _importRunning
+            ? _SetupPage.importing
+            : _overview != null
+            ? _SetupPage.imported
+            : _SetupPage.sms;
+        _message = null;
+      });
+    } else if (_page == _SetupPage.imported) {
+      setState(() {
+        _page = _SetupPage.sms;
+        _message = null;
+      });
+    } else if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoute.signUp);
     }
-    if (mounted) setState(() => _locationGranted = granted);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Material rather than DecoratedBox: this screen is routed without a
-    // Scaffold, and with no Material ancestor every Text below inherited
-    // `WidgetsApp._errorTextStyle`, which painted a yellow underline under
-    // each line. `color:` fills the same opaque slate the box did.
-    return Material(
-      color: BambooInk.paper,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpace.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  tooltip: 'Back',
-                  color: BambooInk.ink900,
-                  onPressed: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go(AppRoute.signUp);
-                    }
-                  },
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-              ),
-              Text(
-                'Set up a few permissions',
-                style: BambooFonts.heading(24, color: BambooInk.ink900),
-              ),
-              const SizedBox(height: AppSpace.xs),
-              Text(
-                'Every one of these is optional — skip any you\'re not sure about, you can turn them on later.',
-                style: BambooFonts.ui(14, color: BambooInk.ink500),
-              ),
-              const SizedBox(height: AppSpace.xl),
-              Expanded(
-                child: ListView(
-                  children: [
-                    if (_isAndroid)
-                      _PermissionRow(
-                        icon: Icons.sms_outlined,
-                        title: 'Read bank SMS alerts',
-                        reason:
-                            'Automatically finds your cards and logs spends from your bank\'s SMS, 100% on-device. '
-                            'We never see full card numbers.',
-                        granted: _smsGranted,
-                        actionLabel: _smsPermanentlyDenied
-                            ? 'Open settings'
-                            : 'Enable',
-                        onRequest: _requestSms,
-                      ),
-                    if (_isAndroid) const SizedBox(height: AppSpace.md),
-                    _PermissionRow(
-                      icon: Icons.notifications_none_rounded,
-                      title: 'Notifications',
-                      reason:
-                          'Reward alerts, due-date reminders, and cap warnings.',
-                      granted: _notificationsGranted,
-                      onRequest: _requestNotifications,
+    final options = _page == _SetupPage.options;
+    return PopScope(
+      canPop:
+          !_requestingAll &&
+          (_page == _SetupPage.sms || (!_isAndroid && options)),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          if (_requestingAll) return;
+          if (_page == _SetupPage.importing) {
+            _showOptions();
+          } else {
+            _back();
+          }
+        }
+      },
+      child: EntryBackdrop(
+        waves: options,
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 6, 24, 0),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          tooltip: 'Back',
+                          onPressed: _requestingAll
+                              ? null
+                              : _page == _SetupPage.importing
+                              ? _showOptions
+                              : _back,
+                          icon: const Icon(Icons.arrow_back_rounded),
+                        ),
+                        const Spacer(),
+                        const PandaWordmark(size: 22),
+                      ],
                     ),
-                    const SizedBox(height: AppSpace.md),
-                    _PermissionRow(
-                      icon: Icons.location_on_outlined,
-                      title: 'Location',
-                      reason:
-                          'Suggests the best card the moment you\'re near a merchant.',
-                      granted: _locationGranted,
-                      onRequest: _requestLocation,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpace.md),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: BambooInk.jade,
-                  foregroundColor: BambooInk.paper,
-                  minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
                   ),
-                  textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
-                ),
-                onPressed: () => context.push(AppRoute.tour),
-                child: const Text('Continue'),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                    child: Row(
+                      children: [
+                        Expanded(child: _StepLine(active: true)),
+                        const SizedBox(width: 6),
+                        Expanded(child: _StepLine(active: options)),
+                        const SizedBox(width: 12),
+                        Text(
+                          options ? '2 of 2' : '1 of 2',
+                          style: BambooFonts.ui(12, color: BambooInk.ink700),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      key: ValueKey(_page),
+                      padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+                      child: switch (_page) {
+                        _SetupPage.sms => _smsContent(),
+                        _SetupPage.importing => _importContent(),
+                        _SetupPage.imported => _resultContent(),
+                        _SetupPage.options => _optionsContent(),
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+                    child: _footer(),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
-}
 
-class _PermissionRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String reason;
-  final bool? granted;
-  final String actionLabel;
-  final VoidCallback onRequest;
-
-  const _PermissionRow({
-    required this.icon,
-    required this.title,
-    required this.reason,
-    required this.granted,
-    this.actionLabel = 'Enable',
-    required this.onRequest,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
+  Widget _smsContent() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const _Eyebrow('LESS TYPING. MORE CLARITY.'),
+      const SizedBox(height: 12),
+      const _Title('Let your spends\nfind their way.'),
+      const SizedBox(height: 12),
+      _body(
+        'Turn bank SMS alerts into spending and bill details, so you don’t have to enter them one by one.',
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: BambooInk.paper,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: BambooInk.hairlineOnPaper),
-            ),
-            child: Icon(icon, color: BambooInk.jade, size: 20),
-          ),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
+      const SizedBox(height: 20),
+      const SmsPermissionArtwork(),
+      const SizedBox(height: 22),
+      const _TrustPoint(
+        icon: Icons.phonelink_lock_rounded,
+        title: 'Filtered on your phone',
+        body:
+            'OTP and security-code messages are excluded before capture or sync.',
+      ),
+      const SizedBox(height: 15),
+      const _TrustPoint(
+        icon: Icons.cloud_sync_outlined,
+        title: 'Connected to your account',
+        body:
+            'Matching financial SMS text is sent to PandaPay’s server for processing and account sync.',
+      ),
+      const SizedBox(height: 14),
+      _body(
+        'Android grants inbox access. You can revoke it at any time in device Settings.',
+        small: true,
+      ),
+    ],
+  );
+
+  Widget _importContent() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const _Eyebrow('A LITTLE SORTING, A LOT OF CLARITY'),
+      const SizedBox(height: 12),
+      const _Title('Panda’s sorting\nthe small print.'),
+      const SizedBox(height: 12),
+      _body(
+        'Finding financial alerts and putting recognized spends into your spending view.',
+      ),
+      const SizedBox(height: 28),
+      const ImportPermissionArtwork(complete: false),
+      const SizedBox(height: 28),
+      ValueListenableBuilder<SmsInboxScanProgress>(
+        valueListenable: ref.read(smsAutoImportProvider).inboxScanProgress,
+        builder: (context, progress, _) => Semantics(
+          liveRegion: true,
+          child: _Surface(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  title,
-                  style: BambooFonts.heading(15, color: BambooInk.ink900),
+                  progress.complete
+                      ? 'Preparing your spending view…'
+                      : 'Checking your SMS inbox…',
+                  style: BambooFonts.heading(17, weight: FontWeight.w600),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  reason,
-                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                const SizedBox(height: 14),
+                const LinearProgressIndicator(
+                  color: BambooInk.jade,
+                  backgroundColor: Color(0xFFEAF1E2),
+                  minHeight: 5,
+                  borderRadius: BorderRadius.all(Radius.circular(5)),
+                ),
+                const SizedBox(height: 13),
+                _body(
+                  '${progress.checked} messages checked · ${progress.matched} financial alerts found',
+                  small: true,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: AppSpace.sm),
-          if (granted == true)
-            const Icon(
-              Icons.check_circle_rounded,
-              color: BambooInk.jade,
-              size: 22,
-            )
-          else
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: BambooInk.ink900,
-                side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                minimumSize: const Size(0, 34),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              onPressed: onRequest,
-              child: Text(actionLabel),
-            ),
-        ],
+        ),
       ),
+      const SizedBox(height: 20),
+      const _TrustPoint(
+        icon: Icons.shield_outlined,
+        title: 'One step at a time',
+        body:
+            'Alerts are saved locally first. Account sync can continue in the background, including when you reconnect.',
+      ),
+    ],
+  );
+
+  Widget _resultContent() {
+    final overview = _overview;
+    final hasSpends = (overview?.spends ?? 0) > 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _Eyebrow('A GOOD START'),
+        const SizedBox(height: 12),
+        _Title(
+          _message != null
+              ? 'We can finish\nthis later.'
+              : hasSpends
+              ? 'Your spends,\ncoming together.'
+              : (overview?.bankAlerts ?? 0) > 0
+              ? 'Your bank alerts,\nin one place.'
+              : 'Ready for your\nfirst spend.',
+        ),
+        const SizedBox(height: 12),
+        _body(
+          _message != null
+              ? 'You can keep setting up PandaPay while we leave the rest in your hands.'
+              : (overview?.bankAlerts ?? 0) == 0
+              ? 'No financial SMS alerts were found in this account’s captured inbox. You can add spends manually or import them later.'
+              : 'Recognized spends are available in Spending. Some alerts may need review or a connection before they appear.',
+        ),
+        const SizedBox(height: 22),
+        ImportPermissionArtwork(complete: _message == null),
+        const SizedBox(height: 20),
+        if (overview != null)
+          _Surface(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _Count(
+                    value: overview.bankAlerts,
+                    label: 'Bank alerts saved',
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 52,
+                  color: BambooInk.hairlineOnPaper,
+                ),
+                Expanded(
+                  child: _Count(
+                    value: overview.spends,
+                    label: 'SMS spends available',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if ((overview?.pendingSync ?? 0) > 0) ...[
+          const SizedBox(height: 16),
+          _body(
+            '${overview!.pendingSync} bank alerts are waiting for account sync. They’re saved on this device.',
+            small: true,
+          ),
+        ],
+        if (_message != null) _notice(_message!),
+      ],
     );
   }
+
+  Widget _optionsContent() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const _Eyebrow('HELPFUL EXTRAS. YOUR CHOICE.'),
+      const SizedBox(height: 12),
+      const _Title('A little help.\nOn your terms.'),
+      const SizedBox(height: 12),
+      _body(
+        'Choose what’s useful to you. Each permission has a purpose, and you can change your mind later.',
+      ),
+      const SizedBox(height: 12),
+      const ReminderPermissionArtwork(),
+      const SizedBox(height: 12),
+      _permissionTile(
+        Permission.notification,
+        Icons.notifications_none_rounded,
+        'Timely reminders',
+        'Bill due dates, reward caps and milestone alerts.',
+      ),
+      const SizedBox(height: 10),
+      _permissionTile(
+        Permission.locationWhenInUse,
+        Icons.near_me_outlined,
+        'Nearby merchants',
+        'Find merchants near you while using the app.',
+      ),
+      const SizedBox(height: 10),
+      _permissionTile(
+        Permission.camera,
+        Icons.qr_code_scanner_rounded,
+        'Scan, don’t type',
+        'Scan UPI QR codes or photograph a card to add it.',
+      ),
+      const SizedBox(height: 10),
+      _permissionTile(
+        Permission.microphone,
+        Icons.mic_none_rounded,
+        'Say it to Panda',
+        'Use voice input with the assistant when you tap the mic.',
+      ),
+      const SizedBox(height: 16),
+      _body('Background alerts are a separate opt-in in Nearby.', small: true),
+    ],
+  );
+
+  Widget _permissionTile(
+    Permission permission,
+    IconData icon,
+    String title,
+    String reason,
+  ) => _PermissionTile(
+    icon: icon,
+    title: title,
+    reason: reason,
+    granted: _granted(permission),
+    blocked: _blocked(permission),
+    busy: _requesting == permission,
+    checking: _checkingStatuses,
+    known: _statuses.containsKey(permission),
+    onPressed:
+        _checkingStatuses ||
+            _requestingAll ||
+            _requesting != null ||
+            _granted(permission)
+        ? null
+        : () => _request(permission),
+  );
+
+  Widget _footer() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (_message != null &&
+          (_page == _SetupPage.sms || _page == _SetupPage.options))
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Semantics(
+            liveRegion: true,
+            child: Text(
+              _message!,
+              style: BambooFonts.ui(12, color: BambooInk.ink700, height: 1.4),
+            ),
+          ),
+        ),
+      _footerActions(),
+    ],
+  );
+
+  Widget _footerActions() => switch (_page) {
+    _SetupPage.sms => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        EntryButton(
+          label: _granted(Permission.sms)
+              ? 'Find my spends'
+              : _blocked(Permission.sms)
+              ? 'Open SMS settings'
+              : 'Allow SMS & find my spends',
+          loading: _checkingStatuses || _requesting == Permission.sms,
+          onPressed: _checkingStatuses || _requesting != null
+              ? null
+              : () => _granted(Permission.sms)
+                    ? _importSms()
+                    : _request(Permission.sms),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _requesting != null ? null : _showOptions,
+          child: Text(
+            'I’ll add spends myself',
+            style: BambooFonts.ui(
+              14,
+              color: BambooInk.ink700,
+              weight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+    _SetupPage.importing => EntryButton(
+      label: 'Continue in background',
+      onPressed: _showOptions,
+      secondary: true,
+    ),
+    _SetupPage.imported => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        EntryButton(label: 'Continue', onPressed: _showOptions),
+        if (_message != null)
+          TextButton(
+            onPressed: _importSms,
+            child: const Text('Try SMS import again'),
+          ),
+      ],
+    ),
+    _SetupPage.options => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        EntryButton(
+          label: _extrasEnabled
+              ? 'Continue to my cards'
+              : _extraPermissions.any(_granted)
+              ? 'Allow remaining permissions'
+              : 'Allow permissions',
+          loading: _checkingStatuses || _requestingAll,
+          onPressed: _checkingStatuses || _requestingAll || _requesting != null
+              ? null
+              : _extrasEnabled
+              ? _continueToCards
+              : _requestAll,
+        ),
+        if (!_extrasEnabled)
+          TextButton(
+            onPressed: _requestingAll || _requesting != null
+                ? null
+                : _continueToCards,
+            child: Text(
+              'Continue for now',
+              style: BambooFonts.ui(13, color: BambooInk.ink700),
+            ),
+          ),
+      ],
+    ),
+  };
+
+  Widget _body(String text, {bool small = false}) => Text(
+    text,
+    style: BambooFonts.ui(
+      small ? 12 : 15,
+      color: BambooInk.ink700,
+      height: 1.45,
+    ),
+  );
+  Widget _notice(String text) => Padding(
+    padding: const EdgeInsets.only(top: 16),
+    child: Semantics(
+      liveRegion: true,
+      child: _Surface(
+        child: Text(
+          text,
+          style: BambooFonts.ui(13, color: BambooInk.ink700, height: 1.4),
+        ),
+      ),
+    ),
+  );
+}
+
+class _PermissionTile extends StatelessWidget {
+  final IconData icon;
+  final String title, reason;
+  final bool granted, blocked, busy, checking, known;
+  final VoidCallback? onPressed;
+  const _PermissionTile({
+    required this.icon,
+    required this.title,
+    required this.reason,
+    required this.granted,
+    required this.blocked,
+    required this.busy,
+    required this.checking,
+    required this.known,
+    required this.onPressed,
+  });
+
+  Widget _action() => granted
+      ? Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.check_circle_rounded,
+                color: BambooInk.jade,
+                size: 16,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                'Enabled',
+                style: BambooFonts.ui(
+                  12,
+                  color: BambooInk.jade,
+                  weight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        )
+      : TextButton(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(
+            foregroundColor: BambooInk.jade,
+            minimumSize: const Size(64, 44),
+          ),
+          child: busy
+              ? const SizedBox.square(
+                  dimension: 17,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(
+                  checking
+                      ? 'Checking…'
+                      : blocked
+                      ? 'Settings'
+                      : known
+                      ? 'Enable'
+                      : 'Check again',
+                  style: BambooFonts.ui(
+                    13,
+                    color: BambooInk.jade,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+        );
+
+  @override
+  Widget build(BuildContext context) => _Surface(
+    padding: 12,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final compact =
+            constraints.maxWidth >= 300 &&
+            MediaQuery.textScalerOf(context).scale(14) <= 18;
+        final description = Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: BambooFonts.heading(16, weight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                reason,
+                style: BambooFonts.ui(
+                  12.5,
+                  color: BambooInk.ink700,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        );
+        final row = Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F7E8),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, color: BambooInk.jade, size: 20),
+            ),
+            const SizedBox(width: 11),
+            description,
+            if (compact) ...[const SizedBox(width: 7), _action()],
+          ],
+        );
+        return compact
+            ? row
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  row,
+                  const SizedBox(height: 6),
+                  Align(alignment: Alignment.centerRight, child: _action()),
+                ],
+              );
+      },
+    ),
+  );
+}
+
+class _Title extends StatelessWidget {
+  final String text;
+  const _Title(this.text);
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: BambooFonts.heading(33, weight: FontWeight.w800, height: 1.08),
+  );
+}
+
+class _Eyebrow extends StatelessWidget {
+  final String text;
+  const _Eyebrow(this.text);
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: BambooFonts.ui(
+      10,
+      color: BambooInk.jade,
+      weight: FontWeight.w700,
+    ).copyWith(letterSpacing: 1.3),
+  );
+}
+
+class _StepLine extends StatelessWidget {
+  final bool active;
+  const _StepLine({required this.active});
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 4,
+    decoration: BoxDecoration(
+      color: active ? const Color(0xFFACD967) : const Color(0xFFE9EDE4),
+      borderRadius: BorderRadius.circular(10),
+    ),
+  );
+}
+
+class _Surface extends StatelessWidget {
+  final Widget child;
+  final double padding;
+  const _Surface({required this.child, this.padding = 16});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: EdgeInsets.all(padding),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .93),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: const Color(0xFFE5E9E1)),
+    ),
+    child: child,
+  );
+}
+
+class _TrustPoint extends StatelessWidget {
+  final IconData icon;
+  final String title, body;
+  const _TrustPoint({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 22, color: BambooInk.jade),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: BambooFonts.ui(14, weight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text(
+              body,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink700, height: 1.4),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+class _Count extends StatelessWidget {
+  final int value;
+  final String label;
+  const _Count({required this.value, required this.label});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    child: Column(
+      children: [
+        Text(
+          '$value',
+          style: BambooFonts.heading(
+            30,
+            color: BambooInk.jade,
+            weight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: BambooFonts.ui(12, color: BambooInk.ink700),
+        ),
+      ],
+    ),
+  );
 }

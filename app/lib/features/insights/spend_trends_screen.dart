@@ -61,8 +61,15 @@ final spendPeriodTransactionsProvider =
 /// itself.
 class SpendTrendsScreen extends ConsumerStatefulWidget {
   final String? initialCategory;
+  final Key? periodSelectorKey;
+  final Key? overviewKey;
 
-  const SpendTrendsScreen({super.key, this.initialCategory});
+  const SpendTrendsScreen({
+    super.key,
+    this.initialCategory,
+    this.periodSelectorKey,
+    this.overviewKey,
+  });
 
   @override
   ConsumerState<SpendTrendsScreen> createState() => _SpendTrendsScreenState();
@@ -108,10 +115,13 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
       body: AppBackground(
         child: Column(
           children: [
-            _PeriodSelector(
-              selected: query,
-              filtersActive: _filtersActive,
-              onFilters: () => reportBodyKey.currentState?.openFilters(),
+            KeyedSubtree(
+              key: widget.periodSelectorKey,
+              child: _PeriodSelector(
+                selected: query,
+                filtersActive: _filtersActive,
+                onFilters: () => reportBodyKey.currentState?.openFilters(),
+              ),
             ),
             OfflineBanner(
               gutter: AppSpace.lg,
@@ -161,6 +171,7 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
                     transactions: transactions.valueOrNull ?? const [],
                     transactionDetailsLoading: transactions.isLoading,
                     initialCategory: widget.initialCategory,
+                    overviewKey: widget.overviewKey,
                     onFiltersActiveChanged: (active) =>
                         setState(() => _filtersActive = active),
                     onRefresh: () {
@@ -902,6 +913,7 @@ class _ReportBody extends StatefulWidget {
   final List<TransactionEntry> transactions;
   final bool transactionDetailsLoading;
   final String? initialCategory;
+  final Key? overviewKey;
   final ValueChanged<bool> onFiltersActiveChanged;
   final VoidCallback onRefresh;
   const _ReportBody({
@@ -911,6 +923,7 @@ class _ReportBody extends StatefulWidget {
     required this.transactions,
     required this.transactionDetailsLoading,
     this.initialCategory,
+    this.overviewKey,
     required this.onFiltersActiveChanged,
     required this.onRefresh,
   });
@@ -1309,25 +1322,33 @@ class _ReportBodyState extends State<_ReportBody> {
           AppSpace.xl,
         ),
         children: [
-          _HeadlineCard(
-            report: _filtersActive ? _filteredReport(report, total) : report,
-            multiMonth: multiMonth,
-            monthCount: monthCount,
+          Column(
+            key: widget.overviewKey,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _HeadlineCard(
+                report: _filtersActive
+                    ? _filteredReport(report, total)
+                    : report,
+                multiMonth: multiMonth,
+                monthCount: monthCount,
+              ),
+              const SizedBox(height: AppSpace.lg),
+              if (multiMonth) ...[
+                _MonthlyComparisonCard(series: series),
+                const SizedBox(height: AppSpace.lg),
+              ],
+              if (categoryRows.isNotEmpty) ...[
+                _SpendingMixCard(
+                  rows: categoryRows,
+                  total: total,
+                  compact: multiMonth,
+                  rangeLabel: multiMonth ? _reportRangeLabel(report) : null,
+                ),
+                const SizedBox(height: AppSpace.lg),
+              ],
+            ],
           ),
-          const SizedBox(height: AppSpace.lg),
-          if (multiMonth) ...[
-            _MonthlyComparisonCard(series: series),
-            const SizedBox(height: AppSpace.lg),
-          ],
-          if (categoryRows.isNotEmpty) ...[
-            _SpendingMixCard(
-              rows: categoryRows,
-              total: total,
-              compact: multiMonth,
-              rangeLabel: multiMonth ? _reportRangeLabel(report) : null,
-            ),
-            const SizedBox(height: AppSpace.lg),
-          ],
           _SpendingTabs(
             selected: _tab,
             onChanged: (tab) => setState(() => _tab = tab),
@@ -2779,8 +2800,10 @@ class _SpendingDonut extends StatelessWidget {
                         transitionBuilder: (child, animation) => FadeTransition(
                           opacity: animation,
                           child: ScaleTransition(
-                            scale: Tween<double>(begin: 0.94, end: 1)
-                                .animate(animation),
+                            scale: Tween<double>(
+                              begin: 0.94,
+                              end: 1,
+                            ).animate(animation),
                             child: child,
                           ),
                         ),
@@ -2931,10 +2954,11 @@ class _SpendingDonutPainter extends CustomPainter {
           ? 1.0
           : 1.0 - 0.66 * selectionProgress;
       final paint = Paint()
-        ..color = spendingCategoryVisual(row.label).accent.withValues(alpha: alpha)
+        ..color = spendingCategoryVisual(
+          row.label,
+        ).accent.withValues(alpha: alpha)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth +
-            (isSelected ? 6 * selectionProgress : 0);
+        ..strokeWidth = strokeWidth + (isSelected ? 6 * selectionProgress : 0);
       canvas.drawArc(rect.deflate(10), start, sweep, false, paint);
       start += sweep;
     }

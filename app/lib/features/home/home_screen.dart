@@ -477,6 +477,13 @@ class _BrandHeader extends ConsumerWidget {
                   ],
                 ),
         ),
+        IconButton(
+          tooltip: 'Add transaction',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const QuickAddScreen()),
+          ),
+          icon: const Icon(Icons.add_rounded, color: BambooInk.jade),
+        ),
       ],
     );
   }

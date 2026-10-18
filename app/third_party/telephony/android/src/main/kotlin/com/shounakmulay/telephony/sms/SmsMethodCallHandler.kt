@@ -47,6 +47,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 class SmsMethodCallHandler(
@@ -58,7 +59,31 @@ class SmsMethodCallHandler(
     BroadcastReceiver() {
 
   private lateinit var result: MethodChannel.Result
-  private lateinit var action: SmsAction
+  private lateinit var activeCall: MethodCall
+  private var pendingPermissionCall: PendingPermissionCall? = null
+
+  private data class PendingPermissionCall(
+      val call: MethodCall,
+      val result: MethodChannel.Result,
+      val requestCode: Int
+  )
+
+  /** Each platform call owns one reply, including callbacks that finish later. */
+  private class SingleReply(private val delegate: MethodChannel.Result) : MethodChannel.Result {
+    private val completed = AtomicBoolean(false)
+
+    override fun success(value: Any?) {
+      if (completed.compareAndSet(false, true)) delegate.success(value)
+    }
+
+    override fun error(code: String, message: String?, details: Any?) {
+      if (completed.compareAndSet(false, true)) delegate.error(code, message, details)
+    }
+
+    override fun notImplemented() {
+      if (completed.compareAndSet(false, true)) delegate.notImplemented()
+    }
+  }
   private lateinit var foregroundChannel: MethodChannel
   private lateinit var activity: Activity
 
@@ -77,12 +102,11 @@ class SmsMethodCallHandler(
 
   private lateinit var phoneNumber: String
 
-  private var requestCode: Int = -1
-
-  override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+  override fun onMethodCall(call: MethodCall, rawResult: MethodChannel.Result) {
+    val result = if (rawResult is SingleReply) rawResult else SingleReply(rawResult)
     this.result = result
-
-    action = SmsAction.fromMethod(call.method)
+    activeCall = call
+    val action = SmsAction.fromMethod(call.method)
 
     if (action == SmsAction.NO_SUCH_METHOD) {
       result.notImplemented()
@@ -261,19 +285,25 @@ class SmsMethodCallHandler(
         SmsAction.IS_NETWORK_ROAMING -> isNetworkRoaming()
         SmsAction.GET_SIGNAL_STRENGTH -> {
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            getSignalStrength()
-                ?: result.error("SERVICE_STATE_NULL", "Error getting service state", null)
+            getSignalStrength() ?: run {
+              result.error("SERVICE_STATE_NULL", "Error getting service state", null)
+              return
+            }
 
           } else {
-            result.error("INCORRECT_SDK_VERSION", "getServiceState() can only be called on Android Q and above", null)
+            result.error("INCORRECT_SDK_VERSION", "getSignalStrength() requires Android Q or above", null)
+            return
           }
         }
         SmsAction.GET_SERVICE_STATE -> {
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            getServiceState()
-                ?: result.error("SERVICE_STATE_NULL", "Error getting service state", null)
+            getServiceState() ?: run {
+              result.error("SERVICE_STATE_NULL", "Error getting service state", null)
+              return
+            }
           } else {
-            result.error("INCORRECT_SDK_VERSION", "getServiceState() can only be called on Android O and above", null)
+            result.error("INCORRECT_SDK_VERSION", "getServiceState() requires Android O or above", null)
+            return
           }
         }
         else -> throw IllegalArgumentException()
@@ -308,8 +338,6 @@ class SmsMethodCallHandler(
    */
   @RequiresApi(Build.VERSION_CODES.M)
   fun checkOrRequestPermission(smsAction: SmsAction, requestCode: Int): Boolean {
-    this.action = smsAction
-    this.requestCode = requestCode
     when (smsAction) {
       SmsAction.GET_INBOX,
       SmsAction.GET_SENT,
@@ -364,12 +392,25 @@ class SmsMethodCallHandler(
   private fun checkOrRequestPermission(permissions: List<String>, requestCode: Int): Boolean {
     permissionsController.apply {
 
-      if (!::activity.isInitialized) {
-        return hasRequiredPermissions(permissions)
-      }
-
       if (!hasRequiredPermissions(permissions)) {
-        requestPermissions(activity, permissions, requestCode)
+        if (!::activity.isInitialized) {
+          result.error(PERMISSION_DENIED, PERMISSION_DENIED_MESSAGE, permissions)
+          return false
+        }
+        if (pendingPermissionCall != null) {
+          result.error("PERMISSION_REQUEST_IN_PROGRESS", "Another SMS permission request is active", null)
+          return false
+        }
+        // Save the entire original call. Inbox/background queries may arrive
+        // while Android's permission activity is open and update handler fields.
+        pendingPermissionCall = PendingPermissionCall(activeCall, result, requestCode)
+        try {
+          requestPermissions(activity, permissions, requestCode)
+        } catch (error: RuntimeException) {
+          pendingPermissionCall = null
+          isRequestingPermission = false
+          throw error
+        }
         return false
       }
       return true
@@ -377,32 +418,28 @@ class SmsMethodCallHandler(
   }
 
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray): Boolean {
-
+    // Flutter delivers other plugins' permission callbacks here too. Only
+    // the frozen, outstanding telephony call can own this callback.
+    val pending = pendingPermissionCall ?: return false
+    if (requestCode != pending.requestCode) return false
+    // Consume before dispatch: repeated callbacks must never replay a query.
+    pendingPermissionCall = null
     permissionsController.isRequestingPermission = false
 
-    val deniedPermissions = mutableListOf<String>()
-    if (requestCode != this.requestCode && !this::action.isInitialized) {
-      return false
-    }
-
-    val allPermissionGranted = grantResults.foldIndexed(true) { i, acc, result ->
-      if (result == PackageManager.PERMISSION_DENIED) {
-        permissions.let { deniedPermissions.add(it[i]) }
-      }
-      return@foldIndexed acc && result == PackageManager.PERMISSION_GRANTED
-    }
-
-    return if (allPermissionGranted) {
-      execute(action)
-      true
+    val allGranted = grantResults.isNotEmpty() &&
+        grantResults.size == permissions.size &&
+        grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+    if (allGranted) {
+      // Re-read arguments from that call, never the last unrelated method's
+      // action/result/projection. The same SingleReply survives this retry.
+      onMethodCall(pending.call, pending.result)
     } else {
-      onPermissionDenied(deniedPermissions)
-      false
+      val denied = permissions.filterIndexed { i, _ ->
+        i >= grantResults.size || grantResults[i] != PackageManager.PERMISSION_GRANTED
+      }
+      pending.result.error(PERMISSION_DENIED, PERMISSION_DENIED_MESSAGE, denied)
     }
-  }
-
-  private fun onPermissionDenied(deniedPermissions: List<String>) {
-    result.error(PERMISSION_DENIED, PERMISSION_DENIED_MESSAGE, deniedPermissions)
+    return true
   }
 
   fun setForegroundChannel(channel: MethodChannel) {

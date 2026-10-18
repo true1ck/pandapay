@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/consents_api.dart';
@@ -16,10 +17,6 @@ import '../import/gmail_connect_service.dart';
 /// Reached via `Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
 /// const PrivacyPermissionsScreen()))` — a plain pushed screen, not a
 /// registered go_router route, same pattern as ToolsHubScreen's children.
-///
-/// Local-only providers: this screen deliberately does NOT touch
-/// app/lib/app/providers.dart (parallel-build collision avoidance across
-/// several agents landing sibling H-group screens at once).
 final _consentsApiProvider = Provider<ConsentsApi?>((ref) {
   final token = ref.watch(accessTokenProvider);
   if (token == null) return null;
@@ -30,25 +27,54 @@ final _consentsApiProvider = Provider<ConsentsApi?>((ref) {
   );
 });
 
-final _consentHistoryProvider = FutureProvider.autoDispose<List<ConsentRecord>>((ref) async {
-  final api = ref.watch(_consentsApiProvider);
-  if (api == null) return const [];
-  return api.fetchHistory();
-});
-
-/// Local device-permission status, refreshable via `ref.invalidate` after
-/// returning from `openAppSettings()`.
-final _locationStatusProvider = FutureProvider.autoDispose<PermissionStatus>(
-  (ref) => Permission.location.status,
+final _consentHistoryProvider = FutureProvider.autoDispose<List<ConsentRecord>>(
+  (ref) async {
+    final api = ref.watch(_consentsApiProvider);
+    if (api == null) return const [];
+    return api.fetchHistory();
+  },
 );
-final _cameraStatusProvider = FutureProvider.autoDispose<PermissionStatus>((ref) => Permission.camera.status);
-final _smsStatusProvider = FutureProvider.autoDispose<PermissionStatus>((ref) => Permission.sms.status);
 
-class PrivacyPermissionsScreen extends ConsumerWidget {
+/// These values come from the phone, never from saved onboarding choices.
+final _permissionStatusProvider = FutureProvider.autoDispose
+    .family<PermissionStatus, Permission>(
+      (ref, permission) => readDevicePermissionStatus(permission),
+    );
+
+class PrivacyPermissionsScreen extends ConsumerStatefulWidget {
   const PrivacyPermissionsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PrivacyPermissionsScreen> createState() =>
+      _PrivacyPermissionsScreenState();
+}
+
+class _PrivacyPermissionsScreenState
+    extends ConsumerState<PrivacyPermissionsScreen>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // openAppSettings completes when Settings launches, not when the user
+      // returns. Only then is it useful to reread the changed native grants.
+      ref.invalidate(_permissionStatusProvider);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final signedIn = ref.watch(accessTokenProvider) != null;
 
     return Scaffold(
@@ -58,7 +84,10 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Privacy & Permissions', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+        title: Text(
+          'Privacy & Permissions',
+          style: BambooFonts.heading(17, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: ListView(
@@ -66,29 +95,47 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
           children: [
             Text(
               'App permissions',
-              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              style: BambooFonts.ui(
+                12.5,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
-            _PermissionRow(
+            const _PermissionRow(
+              icon: Icons.notifications_none_rounded,
+              title: 'Notifications',
+              caption: 'bill reminders, reward caps and milestone alerts',
+              permission: Permission.notification,
+            ),
+            const SizedBox(height: AppSpace.sm),
+            const _PermissionRow(
               icon: Icons.location_on_outlined,
               title: 'Location',
-              caption: 'used to detect which store you\'re at',
-              statusProvider: _locationStatusProvider,
+              caption: 'find nearby merchants while using the app',
+              permission: Permission.locationWhenInUse,
             ),
             const SizedBox(height: AppSpace.sm),
-            _PermissionRow(
+            const _PermissionRow(
               icon: Icons.qr_code_scanner_rounded,
               title: 'Camera',
               caption: 'used to scan payment QR codes',
-              statusProvider: _cameraStatusProvider,
+              permission: Permission.camera,
+            ),
+            const SizedBox(height: AppSpace.sm),
+            const _PermissionRow(
+              icon: Icons.mic_none_rounded,
+              title: 'Microphone',
+              caption: 'voice input when you tap the assistant’s mic',
+              permission: Permission.microphone,
             ),
             if (Platform.isAndroid) ...[
               const SizedBox(height: AppSpace.sm),
-              _PermissionRow(
+              const _PermissionRow(
                 icon: Icons.sms_outlined,
                 title: 'SMS',
                 caption: 'used to auto-detect transactions from bank messages',
-                statusProvider: _smsStatusProvider,
+                permission: Permission.sms,
               ),
             ],
             const SizedBox(height: AppSpace.sm),
@@ -96,7 +143,11 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
             const SizedBox(height: AppSpace.xl),
             Text(
               'How your data is handled',
-              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              style: BambooFonts.ui(
+                12.5,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             const _DataHandlingSection(
@@ -126,31 +177,52 @@ class PrivacyPermissionsScreen extends ConsumerWidget {
             const SizedBox(height: AppSpace.xl),
             Text(
               'Crowdsourced contributions',
-              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              style: BambooFonts.ui(
+                12.5,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             if (!signedIn)
-              const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
+              const EmptyState(
+                icon: Icons.lock_outline,
+                title: 'Sign in to view',
+              )
             else
               const _ContributionToggle(),
             const SizedBox(height: AppSpace.xl),
             Text(
               'How your data may be used',
-              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              style: BambooFonts.ui(
+                12.5,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             if (!signedIn)
-              const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
+              const EmptyState(
+                icon: Icons.lock_outline,
+                title: 'Sign in to view',
+              )
             else
               const _PurposeConsents(),
             const SizedBox(height: AppSpace.xl),
             Text(
               'Consent history',
-              style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+              style: BambooFonts.ui(
+                12.5,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             if (!signedIn)
-              const EmptyState(icon: Icons.lock_outline, title: 'Sign in to view')
+              const EmptyState(
+                icon: Icons.lock_outline,
+                title: 'Sign in to view',
+              )
             else
               const _ConsentHistoryList(),
           ],
@@ -164,18 +236,18 @@ class _PermissionRow extends ConsumerWidget {
   final IconData icon;
   final String title;
   final String caption;
-  final AutoDisposeFutureProvider<PermissionStatus> statusProvider;
+  final Permission permission;
 
   const _PermissionRow({
     required this.icon,
     required this.title,
     required this.caption,
-    required this.statusProvider,
+    required this.permission,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final status = ref.watch(statusProvider);
+    final status = ref.watch(_permissionStatusProvider(permission));
 
     return Container(
       decoration: BoxDecoration(
@@ -189,7 +261,10 @@ class _PermissionRow extends ConsumerWidget {
           Container(
             width: 40,
             height: 40,
-            decoration: const BoxDecoration(color: BambooInk.paperMuted, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: BambooInk.paperMuted,
+              shape: BoxShape.circle,
+            ),
             child: Icon(icon, size: 20, color: BambooInk.ink900),
           ),
           const SizedBox(width: AppSpace.md),
@@ -197,31 +272,47 @@ class _PermissionRow extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                Text(
+                  title,
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
                 const SizedBox(height: 2),
-                Text(caption, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                Text(
+                  caption,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
                 const SizedBox(height: 4),
                 status.when(
-                  loading: () => Text('Checking…', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                  error: (_, _) => Text('Unknown', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                  skipLoadingOnRefresh: false,
+                  loading: () => Text(
+                    'Checking…',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                  error: (_, _) => Text(
+                    'Unknown',
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
                   data: (s) => _StatusBadge(status: s),
                 ),
               ],
             ),
           ),
           const SizedBox(width: AppSpace.sm),
-          status.maybeWhen(
-            data: (s) => (s.isDenied || s.isPermanentlyDenied)
-                ? TextButton(
-                    style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
-                    onPressed: () async {
-                      await openAppSettings();
-                      ref.invalidate(statusProvider);
-                    },
-                    child: const Text('Open Settings'),
-                  )
-                : const SizedBox.shrink(),
-            orElse: () => const SizedBox.shrink(),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
+            onPressed: () async {
+              final opened = await openAppSettings();
+              if (!opened && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Open PandaPay’s permissions in device Settings.',
+                    ),
+                  ),
+                );
+              }
+            },
+            child: const Text('Settings'),
           ),
         ],
       ),
@@ -237,19 +328,43 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, fg, bg) = switch (status) {
-      PermissionStatus.granted => ('Allowed', BambooInk.jade, BambooInk.jade.withValues(alpha: 0.12)),
-      PermissionStatus.limited => ('Limited', BambooInk.clay, BambooInk.clay.withValues(alpha: 0.12)),
+      PermissionStatus.granted => (
+        'Enabled',
+        BambooInk.jade,
+        BambooInk.jade.withValues(alpha: 0.12),
+      ),
+      PermissionStatus.limited => (
+        'Limited',
+        BambooInk.clay,
+        BambooInk.clay.withValues(alpha: 0.12),
+      ),
       PermissionStatus.permanentlyDenied => (
         'Denied — set in Settings',
         BambooInk.clay,
         BambooInk.clay.withValues(alpha: 0.12),
       ),
-      PermissionStatus.denied => ('Not allowed', BambooInk.clay, BambooInk.clay.withValues(alpha: 0.12)),
-      _ => ('Unknown', BambooInk.ink500, BambooInk.paperMuted),
+      PermissionStatus.denied => (
+        'Not enabled',
+        BambooInk.clay,
+        BambooInk.clay.withValues(alpha: 0.12),
+      ),
+      PermissionStatus.restricted => (
+        'Restricted',
+        BambooInk.clay,
+        BambooInk.clay.withValues(alpha: 0.12),
+      ),
+      PermissionStatus.provisional => (
+        'Quiet notifications',
+        BambooInk.jade,
+        BambooInk.jade.withValues(alpha: 0.12),
+      ),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: 2),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
       child: Text(
         label,
         style: BambooFonts.ui(11, weight: FontWeight.w600, color: fg),

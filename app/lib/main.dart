@@ -265,6 +265,7 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     // assistant links that open a screen outside the tab shell.
     ref.watch(backgroundAlertsLifecycleProvider);
     return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
       title: 'PandaPay',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),

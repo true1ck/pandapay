@@ -249,6 +249,7 @@ flutter:
   # wherever a screen has been migrated to the new design system.
   assets:
     - assets/logo/pandapay_mark.png
+    - assets/illustrations/
     - assets/data/bundled_catalogue.json
 
   # An image asset can refer to one or more resolution-specific "variants", see

@@ -65,10 +65,8 @@ void main() {
     (tester) async {
       await _pumpApp(tester, onboardingComplete: false, signedIn: false);
 
-      expect(
-        find.text('Know which card to use — before you pay.'),
-        findsOneWidget,
-      );
+      expect(find.text('A little less\ncard chaos.'), findsOneWidget);
+      expect(find.text('Create account'), findsNothing);
       expect(find.byType(HomeScreen), findsNothing);
     },
   );
@@ -78,27 +76,30 @@ void main() {
     (tester) async {
       await _pumpApp(tester, onboardingComplete: true, signedIn: false);
 
-      expect(
-        find.text('Know which card to use — before you pay.'),
-        findsOneWidget,
-      );
+      expect(find.text('A little less\ncard chaos.'), findsOneWidget);
       expect(find.byType(HomeScreen), findsNothing);
     },
   );
 
-  testWidgets(
-    'welcome exposes direct sign-up and sign-in, never guest mode',
-    (tester) async {
-      await _pumpApp(tester, onboardingComplete: false, signedIn: false);
+  testWidgets('welcome exposes direct sign-up and sign-in, never guest mode', (
+    tester,
+  ) async {
+    await _pumpApp(tester, onboardingComplete: false, signedIn: false);
 
-      await tester.tap(find.text('Create an account'));
-      await tester.pumpAndSettle();
-      expect(find.byType(TextField), findsNWidgets(2));
-      expect(find.text('How do you want to start?'), findsNothing);
-      expect(find.text('Use without an account'), findsNothing);
-      expect(find.byType(HomeScreen), findsNothing);
-    },
-  );
+    await tester.pump(const Duration(milliseconds: 4850));
+    await tester.pump(const Duration(milliseconds: 450));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 6600));
+    await tester.pump(const Duration(milliseconds: 450));
+    await tester.pump();
+    expect(find.text('Make every\ncard count.'), findsOneWidget);
+    await tester.tap(find.text('Create account'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNWidgets(2));
+    expect(find.text('How do you want to start?'), findsNothing);
+    expect(find.text('Use without an account'), findsNothing);
+    expect(find.byType(HomeScreen), findsNothing);
+  });
 
   testWidgets(
     'a signed-in completed account goes Home and cannot return to Welcome',
@@ -112,10 +113,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(HomeScreen), findsOneWidget);
-      expect(
-        find.text('Know which card to use — before you pay.'),
-        findsNothing,
-      );
+      expect(find.text('Make every\ncard count.'), findsNothing);
     },
   );
 

@@ -1,175 +1,355 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
-import '../../app/providers.dart';
 import '../../app/tutorial_keys.dart';
 
+enum TutorialPage { home, manual, scan, voice, spending }
+
 class _TutorialStep {
+  final TutorialPage page;
   final String title;
   final String body;
   final GlobalKey Function(TutorialKeys) targetKey;
-  const _TutorialStep({required this.title, required this.body, required this.targetKey});
+
+  const _TutorialStep({
+    required this.page,
+    required this.title,
+    required this.body,
+    required this.targetKey,
+  });
 }
 
 const _steps = [
   _TutorialStep(
-    title: 'Type what you\'re about to spend',
-    body: 'Every recommendation below updates for the exact amount.',
+    page: TutorialPage.home,
+    title: 'Make every card count.',
+    body:
+        'Choose an amount and category on Home. Panda compares your cards and explains which one could earn you more.',
     targetKey: _amountField,
   ),
   _TutorialStep(
-    title: 'Pick the category',
-    body: 'Groceries, fuel, dining — the ranking changes with it.',
-    targetKey: _categoryChips,
+    page: TutorialPage.manual,
+    title: 'Add a transaction yourself.',
+    body:
+        'Tap + on Home to open Quick add. Add the amount, payment method and category, and attach a receipt photo or file if you like. Save when you’re ready. This tour won’t save a transaction.',
+    targetKey: _manualAmount,
   ),
   _TutorialStep(
-    title: 'This is your best card, and why',
-    body: 'The reasons underneath are the real numbers, not a guess.',
-    targetKey: _firstCard,
-  ),
-  _TutorialStep(
-    title: 'Scan a card to add it',
-    body: 'Point your camera at any card — this button works from every tab.',
+    page: TutorialPage.scan,
+    title: 'Scan before you spend.',
+    body:
+        'Use the centre scan button for a merchant’s UPI QR code. Panda helps you choose a card, then you can review and log the spend.',
     targetKey: _scanFab,
+  ),
+  _TutorialStep(
+    page: TutorialPage.voice,
+    title: 'Or just say it to Panda.',
+    body:
+        'Tap the mic and say something like “Spent ₹250 on groceries.” Review the details before saving—handy when you don’t want to type.',
+    targetKey: _voiceFab,
+  ),
+  _TutorialStep(
+    page: TutorialPage.spending,
+    title: 'See where your money goes.',
+    body:
+        'Insights → Spending brings your totals, categories and trends together. Change the period or filters here. Insights also has budgets, rewards and bill details.',
+    targetKey: _spendingPeriod,
   ),
 ];
 
-GlobalKey _amountField(TutorialKeys k) => k.amountField;
-GlobalKey _categoryChips(TutorialKeys k) => k.categoryChips;
-GlobalKey _firstCard(TutorialKeys k) => k.firstRecommendationCard;
-GlobalKey _scanFab(TutorialKeys k) => k.scanFab;
+GlobalKey _amountField(TutorialKeys keys) => keys.amountField;
+GlobalKey _manualAmount(TutorialKeys keys) => keys.manualAmount;
+GlobalKey _scanFab(TutorialKeys keys) => keys.scanFab;
+GlobalKey _voiceFab(TutorialKeys keys) => keys.voiceFab;
+GlobalKey _spendingPeriod(TutorialKeys keys) =>
+    keys.spendingSummary.currentContext != null
+    ? keys.spendingSummary
+    : keys.spendingPeriod;
 
-/// Task 5 (ui-spec.md A11): four coach-marked steps over the REAL Home
-/// screen and shell — not static illustrations. Locates each target via the
-/// GlobalKeys in tutorial_keys.dart, shared with HomeScreen and the shell's
-/// FAB, so the spotlight sits on whatever is actually on screen right now.
-///
-/// Deliberately tolerant of a missing target (e.g. step 3 when the wallet is
-/// still empty and there's no first card to point at yet): falls back to a
-/// centered card with no cutout rather than crashing on a null RenderBox.
+/// The shell owns navigation; the guide stays above its Navigator, dock and
+/// microphone. A modal barrier blocks even the spotlight's transparent area,
+/// so tapping a highlighted control cannot open a different route mid-step.
 class TutorialOverlay extends ConsumerStatefulWidget {
-  const TutorialOverlay({super.key});
+  final Future<void> Function(TutorialPage page) onShowPage;
+  final Future<void> Function(bool completed) onFinish;
+
+  const TutorialOverlay({
+    super.key,
+    required this.onShowPage,
+    required this.onFinish,
+  });
 
   @override
   ConsumerState<TutorialOverlay> createState() => _TutorialOverlayState();
 }
 
-class _TutorialOverlayState extends ConsumerState<TutorialOverlay> {
+class _TutorialOverlayState extends ConsumerState<TutorialOverlay>
+    with WidgetsBindingObserver {
   int _step = 0;
+  bool _moving = true;
+  bool _finishing = false;
+  String? _message;
+  Rect? _targetRect;
   final _overlayBoxKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
-    // On the very first frame this overlay's own RenderBox doesn't exist
-    // yet (it's what we're in the middle of building), so _localTargetRect
-    // below has nothing to convert into on that pass. One extra frame is
-    // enough — after that this State stays mounted across every _next()
-    // call, so its RenderBox is always available from then on.
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      unawaited(_showStep(0));
+      _trackTarget(Duration.zero);
     });
   }
 
-  Future<void> _finish() async {
-    await ref.read(tutorialSeenProvider.notifier).complete();
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
-  void _next() {
-    if (_step >= _steps.length - 1) {
-      _finish();
-    } else {
-      setState(() => _step++);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Remeasure after returning from the background without resetting or
+      // advancing the current step.
+      setState(() => _targetRect = null);
     }
   }
 
-  /// The target's rect converted into THIS overlay's own local coordinate
-  /// space — i.e. Positioned-ready. Target widgets report their position via
-  /// `localToGlobal`, which is relative to the whole device screen; but this
-  /// overlay sits inside the Scaffold's body Stack, whose (0,0) starts below
-  /// the AppBar, not at the screen's true top-left. Feeding a global
-  /// coordinate straight into `Positioned` would silently shift everything
-  /// up by the AppBar's height — `globalToLocal` on this overlay's own
-  /// RenderBox is what corrects for that.
-  Rect? _localTargetRect(TutorialKeys keys) {
-    final key = _steps[_step].targetKey(keys);
-    final targetBox = key.currentContext?.findRenderObject();
-    if (targetBox is! RenderBox || !targetBox.attached) return null;
+  Future<void> _showStep(int index) async {
+    setState(() {
+      _step = index;
+      _moving = true;
+      _targetRect = null;
+      _message = null;
+    });
+    FocusManager.instance.primaryFocus?.unfocus();
+    try {
+      await widget.onShowPage(_steps[index].page);
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      final target = _steps[index]
+          .targetKey(ref.read(tutorialKeysProvider))
+          .currentContext;
+      if (target != null &&
+          target.mounted &&
+          ModalRoute.of(target)?.isCurrent != false) {
+        await Scrollable.ensureVisible(
+          target,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        );
+      }
+      await WidgetsBinding.instance.endOfFrame;
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message =
+              'This view isn’t ready yet. You can continue the tour or skip it.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _moving = false;
+          _targetRect = _localTargetRect();
+        });
+      }
+    }
+  }
 
-    final overlayBox = _overlayBoxKey.currentContext?.findRenderObject();
-    if (overlayBox is! RenderBox || !overlayBox.attached) return null;
+  /// Observe real rendered frames, including data refreshes, scrolling and
+  /// size changes. Registering the next callback does not request a frame;
+  /// only a changed rectangle needs a repaint, so the guide stays idle too.
+  void _trackTarget(Duration _) {
+    if (!mounted) return;
+    if (!_moving && !_finishing) {
+      final target = _localTargetRect();
+      if (target != _targetRect) setState(() => _targetRect = target);
+    }
+    WidgetsBinding.instance.addPostFrameCallback(_trackTarget);
+  }
 
-    final globalTopLeft = targetBox.localToGlobal(Offset.zero);
-    final localTopLeft = overlayBox.globalToLocal(globalTopLeft);
-    return localTopLeft & targetBox.size;
+  Rect? _localTargetRect() {
+    final targetContext = _steps[_step]
+        .targetKey(ref.read(tutorialKeysProvider))
+        .currentContext;
+    if (targetContext == null ||
+        ModalRoute.of(targetContext)?.isCurrent == false) {
+      return null;
+    }
+    final target = targetContext.findRenderObject();
+    final overlay = _overlayBoxKey.currentContext?.findRenderObject();
+    if (target is! RenderBox ||
+        !target.attached ||
+        !target.hasSize ||
+        overlay is! RenderBox ||
+        !overlay.attached ||
+        !overlay.hasSize) {
+      return null;
+    }
+    final topLeft = overlay.globalToLocal(target.localToGlobal(Offset.zero));
+    final rect = (topLeft & target.size).intersect(Offset.zero & overlay.size);
+    return rect.isEmpty || !rect.isFinite ? null : rect;
+  }
+
+  Future<void> _finish(bool completed) async {
+    if (_finishing) return;
+    setState(() => _finishing = true);
+    try {
+      await widget.onFinish(completed);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _finishing = false;
+          _message = 'We couldn’t close the tour. Please try again.';
+        });
+      }
+    }
+  }
+
+  void _next() {
+    if (_moving || _finishing) return;
+    if (_step == _steps.length - 1) {
+      unawaited(_finish(true));
+    } else {
+      unawaited(_showStep(_step + 1));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final tutorialKeys = ref.watch(tutorialKeysProvider);
     final step = _steps[_step];
-    final targetRect = _localTargetRect(tutorialKeys);
-    final isLast = _step == _steps.length - 1;
-    // Same box _localTargetRect used for the coordinate conversion — reused
-    // here for its size rather than a LayoutBuilder, since a LayoutBuilder
-    // wrapping a Positioned isn't a valid direct Stack child (Positioned
-    // needs RenderStack as its immediate ancestor RenderObject).
-    final overlayBox = _overlayBoxKey.currentContext?.findRenderObject();
-    final overlaySize = overlayBox is RenderBox && overlayBox.attached
-        ? overlayBox.size
-        : MediaQuery.sizeOf(context);
-
+    final busy = _moving || _finishing;
     return Positioned.fill(
-      child: SizedBox.expand(
-        key: _overlayBoxKey,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: IgnorePointer(ignoring: true, child: CustomPaint(painter: _ScrimPainter(targetRect))),
-            ),
-            _TooltipCard(
-              title: step.title,
-              body: step.body,
-              targetRect: targetRect,
-              overlaySize: overlaySize,
-              stepIndex: _step,
-              stepCount: _steps.length,
-              isLast: isLast,
-              onSkip: _finish,
-              onNext: _next,
-            ),
-          ],
+      child: BlockSemantics(
+        child: SizedBox.expand(
+          key: _overlayBoxKey,
+          child: Stack(
+            children: [
+              const Positioned.fill(
+                child: ModalBarrier(
+                  dismissible: false,
+                  color: Colors.transparent,
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(painter: _ScrimPainter(_targetRect)),
+                ),
+              ),
+              Positioned.fill(
+                child: CustomMultiChildLayout(
+                  delegate: _TooltipLayout(
+                    target: _targetRect,
+                    safePadding: MediaQuery.paddingOf(context),
+                  ),
+                  children: [
+                    LayoutId(
+                      id: _tooltipId,
+                      child: _TooltipCard(
+                        title: step.title,
+                        body: step.body,
+                        message: _message,
+                        stepIndex: _step,
+                        stepCount: _steps.length,
+                        busy: busy,
+                        onSkip: _finishing ? null : () => _finish(false),
+                        onBack: _step == 0 || busy
+                            ? null
+                            : () => _showStep(_step - 1),
+                        onNext: busy ? null : _next,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Dims everything except a rounded-rect cutout around the current target.
-/// `IgnorePointer` wraps this specific layer (not the tooltip below it) so
-/// the scrim never blocks the tooltip's own buttons or, once dismissed, the
-/// real screen underneath.
+const _tooltipId = 'tutorial-tooltip';
+
+/// Position using the card's actual laid-out height, including large text,
+/// instead of assuming a fixed height that can hide Next behind the dock.
+class _TooltipLayout extends MultiChildLayoutDelegate {
+  final Rect? target;
+  final EdgeInsets safePadding;
+
+  _TooltipLayout({required this.target, required this.safePadding});
+
+  @override
+  void performLayout(Size size) {
+    final margin = math.min(16.0, size.width / 8);
+    final minTop = safePadding.top + margin;
+    final maxBottom = math.max(
+      minTop,
+      size.height - safePadding.bottom - margin,
+    );
+    final card = layoutChild(
+      _tooltipId,
+      BoxConstraints.loose(
+        Size(
+          math.min(360, math.max(0, size.width - margin * 2)),
+          math.max(0, maxBottom - minTop),
+        ),
+      ),
+    );
+    final maxTop = math.max(minTop, maxBottom - card.height);
+    var top = minTop + (maxBottom - minTop - card.height) / 2;
+    if (target != null) {
+      final below = target!.bottom + 16;
+      final above = target!.top - 16 - card.height;
+      if (below + card.height <= maxBottom) {
+        top = below;
+      } else if (above >= minTop) {
+        top = above;
+      }
+    }
+    positionChild(
+      _tooltipId,
+      Offset((size.width - card.width) / 2, top.clamp(minTop, maxTop)),
+    );
+  }
+
+  @override
+  bool shouldRelayout(covariant _TooltipLayout oldDelegate) =>
+      target != oldDelegate.target || safePadding != oldDelegate.safePadding;
+}
+
 class _ScrimPainter extends CustomPainter {
   final Rect? target;
   const _ScrimPainter(this.target);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final scrimPaint = Paint()..color = Colors.black.withValues(alpha: 0.55);
-    final fullScreen = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
-
+    final fullScreen = Path()..addRect(Offset.zero & size);
+    final paint = Paint()..color = BambooInk.slate.withValues(alpha: 0.55);
     if (target == null) {
-      canvas.drawPath(fullScreen, scrimPaint);
+      canvas.drawPath(fullScreen, paint);
       return;
     }
-
-    final inflated = target!.inflate(8);
-    final cutout = Path()..addRRect(RRect.fromRectAndRadius(inflated, const Radius.circular(AppRadius.md)));
-    final scrimWithHole = Path.combine(PathOperation.difference, fullScreen, cutout);
-    canvas.drawPath(scrimWithHole, scrimPaint);
+    final spotlight = RRect.fromRectAndRadius(
+      target!.inflate(6),
+      const Radius.circular(16),
+    );
+    final hole = Path()..addRRect(spotlight);
+    canvas.drawPath(
+      Path.combine(PathOperation.difference, fullScreen, hole),
+      paint,
+    );
     canvas.drawRRect(
-      RRect.fromRectAndRadius(inflated, const Radius.circular(AppRadius.md)),
+      spotlight,
       Paint()
         ..color = BambooInk.lime
         ..style = PaintingStyle.stroke
@@ -178,124 +358,140 @@ class _ScrimPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _ScrimPainter oldDelegate) => oldDelegate.target != target;
+  bool shouldRepaint(covariant _ScrimPainter oldDelegate) =>
+      target != oldDelegate.target;
 }
 
 class _TooltipCard extends StatelessWidget {
-  final String title;
-  final String body;
-  final Rect? targetRect;
-  final Size overlaySize;
-  final int stepIndex;
-  final int stepCount;
-  final bool isLast;
-  final VoidCallback onSkip;
-  final VoidCallback onNext;
+  final String title, body;
+  final String? message;
+  final int stepIndex, stepCount;
+  final bool busy;
+  final VoidCallback? onSkip, onBack, onNext;
 
   const _TooltipCard({
     required this.title,
     required this.body,
-    required this.targetRect,
-    required this.overlaySize,
+    required this.message,
     required this.stepIndex,
     required this.stepCount,
-    required this.isLast,
+    required this.busy,
     required this.onSkip,
+    required this.onBack,
     required this.onNext,
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Place the card below the target if there's room, otherwise above it;
-    // centered vertically when there's no target to anchor to at all. All
-    // measurements here are in the overlay's own local space (see
-    // _localTargetRect's doc comment), matching what Positioned expects.
-    const cardWidth = 300.0;
-    const cardHeight = 180.0;
-    // The floating nav dock (router.dart's _FloatingNavBar) sits ON TOP of
-    // this overlay in the shell's Stack and covers the bottom ~128px — the
-    // same reserve router.dart pads its own body content by. Positioning
-    // the card into that band leaves its Skip/Next/Done buttons visible but
-    // NOT tappable, because the dock's BackdropFilter wins the hit test.
-    // This is the same "content hidden behind the frosted dock" failure the
-    // design handoff flags as its one known unresolved issue, so it's
-    // guarded here rather than left to chance.
-    const dockReserve = 128.0;
-    final maxTop = (overlaySize.height - dockReserve - cardHeight).clamp(AppSpace.xxl, overlaySize.height);
-    double top;
-    if (targetRect == null) {
-      top = (overlaySize.height - dockReserve - 220) / 2;
-    } else if (targetRect!.bottom + cardHeight + dockReserve < overlaySize.height) {
-      top = targetRect!.bottom + AppSpace.lg;
-    } else {
-      top = targetRect!.top - cardHeight;
-    }
-    top = top.clamp(AppSpace.xxl, maxTop);
-    final left = ((overlaySize.width - cardWidth) / 2).clamp(
-      AppSpace.lg,
-      overlaySize.width - cardWidth - AppSpace.lg,
-    );
-
-    return Positioned(
-      top: top,
-      left: left,
-      width: cardWidth,
-      child: Material(
-        color: BambooInk.slate,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        elevation: 8,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpace.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => Material(
+    color: BambooInk.paper,
+    elevation: 12,
+    shadowColor: BambooInk.slate.withValues(alpha: 0.2),
+    borderRadius: BorderRadius.circular(24),
+    clipBehavior: Clip.antiAlias,
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  for (var i = 0; i < stepCount; i++)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: i == stepIndex ? BambooInk.lime : BambooInk.onSlateMuted,
-                        ),
-                      ),
-                    ),
-                ],
+              Image.asset(
+                'assets/illustrations/panda_peek.png',
+                width: 42,
+                height: 42,
               ),
-              const SizedBox(height: AppSpace.sm),
-              Text(title, style: BambooFonts.heading(16, color: BambooInk.onSlate)),
-              const SizedBox(height: 4),
-              Text(body, style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted)),
-              const SizedBox(height: AppSpace.lg),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton(
-                    style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
-                    onPressed: onSkip,
-                    child: const Text('Skip tour'),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'PANDA’S QUICK TOUR',
+                  style: BambooFonts.ui(
+                    10.5,
+                    color: BambooInk.jade,
+                    weight: FontWeight.w700,
                   ),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: BambooInk.lime,
-                      foregroundColor: BambooInk.slate,
-                      minimumSize: const Size(0, 40),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
-                    ),
-                    onPressed: onNext,
-                    child: Text(isLast ? 'Done' : 'Next'),
-                  ),
-                ],
+                ),
+              ),
+              Text(
+                '${stepIndex + 1} of $stepCount',
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 14),
+          LinearProgressIndicator(
+            value: (stepIndex + 1) / stepCount,
+            color: BambooInk.jade,
+            backgroundColor: const Color(0xFFEAF1E2),
+            borderRadius: BorderRadius.circular(4),
+            minHeight: 4,
+          ),
+          const SizedBox(height: 18),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              title,
+              style: BambooFonts.heading(
+                21,
+                weight: FontWeight.w700,
+                color: BambooInk.ink900,
+                height: 1.15,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            body,
+            style: BambooFonts.ui(14, color: BambooInk.ink700, height: 1.45),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 10),
+            Text(message!, style: BambooFonts.ui(12, color: BambooInk.clay)),
+          ],
+          const SizedBox(height: 18),
+          Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 8,
+            children: [
+              TextButton(
+                onPressed: onSkip,
+                style: TextButton.styleFrom(foregroundColor: BambooInk.ink500),
+                child: const Text('Skip tour'),
+              ),
+              if (stepIndex > 0)
+                TextButton(
+                  onPressed: onBack,
+                  style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
+                  child: const Text('Back'),
+                ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: BambooInk.slate,
+                  foregroundColor: BambooInk.lime,
+                  minimumSize: const Size(100, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
+                ),
+                onPressed: onNext,
+                child: busy
+                    ? const SizedBox.square(
+                        dimension: 17,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        stepIndex == stepCount - 1
+                            ? 'Explore Insights'
+                            : 'Next',
+                      ),
+              ),
+            ],
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }

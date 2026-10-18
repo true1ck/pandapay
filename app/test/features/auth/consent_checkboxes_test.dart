@@ -73,6 +73,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Verify & continue'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+      await tester.enterText(find.byType(TextField), '12a345');
+      final codeField = tester.widget<TextField>(find.byType(TextField));
+      expect(codeField.controller!.text, '1234');
     },
   );
 
@@ -98,8 +102,8 @@ void main() {
       );
       await tester.enterText(find.byType(TextField).at(1), '9876543210');
       // Terms checkbox left unchecked deliberately.
-      await tester.ensureVisible(find.text('Send code'));
-      await tester.tap(find.text('Send code'));
+      await tester.ensureVisible(find.text('Send verification code'));
+      await tester.tap(find.text('Send verification code'));
       await tester.pumpAndSettle();
 
       expect(otpRequested, isFalse);
@@ -172,8 +176,8 @@ void main() {
       await tester.ensureVisible(find.byType(CheckboxListTile).at(0));
       await tester.tap(find.byType(CheckboxListTile).at(0)); // required Terms
       await tester.pump();
-      await tester.ensureVisible(find.text('Send code'));
-      await tester.tap(find.text('Send code'));
+      await tester.ensureVisible(find.text('Send verification code'));
+      await tester.tap(find.text('Send verification code'));
       await tester.pumpAndSettle();
 
       // OTP step now showing.

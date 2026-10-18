@@ -85,7 +85,7 @@ class _TrackingSetupScreenState extends ConsumerState<TrackingSetupScreen> {
                         _ChannelChoiceCard(
                           icon: Icons.sms_outlined,
                           title: 'SMS auto-read',
-                          description: 'Android only, instant, on-device.',
+                          description: 'Android bank alerts with account sync.',
                           badge: 'RECOMMENDED',
                           onTap: () => _openChannel(const SmsImportScreen()),
                         ),

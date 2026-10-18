@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -868,6 +869,8 @@ class _AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<_AppShell> {
   bool _scanning = false;
+  int _tutorialNavigationRevision = 0;
+  bool _finishingTutorial = false;
 
   @override
   void initState() {
@@ -922,6 +925,68 @@ class _AppShellState extends ConsumerState<_AppShell> {
     }
   }
 
+  Future<void> _showTutorialPage(TutorialPage page) async {
+    final revision = ++_tutorialNavigationRevision;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _shellNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+    context.go(
+      page == TutorialPage.spending ? AppRoute.insights : AppRoute.home,
+    );
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted ||
+        revision != _tutorialNavigationRevision ||
+        _finishingTutorial) {
+      return;
+    }
+
+    final keys = ref.read(tutorialKeysProvider);
+    final Widget? preview = switch (page) {
+      TutorialPage.manual => QuickAddScreen(
+        autofocus: false,
+        amountFieldKey: keys.manualAmount,
+      ),
+      TutorialPage.spending => SpendTrendsScreen(
+        periodSelectorKey: keys.spendingPeriod,
+        overviewKey: keys.spendingSummary,
+      ),
+      _ => null,
+    };
+    if (preview != null) {
+      // These are the actual screens. Disable autofocus and route animation
+      // for the guide; it never records audio, opens a camera, or saves data.
+      unawaited(
+        _shellNavigatorKey.currentState?.push<void>(
+          PageRouteBuilder<void>(
+            settings: RouteSettings(name: 'tutorial-${page.name}'),
+            transitionDuration: Duration.zero,
+            reverseTransitionDuration: Duration.zero,
+            pageBuilder: (context, _, _) => PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, _) {
+                if (!didPop) unawaited(_finishTutorial(false));
+              },
+              child: preview,
+            ),
+          ),
+        ),
+      );
+    }
+    await WidgetsBinding.instance.endOfFrame;
+  }
+
+  Future<void> _finishTutorial(bool completed) async {
+    if (_finishingTutorial) return;
+    _finishingTutorial = true;
+    _tutorialNavigationRevision++;
+    try {
+      _shellNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+      context.go(completed ? AppRoute.insights : AppRoute.home);
+      await ref.read(tutorialSeenProvider.notifier).complete();
+    } finally {
+      _finishingTutorial = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Runs sessionKeepAliveProvider for the app's whole lifetime — the shell
@@ -957,87 +1022,108 @@ class _AppShellState extends ConsumerState<_AppShell> {
     ref.watch(smsBackgroundFlushProvider);
     ref.watch(smsListenerLifecycleProvider);
     final tutorialKeys = ref.watch(tutorialKeysProvider);
-    // Task 5: the coach-mark tour only makes sense over Home (that's where
-    // every one of its four targets lives) — a user who backs out to
-    // another tab mid-tour simply doesn't see it there rather than the
-    // overlay trying to follow them to a screen with nothing to point at.
-    final showTutorial =
-        widget.location == AppRoute.home &&
-        !(ref.watch(tutorialSeenProvider).valueOrNull ?? true);
-    return Scaffold(
-      backgroundColor: BambooInk.paper,
-      // No AppBar. Not one of the deck's 32 mockups gives a tab screen a
-      // title bar — each one opens straight onto its own content header
-      // ("Evening, Aarav" on 01, "Your wallet" on 02, …) drawn on the same
-      // continuous background. A shared "PandaPay — Home" chrome strip on
-      // top of that reads as a separate app bolted above the design, which
-      // is exactly what it looked like.
-      //
-      // Design (every "01 Home" .. "32 Monthly recap" mockup): the nav is a
-      // floating dark glass pill drawn INSIDE each screen's own bottom
-      // inset, not a native Scaffold bottomNavigationBar/FAB pairing — the
-      // scan button lives inside the bar itself as a raised lime circle,
-      // not a docked FAB elevated above a notch. Reserve 128 (bar's ~92
-      // total footprint + comfortable clearance) at the bottom of every tab
-      // body, same number the mockup uses for its scroll padding.
-      body: Stack(
-        children: [
-          // Full-bleed, NOT inset by the pill's height: the mockups scroll
-          // content *under* the bar (hence its backdrop blur), and insetting
-          // it left a bare white band between the screen's own background
-          // and the bar. Each tab pays the clearance itself as bottom scroll
-          // padding — AppShell.navClearance.
-          widget.child,
-          const BiometricSetupPrompt(),
-          if (showTutorial) const TutorialOverlay(),
-          // `bottom: 26` measured from the physical bottom of the 390×844
-          // frame, exactly as the mockup positions it — NOT 26 above the
-          // home-indicator inset. Wrapping this in a SafeArea added the
-          // device's 34pt bottom inset underneath and floated the bar at
-          // 60pt, visibly higher than every mockup.
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 26,
-            child: ValueListenableBuilder<bool>(
-              valueListenable: _shellStackNotEmpty,
-              builder: (context, pushedOnTop, child) =>
-                  pushedOnTop ? const SizedBox.shrink() : child!,
-              child: _FloatingNavBar(
-                key: const ValueKey('appShellNavBar'),
-                destinations: _destinations,
-                location: widget.location,
-                scanning: _scanning,
-                scanKey: tutorialKeys.scanFab,
-                onSelect: (path) {
-                  _shellNavigatorKey.currentState?.popUntil(
-                    (route) => route.isFirst,
-                  );
-                  context.go(path);
-                },
-                onScan: _scanning ? null : _scanToPay,
+    // Keep one guide mounted while it moves between Home, Quick add and
+    // Insights/Spending. Only its own navigation controls change the view.
+    final tutorialSeen = ref.watch(tutorialSeenProvider);
+    final showTutorial = !(tutorialSeen.valueOrNull ?? true);
+    return PopScope(
+      canPop: !showTutorial,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && showTutorial) unawaited(_finishTutorial(false));
+      },
+      child: Scaffold(
+        backgroundColor: BambooInk.paper,
+        // No AppBar. Not one of the deck's 32 mockups gives a tab screen a
+        // title bar — each one opens straight onto its own content header
+        // ("Evening, Aarav" on 01, "Your wallet" on 02, …) drawn on the same
+        // continuous background. A shared "PandaPay — Home" chrome strip on
+        // top of that reads as a separate app bolted above the design, which
+        // is exactly what it looked like.
+        //
+        // Design (every "01 Home" .. "32 Monthly recap" mockup): the nav is a
+        // floating dark glass pill drawn INSIDE each screen's own bottom
+        // inset, not a native Scaffold bottomNavigationBar/FAB pairing — the
+        // scan button lives inside the bar itself as a raised lime circle,
+        // not a docked FAB elevated above a notch. Reserve 128 (bar's ~92
+        // total footprint + comfortable clearance) at the bottom of every tab
+        // body, same number the mockup uses for its scroll padding.
+        body: Stack(
+          children: [
+            // Full-bleed, NOT inset by the pill's height: the mockups scroll
+            // content *under* the bar (hence its backdrop blur), and insetting
+            // it left a bare white band between the screen's own background
+            // and the bar. Each tab pays the clearance itself as bottom scroll
+            // padding — AppShell.navClearance.
+            widget.child,
+            if (tutorialSeen.valueOrNull == true) const BiometricSetupPrompt(),
+            // `bottom: 26` measured from the physical bottom of the 390×844
+            // frame, exactly as the mockup positions it — NOT 26 above the
+            // home-indicator inset. Wrapping this in a SafeArea added the
+            // device's 34pt bottom inset underneath and floated the bar at
+            // 60pt, visibly higher than every mockup.
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 26,
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _shellStackNotEmpty,
+                builder: (context, pushedOnTop, child) =>
+                    pushedOnTop ? const SizedBox.shrink() : child!,
+                child: _FloatingNavBar(
+                  key: const ValueKey('appShellNavBar'),
+                  destinations: _destinations,
+                  location: widget.location,
+                  scanning: _scanning,
+                  scanKey: tutorialKeys.scanFab,
+                  onSelect: (path) {
+                    _shellNavigatorKey.currentState?.popUntil(
+                      (route) => route.isFirst,
+                    );
+                    context.go(path);
+                  },
+                  onScan: _scanning ? null : _scanToPay,
+                ),
               ),
             ),
-          ),
-          Positioned(
-            right: 24,
-            bottom: 104,
-            child: ValueListenableBuilder<bool>(
-              valueListenable: _shellStackNotEmpty,
-              builder: (context, pushedOnTop, child) =>
-                  pushedOnTop ? const SizedBox.shrink() : child!,
-              child: FloatingActionButton(
-                heroTag: 'voiceCapture',
-                mini: true,
-                backgroundColor: BambooInk.jade,
-                foregroundColor: Colors.white,
-                tooltip: 'Add by voice',
-                onPressed: () => showVoiceInputSheet(context),
-                child: const Icon(Icons.mic_rounded),
+            Positioned(
+              right: 24,
+              bottom: 104,
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _shellStackNotEmpty,
+                builder: (context, pushedOnTop, child) =>
+                    pushedOnTop ? const SizedBox.shrink() : child!,
+                child: Theme(
+                  data: Theme.of(context).copyWith(
+                    floatingActionButtonTheme: Theme.of(context)
+                        .floatingActionButtonTheme
+                        .copyWith(
+                          smallSizeConstraints: const BoxConstraints.tightFor(
+                            width: 48,
+                            height: 48,
+                          ),
+                        ),
+                  ),
+                  child: FloatingActionButton.small(
+                    key: tutorialKeys.voiceFab,
+                    heroTag: 'voiceCapture',
+                    backgroundColor: BambooInk.jade,
+                    foregroundColor: Colors.white,
+                    tooltip: 'Add by voice',
+                    onPressed: () => showVoiceInputSheet(context),
+                    child: const Icon(Icons.mic_rounded),
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+            // Last in the Stack: the barrier covers the Navigator, dock and
+            // voice button, including the transparent spotlight cutout.
+            if (showTutorial)
+              TutorialOverlay(
+                onShowPage: _showTutorialPage,
+                onFinish: _finishTutorial,
+              ),
+          ],
+        ),
       ),
     );
   }
