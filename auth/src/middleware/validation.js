@@ -290,6 +290,11 @@ function validateGoogleLoginBody(req, res, next) {
  */
 function validateRefreshTokenBody(req, res, next) {
   const { refresh_token } = req.body;
+  if (req.body.refresh_request_id !== undefined &&
+      (typeof req.body.refresh_request_id !== 'string' ||
+       !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(req.body.refresh_request_id))) {
+    return res.status(400).json({ error: 'Invalid refresh_request_id' });
+  }
 
   // Check body size
   const sizeCheck = validateBodySize(req.body, 2000);

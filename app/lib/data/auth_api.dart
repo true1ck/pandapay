@@ -68,12 +68,15 @@ class AuthApi {
     );
   }
 
-  Future<AuthTokens> refresh(String refreshToken) async {
+  Future<AuthTokens> refresh(String refreshToken, {String? requestId}) async {
     final response = await _client
         .post(
           Uri.parse('$authBaseUrl/auth/refresh'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'refresh_token': refreshToken}),
+          body: jsonEncode({
+            'refresh_token': refreshToken,
+            if (requestId != null) 'refresh_request_id': requestId,
+          }),
         )
         .timeout(_requestTimeout);
     if (response.statusCode != 200) {

@@ -26,6 +26,73 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'lost response retries the persisted rotation identity after restart',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'pandapay_app.access_token': 'access',
+        'pandapay_app.refresh_token': 'refresh',
+      });
+      final requests = <Map<String, dynamic>>[];
+      final client = MockClient((request) async {
+        requests.add(jsonDecode(request.body) as Map<String, dynamic>);
+        if (requests.length == 1) {
+          return http.Response('{"error":"response lost"}', 503);
+        }
+        return http.Response(
+          '{"access_token":"next-access","refresh_token":"next-refresh"}',
+          200,
+        );
+      });
+      Future<void> run() async {
+        final store = await TokenStore.load();
+        String? access = store.accessToken;
+        final coordinator = SessionRefreshCoordinator(
+          loadStore: () async => store,
+          authApi: AuthApi(authBaseUrl: 'http://auth.test', client: client),
+          readAccessToken: () => access,
+          writeAccessToken: (value) => access = value,
+        );
+        await coordinator.refresh();
+      }
+
+      await run();
+      await run();
+      expect(requests[0]['refresh_request_id'], isNotEmpty);
+      expect(requests[1], requests[0]);
+      final restored = await TokenStore.load();
+      expect(restored.accessToken, 'next-access');
+      expect(restored.refreshToken, 'next-refresh');
+    },
+  );
+
+  test(
+    'an in-flight refresh cannot restore a session after explicit logout',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final store = await TokenStore.load();
+      await store.save(accessToken: 'access', refreshToken: 'refresh');
+      String? access = 'access';
+      final client = MockClient((request) async {
+        await store.clear();
+        access = null;
+        return http.Response(
+          '{"access_token":"next-access","refresh_token":"next-refresh"}',
+          200,
+        );
+      });
+      final coordinator = SessionRefreshCoordinator(
+        loadStore: () async => store,
+        authApi: AuthApi(authBaseUrl: 'http://auth.test', client: client),
+        readAccessToken: () => access,
+        writeAccessToken: (value) => access = value,
+      );
+      expect(await coordinator.refresh(), isNull);
+      expect(access, isNull);
+      expect((await TokenStore.load()).refreshToken, isNull);
+    },
+  );
+
   test('access-token rotation keeps the account namespace stable', () async {
     String tokenFor(String accessToken, String subject) {
       final header = base64Url

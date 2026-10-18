@@ -645,17 +645,14 @@ class SessionRefreshCoordinator {
     final accessTokenBeforeRefresh = readAccessToken();
 
     try {
-      // Refresh tokens are single-use. A timeout or 5xx does not prove that
-      // auth/ did not rotate this token before its response was lost. Retrying
-      // the same credential here can trigger reuse detection and revoke the
-      // whole device session. Leave the saved session in place and let a later
-      // recovery attempt inspect the current stored token rather than
-      // immediately replaying this request.
-      final tokens = await authApi.refresh(refreshToken);
+      // Reuse a durable request identity after a lost response/process death.
+      // The server returns the same still-active successor for this request.
+      final requestId = await store.refreshRequestId(refreshToken);
+      final tokens = await authApi.refresh(refreshToken, requestId: requestId);
       // A fresh login or another coordinator invocation may have won while
       // the network request was in flight. Never overwrite that session.
-      if (readAccessToken() != accessTokenBeforeRefresh &&
-          readAccessToken() != null) {
+      if (readAccessToken() != accessTokenBeforeRefresh ||
+          store.refreshToken != refreshToken) {
         return readAccessToken();
       }
       await store.save(
@@ -669,8 +666,8 @@ class SessionRefreshCoordinator {
         // A newer OTP sign-in may have replaced this session while the
         // rejected refresh request was in flight. Never clear that winner.
         final currentAccessToken = readAccessToken();
-        if (currentAccessToken != accessTokenBeforeRefresh &&
-            currentAccessToken != null) {
+        if (currentAccessToken != accessTokenBeforeRefresh ||
+            store.refreshToken != refreshToken) {
           return currentAccessToken;
         }
         // A 401 from /auth/refresh is a definitive rejection of this

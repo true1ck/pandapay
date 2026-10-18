@@ -1196,7 +1196,8 @@ router.post(
       }
 
       console.log(`[AUTH] Refresh token request received: ip=${clientIp}, userAgent=${req.headers['user-agent']}`);
-      const verification = await verifyRefreshToken(refresh_token);
+      const requestId = req.body.refresh_request_id;
+      const verification = await verifyRefreshToken(refresh_token, { requestId });
       if (!verification || verification.reuseDetected) {
         console.log(`[AUTH] Refresh token verification failed: reuseDetected=${verification?.reuseDetected || false}`);
         return res.status(401).json({ error: 'Invalid refresh token' });
@@ -1299,6 +1300,7 @@ router.post(
         tokenRow,
         userAgent: req.headers['user-agent'],
         ip: clientIp,
+        requestId,
       });
       console.log(`[AUTH] New refresh token generated and rotated: userId=${userId}, deviceId=${deviceId}`);
 
@@ -1336,6 +1338,9 @@ router.post(
       console.log(`[AUTH] Token refresh successful: userId=${userId}, deviceId=${deviceId}`);
       return res.json({ access_token: newAccess, refresh_token: newRefresh });
     } catch (err) {
+      if (err.statusCode === 401) {
+        return res.status(401).json({ error: 'Invalid refresh token' });
+      }
       console.error('[AUTH] refresh error', err);
       return res.status(500).json({ error: 'Internal server error' });
     }

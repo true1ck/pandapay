@@ -1,5 +1,44 @@
 # Payments due session failure investigation
 
+## Update sign-in incident, 2026-10-18
+
+The phone logged `session refresh rejected; sign-in is required` at 12:27:29
+from the previous app process. Android recorded the replacement APK installation
+at 12:27:35, with the original first-install date retained. Installation used
+`adb install -r`; it did not uninstall or clear app data. The server rejection
+preceded the update. Its exact upstream cause is still unconfirmed.
+
+The follow-up fix addresses two demonstrated failure paths without bypassing
+authentication or changing UI:
+
+* Refresh successor creation and parent revocation now share a PostgreSQL
+  transaction and lock the parent row. A failed insert cannot consume the
+  only usable credential; concurrent callers recheck the locked state.
+* The device saves a UUID request identity in secure storage before refreshing.
+  After a lost response or process interruption, the same credential and
+  identity recover the same active successor rather than rotate again.
+  The successor ID is derived with a server-secret HMAC. Its JWT can be
+  reconstructed from existing DB fields (explicit expiry, no issued-at claim),
+  and must match the stored hash. No plaintext token is added to the server DB,
+  and no schema migration is required.
+* Recovery requires the exact request identity and a matching, unexpired,
+  non-idle, non-revoked successor for the same user/device. An unrelated reuse
+  still triggers existing device revocation. Explicit logout also disables
+  recovery. Older clients remain supported but cannot recover lost responses.
+* A completed refresh cannot overwrite an explicit logout or a newer login.
+
+Both server and client must be deployed for lost-response recovery. Already
+cleared credentials cannot be reconstructed by this update; the affected phone
+needs one fresh sign-in. This change does not claim that all future auth policy
+rejections, expiry or deliberate revocation can be avoided.
+
+Validation: server tests cover committed-response recovery, an overlapping
+caller, insert rollback, unrelated reuse, logout, legacy clients and request
+validation. Client regressions cover durable retry identity across restart,
+credential replacement and an explicit logout during an in-flight refresh.
+Server unit tests use a transactional database double, not a live PostgreSQL
+instance; deployment health and device install are checked separately.
+
 The follow-up implementation now provides centralized local entities, durable
 SMS intake and local parsing. See [Local-first financial data](local-first-data.md)
 for the current behavior and verification; the snapshot-loader findings below

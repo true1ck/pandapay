@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 /// UA-3. Access/refresh tokens let this device keep its session across app
 /// restarts. The server keeps a rolling 90-day inactivity limit for an
@@ -16,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class TokenStore {
   static const _accessKey = 'pandapay_app.access_token';
   static const _refreshKey = 'pandapay_app.refresh_token';
+  static const _requestKey = 'pandapay_app.refresh_request';
 
   final FlutterSecureStorage _secureStorage;
   String? _cachedAccessToken;
@@ -68,6 +72,24 @@ class TokenStore {
   String? get accessToken => _cachedAccessToken;
   String? get refreshToken => _cachedRefreshToken;
 
+  /// Persist before sending: an interrupted update/network request must retry
+  /// the same rotation, rather than consume the old credential a second time.
+  Future<String> refreshRequestId(String refreshToken) async {
+    final saved = await _secureStorage.read(key: _requestKey);
+    if (saved != null) {
+      final record = jsonDecode(saved) as Map<String, dynamic>;
+      if (record['refresh_token'] == refreshToken) {
+        return record['request_id'] as String;
+      }
+    }
+    final id = const Uuid().v4();
+    await _secureStorage.write(
+      key: _requestKey,
+      value: jsonEncode({'refresh_token': refreshToken, 'request_id': id}),
+    );
+    return id;
+  }
+
   Future<void> save({required String accessToken, String? refreshToken}) async {
     // Refresh tokens rotate and the previous value becomes invalid as soon as
     // the server accepts a refresh. Persist the replacement first so a process
@@ -86,5 +108,6 @@ class TokenStore {
     _cachedRefreshToken = null;
     await _secureStorage.delete(key: _accessKey);
     await _secureStorage.delete(key: _refreshKey);
+    await _secureStorage.delete(key: _requestKey);
   }
 }

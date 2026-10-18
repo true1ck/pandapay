@@ -101,11 +101,21 @@ jobs:
           # state into another on a shared test VM.
           flutter test --concurrency=1
 
-      # smsextractionimple.md Task S-2. The prod flavor strips READ_SMS/
-      # RECEIVE_SMS, but nothing enforced that it stayed stripped — a plugin
-      # bump merges a library manifest in with no diff in this repo, and the
-      # result is a Play Store review problem no test would catch. Build the
-      # real prod artefact and read the permissions out of it.
+      # A fresh runner has never built a debug APK and may have no fallback
+      # keystore. This bundle is a manifest check, never a published release.
+      - name: Prepare ephemeral CI signing key
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -noprompt \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -keypass android -alias androiddebugkey \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000
+          fi
+
+      # Verify required SMS permissions and the storage denylist in the
+      # packaged prod manifest, including permissions merged by plugins.
       #
       # `--flavor prod` needs the dart-defines Env.assertReleaseConfigured
       # demands; CI-only placeholder URLs satisfy it without pointing at

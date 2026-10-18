@@ -1,7 +1,7 @@
 // src/services/tokenService.js
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const { randomUUID } = require('crypto');
+const { randomUUID, createHmac } = require('crypto');
 const db = require('../db');
 const config = require('../config');
 const {
@@ -67,8 +67,9 @@ async function issueRefreshToken({
   userAgent,
   ip,
   rotatedFromId = null,
+  tokenId = randomUUID(),
+  executor = db,
 }) {
-  const tokenId = randomUUID();
   const token = jwt.sign(
     {
       sub: userId,
@@ -76,7 +77,9 @@ async function issueRefreshToken({
       jti: tokenId,
     },
     REFRESH_SECRET,
-    { expiresIn: REFRESH_TTL }
+    // Explicit expiry, without an issued-at claim, lets an identical request
+    // recover the committed successor from its existing hashed DB record.
+    { expiresIn: REFRESH_TTL, noTimestamp: true }
   );
   const decoded = jwt.decode(token);
   const expiresAt = new Date(decoded.exp * 1000);
@@ -90,6 +93,7 @@ async function issueRefreshToken({
     userAgent,
     ip,
     rotatedFromId,
+    executor,
   });
 
   return token;
@@ -104,10 +108,11 @@ async function storeRefreshToken({
   userAgent,
   ip,
   rotatedFromId = null,
+  executor = db,
 }) {
   const tokenHash = await bcrypt.hash(token, 10);
 
-  await db.query(
+  await executor.query(
     `
     INSERT INTO refresh_tokens (
       user_id,
@@ -134,7 +139,7 @@ async function storeRefreshToken({
   );
 }
 
-async function verifyRefreshToken(rawToken) {
+async function verifyRefreshToken(rawToken, { requestId } = {}) {
   console.log('[TOKEN_SERVICE] verifyRefreshToken: Starting verification');
   let payload;
   try {
@@ -178,6 +183,8 @@ async function verifyRefreshToken(rawToken) {
   }
 
   if (tokenRow.revoked_at) {
+    const recovered = await recoverRotation(tokenRow, requestId, db);
+    if (recovered) return { userId, deviceId, row: tokenRow, recovered };
     console.log(`[TOKEN_SERVICE] verifyRefreshToken: Token revoked at ${tokenRow.revoked_at}`);
     await handleReuse(tokenRow);
     return { reuseDetected: true };
@@ -208,15 +215,71 @@ async function verifyRefreshToken(rawToken) {
   return { userId, deviceId, row: tokenRow };
 }
 
-async function rotateRefreshToken({ tokenRow, userAgent, ip }) {
-  await revokeToken(tokenRow.id);
-  return issueRefreshToken({
-    userId: tokenRow.user_id,
-    deviceId: tokenRow.device_id,
-    userAgent,
-    ip,
-    rotatedFromId: tokenRow.id,
-  });
+function successorId(tokenRow, requestId) {
+  if (!requestId) return null;
+  const hex = createHmac('sha256', REFRESH_SECRET)
+    .update(`refresh-rotation-v1:${tokenRow.token_id}:${requestId}`)
+    .digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+async function recoverRotation(tokenRow, requestId, executor) {
+  const tokenId = successorId(tokenRow, requestId);
+  if (!tokenId) return null; // Older clients retain single-use semantics.
+  const { rows } = await executor.query(
+    `SELECT * FROM refresh_tokens WHERE token_id = $1 AND rotated_from_id = $2`,
+    [tokenId, tokenRow.id]
+  );
+  const child = rows[0];
+  if (!child || child.revoked_at || new Date(child.expires_at) <= new Date() ||
+      child.user_id !== tokenRow.user_id || child.device_id !== tokenRow.device_id ||
+      (child.last_used_at && Date.now() - new Date(child.last_used_at).getTime() > REFRESH_MAX_IDLE_MS)) return null;
+  const token = jwt.sign({
+    sub: child.user_id,
+    device_id: child.device_id,
+    jti: child.token_id,
+    exp: Math.floor(new Date(child.expires_at).getTime() / 1000),
+  }, REFRESH_SECRET, { noTimestamp: true });
+  // Never return a reconstructed credential unless it matches the saved hash.
+  return await bcrypt.compare(token, child.token_hash) ? token : null;
+}
+
+async function rotateRefreshToken({ tokenRow, userAgent, ip, requestId }) {
+  const pool = await db.pool;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'SELECT * FROM refresh_tokens WHERE id = $1 FOR UPDATE', [tokenRow.id]
+    );
+    const current = rows[0];
+    if (!current || new Date(current.expires_at) <= new Date()) {
+      throw Object.assign(new Error('Invalid refresh token'), { statusCode: 401 });
+    }
+    if (current.revoked_at) {
+      const recovered = await recoverRotation(current, requestId, client);
+      if (!recovered) throw Object.assign(new Error('Invalid refresh token'), { statusCode: 401 });
+      await client.query('COMMIT');
+      return recovered;
+    }
+    const token = await issueRefreshToken({
+      userId: current.user_id,
+      deviceId: current.device_id,
+      userAgent,
+      ip,
+      rotatedFromId: current.id,
+      tokenId: successorId(current, requestId) || randomUUID(),
+      executor: client,
+    });
+    await client.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1', [current.id]);
+    await client.query('COMMIT');
+    return token;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function revokeRefreshToken(userId, deviceId) {
