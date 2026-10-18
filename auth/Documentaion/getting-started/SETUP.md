@@ -50,8 +50,8 @@ PORT=3000                                    # Server port (default: 3000)
 NODE_ENV=development                         # Environment (development/production)
 CORS_ALLOWED_ORIGINS=                        # Comma-separated origins (required in production)
 JWT_ACCESS_TTL=15m                          # Access token expiry (default: 15m)
-JWT_REFRESH_TTL=7d                          # Refresh token expiry (default: 7d)
-REFRESH_MAX_IDLE_MINUTES=4320               # Refresh token inactivity timeout (default: 3 days)
+JWT_REFRESH_TTL=180d                       # Refresh token expiry (default: 180 days)
+REFRESH_MAX_IDLE_MINUTES=129600             # Sign-in required only after 90 days inactive
 OTP_MAX_ATTEMPTS=5                          # Max OTP verification attempts (default: 5)
 ```
 

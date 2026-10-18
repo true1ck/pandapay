@@ -96,7 +96,8 @@ services:
       JWT_ISSUER: "${JWT_ISSUER:-pandapay-auth}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:-mobile-app}"
       JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-15m}"
-      JWT_REFRESH_TTL: "${JWT_REFRESH_TTL:-30d}"
+      JWT_REFRESH_TTL: "${JWT_REFRESH_TTL:-180d}"
+      REFRESH_MAX_IDLE_MINUTES: "${REFRESH_MAX_IDLE_MINUTES:-129600}"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:?}"
       # Must be absent/false everywhere reachable from the internet — it lets
       # OTP verification succeed without sending a real code.

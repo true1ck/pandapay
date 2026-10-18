@@ -79,7 +79,8 @@ services:
       JWT_ISSUER: "${JWT_ISSUER:-pandapay-auth}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:-mobile-app}"
       JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:-15m}"
-      JWT_REFRESH_TTL: "${JWT_REFRESH_TTL:-30d}"
+      JWT_REFRESH_TTL: "${JWT_REFRESH_TTL:-180d}"
+      REFRESH_MAX_IDLE_MINUTES: "${REFRESH_MAX_IDLE_MINUTES:-129600}"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:?}"
       # False, same as prod — staging exists to catch what a real OTP
       # provider does differently from the test path, not to skip it.

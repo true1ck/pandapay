@@ -62,9 +62,15 @@ const corsAllowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-const refreshMaxIdleMinutes = Number(
-  process.env.REFRESH_MAX_IDLE_MINUTES || 4320
+// A returning user should remain signed in for months, while a lost or
+// abandoned device must still require authentication eventually. Keep the
+// value bounded even when an environment file is malformed.
+const configuredRefreshMaxIdleMinutes = Number(
+  process.env.REFRESH_MAX_IDLE_MINUTES || 129600
 );
+const refreshMaxIdleMinutes = Number.isFinite(configuredRefreshMaxIdleMinutes)
+  ? Math.min(525600, Math.max(1, Math.floor(configuredRefreshMaxIdleMinutes)))
+  : 129600;
 
 if (isProduction && corsAllowedOrigins.length === 0) {
   throw new Error(
@@ -80,7 +86,7 @@ module.exports = {
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
   jwtAccessTtl: process.env.JWT_ACCESS_TTL || '15m',
-  jwtRefreshTtl: process.env.JWT_REFRESH_TTL || '7d',
+  jwtRefreshTtl: process.env.JWT_REFRESH_TTL || '180d',
   jwtIssuer: process.env.JWT_ISSUER || 'pandapay-auth',
   jwtAudience: process.env.JWT_AUDIENCE || 'mobile-app',
   dbPoolMax: Math.min(100, Math.max(1, Number(process.env.DB_POOL_MAX) || 10)),

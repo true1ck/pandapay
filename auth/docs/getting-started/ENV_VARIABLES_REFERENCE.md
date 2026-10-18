@@ -79,7 +79,7 @@ Credentials are fetched from AWS SSM Parameter Store:
 | `JWT_ACCESS_SECRET` | Yes | - | Secret for signing access tokens |
 | `JWT_REFRESH_SECRET` | Yes | - | Secret for signing refresh tokens |
 | `JWT_ACCESS_TTL` | No | `15m` | Access token expiration time |
-| `JWT_REFRESH_TTL` | No | `7d` | Refresh token expiration time |
+| `JWT_REFRESH_TTL` | No | `180d` | Refresh token expiration time |
 
 ### Application Configuration
 
@@ -127,7 +127,8 @@ DB_USE_READONLY=false
 JWT_ACCESS_SECRET=your-super-secret-access-key-change-this-in-production
 JWT_REFRESH_SECRET=your-super-secret-refresh-key-change-this-in-production
 JWT_ACCESS_TTL=15m
-JWT_REFRESH_TTL=7d
+JWT_REFRESH_TTL=180d
+REFRESH_MAX_IDLE_MINUTES=129600
 
 # Redis Configuration (Optional)
 REDIS_URL=redis://your-redis-host:6379

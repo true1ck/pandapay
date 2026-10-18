@@ -1,9 +1,9 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// UA-3. Access/refresh tokens are the credential that lets this device act
-/// as the signed-in user indefinitely (the refresh token in particular has
-/// no short expiry) — OWASP M9 requires these live in the iOS Keychain /
+/// UA-3. Access/refresh tokens let this device keep its session across app
+/// restarts. The server keeps a rolling 90-day inactivity limit for an
+/// abandoned or lost device — OWASP M9 requires these live in the iOS Keychain /
 /// Android Keystore, not SharedPreferences' plaintext plist/XML, which is
 /// readable on a jailbroken/rooted device and can end up in an unencrypted
 /// backup. `flutter_secure_storage` wraps exactly that OS-level storage.

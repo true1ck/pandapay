@@ -162,7 +162,8 @@ This guide will help you deploy the Farm Auth Service on AWS Lightsail Ubuntu se
    JWT_ACCESS_SECRET=your_strong_random_secret_here_min_32_chars
    JWT_REFRESH_SECRET=your_strong_random_secret_here_min_32_chars
    JWT_ACCESS_TTL=15m
-   JWT_REFRESH_TTL=7d
+   JWT_REFRESH_TTL=180d
+   REFRESH_MAX_IDLE_MINUTES=129600 # rolling 90-day inactivity window
    
    # Redis Configuration (Optional - for rate limiting)
    # REDIS_URL=redis://your-redis-host:6379

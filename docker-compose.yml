@@ -180,7 +180,8 @@ services:
       JWT_ACCESS_SECRET: dev_access_secret_change_me
       JWT_REFRESH_SECRET: dev_refresh_secret_change_me
       JWT_ACCESS_TTL: 15m
-      JWT_REFRESH_TTL: 30d
+      JWT_REFRESH_TTL: 180d
+      REFRESH_MAX_IDLE_MINUTES: 129600
       # Dev only. Lets the OTP flow be exercised without an SMS/email provider
       # configured; must be absent in every real environment.
       ALLOW_TEST_OTP: "true"
