@@ -8,7 +8,11 @@ const auth = require('../middleware/authMiddleware');
 const { sendOtpSms } = require('../services/smsService');
 const { sendOtpEmail } = require('../services/emailService');
 const { verifyGoogleToken } = require('../services/googleAuthService');
-const { createOtp, verifyOtp } = require('../services/otpService');
+const {
+  createOtp,
+  verifyOtp,
+  discardUndeliveredOtp,
+} = require('../services/otpService');
 const {
   signAccessToken,
   issueRefreshToken,
@@ -465,7 +469,7 @@ router.post(
       // Execute all verification work with timing protection
       // This ensures all verification attempts take similar time regardless of outcome
       const verificationResult = await executeOtpVerifyWithTiming(async () => {
-        const { phone_number, code, device_id, device_info } = req.body;
+        const { phone_number, code, device_id, device_info, recovery_only } = req.body;
 
         // Debug: Log entire request body to see what's being received
         console.log('[verify-otp] Request body keys:', Object.keys(req.body || {}));
@@ -521,7 +525,7 @@ router.post(
           };
         }
 
-        return { ok: true, normalizedPhone, device_id, device_info };
+        return { ok: true, normalizedPhone, device_id, device_info, recovery_only };
       });
 
       // Handle verification failure
@@ -533,7 +537,7 @@ router.post(
       }
 
       // Continue with successful verification
-      const { normalizedPhone, device_id, device_info } = verificationResult;
+      const { normalizedPhone, device_id, device_info, recovery_only } = verificationResult;
 
       // find or create user
       // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
@@ -553,6 +557,20 @@ router.post(
       );
 
       if (found.rows.length === 0) {
+        if (recovery_only === true) {
+          // Recovery must verify an account that already exists. Never let
+          // an OTP sent to an unlinked phone create a new/empty account.
+          await logSuspiciousOtpAttempt(
+            normalizedPhone,
+            clientIp,
+            req.headers['user-agent'],
+            'recovery_account_not_found'
+          );
+          return res.status(400).json({
+            success: false,
+            message: 'OTP invalid or expired. Please request a new one.',
+          });
+        }
         // User not found - create a minimal user for signup flow
         // Extract country code from phone number
         const countryCode = normalizedPhone.startsWith('+')
@@ -576,6 +594,13 @@ router.post(
         user = newUserResult.rows[0];
       } else {
         user = found.rows[0];
+        if (recovery_only === true) {
+          // A successful SMS code proves control of this linked number.
+          await db.query(
+            'UPDATE users SET is_phone_verified = TRUE WHERE id = $1',
+            [user.id]
+          );
+        }
       }
 
       // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
@@ -809,7 +834,7 @@ router.post(
           }
         }
 
-        const { code } = await createOtp(normalizedEmail, 'email');
+        const { code, requestId } = await createOtp(normalizedEmail, 'email');
         const emailResult = await sendOtpEmail(normalizedEmail, code);
 
         await logAuthEvent({
@@ -823,6 +848,11 @@ router.post(
 
         if (!emailResult || !emailResult.success) {
           console.warn('⚠️ Email sending failed, but OTP was generated');
+          await discardUndeliveredOtp(normalizedEmail, 'email', requestId);
+          return {
+            error: 'Unable to send a sign-in code right now. Please try again later.',
+            status: 503,
+          };
         }
 
         return { ok: true, status: 200 };
@@ -856,7 +886,7 @@ router.post(
     }
 
     try {
-      const { email, phone_number, code, device_id, device_info } = req.body;
+      const { email, phone_number, code, device_id, device_info, recovery_only } = req.body;
       const normalizedEmail = email.trim().toLowerCase();
       // Email-only recovery is intentionally supported by the mobile app. Do
       // not treat a missing phone as a phone mismatch, and do not overwrite a
@@ -912,6 +942,20 @@ router.post(
           )
         : { rows: [] };
 
+      if (recovery_only === true && foundByEmail.rows.length === 0) {
+        // Recovery may only authenticate an existing account by the exact
+        // verified email. It must never attach an email to a phone-only
+        // account or create a new account from a valid OTP.
+        await logSuspiciousOtpAttempt(
+          normalizedEmail,
+          clientIp,
+          req.headers['user-agent'],
+          'recovery_account_not_found'
+        );
+        await otpVerifyDelay();
+        return res.status(400).json({ error: 'Invalid or expired code' });
+      }
+
       if (foundByEmail.rows.length > 0 && foundByPhone.rows.length > 0) {
         if (foundByEmail.rows[0].id !== foundByPhone.rows[0].id) {
           return res.status(409).json({ error: 'This email and phone number belong to different accounts.' });
@@ -949,7 +993,7 @@ router.post(
         // not found. New accounts require the normal sign-up flow with a
         // phone number.
         if (!hasPhone) {
-          return res.status(404).json({ error: 'Account not found. Please use sign up first.' });
+          return res.status(400).json({ error: 'Invalid or expired code' });
         }
         const newUserResult = await db.query(
           `INSERT INTO users (email, phone_number, language, timezone, is_email_verified)

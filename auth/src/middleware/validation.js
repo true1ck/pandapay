@@ -156,7 +156,7 @@ function validateRequestOtpBody(req, res, next) {
  * Middleware: Validate /auth/verify-otp request
  */
 function validateVerifyOtpBody(req, res, next) {
-  const { phone_number, code, device_id, device_info } = req.body;
+  const { phone_number, code, device_id, device_info, recovery_only } = req.body;
 
   // Check body size
   const sizeCheck = validateBodySize(req.body, 2000);
@@ -171,6 +171,10 @@ function validateVerifyOtpBody(req, res, next) {
 
   if (!code) {
     return res.status(400).json({ error: 'code is required' });
+  }
+
+  if (recovery_only !== undefined && typeof recovery_only !== 'boolean') {
+    return res.status(400).json({ error: 'recovery_only must be a boolean' });
   }
 
   // Validate each field
@@ -234,13 +238,17 @@ function validateRequestEmailOtpBody(req, res, next) {
  * Middleware: Validate /auth/verify-email-otp request
  */
 function validateVerifyEmailOtpBody(req, res, next) {
-  const { email, phone_number, code, device_id, device_info } = req.body;
+  const { email, phone_number, code, device_id, device_info, recovery_only } = req.body;
 
   const sizeCheck = validateBodySize(req.body, 2000);
   if (!sizeCheck.valid) return res.status(400).json({ error: sizeCheck.error });
 
   if (!email) return res.status(400).json({ error: 'email is required' });
   if (!code) return res.status(400).json({ error: 'code is required' });
+
+  if (recovery_only !== undefined && typeof recovery_only !== 'boolean') {
+    return res.status(400).json({ error: 'recovery_only must be a boolean' });
+  }
 
   const emailCheck = validateEmail(email);
   if (!emailCheck.valid) return res.status(400).json({ error: emailCheck.error });

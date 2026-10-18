@@ -16,7 +16,7 @@ setInterval(() => {
       delete memoryStore[key];
     }
   });
-}, 60000); // Clean up every minute
+}, 60000).unref(); // Clean up every minute without keeping a stopped service alive
 
 // Configuration from environment variables
 const config = {
@@ -421,7 +421,7 @@ async function rateLimitVerifyOtpByEmail(req, res, next) {
  * @param {string} identifier - Phone number or email
  * @param {number} ttlSeconds - Time to live in seconds
  */
-async function markActiveOtp(identifier, ttlSeconds) {
+async function markActiveOtp(identifier, ttlSeconds, requestId = '1') {
   const isEmail = identifier.includes('@');
   let normalized = identifier.trim().toLowerCase();
   
@@ -432,7 +432,35 @@ async function markActiveOtp(identifier, ttlSeconds) {
   
   const type = isEmail ? 'email' : 'phone';
   const key = `otp_active:${type}:${normalized}`;
-  await setWithTTL(key, '1', ttlSeconds);
+  await setWithTTL(key, String(requestId), ttlSeconds);
+}
+
+/** Clear an active OTP marker when delivery failed and the code was discarded. */
+async function clearActiveOtp(identifier, requestId) {
+  if (!requestId) return;
+  const isEmail = identifier.includes('@');
+  let normalized = identifier.trim().toLowerCase();
+  if (!isEmail) {
+    normalized = normalizePhoneForOtp(identifier);
+    if (!normalized) return;
+  }
+
+  const type = isEmail ? 'email' : 'phone';
+  const key = `otp_active:${type}:${normalized}`;
+  const redis = await getRedisClient();
+  if (isRedisReady() && redis) {
+    try {
+      // Compare and delete atomically: a late failure must not clear the
+      // cooldown for a newer code that has already been sent.
+      await redis.eval(
+        'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end',
+        { keys: [key], arguments: [String(requestId)] }
+      );
+    } catch (err) {
+      console.error('Redis delete error while clearing active OTP:', err);
+    }
+  }
+  if (memoryStore[key]?.value === String(requestId)) delete memoryStore[key];
 }
 
 /**
@@ -534,6 +562,7 @@ module.exports = {
   rateLimitVerifyOtpByPhone,
   rateLimitVerifyOtpByEmail,
   markActiveOtp,
+  clearActiveOtp,
   incrementFailedVerify,
   isIpBlockedForEnumeration,
   blockIpForEnumeration,

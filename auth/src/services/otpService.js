@@ -2,7 +2,10 @@
 const bcrypt = require('bcrypt');
 const db = require('../db');
 const config = require('../config');
-const { markActiveOtp } = require('../middleware/rateLimitMiddleware');
+const {
+  markActiveOtp,
+  clearActiveOtp,
+} = require('../middleware/rateLimitMiddleware');
 // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
 const { encryptPhoneNumber } = require('../utils/fieldEncryption');
 
@@ -113,20 +116,21 @@ async function createOtp(identifier, type = 'phone') {
   }
 
   // Insert new OTP with type and identifier
-  await db.query(
+  const inserted = await db.query(
     `INSERT INTO otp_requests (phone_number, email, type, country_code, otp_hash, expires_at, attempt_count, deleted)
-     VALUES ($1, $2, $3, $4, $5, $6, 0, FALSE)`,
+     VALUES ($1, $2, $3, $4, $5, $6, 0, FALSE)
+     RETURNING id`,
     [encryptedPhone, email, type, countryCode, otpHash, expiresAt]
   );
 
   // Mark OTP as active in Redis/memory store
   try {
-    await markActiveOtp(identifier, OTP_TTL_SECONDS);
+    await markActiveOtp(identifier, OTP_TTL_SECONDS, inserted.rows[0].id);
   } catch (err) {
     console.error('Failed to mark active OTP in rate limiter:', err);
   }
 
-  return { code };
+  return { code, requestId: inserted.rows[0].id };
 }
 
 /**
@@ -355,8 +359,33 @@ async function cleanupExpiredOtps() {
   );
 }
 
+/** Discard an OTP that could not be delivered so the user can retry at once. */
+async function discardUndeliveredOtp(identifier, type, requestId) {
+  if (!requestId) throw new Error('OTP request id is required for delivery cleanup');
+  const normalizedIdentifier = identifier.trim().toLowerCase();
+  if (type === 'email') {
+    await db.query(
+      `UPDATE otp_requests
+       SET deleted = TRUE
+       WHERE id = $1 AND email = $2 AND deleted = FALSE AND consumed_at IS NULL`,
+      [requestId, normalizedIdentifier]
+    );
+  } else {
+    const encryptedPhone = encryptPhoneNumber(identifier);
+    await db.query(
+      `UPDATE otp_requests
+       SET deleted = TRUE
+       WHERE id = $1 AND (phone_number = $2 OR phone_number = $3)
+         AND deleted = FALSE AND consumed_at IS NULL`,
+      [requestId, encryptedPhone, identifier]
+    );
+  }
+  await clearActiveOtp(identifier, requestId);
+}
+
 module.exports = {
   createOtp,
   verifyOtp,
   cleanupExpiredOtps,
+  discardUndeliveredOtp,
 };

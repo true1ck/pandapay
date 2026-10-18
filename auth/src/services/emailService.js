@@ -17,7 +17,9 @@ if (config.emailHost && config.emailUser && config.emailPass) {
   });
   console.log('✅ Email service initialized');
 } else {
-  console.warn('⚠️  Email SMTP credentials missing. Emails will be logged to console instead.');
+  console.warn(config.isProduction
+    ? 'Email SMTP credentials missing. Email authentication delivery is unavailable.'
+    : 'Email SMTP credentials missing. Development emails will be logged to console.');
 }
 
 /**
@@ -46,6 +48,9 @@ async function sendOtpEmail(email, code) {
 
   try {
     if (!transporter) {
+      if (config.isProduction) {
+        return { success: false, error: 'Email delivery is not configured' };
+      }
       console.log('--------------------------------------------------');
       console.log(`[MOCK EMAIL] To: ${email}`);
       console.log(`[MOCK EMAIL] Subject: ${mailOptions.subject}`);
@@ -55,6 +60,11 @@ async function sendOtpEmail(email, code) {
     }
 
     const info = await transporter.sendMail(mailOptions);
+    const accepted = info.accepted || [];
+    if (!accepted.some(address => String(address).toLowerCase() === email.toLowerCase())) {
+      console.error('[Email Service] SMTP did not accept the OTP recipient');
+      return { success: false, error: 'Email recipient was not accepted' };
+    }
     console.log(`[Email Service] OTP sent to ${email} (Message ID: ${info.messageId})`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
