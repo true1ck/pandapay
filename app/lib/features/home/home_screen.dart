@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -126,7 +124,6 @@ class HomeScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
               child: _BrandHeader(greeting: _greetingFor(now)),
             ),
-            const _HomeSpendHeadline(),
             Padding(
               padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 0),
               child: Text(
@@ -183,6 +180,7 @@ class HomeScreen extends ConsumerWidget {
               child: _RankedSection(ranked: ranked, tutorialKeys: tutorialKeys),
             ),
             const _UtilizationWarningBanner(),
+            const _HomeSpendHeadline(),
             const _HomeCategories(),
             const _HomeDuesAndReminders(),
             const _HomeAccountSnapshot(),
@@ -213,7 +211,7 @@ class _HomeSpendHeadline extends ConsumerWidget {
         0,
       ),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: BambooInk.paper,
           borderRadius: BorderRadius.circular(18),
@@ -223,32 +221,31 @@ class _HomeSpendHeadline extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('TOTAL SPENT', style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: .7)),
+            Row(
+              children: [
+                Expanded(child: Text('TOTAL SPENT', style: BambooFonts.ui(10.5, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: .7))),
+                if (change != null) _HomeSpendChangePill(change: change),
+              ],
+            ),
             const SizedBox(height: 4),
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: MoneyText(report.spend.total, confidence: Confidence.estimated, showConfidenceIcon: false, style: BambooFonts.money(34, color: BambooInk.ink900)))),
-                if (change != null) ...[
-                  const SizedBox(width: 10),
-                  _HomeSpendChangePill(change: change),
-                ],
+                Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: MoneyText(report.spend.total, confidence: Confidence.estimated, showConfidenceIcon: false, style: BambooFonts.money(24, color: BambooInk.ink900)))),
               ],
             ),
             if (projected != null && report.elapsedFraction < .95) ...[
               const SizedBox(height: 4),
-              Text('On track for ${projected.format(compact: true)} this month', style: BambooFonts.ui(13, color: BambooInk.ink500)),
+              Text('On track for ${projected.format(compact: true)} this month', style: BambooFonts.ui(11, color: BambooInk.ink500)),
             ],
             if (!report.spend.rewards.isZero) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               Container(height: 1, color: BambooInk.hairlineOnPaper),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Row(children: [
-                Text('Rewards earned', style: BambooFonts.ui(13, color: BambooInk.ink900)),
+                Text('Rewards earned', style: BambooFonts.ui(11, color: BambooInk.ink700)),
                 const Spacer(),
-                MoneyText(report.spend.rewards, confidence: Confidence.estimated, style: BambooFonts.ui(15, weight: FontWeight.w700, color: BambooInk.jade)),
-                const SizedBox(width: 7),
-                const Text('⌛', style: TextStyle(fontSize: 16)),
+                MoneyText(report.spend.rewards, confidence: Confidence.estimated, showConfidenceIcon: false, style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.jade)),
               ]),
             ],
           ],
@@ -266,11 +263,12 @@ class _HomeSpendChangePill extends StatelessWidget {
   Widget build(BuildContext context) {
     final up = change >= 0;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-      decoration: BoxDecoration(color: const Color(0xFFE7F8D8), borderRadius: BorderRadius.circular(18)),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('${up ? '↑' : '↓'} ${(change.abs() * 100).round()}%', style: BambooFonts.ui(17, weight: FontWeight.w800, color: const Color(0xFF1C7B35))),
-        Text('vs last month', style: BambooFonts.ui(12, color: BambooInk.ink700)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: const Color(0xFFE7F8D8), borderRadius: BorderRadius.circular(8)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text('${up ? '↑' : '↓'} ${(change.abs() * 100).round()}%', style: BambooFonts.ui(11, weight: FontWeight.w800, color: const Color(0xFF1C7B35))),
+        const SizedBox(width: 4),
+        Text('vs last month', style: BambooFonts.ui(10, color: BambooInk.ink700)),
       ]),
     );
   }
@@ -2563,11 +2561,7 @@ class _HomeCategories extends ConsumerWidget {
               : _categorySpendFromTransactions(transactions));
     final sorted = [...rows]
       ..sort((a, b) => b.totalSpend.rupees.compareTo(a.totalSpend.rupees));
-    final visible = sorted.take(5).toList();
-    final total = visible.fold<Money>(
-      const Money.zero(),
-      (sum, row) => sum + row.totalSpend,
-    );
+    final visible = sorted.take(6).toList();
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpace.xl),
@@ -2614,48 +2608,17 @@ class _HomeCategories extends ConsumerWidget {
               ),
             )
           else
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: HomeScreen._gutter),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-                decoration: BoxDecoration(
-                  color: BambooInk.glassFillOnPaper,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: BambooInk.hairlineOnPaper),
+            SizedBox(
+              height: 132,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: HomeScreen._gutter,
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 118,
-                      height: 118,
-                      child: CustomPaint(
-                        painter: _SpendDonutPainter(rows: visible, total: total),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                total.format(hidePaise: true),
-                                style: BambooFonts.money(13, color: BambooInk.ink900),
-                              ),
-                              Text('spent', style: BambooFonts.ui(10, color: BambooInk.ink500)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        children: [
-                          for (final row in visible)
-                            _HomeCategoryLegendRow(row: row, total: total),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                scrollDirection: Axis.horizontal,
+                itemCount: visible.length,
+                separatorBuilder: (_, _) => const SizedBox(width: AppSpace.sm),
+                itemBuilder: (context, index) =>
+                    _HomeCategoryCard(row: visible[index]),
               ),
             ),
           Padding(
@@ -2676,60 +2639,6 @@ class _HomeCategories extends ConsumerWidget {
       ),
     );
   }
-}
-
-class _HomeCategoryLegendRow extends StatelessWidget {
-  final CategorySpend row;
-  final Money total;
-
-  const _HomeCategoryLegendRow({required this.row, required this.total});
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = spendingCategoryVisual(row.displayName);
-    final percent = total.isZero ? 0 : (row.totalSpend.rupees / total.rupees * 100).round();
-    return InkWell(
-      onTap: () => context.push('${AppRoute.spendTrends}?category=${Uri.encodeComponent(row.categoryId ?? row.categoryName ?? 'Other')}'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Container(width: 20, height: 20, decoration: BoxDecoration(color: visual.surface, borderRadius: BorderRadius.circular(6)), child: Icon(visual.icon, size: 12, color: visual.accent)),
-            const SizedBox(width: 7),
-            Expanded(child: Text('${row.displayName} · $percent%', maxLines: 1, overflow: TextOverflow.ellipsis, style: BambooFonts.ui(11, color: BambooInk.ink700))),
-            Text(row.totalSpend.format(hidePaise: true), style: BambooFonts.ui(11, weight: FontWeight.w700, color: BambooInk.ink900)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SpendDonutPainter extends CustomPainter {
-  final List<CategorySpend> rows;
-  final Money total;
-
-  const _SpendDonutPainter({required this.rows, required this.total});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = math.min(size.width, size.height) / 2 - 5;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-    final base = Paint()..style = PaintingStyle.stroke..strokeWidth = 14..color = BambooInk.paperCool;
-    canvas.drawArc(rect, 0, math.pi * 2, false, base);
-    if (total.isZero) return;
-    var start = -math.pi / 2;
-    for (final row in rows) {
-      final sweep = math.pi * 2 * row.totalSpend.rupees / total.rupees;
-      final paint = Paint()..style = PaintingStyle.stroke..strokeCap = StrokeCap.butt..strokeWidth = 14..color = spendingCategoryVisual(row.displayName).accent;
-      canvas.drawArc(rect, start, sweep, false, paint);
-      start += sweep;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SpendDonutPainter oldDelegate) => oldDelegate.rows != rows || oldDelegate.total != total;
 }
 
 List<CategorySpend> _categorySpendFromTransactions(
@@ -2756,6 +2665,78 @@ List<CategorySpend> _categorySpendFromTransactions(
         txnCount: counts[entry.key] ?? 0,
       ),
   ];
+}
+
+class _HomeCategoryCard extends StatelessWidget {
+  final CategorySpend row;
+
+  const _HomeCategoryCard({required this.row});
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = spendingCategoryVisual(row.displayName);
+    return SizedBox(
+      width: 232,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => context.push(
+          '${AppRoute.spendTrends}?category=${Uri.encodeComponent(row.categoryId ?? row.categoryName ?? 'Other')}',
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpace.md),
+          decoration: BoxDecoration(
+            color: BambooInk.glassFillOnPaper,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: visual.surface,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(visual.icon, size: 19, color: visual.accent),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: Text(
+                      row.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(
+                        14,
+                        weight: FontWeight.w700,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              MoneyText(
+                row.totalSpend,
+                confidence: Confidence.estimated,
+                style: BambooFonts.money(20, color: BambooInk.ink900),
+                hidePaise: true,
+                showConfidenceIcon: false,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${row.txnCount} ${row.txnCount == 1 ? 'spend' : 'spends'}',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _HomeDuesAndReminders extends ConsumerWidget {
