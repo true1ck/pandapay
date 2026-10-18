@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay/features/cards/card_summary.dart';
 import 'package:pandapay/features/insights/spend_trends_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -331,6 +332,39 @@ void main() {
 
     expect(find.text('Sep 26'), findsNothing);
     expect(find.text('Oct 26'), findsNothing);
+  });
+
+  testWidgets('gives the monthly comparison chart the available card width', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => SpendReportQuery.custom(
+              from: DateTime(2026, 8, 1),
+              to: DateTime(2026, 10, 31),
+            ),
+          ),
+          spendReportProvider.overrideWith((ref, query) async => _report()),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => const [],
+          ),
+        ],
+        child: const MaterialApp(home: SpendTrendsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final chart = find.descendant(
+      of: find.ancestor(
+        of: find.text('Monthly comparison'),
+        matching: find.byType(CardSummaryPanel),
+      ),
+      matching: find.byType(CustomPaint),
+    );
+    expect(chart, findsOneWidget);
+    expect(tester.getSize(chart).width, greaterThan(0));
   });
 
   testWidgets('an empty period shows an explicit zero-spending state', (

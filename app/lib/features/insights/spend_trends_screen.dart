@@ -2371,6 +2371,7 @@ class _MonthlyComparisonCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           SizedBox(
+            width: double.infinity,
             height: 145,
             child: CustomPaint(
               painter: _MonthlyBarChartPainter(series: series),
