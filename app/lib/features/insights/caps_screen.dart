@@ -35,8 +35,9 @@ const _amber = Color(0xFFD97706);
 
 class CapsScreen extends ConsumerWidget {
   final bool embedded;
+  final String? cardId;
 
-  const CapsScreen({super.key, this.embedded = false});
+  const CapsScreen({super.key, this.embedded = false, this.cardId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -58,6 +59,7 @@ class CapsScreen extends ConsumerWidget {
                   .firstOrNull ??
               'Card-wide';
         }
+
         final rows = <(UserCard, CardProduct, CapRule)>[
           for (final (userCard, product) in owned)
             for (final cap in uniqueCapRules(product.capRules))
@@ -126,14 +128,19 @@ class CapsScreen extends ConsumerWidget {
         }
 
         return ListView(
+          key: cardId == null ? null : PageStorageKey('caps-$cardId'),
+          primary: embedded ? false : null,
           padding: embedded
               ? EdgeInsets.zero
               : const EdgeInsets.all(AppSpace.lg),
           shrinkWrap: embedded,
           physics: embedded ? const NeverScrollableScrollPhysics() : null,
           children: [
-            for (final group in groups.values)
+            for (final group in groups.values.where(
+              (g) => cardId == null || g.userCard.id == cardId,
+            ))
               CardCapabilitySection(
+                inline: cardId != null,
                 cardName: group.userCard.nickname?.isNotEmpty == true
                     ? group.userCard.nickname!
                     : group.product.name,

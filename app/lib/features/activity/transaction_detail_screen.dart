@@ -13,13 +13,14 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
-import '../../data/local/response_cache.dart';
+import '../../data/local/split_repository.dart';
 import '../../data/local/transaction_attachments_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../account/account_screen.dart' show AccountTile;
 import '../cards/card_summary.dart';
 import 'report_transaction_screen.dart';
+import '../sync/split_sync.dart';
 
 /// D2 Transaction Detail (ui-spec Group D). Deep-linkable at /activity/:id.
 /// Full record incl. source and reconciliation status. Actions: edit (D3),
@@ -68,7 +69,7 @@ class TransactionDetailScreen extends ConsumerWidget {
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
         actions: [
-          if (entry?.status == 'active')
+          if (entry?.status == 'active' && !transactionId.startsWith('local-'))
             IconButton(
               tooltip: 'Edit',
               icon: const Icon(Icons.edit_outlined),
@@ -86,7 +87,29 @@ class TransactionDetailScreen extends ConsumerWidget {
       ),
       body: AppBackground(
         child: entry != null
-            ? _DetailBody(entry: entry)
+            ? transactionId.startsWith('local-')
+                  ? Padding(
+                      padding: const EdgeInsets.all(AppSpace.lg),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            entry.merchantName ?? 'Saved transaction',
+                            style: BambooFonts.heading(20),
+                          ),
+                          const SizedBox(height: AppSpace.md),
+                          Text(
+                            entry.amount.format(),
+                            style: BambooFonts.heading(28),
+                          ),
+                          const SizedBox(height: AppSpace.md),
+                          const Text(
+                            'Saved on this device. Details and editing will be available after this entry syncs.',
+                          ),
+                        ],
+                      ),
+                    )
+                  : _DetailBody(entry: entry)
             : txn.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, _) => ErrorState(
@@ -116,7 +139,7 @@ final _transactionProvider = FutureProvider.family<TransactionEntry?, String>((
       : loaded.where((entry) => entry.id == id).firstOrNull;
   final cached = await cachedTransactionById(ref, id);
   final fallback = fromLoaded ?? cached;
-  if (repo == null) return fallback;
+  if (repo == null || id.startsWith('local-')) return fallback;
   try {
     return await repo.fetchTransaction(id);
   } catch (error) {
@@ -153,6 +176,27 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   String? _splitLoadError;
   bool _loadingSplits = true;
   bool _savingSplits = false;
+  SplitRepository? _splitStore;
+  LocalSplitDocument? _localSplit;
+
+  @override
+  void dispose() {
+    _splitStore?.removeListener(_splitChanged);
+    super.dispose();
+  }
+
+  void _splitChanged() {
+    if (!mounted) return;
+    if (_splitStore?.namespace != ref.read(cacheNamespaceProvider)) return;
+    final local = _splitStore?.local(widget.entry.id);
+    if (local == null) return;
+    setState(() {
+      _localSplit = local;
+      _splits = local.document.splits;
+      _loadingSplits = false;
+      _splitLoadError = null;
+    });
+  }
 
   @override
   void initState() {
@@ -160,96 +204,110 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     _loadSplits();
   }
 
-  String get _splitCacheKey =>
-      '${ref.read(cacheNamespaceProvider)}:transaction_splits:${widget.entry.id}';
-
-  static List<TransactionSplit>? _decodeCachedSplits(String? rawJson) {
-    if (rawJson == null) return null;
-    try {
-      final body = jsonDecode(rawJson) as Map<String, dynamic>;
-      final rows = body['splits'];
-      if (rows is! List) return null;
-      return rows
-          .cast<Map<String, dynamic>>()
-          .map(TransactionSplit.fromJson)
-          .toList();
-    } catch (_) {
-      // A corrupt optional snapshot must never break the transaction detail.
-      return null;
-    }
-  }
-
-  static String _encodeSplits(List<TransactionSplit> splits) => jsonEncode({
-    'splits': [
-      for (final split in splits)
-        {
-          'id': split.id,
-          'user_card_id': split.userCardId,
-          'category_id': split.categoryId,
-          'category_name': split.categoryName,
-          'amount_inr': split.amount.rupees,
-          'note': split.note,
-        },
-    ],
-  });
-
-  Future<(ResponseCache?, List<TransactionSplit>?)> _readCachedSplits() async {
-    ResponseCache? cache;
-    try {
-      cache = await ref.read(responseCacheProvider.future);
-      final raw = await cache?.get(_splitCacheKey);
-      return (cache, _decodeCachedSplits(raw));
-    } catch (_) {
-      // The local cache is best-effort. A database/platform failure must not
-      // prevent the live request or the normal retry state from rendering.
-      return (cache, null);
-    }
-  }
-
   Future<void> _loadSplits() async {
-    final (cache, cachedSplits) = await _readCachedSplits();
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null) {
-      if (mounted) {
-        setState(() {
-          if (cachedSplits != null) _splits = cachedSplits;
-          _loadingSplits = false;
-          _splitLoadError = cachedSplits == null
-              ? const AuthenticationUnavailableException().message
-              : null;
-        });
-      }
-      return;
-    }
     try {
-      final splits = await repo.fetchSplits(widget.entry.id);
-      try {
-        await cache?.put(_splitCacheKey, _encodeSplits(splits));
-      } catch (_) {
-        // Rendering a successful live response must not depend on cache I/O.
+      final store = await ref.read(splitRepositoryProvider.future);
+      if (!mounted) return;
+      if (store.namespace != ref.read(cacheNamespaceProvider)) return;
+      final cacheKey =
+          '${store.namespace}:transaction_splits:${widget.entry.id}';
+      if (_splitStore != store) {
+        _splitStore?.removeListener(_splitChanged);
+        _splitStore = store;
+        store.addListener(_splitChanged);
       }
-      if (mounted) {
-        setState(() {
-          _splits = splits;
-          _splitLoadError = null;
-          _loadingSplits = false;
-        });
+      // Migrate the old account-scoped read cache once. Pending documents in
+      // the repository always take precedence over an endpoint snapshot.
+      if (store.local(widget.entry.id) == null) {
+        try {
+          final cache = await ref.read(responseCacheProvider.future);
+          final raw = await cache.get(cacheKey);
+          if (raw != null) {
+            store.seed(
+              widget.entry.id,
+              TransactionSplitDocument.fromJson(
+                jsonDecode(raw) as Map<String, dynamic>,
+              ),
+              await cache.fetchedAt(cacheKey) ??
+                  DateTime.fromMillisecondsSinceEpoch(0),
+            );
+          }
+        } catch (_) {
+          // A corrupt legacy blob is disposable; the durable outbox is not.
+        }
       }
+      await store.read(widget.entry.id);
+      _splitChanged();
     } catch (error) {
-      // Keep the transaction detail usable without silently presenting a
-      // failed split read as an unsplit transaction. A successful cached
-      // response is account-scoped and safe to show while the session or
-      // connection recovers.
       if (mounted) {
         setState(() {
-          if (cachedSplits != null) _splits = cachedSplits;
           _loadingSplits = false;
-          _splitLoadError = cachedSplits != null
-              ? null
-              : isAuthenticationFailure(error)
+          _splitLoadError = isAuthenticationFailure(error)
               ? const AuthenticationUnavailableException().message
               : userFacingErrorMessage(error);
         });
+      }
+    }
+  }
+
+  Future<void> _resolveSplit(bool keepLocal) async {
+    try {
+      final store = _splitStore;
+      if (store == null) return;
+      final server = await store.fetchServerVersion(widget.entry.id);
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(
+            keepLocal ? 'Keep your saved split?' : 'Use the server split?',
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Current server version'),
+                if (server.splits.isEmpty)
+                  const Text('No shares recorded.')
+                else
+                  _SplitSummary(
+                    splits: server.splits,
+                    total: widget.entry.amount,
+                  ),
+                const SizedBox(height: AppSpace.md),
+                Text(
+                  keepLocal
+                      ? 'Your saved shares will replace this version when synced.'
+                      : 'Your unsynced changes will be replaced with this version.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(keepLocal ? 'Keep my split' : 'Use server split'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true && mounted) {
+        await store.resolve(
+          widget.entry.id,
+          keepLocal: keepLocal,
+          reviewedServerVersion: server,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
       }
     }
   }
@@ -388,40 +446,25 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     );
     if (result == null) return;
 
-    final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sign in again to save this split.')),
-        );
-      }
-      return;
-    }
-    if (mounted) setState(() => _savingSplits = true);
+    if (!mounted) return;
+    setState(() => _savingSplits = true);
     try {
-      final saved = await repo.saveSplits(widget.entry.id, result);
-      try {
-        final cache = await ref.read(responseCacheProvider.future);
-        await cache.put(_splitCacheKey, _encodeSplits(saved));
-      } catch (_) {
-        // The server write remains authoritative; cache persistence is only
-        // an offline/readability enhancement.
+      final store = _splitStore;
+      if (store == null) {
+        throw StateError('Local storage is unavailable. Try again.');
       }
-      if (mounted) {
-        setState(() {
-          _splits = saved;
-          _splitLoadError = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Couldn't save the split. ${userFacingErrorMessage(e)}",
-            ),
-          ),
+      if (store.namespace != ref.read(cacheNamespaceProvider)) {
+        throw StateError(
+          'Account changed. Reopen the transaction before editing.',
         );
+      }
+      store.save(widget.entry.id, result, widget.entry.amount);
+      _splitChanged();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
       }
     } finally {
       if (mounted) setState(() => _savingSplits = false);
@@ -728,6 +771,19 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     label: 'Category',
                     value: entry.categoryName ?? 'Other',
                   ),
+                  if (isActive &&
+                      (entry.categoryName == null ||
+                          [
+                            'other',
+                            'unknown',
+                            'uncategorized',
+                            'unclassified',
+                          ].contains(entry.categoryName!.trim().toLowerCase())))
+                    TextButton.icon(
+                      onPressed: _openEdit,
+                      icon: const Icon(Icons.category_outlined),
+                      label: const Text('Assign category'),
+                    ),
                   _DetailRow(
                     label: 'Date',
                     value: entry.occurredAt
@@ -807,6 +863,49 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         : 'Split across ${_splits.length} ${_splits.length == 1 ? 'share' : 'shares'}',
                     onTap: _showSplitSheet,
                   ),
+                  if (_localSplit?.pending == true) ...[
+                    const SizedBox(height: AppSpace.xs),
+                    Text(
+                      _localSplit!.error ??
+                          'Saved on this device — waiting to sync.',
+                      style: BambooFonts.ui(
+                        12,
+                        color: _localSplit!.blocked
+                            ? BambooInk.clayInk
+                            : BambooInk.ink500,
+                      ),
+                    ),
+                    if (_localSplit!.blocked)
+                      Wrap(
+                        children: [
+                          TextButton(
+                            onPressed: () => _resolveSplit(true),
+                            child: const Text('Keep my split'),
+                          ),
+                          TextButton(
+                            onPressed: () => _resolveSplit(false),
+                            child: const Text('Use server split'),
+                          ),
+                        ],
+                      ),
+                  ],
+                  if (_localSplit != null && !_localSplit!.pending)
+                    TextButton(
+                      onPressed: () async {
+                        try {
+                          await _splitStore?.refresh(widget.entry.id);
+                        } catch (error) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(userFacingErrorMessage(error)),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      child: const Text('Refresh split'),
+                    ),
                   if (_loadingSplits) ...[
                     const SizedBox(height: AppSpace.sm),
                     const LinearProgressIndicator(minHeight: 2),
@@ -1148,6 +1247,7 @@ class _SplitSheet extends StatefulWidget {
 class _SplitSheetState extends State<_SplitSheet> {
   late final List<TextEditingController> _amounts;
   late final List<TextEditingController> _notes;
+  final _originalShares = <TextEditingController, TransactionSplit>{};
 
   @override
   void initState() {
@@ -1162,6 +1262,9 @@ class _SplitSheetState extends State<_SplitSheet> {
         ),
     ];
     _notes = [for (final s in seed) TextEditingController(text: s.note ?? '')];
+    for (var i = 0; i < seed.length; i++) {
+      _originalShares[_amounts[i]] = seed[i];
+    }
   }
 
   @override
@@ -1193,7 +1296,16 @@ class _SplitSheetState extends State<_SplitSheet> {
   // An existing split can be cleared intentionally by removing every row.
   // A brand-new split still needs at least one positive share.
   bool get _canSave =>
-      !_overAllocated && (_hasShares || widget.initial.isNotEmpty);
+      !_overAllocated &&
+      !_hasInvalidAmounts &&
+      (_hasShares || widget.initial.isNotEmpty);
+
+  bool get _hasInvalidAmounts => _amounts.any((controller) {
+    final text = controller.text.trim();
+    return text.isNotEmpty &&
+        (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text) ||
+            _amount(controller).isZero);
+  });
 
   void _addShare() {
     setState(() {
@@ -1204,19 +1316,26 @@ class _SplitSheetState extends State<_SplitSheet> {
 
   void _removeShare(int index) {
     setState(() {
+      _originalShares.remove(_amounts[index]);
       _amounts.removeAt(index).dispose();
       _notes.removeAt(index).dispose();
     });
   }
 
   void _save() {
+    if (!_canSave) return;
     final splits = <TransactionSplit>[];
     for (var i = 0; i < _amounts.length; i++) {
       final amount = _amount(_amounts[i]);
       if (amount.isZero) continue; // a blank row is not an error, just skipped
       final note = _notes[i].text.trim();
       splits.add(
-        TransactionSplit(amount: amount, note: note.isEmpty ? null : note),
+        TransactionSplit(
+          amount: amount,
+          note: note.isEmpty ? null : note,
+          userCardId: _originalShares[_amounts[i]]?.userCardId,
+          categoryId: _originalShares[_amounts[i]]?.categoryId,
+        ),
       );
     }
     if (splits.isEmpty && widget.initial.isEmpty) return;
@@ -1274,9 +1393,11 @@ class _SplitSheetState extends State<_SplitSheet> {
                     Expanded(
                       child: TextField(
                         controller: _notes[i],
+                        maxLength: 2000,
                         style: BambooFonts.ui(14, color: BambooInk.ink900),
                         decoration: const InputDecoration(
                           hintText: 'Who / what for',
+                          counterText: '',
                         ),
                       ),
                     ),
@@ -1304,7 +1425,9 @@ class _SplitSheetState extends State<_SplitSheet> {
             ),
             const SizedBox(height: AppSpace.sm),
             Text(
-              _overAllocated
+              _hasInvalidAmounts
+                  ? 'Enter a positive amount with at most two decimal places for each share.'
+                  : _overAllocated
                   ? 'That is ${(-remaining).format()} more than the payment.'
                   : 'Unallocated: ${remaining.format()} — still yours.',
               style: BambooFonts.ui(

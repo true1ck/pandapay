@@ -1,8 +1,11 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:uuid/uuid.dart';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 
 import '../user_cards_repository.dart';
 import 'app_database.dart';
+import 'financial_store.dart';
 
 /// Plain value holder for one queued row — mirrors the
 /// transaction_outbox_entries columns 1:1 (see app_database.dart).
@@ -42,7 +45,47 @@ class TransactionOutboxEntry {
 /// to true — see providers.dart's outboxFlushProvider).
 class TransactionOutboxRepository {
   final AppDatabase _appDb;
-  TransactionOutboxRepository(this._appDb);
+  final String namespace;
+  final FinancialStore? financialStore;
+  TransactionOutboxRepository(
+    this._appDb, {
+    this.namespace = 'legacy',
+    this.financialStore,
+  });
+  String _sourceKey(String mutationId) {
+    final account = namespace.startsWith('user:')
+        ? namespace.substring(5)
+        : namespace;
+    return sha256
+        .convert(
+          utf8.encode(
+            '$account\u0000manual\u0000client-mutation\u0000$mutationId',
+          ),
+        )
+        .toString();
+  }
+
+  Future<void> restoreLocalEntries() async {
+    for (final entry in await pending()) {
+      financialStore?.saveProvisional(
+        namespace,
+        TransactionEntry(
+          id: 'local-outbox:${entry.clientMutationId}',
+          sourceKey: _sourceKey(entry.clientMutationId),
+          amount: Money.fromPaise(entry.amountPaise),
+          occurredAt: entry.occurredAt ?? entry.createdAt,
+          userCardId: entry.userCardId,
+          categoryId: entry.categoryId,
+          merchantName: entry.merchantName,
+          note: entry.note,
+          instrument: entry.instrument,
+          entryKind: entry.entryKind,
+          source: 'manual',
+          status: 'active',
+        ),
+      );
+    }
+  }
 
   Future<void> enqueue({
     String? userCardId,
@@ -59,11 +102,12 @@ class TransactionOutboxRepository {
     _appDb.db.execute(
       '''
       INSERT INTO transaction_outbox_entries
-        (user_card_id, client_mutation_id, amount_paise, category_id, merchant_name,
+        (namespace, user_card_id, client_mutation_id, amount_paise, category_id, merchant_name,
          occurred_at, note, instrument, entry_kind, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       [
+        namespace,
         userCardId,
         mutationId,
         amount.paise,
@@ -76,10 +120,30 @@ class TransactionOutboxRepository {
         DateTime.now().millisecondsSinceEpoch,
       ],
     );
+    financialStore?.saveProvisional(
+      namespace,
+      TransactionEntry(
+        id: 'local-outbox:$mutationId',
+        sourceKey: _sourceKey(mutationId),
+        amount: amount,
+        occurredAt: occurredAt ?? DateTime.now(),
+        userCardId: userCardId,
+        categoryId: categoryId,
+        merchantName: merchantName,
+        note: note,
+        instrument: instrument,
+        entryKind: entryKind,
+        source: 'manual',
+        status: 'active',
+      ),
+    );
   }
 
   Future<List<TransactionOutboxEntry>> pending() async {
-    final rows = _appDb.db.select('SELECT * FROM transaction_outbox_entries ORDER BY created_at ASC');
+    final rows = _appDb.db.select(
+      'SELECT * FROM transaction_outbox_entries WHERE namespace=? ORDER BY created_at ASC',
+      [namespace],
+    );
     return rows.map((row) {
       return TransactionOutboxEntry(
         id: row['id'] as int,
@@ -88,11 +152,15 @@ class TransactionOutboxRepository {
         amountPaise: row['amount_paise'] as int,
         categoryId: row['category_id'] as String?,
         merchantName: row['merchant_name'] as String?,
-        occurredAt: row['occurred_at'] == null ? null : DateTime.fromMillisecondsSinceEpoch(row['occurred_at'] as int),
+        occurredAt: row['occurred_at'] == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(row['occurred_at'] as int),
         note: row['note'] as String?,
         instrument: TxnInstrument.fromJson(row['instrument'] as String?),
         entryKind: TxnEntryKind.fromJson(row['entry_kind'] as String?),
-        createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          row['created_at'] as int,
+        ),
         lastError: row['last_error'] as String?,
       );
     }).toList();
@@ -105,7 +173,7 @@ class TransactionOutboxRepository {
     var sent = 0;
     for (final entry in await pending()) {
       try {
-        await repo.logTransaction(
+        final id = await repo.logTransaction(
           userCardId: entry.userCardId,
           amount: Money.fromPaise(entry.amountPaise),
           categoryId: entry.categoryId,
@@ -116,13 +184,32 @@ class TransactionOutboxRepository {
           entryKind: entry.entryKind,
           clientMutationId: entry.clientMutationId,
         );
-        _appDb.db.execute('DELETE FROM transaction_outbox_entries WHERE id = ?', [entry.id]);
+        financialStore?.saveTransactions(namespace, [
+          TransactionEntry(
+            id: id,
+            sourceKey: _sourceKey(entry.clientMutationId),
+            amount: Money.fromPaise(entry.amountPaise),
+            occurredAt: entry.occurredAt ?? entry.createdAt,
+            userCardId: entry.userCardId,
+            categoryId: entry.categoryId,
+            merchantName: entry.merchantName,
+            note: entry.note,
+            instrument: entry.instrument,
+            entryKind: entry.entryKind,
+            source: 'manual',
+            status: 'active',
+          ),
+        ]);
+        _appDb.db.execute(
+          'DELETE FROM transaction_outbox_entries WHERE id = ?',
+          [entry.id],
+        );
         sent++;
       } catch (e) {
-        _appDb.db.execute('UPDATE transaction_outbox_entries SET last_error = ? WHERE id = ?', [
-          e.toString(),
-          entry.id,
-        ]);
+        _appDb.db.execute(
+          'UPDATE transaction_outbox_entries SET last_error = ? WHERE id = ?',
+          [e.toString(), entry.id],
+        );
       }
     }
     return sent;

@@ -16,11 +16,8 @@ import '../tools/emi_advisor_screen.dart';
 import '../tools/split_planner_screen.dart';
 
 /// ui-spec B7. "Split suggestion" pushes G2 Split Planner and "EMI
-/// comparison" pushes G3 EMI Advisor — both screens carry their own amount
-/// input (splitPlannerAmountProvider / EmiAdvisorScreen's own principal
-/// field), so this screen's local `_amount` isn't threaded through; a user
-/// arriving from B7 re-enters the figure there, same as arriving at G2/G3
-/// any other way (from Tools Hub). Originally shipped disabled with a
+/// comparison" pushes G3 EMI Advisor. The split planner starts with this
+/// screen's purchase amount and keeps its own editable input. Originally shipped disabled with a
 /// "Coming soon" snackbar before G2/G3 existed in this codebase — wired for
 /// real once they landed.
 ///
@@ -154,7 +151,7 @@ class _BigPurchaseCalculatorScreenState
                       ),
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const SplitPlannerScreen(),
+                          builder: (_) => SplitPlannerScreen(initialAmount: _amount),
                         ),
                       ),
                       child: const Text('Split suggestion'),

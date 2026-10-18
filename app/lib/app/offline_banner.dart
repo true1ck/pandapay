@@ -32,7 +32,9 @@ class OfflineBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isOnline = ref.watch(isOnlineProvider).valueOrNull ?? true;
-    if (isOnline) return const SizedBox.shrink();
+    final syncMessage =
+        ref.watch(financialSyncStatusProvider).valueOrNull ?? '';
+    if (isOnline && syncMessage.isEmpty) return const SizedBox.shrink();
 
     final pendingCount = ref.watch(pendingOutboxCountProvider).valueOrNull ?? 0;
     final lastSynced = ref.watch(lastSyncedAtProvider).valueOrNull;
@@ -41,7 +43,10 @@ class OfflineBanner extends ConsumerWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(gutter, AppSpace.md, gutter, 0),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.md,
+          vertical: AppSpace.md,
+        ),
         decoration: BoxDecoration(
           color: BambooInk.paperMuted,
           borderRadius: BorderRadius.circular(14),
@@ -50,19 +55,33 @@ class OfflineBanner extends ConsumerWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.cloud_off_rounded, size: 16, color: BambooInk.ink500),
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 16,
+              color: BambooInk.ink500,
+            ),
             const SizedBox(width: AppSpace.sm),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "You're offline",
-                    style: BambooFonts.ui(12.5, weight: FontWeight.w600, color: BambooInk.ink900),
+                    isOnline ? 'Saved on this device' : "You're offline",
+                    style: BambooFonts.ui(
+                      12.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    offlineDetailLine(lastSynced: lastSynced, now: now, pendingCount: pendingCount),
+                    isOnline
+                        ? syncMessage
+                        : offlineDetailLine(
+                            lastSynced: lastSynced,
+                            now: now,
+                            pendingCount: pendingCount,
+                          ),
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 ],
@@ -95,13 +114,20 @@ class OfflineBanner extends ConsumerWidget {
 /// view is, and how many quick-add transactions are still queued. With no
 /// cache timestamp at all — a user who has been offline since install —
 /// the staleness clause is dropped rather than filled with a guess.
-String offlineDetailLine({required DateTime? lastSynced, required DateTime now, required int pendingCount}) {
+String offlineDetailLine({
+  required DateTime? lastSynced,
+  required DateTime now,
+  required int pendingCount,
+}) {
   final parts = <String>[];
 
   if (lastSynced == null) {
     parts.add('Showing what little is cached on this phone.');
   } else {
-    final sameDay = lastSynced.year == now.year && lastSynced.month == now.month && lastSynced.day == now.day;
+    final sameDay =
+        lastSynced.year == now.year &&
+        lastSynced.month == now.month &&
+        lastSynced.day == now.day;
     final stamp = sameDay
         ? DateFormat.jm().format(lastSynced)
         : DateFormat.MMMd().add_jm().format(lastSynced);

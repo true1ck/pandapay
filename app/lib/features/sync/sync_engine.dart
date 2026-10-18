@@ -7,6 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../data/local/sync_queue.dart';
 import '../../data/sync_api.dart';
+import 'split_sync.dart';
+import '../../data/local/financial_store.dart';
+import 'dart:convert';
 
 /// Plan Phase 4 — the client-side sync loop.
 ///
@@ -68,6 +71,9 @@ class SyncEngine {
 
     _running = true;
     try {
+      await (await _ref.read(
+        splitRepositoryProvider.future,
+      )).sync(reconnect: true);
       final queue = await _ref.read(syncQueueProvider.future);
 
       var deviceId = queue.deviceId;
@@ -106,23 +112,47 @@ class SyncEngine {
     final pending = queue.pending();
     if (pending.isEmpty) return 0;
 
-    final results = await api.push(deviceId: deviceId, changes: pending);
-    var applied = 0;
-    for (final result in results) {
-      if (result.clientSeq == null) continue;
-      if (result.applied) {
-        queue.remove(result.clientSeq!);
-        applied++;
-      } else if (result.isPermanentFailure) {
-        // The server will never accept this one. Dropping it is the only way
-        // to stop it blocking everything queued behind it — see
-        // SyncQueue.recordFailure for why that trade is the right way round.
-        queue.remove(result.clientSeq!);
-      } else {
-        queue.recordFailure(result.clientSeq!, result.reason ?? 'unknown');
+    queue.claim(pending);
+    try {
+      final results = await api.push(deviceId: deviceId, changes: pending);
+      final accepted = results
+          .where((r) => r.applied)
+          .map((r) => r.clientSeq)
+          .toSet();
+      final entities = pending
+          .where((c) => accepted.contains(c.clientSeq))
+          .map((c) => c.entity)
+          .toSet();
+      if (entities.isNotEmpty) await _materialize(entities, queue);
+      var applied = 0;
+      for (final result in results) {
+        if (result.clientSeq == null) continue;
+        if (result.applied) {
+          final change = pending
+              .where((c) => c.clientSeq == result.clientSeq)
+              .first;
+          if (change.entity == 'transactions' &&
+              (change.op == 'delete' ||
+                  change.payload['status'] == 'ignored')) {
+            final cache = await _ref.read(responseCacheProvider.future);
+            cache.financialStore.markInactive(queue.namespace, change.entityId);
+          }
+          queue.remove(result.clientSeq!);
+          applied++;
+        } else if (result.isPermanentFailure) {
+          // Retain rejected work for review while allowing later edits through.
+          queue.reject(
+            result.clientSeq!,
+            result.reason ?? 'Change needs attention',
+          );
+        } else {
+          queue.recordFailure(result.clientSeq!, result.reason ?? 'unknown');
+        }
       }
+      return applied;
+    } finally {
+      queue.release(pending);
     }
-    return applied;
   }
 
   Future<(int, int)> _pullAndApply(
@@ -143,11 +173,10 @@ class SyncEngine {
 
       if (batch.changes.isEmpty) break;
 
-      // Applying means invalidating the providers that read the affected
-      // entities, not writing into a local mirror: the app is
-      // server-authoritative (see the response cache's own doc comment), so
-      // "apply" correctly means "re-read from the server".
-      _invalidateFor(batch.changes.map((c) => c['entity'] as String).toSet());
+      // Commit the affected records before the cursor/ack can advance.
+      final entities = batch.changes.map((c) => c['entity'] as String).toSet();
+      await _materialize(entities, queue);
+      _invalidateFor(entities);
 
       since = batch.latestServerSeq;
       queue.lastServerSeq = since;
@@ -159,6 +188,56 @@ class SyncEngine {
 
     _ref.read(unacknowledgedConflictsProvider.notifier).state = totalConflicts;
     return (totalPulled, totalConflicts);
+  }
+
+  Future<void> _materialize(Set<String> entities, SyncQueue queue) async {
+    final namespace = _ref.read(cacheNamespaceProvider);
+    if (namespace != queue.namespace) {
+      throw StateError('Account changed during sync');
+    }
+    final cache = await _ref.read(responseCacheProvider.future);
+    final repository = _ref.read(userCardsRepositoryProvider);
+    if (repository == null) throw StateError('Sign in to sync');
+    // Materialize authoritative records before advancing the cursor. If a
+    // fetch or local commit fails, this batch is safely replayed next time.
+    if (entities.contains('transactions')) {
+      final rows = await repository.fetchTransactions();
+      if (_ref.read(cacheNamespaceProvider) != namespace) {
+        throw StateError('Account changed during sync');
+      }
+      cache.financialStore.saveTransactions(
+        namespace,
+        rows,
+        completeQuery: const TransactionQuery(),
+      );
+    }
+    if (entities.contains('user_cards')) {
+      final cards = await repository.fetchUserCards();
+      final archived = await repository.fetchUserCards(includeArchived: true);
+      if (_ref.read(cacheNamespaceProvider) != namespace) {
+        throw StateError('Account changed during sync');
+      }
+      await cache.put(
+        '$namespace:user_cards',
+        jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
+      );
+      await cache.put(
+        '$namespace:user_cards_with_archived',
+        jsonEncode({'userCards': archived.map((c) => c.toJson()).toList()}),
+      );
+    }
+    if (entities.contains('card_overrides')) {
+      final overrides = await _ref
+          .read(cardOverridesRepositoryProvider)!
+          .fetchOverrides();
+      if (_ref.read(cacheNamespaceProvider) != namespace) {
+        throw StateError('Account changed during sync');
+      }
+      await cache.put(
+        '$namespace:card_overrides',
+        jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
+      );
+    }
   }
 
   void _invalidateFor(Set<String> entities) {
@@ -202,14 +281,15 @@ final unacknowledgedConflictsProvider = StateProvider<int>((ref) => 0);
 /// would be the right addition when one device needs to learn about another's
 /// change immediately, which no screen currently requires.
 final syncLifecycleProvider = Provider<void>((ref) {
+  ref.watch(splitSyncLifecycleProvider);
   ref.listen<String>(cacheNamespaceProvider, (previous, next) async {
-    if (previous == 'signed-out' && next != 'signed-out') {
+    if (previous != next && next != 'signed-out') {
       await ref.read(syncEngineProvider).sync();
     }
     if (previous != 'signed-out' && next == 'signed-out') {
       // Sign-out: the queue and cursor belong to the account that just left.
-      final queue = await ref.read(syncQueueProvider.future);
-      queue.clear();
+      final db = await ref.read(appDatabaseProvider.future);
+      SyncQueue(db, namespace: previous!).resetCursor();
     }
   });
 

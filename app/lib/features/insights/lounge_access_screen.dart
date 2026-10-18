@@ -26,8 +26,9 @@ import 'grouped_insight_screen.dart';
 /// visible note rather than silently mis-counting.
 class LoungeAccessScreen extends ConsumerWidget {
   final bool embedded;
+  final String? cardId;
 
-  const LoungeAccessScreen({super.key, this.embedded = false});
+  const LoungeAccessScreen({super.key, this.embedded = false, this.cardId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -85,14 +86,21 @@ class LoungeAccessScreen extends ConsumerWidget {
             }
 
             return ListView(
+              key: cardId == null
+                  ? null
+                  : PageStorageKey('lounge_access-$cardId'),
+              primary: embedded ? false : null,
               padding: embedded
                   ? EdgeInsets.zero
                   : const EdgeInsets.all(AppSpace.lg),
               shrinkWrap: embedded,
               physics: embedded ? const NeverScrollableScrollPhysics() : null,
               children: [
-                for (final group in groups.values)
+                for (final group in groups.values.where(
+                  (g) => cardId == null || g.userCard.id == cardId,
+                ))
                   CardCapabilitySection(
+                    inline: cardId != null,
                     cardName: group.userCard.nickname?.isNotEmpty == true
                         ? group.userCard.nickname!
                         : group.product.name,

@@ -1,0 +1,117 @@
+[
+  {
+    "body": "Rs.1,499.00 spent on your HDFC Bank Card ending 4321 at AMAZON RETAIL on 04-08-26. Avl limit Rs.85,000.",
+    "amount": 1499,
+    "instrument": "credit_card",
+    "kind": "spend"
+  },
+  {
+    "body": "INR 250 spent on ICICI Bank Card XX7788 at SWIGGY on 05-Aug-26.",
+    "amount": 250,
+    "instrument": "credit_card",
+    "kind": "spend"
+  },
+  {
+    "body": "Rs.500 debited from A/c XX1234 to SHOP via UPI on 16-10-26. Ref 123456789012.",
+    "amount": 500,
+    "instrument": "upi_bank",
+    "kind": "transfer"
+  },
+  {
+    "body": "INR 100 spent using debit card XX1234 at SHOP on 16-10-26.",
+    "amount": 100,
+    "instrument": "debit_card",
+    "kind": "spend"
+  },
+  {
+    "body": "Your account XX1234 credited INR 50000 as salary on 16-10-26.",
+    "amount": 50000,
+    "instrument": "upi_bank",
+    "kind": "income"
+  },
+  {
+    "body": "Rs.1200 debited towards your credit card bill.",
+    "amount": 1200,
+    "instrument": "other",
+    "kind": "transfer"
+  },
+  {
+    "body": "OTP 123456 for transaction INR 500 on card XX4321. Do not share.",
+    "amount": null
+  },
+  {
+    "body": "INR 500 purchase declined on credit card XX4321.",
+    "amount": null
+  },
+  {
+    "body": "INR 500 refunded to credit card XX4321.",
+    "amount": null
+  },
+  {
+    "body": "Your credit card XX4321 payment due on 20-Oct-2026. Total amount due INR 3000.",
+    "amount": null,
+    "dueDay": 20
+  },
+  {
+    "body": "Spend INR 15000 on card XX4321 and get cashback INR 250.",
+    "amount": null
+  },
+  {
+    "body": "Your account XX1234 available balance is INR 3000.",
+    "amount": null
+  },
+  {
+    "body": "Payment received INR 2500 from RAVI via UPI.",
+    "amount": 2500,
+    "instrument": "upi_bank",
+    "kind": "income"
+  },
+  {
+    "body": "INR 500 refunded to your bank account XX1234.",
+    "amount": 500,
+    "instrument": "upi_bank",
+    "kind": "income"
+  },
+  {
+    "body": "INR 200 reversed to your account XX1234.",
+    "amount": 200,
+    "instrument": "upi_bank",
+    "kind": "income"
+  },
+  {
+    "body": "INR 1200 deposited into your wallet.",
+    "amount": 1200,
+    "instrument": "wallet",
+    "kind": "income"
+  },
+  {
+    "body": "Your bank account XX1234 received INR 4500 from RAVI.",
+    "amount": 4500,
+    "instrument": "upi_bank",
+    "kind": "income"
+  },
+  {
+    "body": "INR 500 will be credited to account XX1234.",
+    "amount": null
+  },
+  {
+    "body": "INR 500 not credited to account XX1234.",
+    "amount": null
+  },
+  {
+    "body": "Refund INR 500 initiated to account XX1234.",
+    "amount": null
+  },
+  {
+    "body": "INR 500 credit failed to account XX1234.",
+    "amount": null
+  },
+  {
+    "body": "Refund of INR 500 pending in your bank account.",
+    "amount": null
+  },
+  {
+    "body": "Your bank account cashback offer INR 500 on spend INR 5000.",
+    "amount": null
+  }
+]

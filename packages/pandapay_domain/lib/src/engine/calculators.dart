@@ -81,17 +81,22 @@ class SplitOptimizer {
     List<CardSnapshot> cards, {
     Map<String, Money>?
     utilizationCeiling, // card.id -> max additional spend before 30%
+    Map<CardSnapshot, Money>? snapshotCeilings,
     int stepCount = 20,
   }) {
-    if (cards.isEmpty || totalAmount.isZero) return const [];
+    if (stepCount <= 0) throw ArgumentError.value(stepCount, 'stepCount');
+    if (cards.isEmpty || totalAmount.isZero || totalAmount.isNegative)
+      return const [];
 
-    final stepSize = Money.fromPaise((totalAmount.paise / stepCount).round());
+    final stepSize = Money.fromPaise((totalAmount.paise / stepCount).ceil());
     final remainingCeiling = {
       for (final s in cards)
-        s.product.id:
-            utilizationCeiling?[s.product.id] ?? const Money.fromPaise(1 << 50),
+        s:
+            snapshotCeilings?[s] ??
+            utilizationCeiling?[s.product.id] ??
+            const Money.fromPaise(1 << 50),
     };
-    final allocated = {for (final s in cards) s.product.id: const Money.zero()};
+    final allocated = {for (final s in cards) s: const Money.zero()};
 
     Money placed = const Money.zero();
     while (placed < totalAmount) {
@@ -102,9 +107,13 @@ class SplitOptimizer {
 
       // Rank cards for this marginal chunk with each card's *already allocated*
       // amount folded into the context so cap blending reflects prior steps.
-      final marginal = <String, Money>{};
+      final marginal = <CardSnapshot, Money>{};
+      final chunks = <CardSnapshot, Money>{};
       for (final snapshot in cards) {
-        final consumedSoFar = allocated[snapshot.product.id]!;
+        final ceiling = remainingCeiling[snapshot]!;
+        if (ceiling.isZero || ceiling.isNegative) continue;
+        final chunk = ceiling < stepAmount ? ceiling : stepAmount;
+        final consumedSoFar = allocated[snapshot]!;
         final adjustedSnapshot = _withReducedCaps(
           snapshot,
           consumedSoFar,
@@ -112,8 +121,9 @@ class SplitOptimizer {
         );
         final rec = engine.rank(
           RecommendationContext(
-            amount: stepAmount,
+            amount: chunk,
             categoryId: baseContext.categoryId,
+            categorySlug: baseContext.categorySlug,
             mcc: baseContext.mcc,
             vpa: baseContext.vpa,
             rail: baseContext.rail,
@@ -129,22 +139,29 @@ class SplitOptimizer {
           [adjustedSnapshot],
         ).first;
         if (rec.isExcluded) continue;
-        if (remainingCeiling[snapshot.product.id]!.isZero) continue;
-        marginal[snapshot.product.id] = rec.expectedValue;
+        marginal[snapshot] = rec.expectedValue;
+        chunks[snapshot] = chunk;
       }
       if (marginal.isEmpty) break; // nothing eligible for more spend
 
       final bestCardId = marginal.entries
-          .reduce((a, b) => a.value.paise >= b.value.paise ? a : b)
+          .reduce(
+            (a, b) =>
+                a.value.paise * chunks[b.key]!.paise >=
+                    b.value.paise * chunks[a.key]!.paise
+                ? a
+                : b,
+          )
           .key;
-      allocated[bestCardId] = allocated[bestCardId]! + stepAmount;
-      remainingCeiling[bestCardId] = remainingCeiling[bestCardId]! - stepAmount;
-      placed += stepAmount;
+      final chunk = chunks[bestCardId]!;
+      allocated[bestCardId] = allocated[bestCardId]! + chunk;
+      remainingCeiling[bestCardId] = remainingCeiling[bestCardId]! - chunk;
+      placed += chunk;
     }
 
     final result = <SplitAllocation>[];
     for (final snapshot in cards) {
-      final amount = allocated[snapshot.product.id]!;
+      final amount = allocated[snapshot]!;
       if (amount.isZero) continue;
       final adjustedSnapshot = _withReducedCaps(
         snapshot,

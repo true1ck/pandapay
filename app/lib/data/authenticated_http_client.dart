@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'api_exception.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -14,6 +16,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
   final http.Client _inner;
   final Future<String?> Function() refreshAccessToken;
   final String? Function()? currentAccessToken;
+  final void Function(http.BaseRequest)? onSuccessfulMutation;
 
   /// Optional token-aware refresh hook.  A keep-alive refresh can finish
   /// between the original 401 and this callback; in that case the caller
@@ -26,6 +29,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
   AuthenticatedHttpClient({
     required this.refreshAccessToken,
     this.currentAccessToken,
+    this.onSuccessfulMutation,
     this.refreshAccessTokenForToken,
     http.Client? inner,
   }) : _inner = inner ?? http.Client();
@@ -33,6 +37,21 @@ class AuthenticatedHttpClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final liveToken = currentAccessToken?.call();
+    final originalHeader =
+        request.headers['authorization'] ?? request.headers['Authorization'];
+    final originalSubject = _subject(
+      originalHeader?.replaceFirst('Bearer ', ''),
+    );
+    final currentSubject = _subject(liveToken);
+    if (currentAccessToken != null &&
+        originalSubject != null &&
+        (liveToken == null || currentSubject != originalSubject)) {
+      throw ApiException(
+        'Account changed before request',
+        userMessage:
+            'Your account changed. Please retry from the current account.',
+      );
+    }
     if (currentAccessToken != null) {
       if (liveToken != null && liveToken.isNotEmpty) {
         // Repository objects may outlive an access-token rotation. Update the
@@ -47,6 +66,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
       }
     }
     final response = await _inner.send(request);
+    _didRespond(request, response);
     if (response.statusCode != 401 || request is! http.Request) {
       return response;
     }
@@ -64,6 +84,13 @@ class AuthenticatedHttpClient extends http.BaseClient {
     if (newToken == null || newToken.isEmpty) {
       return _replayResponse(response, body);
     }
+    if (originalSubject != null && _subject(newToken) != originalSubject) {
+      throw ApiException(
+        'Account changed during refresh',
+        userMessage:
+            'Your account changed. Please retry from the current account.',
+      );
+    }
 
     final retry = http.Request(request.method, request.url)
       ..headers.addAll(request.headers)
@@ -72,7 +99,36 @@ class AuthenticatedHttpClient extends http.BaseClient {
       ..maxRedirects = request.maxRedirects
       ..persistentConnection = request.persistentConnection
       ..headers['Authorization'] = 'Bearer $newToken';
-    return _inner.send(retry);
+    final retried = await _inner.send(retry);
+    _didRespond(retry, retried);
+    return retried;
+  }
+
+  void _didRespond(http.BaseRequest request, http.StreamedResponse response) {
+    if (!['GET', 'HEAD', 'OPTIONS'].contains(request.method) &&
+        response.statusCode >= 200 &&
+        response.statusCode < 300) {
+      try {
+        onSuccessfulMutation?.call(request);
+      } catch (_) {
+        // Refresh metadata is best-effort. A server-accepted write must not
+        // look failed and invite the user to submit another transaction.
+      }
+    }
+  }
+
+  static String? _subject(String? token) {
+    try {
+      final parts = token?.split('.');
+      if (parts == null || parts.length != 3) return null;
+      return (jsonDecode(
+                utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+              )
+              as Map)['sub']
+          as String?;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<String?> _refreshOnce(String rejectedAccessToken) {

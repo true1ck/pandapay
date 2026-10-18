@@ -154,6 +154,40 @@ See [background merchant alerts](background-merchant-alerts.md) for details.
 This is a connected-device test build only. Future updates for this phone must
 exceed version `20047` and match the same signing certificate.
 
+Verified local-first device-test update on 2026-10-18:
+
+| Device | ABI | Installed package version | APK SHA-256 |
+| --- | --- | ---: | --- |
+| Motorola edge 50 fusion (`ZA222MS4SF`) | `arm64-v8a` | `20048` | `6896EA0C4FADB75DA5F1BA0BC3288F7A18CE4E1E5B37609322CF621EEDC31BDB` |
+
+Built with `-BuildNumber 18048`, the hosted production endpoints, and
+`-AllowDebugSigningForDeviceTest`. The ARM64 split has the production package ID,
+the expected SMS and notification permissions, a valid APK v2 signature, and
+the same Android Debug certificate as the installed version. `adb install -r`
+updated the phone from `20047` without clearing app data. The app launched,
+showed the existing wallet, and Payments due displayed its saved card and due
+date while a stored refresh status indicated authentication trouble; that
+status was later found to be an unreliable sign-in signal. The prior full-screen
+refresh error did not appear. A force-stop and relaunch succeeded. This verifies local display
+through the expired-session state, but does not establish background SMS capture
+or server reconciliation. This debug-signed APK is for the connected device
+test only. Future updates for this phone must exceed version `20048` and match
+its certificate.
+
+Verified session-banner device-test update on 2026-10-18:
+
+| Device | ABI | Installed package version | APK SHA-256 |
+| --- | --- | ---: | --- |
+| Motorola edge 50 fusion (`ZA222MS4SF`) | `arm64-v8a` | `20050` | `2838BEA8BC32D4ED770802927E201026E126E726B6B6B6C0EA58FEB495831E68` |
+
+Built with `-BuildNumber 18050`, hosted production endpoints and the explicit
+debug-signing device-test exception. The ARM64 package ID and Android Debug
+certificate match the preceding installed version, and APK v2 verification
+passed. Installed using `adb install -r`, preserving app data. Home and
+Payments due rendered saved content without a sign-in or bulk pending-SMS
+warning. This is not a distributable release. Future updates for this phone
+must exceed version `20050` and use the same signing certificate.
+
 ## 5. Canonical build command
 
 Use the repository wrapper; do not assemble a production APK with an ad-hoc

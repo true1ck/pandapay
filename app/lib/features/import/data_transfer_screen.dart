@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
-import 'csv_statement_import_screen.dart';
+import 'document_import_screen.dart';
+import 'screenshot_spending_import_screen.dart';
 import 'data_export_screen.dart';
-import 'statement_pdf_import_screen.dart';
 
 /// The single entry point for moving data into and out of PandaPay.
 ///
@@ -49,17 +49,18 @@ class DataTransferScreen extends StatelessWidget {
               icon: Icons.upload_file_outlined,
               title: 'Import data',
               subtitle:
-                  'Bring in transactions from almost any CSV layout or bank statement PDF.',
+                  'Import PDF, CSV, TSV, Excel (.xlsx), JSON, or transaction screenshots.',
               actions: [
                 _TransferAction(
                   icon: Icons.table_view_outlined,
-                  label: 'CSV file',
-                  onTap: () => _open(context, const CsvStatementImportScreen()),
+                  label: 'Import file',
+                  onTap: () => _open(context, const DocumentImportScreen()),
                 ),
                 _TransferAction(
-                  icon: Icons.picture_as_pdf_outlined,
-                  label: 'PDF statement',
-                  onTap: () => _open(context, const StatementPdfImportScreen()),
+                  icon: Icons.image_search_outlined,
+                  label: 'Screenshots',
+                  onTap: () =>
+                      _open(context, const SpendingScreenshotImportScreen()),
                 ),
               ],
             ),

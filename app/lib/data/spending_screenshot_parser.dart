@@ -83,7 +83,7 @@ ParsedSpendingScreenshot parseSpendingScreenshotText(String text) {
   }
 
   return ParsedSpendingScreenshot(
-    transactions: _deduplicate(statement.transactions),
+    transactions: statement.transactions,
     totalSpendRupees: _number(total?.group(1)),
     periodLabel: _firstPeriodLabel(lines),
     categorySummaries: summaries,
@@ -99,16 +99,4 @@ String? _firstPeriodLabel(List<String> lines) {
     if (month.hasMatch(line)) return line;
   }
   return null;
-}
-
-List<ParsedStatementLine> _deduplicate(List<ParsedStatementLine> input) {
-  final seen = <String>{};
-  return [
-    for (final transaction in input)
-      if (seen.add(
-        '${transaction.date.year}-${transaction.date.month}-${transaction.date.day}|${transaction.amount.paise}|'
-        '${transaction.description.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')}|${transaction.isCredit}',
-      ))
-        transaction,
-  ];
 }

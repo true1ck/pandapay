@@ -26,14 +26,14 @@ void main() {
     expect(parsed.categorySummaries.map((item) => item.category), containsAll(<String>['Unknown', 'Bills', 'Shopping']));
   });
 
-  test('parses dated transaction rows and removes exact OCR duplicates', () {
+  test('preserves repeated dated rows for shared duplicate review', () {
     final parsed = parseSpendingScreenshotText('''
       15/10/2026 AMAZON PAY INDIA ₹1,234.50
       15/10/2026 AMAZON PAY INDIA ₹1,234.50
       16 Oct 2026 LOCAL STORE 80
     ''');
 
-    expect(parsed.transactions, hasLength(2));
+    expect(parsed.transactions, hasLength(3));
     expect(parsed.transactions.first.description, 'AMAZON PAY INDIA');
     expect(parsed.transactions.first.amount.rupees, 1234.5);
     expect(parsed.transactions.last.date, DateTime(2026, 10, 16));

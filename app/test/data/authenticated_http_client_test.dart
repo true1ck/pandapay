@@ -4,8 +4,51 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/authenticated_http_client.dart';
+import 'package:pandapay/data/api_exception.dart';
 
 void main() {
+  test(
+    'refresh metadata failure cannot turn an accepted write into a failed save',
+    () async {
+      final client = AuthenticatedHttpClient(
+        refreshAccessToken: () async => null,
+        onSuccessfulMutation: (_) => throw StateError('storage unavailable'),
+        inner: MockClient((_) async => http.Response('saved', 201)),
+      );
+      addTearDown(client.close);
+      final response = await client.post(
+        Uri.parse('https://api.example.test/transactions'),
+        body: '{}',
+      );
+      expect(response.statusCode, 201);
+    },
+  );
+  test(
+    'an old repository cannot submit data under a different signed-in account',
+    () async {
+      String token(String user) =>
+          'e30.${base64Url.encode(utf8.encode(jsonEncode({'sub': user}))).replaceAll('=', '')}.sig';
+      var requests = 0;
+      final client = AuthenticatedHttpClient(
+        currentAccessToken: () => token('b'),
+        refreshAccessToken: () async => null,
+        inner: MockClient((_) async {
+          requests++;
+          return http.Response('ok', 200);
+        }),
+      );
+      addTearDown(client.close);
+      await expectLater(
+        client.post(
+          Uri.parse('https://api.example.test/transactions'),
+          headers: {'Authorization': 'Bearer ${token('a')}'},
+          body: '{}',
+        ),
+        throwsA(isA<ApiException>()),
+      );
+      expect(requests, 0);
+    },
+  );
   test(
     'refreshes once and retries a request rejected by an expired token',
     () async {

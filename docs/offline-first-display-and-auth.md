@@ -7,7 +7,12 @@ service are deployed with different token settings.
 
 ## Display-data contract
 
-The app uses the local SQLite response cache as the last-known display source.
+Transactions and saved cards now use the centralized local entity store;
+see [Local-first financial data](local-first-data.md) for capture, migration,
+coverage, pending writes and reconciliation. The response-cache rules below
+continue to apply to legacy snapshots and server-derived display aggregates.
+
+The app uses local SQLite storage as the last-known display source.
 The cache is scoped by the JWT `sub`, so rotating an access token does not
 look like a different account and signing out clears that account's snapshot.
 

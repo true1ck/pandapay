@@ -67,7 +67,8 @@ bool looksLikeTransactionSms(String smsBody) {
   // OTP and security alerts often contain "txn", "INR", and a card suffix.
   // Reject them before the high-recall keyword check so they never reach the
   // importer or appear in Needs Review as if they were failed transactions.
-  final otpOrSecurity = RegExp(
+  final otpOrSecurity =
+      RegExp(
         r'\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b',
       ).hasMatch(lower) ||
       RegExp(r"\b(?:do not|don't|never)\s+share\b").hasMatch(lower) ||
@@ -80,23 +81,25 @@ bool looksLikeTransactionSms(String smsBody) {
   const nonSpendWords = [
     'declined',
     'decline',
-    'reversed',
-    'reversal',
     'failed',
     'failure',
     'cancelled',
     'canceled',
     'pending',
-    'refund',
-    'refunded',
   ];
   if (nonSpendWords.any(lower.contains)) return false;
-  
+
   // 1. Hard reject obvious promotional spam
   const promoWords = [
-    'apply now', 'pre-approved', 'lifetime free', 'ltf', 
-    'personal loan', 'enjoy', 'exclusive offer', 'get free',
-    'special offer'
+    'apply now',
+    'pre-approved',
+    'lifetime free',
+    'ltf',
+    'personal loan',
+    'enjoy',
+    'exclusive offer',
+    'get free',
+    'special offer',
   ];
   if (promoWords.any(lower.contains)) return false;
 
@@ -105,6 +108,10 @@ bool looksLikeTransactionSms(String smsBody) {
     'spent',
     'debited',
     'credited',
+    'received',
+    'deposited',
+    'refund',
+    'reversal',
     'txn',
     'transaction',
     'purchase',

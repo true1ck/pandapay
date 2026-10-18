@@ -198,6 +198,7 @@ dependencies:
   # F4: parsing an "SMS Backup & Restore"-format XML export — already
   # resolved transitively via syncfusion_flutter_pdf, declared directly
   # here since app/lib/data/sms_backup_xml_parser.dart imports it directly.
+  archive: ^4.3.0
   xml: ^7.0.1
   flutter_test:
     sdk: flutter

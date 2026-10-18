@@ -16,8 +16,9 @@ import 'grouped_insight_screen.dart';
 /// Days-to-anniversary uses UserCard.anniversaryOn (Task E-0).
 class FeeWaiversScreen extends ConsumerWidget {
   final bool embedded;
+  final String? cardId;
 
-  const FeeWaiversScreen({super.key, this.embedded = false});
+  const FeeWaiversScreen({super.key, this.embedded = false, this.cardId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -77,14 +78,19 @@ class FeeWaiversScreen extends ConsumerWidget {
         }
 
         return ListView(
+          key: cardId == null ? null : PageStorageKey('fee_waivers-$cardId'),
+          primary: embedded ? false : null,
           padding: embedded
               ? EdgeInsets.zero
               : const EdgeInsets.all(AppSpace.lg),
           shrinkWrap: embedded,
           physics: embedded ? const NeverScrollableScrollPhysics() : null,
           children: [
-            for (final group in groups.values)
+            for (final group in groups.values.where(
+              (g) => cardId == null || g.userCard.id == cardId,
+            ))
               CardCapabilitySection(
+                inline: cardId != null,
                 cardName: group.userCard.nickname?.isNotEmpty == true
                     ? group.userCard.nickname!
                     : group.product.name,

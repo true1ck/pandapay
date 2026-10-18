@@ -1,0 +1,211 @@
+const SOURCES = new Set(['statement', 'screenshot', 'csv', 'xlsx', 'json']);
+const RAILS = new Set(['upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown']);
+function maskAccount(value) { return value?.replace(/\d{6,}/g, (digits) => `****${digits.slice(-4)}`) || null; }
+const HASH = /^[a-f0-9]{64}$/i;
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function calendarDate(value) {
+  if (typeof value !== 'string') return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(value);
+  if (!match) return false;
+  const [year, month, day] = match.slice(1).map(Number);
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1) return false;
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDate() === day;
+}
+
+function timestamp(value) {
+  if (!calendarDate(value)) return false;
+  const time = /^\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.exec(value);
+  return Boolean(time && Number(time[1]) < 24 && Number(time[2]) < 60 && Number(time[3]) < 60 && Number.isFinite(Date.parse(value)));
+}
+
+function money(value, { signed = false } = {}) {
+  return typeof value === 'number' && Number.isFinite(value) && (signed || value >= 0)
+    && Math.abs(value) <= 9999999999.99
+    && /^-?\d+(?:\.\d{1,2})?$/.test(String(value));
+}
+
+function validateStatementImport(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return 'An import object is required';
+  if (body.userCardId != null && (typeof body.userCardId !== 'string' || !UUID.test(body.userCardId))) return 'userCardId must be a card id or null';
+  if (!calendarDate(body.statementFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(body.statementFrom)
+      || !calendarDate(body.statementTo) || !/^\d{4}-\d{2}-\d{2}$/.test(body.statementTo)
+      || body.statementFrom > body.statementTo) return 'Choose a valid statement date range';
+  if (!SOURCES.has(body.importSource ?? 'statement')) return 'Unsupported import source';
+  if (body.closingBalanceInr != null && !money(body.closingBalanceInr, { signed: true })) return 'closingBalanceInr is invalid';
+  if (body.pointsPosted != null && (typeof body.pointsPosted !== 'number' || !Number.isFinite(body.pointsPosted))) return 'pointsPosted is invalid';
+  if (body.issuerFormatId != null && (typeof body.issuerFormatId !== 'string' || body.issuerFormatId.length > 100)) return 'issuerFormatId is invalid';
+  if (body.transactions === undefined) {
+    if (!body.userCardId) return 'A card is required for a legacy summary-only import';
+    for (const name of ['txnCount', 'reconciledCount']) {
+      if (body[name] != null && (!Number.isInteger(body[name]) || body[name] < 0)) return `${name} must be a nonnegative integer`;
+    }
+    return null;
+  }
+  if (!Array.isArray(body.transactions) || body.transactions.length < 1 || body.transactions.length > 5000) return 'Choose between 1 and 5000 transactions per batch';
+  if (typeof body.importKey !== 'string' || !HASH.test(body.importKey)) return 'A SHA-256 importKey is required';
+  const keys = new Set();
+  for (const [index, row] of body.transactions.entries()) {
+    const prefix = `transactions[${index}]`;
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return `${prefix} must be an object`;
+    if (!money(row.amountInr) || row.amountInr <= 0) return `${prefix}.amountInr must be positive INR with at most two decimals`;
+    if (!timestamp(row.occurredAt)) return `${prefix}.occurredAt must be a valid ISO timestamp with timezone`;
+    // The app's date range is in the device's accounting timezone. Allow the
+    // full UTC-offset envelope rather than shifting date-only purchases a day.
+    const time = Date.parse(row.occurredAt);
+    if (time < Date.parse(body.statementFrom) - 14 * 3600000 || time >= Date.parse(body.statementTo) + 38 * 3600000) return `${prefix} falls outside the statement period`;
+    if (row.merchantName != null && (typeof row.merchantName !== 'string' || !row.merchantName.trim() || row.merchantName.length > 500)) return `${prefix}.merchantName is invalid`;
+    if (row.bankReference != null && (typeof row.bankReference !== 'string' || !/^[a-z0-9-]{6,40}$/i.test(row.bankReference))) return `${prefix}.bankReference is invalid`;
+    if (row.sourceAccount != null && (typeof row.sourceAccount !== 'string' || row.sourceAccount.length > 200)) return `${prefix}.sourceAccount is invalid`;
+    if (row.rail != null && !RAILS.has(row.rail)) return `${prefix}.rail is invalid`;
+    if (row.importRowKey !== undefined) {
+      if (typeof row.importRowKey !== 'string' || !HASH.test(row.importRowKey)) return `${prefix}.importRowKey must be a SHA-256 digest`;
+      if (keys.has(row.importRowKey)) return 'A source row is repeated inside this batch';
+      keys.add(row.importRowKey);
+    }
+  }
+  return null;
+}
+
+function createStatementImportHandler({ withUserClient, importResolvers, clientMutationSourceKey, insertTransactionAndUpdateState, logger = console }) {
+  return async (req, res) => {
+  const {
+    userCardId,
+    statementFrom,
+    statementTo,
+    closingBalanceInr,
+    pointsPosted,
+    txnCount,
+    reconciledCount,
+    issuerFormatId,
+    importSource = 'statement',
+    importKey,
+    transactions: structuredTransactions,
+  } = req.body || {};
+  const validationError = validateStatementImport(req.body);
+  if (validationError) return res.status(400).json({ error: validationError });
+
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const transactionSource = importSource === 'statement' ? 'statement' : 'imported';
+      let instrument = 'other';
+      if (userCardId) {
+        const card = await client.query(
+          `SELECT cp.card_type FROM user_cards uc
+             JOIN card_products cp ON cp.id = uc.card_product_id
+            WHERE uc.id = $1 AND uc.profile_id = $2 AND uc.is_archived = false`,
+          [userCardId, req.userId]
+        );
+        if (!card.rows.length) return { status: 404, error: 'user_card not found' };
+        instrument = card.rows[0].card_type === 'credit' ? 'credit_card' : card.rows[0].card_type === 'debit' ? 'debit_card' : 'other';
+      }
+      const statementSourceKey = importKey
+        ? clientMutationSourceKey(req.userId, 'statement', importKey)
+        : null;
+      const insertedImport = await client.query(
+        `INSERT INTO statement_imports
+           (profile_id, user_card_id, statement_from, statement_to, closing_balance_inr,
+            points_posted, txn_count, reconciled_count, issuer_format_id, source_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
+         RETURNING *`,
+        [
+          req.userId,
+          userCardId,
+          statementFrom,
+          statementTo,
+          closingBalanceInr ?? null,
+          pointsPosted ?? null,
+          structuredTransactions?.length ?? (txnCount ?? 0),
+          structuredTransactions ? 0 : (reconciledCount ?? 0),
+          issuerFormatId ?? null,
+          statementSourceKey,
+        ]
+      );
+
+      if (insertedImport.rowCount === 0) {
+        const existing = await client.query(
+          `SELECT * FROM statement_imports WHERE profile_id = $1 AND source_key = $2`,
+          [req.userId, statementSourceKey]
+        );
+        return {
+          status: 200,
+          statementImport: existing.rows[0],
+          duplicate: true,
+          summary: { imported: 0, pendingDuplicates: 0, exactRetries: structuredTransactions?.length ?? 0 },
+        };
+      }
+
+      const statementImport = insertedImport.rows[0];
+      let imported = 0;
+      let pendingDuplicates = 0;
+      let exactRetries = 0;
+      let reconciled = 0;
+      for (const [index, transaction] of (structuredTransactions || []).entries()) {
+        const occurred = new Date(transaction.occurredAt);
+        const merchantName = transaction.merchantName?.trim() || null;
+        const categoryId = await importResolvers.resolveCategoryForImport(client, req.userId, {
+          merchantName,
+        });
+        const sourceKey = clientMutationSourceKey(
+          req.userId,
+          transactionSource,
+          transaction.importRowKey || `${importKey}:${index}`,
+        );
+        const outcome = await insertTransactionAndUpdateState(client, req.userId, {
+          userCardId,
+          instrument,
+          amount: Number(transaction.amountInr),
+          occurred,
+          categoryId,
+          rail: transaction.rail || 'unknown',
+          merchantName,
+          source: transactionSource,
+          sourceKey,
+          backfill: true,
+          accountLast4: /(?:^|\s)(\d{4})$/.exec(transaction.sourceAccount || '')?.[1],
+          observationMetadata: { bankReference: transaction.bankReference || null, statementImportId: statementImport.id, line: index, importSource, sourceAccount: maskAccount(transaction.sourceAccount) },
+        });
+        if (outcome.status !== 200 && outcome.status !== 201) {
+          throw new Error(`statement transaction ${index} failed: ${outcome.error || outcome.status}`);
+        }
+        if (['exact_retry', 'high_confidence'].includes(outcome.duplicateKind)) {
+          exactRetries += 1;
+          if (outcome.transaction?.status === 'active') reconciled += 1;
+        }
+        else {
+          if (outcome.duplicatePending) pendingDuplicates += 1;
+          else { imported += 1; reconciled += 1; }
+          await client.query(
+            `UPDATE transactions
+                SET statement_import_id = $1,
+                    reward_state = CASE WHEN status = 'active' THEN 'confirmed' ELSE reward_state END,
+                    reconciled_at = CASE WHEN status = 'active' THEN now() ELSE reconciled_at END
+              WHERE id = $2`,
+            [statementImport.id, outcome.transaction.id]
+          );
+        }
+      }
+
+      const updatedImport = await client.query(
+        `UPDATE statement_imports
+            SET txn_count = $1, reconciled_count = $2
+          WHERE id = $3
+          RETURNING *`,
+        [structuredTransactions?.length ?? (txnCount ?? 0), structuredTransactions ? reconciled : (reconciledCount ?? 0), statementImport.id]
+      );
+      return {
+        status: 201,
+        statementImport: updatedImport.rows[0],
+        summary: { imported, pendingDuplicates, exactRetries },
+      };
+    });
+    res.status(result.status).json(result);
+  } catch (err) {
+    logger.error('POST /statement-imports error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+  };
+}
+
+module.exports = { validateStatementImport, createStatementImportHandler, maskAccount };

@@ -145,6 +145,7 @@ class _VerticalInsightSection extends StatelessWidget {
 /// relationship explicit while leaving each tab free to render its own
 /// capability rows underneath.
 class CardCapabilitySection extends StatelessWidget {
+  final bool inline;
   final String cardName;
   final CardProduct product;
   final String capabilityLabel;
@@ -153,6 +154,7 @@ class CardCapabilitySection extends StatelessWidget {
 
   const CardCapabilitySection({
     super.key,
+    this.inline = false,
     required this.cardName,
     required this.product,
     required this.capabilityLabel,
@@ -162,6 +164,12 @@ class CardCapabilitySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (inline) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      );
+    }
     return CardSummaryPanel(
       margin: const EdgeInsets.only(bottom: AppSpace.md),
       padding: EdgeInsets.zero,

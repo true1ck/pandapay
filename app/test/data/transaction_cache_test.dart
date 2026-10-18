@@ -8,6 +8,7 @@ import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/activity_screen.dart';
+import 'package:pandapay/features/insights/payments_due_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 class _AuthFailingRepository implements UserCardsRepository {
@@ -45,6 +46,46 @@ class _EmptyRepository implements UserCardsRepository {
 }
 
 void main() {
+  test(
+    'Payments due renders saved dates with a synced empty history after 401',
+    () async {
+      final database = openInMemoryForTesting();
+      addTearDown(database.close);
+      final cache = ResponseCache(database);
+      final card = UserCard.fromJson({
+        'id': 'card-1',
+        'card_product_id': 'product-1',
+        'card_name': 'Saved card',
+        'is_default': false,
+        'due_day': 20,
+        'statement_day': 5,
+      });
+      final container = ProviderContainer(
+        overrides: [
+          accessTokenProvider.overrideWith((ref) => 'test-token'),
+          responseCacheProvider.overrideWith((ref) async => cache),
+          userCardsRepositoryProvider.overrideWithValue(
+            _AuthFailingRepository(),
+          ),
+          myCardsProvider.overrideWith((ref) async => [card]),
+        ],
+      );
+      addTearDown(container.dispose);
+      final namespace = container.read(cacheNamespaceProvider);
+      await cache.put(
+        '$namespace:transactions:all',
+        jsonEncode({'transactions': const []}),
+      );
+      await container.read(transactionsProvider.future);
+      await container.read(myCardsProvider.future);
+      final due = await container
+          .read(paymentsDueProvider.future)
+          .timeout(const Duration(seconds: 10));
+      expect(due.single.card.id, 'card-1');
+      expect(due.single.loggedThisCycle, const Money.zero());
+    },
+  );
+
   test(
     'Activity keeps the all-transactions snapshot after a transient auth failure',
     () async {
@@ -129,33 +170,86 @@ void main() {
     },
   );
 
+  test('auth failure preserves a successfully synced empty history', () async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final cache = ResponseCache(database);
+    final container = ProviderContainer(
+      overrides: [
+        accessTokenProvider.overrideWith((ref) => 'test-token'),
+        responseCacheProvider.overrideWith((ref) async => cache),
+        userCardsRepositoryProvider.overrideWithValue(_AuthFailingRepository()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final namespace = container.read(cacheNamespaceProvider);
+    await cache.put(
+      '$namespace:transactions:all',
+      jsonEncode({'transactions': const []}),
+    );
+
+    expect(await container.read(activityTransactionsProvider.future), isEmpty);
+  });
+
+  test('auth failure without a snapshot remains unavailable', () async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final container = ProviderContainer(
+      overrides: [
+        accessTokenProvider.overrideWith((ref) => 'test-token'),
+        responseCacheProvider.overrideWith(
+          (ref) async => ResponseCache(database),
+        ),
+        userCardsRepositoryProvider.overrideWithValue(_AuthFailingRepository()),
+      ],
+    );
+    addTearDown(container.dispose);
+    await expectLater(
+      container.read(transactionsProvider.future),
+      throwsA(isA<AuthenticationUnavailableException>()),
+    );
+  });
+
   test(
-    'auth failure with no transaction rows is not an empty history',
+    'filtered screens recover report rows and apply their date range',
     () async {
       final database = openInMemoryForTesting();
       addTearDown(database.close);
       final cache = ResponseCache(database);
+      final loader = FutureProvider<List<TransactionEntry>>(
+        (ref) => loadTransactionsWithOfflineCache(
+          ref,
+          repo: _AuthFailingRepository(),
+          cacheKey: 'transactions:payments_due',
+          from: DateTime(2026, 10, 1),
+        ),
+      );
       final container = ProviderContainer(
         overrides: [
           accessTokenProvider.overrideWith((ref) => 'test-token'),
           responseCacheProvider.overrideWith((ref) async => cache),
-          userCardsRepositoryProvider.overrideWithValue(
-            _AuthFailingRepository(),
-          ),
         ],
       );
       addTearDown(container.dispose);
-
       final namespace = container.read(cacheNamespaceProvider);
       await cache.put(
-        '$namespace:transactions:all',
-        jsonEncode({'transactions': const []}),
+        '$namespace:spend_detail:month:2026-10',
+        jsonEncode({
+          'transactions': [
+            for (final month in [9, 10])
+              TransactionEntry(
+                id: 'row-$month',
+                amount: Money.fromRupees(100),
+                occurredAt: DateTime(2026, month, 15),
+                source: 'sms',
+                status: 'active',
+              ).toJson(),
+          ],
+        }),
       );
-
-      await expectLater(
-        container.read(activityTransactionsProvider.future),
-        throwsA(isA<AuthenticationUnavailableException>()),
-      );
+      final rows = await container.read(loader.future);
+      expect(rows.map((row) => row.id), ['row-10']);
     },
   );
 
@@ -197,37 +291,46 @@ void main() {
     expect(rows.single.id, 'spending-row-1');
   });
 
-  test('Activity combines older history with newer Spending rows offline', () async {
-    final database = openInMemoryForTesting();
-    addTearDown(database.close);
-    final cache = ResponseCache(database);
-    final container = ProviderContainer(
-      overrides: [
-        accessTokenProvider.overrideWith((ref) => 'test-token'),
-        responseCacheProvider.overrideWith((ref) async => cache),
-        userCardsRepositoryProvider.overrideWithValue(_AuthFailingRepository()),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'Activity combines older history with newer Spending rows offline',
+    () async {
+      final database = openInMemoryForTesting();
+      addTearDown(database.close);
+      final cache = ResponseCache(database);
+      final container = ProviderContainer(
+        overrides: [
+          accessTokenProvider.overrideWith((ref) => 'test-token'),
+          responseCacheProvider.overrideWith((ref) async => cache),
+          userCardsRepositoryProvider.overrideWithValue(
+            _AuthFailingRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final namespace = container.read(cacheNamespaceProvider);
-    TransactionEntry row(String id, int day) => TransactionEntry(
-      id: id,
-      amount: Money.fromRupees(100),
-      occurredAt: DateTime(2026, 10, day),
-      source: 'sms',
-      status: 'active',
-    );
-    await cache.put(
-      '$namespace:transactions:all',
-      jsonEncode({'transactions': [row('old', 16).toJson()]}),
-    );
-    await cache.put(
-      '$namespace:spend_detail:month:2026-10',
-      jsonEncode({'transactions': [row('new', 17).toJson()]}),
-    );
+      final namespace = container.read(cacheNamespaceProvider);
+      TransactionEntry row(String id, int day) => TransactionEntry(
+        id: id,
+        amount: Money.fromRupees(100),
+        occurredAt: DateTime(2026, 10, day),
+        source: 'sms',
+        status: 'active',
+      );
+      await cache.put(
+        '$namespace:transactions:all',
+        jsonEncode({
+          'transactions': [row('old', 16).toJson()],
+        }),
+      );
+      await cache.put(
+        '$namespace:spend_detail:month:2026-10',
+        jsonEncode({
+          'transactions': [row('new', 17).toJson()],
+        }),
+      );
 
-    final rows = await container.read(activityTransactionsProvider.future);
-    expect(rows.map((row) => row.id).toSet(), {'old', 'new'});
-  });
+      final rows = await container.read(activityTransactionsProvider.future);
+      expect(rows.map((row) => row.id).toSet(), {'old', 'new'});
+    },
+  );
 }

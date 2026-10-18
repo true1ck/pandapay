@@ -264,7 +264,8 @@ async function syncDueDayFromSms(client, userId, { body, patternIssuerId }) {
  * invent a specific category.
  */
 async function resolveCategoryForImport(client, userId, { merchantName, vpa, mcc, messageText }) {
-  const normalized = normalizeMerchant(merchantName);
+  const merchantKey = normalizeMerchant(merchantName);
+  const normalized = ['unknown', 'unknownmerchant', 'other', 'na', 'notavailable'].includes(merchantKey) ? '' : merchantKey;
 
   // 1. Verified VPA record.
   if (vpa) {

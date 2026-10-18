@@ -14,13 +14,26 @@ class StatementTransactionInput {
   final DateTime occurredAt;
   final Money amount;
   final String merchantName;
+  final String? importRowKey;
+  final String? sourceAccount;
+  final String? bankReference;
 
-  const StatementTransactionInput({required this.occurredAt, required this.amount, required this.merchantName});
+  const StatementTransactionInput({
+    required this.occurredAt,
+    required this.amount,
+    required this.merchantName,
+    this.importRowKey,
+    this.sourceAccount,
+    this.bankReference,
+  });
 
   Map<String, dynamic> toJson() => {
     'occurredAt': occurredAt.toUtc().toIso8601String(),
     'amountInr': amount.rupees,
     'merchantName': merchantName,
+    if (importRowKey != null) 'importRowKey': importRowKey,
+    if (sourceAccount != null) 'sourceAccount': sourceAccount,
+    if (bankReference != null) 'bankReference': bankReference,
   };
 }
 
@@ -34,8 +47,11 @@ class ImportRepository {
   final String accessToken;
   final http.Client _client;
 
-  ImportRepository({required this.apiBaseUrl, required this.accessToken, http.Client? client})
-    : _client = client ?? http.Client();
+  ImportRepository({
+    required this.apiBaseUrl,
+    required this.accessToken,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer $accessToken',
@@ -45,22 +61,36 @@ class ImportRepository {
   // ---- F3 Email Forwarding -------------------------------------------------
 
   Future<ForwardingAddress?> fetchForwardingAddress() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/forwarding-addresses/me'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/forwarding-addresses/me'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /forwarding-addresses/me failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /forwarding-addresses/me failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final row = body['forwardingAddress'];
-    return row == null ? null : ForwardingAddress.fromJson(row as Map<String, dynamic>);
+    return row == null
+        ? null
+        : ForwardingAddress.fromJson(row as Map<String, dynamic>);
   }
 
   Future<ForwardingAddress> issueForwardingAddress() async {
-    final response = await _client.post(Uri.parse('$apiBaseUrl/forwarding-addresses'), headers: _headers);
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/forwarding-addresses'),
+      headers: _headers,
+    );
     if (response.statusCode != 201) {
-      throw ApiException('POST /forwarding-addresses failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /forwarding-addresses failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return ForwardingAddress.fromJson(body['forwardingAddress'] as Map<String, dynamic>);
+    return ForwardingAddress.fromJson(
+      body['forwardingAddress'] as Map<String, dynamic>,
+    );
   }
 
   /// Task F-8: the confirmation code Gmail (or the link Outlook/Yahoo) sends
@@ -80,7 +110,9 @@ class ImportRepository {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final row = body['verification'];
-    return row == null ? null : ForwardingVerification.fromJson(row as Map<String, dynamic>);
+    return row == null
+        ? null
+        : ForwardingVerification.fromJson(row as Map<String, dynamic>);
   }
 
   /// GET /inbound-emails/me — real data as of the email-ingestion webhook
@@ -90,12 +122,20 @@ class ImportRepository {
   /// not something this app does at runtime) — an honest empty state, not
   /// a fake one.
   Future<List<InboundEmail>> fetchInboundEmails() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/inbound-emails/me'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/inbound-emails/me'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /inbound-emails/me failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /inbound-emails/me failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['inboundEmails'] as List).cast<Map<String, dynamic>>().map(InboundEmail.fromJson).toList();
+    return (body['inboundEmails'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(InboundEmail.fromJson)
+        .toList();
   }
 
   Future<void> createTransactionFromInboundEmail({
@@ -105,7 +145,9 @@ class ImportRepository {
     String? rail,
   }) async {
     final response = await _client.post(
-      Uri.parse('$apiBaseUrl/inbound-emails/$inboundEmailId/create-transaction'),
+      Uri.parse(
+        '$apiBaseUrl/inbound-emails/$inboundEmailId/create-transaction',
+      ),
       headers: _headers,
       body: jsonEncode({
         'userCardId': userCardId,
@@ -123,9 +165,14 @@ class ImportRepository {
   // ---- F2 Statement PDF Import ----------------------------------------------
 
   Future<List<StatementImport>> fetchStatementImports() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/statement-imports'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/statement-imports'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /statement-imports failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /statement-imports failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['statementImports'] as List)
@@ -135,7 +182,7 @@ class ImportRepository {
   }
 
   Future<StatementImport> confirmStatementImport({
-    required String userCardId,
+    required String? userCardId,
     required DateTime statementFrom,
     required DateTime statementTo,
     Money? closingBalance,
@@ -147,36 +194,59 @@ class ImportRepository {
     required String importKey,
     required List<StatementTransactionInput> transactions,
   }) async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/statement-imports'),
-      headers: _headers,
-      body: jsonEncode({
-        'userCardId': userCardId,
-        'statementFrom': _dateOnly(statementFrom),
-        'statementTo': _dateOnly(statementTo),
-        if (closingBalance != null) 'closingBalanceInr': closingBalance.rupees,
-        'pointsPosted': ?pointsPosted,
-        'txnCount': txnCount,
-        'reconciledCount': reconciledCount,
-        'issuerFormatId': ?issuerFormatId,
-        'importSource': importSource,
-        'importKey': importKey,
-        'transactions': [for (final transaction in transactions) transaction.toJson()],
-      }),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/statement-imports'),
+          headers: _headers,
+          body: jsonEncode({
+            'userCardId': userCardId,
+            'statementFrom': _dateOnly(statementFrom),
+            'statementTo': _dateOnly(statementTo),
+            if (closingBalance != null)
+              'closingBalanceInr': closingBalance.rupees,
+            'pointsPosted': ?pointsPosted,
+            'txnCount': txnCount,
+            'reconciledCount': reconciledCount,
+            'issuerFormatId': ?issuerFormatId,
+            'importSource': importSource,
+            'importKey': importKey,
+            'transactions': [
+              for (final transaction in transactions) transaction.toJson(),
+            ],
+          }),
+        )
+        .timeout(
+          const Duration(seconds: 60),
+          onTimeout: () => throw ApiException(
+            'POST /statement-imports timed out',
+            userMessage:
+                'The import response timed out. Retry to continue without duplicating rows.',
+          ),
+        );
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw ApiException('POST /statement-imports failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /statement-imports failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return StatementImport.fromJson(body['statementImport'] as Map<String, dynamic>);
+    return StatementImport.fromJson({
+      ...body['statementImport'] as Map<String, dynamic>,
+      'summary': body['summary'],
+      'duplicate': body['duplicate'],
+    });
   }
 
   // ---- F4 SMS backup-file import --------------------------------------------
 
   Future<List<SmsImportBatch>> fetchSmsImportBatches() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/sms-import-batches'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/sms-import-batches'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /sms-import-batches failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /sms-import-batches failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return (body['smsImportBatches'] as List)
@@ -200,20 +270,31 @@ class ImportRepository {
       }),
     );
     if (response.statusCode != 201) {
-      throw ApiException('POST /sms-import-batches failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /sms-import-batches failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return SmsImportBatch.fromJson(body['smsImportBatch'] as Map<String, dynamic>);
+    return SmsImportBatch.fromJson(
+      body['smsImportBatch'] as Map<String, dynamic>,
+    );
   }
 
   // ---- F5 Sync & Backup (status only — see GET /backup-status doc-comment) --
 
   Future<BackupStatus> fetchBackupStatus() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/backup-status'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/backup-status'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /backup-status failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /backup-status failed: ${response.statusCode} ${response.body}',
+      );
     }
-    return BackupStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return BackupStatus.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   /// Removed, not renamed: there is no longer anything for it to trigger.
@@ -241,11 +322,18 @@ class ImportRepository {
   /// (Dart doesn't allow naming positional record fields in a type
   /// signature, only via `({...})` named records) — callers destructure it
   /// positionally, e.g. `final (body, filename, mime) = await ...`.
-  Future<(String, String, String)> fetchExport({required String scope, required String format}) async {
-    final uri = Uri.parse('$apiBaseUrl/export').replace(queryParameters: {'scope': scope, 'format': format});
+  Future<(String, String, String)> fetchExport({
+    required String scope,
+    required String format,
+  }) async {
+    final uri = Uri.parse(
+      '$apiBaseUrl/export',
+    ).replace(queryParameters: {'scope': scope, 'format': format});
     final response = await _client.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw ApiException('GET /export failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /export failed: ${response.statusCode} ${response.body}',
+      );
     }
     final mime = format == 'csv' ? 'text/csv' : 'application/json';
     return (response.body, 'pandapay-export-$scope.$format', mime);
@@ -254,13 +342,20 @@ class ImportRepository {
   // ---- F7 IMAP Connection -----------------------------------------------------
 
   Future<ImapConnection?> fetchImapConnection() async {
-    final response = await _client.get(Uri.parse('$apiBaseUrl/imap-connections/me'), headers: _headers);
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/imap-connections/me'),
+      headers: _headers,
+    );
     if (response.statusCode != 200) {
-      throw ApiException('GET /imap-connections/me failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /imap-connections/me failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final row = body['imapConnection'];
-    return row == null ? null : ImapConnection.fromJson(row as Map<String, dynamic>);
+    return row == null
+        ? null
+        : ImapConnection.fromJson(row as Map<String, dynamic>);
   }
 
   Future<ImapConnection> saveImapConnection({
@@ -278,14 +373,19 @@ class ImportRepository {
         'appPassword': appPassword,
         'imapHost': imapHost,
         'imapPort': imapPort,
-        if (senderFilter != null && senderFilter.isNotEmpty) 'senderFilter': senderFilter,
+        if (senderFilter != null && senderFilter.isNotEmpty)
+          'senderFilter': senderFilter,
       }),
     );
     if (response.statusCode != 201) {
-      throw ApiException('POST /imap-connections failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /imap-connections failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return ImapConnection.fromJson(body['imapConnection'] as Map<String, dynamic>);
+    return ImapConnection.fromJson(
+      body['imapConnection'] as Map<String, dynamic>,
+    );
   }
 
   Future<ImapTestResult> testImapConnection(String id) async {
@@ -294,13 +394,17 @@ class ImportRepository {
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw ApiException('POST /imap-connections/:id/test failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'POST /imap-connections/:id/test failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return ImapTestResult(
       ok: body['ok'] as bool? ?? false,
       reason: body['reason'] as String?,
-      connection: ImapConnection.fromJson(body['connection'] as Map<String, dynamic>),
+      connection: ImapConnection.fromJson(
+        body['connection'] as Map<String, dynamic>,
+      ),
     );
   }
 
@@ -331,14 +435,19 @@ class ForwardingAddress {
 
   String get fullAddress => '$localPart@in.pandapay.app';
 
-  factory ForwardingAddress.fromJson(Map<String, dynamic> json) => ForwardingAddress(
-    id: json['id'] as String,
-    localPart: json['local_part'] as String,
-    isActive: json['is_active'] as bool? ?? true,
-    verifiedAt: json['verified_at'] == null ? null : DateTime.parse(json['verified_at'] as String),
-    firstEmailAt: json['first_email_at'] == null ? null : DateTime.parse(json['first_email_at'] as String),
-    emailCount: (json['email_count'] as num?)?.toInt() ?? 0,
-  );
+  factory ForwardingAddress.fromJson(Map<String, dynamic> json) =>
+      ForwardingAddress(
+        id: json['id'] as String,
+        localPart: json['local_part'] as String,
+        isActive: json['is_active'] as bool? ?? true,
+        verifiedAt: json['verified_at'] == null
+            ? null
+            : DateTime.parse(json['verified_at'] as String),
+        firstEmailAt: json['first_email_at'] == null
+            ? null
+            : DateTime.parse(json['first_email_at'] as String),
+        emailCount: (json['email_count'] as num?)?.toInt() ?? 0,
+      );
 }
 
 /// Task F-8. Either [code] (Gmail) or [link] (Outlook/Yahoo) is non-null —
@@ -356,12 +465,13 @@ class ForwardingVerification {
     required this.receivedAt,
   });
 
-  factory ForwardingVerification.fromJson(Map<String, dynamic> json) => ForwardingVerification(
-    provider: json['provider'] as String? ?? 'gmail',
-    code: json['code'] as String?,
-    link: json['link'] as String?,
-    receivedAt: DateTime.parse(json['receivedAt'] as String),
-  );
+  factory ForwardingVerification.fromJson(Map<String, dynamic> json) =>
+      ForwardingVerification(
+        provider: json['provider'] as String? ?? 'gmail',
+        code: json['code'] as String?,
+        link: json['link'] as String?,
+        receivedAt: DateTime.parse(json['receivedAt'] as String),
+      );
 }
 
 class InboundEmail {
@@ -397,7 +507,7 @@ class InboundEmail {
 /// F2.
 class StatementImport {
   final String id;
-  final String userCardId;
+  final String? userCardId;
   final DateTime statementFrom;
   final DateTime statementTo;
   final Money? closingBalance;
@@ -405,6 +515,9 @@ class StatementImport {
   final int txnCount;
   final int reconciledCount;
   final DateTime importedAt;
+  final int addedCount;
+  final int pendingDuplicateCount;
+  final int exactRetryCount;
 
   const StatementImport({
     required this.id,
@@ -416,11 +529,21 @@ class StatementImport {
     required this.txnCount,
     required this.reconciledCount,
     required this.importedAt,
+    this.addedCount = 0,
+    this.pendingDuplicateCount = 0,
+    this.exactRetryCount = 0,
   });
 
-  factory StatementImport.fromJson(Map<String, dynamic> json) => StatementImport(
+  factory StatementImport.fromJson(
+    Map<String, dynamic> json,
+  ) => StatementImport(
+    addedCount: ((json['summary'] as Map?)?['imported'] as num?)?.toInt() ?? 0,
+    pendingDuplicateCount:
+        ((json['summary'] as Map?)?['pendingDuplicates'] as num?)?.toInt() ?? 0,
+    exactRetryCount:
+        ((json['summary'] as Map?)?['exactRetries'] as num?)?.toInt() ?? 0,
     id: json['id'] as String,
-    userCardId: json['user_card_id'] as String,
+    userCardId: json['user_card_id'] as String?,
     statementFrom: DateTime.parse(json['statement_from'] as String),
     statementTo: DateTime.parse(json['statement_to'] as String),
     closingBalance: _numOrNull(json['closing_balance_inr']) == null
@@ -479,9 +602,13 @@ class BackupStatus {
     final backup = json['latestBackup'] as Map<String, dynamic>?;
     final drill = json['latestRestoreDrill'] as Map<String, dynamic>?;
     return BackupStatus(
-      latestBackupRanAt: backup?['ran_at'] == null ? null : DateTime.parse(backup!['ran_at'] as String),
+      latestBackupRanAt: backup?['ran_at'] == null
+          ? null
+          : DateTime.parse(backup!['ran_at'] as String),
       latestBackupStatus: backup?['status'] as String?,
-      latestRestoreDrillRanAt: drill?['ran_at'] == null ? null : DateTime.parse(drill!['ran_at'] as String),
+      latestRestoreDrillRanAt: drill?['ran_at'] == null
+          ? null
+          : DateTime.parse(drill!['ran_at'] as String),
       latestRestoreDrillOk: drill?['restored_ok'] as bool?,
       conflicts: (json['conflicts'] as List? ?? const [])
           .cast<Map<String, dynamic>>()
@@ -573,8 +700,12 @@ class ImapConnection {
     imapPort: (json['imap_port'] as num?)?.toInt() ?? 993,
     senderFilter: json['sender_filter'] as String?,
     isActive: json['is_active'] as bool? ?? true,
-    verifiedAt: json['verified_at'] == null ? null : DateTime.parse(json['verified_at'] as String),
-    lastPollAt: json['last_poll_at'] == null ? null : DateTime.parse(json['last_poll_at'] as String),
+    verifiedAt: json['verified_at'] == null
+        ? null
+        : DateTime.parse(json['verified_at'] as String),
+    lastPollAt: json['last_poll_at'] == null
+        ? null
+        : DateTime.parse(json['last_poll_at'] as String),
     lastPollStatus: json['last_poll_status'] as String?,
   );
 }
@@ -583,5 +714,9 @@ class ImapTestResult {
   final bool ok;
   final String? reason;
   final ImapConnection connection;
-  const ImapTestResult({required this.ok, this.reason, required this.connection});
+  const ImapTestResult({
+    required this.ok,
+    this.reason,
+    required this.connection,
+  });
 }

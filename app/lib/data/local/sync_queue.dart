@@ -19,7 +19,23 @@ import 'app_database.dart';
 /// which is also the only value that is true.
 class SyncQueue {
   final AppDatabase _appDb;
-  SyncQueue(this._appDb);
+  final String namespace;
+  final void Function()? onChanged;
+  SyncQueue(this._appDb, {this.namespace = 'legacy', this.onChanged}) {
+    final columns = _appDb.db.select('PRAGMA table_info(sync_pending_changes)');
+    if (!columns.any((c) => c['name'] == 'namespace')) {
+      _appDb.db.execute(
+        "ALTER TABLE sync_pending_changes ADD COLUMN namespace TEXT NOT NULL DEFAULT 'legacy'",
+      );
+    }
+    _appDb.db.execute('''CREATE TABLE IF NOT EXISTS account_sync_state (
+      namespace TEXT PRIMARY KEY, device_id TEXT, last_server_seq INTEGER NOT NULL DEFAULT 0,
+      last_synced_at INTEGER)''');
+    _appDb.db.execute(
+      'UPDATE sync_pending_changes SET in_flight=0 WHERE namespace=?',
+      [namespace],
+    );
+  }
 
   /// Records a local edit.
   ///
@@ -38,16 +54,17 @@ class SyncQueue {
 
     final existing = _appDb.db.select(
       "SELECT client_seq, payload_json, field_clocks_json FROM sync_pending_changes "
-      "WHERE entity = ? AND entity_id = ? AND op = 'update' ORDER BY client_seq LIMIT 1",
-      [entity, entityId],
+      "WHERE namespace = ? AND entity = ? AND entity_id = ? AND op = 'update' AND in_flight=0 ORDER BY client_seq LIMIT 1",
+      [namespace, entity, entityId],
     );
 
     if (existing.isEmpty) {
       _appDb.db.execute(
         'INSERT INTO sync_pending_changes '
-        '(entity, entity_id, op, payload_json, field_clocks_json, created_at) '
-        "VALUES (?, ?, 'update', ?, ?, ?)",
+        '(namespace, entity, entity_id, op, payload_json, field_clocks_json, created_at) '
+        "VALUES (?, ?, ?, 'update', ?, ?, ?)",
         [
+          namespace,
           entity,
           entityId,
           jsonEncode(fields),
@@ -55,6 +72,7 @@ class SyncQueue {
           clockMs,
         ],
       );
+      onChanged?.call();
       return;
     }
 
@@ -71,9 +89,10 @@ class SyncQueue {
     )..addAll({for (final k in fields.keys) k: clockMs});
 
     _appDb.db.execute(
-      'UPDATE sync_pending_changes SET payload_json = ?, field_clocks_json = ? WHERE client_seq = ?',
+      'UPDATE sync_pending_changes SET payload_json = ?, field_clocks_json = ?, attempts = 0, last_error = NULL WHERE client_seq = ?',
       [jsonEncode(payload), jsonEncode(clocks), row['client_seq']],
     );
+    onChanged?.call();
   }
 
   /// Records a local delete.
@@ -82,30 +101,42 @@ class SyncQueue {
   /// and then a delete of the same row wastes a round trip on a value that is
   /// about to stop existing, and on `user_cards` the delete is really an
   /// archive, so the ordering would be observable.
-  void enqueueDelete({required String entity, required String entityId, DateTime? at}) {
+  void enqueueDelete({
+    required String entity,
+    required String entityId,
+    DateTime? at,
+  }) {
     _appDb.db.execute(
-      'DELETE FROM sync_pending_changes WHERE entity = ? AND entity_id = ?',
-      [entity, entityId],
+      'DELETE FROM sync_pending_changes WHERE namespace = ? AND entity = ? AND entity_id = ? AND in_flight=0',
+      [namespace, entity, entityId],
     );
     _appDb.db.execute(
       'INSERT INTO sync_pending_changes '
-      '(entity, entity_id, op, payload_json, field_clocks_json, created_at) '
-      "VALUES (?, ?, 'delete', '{}', '{}', ?)",
-      [entity, entityId, (at ?? DateTime.now()).millisecondsSinceEpoch],
+      '(namespace, entity, entity_id, op, payload_json, field_clocks_json, created_at) '
+      "VALUES (?, ?, ?, 'delete', '{}', '{}', ?)",
+      [
+        namespace,
+        entity,
+        entityId,
+        (at ?? DateTime.now()).millisecondsSinceEpoch,
+      ],
     );
+    onChanged?.call();
   }
 
   List<SyncChange> pending({int limit = 200}) {
     final rows = _appDb.db.select(
-      'SELECT * FROM sync_pending_changes ORDER BY client_seq LIMIT ?',
-      [limit],
+      'SELECT * FROM sync_pending_changes WHERE namespace = ? AND attempts < 5 AND in_flight=0 ORDER BY client_seq LIMIT ?',
+      [namespace, limit],
     );
     return rows.map((r) {
       return SyncChange(
         entity: r['entity'] as String,
         entityId: r['entity_id'] as String,
         op: r['op'] as String,
-        payload: Map<String, Object?>.from(jsonDecode(r['payload_json'] as String) as Map),
+        payload: Map<String, Object?>.from(
+          jsonDecode(r['payload_json'] as String) as Map,
+        ),
         fieldClocks: Map<String, int>.from(
           (jsonDecode(r['field_clocks_json'] as String) as Map).map(
             (k, v) => MapEntry(k as String, (v as num).toInt()),
@@ -117,67 +148,105 @@ class SyncQueue {
   }
 
   int get pendingCount =>
-      _appDb.db.select('SELECT COUNT(*) AS c FROM sync_pending_changes').first['c'] as int;
+      _appDb.db.select(
+            'SELECT COUNT(*) AS c FROM sync_pending_changes WHERE namespace = ?',
+            [namespace],
+          ).first['c']
+          as int;
 
   void remove(int clientSeq) {
-    _appDb.db.execute('DELETE FROM sync_pending_changes WHERE client_seq = ?', [clientSeq]);
+    _appDb.db.execute(
+      'DELETE FROM sync_pending_changes WHERE client_seq = ? AND namespace = ?',
+      [clientSeq, namespace],
+    );
+    onChanged?.call();
+  }
+
+  void claim(List<SyncChange> changes) {
+    for (final change in changes) {
+      _appDb.db.execute(
+        'UPDATE sync_pending_changes SET in_flight=1 WHERE namespace=? AND client_seq=?',
+        [namespace, change.clientSeq],
+      );
+    }
+  }
+
+  void release(List<SyncChange> changes) {
+    for (final change in changes) {
+      _appDb.db.execute(
+        'UPDATE sync_pending_changes SET in_flight=0 WHERE namespace=? AND client_seq=?',
+        [namespace, change.clientSeq],
+      );
+    }
   }
 
   /// Marks a change as having failed for a retryable reason.
   ///
-  /// After [maxAttempts] the change is dropped rather than retried forever.
-  /// That is a deliberate, uncomfortable choice: it discards a user edit. The
-  /// alternative is worse — a change the server will never accept sits at the
-  /// head of the queue and blocks every later edit from syncing, so one bad
-  /// row silently freezes the account's sync indefinitely. The error is
-  /// retained on the row until it is dropped so it can be surfaced.
+  /// After [maxAttempts] the change stays saved but leaves the automatic
+  /// retry set. Sync & backup exposes it for correction or explicit retry;
+  /// later valid edits continue syncing.
   static const maxAttempts = 5;
 
   void recordFailure(int clientSeq, String error) {
     _appDb.db.execute(
-      'UPDATE sync_pending_changes SET attempts = attempts + 1, last_error = ? WHERE client_seq = ?',
-      [error, clientSeq],
+      'UPDATE sync_pending_changes SET attempts = attempts + 1, last_error = ? WHERE client_seq = ? AND namespace = ?',
+      [error, clientSeq, namespace],
     );
-    _appDb.db.execute(
-      'DELETE FROM sync_pending_changes WHERE client_seq = ? AND attempts >= ?',
-      [clientSeq, maxAttempts],
-    );
+    onChanged?.call();
   }
 
+  void reject(int clientSeq, String error) {
+    _appDb.db.execute(
+      'UPDATE sync_pending_changes SET attempts = ?, last_error = ? WHERE client_seq = ? AND namespace = ?',
+      [maxAttempts, error, clientSeq, namespace],
+    );
+    onChanged?.call();
+  }
   // ---- Device identity and cursor -------------------------------------------
 
   String? get deviceId {
-    final rows = _appDb.db.select('SELECT device_id FROM sync_state WHERE id = 1');
+    final rows = _appDb.db.select(
+      'SELECT device_id FROM account_sync_state WHERE namespace = ?',
+      [namespace],
+    );
     return rows.isEmpty ? null : rows.first['device_id'] as String?;
   }
 
   set deviceId(String? value) {
     _appDb.db.execute(
-      'INSERT INTO sync_state (id, device_id) VALUES (1, ?) '
-      'ON CONFLICT(id) DO UPDATE SET device_id = excluded.device_id',
-      [value],
+      'INSERT INTO account_sync_state(namespace,device_id) VALUES (?,?) ON CONFLICT(namespace) DO UPDATE SET device_id=excluded.device_id',
+      [namespace, value],
     );
   }
 
   int get lastServerSeq {
-    final rows = _appDb.db.select('SELECT last_server_seq FROM sync_state WHERE id = 1');
-    return rows.isEmpty ? 0 : (rows.first['last_server_seq'] as int?) ?? 0;
+    final rows = _appDb.db.select(
+      'SELECT last_server_seq FROM account_sync_state WHERE namespace=?',
+      [namespace],
+    );
+    return rows.isEmpty ? 0 : rows.first['last_server_seq'] as int;
   }
 
   set lastServerSeq(int value) {
     _appDb.db.execute(
-      'INSERT INTO sync_state (id, last_server_seq, last_synced_at) VALUES (1, ?, ?) '
-      'ON CONFLICT(id) DO UPDATE SET last_server_seq = excluded.last_server_seq, '
-      'last_synced_at = excluded.last_synced_at',
-      [value, DateTime.now().millisecondsSinceEpoch],
+      'INSERT INTO account_sync_state(namespace,last_server_seq,last_synced_at) VALUES (?,?,?) ON CONFLICT(namespace) DO UPDATE SET last_server_seq=excluded.last_server_seq,last_synced_at=excluded.last_synced_at',
+      [namespace, value, DateTime.now().millisecondsSinceEpoch],
     );
   }
 
-  /// Called on sign-out. The queue and cursor belong to one account; carrying
-  /// them into the next sign-in on the same device would push one user's edits
-  /// under another user's token.
+  void resetCursor() {
+    _appDb.db.execute('DELETE FROM account_sync_state WHERE namespace=?', [
+      namespace,
+    ]);
+  }
+
   void clear() {
-    _appDb.db.execute('DELETE FROM sync_pending_changes');
-    _appDb.db.execute('DELETE FROM sync_state');
+    _appDb.db.execute('DELETE FROM sync_pending_changes WHERE namespace=?', [
+      namespace,
+    ]);
+    _appDb.db.execute('DELETE FROM account_sync_state WHERE namespace=?', [
+      namespace,
+    ]);
+    onChanged?.call();
   }
 }

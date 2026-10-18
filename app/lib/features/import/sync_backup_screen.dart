@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../sync/split_sync.dart';
 import '../../data/api_exception.dart';
 import '../../data/import_repository.dart';
 import '../settings/feedback_support_screen.dart';
+import '../sync/sync_engine.dart';
 
 /// ui-spec.md F5 Sync & Backup.
 ///
@@ -42,7 +44,10 @@ class SyncBackupScreen extends ConsumerWidget {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Sync & backup', style: BambooFonts.heading(17, color: BambooInk.ink900)),
+        title: Text(
+          'Sync & backup',
+          style: BambooFonts.heading(17, color: BambooInk.ink900),
+        ),
       ),
       body: AppBackground(
         child: status.when(
@@ -53,7 +58,10 @@ class SyncBackupScreen extends ConsumerWidget {
           ),
           data: (backupStatus) {
             if (backupStatus == null || repo == null) {
-              return const EmptyState(icon: Icons.cloud_off_outlined, title: 'Sign in to see backup status');
+              return const EmptyState(
+                icon: Icons.cloud_off_outlined,
+                title: 'Sign in to see backup status',
+              );
             }
             return ListView(
               padding: const EdgeInsets.all(AppSpace.lg),
@@ -71,9 +79,9 @@ class SyncBackupScreen extends ConsumerWidget {
                     // multi-device sync engine with live conflict resolution.
                     // Those are different claims and the screen was making
                     // the wrong one.
-                    'Multi-device sync (live conflict resolution across devices) isn\'t built yet. Anything you '
-                    'save while offline is queued on this phone and sent when you reconnect — that queue is '
-                    'shown below. This screen also shows real backup/restore status and any conflicts on record.',
+                    'Saved entries remain available on this phone while sync is paused. '
+                    'Pending changes are sent when you reconnect. Changes that need attention '
+                    'stay saved here so you can retry them.',
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 ),
@@ -86,6 +94,7 @@ class SyncBackupScreen extends ConsumerWidget {
                 // NOT survive losing this device — it has never reached the
                 // server, so no amount of signing in elsewhere recovers it.
                 const _PendingOutboxCard(),
+                const _PendingRecoveryCard(),
                 const SizedBox(height: AppSpace.md),
                 _StatusCard(
                   icon: Icons.backup_outlined,
@@ -120,29 +129,50 @@ class SyncBackupScreen extends ConsumerWidget {
                 Text(
                   'Backups run automatically. The times above come from real backup and '
                   'restore-test runs, not from this screen.',
-                  style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.5),
+                  style: BambooFonts.ui(
+                    12.5,
+                    color: BambooInk.ink500,
+                    height: 1.5,
+                  ),
                 ),
                 const SizedBox(height: AppSpace.xxl),
                 Text(
                   'Conflict log',
-                  style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
                 ),
                 const SizedBox(height: AppSpace.sm),
                 if (backupStatus.conflicts.isEmpty)
-                  Text('No conflicts on record.', style: BambooFonts.ui(13.5, color: BambooInk.ink500))
+                  Text(
+                    'No conflicts on record.',
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+                  )
                 else
-                  for (final c in backupStatus.conflicts) _ConflictTile(conflict: c),
+                  for (final c in backupStatus.conflicts)
+                    _ConflictTile(conflict: c),
                 const SizedBox(height: AppSpace.xxl),
                 Text(
                   'Restore',
-                  style: BambooFonts.ui(12.5, weight: FontWeight.w700, color: BambooInk.ink900),
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
                 ),
                 const SizedBox(height: AppSpace.sm),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: BambooInk.clay,
-                    side: const BorderSide(color: BambooInk.warningBorder, width: 1.5),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    side: const BorderSide(
+                      color: BambooInk.warningBorder,
+                      width: 1.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   icon: const Icon(Icons.warning_amber_rounded),
                   label: const Text('Restore from backup'),
@@ -180,8 +210,14 @@ class SyncBackupScreen extends ConsumerWidget {
           'This will overwrite data on this device with the last backup. This cannot be undone.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Continue')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Continue'),
+          ),
         ],
       ),
     );
@@ -196,9 +232,13 @@ class SyncBackupScreen extends ConsumerWidget {
           decoration: const InputDecoration(hintText: 'RESTORE'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(typed.text.trim() == 'RESTORE'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(ctx).pop(typed.text.trim() == 'RESTORE'),
             child: const Text('Restore'),
           ),
         ],
@@ -221,7 +261,11 @@ class _StatusCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String value;
-  const _StatusCard({required this.icon, required this.title, required this.value});
+  const _StatusCard({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -240,8 +284,14 @@ class _StatusCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-                Text(value, style: BambooFonts.heading(14.5, color: BambooInk.ink900)),
+                Text(
+                  title,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+                Text(
+                  value,
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
               ],
             ),
           ),
@@ -284,7 +334,9 @@ class _ConflictTile extends ConsumerWidget {
   static String _display(Object? value) {
     if (value == null) return 'empty';
     final s = value is String ? value : jsonEncode(value);
-    final unquoted = s.startsWith('"') && s.endsWith('"') ? s.substring(1, s.length - 1) : s;
+    final unquoted = s.startsWith('"') && s.endsWith('"')
+        ? s.substring(1, s.length - 1)
+        : s;
     return unquoted.isEmpty ? 'empty' : unquoted;
   }
 
@@ -306,7 +358,11 @@ class _ConflictTile extends ConsumerWidget {
           children: [
             Text(
               'Two devices changed the $label',
-              style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink900),
+              style: BambooFonts.ui(
+                13,
+                weight: FontWeight.w600,
+                color: BambooInk.ink900,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -314,7 +370,11 @@ class _ConflictTile extends ConsumerWidget {
                   ? 'Kept "${_display(conflict.chosenValue)}".'
                   : 'Kept "${_display(conflict.chosenValue)}" and discarded '
                         '"${_display(discarded)}" — the most recent edit won.',
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.45),
+              style: BambooFonts.ui(
+                12.5,
+                color: BambooInk.ink500,
+                height: 1.45,
+              ),
             ),
             if (!conflict.userAcknowledged)
               Align(
@@ -354,13 +414,89 @@ class _PendingOutboxCard extends ConsumerWidget {
     // whether anything is still stuck on this phone.
     final outbox = ref.watch(pendingOutboxCountProvider).valueOrNull ?? 0;
     final edits = ref.watch(pendingSyncCountProvider).valueOrNull ?? 0;
-    final pending = outbox + edits;
+    final splits = ref.watch(pendingSplitCountProvider).valueOrNull ?? 0;
+    final sms =
+        ref.watch(pendingRecoveryStatusProvider).valueOrNull?['sms'] ?? 0;
+    final pending = outbox + edits + splits + sms;
     return _StatusCard(
       icon: pending > 0 ? Icons.cloud_off_outlined : Icons.cloud_done_outlined,
       title: 'Waiting to sync',
       value: pending == 0
-          ? 'Nothing queued — everything you\'ve saved has reached the server'
+          ? 'No pending changes recorded on this device'
           : '$pending ${pending == 1 ? 'change' : 'changes'} saved offline, still on this phone only',
+    );
+  }
+}
+
+class _PendingRecoveryCard extends ConsumerWidget {
+  const _PendingRecoveryCard();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status =
+        ref.watch(pendingRecoveryStatusProvider).valueOrNull ??
+        const <String, int>{};
+    final legacy = status['legacy'] ?? 0;
+    final blocked = status['blocked'] ?? 0;
+    if (legacy == 0 && blocked == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (blocked > 0) ...[
+            Text(
+              '$blocked saved ${blocked == 1 ? 'change needs' : 'changes need'} attention. Your changes have been retained.',
+            ),
+            TextButton(
+              onPressed: () async {
+                final namespace = ref.read(cacheNamespaceProvider);
+                final cache = await ref.read(responseCacheProvider.future);
+                cache.financialStore.database.db.execute(
+                  'UPDATE sync_pending_changes SET attempts=0 WHERE namespace=? AND attempts>=5',
+                  [namespace],
+                );
+                await ref.read(syncEngineProvider).sync();
+                ref.invalidate(pendingRecoveryStatusProvider);
+                ref.invalidate(pendingSyncCountProvider);
+              },
+              child: const Text('Retry saved changes'),
+            ),
+          ],
+          if (legacy > 0) ...[
+            Text(
+              '$legacy older saved ${legacy == 1 ? 'item needs' : 'items need'} account confirmation before syncing.',
+            ),
+            TextButton(
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Recover older saved items?'),
+                    content: const Text(
+                      'These items were saved by an older app version without an account label. Only continue if they belong to the account you are signed into.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Keep saved'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('They belong to this account'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await recoverLegacyPendingChanges(ref);
+                  await ref.read(syncEngineProvider).sync();
+                }
+              },
+              child: const Text('Recover older saved items'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

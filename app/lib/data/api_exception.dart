@@ -72,8 +72,7 @@ class AuthenticationUnavailableException implements Exception {
   final String message;
 
   const AuthenticationUnavailableException([
-    this.message =
-        'Your session could not be refreshed. Your saved data is safe; try again when connected.',
+    this.message = 'We couldn\'t load this yet. Please try again.',
   ]);
 
   @override

@@ -5,7 +5,7 @@ import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
-import 'package:pandapay/features/insights/caps_screen.dart';
+import 'package:pandapay/features/insights/limits_and_perks_screen.dart';
 import 'package:pandapay/features/insights/insights_overview.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,6 +33,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        ownedCardsWithProductProvider.overrideWithValue(const AsyncData([])),
         catalogueRepositoryProvider.overrideWithValue(
           _FakeCatalogueRepository(const []),
         ),
@@ -183,10 +184,9 @@ void main() {
     );
     await tester.drag(scrollFinder, const Offset(0, -2000));
     await tester.pump(const Duration(milliseconds: 100));
-    final scrollableFinder = find.descendant(
-      of: scrollFinder,
-      matching: find.byType(Scrollable),
-    ).first;
+    final scrollableFinder = find
+        .descendant(of: scrollFinder, matching: find.byType(Scrollable))
+        .first;
     final before = tester
         .state<ScrollableState>(scrollableFinder)
         .position
@@ -218,8 +218,7 @@ void main() {
   testWidgets('Limits & perks opens as one vertical card-capability view', (
     tester,
   ) async {
-    // All capability groups are rendered in one vertical scroll so the user
-    // does not need to discover or swipe a hidden tab bar.
+    // The grouped route opens the card-first screen, including an empty wallet.
     await _openInsights(tester);
 
     await _reveal(tester, 'Limits & perks');
@@ -228,19 +227,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    expect(find.byType(CapsScreen), findsOneWidget);
+    expect(find.byType(LimitsAndPerksScreen), findsOneWidget);
     expect(find.byType(BackButton), findsOneWidget);
-    for (final section in const [
-      'CAPS',
-      'MILESTONES',
-      'FEE WAIVERS',
-      'LOUNGE',
-    ]) {
-      expect(
-        find.text(section),
-        findsOneWidget,
-        reason: 'the group must expose its sibling sections vertically',
-      );
-    }
+    expect(find.text('Your card benefits, together'), findsOneWidget);
   });
 }

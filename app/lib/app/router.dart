@@ -42,6 +42,7 @@ import '../features/insights/my_contributions_screen.dart';
 import '../features/insights/portfolio_audit_screen.dart';
 import '../features/insights/budgets_screen.dart';
 import '../features/insights/grouped_insight_screen.dart';
+import '../features/insights/limits_and_perks_screen.dart';
 import '../features/insights/spend_trends_screen.dart';
 import '../features/insights/subscriptions_screen.dart';
 import '../features/onboarding/add_first_card_screen.dart';
@@ -679,19 +680,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // embed unchanged and the standalone routes keep working.
       GoRoute(
         path: AppRoute.limitsAndPerks,
-        builder: (context, state) => const GroupedInsightScreen(
-          title: 'Limits & perks',
-          verticalSections: true,
-          tabs: [
-            (label: 'Caps', body: CapsScreen(embedded: true)),
-            (label: 'Milestones', body: MilestonesScreen(embedded: true)),
-            (label: 'Fee waivers', body: FeeWaiversScreen(embedded: true)),
-            // A lounge quota is the same shape as a cap — "N visits a year,
-            // M used" — so it belongs with the thresholds rather than
-            // sitting alone on the grid.
-            (label: 'Lounge', body: LoungeAccessScreen(embedded: true)),
-          ],
-        ),
+        builder: (context, state) => const LimitsAndPerksScreen(),
       ),
       GoRoute(
         path: AppRoute.rewardsGroup,

@@ -16,13 +16,13 @@ function sourceFamily(source) {
 }
 
 function normalizeMerchant(value) {
-  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 }
 
 function compareMerchants(left, right) {
   const a = normalizeMerchant(left);
   const b = normalizeMerchant(right);
-  if (!a || !b) return { kind: 'missing', score: 0.06 };
+  if (!a || !b || ['unknown', 'unknownmerchant', 'other', 'na'].includes(a) || ['unknown', 'unknownmerchant', 'other', 'na'].includes(b)) return { kind: 'missing', score: 0.06 };
   if (a === b) return { kind: 'exact', score: 0.35 };
 
   // Bank channels commonly decorate a merchant (AMAZONPAYIND vs AMAZON).
@@ -37,6 +37,15 @@ function compareMerchants(left, right) {
 function asMillis(value) {
   const result = new Date(value).getTime();
   return Number.isFinite(result) ? result : null;
+}
+
+// App-local row IDs and invoice numbers are not portable bank identities.
+function referenceOf(row) {
+  const explicit = row.bankReference ?? row.bank_reference;
+  if (explicit && /^[a-z0-9-]{6,40}$/i.test(String(explicit))) return String(explicit).toUpperCase().replace(/-/g, '');
+  const text = String(row.merchantName ?? row.merchant_name ?? '');
+  const match = /(?:UTR|RRN|UPI\s*REF(?:ERENCE)?|(?:TXN|TRANSACTION)\s*(?:ID|REF)|REF(?:ERENCE)?(?:\s*(?:NO|NUMBER|ID))?)\s*[:#.-]?\s*([A-Z0-9][A-Z0-9-]{5,39})\b/i.exec(text);
+  return match ? match[1].toUpperCase().replace(/-/g, '') : null;
 }
 
 /**
@@ -57,15 +66,23 @@ function evaluateDuplicate(incoming, candidate) {
   // exact message identity. Screenshot files can overlap without having the
   // same file hash (for example, two cropped pages), so imported rows still
   // need row-level duplicate detection within their family.
-  if (incomingSource === candidateSource && incomingSource !== 'imported') return null;
+  const incomingRef = referenceOf(incoming);
+  const candidateRef = referenceOf(candidate);
+  if (incomingRef && candidateRef && incomingRef !== candidateRef) return null;
+  const sameReference = Boolean(incomingRef && incomingRef === candidateRef);
+  if (incomingSource === candidateSource && incomingSource !== 'imported' && !sameReference) return null;
 
   const incomingInstrument = incoming.instrument || 'credit_card';
   const candidateInstrument = candidate.instrument || 'credit_card';
-  if (incomingInstrument !== candidateInstrument) return null;
+  if (incomingInstrument !== candidateInstrument && ![incomingInstrument, candidateInstrument].includes('other')) return null;
 
   const incomingCard = incoming.userCardId ?? incoming.user_card_id ?? null;
   const candidateCard = candidate.userCardId ?? candidate.user_card_id ?? null;
   if (incomingCard && candidateCard && incomingCard !== candidateCard) return null;
+
+  const leftAccount = incoming.accountLast4 ?? incoming.source_account_last4;
+  const rightAccount = candidate.accountLast4 ?? candidate.source_account_last4;
+  if (leftAccount && rightAccount && leftAccount !== rightAccount) return null;
 
   const amountDifference = Math.abs(Number(incoming.amount ?? incoming.amount_inr) - Number(candidate.amount ?? candidate.amount_inr));
   if (!Number.isFinite(amountDifference) || amountDifference > AMOUNT_TOLERANCE_INR) return null;
@@ -80,7 +97,11 @@ function evaluateDuplicate(incoming, candidate) {
     incoming.merchantName ?? incoming.merchant_name,
     candidate.merchantName ?? candidate.merchant_name,
   );
-  if (!merchants) return null;
+  if (!merchants && !sameReference) return null;
+  if (sameReference) {
+    if (amountDifference >= 0.005) return null;
+    return { score: 0.999, automatic: true, amountDifference: 0, timeDifferenceMinutes: Math.round(timeDifferenceMs / 60000), merchantMatch: merchants?.kind || 'different', sourceFamilies: [candidateSource, incomingSource], reason: 'same bank reference and exact amount; no conflicting account' };
+  }
 
   let score = amountDifference < 0.005 ? 0.24 : 0.20;
   score += merchants.score;
@@ -97,6 +118,7 @@ function evaluateDuplicate(incoming, candidate) {
   if (score < REVIEW_THRESHOLD) return null;
   return {
     score,
+    automatic: false,
     amountDifference: Number(amountDifference.toFixed(2)),
     timeDifferenceMinutes: Math.round(timeDifferenceMs / 60000),
     merchantMatch: merchants.kind,
@@ -112,13 +134,18 @@ function evaluateDuplicate(incoming, candidate) {
 }
 
 function bestDuplicate(incoming, candidates) {
-  return candidates
+  const ranked = candidates
     .map((candidate) => ({ candidate, match: evaluateDuplicate(incoming, candidate) }))
     .filter((item) => item.match)
     .sort((left, right) =>
       right.match.score - left.match.score
       || left.match.timeDifferenceMinutes - right.match.timeDifferenceMinutes
-    )[0] || null;
+    );
+  const selected = ranked[0] || null;
+  if (selected?.match.automatic && ranked.filter((item) => item.match.automatic).length > 1) {
+    selected.match = { ...selected.match, automatic: false, reason: `${selected.match.reason}; multiple possible transactions` };
+  }
+  return selected;
 }
 
 module.exports = {
@@ -126,6 +153,7 @@ module.exports = {
   MAX_TIME_DISTANCE_MS,
   REVIEW_THRESHOLD,
   sourceFamily,
+  referenceOf,
   normalizeMerchant,
   compareMerchants,
   evaluateDuplicate,

@@ -7,6 +7,11 @@ import 'package:telephony/telephony.dart';
 
 import 'sms_background_queue.dart';
 import 'sms_text_hint.dart';
+import '../../data/local/app_database.dart';
+import '../../data/local/sms_intake_repository.dart';
+import '../../data/local/financial_store.dart';
+import '../../data/local_sms_parser.dart';
+import '../../data/local/sms_import_store.dart';
 
 /// The background-isolate entry point for an SMS that arrives while the app
 /// is closed or backgrounded.
@@ -36,21 +41,28 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
   // The same cheap pre-filter the foreground path uses, applied BEFORE
   // anything is written: an OTP or a delivery notice must never be
   // persisted to disk, not even briefly.
-  if (!looksLikeTransactionSms(body)) return;
+  if (!looksLikeTransactionSms(body) || LocalSmsParser.sensitive(body)) return;
 
   try {
     final prefs = await SharedPreferences.getInstance();
     final messageTimestamp = message.date ?? message.dateSent;
-    await SmsBackgroundQueue.enqueue(
-      prefs,
-      QueuedSms(
+    await prefs.reload();
+    final namespace = prefs.getString(smsCaptureNamespaceKey) ?? 'signed-out';
+    final database = await AppDatabase.open();
+    try {
+      final queued = QueuedSms(
         sender: sender,
         body: body,
         receivedAt: messageTimestamp == null
             ? DateTime.now()
             : DateTime.fromMillisecondsSinceEpoch(messageTimestamp),
-      ),
-    );
+      );
+      final store = FinancialStore(database);
+      SmsImportStore(store).capture(namespace, queued);
+      store.dispose();
+    } finally {
+      database.close();
+    }
   } catch (_) {
     // Nothing in a background isolate can surface an error to the user, and
     // an uncaught throw here would be reported by the OS as an app crash
@@ -149,11 +161,16 @@ class SmsListenerService {
     try {
       final filter = since == null
           ? null
-          : SmsFilter.where(SmsColumn.DATE).greaterThanOrEqualTo(
-              since.millisecondsSinceEpoch.toString(),
-            );
+          : SmsFilter.where(
+              SmsColumn.DATE,
+            ).greaterThanOrEqualTo(since.millisecondsSinceEpoch.toString());
       final messages = await _telephony.getInboxSms(
-        columns: const [SmsColumn.ID, SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
+        columns: const [
+          SmsColumn.ID,
+          SmsColumn.ADDRESS,
+          SmsColumn.BODY,
+          SmsColumn.DATE,
+        ],
         filter: filter,
         sortOrder: [OrderBy(SmsColumn.DATE, sort: Sort.DESC)],
       );
@@ -199,7 +216,9 @@ class SmsListenerService {
   /// enabled in the prod flavor after the user grants SMS access. Play
   /// distribution still requires the applicable SMS declaration/review for
   /// financial tracking apps.
-  void listenForeground(void Function(String sender, String body, DateTime receivedAt) onSms) {
+  void listenForeground(
+    void Function(String sender, String body, DateTime receivedAt) onSms,
+  ) {
     _telephony.listenIncomingSms(
       onNewMessage: (SmsMessage message) {
         final sender = message.address;
@@ -230,9 +249,40 @@ class SmsListenerService {
   ///
   /// Returns how many were successfully handled.
   Future<int> flushBackgroundQueue(
-    Future<bool> Function(String sender, String body, DateTime receivedAt) upload, {
+    Future<bool> Function(String sender, String body, DateTime receivedAt)
+    upload, {
     SharedPreferences? prefs,
+    SmsIntakeRepository? intake,
+    String? namespace,
   }) async {
+    if (intake != null && namespace != null) {
+      final legacy = prefs ?? await SharedPreferences.getInstance();
+      await legacy.reload();
+      // This is upgrade-only input. All new callbacks append to SQLite.
+      for (final message in SmsBackgroundQueue.read(legacy)) {
+        if (!LocalSmsParser.sensitive(message.body)) {
+          intake.capture('legacy', message);
+        }
+      }
+      await SmsBackgroundQueue.clear(legacy);
+      var handled = 0;
+      for (final entry in intake.pending(namespace)) {
+        try {
+          final message = entry.message;
+          if (await upload(message.sender, message.body, message.receivedAt)) {
+            intake.acknowledge(namespace, entry.id);
+            handled++;
+          } else {
+            intake.failed(namespace, entry.id);
+            break;
+          }
+        } catch (_) {
+          intake.failed(namespace, entry.id);
+          break;
+        }
+      }
+      return handled;
+    }
     final store = prefs ?? await SharedPreferences.getInstance();
     // The queue is written by the telephony callback's background isolate.
     // SharedPreferences keeps an isolate-local cache; reload before reading.
@@ -244,7 +294,11 @@ class SmsListenerService {
     var handled = 0;
     for (final message in queued) {
       try {
-        final ok = await upload(message.sender, message.body, message.receivedAt);
+        final ok = await upload(
+          message.sender,
+          message.body,
+          message.receivedAt,
+        );
         if (ok) {
           handled += 1;
         } else {

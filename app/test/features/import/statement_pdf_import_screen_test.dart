@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/import_repository.dart';
+import 'package:pandapay/data/import_models.dart';
 import 'package:pandapay/data/user_cards_repository.dart' show UserCard;
 import 'package:pandapay/features/import/statement_pdf_import_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -36,17 +37,21 @@ class _FakePdfFilePickerPlatform extends FilePickerPlatform {
     dynamic androidSafOptions,
   }) async {
     return FilePickerResult([
-      PlatformFile(name: 'statement.pdf', size: pdfBytes.length, bytes: pdfBytes),
+      PlatformFile(
+        name: 'statement.pdf',
+        size: pdfBytes.length,
+        bytes: pdfBytes,
+      ),
     ]);
   }
 }
 
-Uint8List _buildTestPdf({String? password}) {
+Uint8List _buildTestPdf({String? password, String? text}) {
   final document = PdfDocument();
   document.pages.add().graphics.drawString(
-        '01/04/2026 TEST MERCHANT 250.00\nClosing Balance: 900.00',
-        PdfStandardFont(PdfFontFamily.helvetica, 12),
-      );
+    text ?? '01/04/2026 TEST MERCHANT 250.00\nClosing Balance: 900.00',
+    PdfStandardFont(PdfFontFamily.helvetica, 12),
+  );
   if (password != null) document.security.userPassword = password;
   final bytes = Uint8List.fromList(document.saveSync());
   document.dispose();
@@ -55,11 +60,13 @@ Uint8List _buildTestPdf({String? password}) {
 
 class _RecordingImportRepository extends ImportRepository {
   Map<String, dynamic>? lastConfirmArgs;
-  _RecordingImportRepository() : super(apiBaseUrl: 'http://test', accessToken: 'tok');
+  final calls = <Map<String, dynamic>>[];
+  _RecordingImportRepository()
+    : super(apiBaseUrl: 'http://test', accessToken: 'tok');
 
   @override
   Future<StatementImport> confirmStatementImport({
-    required String userCardId,
+    required String? userCardId,
     required DateTime statementFrom,
     required DateTime statementTo,
     Money? closingBalance,
@@ -79,6 +86,7 @@ class _RecordingImportRepository extends ImportRepository {
       'importKey': importKey,
       'transactions': transactions,
     };
+    calls.add(lastConfirmArgs!);
     return StatementImport.fromJson({
       'id': 'si1',
       'user_card_id': userCardId,
@@ -87,71 +95,170 @@ class _RecordingImportRepository extends ImportRepository {
       'txn_count': txnCount,
       'reconciled_count': reconciledCount,
       'imported_at': DateTime.now().toIso8601String(),
+      'summary': {
+        'imported': txnCount,
+        'pendingDuplicates': 0,
+        'exactRetries': 0,
+      },
     });
   }
 }
 
+Future<void> waitForParsing(WidgetTester tester) async {
+  for (var i = 0; i < 150; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+    if (find.text('Reading on-device…').evaluate().isEmpty) {
+      await tester.pumpAndSettle();
+      return;
+    }
+  }
+  fail('Import did not finish parsing');
+}
+
 void main() {
-  testWidgets('unencrypted PDF: pick -> parse -> preview shows real detected data -> confirm', (tester) async {
-    FilePickerPlatform.instance = _FakePdfFilePickerPlatform(_buildTestPdf());
-    const card = UserCard(id: 'card-1', cardProductId: 'p1', cardName: 'Test Card', isDefault: true);
-    final repo = _RecordingImportRepository();
+  testWidgets(
+    'mixed-account PDF requires source selection and supports non-card spending',
+    (tester) async {
+      FilePickerPlatform.instance = _FakePdfFilePickerPlatform(
+        _buildTestPdf(
+          text:
+              '2026-10-02 08:32 PM COFFEE 100 DR Example bank 1234 Yes - FOOD\n'
+              '2026-10-03 09:00 AM FUEL 500 DR Other credit 5678 Yes - FUEL',
+        ),
+      );
+      final repo = _RecordingImportRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userCardsProvider.overrideWith((ref) async => const []),
+            importRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: const MaterialApp(home: StatementPdfImportScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose file'));
+      await waitForParsing(tester);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Confirm import'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Other spending (no card)').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byType(DropdownButtonFormField<String>).last,
+      );
+      await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Other spending (no card)').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Confirm import'));
+      await tester.tap(find.text('Confirm import'));
+      await tester.pumpAndSettle();
+      expect(repo.lastConfirmArgs!['userCardId'], isNull);
+      expect(repo.calls, hasLength(2));
+      final rows =
+          repo.calls.first['transactions'] as List<StatementTransactionInput>;
+      expect(rows, hasLength(1));
+      expect(rows.single.merchantName, 'COFFEE');
+      expect(rows.single.importRowKey, matches(RegExp(r'^[a-f0-9]{64}$')));
+      expect(rows.single.occurredAt, DateTime(2026, 10, 2, 20, 32));
+    },
+  );
+  testWidgets(
+    'unencrypted PDF: pick -> parse -> preview shows real detected data -> confirm',
+    (tester) async {
+      FilePickerPlatform.instance = _FakePdfFilePickerPlatform(_buildTestPdf());
+      const card = UserCard(
+        id: 'card-1',
+        cardProductId: 'p1',
+        cardName: 'Test Card',
+        isDefault: true,
+      );
+      final repo = _RecordingImportRepository();
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          userCardsProvider.overrideWith((ref) async => const [card]),
-          importRepositoryProvider.overrideWithValue(repo),
-        ],
-        child: const MaterialApp(home: StatementPdfImportScreen()),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userCardsProvider.overrideWith((ref) async => const [card]),
+            importRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: const MaterialApp(home: StatementPdfImportScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Choose file'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose file'));
+      await waitForParsing(tester);
 
-    expect(find.text('statement.pdf'), findsOneWidget);
-    await tester.tap(find.text('Unlock & parse'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Columns and formats'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<ImportDateOrder>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Day / Month / Year').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Apply formats'));
+      await waitForParsing(tester);
 
-    expect(find.text('1 transactions found'), findsOneWidget);
-    expect(find.textContaining('TEST MERCHANT'), findsOneWidget);
+      expect(find.text('1 transactions found'), findsOneWidget);
+      expect(find.textContaining('TEST MERCHANT'), findsOneWidget);
 
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Test Card').last);
-    await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Test Card').last);
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Confirm import'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm import'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Statement imported'), findsOneWidget);
-    expect(repo.lastConfirmArgs!['txnCount'], 1);
-    expect(repo.lastConfirmArgs!['reconciledCount'], 1);
-    expect((repo.lastConfirmArgs!['closingBalance'] as Money).paise, Money.fromRupees(900).paise);
-  });
+      expect(find.text('Statement imported'), findsOneWidget);
+      expect(repo.lastConfirmArgs!['txnCount'], 1);
+      expect(repo.lastConfirmArgs!['reconciledCount'], 0);
+      expect(
+        (repo.lastConfirmArgs!['closingBalance'] as Money).paise,
+        Money.fromRupees(900).paise,
+      );
+    },
+  );
 
-  testWidgets('a wrong password shows a plain-language error, not a raw exception', (tester) async {
-    FilePickerPlatform.instance = _FakePdfFilePickerPlatform(_buildTestPdf(password: 'correct'));
+  testWidgets(
+    'a wrong password shows a plain-language error, not a raw exception',
+    (tester) async {
+      FilePickerPlatform.instance = _FakePdfFilePickerPlatform(
+        _buildTestPdf(password: 'correct'),
+      );
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          userCardsProvider.overrideWith((ref) async => const []),
-        ],
-        child: const MaterialApp(home: StatementPdfImportScreen()),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [userCardsProvider.overrideWith((ref) async => const [])],
+          child: const MaterialApp(home: StatementPdfImportScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Choose file'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose file'));
+      await waitForParsing(tester);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Statement password (optional)'), 'wrong-password');
-    await tester.tap(find.text('Unlock & parse'));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Statement password (optional)'),
+        'wrong-password',
+      );
+      await tester.tap(find.text('Unlock & parse'));
+      await waitForParsing(tester);
 
-    expect(find.text("That password didn't work for this statement."), findsOneWidget);
-  });
+      expect(
+        find.text("That password didn't work for this statement."),
+        findsOneWidget,
+      );
+    },
+  );
 }

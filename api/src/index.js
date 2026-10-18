@@ -1,3 +1,4 @@
+const { createStatementImportHandler } = require('./statement_import');
 require('dotenv').config();
 const crypto = require('crypto');
 const express = require('express');
@@ -15,6 +16,7 @@ const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const rewardMath = require('./reward_math');
+const { registerSplitRoutes } = require('./transaction_splits');
 const { AMOUNT_TOLERANCE_INR, MAX_TIME_DISTANCE_MS, bestDuplicate } = require('./transaction_dedup');
 const { emailSourceKey } = require('./source_identity');
 const spendReports = require('./spend_reports');
@@ -1475,8 +1477,23 @@ app.post('/sync/push', requireAuth, async (req, res) => {
               Number.isFinite(clientSeq) ? clientSeq : 0,
             ]
           );
-          await client.query('RELEASE SAVEPOINT sync_item');
           const row = r.rows[0];
+          // Offline transaction edits use this RPC rather than PATCH. Enforce
+          // the same split invariant before accepting the item; a failure
+          // rolls back the entire item, including its sync log/reward state.
+          if (row.out_applied && entity === 'transactions' && payload?.amount_inr != null) {
+            const splitCheck = await client.query(
+              `SELECT t.amount_inr, COALESCE((SELECT SUM(s.amount_inr)
+                 FROM transaction_splits s WHERE s.transaction_id=t.id), 0) AS split_total
+                 FROM transactions t WHERE t.id=$1 AND t.profile_id=$2 FOR UPDATE`,
+              [entityId, req.userId]
+            );
+            const checked = splitCheck.rows[0];
+            if (checked && Math.round(Number(checked.split_total) * 100) > Math.round(Number(checked.amount_inr) * 100)) {
+              throw new Error('amount is less than saved split shares; edit or clear the split first');
+            }
+          }
+          await client.query('RELEASE SAVEPOINT sync_item');
           out.push({
             clientSeq: clientSeq ?? null,
             entityId,
@@ -3228,32 +3245,16 @@ async function insertTransactionAndUpdateState(client, userId, {
     `transaction-ingest:${userId}`,
   ]);
 
-  // Older app builds used the SMS receive timestamp for source_key. Inbox
-  // reconciliation uses the provider timestamp, which can differ slightly
-  // from the broadcast timestamp and would otherwise re-insert those legacy
-  // rows. During a backfill, treat an identical SMS spend on the same card,
-  // merchant, amount, and accounting day as already handled. This guard is
-  // intentionally limited to SMS backfill so two genuine live same-day
-  // purchases are never collapsed by a broad heuristic.
-  if (['sms', 'sms_bulk'].includes(source) && backfill && merchantName) {
-    const legacyDuplicate = await client.query(
-      `SELECT id
-         FROM transactions
-        WHERE profile_id = $1
-          AND source IN ('sms', 'sms_bulk')
-          AND amount_inr = $2
-          AND instrument = $3
-          AND entry_kind = $4
-          AND lower(coalesce(merchant_name, '')) = lower($5)
-          AND occurred_at >= date_trunc('day', $6::timestamptz)
-          AND occurred_at < date_trunc('day', $6::timestamptz) + interval '1 day'
-          AND ($7::uuid IS NULL OR user_card_id = $7::uuid)
-        LIMIT 1`,
-      [userId, amount, resolvedInstrument, resolvedEntryKind, merchantName, occurred, userCardId || null]
+  // Source aliases keep retries idempotent after automatic consolidation.
+  if (sourceKey) {
+    const observed = await client.query(
+      `SELECT t.* FROM transaction_observations o
+         JOIN transactions t ON t.id = o.transaction_id AND t.profile_id = o.profile_id
+        WHERE o.profile_id = $1 AND o.source = $2 AND o.source_key = $3
+          AND t.source_key IS DISTINCT FROM $3 LIMIT 1`,
+      [userId, resolvedSource, sourceKey]
     );
-    if (legacyDuplicate.rowCount > 0) {
-      return { status: 200, duplicate: true, transaction: null };
-    }
+    if (observed.rows[0]) return { status: 200, duplicate: true, duplicateKind: 'exact_retry', transaction: observed.rows[0] };
   }
 
   // Only a credit-card SPEND moves card state.
@@ -3371,7 +3372,9 @@ async function insertTransactionAndUpdateState(client, userId, {
         occurred,
         merchantName,
         source: resolvedSource,
-        userCardId: movesCardState ? userCardId : null,
+        userCardId: userCardId || null,
+        accountLast4: resolvedAccountLast4,
+        bankReference: observationMetadata?.bankReference,
         instrument: resolvedInstrument,
         entryKind: resolvedEntryKind,
       })
@@ -3381,6 +3384,16 @@ async function insertTransactionAndUpdateState(client, userId, {
   // reward/card state is applied. Every Insights query already counts only
   // status='active', so this establishes the count-once invariant across all
   // existing consumers without teaching each feature its own dedupe rule.
+  if (duplicates.automatic) {
+    await client.query(`UPDATE transactions SET status = 'ignored', note = $1 WHERE id = $2`,
+      [`[automatically matched duplicate of ${duplicates.duplicateOf}]`, txn.rows[0].id]);
+    await recordTransactionObservation(client, userId, duplicates.duplicateOf, {
+      source: resolvedSource, sourceKey, observedAt: occurred,
+      externalRef: observationMetadata?.bankReference,
+      metadata: { ...(observationMetadata || {}), automaticDuplicate: true, matchedRowId: txn.rows[0].id },
+    });
+    return { status: 200, duplicate: true, duplicateKind: 'high_confidence', transaction: duplicates.transaction, duplicateOf: duplicates.duplicateOf };
+  }
   if (duplicates.candidateId) {
     const noteTag = `[pending duplicate of ${duplicates.duplicateOf}]`;
     const suppressed = await client.query(
@@ -3992,11 +4005,14 @@ async function reconcileCurrentCapStates(client, userId) {
  * a duplicate duplicate-flag.
  */
 async function detectDuplicates(client, userId, {
-  newTxnId, amount, occurred, merchantName, source, userCardId, instrument, entryKind,
+  newTxnId, amount, occurred, merchantName, source, userCardId, instrument, entryKind, accountLast4, bankReference,
 }) {
   const candidates = await client.query(
-    `SELECT id, amount_inr, occurred_at, merchant_name, source, user_card_id, instrument, entry_kind
-       FROM transactions
+    `SELECT t.id, t.amount_inr, t.occurred_at, t.merchant_name, t.source, t.user_card_id, t.instrument, t.entry_kind, t.status, t.source_account_last4,
+            (SELECT COALESCE(o.external_ref, o.metadata->>'bankReference')
+               FROM transaction_observations o WHERE o.transaction_id = t.id AND o.profile_id = t.profile_id
+                AND COALESCE(o.external_ref, o.metadata->>'bankReference') IS NOT NULL LIMIT 1) AS bank_reference
+       FROM transactions t
       WHERE profile_id = $1 AND status = 'active' AND id != $2
         AND amount_inr BETWEEN $3::numeric - $6::numeric AND $3::numeric + $6::numeric
         AND entry_kind = 'spend'
@@ -4006,10 +4022,11 @@ async function detectDuplicates(client, userId, {
   );
 
   const selected = bestDuplicate(
-    { amount, occurred, merchantName, source, userCardId, instrument, entryKind },
+    { amount, occurred, merchantName, source, userCardId, instrument, entryKind, accountLast4, bankReference },
     candidates.rows,
   );
   if (!selected) return { candidateId: null };
+  if (selected.match.automatic) return { automatic: true, duplicateOf: selected.candidate.id, transaction: selected.candidate };
   const [txnA, txnB] = [newTxnId, selected.candidate.id].sort();
   const inserted = await client.query(
     `INSERT INTO duplicate_candidates
@@ -4619,6 +4636,7 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
           status: 200,
           parsed: true,
           duplicate: true,
+          transaction: inserted.transaction,
           patternId: parsed.patternId,
           dueDateDetected: Boolean(dueDaySync),
           dueDayUpdated: Boolean(dueDaySync?.updated),
@@ -4791,6 +4809,8 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           results.push({
             index: i,
             outcome: 'duplicate',
+            transactionId: inserted.transaction?.id,
+            transaction: inserted.transaction,
             dueDateDetected: Boolean(dueDaySync),
             dueDayUpdated: Boolean(dueDaySync?.updated),
           });
@@ -5055,7 +5075,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
            GROUP BY archived_card_id
           HAVING COUNT(*) = 1
         )
-        SELECT t.id, ${canonicalCardId} AS user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
+        SELECT t.id, t.source_key, ${canonicalCardId} AS user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
@@ -5402,6 +5422,16 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         return { status: 409, error: `cannot edit a transaction with status '${old.status}'` };
       }
 
+      if (amountInr !== undefined) {
+        const shares = await client.query(
+          'SELECT COALESCE(SUM(amount_inr), 0) AS total FROM transaction_splits WHERE transaction_id = $1',
+          [req.params.id]
+        );
+        if (Math.round(Number(shares.rows[0].total) * 100) > Math.round(Number(amountInr) * 100)) {
+          return { status: 400, error: 'amount is less than saved split shares; edit or clear the split first' };
+        }
+      }
+
       const oldMovesCardState = old.instrument === 'credit_card'
         && old.entry_kind === 'spend'
         && Boolean(old.user_card_id);
@@ -5549,115 +5579,7 @@ app.patch('/transactions/:id/note', requireAuth, async (req, res) => {
  * transaction_detail_screen.dart called that out as a real gap rather than
  * faking the feature. These two routes close it.
  */
-app.get('/transactions/:id/splits', requireAuth, async (req, res) => {
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const owns = await client.query(`SELECT id FROM transactions WHERE id = $1 AND profile_id = $2`, [
-        req.params.id,
-        req.userId,
-      ]);
-      if (owns.rows.length === 0) return null;
-      return client.query(
-        `SELECT ts.id, ts.user_card_id, ts.category_id, ts.amount_inr, ts.note,
-                sc.name AS category_name
-           FROM transaction_splits ts
-           LEFT JOIN spend_categories sc ON sc.id = ts.category_id
-          WHERE ts.transaction_id = $1
-          ORDER BY ts.amount_inr DESC`,
-        [req.params.id]
-      );
-    });
-    if (!result) return res.status(404).json({ error: 'transaction not found' });
-    res.json({ splits: result.rows });
-  } catch (err) {
-    console.error('GET /transactions/:id/splits error', err);
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-/**
- * PUT /transactions/:id/splits — replace this transaction's whole split set.
- *
- * Replace, not append: a split is a partition of one amount, so the only
- * coherent unit of edit is the whole set. Appending would let a client
- * build a set summing to more than the transaction, and per-row PATCH would
- * make "move ₹100 from A to B" two writes with an invalid state in between.
- *
- * The sum is validated against the parent amount and rejected if it
- * exceeds it — over-splitting is always a bug. Splitting to *less* than the
- * full amount is allowed: partially splitting a bill ("₹400 of this ₹1,000
- * was Priya's") is a real thing users do, and the remainder is simply
- * unallocated.
- *
- * **These do not touch reward state.** Cap, milestone and points state were
- * computed from the transaction as a whole, on the card it was actually
- * paid with; splits record who owed what, not a second set of payments.
- * Recomputing state from splits would double-count the spend.
- */
-app.put('/transactions/:id/splits', requireAuth, async (req, res) => {
-  const splits = (req.body || {}).splits;
-  if (!Array.isArray(splits)) return res.status(400).json({ error: 'splits must be an array' });
-  if (splits.length > 20) return res.status(400).json({ error: 'at most 20 splits per transaction' });
-
-  for (const split of splits) {
-    const amount = Number(split && split.amountInr);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ error: 'each split needs a positive amountInr' });
-    }
-    if (split.note !== undefined && split.note !== null && typeof split.note !== 'string') {
-      return res.status(400).json({ error: 'split note must be a string or null' });
-    }
-  }
-
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const parent = await client.query(
-        `SELECT id, amount_inr FROM transactions WHERE id = $1 AND profile_id = $2`,
-        [req.params.id, req.userId]
-      );
-      if (parent.rows.length === 0) return { status: 404, error: 'transaction not found' };
-
-      const total = splits.reduce((sum, s) => sum + Number(s.amountInr), 0);
-      // Compared in paise to avoid a float sum tripping the check on an
-      // exact split (three ₹33.34 shares of ₹100.02, say).
-      if (Math.round(total * 100) > Math.round(Number(parent.rows[0].amount_inr) * 100)) {
-        return { status: 400, error: 'splits total more than the transaction amount' };
-      }
-
-      await client.query(`DELETE FROM transaction_splits WHERE transaction_id = $1`, [req.params.id]);
-      for (const split of splits) {
-        await client.query(
-          `INSERT INTO transaction_splits (transaction_id, user_card_id, category_id, amount_inr, note)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [
-            req.params.id,
-            split.userCardId || null,
-            split.categoryId || null,
-            Number(split.amountInr),
-            split.note || null,
-          ]
-        );
-      }
-
-      const saved = await client.query(
-        `SELECT ts.id, ts.user_card_id, ts.category_id, ts.amount_inr, ts.note,
-                sc.name AS category_name
-           FROM transaction_splits ts
-           LEFT JOIN spend_categories sc ON sc.id = ts.category_id
-          WHERE ts.transaction_id = $1
-          ORDER BY ts.amount_inr DESC`,
-        [req.params.id]
-      );
-      return { status: 200, splits: saved.rows };
-    });
-
-    if (result.error) return res.status(result.status).json({ error: result.error });
-    res.json({ splits: result.splits });
-  } catch (err) {
-    console.error('PUT /transactions/:id/splits error', err);
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+registerSplitRoutes(app, { requireAuth, withUserClient });
 
 /**
  * POST /transactions/:id/ignore — Task C-0c (ui-spec D2 "mark ignored
@@ -8739,158 +8661,9 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
  * for the (stub/best-effort, explicitly scoped-down) on-device parser this
  * feeds from.
  */
-app.post('/statement-imports', requireAuth, async (req, res) => {
-  const {
-    userCardId,
-    statementFrom,
-    statementTo,
-    closingBalanceInr,
-    pointsPosted,
-    txnCount,
-    reconciledCount,
-    issuerFormatId,
-    importSource = 'statement',
-    importKey,
-    transactions: structuredTransactions,
-  } = req.body || {};
-  if (!userCardId || typeof userCardId !== 'string') {
-    return res.status(400).json({ error: 'userCardId is required' });
-  }
-  if (!statementFrom || !statementTo) {
-    return res.status(400).json({ error: 'statementFrom and statementTo are required' });
-  }
-  if (!['statement', 'screenshot'].includes(importSource)) {
-    return res.status(400).json({ error: 'importSource must be statement or screenshot' });
-  }
-  if (structuredTransactions !== undefined && !Array.isArray(structuredTransactions)) {
-    return res.status(400).json({ error: 'transactions must be an array when given' });
-  }
-  if (Array.isArray(structuredTransactions) && structuredTransactions.length > 5000) {
-    return res.status(400).json({ error: 'transactions may not exceed 5000 rows' });
-  }
-  if (Array.isArray(structuredTransactions) && (
-    typeof importKey !== 'string' || !/^[a-f0-9]{64}$/i.test(importKey)
-  )) {
-    return res.status(400).json({ error: 'a SHA-256 importKey is required with transactions' });
-  }
-
-  for (const [index, transaction] of (structuredTransactions || []).entries()) {
-    const amount = Number(transaction && transaction.amountInr);
-    const occurred = new Date(transaction && transaction.occurredAt);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ error: `transactions[${index}].amountInr must be positive` });
-    }
-    if (Number.isNaN(occurred.getTime())) {
-      return res.status(400).json({ error: `transactions[${index}].occurredAt is invalid` });
-    }
-    if (transaction.merchantName !== undefined && (
-      typeof transaction.merchantName !== 'string' || transaction.merchantName.length > 500
-    )) {
-      return res.status(400).json({ error: `transactions[${index}].merchantName must be at most 500 characters` });
-    }
-  }
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const transactionSource = importSource === 'screenshot' ? 'imported' : 'statement';
-      const statementSourceKey = importKey
-        ? clientMutationSourceKey(req.userId, 'statement', importKey)
-        : null;
-      const insertedImport = await client.query(
-        `INSERT INTO statement_imports
-           (profile_id, user_card_id, statement_from, statement_to, closing_balance_inr,
-            points_posted, txn_count, reconciled_count, issuer_format_id, source_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
-         RETURNING *`,
-        [
-          req.userId,
-          userCardId,
-          statementFrom,
-          statementTo,
-          closingBalanceInr ?? null,
-          pointsPosted ?? null,
-          txnCount ?? 0,
-          reconciledCount ?? 0,
-          issuerFormatId ?? null,
-          statementSourceKey,
-        ]
-      );
-
-      if (insertedImport.rowCount === 0) {
-        const existing = await client.query(
-          `SELECT * FROM statement_imports WHERE profile_id = $1 AND source_key = $2`,
-          [req.userId, statementSourceKey]
-        );
-        return {
-          status: 200,
-          statementImport: existing.rows[0],
-          duplicate: true,
-          summary: { imported: 0, pendingDuplicates: 0, exactRetries: structuredTransactions.length },
-        };
-      }
-
-      const statementImport = insertedImport.rows[0];
-      let imported = 0;
-      let pendingDuplicates = 0;
-      let exactRetries = 0;
-      for (const [index, transaction] of (structuredTransactions || []).entries()) {
-        const occurred = new Date(transaction.occurredAt);
-        const merchantName = transaction.merchantName?.trim() || null;
-        const categoryId = await importResolvers.resolveCategoryForImport(client, req.userId, {
-          merchantName,
-        });
-        const sourceKey = clientMutationSourceKey(
-          req.userId,
-          transactionSource,
-          `${importKey}:${index}`,
-        );
-        const outcome = await insertTransactionAndUpdateState(client, req.userId, {
-          userCardId,
-          amount: Number(transaction.amountInr),
-          occurred,
-          categoryId,
-          rail: transaction.rail || 'unknown',
-          merchantName,
-          source: transactionSource,
-          sourceKey,
-          backfill: true,
-          observationMetadata: { statementImportId: statementImport.id, line: index, importSource },
-        });
-        if (outcome.status !== 200 && outcome.status !== 201) {
-          throw new Error(`statement transaction ${index} failed: ${outcome.error || outcome.status}`);
-        }
-        if (outcome.duplicateKind === 'exact_retry') exactRetries += 1;
-        else {
-          imported += 1;
-          if (outcome.duplicatePending) pendingDuplicates += 1;
-          await client.query(
-            `UPDATE transactions
-                SET statement_import_id = $1, reward_state = 'confirmed', reconciled_at = now()
-              WHERE id = $2`,
-            [statementImport.id, outcome.transaction.id]
-          );
-        }
-      }
-
-      const updatedImport = await client.query(
-        `UPDATE statement_imports
-            SET txn_count = $1, reconciled_count = $2
-          WHERE id = $3
-          RETURNING *`,
-        [structuredTransactions?.length ?? (txnCount ?? 0), imported + exactRetries, statementImport.id]
-      );
-      return {
-        status: 201,
-        statementImport: updatedImport.rows[0],
-        summary: { imported, pendingDuplicates, exactRetries },
-      };
-    });
-    res.status(result.status).json(result);
-  } catch (err) {
-    console.error('POST /statement-imports error', err);
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.post('/statement-imports', requireAuth, createStatementImportHandler({
+  withUserClient, importResolvers, clientMutationSourceKey, insertTransactionAndUpdateState,
+}));
 
 /** GET /statement-imports — F1's per-channel status + F2's own import history. */
 app.get('/statement-imports', requireAuth, async (req, res) => {

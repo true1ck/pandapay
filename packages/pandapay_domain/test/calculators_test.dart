@@ -196,6 +196,78 @@ void main() {
   });
 
   group('UA-2.4.2 split optimizer', () {
+    test('keeps two owned cards of the same product independent', () {
+      final product = _card('same', 2);
+      final first = CardSnapshot(product: product);
+      final second = CardSnapshot(product: product);
+      final total = Money.fromRupees(100);
+      final result = const SplitOptimizer().optimize(
+        total,
+        RecommendationContext(amount: total, rail: TxnRail.swipe),
+        [first, second],
+        snapshotCeilings: {
+          first: Money.fromRupees(30),
+          second: Money.fromRupees(70),
+        },
+      );
+      expect(result.map((r) => r.amount), [
+        Money.fromRupees(30),
+        Money.fromRupees(70),
+      ]);
+    });
+    test('never exceeds headroom smaller than a search step', () {
+      final total = Money.fromRupees(1000);
+      final result = const SplitOptimizer().optimize(
+        total,
+        RecommendationContext(amount: total, rail: TxnRail.swipe),
+        [
+          CardSnapshot(product: _card('high', 10)),
+          CardSnapshot(product: _card('low', 2)),
+        ],
+        utilizationCeiling: {
+          'high': Money.fromRupees(13.37),
+          'low': Money.fromRupees(20),
+        },
+      );
+      expect(
+        result.firstWhere((r) => r.card.id == 'high').amount,
+        Money.fromRupees(13.37),
+      );
+      expect(
+        result.firstWhere((r) => r.card.id == 'low').amount,
+        Money.fromRupees(20),
+      );
+    });
+
+    test('places one paise and ignores negative ceilings', () {
+      const total = Money.fromPaise(1);
+      final result = const SplitOptimizer().optimize(
+        total,
+        RecommendationContext(amount: total, rail: TxnRail.swipe),
+        [
+          CardSnapshot(product: _card('high', 10)),
+          CardSnapshot(product: _card('low', 2)),
+        ],
+        utilizationCeiling: {'high': const Money.fromPaise(-1)},
+      );
+      expect(result.single.card.id, 'low');
+      expect(result.single.amount, total);
+    });
+
+    test('rejects invalid step counts', () {
+      expect(
+        () => const SplitOptimizer().optimize(
+          const Money.fromPaise(1),
+          RecommendationContext(
+            amount: const Money.fromPaise(1),
+            rail: TxnRail.swipe,
+          ),
+          [],
+          stepCount: 0,
+        ),
+        throwsArgumentError,
+      );
+    });
     test('fills the higher-rate card first, then spills over to the next', () {
       final optimizer = SplitOptimizer();
       final highRateCap = CapRule(

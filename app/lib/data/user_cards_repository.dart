@@ -317,6 +317,36 @@ enum AutopayMode {
 /// [id] is null for a split the user has built on screen but not yet
 /// saved — the server assigns ids on write, and the whole set is replaced
 /// on each save, so client-side ids would be meaningless.
+class TransactionSplitDocument {
+  final List<TransactionSplit> splits;
+  final String? fingerprint;
+  const TransactionSplitDocument(this.splits, {this.fingerprint});
+
+  factory TransactionSplitDocument.fromJson(Map<String, dynamic> json) =>
+      TransactionSplitDocument(
+        (json['splits'] as List)
+            .cast<Map<String, dynamic>>()
+            .map(TransactionSplit.fromJson)
+            .toList(),
+        fingerprint: json['fingerprint'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+    'fingerprint': fingerprint,
+    'splits': [
+      for (final s in splits)
+        {
+          'id': s.id,
+          'user_card_id': s.userCardId,
+          'category_id': s.categoryId,
+          'category_name': s.categoryName,
+          'amount_inr': s.amount.rupees,
+          'note': s.note,
+        },
+    ],
+  };
+}
+
 class TransactionSplit {
   final String? id;
   final String? userCardId;
@@ -859,12 +889,31 @@ class UserCardsRepository {
   final String apiBaseUrl;
   final String accessToken;
   final http.Client _client;
+  final Future<void> Function(SmsBatchMessage)? onSmsCaptured;
+  final Future<void> Function(List<SmsBatchMessage>)? onSmsBatchCaptured;
+  final Future<void> Function(
+    List<SmsBatchMessage>,
+    List<Map<String, dynamic>>,
+  )?
+  onSmsUploaded;
 
   UserCardsRepository({
     required this.apiBaseUrl,
     required this.accessToken,
     http.Client? client,
+    this.onSmsCaptured,
+    this.onSmsBatchCaptured,
+    this.onSmsUploaded,
   }) : _client = client ?? http.Client();
+  Future<void> captureSmsMessages(List<SmsBatchMessage> messages) async {
+    if (onSmsBatchCaptured != null) {
+      await onSmsBatchCaptured!(messages);
+      return;
+    }
+    for (final message in messages) {
+      await onSmsCaptured?.call(message);
+    }
+  }
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer $accessToken',
@@ -1129,20 +1178,25 @@ class UserCardsRepository {
   /// Design 18 "Split this expense" — the current split set for one
   /// transaction, empty when it has never been split.
   Future<List<TransactionSplit>> fetchSplits(String transactionId) async {
-    final response = await _client.get(
-      Uri.parse('$apiBaseUrl/transactions/$transactionId/splits'),
-      headers: _headers,
-    );
+    return (await fetchSplitDocument(transactionId)).splits;
+  }
+
+  Future<TransactionSplitDocument> fetchSplitDocument(
+    String transactionId,
+  ) async {
+    final response = await _client
+        .get(
+          Uri.parse('$apiBaseUrl/transactions/$transactionId/splits'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 20));
     if (response.statusCode != 200) {
       throw ApiException(
         'GET splits failed: ${response.statusCode} ${response.body}',
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['splits'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(TransactionSplit.fromJson)
-        .toList();
+    return TransactionSplitDocument.fromJson(body);
   }
 
   /// Replaces the whole split set. Replace rather than append is the
@@ -1153,23 +1207,34 @@ class UserCardsRepository {
     String transactionId,
     List<TransactionSplit> splits,
   ) async {
-    final response = await _client.put(
-      Uri.parse('$apiBaseUrl/transactions/$transactionId/splits'),
-      headers: _headers,
-      body: jsonEncode({
-        'splits': [for (final s in splits) s.toRequestJson()],
-      }),
-    );
+    return (await saveSplitDocument(
+      transactionId,
+      TransactionSplitDocument(splits),
+    )).splits;
+  }
+
+  Future<TransactionSplitDocument> saveSplitDocument(
+    String transactionId,
+    TransactionSplitDocument document,
+  ) async {
+    final response = await _client
+        .put(
+          Uri.parse('$apiBaseUrl/transactions/$transactionId/splits'),
+          headers: _headers,
+          body: jsonEncode({
+            'splits': [for (final s in document.splits) s.toRequestJson()],
+            if (document.fingerprint != null)
+              'expectedFingerprint': document.fingerprint,
+          }),
+        )
+        .timeout(const Duration(seconds: 20));
     if (response.statusCode != 200) {
       throw ApiException(
         'save splits failed: ${response.statusCode} ${response.body}',
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['splits'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(TransactionSplit.fromJson)
-        .toList();
+    return TransactionSplitDocument.fromJson(body);
   }
 
   /// UA-5.3 (Chunk 31): SMS auto-import. Sends the raw SMS sender+body to
@@ -1196,6 +1261,13 @@ class UserCardsRepository {
     DateTime? occurredAt,
     bool backfill = false,
   }) async {
+    final message = SmsBatchMessage(
+      userCardId: userCardId,
+      sender: sender,
+      body: body,
+      occurredAt: occurredAt ?? DateTime.now(),
+    );
+    await onSmsCaptured?.call(message);
     final response = await _client
         .post(
           Uri.parse('$apiBaseUrl/transactions/from-sms'),
@@ -1216,6 +1288,18 @@ class UserCardsRepository {
       );
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
+    await onSmsUploaded?.call(
+      [message],
+      [
+        {
+          'index': 0,
+          'outcome': json['parsed'] == true ? 'imported' : 'unparsed',
+          'reason': json['reason'],
+          'transactionId': (json['transaction'] as Map?)?['id'],
+          'transaction': json['transaction'],
+        },
+      ],
+    );
     return SmsImportResult(
       parsed: json['parsed'] == true,
       reason: json['reason'] as String?,
@@ -1301,6 +1385,7 @@ class UserCardsRepository {
     required List<SmsBatchMessage> messages,
     bool backfill = true,
   }) async {
+    await captureSmsMessages(messages);
     final response = await _client
         .post(
           Uri.parse('$apiBaseUrl/transactions/from-sms/batch'),
@@ -1327,7 +1412,9 @@ class UserCardsRepository {
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final summary = json['summary'] as Map<String, dynamic>? ?? const {};
     final results = (json['results'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
+        .cast<Map<String, dynamic>>()
+        .toList();
+    await onSmsUploaded?.call(messages, results);
     return SmsBatchImportResult(
       imported: (summary['imported'] as num?)?.toInt() ?? 0,
       duplicate: (summary['duplicate'] as num?)?.toInt() ?? 0,
@@ -1811,6 +1898,7 @@ class UserCardsRepository {
 }
 
 class TransactionEntry {
+  final String? sourceKey;
   final String id;
   final Money amount;
   final DateTime occurredAt;
@@ -1866,6 +1954,7 @@ class TransactionEntry {
   final Money? rewardValue;
 
   const TransactionEntry({
+    this.sourceKey,
     required this.id,
     required this.amount,
     required this.occurredAt,
@@ -1892,6 +1981,7 @@ class TransactionEntry {
   /// the API as a transaction mutation.
   Map<String, dynamic> toJson() => {
     'id': id,
+    'source_key': sourceKey,
     'amount_inr': amount.rupees,
     'occurred_at': occurredAt.toIso8601String(),
     'merchant_name': merchantName,
@@ -1928,6 +2018,7 @@ class TransactionEntry {
     final nickname = json['card_nickname'] as String?;
     final cardName = json['card_name'] as String?;
     return TransactionEntry(
+      sourceKey: json['source_key'] as String?,
       id: json['id'] as String,
       amount: Money.fromRupees(_num(json['amount_inr'])),
       occurredAt: DateTime.parse(json['occurred_at'] as String),

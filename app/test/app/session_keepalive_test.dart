@@ -56,38 +56,73 @@ void main() {
     expect(container.read(cacheNamespaceProvider), 'user:user-1');
   });
 
-  test('preserves a cached startup session when refresh is rejected', () async {
-    SharedPreferences.setMockInitialValues({
-      'pandapay_app.access_token': 'stale-access',
-      'pandapay_app.refresh_token': 'revoked-refresh',
-    });
+  test(
+    'requires sign-in when the server rejects the startup refresh token',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'pandapay_app.access_token': 'stale-access',
+        'pandapay_app.refresh_token': 'revoked-refresh',
+      });
 
-    final client = MockClient(
-      (req) async =>
-          http.Response(jsonEncode({'error': 'Invalid refresh token'}), 401),
-    );
+      final client = MockClient(
+        (req) async =>
+            http.Response(jsonEncode({'error': 'Invalid refresh token'}), 401),
+      );
 
-    final container = ProviderContainer(
-      overrides: [
-        tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
-        authApiProvider.overrideWithValue(
-          AuthApi(authBaseUrl: 'http://auth.test', client: client),
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+          authApiProvider.overrideWithValue(
+            AuthApi(authBaseUrl: 'http://auth.test', client: client),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    await container.read(sessionInitProvider.future);
-    // Startup restores the cached token without waiting on auth/. A refresh
-    // rejection must not erase the local session asynchronously: the account
-    // may still have useful cached data and the auth deployment can recover.
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+      await container.read(sessionInitProvider.future);
+      // Startup restores the token first, then removes it after auth/
+      // definitively rejects the refresh credential. Account-scoped local data
+      // remains saved.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
-    expect(container.read(accessTokenProvider), 'stale-access');
-    final store = await container.read(tokenStoreProvider.future);
-    expect(store.accessToken, 'stale-access');
-    expect(store.refreshToken, 'revoked-refresh');
-  });
+      expect(container.read(accessTokenProvider), isNull);
+      final store = await container.read(tokenStoreProvider.future);
+      expect(store.accessToken, isNull);
+      expect(store.refreshToken, isNull);
+    },
+  );
+
+  test(
+    'does not replay a one-time refresh token after a server error',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'pandapay_app.access_token': 'cached-access',
+        'pandapay_app.refresh_token': 'one-time-refresh',
+      });
+      var calls = 0;
+      final client = MockClient((request) async {
+        calls++;
+        return http.Response(jsonEncode({'error': 'temporary failure'}), 503);
+      });
+      final container = ProviderContainer(
+        overrides: [
+          tokenStoreProvider.overrideWith((ref) => TokenStore.load()),
+          authApiProvider.overrideWithValue(
+            AuthApi(authBaseUrl: 'http://auth.test', client: client),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.read(accessTokenProvider.notifier).state = 'cached-access';
+
+      expect(
+        await container.read(sessionRefreshCoordinatorProvider).refresh(),
+        isNull,
+      );
+      expect(calls, 1);
+      expect(container.read(accessTokenProvider), 'cached-access');
+    },
+  );
 
   test(
     'keeps the session during a temporary startup failure even if access expired',
@@ -276,7 +311,7 @@ void main() {
     });
   });
 
-  test('keeps the session when the refresh token is rejected', () {
+  test('clears a rejected refresh token and requires sign-in', () {
     fakeAsync((async) {
       SharedPreferences.setMockInitialValues({
         'pandapay_app.access_token': 'initial-access',
@@ -311,9 +346,9 @@ void main() {
 
       async.elapse(const Duration(minutes: 11));
 
-      expect(container.read(accessTokenProvider), 'initial-access');
-      expect(capturedStore?.accessToken, 'initial-access');
-      expect(capturedStore?.refreshToken, 'initial-refresh');
+      expect(container.read(accessTokenProvider), isNull);
+      expect(capturedStore?.accessToken, isNull);
+      expect(capturedStore?.refreshToken, isNull);
     });
   });
 

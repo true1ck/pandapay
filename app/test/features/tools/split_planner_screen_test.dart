@@ -24,41 +24,95 @@ CardProduct _flatRateCard(String id, double ratePercent) {
     name: 'Card $id',
     network: CardNetwork.rupay,
     isUpiLinkable: true,
-    rewardRules: [RewardRule(id: '$id-rule', unit: RewardUnit.cashbackPercent, rate: ratePercent)],
+    rewardRules: [
+      RewardRule(
+        id: '$id-rule',
+        unit: RewardUnit.cashbackPercent,
+        rate: ratePercent,
+      ),
+    ],
   );
 }
 
-Future<void> _pump(WidgetTester tester, {required List<CardProduct> catalogue, required List<UserCard> owned}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  required List<CardProduct> catalogue,
+  required List<UserCard> owned,
+  Money? initialAmount,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        catalogueRepositoryProvider.overrideWithValue(_FakeCatalogueRepository(catalogue)),
+        catalogueRepositoryProvider.overrideWithValue(
+          _FakeCatalogueRepository(catalogue),
+        ),
         userCardsProvider.overrideWith((ref) async => owned),
       ],
-      child: const MaterialApp(home: Scaffold(body: SplitPlannerScreen())),
+      child: MaterialApp(
+        home: Scaffold(body: SplitPlannerScreen(initialAmount: initialAmount)),
+      ),
     ),
   );
   await tester.pumpAndSettle();
 }
 
 void main() {
-  testWidgets('shows an empty state when the wallet has no cards', (tester) async {
+  testWidgets('prefills a purchase amount and rejects malformed decimals', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      catalogue: [_flatRateCard('p1', 2)],
+      owned: [
+        UserCard(
+          id: 'uc1',
+          cardProductId: 'p1',
+          cardName: 'Test Card',
+          isDefault: false,
+        ),
+      ],
+      initialAmount: Money.fromRupees(123.45),
+    );
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller!.text, '123.45');
+    expect(find.text('Total expected reward value'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '1.2.3');
+    await tester.pumpAndSettle();
+    expect(field.controller!.text, '123.45');
+  });
+  testWidgets('shows an empty state when the wallet has no cards', (
+    tester,
+  ) async {
     await _pump(tester, catalogue: const [], owned: const []);
     expect(find.text('No cards yet'), findsOneWidget);
   });
 
-  testWidgets('prompts for an amount before any plan is computed', (tester) async {
+  testWidgets('prompts for an amount before any plan is computed', (
+    tester,
+  ) async {
     final product = _flatRateCard('p1', 2);
-    final owned = UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Card', isDefault: false);
+    final owned = UserCard(
+      id: 'uc1',
+      cardProductId: 'p1',
+      cardName: 'Test Card',
+      isDefault: false,
+    );
 
     await _pump(tester, catalogue: [product], owned: [owned]);
 
     expect(find.text('Enter an amount to see a split'), findsOneWidget);
   });
 
-  testWidgets('typing an amount renders an allocation across the owned card', (tester) async {
+  testWidgets('typing an amount renders an allocation across the owned card', (
+    tester,
+  ) async {
     final product = _flatRateCard('p1', 2);
-    final owned = UserCard(id: 'uc1', cardProductId: 'p1', cardName: 'Test Card', isDefault: false);
+    final owned = UserCard(
+      id: 'uc1',
+      cardProductId: 'p1',
+      cardName: 'Test Card',
+      isDefault: false,
+    );
 
     await _pump(tester, catalogue: [product], owned: [owned]);
 

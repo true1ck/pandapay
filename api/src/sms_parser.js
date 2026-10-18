@@ -161,10 +161,18 @@ function parseBuiltInAccountCredit(sms) {
     return { ok: false, reason: 'credit_card_message' };
   }
 
+  // Incoming receipts must describe a completed movement, not a promise.
+  if (/\b(?:declined|failed|failure|cancelled|canceled|pending|processing|initiated)\b/i.test(body)
+      || /\b(?:will|shall|would|to)\s+be\s+(?:credited|received|deposited|refunded|reversed)\b/i.test(body)
+      || /\b(?:not|never)\s+(?:been\s+)?(?:credited|received|deposited|refunded|reversed)\b/i.test(body)
+      || isNonTransactionAlert(body)) {
+    return { ok: false, reason: 'not_a_completed_credit' };
+  }
+
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_account_credit_match' };
 
-  const incomingMarker = /\b(?:credited|received|deposited|deposit|salary|cashback|refund(?:ed)?|reversal)\b/i.test(body);
+  const incomingMarker = /\b(?:credited|received|deposited|refunded|reversed)\b/i.test(body);
   const accountEvidence = /\b(?:a\/?c\.?|account|savings|bank|wallet)\b/i.test(body);
   const namedIncoming = /\b(?:money|amount|payment|funds?)\b[\s\S]{0,40}\b(?:received|credited|deposited)\b/i.test(body);
   if (!incomingMarker || (!accountEvidence && !namedIncoming)) {

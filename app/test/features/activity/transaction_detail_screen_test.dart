@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay/data/local/split_repository.dart';
 import 'package:pandapay/features/activity/transaction_detail_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -62,6 +63,23 @@ class _FakeUserCardsRepository implements UserCardsRepository {
       note: note,
     );
   }
+
+  @override
+  Future<TransactionSplitDocument> fetchSplitDocument(
+    String transactionId,
+  ) async => TransactionSplitDocument(
+    await fetchSplits(transactionId),
+    fingerprint: SplitRepository.fingerprint(splits),
+  );
+
+  @override
+  Future<TransactionSplitDocument> saveSplitDocument(
+    String transactionId,
+    TransactionSplitDocument document,
+  ) async => TransactionSplitDocument(
+    await saveSplits(transactionId, document.splits),
+    fingerprint: SplitRepository.fingerprint(document.splits),
+  );
 
   @override
   Future<List<TransactionSplit>> fetchSplits(String transactionId) async {
@@ -252,6 +270,13 @@ void main() {
 
     await tester.tap(find.text('Save split'));
     await tester.pumpAndSettle();
+    expect(
+      find.text('Saved on this device — waiting to sync.'),
+      findsOneWidget,
+    );
+    expect(repo.splits, isEmpty);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
 
     expect(repo.splits, hasLength(2));
     expect(repo.splits[0].amount, Money.fromRupees(400));
@@ -261,6 +286,55 @@ void main() {
     expect(find.text('Split across 2 shares'), findsOneWidget);
     expect(find.text('Your share: ₹0.00'), findsOneWidget);
   });
+
+  testWidgets(
+    'editing shares validates amounts and preserves card and category',
+    (tester) async {
+      final repo = _FakeUserCardsRepository(
+        TransactionEntry(
+          id: 't1',
+          amount: Money.fromRupees(1000),
+          occurredAt: DateTime(2026, 3, 1),
+          userCardId: 'uc1',
+          source: 'manual',
+          status: 'active',
+        ),
+        splits: [
+          TransactionSplit(
+            amount: Money.fromRupees(400),
+            note: 'Priya',
+            userCardId: 'uc1',
+            categoryId: 'category1',
+          ),
+        ],
+      );
+      await _pump(tester, repo: repo);
+      final button = find.text('Split across 1 share');
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      for (final invalid in ['-10', '1.001', 'NaN', '1001']) {
+        await tester.enterText(find.byType(TextField).at(0), invalid);
+        await tester.pump();
+        expect(
+          tester
+              .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Save split'),
+              )
+              .onPressed,
+          isNull,
+        );
+      }
+      await tester.enterText(find.byType(TextField).at(0), '300.25');
+      await tester.pump();
+      await tester.tap(find.text('Save split'));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(repo.splits.single.amount, Money.fromRupees(300.25));
+      expect(repo.splits.single.userCardId, 'uc1');
+      expect(repo.splits.single.categoryId, 'category1');
+    },
+  );
 
   testWidgets('can clear an existing split', (tester) async {
     final repo = _FakeUserCardsRepository(
@@ -272,9 +346,7 @@ void main() {
         source: 'manual',
         status: 'active',
       ),
-      splits: [
-        TransactionSplit(amount: Money.fromRupees(400), note: 'Priya'),
-      ],
+      splits: [TransactionSplit(amount: Money.fromRupees(400), note: 'Priya')],
     );
     await _pump(tester, repo: repo);
 
@@ -284,6 +356,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), '');
     await tester.tap(find.text('Clear split'));
+    await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
     expect(repo.splits, isEmpty);
@@ -310,10 +383,7 @@ void main() {
         find.textContaining('Missing or invalid access token'),
         findsNothing,
       );
-      expect(
-        find.textContaining('Your session could not be refreshed'),
-        findsOneWidget,
-      );
+      expect(find.textContaining("We couldn't load this yet"), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     },
   );
@@ -365,6 +435,7 @@ void main() {
 
     expect(find.text('UPI / bank account'), findsOneWidget);
     expect(find.text('Other'), findsOneWidget);
+    expect(find.text('Assign category'), findsOneWidget);
     expect(find.text('—'), findsNothing);
   });
 

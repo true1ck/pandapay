@@ -120,9 +120,9 @@ class ImportHubScreen extends ConsumerWidget {
             const SizedBox(height: AppSpace.md),
             _ChannelCard(
               icon: Icons.picture_as_pdf_outlined,
-              title: 'Statement PDF import',
+              title: 'Import spending file',
               status: const _Status(
-                'One-off action — tap to import a statement',
+                'PDF, CSV, TSV, Excel XLSX, or JSON',
                 BambooInk.ink500,
               ),
               onTap: () => Navigator.of(context).push(

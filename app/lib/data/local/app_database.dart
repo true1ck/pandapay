@@ -16,8 +16,9 @@ import 'package:sqlite3/sqlite3.dart';
 ///
 /// `cached_responses` — one row per cached endpoint, storing the raw
 /// response body text so a cold-cache read reuses the exact same fromJson
-/// parser a live fetch already used. Deliberately NOT a relational mirror
-/// of card_products/user_cards/etc. — see the plan's Architecture note.
+/// parser a live fetch already used. FinancialStore now owns canonical
+/// account-scoped transactions/cards and coverage; these blobs remain for
+/// migration and server-derived display aggregates.
 ///
 /// `transaction_outbox_entries` — B6 quick-add offline queue. One row per
 /// POST /transactions payload that failed to send while offline.
@@ -33,6 +34,12 @@ CREATE TABLE IF NOT EXISTS cached_responses (
   raw_json TEXT NOT NULL,
   fetched_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS local_needs_review (
+  namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,
+  PRIMARY KEY(namespace,id)
+);
+CREATE TABLE IF NOT EXISTS cache_refresh_requests (key TEXT PRIMARY KEY);
 
 CREATE TABLE IF NOT EXISTS transaction_outbox_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,8 +136,31 @@ class AppDatabase {
   final Database db;
 
   AppDatabase._(this.db) {
+    // SMS delivery opens another connection in a background isolate. Let
+    // SQLite serialize commits rather than losing a message to SQLITE_BUSY.
+    db.execute('PRAGMA busy_timeout = 5000');
+    db.execute('PRAGMA journal_mode = WAL');
     db.execute(_schema);
     _ensureOutboxSchema();
+    if (!db
+        .select('PRAGMA table_info(sync_pending_changes)')
+        .any((c) => c['name'] == 'in_flight')) {
+      db.execute(
+        'ALTER TABLE sync_pending_changes ADD COLUMN in_flight INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    for (final table in [
+      'transaction_outbox_entries',
+      'sync_pending_changes',
+    ]) {
+      if (!db
+          .select('PRAGMA table_info($table)')
+          .any((c) => c['name'] == 'namespace')) {
+        db.execute(
+          "ALTER TABLE $table ADD COLUMN namespace TEXT NOT NULL DEFAULT 'legacy'",
+        );
+      }
+    }
   }
 
   /// CREATE TABLE IF NOT EXISTS does not update an existing table. Rebuild
@@ -139,7 +169,9 @@ class AppDatabase {
   void _ensureOutboxSchema() {
     final columns = db.select('PRAGMA table_info(transaction_outbox_entries)');
     final names = columns.map((row) => row['name'] as String).toSet();
-    final userCardColumn = columns.firstWhere((row) => row['name'] == 'user_card_id');
+    final userCardColumn = columns.firstWhere(
+      (row) => row['name'] == 'user_card_id',
+    );
     final needsRebuild =
         userCardColumn['notnull'] == 1 ||
         !names.contains('client_mutation_id') ||
@@ -172,7 +204,9 @@ class AppDatabase {
         final instrumentExpression = names.contains('instrument')
             ? "COALESCE(instrument, 'credit_card')"
             : "'credit_card'";
-        final entryKindExpression = names.contains('entry_kind') ? "COALESCE(entry_kind, 'spend')" : "'spend'";
+        final entryKindExpression = names.contains('entry_kind')
+            ? "COALESCE(entry_kind, 'spend')"
+            : "'spend'";
         db.execute('''
           INSERT INTO transaction_outbox_entries_new
             (id, user_card_id, client_mutation_id, amount_paise, category_id,
@@ -185,7 +219,9 @@ class AppDatabase {
           FROM transaction_outbox_entries
         ''');
         db.execute('DROP TABLE transaction_outbox_entries');
-        db.execute('ALTER TABLE transaction_outbox_entries_new RENAME TO transaction_outbox_entries');
+        db.execute(
+          'ALTER TABLE transaction_outbox_entries_new RENAME TO transaction_outbox_entries',
+        );
         db.execute('COMMIT');
       } catch (_) {
         db.execute('ROLLBACK');

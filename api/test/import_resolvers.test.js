@@ -201,3 +201,10 @@ test('a merchant still present in the SMS body is classified when the parser omi
   assert.match(client.calls[0].sql, /slug = \$1/);
   assert.deepEqual(client.calls[0].params, ['fuel']);
 });
+test('placeholder merchant names never inherit a category from unrelated unknown purchases', async () => {
+  const client = fakeClient([[{ id: 'other-category' }]]);
+  const result = await resolveCategoryForImport(client, 'user-1', {merchantName:'Unknown merchant'});
+  assert.equal(result, 'other-category');
+  assert.equal(client.calls.length, 1);
+  assert.match(client.calls[0].sql, /slug = 'other'/);
+});

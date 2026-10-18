@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'local/app_database.dart';
 
 /// Task D-4 (ui-spec D4 Needs Review Queue) — one raw SMS the parser
 /// couldn't match, kept entirely ON-DEVICE.
@@ -42,13 +43,14 @@ class NeedsReviewItem {
     'receivedAt': receivedAt.toIso8601String(),
   };
 
-  factory NeedsReviewItem.fromJson(Map<String, dynamic> json) => NeedsReviewItem(
-    id: json['id'] as String,
-    sender: json['sender'] as String,
-    body: json['body'] as String,
-    reason: json['reason'] as String?,
-    receivedAt: DateTime.parse(json['receivedAt'] as String),
-  );
+  factory NeedsReviewItem.fromJson(Map<String, dynamic> json) =>
+      NeedsReviewItem(
+        id: json['id'] as String,
+        sender: json['sender'] as String,
+        body: json['body'] as String,
+        reason: json['reason'] as String?,
+        receivedAt: DateTime.parse(json['receivedAt'] as String),
+      );
 }
 
 const _needsReviewKey = 'pandapay_app.needs_review_queue_v1';
@@ -57,14 +59,97 @@ const _needsReviewKey = 'pandapay_app.needs_review_queue_v1';
 /// dueDateRemindersProvider (providers.dart) already uses for a similar
 /// "no server round-trip needed, this is purely local" case.
 class NeedsReviewRepository {
+  final String namespace;
+  final Future<AppDatabase> Function()? loadDatabase;
+  NeedsReviewRepository({this.namespace = 'legacy', this.loadDatabase});
+  Future<AppDatabase> _database() async {
+    final db = await loadDatabase!();
+    db.db.execute(
+      'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+    );
+    final prefs = await SharedPreferences.getInstance();
+    final old = prefs.getStringList(_needsReviewKey);
+    if (old != null && old.isNotEmpty) {
+      final corrupt = <String>[];
+      db.db.execute('SAVEPOINT migrate_review');
+      try {
+        for (final raw in old) {
+          NeedsReviewItem item;
+          try {
+            item = NeedsReviewItem.fromJson(
+              jsonDecode(raw) as Map<String, dynamic>,
+            );
+          } catch (_) {
+            corrupt.add(raw);
+            continue;
+          }
+          db.db.execute(
+            "INSERT OR IGNORE INTO local_needs_review VALUES ('legacy',?,?)",
+            [item.id, jsonEncode(item.toJson())],
+          );
+        }
+        db.db.execute('RELEASE SAVEPOINT migrate_review');
+      } catch (_) {
+        db.db.execute('ROLLBACK TO SAVEPOINT migrate_review');
+        db.db.execute('RELEASE SAVEPOINT migrate_review');
+        rethrow;
+      }
+      if (corrupt.isEmpty) {
+        await prefs.remove(_needsReviewKey);
+      } else {
+        await prefs.setStringList(_needsReviewKey, corrupt);
+      }
+    }
+    return db;
+  }
+
   Future<List<NeedsReviewItem>> fetchAll() async {
+    if (loadDatabase != null) {
+      final db = await _database();
+      return db.db
+          .select('SELECT payload FROM local_needs_review WHERE namespace=?', [
+            namespace,
+          ])
+          .map(
+            (r) => NeedsReviewItem.fromJson(
+              jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+            ),
+          )
+          .toList()
+        ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+    }
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
-    return raw.map((s) => NeedsReviewItem.fromJson(jsonDecode(s) as Map<String, dynamic>)).toList()
+    return raw
+        .map(
+          (s) =>
+              NeedsReviewItem.fromJson(jsonDecode(s) as Map<String, dynamic>),
+        )
+        .toList()
       ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
   }
 
   Future<void> add(NeedsReviewItem item) async {
+    if (loadDatabase != null) {
+      final db = await _database();
+      final current = await fetchAll();
+      if (current.any(
+        (old) =>
+            old.id != item.id &&
+            old.sender.trim().toLowerCase() ==
+                item.sender.trim().toLowerCase() &&
+            _normalizeBody(old.body) == _normalizeBody(item.body) &&
+            old.receivedAt.difference(item.receivedAt).abs() <=
+                const Duration(minutes: 5),
+      )) {
+        return;
+      }
+      db.db.execute(
+        'INSERT OR REPLACE INTO local_needs_review VALUES (?,?,?)',
+        [namespace, item.id, jsonEncode(item.toJson())],
+      );
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
     final normalizedSender = item.sender.trim().toLowerCase();
@@ -79,9 +164,11 @@ class NeedsReviewRepository {
           jsonDecode(entry) as Map<String, dynamic>,
         );
         if (existing.id == item.id) return false;
-        final sameMessage = existing.sender.trim().toLowerCase() == normalizedSender &&
+        final sameMessage =
+            existing.sender.trim().toLowerCase() == normalizedSender &&
             _normalizeBody(existing.body) == normalizedBody;
-        final closeInTime = existing.receivedAt.difference(item.receivedAt).abs() <=
+        final closeInTime =
+            existing.receivedAt.difference(item.receivedAt).abs() <=
             const Duration(minutes: 5);
         if (sameMessage && closeInTime) duplicate = true;
         return true;
@@ -90,26 +177,53 @@ class NeedsReviewRepository {
       }
     }).toList();
     if (duplicate) return;
-    await prefs.setStringList(_needsReviewKey, [...withoutRetry, jsonEncode(item.toJson())]);
+    await prefs.setStringList(_needsReviewKey, [
+      ...withoutRetry,
+      jsonEncode(item.toJson()),
+    ]);
   }
 
-  String _normalizeBody(String body) => body.trim().replaceAll(RegExp(r'\s+'), ' ');
+  String _normalizeBody(String body) =>
+      body.trim().replaceAll(RegExp(r'\s+'), ' ');
 
   /// "Not a transaction" dismiss, or a successful one-tap-fill resolution —
   /// either way, the item leaves the queue. Which one happened is the
   /// caller's concern (screen-level), not this store's.
   Future<void> remove(String id) async {
+    if (loadDatabase != null) {
+      (await _database()).db.execute(
+        'DELETE FROM local_needs_review WHERE namespace=? AND id=?',
+        [namespace, id],
+      );
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
-    final kept = raw.where((s) => (jsonDecode(s) as Map<String, dynamic>)['id'] != id).toList();
+    final kept = raw
+        .where((s) => (jsonDecode(s) as Map<String, dynamic>)['id'] != id)
+        .toList();
     await prefs.setStringList(_needsReviewKey, kept);
   }
 
   Future<void> removeAll(Iterable<String> ids) async {
+    if (loadDatabase != null) {
+      final db = await _database();
+      for (final id in ids) {
+        db.db.execute(
+          'DELETE FROM local_needs_review WHERE namespace=? AND id=?',
+          [namespace, id],
+        );
+      }
+      return;
+    }
     final idSet = ids.toSet();
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
-    final kept = raw.where((s) => !idSet.contains((jsonDecode(s) as Map<String, dynamic>)['id'])).toList();
+    final kept = raw
+        .where(
+          (s) => !idSet.contains((jsonDecode(s) as Map<String, dynamic>)['id']),
+        )
+        .toList();
     await prefs.setStringList(_needsReviewKey, kept);
   }
 }

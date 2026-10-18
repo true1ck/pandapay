@@ -1,4 +1,7 @@
+import 'dart:convert';
+import '../user_cards_repository.dart';
 import 'app_database.dart';
+import 'financial_store.dart';
 
 class CachedResponse {
   final String rawJson;
@@ -13,12 +16,77 @@ class CachedResponse {
 class ResponseCache {
   final AppDatabase _db;
   ResponseCache(this._db);
+  late final FinancialStore financialStore = FinancialStore(_db);
+  void markAccountStale(String namespace) {
+    _db.db.execute(
+      'INSERT OR IGNORE INTO cache_refresh_requests SELECT key FROM cached_responses WHERE substr(key,1,length(?))=?',
+      ['$namespace:', '$namespace:'],
+    );
+  }
+
+  bool needsRefresh(String key) => _db.db.select(
+    'SELECT 1 FROM cache_refresh_requests WHERE key=?',
+    [key],
+  ).isNotEmpty;
+
+  void migratePrefix(String oldPrefix, String newPrefix) {
+    final rows = _db.db.select(
+      'SELECT key,raw_json,fetched_at FROM cached_responses WHERE substr(key,1,length(?))=?',
+      [oldPrefix, oldPrefix],
+    );
+    if (rows.isEmpty) return;
+    _db.db.execute('SAVEPOINT migrate_cache_namespace');
+    try {
+      for (final row in rows) {
+        final key =
+            newPrefix + (row['key'] as String).substring(oldPrefix.length);
+        _db.db.execute(
+          'INSERT OR IGNORE INTO cached_responses VALUES (?,?,?)',
+          [key, row['raw_json'], row['fetched_at']],
+        );
+        _db.db.execute('DELETE FROM cached_responses WHERE key=?', [
+          row['key'],
+        ]);
+      }
+      _db.db.execute('RELEASE SAVEPOINT migrate_cache_namespace');
+    } catch (_) {
+      _db.db.execute('ROLLBACK TO SAVEPOINT migrate_cache_namespace');
+      _db.db.execute('RELEASE SAVEPOINT migrate_cache_namespace');
+      rethrow;
+    }
+  }
 
   Future<void> put(String key, String rawJson) async {
+    // Validate private entity snapshots before publishing them. The entity
+    // store is the shared read source; blobs remain for legacy consumers.
+    final cardsMatch = RegExp(
+      r'^(.*):(user_cards|user_cards_with_archived)$',
+    ).firstMatch(key);
+    if (cardsMatch != null) {
+      List<UserCard>? cards;
+      try {
+        final body = jsonDecode(rawJson) as Map<String, dynamic>;
+        cards = (body['userCards'] as List)
+            .map((r) => UserCard.fromJson(Map<String, dynamic>.from(r as Map)))
+            .toList();
+      } on FormatException {
+        /* A legacy blob is not an entity write. */
+      } on TypeError {
+        /* Leave the last valid entities intact. */
+      }
+      if (cards != null) {
+        financialStore.replaceCards(
+          cardsMatch[1]!,
+          cards,
+          archived: cardsMatch[2] == 'user_cards_with_archived',
+        );
+      }
+    }
     _db.db.execute(
       'INSERT OR REPLACE INTO cached_responses (key, raw_json, fetched_at) VALUES (?, ?, ?)',
       [key, rawJson, DateTime.now().millisecondsSinceEpoch],
     );
+    _db.db.execute('DELETE FROM cache_refresh_requests WHERE key=?', [key]);
   }
 
   Future<String?> get(String key) async {
@@ -54,7 +122,9 @@ class ResponseCache {
       for (final row in rows)
         CachedResponse(
           rawJson: row['raw_json'] as String,
-          fetchedAt: DateTime.fromMillisecondsSinceEpoch(row['fetched_at'] as int),
+          fetchedAt: DateTime.fromMillisecondsSinceEpoch(
+            row['fetched_at'] as int,
+          ),
         ),
     ];
   }
@@ -104,9 +174,11 @@ class ResponseCache {
   /// namespaced by account, so sign-out can erase the whole account snapshot
   /// without maintaining a separate endpoint list.
   Future<void> clearPrefix(String prefix) async {
-    _db.db.execute(
-      'DELETE FROM cached_responses WHERE key LIKE ?',
-      ['$prefix%'],
-    );
+    if (prefix.endsWith(':')) {
+      financialStore.clear(prefix.substring(0, prefix.length - 1));
+    }
+    _db.db.execute('DELETE FROM cached_responses WHERE key LIKE ?', [
+      '$prefix%',
+    ]);
   }
 }
