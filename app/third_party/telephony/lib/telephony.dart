@@ -174,17 +174,17 @@ class Telephony {
   Future<List<SmsMessage>> getInboxSms(
       {List<SmsColumn> columns = DEFAULT_SMS_COLUMNS,
       SmsFilter? filter,
-      List<OrderBy>? sortOrder}) async {
+      List<OrderBy>? sortOrder,
+      int? queryLimit}) async {
     assert(_platform.isAndroid == true, "Can only be called on Android.");
     final args = _getArguments(columns, filter, sortOrder);
+    if (queryLimit != null) args['queryLimit'] = queryLimit;
 
     final messages =
         await _foregroundChannel.invokeMethod<List?>(GET_ALL_INBOX_SMS, args);
-
-    return messages
-            ?.map((message) => SmsMessage.fromMap(message, columns))
-            .toList(growable: false) ??
-        List.empty();
+    if (messages == null) throw StateError('SMS provider returned no result');
+    return messages.map((message) => SmsMessage.fromMap(message, columns))
+        .toList(growable: false);
   }
 
   ///

@@ -65,6 +65,7 @@ class _RecordingUserCardsRepository extends UserCardsRepository {
   Future<SmsBatchImportResult> logTransactionsFromSmsBatch({
     required List<SmsBatchMessage> messages,
     bool backfill = true,
+    bool captureLocally = true,
   }) async {
     batches.add(messages);
     return SmsBatchImportResult(

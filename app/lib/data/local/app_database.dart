@@ -134,8 +134,9 @@ CREATE TABLE IF NOT EXISTS sync_state (
 
 class AppDatabase {
   final Database db;
+  final String? filePath;
 
-  AppDatabase._(this.db) {
+  AppDatabase._(this.db, {this.filePath}) {
     // SMS delivery opens another connection in a background isolate. Let
     // SQLite serialize commits rather than losing a message to SQLITE_BUSY.
     db.execute('PRAGMA busy_timeout = 5000');
@@ -267,8 +268,13 @@ class AppDatabase {
     }
     final dir = await getApplicationDocumentsDirectory();
     final dbPath = p.join(dir.path, 'pandapay.sqlite');
-    return AppDatabase._(sqlite3.open(dbPath));
+    return openFile(dbPath);
   }
+
+  /// Worker isolates open their own connection; a native database handle
+  /// must never be shared across isolates.
+  static AppDatabase openFile(String path) =>
+      AppDatabase._(sqlite3.open(path), filePath: path);
 
   void close() => db.dispose();
 }

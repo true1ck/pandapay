@@ -12,10 +12,15 @@ class SmsImportStore {
   void captureBatch(String namespace, List<QueuedSms> messages) {
     store.batch(() {
       final db = store.database.db;
+      final cards = store
+          .entities(namespace, 'cards')
+          .map(UserCard.fromJson)
+          .toList();
+      final intake = SmsIntakeRepository(store.database);
       db.execute('SAVEPOINT sms_batch');
       try {
         for (final message in messages) {
-          capture(namespace, message);
+          _capture(namespace, message, cards, intake);
         }
         db.execute('RELEASE SAVEPOINT sms_batch');
       } catch (_) {
@@ -27,17 +32,32 @@ class SmsImportStore {
   }
 
   void capture(String namespace, QueuedSms message) {
+    _capture(
+      namespace,
+      message,
+      store.entities(namespace, 'cards').map(UserCard.fromJson).toList(),
+      SmsIntakeRepository(store.database),
+    );
+  }
+
+  void _capture(
+    String namespace,
+    QueuedSms message,
+    List<UserCard> cards,
+    SmsIntakeRepository intake,
+  ) {
     if (LocalSmsParser.sensitive(message.body)) return;
     final db = store.database.db;
     db.execute('SAVEPOINT sms_capture');
     try {
-      final key = SmsIntakeRepository(
-        store.database,
-      ).capture(namespace, message);
-      final cards = store
-          .entities(namespace, 'cards')
-          .map(UserCard.fromJson)
-          .toList();
+      final sourceKey = smsSourceKey(namespace, message.sender, message.body);
+      if (intake.wasProcessed(namespace, sourceKey) ||
+          store.hasReceipt(namespace, sourceKey)) {
+        intake.remember(namespace, message);
+        db.execute('RELEASE SAVEPOINT sms_capture');
+        return;
+      }
+      final key = intake.capture(namespace, message);
       final observation = LocalSmsParser.parse(
         namespace: namespace,
         sender: message.sender,
@@ -71,6 +91,8 @@ class SmsImportStore {
               ...matching.single.toJson(),
               'due_day': observation.dueDate!.day,
             });
+            // Later messages in this same batch must see the established day.
+            cards[cards.indexWhere((card) => card.id == updated.id)] = updated;
             store.replaceCards(namespace, [
               for (final card in cards.where((c) => !c.isArchived))
                 if (card.id == updated.id) updated else card,

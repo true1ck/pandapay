@@ -128,7 +128,7 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
       const smsService = SmsListenerService();
       final granted = await smsService.requestPermissions();
       if (granted) {
-        bodies = await smsService.readInboxSmsBodies();
+        bodies = await ref.read(smsAutoImportProvider).capturedSmsBodies();
       }
       if (!mounted) return;
     }

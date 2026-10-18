@@ -87,7 +87,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         }
         if (hasPerm) {
           _smsPermanentlyDenied = false;
-          final readBodies = await smsService.readInboxSmsBodies();
+          final readBodies = await ref.read(smsAutoImportProvider).capturedSmsBodies();
           if (!mounted || generation != _scanGeneration) return;
           if (readBodies.isNotEmpty) {
             bodies = readBodies;
@@ -286,7 +286,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       }
       if (hasPerm) {
         _smsPermanentlyDenied = false;
-        final readBodies = await smsService.readInboxSmsBodies();
+        final readBodies = await ref.read(smsAutoImportProvider).capturedSmsBodies();
         if (!mounted) return;
         if (readBodies.isNotEmpty) {
           await _scan(customBodies: readBodies);

@@ -125,18 +125,26 @@ class FinancialStore {
       return;
     }
     if (!_changes.isClosed) _changes.add(FinancialChange(ns, entity));
+    onEntityChanged?.call(FinancialChange(ns, entity));
     onChanged?.call(ns);
     if (!_statusChanges.isClosed) _statusChanges.add(ns);
   }
 
   void notifyPendingChange(String ns) => _notify(ns, entity: 'all');
+  void notifyExternalChanges(String ns, Iterable<String> entities) {
+    for (final entity in entities.toSet()) {
+      _notify(ns, entity: entity);
+    }
+  }
+
   bool hasPendingTransactions(String ns) => database.db.select(
     "SELECT 1 FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=1 LIMIT 1",
     [ns],
   ).isNotEmpty;
 
   final void Function(String namespace)? onChanged;
-  FinancialStore(this.database, {this.onChanged}) {
+  final void Function(FinancialChange change)? onEntityChanged;
+  FinancialStore(this.database, {this.onChanged, this.onEntityChanged}) {
     database.db.execute('''
       CREATE TABLE IF NOT EXISTS financial_entities (
         namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,
@@ -149,6 +157,8 @@ class FinancialStore {
         ON financial_entities(namespace, source_key);
       CREATE INDEX IF NOT EXISTS financial_transaction_date
         ON financial_entities(namespace, entity, occurred_at);
+      CREATE INDEX IF NOT EXISTS financial_observed_at
+        ON financial_entities(namespace, entity, observed_at);
       CREATE TABLE IF NOT EXISTS financial_coverage (
         namespace TEXT NOT NULL, query_key TEXT NOT NULL, fetched_at INTEGER NOT NULL,
         PRIMARY KEY(namespace, query_key)
@@ -178,7 +188,7 @@ class FinancialStore {
     }
   }
 
-  void _upsert(
+  bool _upsert(
     String ns,
     String entity,
     String id,
@@ -187,6 +197,16 @@ class FinancialStore {
     bool pending = false,
     String? sourceKey,
   }) {
+    final payload = jsonEncode(body);
+    final previous = database.db.select(
+      'SELECT payload, observed_at, pending FROM financial_entities WHERE namespace=? AND entity=? AND id=?',
+      [ns, entity, id],
+    );
+    final changed =
+        previous.isEmpty ||
+        (at >= (previous.single['observed_at'] as int) &&
+            (previous.single['payload'] != payload ||
+                previous.single['pending'] != (pending ? 1 : 0)));
     database.db.execute(
       '''
       INSERT INTO financial_entities(namespace, entity, id, payload, observed_at, pending, source_key, occurred_at, amount_paise)
@@ -201,7 +221,7 @@ class FinancialStore {
         ns,
         entity,
         id,
-        jsonEncode(body),
+        payload,
         at,
         pending ? 1 : 0,
         sourceKey,
@@ -215,15 +235,21 @@ class FinancialStore {
             : null,
       ],
     );
+    return changed;
   }
 
   List<Map<String, dynamic>> entities(
     String ns,
     String entity, {
     TransactionQuery? query,
+    String? id,
   }) {
     final args = <Object?>[ns, entity];
     var range = '';
+    if (id != null) {
+      range = ' AND id=?';
+      args.add(id);
+    }
     if (query != null && (query.from != null || query.to != null)) {
       final conditions = <String>[];
       if (query.from != null) {
@@ -240,7 +266,7 @@ class FinancialStore {
           ).millisecondsSinceEpoch,
         );
       }
-      range =
+      range +=
           " AND ((${conditions.join(' AND ')}) OR EXISTS (SELECT 1 FROM sync_pending_changes p WHERE p.namespace=financial_entities.namespace AND p.entity='transactions' AND p.entity_id=financial_entities.id))";
     }
     final rows = database.db
@@ -252,12 +278,16 @@ class FinancialStore {
         .map((r) => jsonDecode(r['payload'] as String) as Map<String, dynamic>)
         .toList();
     final edits = database.db.select(
-      'SELECT entity_id, op, payload_json FROM sync_pending_changes WHERE namespace=? AND entity=? ORDER BY client_seq',
-      [ns, entity == 'cards' ? 'user_cards' : entity],
+      'SELECT entity_id, op, payload_json FROM sync_pending_changes WHERE namespace=? AND entity=?${id == null ? '' : ' AND entity_id=?'} ORDER BY client_seq',
+      [ns, entity == 'cards' ? 'user_cards' : entity, ?id],
     );
+    final indexes = <Object?, int>{
+      for (var index = 0; index < rows.length; index++)
+        rows[index]['id']: index,
+    };
     for (final edit in edits) {
-      final index = rows.indexWhere((r) => r['id'] == edit['entity_id']);
-      if (index < 0) continue;
+      final index = indexes[edit['entity_id']];
+      if (index == null) continue;
       if (edit['op'] == 'delete') {
         rows[index] = {
           ...rows[index],
@@ -284,11 +314,13 @@ class FinancialStore {
               TransactionQuery.fromKey(r['query_key'] as String).covers(query),
         )
         .toList();
-    final stored = database.db.select(
-      "SELECT payload, observed_at FROM financial_entities WHERE namespace=? AND entity='transactions'",
-      [ns],
-    );
-    if (stored.isEmpty && coverage.isEmpty) return null;
+    final stored =
+        database.db.select(
+              "SELECT MAX(observed_at) AS latest FROM financial_entities WHERE namespace=? AND entity='transactions'",
+              [ns],
+            ).single['latest']
+            as int?;
+    if (stored == null && coverage.isEmpty) return null;
     final rows =
         entities(ns, 'transactions', query: query)
             .map(TransactionEntry.fromJson)
@@ -297,9 +329,7 @@ class FinancialStore {
           ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
     final latest = coverage.isNotEmpty
         ? coverage.first['fetched_at'] as int
-        : stored
-              .map((r) => r['observed_at'] as int)
-              .reduce((a, b) => a > b ? a : b);
+        : stored!;
     return LocalTransactionSnapshot(
       rows,
       DateTime.fromMillisecondsSinceEpoch(latest),
@@ -313,7 +343,7 @@ class FinancialStore {
     TransactionQuery? completeQuery,
     DateTime? at,
   }) {
-    final before = jsonEncode(entities(ns, 'transactions'));
+    var changed = false;
     final timestamp = (at ?? DateTime.now()).millisecondsSinceEpoch;
     _transaction(() {
       if (completeQuery != null) {
@@ -323,6 +353,9 @@ class FinancialStore {
           [ns, timestamp],
         );
         for (final old in existing) {
+          // Most complete refreshes return the same IDs. Decode only absent
+          // rows whose query membership must be checked before deletion.
+          if (ids.contains(old['id'])) continue;
           final row = TransactionEntry.fromJson(
             jsonDecode(old['payload'] as String) as Map<String, dynamic>,
           );
@@ -332,6 +365,7 @@ class FinancialStore {
               "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
               [ns, row.id],
             );
+            changed = database.db.updatedRows > 0 || changed;
           }
         }
         database.db.execute(
@@ -346,8 +380,9 @@ class FinancialStore {
             "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND source_key=? AND pending=1",
             [ns, row.sourceKey],
           );
+          changed = database.db.updatedRows > 0 || changed;
         }
-        _upsert(
+        final rowChanged = _upsert(
           ns,
           'transactions',
           row.id,
@@ -355,9 +390,10 @@ class FinancialStore {
           timestamp,
           sourceKey: row.sourceKey,
         );
+        changed = rowChanged || changed;
       }
     });
-    if (before != jsonEncode(entities(ns, 'transactions'))) _notify(ns);
+    if (changed) _notify(ns);
   }
 
   void saveProvisional(String ns, TransactionEntry row) {
@@ -455,7 +491,7 @@ class FinancialStore {
       'DELETE FROM financial_entities WHERE namespace=? AND source_key=? AND pending=1',
       [ns, sourceKey],
     );
-    _notify(ns);
+    if (database.db.updatedRows > 0) _notify(ns);
   }
 
   void markInactive(String ns, String id) {

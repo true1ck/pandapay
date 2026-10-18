@@ -1384,8 +1384,9 @@ class UserCardsRepository {
   Future<SmsBatchImportResult> logTransactionsFromSmsBatch({
     required List<SmsBatchMessage> messages,
     bool backfill = true,
+    bool captureLocally = true,
   }) async {
-    await captureSmsMessages(messages);
+    if (captureLocally) await captureSmsMessages(messages);
     final response = await _client
         .post(
           Uri.parse('$apiBaseUrl/transactions/from-sms/batch'),

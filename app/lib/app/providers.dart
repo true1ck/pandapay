@@ -58,6 +58,8 @@ import '../features/notifications/notification_gate.dart';
 import '../features/notifications/notification_triggers.dart';
 import '../features/notifications/push_notification_service.dart';
 import '../features/sms_import/sms_listener_service.dart';
+import '../features/sms_import/sms_inbox_scanner.dart';
+import '../features/sms_import/sms_capture_worker.dart';
 import '../features/sms_import/sms_background_queue.dart';
 import '../features/settings/settings_sync.dart';
 import 'env.dart';
@@ -1070,6 +1072,7 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       } catch (_) {
         /* The durable intake retries reconciliation later. */
       }
+      final acknowledgements = <void Function()>[];
       for (final result in results) {
         final index = (result['index'] as num?)?.toInt();
         if (index == null || index < 0 || index >= messages.length) continue;
@@ -1103,20 +1106,21 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
             negative ||
             inactive ||
             store.hasReceipt(namespace, key)) {
-          store.discardProvisional(
-            namespace,
-            key,
-            confirmedId: matched.isNotEmpty
-                ? matched.first.id
-                : inactive
-                ? serverId
-                : null,
-          );
-          intake.acknowledge(namespace, key);
+          acknowledgements.add(() {
+            store.discardProvisional(
+              namespace,
+              key,
+              confirmedId: matched.isNotEmpty
+                  ? matched.first.id
+                  : inactive
+                  ? serverId
+                  : null,
+            );
+            intake.acknowledge(namespace, key);
+          });
         } else if (outcome == 'needs_review' || outcome == 'unparsed') {
           // Preserve unsupported input for review without silently retrying it
           // forever or treating an unconfirmed local parse as final spending.
-          store.discardProvisional(namespace, key);
           await ref
               .read(needsReviewRepositoryProvider)
               .add(
@@ -1128,8 +1132,20 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
                   reason: result['reason'] as String?,
                 ),
               );
-          intake.acknowledge(namespace, key);
+          acknowledgements.add(() {
+            store.discardProvisional(namespace, key);
+            intake.acknowledge(namespace, key);
+          });
         }
+      }
+      if (ref.read(cacheNamespaceProvider) != namespace) return;
+      store.batch(() {
+        for (final acknowledge in acknowledgements) {
+          acknowledge();
+        }
+      });
+      if (acknowledgements.isNotEmpty) {
+        ref.invalidate(pendingRecoveryStatusProvider);
       }
     },
   );
@@ -1359,14 +1375,20 @@ recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
             .toDouble(),
       ),
     );
-    if (cached == null ||
-        cache?.financialStore.hasPendingTransactions(
-              ref.read(cacheNamespaceProvider),
-            ) ==
-            true) {
+    // Pending SMS can lack the category/history used by the local detector.
+    // Keep established server series (and dismissal state) through that work.
+    if (cached == null) {
       final local = await _buildLocalRecurringReport(ref);
       if (local != null) {
         ref.read(transactionsProvider);
+        _warmDisplay(
+          ref,
+          cache,
+          key,
+          DateTime.fromMillisecondsSinceEpoch(0),
+          repo.fetchRecurring,
+          (report) => report.toJson(),
+        );
         return local;
       }
     }
@@ -1796,10 +1818,10 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     } catch (_) {}
   }
 
-  Future<void> refreshSecondaryDisplayData() async {
-    // These providers own their response-cache writes. Invalidate before
-    // reading so a resume/online transition actually refreshes an already
-    // loaded provider instead of returning its previous in-memory value.
+  void refreshSecondaryDisplayData() {
+    // Invalidate projections so visible consumers update. Do not eagerly run
+    // eight report requests for screens the user has not opened: they read the
+    // same captured history and warm their server projection when needed.
     ref.invalidate(categorySpendProvider);
     ref.invalidate(
       spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
@@ -1810,33 +1832,9 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     ref.invalidate(loungeUsageProvider);
     ref.invalidate(currentMonthlyReportProvider);
     ref.invalidate(notificationsProvider);
-
-    Future<void> warm<T>(Future<T> future) async {
-      try {
-        await future;
-      } catch (_) {
-        // Offline or an expired session is handled by each provider's cache
-        // fallback. A failed warm-up must never fail Home's refresh.
-      }
-    }
-
-    await Future.wait([
-      warm(ref.read(categorySpendProvider.future)),
-      warm(
-        ref.read(
-          spendReportProvider(
-            const SpendReportQuery.preset(SpendPeriod.month),
-          ).future,
-        ),
-      ),
-      warm(ref.read(bankAccountSummariesProvider.future)),
-      warm(ref.read(budgetsProvider.future)),
-      warm(ref.read(recurringReportProvider.future)),
-      warm(ref.read(loungeUsageProvider.future)),
-      warm(ref.read(currentMonthlyReportProvider.future)),
-      warm(ref.read(notificationsProvider.future)),
-    ]);
   }
+
+  refreshSecondaryDisplayData();
 
   await Future.wait([
     refreshUserCards(),
@@ -1845,7 +1843,6 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
     refreshOverrides(),
     refreshHomeSummary(),
     refreshTransactions(),
-    refreshSecondaryDisplayData(),
   ]);
   ref.invalidate(userCardsProvider);
   ref.invalidate(catalogueProvider);
@@ -1860,27 +1857,51 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
 /// so opening Wallet/Insights after a long pause could leave the app showing
 /// a live-only error until Home was visited again.
 final displayDataSyncLifecycleProvider = Provider<void>((ref) {
-  Future<void> refreshWhenPossible() async {
+  var refreshing = false;
+  var disposed = false;
+  DateTime? lastStarted;
+  String? lastNamespace;
+  ref.onDispose(() => disposed = true);
+  Future<void> refreshWhenPossible({bool force = false}) async {
+    if (disposed || refreshing) return;
     if (ref.read(cacheNamespaceProvider) == 'signed-out') return;
     if (ref.read(isOnlineProvider).valueOrNull == false) return;
-    ref.invalidate(homeDataRefreshProvider);
+    final namespace = ref.read(cacheNamespaceProvider);
+    final now = DateTime.now();
+    if (!force &&
+        lastNamespace == namespace &&
+        lastStarted != null &&
+        now.difference(lastStarted!) < const Duration(seconds: 15)) {
+      return;
+    }
+    lastStarted = now;
+    lastNamespace = namespace;
+    refreshing = true;
     try {
+      // Resume/connectivity/auth callbacks can arrive together. Do not
+      // invalidate an in-flight refresh and start duplicate network work.
+      ref.invalidate(homeDataRefreshProvider);
       await ref.read(homeDataRefreshProvider.future);
     } catch (_) {
       // The individual refresh tasks are best-effort. A transient failure
       // must not surface as a lifecycle error or interrupt navigation.
+    } finally {
+      refreshing = false;
+      if (!disposed && ref.read(cacheNamespaceProvider) != namespace) {
+        unawaited(refreshWhenPossible(force: true));
+      }
     }
   }
 
   ref.listen<String>(cacheNamespaceProvider, (previous, next) {
     if (previous == 'signed-out' && next != 'signed-out') {
-      unawaited(refreshWhenPossible());
+      unawaited(refreshWhenPossible(force: true));
     }
   });
   ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) {
     final cameOnline =
         previous?.valueOrNull == false && next.valueOrNull == true;
-    if (cameOnline) unawaited(refreshWhenPossible());
+    if (cameOnline) unawaited(refreshWhenPossible(force: true));
   });
 
   final lifecycle = AppLifecycleListener(
@@ -3916,7 +3937,8 @@ Future<TransactionEntry?> cachedTransactionById(Ref ref, String id) async {
   final namespace = ref.read(cacheNamespaceProvider);
   cache?.financialStore.migrateLegacy(namespace);
   final records =
-      cache?.financialStore.entities(namespace, 'transactions') ?? const [];
+      cache?.financialStore.entities(namespace, 'transactions', id: id) ??
+      const [];
   for (final row in records) {
     if (row['id'] == id) return TransactionEntry.fromJson(row);
   }
@@ -4396,87 +4418,12 @@ final notificationTriggerLifecycleProvider = Provider<void>((ref) {
 final smsBackgroundFlushProvider = Provider<void>((ref) {
   var workInProgress = false;
   var rerunRequested = false;
-  const inboxReconciliationInterval = Duration(minutes: 5);
-
-  Future<void> saveAmbiguousSmsForConfirmation(
-    String sender,
-    String body,
-    DateTime receivedAt,
-    SmsImportResult result,
-  ) async {
-    // Non-transaction alerts are intentionally ignored. An account debit
-    // without explicit UPI evidence is different: it may be a transfer or a
-    // bill payment, so keep it on-device for one confirmation instead of
-    // silently adding it to spending.
-    if (result.parsed || result.reason != 'ambiguous_account_debit') return;
-    await ref
-        .read(needsReviewRepositoryProvider)
-        .add(
-          NeedsReviewItem(
-            id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
-            sender: sender,
-            body: body,
-            reason: result.reason,
-            receivedAt: receivedAt,
-          ),
-        );
-    ref.invalidate(needsReviewItemsProvider);
-    ref.invalidate(needsReviewCountProvider);
-  }
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
 
   Future<int> flush() async {
-    final repo = ref.read(userCardsRepositoryProvider);
-    // Guest mode has no server to send to; the queue simply waits until
-    // there is one rather than being discarded.
-    if (repo == null) return 0;
-    final namespace = ref.read(cacheNamespaceProvider);
-    final cache = await ref.read(responseCacheProvider.future);
-    final intake = SmsIntakeRepository(cache.financialStore.database);
-    var dueDayUpdated = false;
-    try {
-      final handled = await SmsListenerService().flushBackgroundQueue(
-        (sender, body, receivedAt) async {
-          final result = await repo.logTransactionFromSms(
-            sender: sender,
-            body: body,
-            occurredAt: receivedAt,
-          );
-          dueDayUpdated = dueDayUpdated || result.dueDayUpdated;
-          await saveAmbiguousSmsForConfirmation(
-            sender,
-            body,
-            receivedAt,
-            result,
-          );
-          // Every one of these is "dealt with": imported, recognised as
-          // already imported, or explicitly ignored as a non-spend. Successful
-          // spends are recorded without requiring card attribution. Only a
-          // network or server failure (which throws) leaves it queued.
-          return !intake
-              .pending(namespace)
-              .any((e) => e.id == smsSourceKey(namespace, sender, body));
-        },
-        intake: intake,
-        namespace: namespace,
-      );
-      // Refresh Spending immediately after a queue upload. If a later inbox
-      // reconciliation request times out, an open report must not stay stale.
-      if (handled > 0 || dueDayUpdated) {
-        if (dueDayUpdated) await _clearUserCardsCacheForRef(ref);
-        ref.invalidate(userCardsProvider);
-        ref.invalidate(myCardsProvider);
-        ref.invalidate(transactionsProvider);
-        ref.invalidate(utilizationTransactionsProvider);
-        ref.invalidate(homeSummaryProvider);
-        ref.invalidate(spendReportProvider);
-        ref.invalidate(budgetsProvider);
-        ref.invalidate(recurringReportProvider);
-      }
-      return handled;
-    } catch (_) {
-      // Offline or server down — the queue keeps what it couldn't send.
-      return 0;
-    }
+    final summary = await ref.read(smsAutoImportProvider).syncPendingMessages();
+    return summary.imported + summary.needsReview + summary.dueDatesUpdated;
   }
 
   // Parser improvements must also help messages that were already placed in
@@ -4484,9 +4431,10 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
   // once at startup through the same server path. Successful imports,
   // cardless imports, and explicitly recognised security/non-spend messages
   // are removed from the old queue.
-  Future<void> retryExistingNeedsReview() async {
+  Future<bool> retryExistingNeedsReview() async {
     final repo = ref.read(userCardsRepositoryProvider);
-    if (repo == null) return;
+    if (repo == null) return false;
+    var completed = true;
     final reviewRepo = ref.read(needsReviewRepositoryProvider);
     final items = await reviewRepo.fetchAll();
     var changed = false;
@@ -4509,6 +4457,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       } catch (_) {
         // Keep the remaining items for the next app start if the API is
         // offline or auth has not finished restoring yet.
+        completed = false;
         break;
       }
     }
@@ -4522,135 +4471,21 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       ref.invalidate(utilizationTransactionsProvider);
       ref.invalidate(homeSummaryProvider);
     }
+    return completed;
   }
 
-  /// Reconcile recent provider SMS in addition to the broadcast listener.
-  ///
-  /// This is deliberately automatic and idempotent. Some Android emulator
-  /// and OEM messaging stacks write an incoming SMS to the provider but do
-  /// not deliver the third-party SMS_RECEIVED callback consistently. The
-  /// server source key makes re-reading recent rows safe, while `backfill`
-  /// prevents old inbox history from changing current reward-cycle state.
+  // Local scanning has no API dependency. Progress advances only after each
+  // page has been captured, and later passes read strictly newer provider IDs.
   Future<bool> reconcileInbox() async {
     if (ref.read(userCardsRepositoryProvider) == null) return false;
-
-    final prefs = await SharedPreferences.getInstance();
-    // Keep reconciliation progress across ordinary app updates. A build-number
-    // keyed value forced a full device inbox scan after every release, which
-    // made startup compete with rendering on phones with a large SMS history.
-    // Bump the revision only when acceptance rules require a deliberate replay.
-    const inboxReconciliationKey = 'pandapay_app.sms_inbox_reconciled_at_v4';
-    const legacyInboxReconciliationPrefix = '${inboxReconciliationKey}_';
-    const serverObservationCountKey =
-        'pandapay_app.sms_server_observation_count_v1';
-    const legacyServerObservationCountPrefix = '${serverObservationCountKey}_';
-    final now = DateTime.now();
-    var lastRunMillis = prefs.getInt(inboxReconciliationKey);
-    if (lastRunMillis == null) {
-      for (final key in prefs.getKeys()) {
-        if (!key.startsWith(legacyInboxReconciliationPrefix)) continue;
-        final legacyValue = prefs.getInt(key);
-        if (legacyValue != null &&
-            (lastRunMillis == null || legacyValue > lastRunMillis)) {
-          lastRunMillis = legacyValue;
-        }
-      }
-      if (lastRunMillis != null) {
-        await prefs.setInt(inboxReconciliationKey, lastRunMillis);
-      }
-    }
-
-    // A server-side cleanup/reset must not strand the device behind its old
-    // local checkpoint. Once a prior positive count drops, recover from the
-    // complete on-device inbox; source keys keep that replay idempotent.
-    var forceFullScan = lastRunMillis == null;
-    var serverResetDetected = false;
-    var previousServerCount = prefs.getInt(serverObservationCountKey);
-    if (previousServerCount == null) {
-      for (final key in prefs.getKeys()) {
-        if (!key.startsWith(legacyServerObservationCountPrefix)) continue;
-        final legacyValue = prefs.getInt(key);
-        if (legacyValue != null &&
-            (previousServerCount == null ||
-                legacyValue > previousServerCount)) {
-          previousServerCount = legacyValue;
-        }
-      }
-      if (previousServerCount != null) {
-        await prefs.setInt(serverObservationCountKey, previousServerCount);
-      }
-    }
-    try {
-      final serverState = await ref
-          .read(userCardsRepositoryProvider)!
-          .fetchSmsImportState();
-      final currentServerCount = serverState.smsObservationCount;
-      if (previousServerCount != null &&
-          previousServerCount > 0 &&
-          currentServerCount != null &&
-          currentServerCount < previousServerCount) {
-        forceFullScan = true;
-        serverResetDetected = true;
-      }
-      // Keep the old positive checkpoint until a forced recovery succeeds.
-      // Otherwise a transient network failure during that recovery would
-      // turn the reset into a normal incremental scan on the next launch.
-      if (currentServerCount != null && !serverResetDetected) {
-        await prefs.setInt(serverObservationCountKey, currentServerCount);
-      }
-    } catch (_) {
-      // Import must continue when the optional checkpoint endpoint is
-      // temporarily unavailable. The date-bounded path remains safe and the
-      // next launch will retry the reset check.
-    }
-
-    // The lightweight checkpoint query above is allowed on every launch so a
-    // server-side cleanup is noticed immediately. Normal launches still use
-    // the five-minute inbox interval and do not reread the device inbox.
-    if (!forceFullScan &&
-        lastRunMillis != null &&
-        now.difference(DateTime.fromMillisecondsSinceEpoch(lastRunMillis)) <
-            inboxReconciliationInterval) {
-      return false;
-    }
-
-    // Reuse the same bounded batch path as the explicit SMS screen. In
-    // particular, do not force these messages through `backfill: true`: a
-    // live SMS received while the app was paused must still update the
-    // current month's card/reward state when reconciliation catches it.
-    // The first run after this version is installed is a complete recovery
-    // pass so a new user does not see only the newest alerts. Later resume
-    // passes query by date from the previous successful scan, with a small
-    // overlap that covers clock skew/offline handover. The server source key
-    // makes that overlap idempotent.
-    final summary = await ref
+    final scanned = await ref
         .read(smsAutoImportProvider)
-        .syncExistingInbox(
-          limit: 0,
-          since: forceFullScan
-              ? null
-              : DateTime.fromMillisecondsSinceEpoch(
-                  lastRunMillis!,
-                ).subtract(const Duration(days: 2)),
-        );
-    await prefs.setInt(inboxReconciliationKey, now.millisecondsSinceEpoch);
-    try {
-      final serverState = await ref
-          .read(userCardsRepositoryProvider)!
-          .fetchSmsImportState();
-      final currentServerCount = serverState.smsObservationCount;
-      if (currentServerCount != null) {
-        await prefs.setInt(serverObservationCountKey, currentServerCount);
-      }
-    } catch (_) {
-      // The next reconciliation will refresh the checkpoint.
-    }
-    return summary.imported > 0 ||
-        summary.needsReview > 0 ||
-        summary.dueDatesUpdated > 0;
+        .captureExistingInbox();
+    return scanned > 0;
   }
 
   Future<void> flushAndRetry() async {
+    if (disposed) return;
     if (workInProgress) {
       // Startup, auth restoration, and resume may all request the same pass.
       // Coalesce those requests instead of silently dropping the one that
@@ -4674,38 +4509,50 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         // settled, leaving the app listening but never importing the existing
         // inbox until a later resume.
         await ref.read(smsAutoImportProvider).start();
-        var changed = await flush() > 0;
+        var changed = false;
         try {
-          changed = await reconcileInbox() || changed;
+          changed = await reconcileInbox();
         } catch (_) {
           // A provider/permission/network failure must not abort the remaining
           // queue retry and must not surface as an unhandled lifecycle error.
         }
+        // Network reconciliation drains durable local rows; it never rereads
+        // inbox history and can fail without undoing completed local capture.
+        changed = await flush() > 0 || changed;
         // Repair rows imported by older builds: this suppresses only a
         // high-confidence SMS replay and fills categories for legacy rows.
-        // It is idempotent, but still a server request, so throttle it rather
-        // than repeating it on every foreground transition.
+        // Run once per migration revision/account, not every five minutes.
         final repo = ref.read(userCardsRepositoryProvider);
         final prefs = await SharedPreferences.getInstance();
         final repairKey =
             'pandapay_app.sms_history_repaired_at_v1_${ref.read(cacheNamespaceProvider)}';
         final lastRepair = prefs.getInt(repairKey);
-        final repairDue =
-            lastRepair == null ||
-            DateTime.now().difference(
-                  DateTime.fromMillisecondsSinceEpoch(lastRepair),
-                ) >=
-                const Duration(minutes: 5);
-        if (repo != null && repairDue) {
-          final repaired = await repo.reconcileSmsHistory();
-          await prefs.setInt(repairKey, DateTime.now().millisecondsSinceEpoch);
-          changed =
-              repaired.duplicateSuppressed > 0 ||
-              repaired.linkedCards > 0 ||
-              repaired.reclassified > 0 ||
-              changed;
+        final repairDue = lastRepair == null;
+        if (repo != null &&
+            repairDue &&
+            ref.read(isOnlineProvider).valueOrNull != false) {
+          try {
+            final repaired = await repo.reconcileSmsHistory();
+            await prefs.setInt(
+              repairKey,
+              DateTime.now().millisecondsSinceEpoch,
+            );
+            changed =
+                repaired.duplicateSuppressed > 0 ||
+                repaired.linkedCards > 0 ||
+                repaired.reclassified > 0 ||
+                changed;
+          } catch (_) {
+            /* Retry the one-time migration after connectivity returns. */
+          }
         }
-        await retryExistingNeedsReview();
+        final reviewKey =
+            'pandapay_app.sms_review_replayed_${LocalSmsParser.version}_${ref.read(cacheNamespaceProvider)}';
+        if (ref.read(isOnlineProvider).valueOrNull != false &&
+            prefs.getBool(reviewKey) != true &&
+            await retryExistingNeedsReview()) {
+          await prefs.setBool(reviewKey, true);
+        }
         if (changed) {
           ref.invalidate(userCardsProvider);
           ref.invalidate(transactionsProvider);
@@ -4717,7 +4564,10 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           ref.invalidate(budgetsProvider);
           ref.invalidate(recurringReportProvider);
         }
-      } while (rerunRequested);
+      } while (rerunRequested && !disposed);
+    } catch (_) {
+      // Local capture and outbox rows remain durable. Lifecycle callbacks
+      // must not turn an unavailable database/API into an unhandled error.
     } finally {
       workInProgress = false;
     }
@@ -4734,6 +4584,12 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       ),
     );
     if (next != 'signed-out' && next != previous) {
+      unawaited(flushAndRetry());
+    }
+  });
+
+  ref.listen<AsyncValue<bool>>(isOnlineProvider, (previous, next) {
+    if (previous?.valueOrNull == false && next.valueOrNull == true) {
       unawaited(flushAndRetry());
     }
   });
@@ -4769,128 +4625,311 @@ class SmsInboxSyncSummary {
   });
 }
 
+final smsListenerServiceProvider = Provider<SmsListenerService>(
+  (ref) => const SmsListenerService(),
+);
+
 class SmsAutoImportController {
-  SmsAutoImportController(this._ref) : _service = SmsListenerService();
+  SmsAutoImportController(this._ref)
+    : _service = _ref.read(smsListenerServiceProvider) {
+    _ref.onDispose(() {
+      _disposed = true;
+      _retryTimer?.cancel();
+      _captureWorker?.dispose();
+    });
+  }
 
   final Ref _ref;
   final SmsListenerService _service;
   bool _registered = false;
   String? _userCardIdOverride;
   Future<SmsInboxSyncSummary>? _activeInboxSync;
+  String? _activeUploadNamespace;
+  Future<int>? _activeInboxCapture;
+  String? _activeCaptureNamespace;
+  Timer? _retryTimer;
+  bool _disposed = false;
+  bool _uploadAgainRequested = false;
+  Future<void>? _starting;
+  SmsCaptureWorker? _captureWorker;
 
   void setCardOverride(String? userCardId) => _userCardIdOverride = userCardId;
 
-  Future<void> start() async {
-    if (_registered || !await _service.hasPermissions()) return;
+  Future<void> start() =>
+      _starting ??= _start().whenComplete(() => _starting = null);
+
+  Future<void> _start() async {
+    if (_disposed ||
+        _registered ||
+        !await _service.hasPermissions() ||
+        _disposed) {
+      return;
+    }
     _service.listenForeground((sender, body, receivedAt) {
       unawaited(_handle(sender, body, receivedAt));
     });
     _registered = true;
   }
 
-  /// Reads the existing on-device inbox once when the user starts SMS
-  /// tracking. The receiver only handles future messages; without this pass a
-  /// newly-installed app appears to do nothing until the next bank alert.
-  ///
-  /// The server's source key makes this safe to repeat: messages already
-  /// imported by the app shell or a previous scan are reported as duplicates,
-  /// not inserted again.
-  Future<SmsInboxSyncSummary> syncExistingInbox({
-    int limit = 0,
-    DateTime? since,
-  }) async {
-    // The app shell and the explicit SMS screen can both request recovery at
-    // the same time (for example when the user opens Settings while the
-    // post-update startup pass is still running). Share the in-flight work;
-    // never read/upload the inbox twice concurrently.
-    final active = _activeInboxSync;
-    if (active != null) return active;
+  /// Both the existing SMS screen and app lifecycle use this one owner.
+  /// Ordinary display pages only read the shared financial store.
+  Future<SmsInboxSyncSummary> syncExistingInbox() async {
+    final scanned = await captureExistingInbox();
+    return syncPendingMessages(scanned: scanned);
+  }
 
-    final future = _syncExistingInbox(limit: limit, since: since);
-    _activeInboxSync = future;
+  Future<int> captureExistingInbox() async {
+    if (_disposed) return 0;
+    final namespace = _ref.read(cacheNamespaceProvider);
+    final active = _activeInboxCapture;
+    if (active != null) {
+      if (_activeCaptureNamespace == namespace) return active;
+      try {
+        await active;
+      } catch (_) {
+        /* Previous account stopped. */
+      }
+      return captureExistingInbox();
+    }
+    final work = _captureExistingInbox(namespace);
+    _activeInboxCapture = work;
+    _activeCaptureNamespace = namespace;
     try {
-      return await future;
+      return await work;
     } finally {
-      if (identical(_activeInboxSync, future)) _activeInboxSync = null;
+      _activeInboxCapture = null;
+      _activeCaptureNamespace = null;
     }
   }
 
-  Future<SmsInboxSyncSummary> _syncExistingInbox({
-    required int limit,
-    required DateTime? since,
-  }) async {
-    final repo = _ref.read(userCardsRepositoryProvider);
-    if (repo == null) {
-      return const SmsInboxSyncSummary(
-        scanned: 0,
+  Future<int> _captureExistingInbox(String namespace) async {
+    if (!await _service.hasPermissions()) return 0;
+    final cache = await _ref.read(responseCacheProvider.future);
+    final store = cache.financialStore;
+    store.migrateLegacy(namespace);
+    void checkAccount() {
+      if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
+        throw StateError('Account changed during SMS capture');
+      }
+    }
+
+    final scanner = SmsInboxScanner(
+      progress: SmsInboxProgress(store.database),
+      head: _service.inboxHeadId,
+      read: (afterId, throughId) =>
+          _service.readInboxPage(afterId: afterId, throughId: throughId),
+      checkAccount: checkAccount,
+      capture: (messages) async {
+        checkAccount();
+        // Upgrade scans establish row-ID progress once. Already confirmed
+        // financial sources are not parsed or uploaded a second time.
+        final queued = [
+          for (final message in messages)
+            QueuedSms(
+              sender: message.sender,
+              body: message.body,
+              receivedAt: message.receivedAt,
+            ),
+        ];
+        await _captureMessages(namespace, cache, queued);
+      },
+    );
+    return scanner.scan(namespace);
+  }
+
+  Future<void> _captureMessages(
+    String namespace,
+    ResponseCache cache,
+    List<QueuedSms> messages,
+  ) async {
+    if (messages.isEmpty) return;
+    if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
+      throw StateError('Account changed during SMS capture');
+    }
+    final store = cache.financialStore;
+    final path = store.database.filePath;
+    if (path == null) {
+      // In-memory test databases cannot be reopened by another isolate.
+      SmsImportStore(store).captureBatch(namespace, messages);
+    } else {
+      final worker = _captureWorker ??= SmsCaptureWorker(path);
+      final changed = await worker.capture(namespace, messages);
+      if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
+        throw StateError('Account changed during SMS capture');
+      }
+      store.notifyExternalChanges(namespace, changed);
+    }
+    _ref.invalidate(pendingRecoveryStatusProvider);
+  }
+
+  /// Card discovery uses the same captured messages as every financial view.
+  /// This only catches up newer IDs; it never launches a separate history scan.
+  Future<List<String>> capturedSmsBodies({int limit = 500}) async {
+    final namespace = _ref.read(cacheNamespaceProvider);
+    await captureExistingInbox();
+    if (_ref.read(cacheNamespaceProvider) != namespace) {
+      throw StateError('Account changed during card discovery');
+    }
+    final cache = await _ref.read(responseCacheProvider.future);
+    return SmsIntakeRepository(
+      cache.financialStore.database,
+    ).capturedBodies(namespace, limit: limit);
+  }
+
+  Future<SmsInboxSyncSummary> syncPendingMessages({int scanned = 0}) async {
+    if (_disposed) {
+      return SmsInboxSyncSummary(
+        scanned: scanned,
         imported: 0,
         duplicates: 0,
         ignored: 0,
       );
     }
-
-    final messages = await _service.readInboxSms(limit: limit, since: since);
-    // Capture the entire scan before the first network request, so a failed
-    // first batch cannot strand the rest of the inbox behind connectivity.
-    await repo.captureSmsMessages([
-      for (final message in messages)
-        SmsBatchMessage(
-          sender: message.sender,
-          body: message.body,
-          occurredAt: message.receivedAt,
-        ),
-    ]);
-    var imported = 0;
-    var duplicates = 0;
-    var ignored = 0;
-    var needsReview = 0;
-    var dueDatesUpdated = 0;
-    final now = DateTime.now();
-    final currentMonth = DateTime(now.year, now.month);
-
-    // Import in bounded requests. Current-month messages are live cycle
-    // activity; older messages remain history and must not inflate current
-    // caps/rewards.
-    for (final backfill in [false, true]) {
-      final selected = messages.where((message) {
-        final messageMonth = DateTime(
-          message.receivedAt.year,
-          message.receivedAt.month,
-        );
-        final isCurrentMonth = messageMonth == currentMonth;
-        return backfill ? !isCurrentMonth : isCurrentMonth;
-      }).toList();
-
-      for (var start = 0; start < selected.length; start += 200) {
-        // Yield between chunks so a large first-install/update recovery pass
-        // does not monopolise Flutter's frame/input loop.
-        await Future<void>.delayed(Duration.zero);
-        final end = (start + 200).clamp(0, selected.length);
-        final chunk = selected.sublist(start, end);
-        final result = await repo.logTransactionsFromSmsBatch(
-          messages: [
-            for (final message in chunk)
-              SmsBatchMessage(
-                userCardId: _userCardIdOverride,
-                sender: message.sender,
-                body: message.body,
-                occurredAt: message.receivedAt,
-              ),
-          ],
-          backfill: backfill,
-        );
-        imported += result.imported;
-        duplicates += result.duplicate;
-        ignored += result.unparsed + result.invalid + result.errored;
-        needsReview += result.needsReview;
-        dueDatesUpdated += result.dueDatesUpdated;
+    final namespace = _ref.read(cacheNamespaceProvider);
+    final active = _activeInboxSync;
+    if (active != null) {
+      if (_activeUploadNamespace == namespace) {
+        _uploadAgainRequested = true;
+        return active;
+      }
+      try {
+        await active;
+      } catch (_) {
+        /* Previous account stopped. */
+      }
+      return syncPendingMessages(scanned: scanned);
+    }
+    _retryTimer?.cancel();
+    _uploadAgainRequested = false;
+    final work = _syncPendingMessages(namespace, scanned);
+    _activeInboxSync = work;
+    _activeUploadNamespace = namespace;
+    try {
+      return await work;
+    } finally {
+      _activeInboxSync = null;
+      _activeUploadNamespace = null;
+      if (!_disposed && _ref.read(cacheNamespaceProvider) == namespace) {
+        final cache = _ref.read(responseCacheProvider).valueOrNull;
+        final next = cache == null
+            ? null
+            : SmsIntakeRepository(
+                cache.financialStore.database,
+              ).nextRetryAt(namespace);
+        if (next != null &&
+            _ref.read(userCardsRepositoryProvider) != null &&
+            _ref.read(isOnlineProvider).valueOrNull != false) {
+          final wait = next.difference(DateTime.now());
+          final delay = wait.isNegative || wait == Duration.zero
+              ? (_uploadAgainRequested
+                    ? const Duration(milliseconds: 100)
+                    : const Duration(seconds: 30))
+              : wait;
+          _retryTimer = Timer(delay, () async {
+            if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
+              return;
+            }
+            try {
+              await syncPendingMessages();
+            } catch (_) {
+              /* Resume/reconnect also retries. */
+            }
+          });
+        }
       }
     }
+  }
 
-    // Publish once after the complete bounded pass. Re-reading the inbox can
-    // find messages the server already knows; that is not a data change and
-    // must not trigger a full-screen refresh.
-    if (imported > 0 || needsReview > 0 || dueDatesUpdated > 0) {
+  Future<SmsInboxSyncSummary> _syncPendingMessages(
+    String namespace,
+    int scanned,
+  ) async {
+    var imported = 0,
+        duplicates = 0,
+        ignored = 0,
+        needsReview = 0,
+        dueDatesUpdated = 0;
+    final repo = _ref.read(userCardsRepositoryProvider);
+    if (repo == null) {
+      return SmsInboxSyncSummary(
+        scanned: scanned,
+        imported: 0,
+        duplicates: 0,
+        ignored: 0,
+      );
+    }
+    final cache = await _ref.read(responseCacheProvider.future);
+    final intake = SmsIntakeRepository(cache.financialStore.database);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    // Old preference queues are upgrade-only input, isolated until account
+    // ownership can be recovered through the existing recovery flow.
+    for (final message in SmsBackgroundQueue.read(prefs)) {
+      if (!LocalSmsParser.sensitive(message.body)) {
+        intake.capture('legacy', message);
+      }
+    }
+    await SmsBackgroundQueue.clear(prefs);
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+    for (var batch = 0; batch < 100; batch++) {
+      if (_ref.read(cacheNamespaceProvider) != namespace ||
+          _ref.read(isOnlineProvider).valueOrNull == false) {
+        break;
+      }
+      final pending = intake.pending(namespace, readyOnly: true);
+      if (pending.isEmpty) break;
+      try {
+        for (final backfill in [false, true]) {
+          final messages = [
+            for (final entry in pending)
+              if ((DateTime(
+                        entry.message.receivedAt.year,
+                        entry.message.receivedAt.month,
+                      ) !=
+                      currentMonth) ==
+                  backfill)
+                SmsBatchMessage(
+                  userCardId: _userCardIdOverride,
+                  sender: entry.message.sender,
+                  body: entry.message.body,
+                  occurredAt: entry.message.receivedAt,
+                ),
+          ];
+          if (messages.isEmpty) continue;
+          if (_ref.read(cacheNamespaceProvider) != namespace) break;
+          final result = await repo.logTransactionsFromSmsBatch(
+            messages: messages,
+            backfill: backfill,
+            captureLocally: false,
+          );
+          imported += result.imported;
+          duplicates += result.duplicate;
+          ignored += result.unparsed + result.invalid + result.errored;
+          needsReview += result.needsReview;
+          dueDatesUpdated += result.dueDatesUpdated;
+        }
+      } catch (_) {
+        // Local capture/progress is already durable. Retry only this outbox.
+        for (final entry in pending) {
+          intake.failed(namespace, entry.id);
+        }
+        break;
+      }
+      final remaining = intake.pending(namespace).map((e) => e.id).toSet();
+      final unresolved = pending
+          .where((e) => remaining.contains(e.id))
+          .toList();
+      if (unresolved.isNotEmpty) {
+        for (final entry in unresolved) {
+          intake.failed(namespace, entry.id);
+        }
+        break;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+    if (_ref.read(cacheNamespaceProvider) == namespace &&
+        (imported > 0 || needsReview > 0 || dueDatesUpdated > 0)) {
       if (dueDatesUpdated > 0) await _clearUserCardsCacheForRef(_ref);
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(myCardsProvider);
@@ -4903,7 +4942,7 @@ class SmsAutoImportController {
       _ref.invalidate(recurringReportProvider);
     }
     return SmsInboxSyncSummary(
-      scanned: messages.length,
+      scanned: scanned,
       imported: imported,
       duplicates: duplicates,
       ignored: ignored,
@@ -4913,53 +4952,20 @@ class SmsAutoImportController {
   }
 
   Future<void> _handle(String sender, String body, DateTime receivedAt) async {
-    if (LocalSmsParser.sensitive(body)) return;
+    if (_disposed || LocalSmsParser.sensitive(body)) return;
     final namespace = _ref.read(cacheNamespaceProvider);
-    final cache = await _ref.read(responseCacheProvider.future);
-    SmsIntakeRepository(cache.financialStore.database).capture(
-      namespace,
-      QueuedSms(sender: sender, body: body, receivedAt: receivedAt),
-    );
-    final repo = _ref.read(userCardsRepositoryProvider);
-    if (repo == null) {
-      return;
-    }
     try {
-      final result = await repo.logTransactionFromSms(
-        userCardId: _userCardIdOverride,
-        sender: sender,
-        body: body,
-        occurredAt: receivedAt,
-      );
-      if (!result.parsed && result.reason == 'ambiguous_account_debit') {
-        await _ref
-            .read(needsReviewRepositoryProvider)
-            .add(
-              NeedsReviewItem(
-                id: '${sender}_${receivedAt.microsecondsSinceEpoch}',
-                sender: sender,
-                body: body,
-                reason: result.reason,
-                receivedAt: receivedAt,
-              ),
-            );
-        _ref.invalidate(needsReviewItemsProvider);
-        _ref.invalidate(needsReviewCountProvider);
-      }
-      if (result.dueDayUpdated) {
-        await _clearUserCardsCacheForRef(_ref);
-      }
-      _ref.invalidate(userCardsProvider);
-      _ref.invalidate(myCardsProvider);
-      _ref.invalidate(transactionsProvider);
-      _ref.invalidate(utilizationTransactionsProvider);
-      _ref.invalidate(homeSummaryProvider);
-      _ref.invalidate(needsReviewCountProvider);
-      _ref.invalidate(spendReportProvider);
-      _ref.invalidate(budgetsProvider);
-      _ref.invalidate(recurringReportProvider);
+      final cache = await _ref.read(responseCacheProvider.future);
+      if (_ref.read(cacheNamespaceProvider) != namespace) return;
+      await _captureMessages(namespace, cache, [
+        QueuedSms(sender: sender, body: body, receivedAt: receivedAt),
+      ]);
+      // Delivery never advances scan progress: there may still be unread
+      // provider rows before this broadcast. All uploads use one outbox owner.
+      await syncPendingMessages();
     } catch (_) {
-      // The intake was committed before upload and remains retryable.
+      // Inbox recovery remains available if local storage/delivery failed.
+      // If only HTTP failed, the durable pending row already remains queued.
     }
   }
 }

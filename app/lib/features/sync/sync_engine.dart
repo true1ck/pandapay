@@ -163,6 +163,7 @@ class SyncEngine {
     var totalPulled = 0;
     var totalConflicts = 0;
     var since = queue.lastServerSeq;
+    final entities = <String>{};
 
     // Loops on `hasMore` so a device returning after a long absence catches up
     // fully instead of one page per trigger. Bounded so a pathological
@@ -173,17 +174,24 @@ class SyncEngine {
 
       if (batch.changes.isEmpty) break;
 
-      // Commit the affected records before the cursor/ack can advance.
-      final entities = batch.changes.map((c) => c['entity'] as String).toSet();
-      await _materialize(entities, queue);
-      _invalidateFor(entities);
-
+      // Gather the bounded backlog before fetching authoritative snapshots.
+      // Fetching the entire transaction history once per page multiplies
+      // startup I/O and UI-isolate work without adding any durable coverage.
+      entities.addAll(batch.changes.map((c) => c['entity'] as String));
       since = batch.latestServerSeq;
-      queue.lastServerSeq = since;
-      await api.ack(deviceId: deviceId, serverSeq: since);
       totalPulled += batch.changes.length;
 
       if (!batch.hasMore) break;
+    }
+
+    if (entities.isNotEmpty) {
+      // Neither the persisted cursor nor the server acknowledgment advances
+      // until every affected entity has been committed. Failure replays the
+      // backlog safely on the next cycle.
+      await _materialize(entities, queue);
+      _invalidateFor(entities);
+      queue.lastServerSeq = since;
+      await api.ack(deviceId: deviceId, serverSeq: since);
     }
 
     _ref.read(unacknowledgedConflictsProvider.notifier).state = totalConflicts;

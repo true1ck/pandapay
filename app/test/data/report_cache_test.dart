@@ -12,6 +12,121 @@ import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 void main() {
+  test('pending SMS preserves established subscription series', () async {
+    final database = openInMemoryForTesting();
+    final cache = ResponseCache(database);
+    final client = MockClient(
+      (_) async => throw http.ClientException('offline'),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        accessTokenProvider.overrideWith((ref) => 'restored-session'),
+        responseCacheProvider.overrideWith((ref) async => cache),
+        spendReportsRepositoryProvider.overrideWithValue(
+          SpendReportsRepository(
+            apiBaseUrl: 'http://api.test',
+            accessToken: 'restored-session',
+            client: client,
+          ),
+        ),
+      ],
+    );
+    addTearDown(() {
+      container.dispose();
+      client.close();
+      cache.financialStore.dispose();
+      database.close();
+    });
+    final namespace = container.read(cacheNamespaceProvider);
+    final saved = RecurringReport(
+      series: [
+        RecurringSeries(
+          id: 'established',
+          displayName: 'Streaming Service',
+          typicalAmount: Money.fromRupees(649),
+          cadenceDays: 30,
+          occurrenceCount: 3,
+          annualCost: Money.fromRupees(7896),
+          nextExpectedOn: DateTime(2026, 11, 5),
+        ),
+      ],
+      totalAnnual: Money.fromRupees(7896),
+    );
+    await cache.put('$namespace:recurring_report', jsonEncode(saved.toJson()));
+    cache.financialStore.saveProvisional(
+      namespace,
+      TransactionEntry(
+        id: 'unrelated-sms',
+        sourceKey: 'unrelated',
+        amount: Money.fromRupees(50),
+        occurredAt: DateTime.now(),
+        merchantName: 'Groceries',
+        status: 'active',
+        source: 'sms',
+      ),
+    );
+    final report = await container.read(recurringReportProvider.future);
+    expect(report!.series.single.id, 'established');
+    cache.financialStore.discardProvisional(namespace, 'unrelated');
+    await Future<void>.delayed(Duration.zero);
+    final afterSync = await container.read(recurringReportProvider.future);
+    expect(afterSync!.series.single.id, 'established');
+  });
+
+  test(
+    'pending local patterns do not resurrect dismissed server series',
+    () async {
+      final database = openInMemoryForTesting();
+      final cache = ResponseCache(database);
+      final client = MockClient(
+        (_) async => throw http.ClientException('offline'),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          accessTokenProvider.overrideWith((ref) => 'restored-session'),
+          responseCacheProvider.overrideWith((ref) async => cache),
+          spendReportsRepositoryProvider.overrideWithValue(
+            SpendReportsRepository(
+              apiBaseUrl: 'http://api.test',
+              accessToken: 'restored-session',
+              client: client,
+            ),
+          ),
+        ],
+      );
+      addTearDown(() {
+        container.dispose();
+        client.close();
+        cache.financialStore.dispose();
+        database.close();
+      });
+      final namespace = container.read(cacheNamespaceProvider);
+      await cache.put(
+        '$namespace:recurring_report',
+        jsonEncode(
+          const RecurringReport(series: [], totalAnnual: Money.zero()).toJson(),
+        ),
+      );
+      for (var month = 7; month <= 9; month++) {
+        cache.financialStore.saveProvisional(
+          namespace,
+          TransactionEntry(
+            id: 'charge-$month',
+            sourceKey: 'charge-$month',
+            amount: Money.fromRupees(649),
+            occurredAt: DateTime(2026, month, 5),
+            merchantName: 'Streaming Service',
+            categoryName: 'Entertainment',
+            status: 'active',
+            source: 'sms',
+          ),
+        );
+      }
+      final report = await container.read(recurringReportProvider.future);
+      expect(report!.series, isEmpty);
+    },
+  );
+
   test(
     'builds Spending and Subscriptions from transactions after report 401',
     () async {

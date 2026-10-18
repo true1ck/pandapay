@@ -106,6 +106,13 @@ class SmsInboxReadException implements Exception {
   String toString() => 'Unable to read the Android SMS inbox: $cause';
 }
 
+class SmsInboxPage {
+  final List<InboxSms> messages;
+  final int lastId;
+  final int rowCount;
+  const SmsInboxPage(this.messages, this.lastId, this.rowCount);
+}
+
 class SmsListenerService {
   final Telephony? _injected;
 
@@ -132,6 +139,68 @@ class SmsListenerService {
 
   Future<bool> hasPermissions() async {
     return Permission.sms.status.then((s) => s.isGranted);
+  }
+
+  /// Capture a fixed inbox boundary. New rows arriving while an initial scan
+  /// runs are handled by the receiver or the next incremental pass.
+  Future<int> inboxHeadId() async {
+    final rows = await _telephony.getInboxSms(
+      columns: const [SmsColumn.ID],
+      sortOrder: [OrderBy(SmsColumn.ID, sort: Sort.DESC)],
+      queryLimit: 1,
+    );
+    return rows.isEmpty ? 0 : rows.single.id!;
+  }
+
+  /// Keyset pagination includes non-financial rows in the progress marker.
+  /// Bodies are transferred in bounded pages, never as one complete inbox.
+  Future<SmsInboxPage> readInboxPage({
+    required int afterId,
+    required int throughId,
+    int pageSize = 200,
+  }) async {
+    final rows = await _telephony.getInboxSms(
+      columns: const [
+        SmsColumn.ID,
+        SmsColumn.ADDRESS,
+        SmsColumn.BODY,
+        SmsColumn.DATE,
+      ],
+      filter: SmsFilter.where(SmsColumn.ID)
+          .greaterThan('$afterId')
+          .and(SmsColumn.ID)
+          .lessThanOrEqualTo('$throughId'),
+      sortOrder: [OrderBy(SmsColumn.ID, sort: Sort.ASC)],
+      queryLimit: pageSize,
+    );
+    var lastId = afterId;
+    final messages = <InboxSms>[];
+    for (final row in rows) {
+      final id = row.id;
+      if (id == null || id <= afterId || id > throughId) {
+        throw const FormatException('Invalid SMS provider progress');
+      }
+      if (id > lastId) lastId = id;
+      final sender = row.address;
+      final body = row.body;
+      final date = row.date;
+      if (sender == null ||
+          body == null ||
+          date == null ||
+          !looksLikeTransactionSms(body) ||
+          LocalSmsParser.sensitive(body)) {
+        continue;
+      }
+      messages.add(
+        InboxSms(
+          id: id,
+          sender: sender,
+          body: body,
+          receivedAt: DateTime.fromMillisecondsSinceEpoch(date),
+        ),
+      );
+    }
+    return SmsInboxPage(messages, lastId, rows.length);
   }
 
   /// True once Android will no longer show the runtime prompt (user picked

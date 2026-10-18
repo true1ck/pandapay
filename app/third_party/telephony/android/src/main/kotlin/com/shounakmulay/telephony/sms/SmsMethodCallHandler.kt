@@ -66,6 +66,7 @@ class SmsMethodCallHandler(
   private var selection: String? = null
   private var selectionArgs: List<String>? = null
   private var sortOrder: String? = null
+  private var queryLimit: Int? = null
 
   private lateinit var messageBody: String
   private lateinit var address: String
@@ -94,6 +95,7 @@ class SmsMethodCallHandler(
         selection = call.argument(SELECTION)
         selectionArgs = call.argument(SELECTION_ARGS)
         sortOrder = call.argument(SORT_ORDER)
+        queryLimit = call.argument("queryLimit")
 
         handleMethod(action, SMS_QUERY_REQUEST_CODE)
       }
@@ -187,6 +189,7 @@ class SmsMethodCallHandler(
     val requestSelection = selection
     val requestSelectionArgs = selectionArgs
     val requestSortOrder = sortOrder
+    val requestLimit = queryLimit
     smsQueryExecutor.execute {
       try {
         val messages = smsController.getMessages(
@@ -194,7 +197,8 @@ class SmsMethodCallHandler(
           requestedProjection,
           requestSelection,
           requestSelectionArgs,
-          requestSortOrder
+          requestSortOrder,
+          requestLimit
         )
         mainHandler.post { requestResult.success(messages) }
       } catch (error: Exception) {

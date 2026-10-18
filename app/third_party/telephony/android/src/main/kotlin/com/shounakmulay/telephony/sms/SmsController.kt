@@ -32,7 +32,8 @@ class SmsController(private val context: Context) {
         projection: List<String>,
         selection: String?,
         selectionArgs: List<String>?,
-        sortOrder: String?
+        sortOrder: String?,
+        queryLimit: Int? = null
     ): List<HashMap<String, String?>> {
         val messages = mutableListOf<HashMap<String, String?>>()
 
@@ -44,9 +45,10 @@ class SmsController(private val context: Context) {
             sortOrder
         )
 
-        cursor?.use { rows ->
+        if (cursor == null) throw IllegalStateException("SMS provider returned no cursor")
+        cursor.use { rows ->
             val columnNames = rows.columnNames
-            while (rows.moveToNext()) {
+            while ((queryLimit == null || queryLimit <= 0 || messages.size < queryLimit) && rows.moveToNext()) {
                 val dataObject = HashMap<String, String?>(columnNames.size)
                 for (columnIndex in columnNames.indices) {
                     dataObject[columnNames[columnIndex]] = rows.getString(columnIndex)

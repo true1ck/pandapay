@@ -190,6 +190,21 @@ must exceed version `20050` and use the same signing certificate.
 
 ## 5. Canonical build command
 
+Latest local stability device-test update, verified 18 October 2026:
+
+| Device | ABI | Installed package version | APK SHA-256 |
+| --- | --- | ---: | --- |
+| Motorola edge 50 fusion (`ZA222MS4SF`) | `arm64-v8a` | `20055` | `29C5F36659AD13F36CE0A76BEDDEA61DDA11549DFDFFA4F75BEE83ADE2B91617` |
+
+Built with `-BuildNumber 18055`, hosted production endpoints and
+`-AllowDebugSigningForDeviceTest`. All three split APKs passed package, ABI,
+version, permission and APK v2 signature checks. The certificate matches the
+previous installed version `20052`. `adb install -r` preserved app data; cold
+launch and Home/Wallet display were checked. This is a debug-signed local test
+build, not a distributable release. Future phone updates must exceed **20055**
+and match that certificate. See [SMS capture and sync architecture](sms-capture-and-sync-architecture.md)
+for the verification limits and remaining server push-registration error.
+
 Use the repository wrapper; do not assemble a production APK with an ad-hoc
 command:
 

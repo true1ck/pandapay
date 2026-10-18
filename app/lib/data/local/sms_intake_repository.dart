@@ -36,7 +36,9 @@ class SmsIntakeEntry {
 /// remain on disk; there is no drop-oldest limit.
 class SmsIntakeRepository {
   final AppDatabase database;
-  SmsIntakeRepository(this.database) {
+  final DateTime Function() now;
+  SmsIntakeRepository(this.database, {DateTime Function()? now})
+    : now = now ?? DateTime.now {
     database.db.execute('''
       CREATE TABLE IF NOT EXISTS sms_intake (
         namespace TEXT NOT NULL, id TEXT NOT NULL, sender TEXT NOT NULL,
@@ -44,10 +46,30 @@ class SmsIntakeRepository {
         attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT,
         PRIMARY KEY(namespace, id)
       );
+      CREATE TABLE IF NOT EXISTS sms_captured_messages (
+        namespace TEXT NOT NULL, id TEXT NOT NULL, sender TEXT NOT NULL,
+        body TEXT NOT NULL, received_at INTEGER NOT NULL,
+        processed INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(namespace, id)
+      );
+      CREATE INDEX IF NOT EXISTS sms_captured_by_date
+        ON sms_captured_messages(namespace,received_at DESC,id);
     ''');
+    if (!database.db
+        .select('PRAGMA table_info(sms_intake)')
+        .any((column) => column['name'] == 'next_attempt')) {
+      database.db.execute(
+        'ALTER TABLE sms_intake ADD COLUMN next_attempt INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    database.db.execute(
+      'CREATE INDEX IF NOT EXISTS sms_pending_retry ON sms_intake(namespace,next_attempt)',
+    );
   }
   String capture(String namespace, QueuedSms sms) {
     final id = smsSourceKey(namespace, sms.sender, sms.body);
+    remember(namespace, sms);
+    if (wasProcessed(namespace, id)) return id;
     database.db.execute(
       'INSERT OR IGNORE INTO sms_intake(namespace,id,sender,body,received_at) VALUES (?,?,?,?,?)',
       [
@@ -61,11 +83,39 @@ class SmsIntakeRepository {
     return id;
   }
 
-  List<SmsIntakeEntry> pending(String namespace, {int limit = 200}) => database
+  void remember(String namespace, QueuedSms sms) => database.db.execute(
+    'INSERT OR IGNORE INTO sms_captured_messages(namespace,id,sender,body,received_at) VALUES (?,?,?,?,?)',
+    [
+      namespace,
+      smsSourceKey(namespace, sms.sender, sms.body),
+      sms.sender,
+      sms.body,
+      sms.receivedAt.millisecondsSinceEpoch,
+    ],
+  );
+
+  bool wasProcessed(String namespace, String id) => database.db.select(
+    'SELECT 1 FROM sms_captured_messages WHERE namespace=? AND id=? AND processed=1',
+    [namespace, id],
+  ).isNotEmpty;
+
+  List<String> capturedBodies(String namespace, {int limit = 500}) => database
       .db
       .select(
-        'SELECT * FROM sms_intake WHERE namespace=? ORDER BY received_at, id LIMIT ?',
+        'SELECT body FROM sms_captured_messages WHERE namespace=? ORDER BY received_at DESC,id LIMIT ?',
         [namespace, limit],
+      )
+      .map((row) => row['body'] as String)
+      .toList();
+
+  List<SmsIntakeEntry> pending(
+    String namespace, {
+    int limit = 200,
+    bool readyOnly = false,
+  }) => database.db
+      .select(
+        'SELECT * FROM sms_intake WHERE namespace=?${readyOnly ? ' AND next_attempt<=?' : ''} ORDER BY received_at, id LIMIT ?',
+        [namespace, if (readyOnly) now().millisecondsSinceEpoch, limit],
       )
       .map(
         (r) => SmsIntakeEntry(
@@ -80,14 +130,43 @@ class SmsIntakeRepository {
         ),
       )
       .toList();
-  void acknowledge(String ns, String id) => database.db.execute(
-    'DELETE FROM sms_intake WHERE namespace=? AND id=?',
-    [ns, id],
-  );
+  void acknowledge(String ns, String id) {
+    database.db.execute('SAVEPOINT sms_ack');
+    try {
+      database.db.execute(
+        'UPDATE sms_captured_messages SET processed=1 WHERE namespace=? AND id=?',
+        [ns, id],
+      );
+      database.db.execute('DELETE FROM sms_intake WHERE namespace=? AND id=?', [
+        ns,
+        id,
+      ]);
+      database.db.execute('RELEASE SAVEPOINT sms_ack');
+    } catch (_) {
+      database.db.execute('ROLLBACK TO SAVEPOINT sms_ack');
+      database.db.execute('RELEASE SAVEPOINT sms_ack');
+      rethrow;
+    }
+  }
+
   void failed(String ns, String id) => database.db.execute(
-    "UPDATE sms_intake SET attempts=attempts+1,last_error='Upload pending' WHERE namespace=? AND id=?",
-    [ns, id],
+    "UPDATE sms_intake SET next_attempt=? + MIN(1800000,30000 * (1 << MIN(attempts,6))),attempts=attempts+1,last_error='Upload pending' WHERE namespace=? AND id=?",
+    [now().millisecondsSinceEpoch, ns, id],
   );
-  void clear(String ns) =>
-      database.db.execute('DELETE FROM sms_intake WHERE namespace=?', [ns]);
+  DateTime? nextRetryAt(String ns) {
+    final next =
+        database.db.select(
+              'SELECT MIN(next_attempt) AS next FROM sms_intake WHERE namespace=?',
+              [ns],
+            ).single['next']
+            as int?;
+    return next == null ? null : DateTime.fromMillisecondsSinceEpoch(next);
+  }
+
+  void clear(String ns) {
+    database.db.execute('DELETE FROM sms_intake WHERE namespace=?', [ns]);
+    database.db.execute('DELETE FROM sms_captured_messages WHERE namespace=?', [
+      ns,
+    ]);
+  }
 }
