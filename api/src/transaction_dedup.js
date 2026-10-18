@@ -2,6 +2,9 @@
 
 const AMOUNT_TOLERANCE_INR = 1;
 const MAX_TIME_DISTANCE_MS = 36 * 60 * 60 * 1000;
+// SMS delivery timestamps distinguish a duplicated alert from two purchases
+// that happen to have the same bank-supplied calendar date.
+const MAX_SMS_NOTIFICATION_DISTANCE_MS = 15 * 60 * 1000;
 const REVIEW_THRESHOLD = 0.72;
 
 /** Sources that are different transports for the same logical channel. */
@@ -70,7 +73,8 @@ function evaluateDuplicate(incoming, candidate) {
   const candidateRef = referenceOf(candidate);
   if (incomingRef && candidateRef && incomingRef !== candidateRef) return null;
   const sameReference = Boolean(incomingRef && incomingRef === candidateRef);
-  if (incomingSource === candidateSource && incomingSource !== 'imported' && !sameReference) return null;
+  const sameSmsFamily = incomingSource === 'sms' && candidateSource === 'sms';
+  if (incomingSource === candidateSource && incomingSource !== 'imported' && !sameReference && !sameSmsFamily) return null;
 
   const incomingInstrument = incoming.instrument || 'credit_card';
   const candidateInstrument = candidate.instrument || 'credit_card';
@@ -86,6 +90,36 @@ function evaluateDuplicate(incoming, candidate) {
 
   const amountDifference = Math.abs(Number(incoming.amount ?? incoming.amount_inr) - Number(candidate.amount ?? candidate.amount_inr));
   if (!Number.isFinite(amountDifference) || amountDifference > AMOUNT_TOLERANCE_INR) return null;
+
+  // Different alert templates for one swipe (for example a bank's initial
+  // push followed by its final transaction SMS) have different body hashes.
+  // They are safe to suppress only when their *delivery* times are close,
+  // the amount and normalized merchant are exact, and the resolved card is
+  // the same. Never use the transaction date here: many SMS formats carry a
+  // date without a time, which would merge legitimate repeat purchases.
+  if (sameSmsFamily && !sameReference) {
+    const incomingObserved = asMillis(incoming.observedAt ?? incoming.observed_at);
+    const candidateObserved = asMillis(candidate.observedAt ?? candidate.observed_at);
+    const merchants = compareMerchants(
+      incoming.merchantName ?? incoming.merchant_name,
+      candidate.merchantName ?? candidate.merchant_name,
+    );
+    if (
+      incomingObserved === null || candidateObserved === null ||
+      Math.abs(incomingObserved - candidateObserved) > MAX_SMS_NOTIFICATION_DISTANCE_MS ||
+      amountDifference >= 0.005 || merchants?.kind !== 'exact' ||
+      !incomingCard || !candidateCard || incomingCard !== candidateCard
+    ) return null;
+    return {
+      score: 0.998,
+      automatic: true,
+      amountDifference: 0,
+      timeDifferenceMinutes: Math.round(Math.abs(incomingObserved - candidateObserved) / 60000),
+      merchantMatch: 'exact',
+      sourceFamilies: [candidateSource, incomingSource],
+      reason: 'same SMS card, amount and merchant within 15 minutes of notification delivery',
+    };
+  }
 
   const incomingTime = asMillis(incoming.occurred ?? incoming.occurred_at);
   const candidateTime = asMillis(candidate.occurred ?? candidate.occurred_at);
@@ -151,6 +185,7 @@ function bestDuplicate(incoming, candidates) {
 module.exports = {
   AMOUNT_TOLERANCE_INR,
   MAX_TIME_DISTANCE_MS,
+  MAX_SMS_NOTIFICATION_DISTANCE_MS,
   REVIEW_THRESHOLD,
   sourceFamily,
   referenceOf,

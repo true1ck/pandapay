@@ -3228,7 +3228,7 @@ function clientMutationSourceKey(userId, source, clientMutationId) {
 async function insertTransactionAndUpdateState(client, userId, {
   userCardId, amount, occurred, categoryId, rail, merchantName, note, source,
   merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, accountLast4,
-  observationMetadata,
+  observationMetadata, observedAt,
 }) {
   const resolvedInstrument = instrument || 'credit_card';
   const resolvedEntryKind = entryKind || 'spend';
@@ -3330,7 +3330,7 @@ async function insertTransactionAndUpdateState(client, userId, {
     await recordTransactionObservation(client, userId, refreshed.rows[0].id, {
       source: resolvedSource,
       sourceKey,
-      observedAt: occurred,
+      observedAt: observedAt || occurred,
       metadata: { ...(observationMetadata || {}), exactRetry: true },
     });
     return { status: 200, duplicate: true, duplicateKind: 'exact_retry', transaction: refreshed.rows[0] };
@@ -3339,7 +3339,7 @@ async function insertTransactionAndUpdateState(client, userId, {
   await recordTransactionObservation(client, userId, txn.rows[0].id, {
     source: resolvedSource,
     sourceKey,
-    observedAt: occurred,
+    observedAt: observedAt || occurred,
     metadata: observationMetadata,
   });
 
@@ -3375,6 +3375,7 @@ async function insertTransactionAndUpdateState(client, userId, {
         userCardId: userCardId || null,
         accountLast4: resolvedAccountLast4,
         bankReference: observationMetadata?.bankReference,
+        observedAt: observedAt || occurred,
         instrument: resolvedInstrument,
         entryKind: resolvedEntryKind,
       })
@@ -3388,7 +3389,7 @@ async function insertTransactionAndUpdateState(client, userId, {
     await client.query(`UPDATE transactions SET status = 'ignored', note = $1 WHERE id = $2`,
       [`[automatically matched duplicate of ${duplicates.duplicateOf}]`, txn.rows[0].id]);
     await recordTransactionObservation(client, userId, duplicates.duplicateOf, {
-      source: resolvedSource, sourceKey, observedAt: occurred,
+      source: resolvedSource, sourceKey, observedAt: observedAt || occurred,
       externalRef: observationMetadata?.bankReference,
       metadata: { ...(observationMetadata || {}), automaticDuplicate: true, matchedRowId: txn.rows[0].id },
     });
@@ -3459,7 +3460,7 @@ async function insertTransactionAndUpdateState(client, userId, {
  * reward totals, and every recommendation made against it afterwards.
  */
 async function importParsedMessage(client, userId, {
-  parsed, patternIssuerId, sender, rawText, source, occurred, sourceKey, backfill,
+  parsed, patternIssuerId, sender, rawText, source, occurred, sourceKey, backfill, observedAt,
   explicitUserCardId, explicitCategoryId, rail, vpa, mcc, observationMetadata,
 }) {
   const parsedVpa = vpa || extractVpa(parsed.fields.merchant) || extractVpa(rawText);
@@ -3565,6 +3566,7 @@ async function importParsedMessage(client, userId, {
     entryKind,
     accountLast4: parsed.fields.accountLast4 || null,
     observationMetadata: importMetadata,
+    observedAt,
   });
 
   return { ...inserted, matchBasis, resolvedCategoryId: categoryId, userCardId };
@@ -3728,6 +3730,57 @@ async function repairSmsHistory(client, userId) {
     [userId]
   );
 
+  // Older builds only had exact body-hash replay protection. Repair the
+  // resulting double alerts with the same deliberately narrow notification
+  // rule used during new ingestion: one card, exact amount and merchant,
+  // and delivery within 15 minutes. This does not use the calendar-only
+  // transaction timestamp, so two real purchases on the same day survive.
+  const notificationDuplicateRows = await client.query(
+    `WITH sms_rows AS (
+       SELECT t.id, t.amount_inr, t.user_card_id, t.occurred_at,
+              regexp_replace(lower(coalesce(t.merchant_name, '')), '[^a-z0-9]', '', 'g') AS merchant_key,
+              MIN(o.observed_at) AS observed_at
+         FROM transactions t
+         JOIN transaction_observations o
+           ON o.transaction_id = t.id AND o.profile_id = t.profile_id
+        WHERE t.profile_id = $1
+          AND t.status = 'active'
+          AND t.source IN ('sms', 'sms_bulk')
+          AND t.entry_kind = 'spend'
+          AND t.user_card_id IS NOT NULL
+          AND o.source IN ('sms', 'sms_bulk')
+        GROUP BY t.id, t.amount_inr, t.user_card_id, t.occurred_at, t.merchant_name
+     ), pairs AS (
+       SELECT CASE
+                WHEN left_row.observed_at < right_row.observed_at THEN right_row.id
+                WHEN left_row.observed_at > right_row.observed_at THEN left_row.id
+                WHEN left_row.id < right_row.id THEN right_row.id
+                ELSE left_row.id
+              END AS ignore_id,
+              CASE
+                WHEN left_row.observed_at < right_row.observed_at THEN left_row.id
+                WHEN left_row.observed_at > right_row.observed_at THEN right_row.id
+                WHEN left_row.id < right_row.id THEN left_row.id
+                ELSE right_row.id
+              END AS keep_id
+         FROM sms_rows left_row
+         JOIN sms_rows right_row
+           ON left_row.id < right_row.id
+          AND left_row.amount_inr = right_row.amount_inr
+          AND left_row.user_card_id = right_row.user_card_id
+          AND left_row.merchant_key <> ''
+          AND left_row.merchant_key = right_row.merchant_key
+          AND abs(extract(epoch FROM (left_row.observed_at - right_row.observed_at))) <= 900
+     )
+     UPDATE transactions t
+        SET status = 'ignored',
+            note = trim(concat('[automatic SMS notification duplicate of ', pairs.keep_id::text, '] ', coalesce(t.note, '')))
+       FROM pairs
+      WHERE t.id = pairs.ignore_id AND t.status = 'active'
+     RETURNING t.id`,
+    [userId]
+  );
+
   // A card can be added after its SMS history was imported. Keep those rows
   // as card transactions while they are unmatched, then attach them as soon
   // as the saved card makes the match unambiguous. This repairs attribution
@@ -3877,7 +3930,7 @@ async function repairSmsHistory(client, userId) {
   }
 
   return {
-    duplicateSuppressed: duplicateRows.rowCount,
+    duplicateSuppressed: duplicateRows.rowCount + notificationDuplicateRows.rowCount,
     linkedCards,
     reclassified,
     remainingLegacyRows: Math.max(0, legacyRows.rowCount - reclassified),
@@ -4005,13 +4058,16 @@ async function reconcileCurrentCapStates(client, userId) {
  * a duplicate duplicate-flag.
  */
 async function detectDuplicates(client, userId, {
-  newTxnId, amount, occurred, merchantName, source, userCardId, instrument, entryKind, accountLast4, bankReference,
+  newTxnId, amount, occurred, merchantName, source, userCardId, instrument, entryKind, accountLast4, bankReference, observedAt,
 }) {
   const candidates = await client.query(
     `SELECT t.id, t.amount_inr, t.occurred_at, t.merchant_name, t.source, t.user_card_id, t.instrument, t.entry_kind, t.status, t.source_account_last4,
             (SELECT COALESCE(o.external_ref, o.metadata->>'bankReference')
                FROM transaction_observations o WHERE o.transaction_id = t.id AND o.profile_id = t.profile_id
-                AND COALESCE(o.external_ref, o.metadata->>'bankReference') IS NOT NULL LIMIT 1) AS bank_reference
+                AND COALESCE(o.external_ref, o.metadata->>'bankReference') IS NOT NULL LIMIT 1) AS bank_reference,
+            (SELECT MIN(o.observed_at)
+               FROM transaction_observations o WHERE o.transaction_id = t.id AND o.profile_id = t.profile_id
+                 AND o.source IN ('sms', 'sms_bulk')) AS observed_at
        FROM transactions t
       WHERE profile_id = $1 AND status = 'active' AND id != $2
         AND amount_inr BETWEEN $3::numeric - $6::numeric AND $3::numeric + $6::numeric
@@ -4022,7 +4078,7 @@ async function detectDuplicates(client, userId, {
   );
 
   const selected = bestDuplicate(
-    { amount, occurred, merchantName, source, userCardId, instrument, entryKind, accountLast4, bankReference },
+    { amount, occurred, merchantName, source, userCardId, instrument, entryKind, accountLast4, bankReference, observedAt },
     candidates.rows,
   );
   if (!selected) return { candidateId: null };
@@ -4605,6 +4661,7 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
         occurred: effectiveOccurred,
         sourceKey,
         backfill: backfill === true,
+        observedAt: occurred,
         explicitUserCardId: userCardId,
         explicitCategoryId: categoryId || null,
         rail,
@@ -4785,6 +4842,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           rawText: body,
           source: 'sms',
           occurred: effectiveOccurred,
+          observedAt: occurred,
           sourceKey: importSourceKey(req.userId, sender, body),
           backfill: backfill === true,
           explicitUserCardId: userCardId,

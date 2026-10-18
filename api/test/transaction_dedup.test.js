@@ -17,9 +17,26 @@ const base = {
   source: 'sms',
 };
 
-test('SMS and SMS bulk are one source family, so backup re-imports rely on exact identity', () => {
+test('SMS and SMS bulk are one source family, but same-day repeat purchases remain separate without notification timing', () => {
   assert.equal(sourceFamily('sms_bulk'), 'sms');
   assert.equal(evaluateDuplicate(base, { ...base, source: 'sms_bulk' }), null);
+});
+
+test('nearby delivery notifications for the same card purchase consolidate even when bodies differ', () => {
+  const match = evaluateDuplicate(
+    { ...base, occurred: '2026-09-09T00:00:00Z', observedAt: '2026-09-09T10:01:00Z' },
+    { ...base, source: 'sms_bulk', occurred: '2026-09-09T00:00:00Z', observedAt: '2026-09-09T10:08:00Z' },
+  );
+  assert.equal(match.automatic, true);
+  assert.equal(match.merchantMatch, 'exact');
+});
+
+test('same card, merchant and amount are retained when SMS notifications are far apart', () => {
+  const match = evaluateDuplicate(
+    { ...base, occurred: '2026-09-09T00:00:00Z', observedAt: '2026-09-09T10:01:00Z' },
+    { ...base, source: 'sms_bulk', occurred: '2026-09-09T00:00:00Z', observedAt: '2026-09-09T12:00:00Z' },
+  );
+  assert.equal(match, null);
 });
 
 test('statement and screenshot imports remain distinct families for cross-source matching', () => {
