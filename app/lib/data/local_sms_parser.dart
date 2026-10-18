@@ -20,7 +20,7 @@ class LocalSmsObservation {
 /// formats remain durable intake for server parsing; they never become guessed
 /// spending. Values are local observations until server reconciliation.
 class LocalSmsParser {
-  static const version = 2;
+  static const version = 3;
   static bool sensitive(String body) => RegExp(
     r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b|\b(?:do not|don't|never)\s+share\b|\bvalid\s+(?:for|till|until)\b",
     caseSensitive: false,
@@ -98,9 +98,12 @@ class LocalSmsParser {
         _re(
           r'\b(?:credit|debit)\s+card\s+(\d{4})\b',
         ).firstMatch(body)?.group(1);
-    final accountLast4 = _re(
-      r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX-]*\s*(\d{4})\b',
-    ).firstMatch(body)?.group(1);
+    // Credit-card account references identify a card ledger, not a bank account.
+    final accountLast4 = _re(r'\bcredit\s+card\b').hasMatch(body)
+        ? null
+        : _re(
+            r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX-]*\s*(\d{4})\b',
+          ).firstMatch(body)?.group(1);
     DateTime? due;
     for (final phrase in [
       r'\bdue\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',

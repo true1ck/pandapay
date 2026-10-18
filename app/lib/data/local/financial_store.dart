@@ -442,10 +442,16 @@ class FinancialStore {
         (a, b) =>
             (b['received_at'] as String).compareTo(a['received_at'] as String),
       );
+    final cardSuffixes = <String>{
+      for (final row in observations)
+        if (row['card_last4'] is String) row['card_last4'] as String,
+    };
     final byAccount = <String, List<Map<String, dynamic>>>{};
     for (final row in observations) {
       final account = row['account_last4'] as String?;
-      if (account != null) {
+      if (account != null &&
+          RegExp(r'^\d{4}$').hasMatch(account) &&
+          !cardSuffixes.contains(account)) {
         byAccount
             .putIfAbsent(
               '${row['sender_bank'] ?? 'unknown'}:$account',

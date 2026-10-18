@@ -5,6 +5,17 @@ import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
 void main() {
+  test('credit card account references never establish bank accounts', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-HDFCBK',
+      body:
+          'Your credit card account ending 8708 payment due on 20-Oct-2026. Available balance Rs.5000.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(result, isNotNull);
+    expect(result!.accountLast4, isNull);
+  });
   final fixtures =
       jsonDecode(File('test/fixtures/local_sms_cases.json').readAsStringSync())
           as List;

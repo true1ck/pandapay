@@ -2247,38 +2247,30 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
     final accounts =
         ref.watch(bankAccountSummariesProvider).valueOrNull ??
         const <BankAccountSummary>[];
-    final summariesByLast4 = <String, BankAccountSummary>{
-      for (final account in accounts) account.accountLast4: account,
+    // Only the account repository may establish a bank account. Report labels
+    // and transaction suffixes can contain historical card misclassifications.
+    final cardSuffixes = <String>{
+      for (final card
+          in ref.watch(userCardsProvider).valueOrNull ?? <UserCard>[])
+        if (card.last4 != null) card.last4!,
+      for (final transaction
+          in ref.watch(transactionsProvider).valueOrNull ??
+              <TransactionEntry>[])
+        if (transaction.cardLast4 != null) transaction.cardLast4!,
     };
-    final accountLast4s = <String>{...summariesByLast4.keys};
-
-    // The Spending report is the canonical categorized view. Include its
-    // bank-account rows too, so Home cannot disagree with a report that has
-    // already identified an account outside the latest 50 activity items.
-    final spendReport = ref
-        .watch(
-          spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
-        )
-        .valueOrNull;
-    final accountLabelPattern = RegExp(r'^Bank account ending (\d{4})$');
-    for (final row in spendReport?.byCard ?? const []) {
-      final match = accountLabelPattern.firstMatch(row.cardName);
-      if (match != null) accountLast4s.add(match.group(1)!);
-    }
-    for (final transaction
-        in ref.watch(transactionsProvider).valueOrNull ??
-            const <TransactionEntry>[]) {
-      final last4 = transaction.accountLast4;
-      if (last4 != null && RegExp(r'^\d{4}$').hasMatch(last4)) {
-        accountLast4s.add(last4);
-      }
-    }
+    final summariesByLast4 = <String, BankAccountSummary>{
+      for (final account in accounts)
+        if (RegExp(r'^\d{4}$').hasMatch(account.accountLast4) &&
+            !cardSuffixes.contains(account.accountLast4))
+          account.accountLast4: account,
+    };
+    final accountLast4s = summariesByLast4.keys.toSet();
     final sortedAccountLast4s = accountLast4s.toList()..sort();
     final accountCount = sortedAccountLast4s.length;
 
     var total = const Money.zero();
     var balancesFound = 0;
-    for (final account in accounts) {
+    for (final account in summariesByLast4.values) {
       final balance = account.availableBalance;
       if (balance == null) continue;
       total += balance;

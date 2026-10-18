@@ -5066,6 +5066,16 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
                 i.logo_url AS issuer_logo_url
            FROM account_rollup r
            LEFT JOIN issuers i ON i.id::text = r.issuer_id
+          WHERE NOT EXISTS (
+            SELECT 1 FROM user_cards uc
+             WHERE uc.profile_id = $1 AND uc.last4 = r.account_last4
+          )
+            AND NOT EXISTS (
+              SELECT 1 FROM transaction_observations card_o
+               WHERE card_o.profile_id = $1
+                 AND card_o.source IN ('sms', 'sms_bulk')
+                 AND card_o.metadata->>'cardLast4' = r.account_last4
+            )
           ORDER BY r.account_last4`,
         [req.userId],
       ),

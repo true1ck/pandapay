@@ -595,3 +595,12 @@ test('Slice UPI credit-card alerts remain card transactions, not bank-account UP
   assert.equal(result.fields.merchant, 'Shantesh gurudas gaude');
   assert.equal(result.fields.instrument, 'credit_card');
 });
+
+test('credit-card account references never become bank account evidence', () => {
+  const result = parseSms(HDFC_PATTERN, {
+    sender: 'VM-HDFCBK',
+    body: 'Rs.100 spent on your HDFC Bank Card ending 8708 at SHOP on 04-08-26. Credit card account ending 8708.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.accountLast4, undefined);
+});

@@ -75,6 +75,8 @@ function isAmbiguousAccountDebit(body) {
 // the `last4` field used to resolve a physical card. Keep this as a separate
 // masked identifier; the full account number is never stored or inferred.
 function extractAccountLast4(body) {
+  // A credit-card account is a card ledger, not a deposit account.
+  if (/\bcredit\s+card\b/i.test(String(body || ''))) return null;
   const match = String(body || '').match(
     /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX-]*\s*(\d{4})\b/i,
   );
