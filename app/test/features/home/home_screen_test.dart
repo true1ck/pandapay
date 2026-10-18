@@ -178,6 +178,7 @@ void main() {
       // The ranked list is collapsed by default. Open it before exercising
       // the per-card expansion state.
       await tester.ensureVisible(find.text('Show 1 more card'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Show 1 more card'));
       await tester.pumpAndSettle();
 

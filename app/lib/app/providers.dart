@@ -3049,15 +3049,6 @@ final appVersionProvider = FutureProvider<String>((ref) async {
   return info.version;
 });
 
-/// Identity of the installed build, including the Android build number. SMS
-/// reconciliation uses this rather than a permanent boolean: an app update
-/// must get one fresh inbox pass even when the previous version already
-/// reconciled this device.
-final appBuildIdentityProvider = FutureProvider<String>((ref) async {
-  final info = await PackageInfo.fromPlatform();
-  return '${info.version}+${info.buildNumber}';
-});
-
 /// UA-0.3 offline cache (GAP_ANALYSIS.md §2, plan
 /// docs/superpowers/plans/2026-08-08-offline-first-local-cache.md). Not a
 /// relational mirror of the Supabase schema — a raw-JSON-blob cache backed
@@ -4544,36 +4535,51 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     if (ref.read(userCardsRepositoryProvider) == null) return false;
 
     final prefs = await SharedPreferences.getInstance();
-    String buildIdentity;
-    try {
-      buildIdentity = await ref.read(appBuildIdentityProvider.future);
-    } catch (_) {
-      // A platform-info failure must not prevent SMS capture. `unknown` is
-      // deliberately retryable: a later launch that can read PackageInfo
-      // will use the real build key and perform the full pass.
-      buildIdentity = 'unknown';
-    }
-    final safeBuildIdentity = buildIdentity.replaceAll(
-      RegExp(r'[^A-Za-z0-9._+-]'),
-      '_',
-    );
-    // Bump this when the SMS acceptance/pre-filter rules change. The due-date
-    // engine now accepts statement-only alerts that older builds discarded;
-    // one full inbox pass is required so existing statements are not stranded
-    // behind the previous checkpoint.
-    final inboxReconciliationKey =
-        'pandapay_app.sms_inbox_reconciled_at_v4_$safeBuildIdentity';
-    final serverObservationCountKey =
-        'pandapay_app.sms_server_observation_count_v1_$safeBuildIdentity';
+    // Keep reconciliation progress across ordinary app updates. A build-number
+    // keyed value forced a full device inbox scan after every release, which
+    // made startup compete with rendering on phones with a large SMS history.
+    // Bump the revision only when acceptance rules require a deliberate replay.
+    const inboxReconciliationKey = 'pandapay_app.sms_inbox_reconciled_at_v4';
+    const legacyInboxReconciliationPrefix = '${inboxReconciliationKey}_';
+    const serverObservationCountKey =
+        'pandapay_app.sms_server_observation_count_v1';
+    const legacyServerObservationCountPrefix = '${serverObservationCountKey}_';
     final now = DateTime.now();
-    final lastRunMillis = prefs.getInt(inboxReconciliationKey);
+    var lastRunMillis = prefs.getInt(inboxReconciliationKey);
+    if (lastRunMillis == null) {
+      for (final key in prefs.getKeys()) {
+        if (!key.startsWith(legacyInboxReconciliationPrefix)) continue;
+        final legacyValue = prefs.getInt(key);
+        if (legacyValue != null &&
+            (lastRunMillis == null || legacyValue > lastRunMillis)) {
+          lastRunMillis = legacyValue;
+        }
+      }
+      if (lastRunMillis != null) {
+        await prefs.setInt(inboxReconciliationKey, lastRunMillis);
+      }
+    }
 
     // A server-side cleanup/reset must not strand the device behind its old
     // local checkpoint. Once a prior positive count drops, recover from the
     // complete on-device inbox; source keys keep that replay idempotent.
     var forceFullScan = lastRunMillis == null;
     var serverResetDetected = false;
-    final previousServerCount = prefs.getInt(serverObservationCountKey);
+    var previousServerCount = prefs.getInt(serverObservationCountKey);
+    if (previousServerCount == null) {
+      for (final key in prefs.getKeys()) {
+        if (!key.startsWith(legacyServerObservationCountPrefix)) continue;
+        final legacyValue = prefs.getInt(key);
+        if (legacyValue != null &&
+            (previousServerCount == null ||
+                legacyValue > previousServerCount)) {
+          previousServerCount = legacyValue;
+        }
+      }
+      if (previousServerCount != null) {
+        await prefs.setInt(serverObservationCountKey, previousServerCount);
+      }
+    }
     try {
       final serverState = await ref
           .read(userCardsRepositoryProvider)!

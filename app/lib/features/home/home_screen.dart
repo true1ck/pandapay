@@ -109,84 +109,99 @@ class HomeScreen extends ConsumerWidget {
     // strip → amount → chips, which buried the question the screen exists to
     // answer under two strips of chrome.
     return AppBackground(
-      child: SingleChildScrollView(
-        // 58pt top / 128pt bottom, the mockup's own scroll padding — the
-        // top inset stands in for the status bar now that the shell has no
-        // AppBar, and the shell reserves the bottom 128 for the nav pill.
-        padding: EdgeInsets.only(
-          top: MediaQuery.paddingOf(context).top + AppSpace.sm,
-          bottom: AppShell.navClearance,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
-              child: _BrandHeader(greeting: _greetingFor(now)),
+      child: CustomScrollView(
+        slivers: [
+          // Build Home sections lazily as they approach the viewport. The
+          // former SingleChildScrollView/Column laid out the whole dashboard
+          // on each refresh, even when only its first cards were visible.
+          SliverPadding(
+            // 58pt top / 128pt bottom, the mockup's own scroll padding — the
+            // top inset stands in for the status bar now that the shell has no
+            // AppBar, and the shell reserves the bottom 128 for the nav pill.
+            padding: EdgeInsets.only(
+              top: MediaQuery.paddingOf(context).top + AppSpace.sm,
+              bottom: AppShell.navClearance,
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 0),
-              child: Text(
-                'What are you paying for?',
-                style: BambooFonts.heading(
-                  24,
-                  color: BambooInk.ink900,
-                  height: 1.15,
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
+                  child: _BrandHeader(greeting: _greetingFor(now)),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 0),
+                  child: Text(
+                    'What are you paying for?',
+                    style: BambooFonts.heading(
+                      24,
+                      color: BambooInk.ink900,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+                // B5's geofence context ("you look like you're at X") reads as
+                // the answer-in-progress to the heading above it, so it sits
+                // directly under the question rather than in its own strip.
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    _gutter,
+                    AppSpace.xs,
+                    _gutter,
+                    0,
+                  ),
+                  child: HomeContextLine(),
+                ),
+                const SizedBox(height: AppSpace.lg),
+                Padding(
+                  key: tutorialKeys.categoryChips,
+                  padding: const EdgeInsets.symmetric(horizontal: _gutter),
+                  child: _PurchaseTypeSelector(
+                    selectedCategory: selectedCategory,
+                    onChanged: (slug) =>
+                        ref.read(selectedCategoryProvider.notifier).state =
+                            slug,
+                  ),
+                ),
+                Padding(
+                  key: tutorialKeys.amountField,
+                  padding: const EdgeInsets.fromLTRB(
+                    _gutter,
+                    AppSpace.lg,
+                    _gutter,
+                    0,
+                  ),
+                  child: const _AmountCard(),
+                ),
+                const SizedBox(height: AppSpace.sm),
+                OfflineBanner(
+                  gutter: _gutter,
+                  onRetry: () {
+                    ref.invalidate(homeDataRefreshProvider);
+                    ref.invalidate(catalogueProvider);
+                    ref.invalidate(categoriesProvider);
+                    ref.invalidate(userCardsProvider);
+                    ref.invalidate(cardOverridesProvider);
+                  },
+                ),
+                const _AlertsStrip(),
+                const SizedBox(height: AppSpace.xs),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: _gutter),
+                  child: _RankedSection(
+                    ranked: ranked,
+                    tutorialKeys: tutorialKeys,
+                  ),
+                ),
+                const _UtilizationWarningBanner(),
+                const _HomeSpendHeadline(),
+                const _HomeCategories(),
+                const _HomeDuesAndReminders(),
+                const _HomeAccountSnapshot(),
+                const SizedBox(height: AppSpace.lg),
+              ]),
             ),
-            // B5's geofence context ("you look like you're at X") reads as
-            // the answer-in-progress to the heading above it, so it sits
-            // directly under the question rather than in its own strip.
-            const Padding(
-              padding: EdgeInsets.fromLTRB(_gutter, AppSpace.xs, _gutter, 0),
-              child: HomeContextLine(),
-            ),
-            const SizedBox(height: AppSpace.lg),
-            Padding(
-              key: tutorialKeys.categoryChips,
-              padding: const EdgeInsets.symmetric(horizontal: _gutter),
-              child: _PurchaseTypeSelector(
-                selectedCategory: selectedCategory,
-                onChanged: (slug) =>
-                    ref.read(selectedCategoryProvider.notifier).state = slug,
-              ),
-            ),
-            Padding(
-              key: tutorialKeys.amountField,
-              padding: const EdgeInsets.fromLTRB(
-                _gutter,
-                AppSpace.lg,
-                _gutter,
-                0,
-              ),
-              child: const _AmountCard(),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            OfflineBanner(
-              gutter: _gutter,
-              onRetry: () {
-                ref.invalidate(homeDataRefreshProvider);
-                ref.invalidate(catalogueProvider);
-                ref.invalidate(categoriesProvider);
-                ref.invalidate(userCardsProvider);
-                ref.invalidate(cardOverridesProvider);
-              },
-            ),
-            const _AlertsStrip(),
-            const SizedBox(height: AppSpace.xs),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: _gutter),
-              child: _RankedSection(ranked: ranked, tutorialKeys: tutorialKeys),
-            ),
-            const _UtilizationWarningBanner(),
-            const _HomeSpendHeadline(),
-            const _HomeCategories(),
-            const _HomeDuesAndReminders(),
-            const _HomeAccountSnapshot(),
-            const SizedBox(height: AppSpace.lg),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -198,9 +213,12 @@ class _HomeSpendHeadline extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final report = ref
-        .watch(spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)))
+        .watch(
+          spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
+        )
         .valueOrNull;
-    if (report == null || report.spend.total.isZero) return const SizedBox.shrink();
+    if (report == null || report.spend.total.isZero)
+      return const SizedBox.shrink();
     final change = report.changeVsPrevious;
     final projected = report.projectedSpend;
     return Padding(
@@ -216,14 +234,29 @@ class _HomeSpendHeadline extends ConsumerWidget {
           color: BambooInk.paper,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: BambooInk.hairlineOnPaper),
-          boxShadow: [BoxShadow(color: BambooInk.ink900.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: BambooInk.ink900.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Expanded(child: Text('TOTAL SPENT', style: BambooFonts.ui(10.5, weight: FontWeight.w700, color: BambooInk.ink500).copyWith(letterSpacing: .7))),
+                Expanded(
+                  child: Text(
+                    'TOTAL SPENT',
+                    style: BambooFonts.ui(
+                      10.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink500,
+                    ).copyWith(letterSpacing: .7),
+                  ),
+                ),
                 if (change != null) _HomeSpendChangePill(change: change),
               ],
             ),
@@ -231,22 +264,50 @@ class _HomeSpendHeadline extends ConsumerWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: MoneyText(report.spend.total, confidence: Confidence.estimated, showConfidenceIcon: false, style: BambooFonts.money(24, color: BambooInk.ink900)))),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: MoneyText(
+                      report.spend.total,
+                      confidence: Confidence.estimated,
+                      showConfidenceIcon: false,
+                      style: BambooFonts.money(24, color: BambooInk.ink900),
+                    ),
+                  ),
+                ),
               ],
             ),
             if (projected != null && report.elapsedFraction < .95) ...[
               const SizedBox(height: 4),
-              Text('On track for ${projected.format(compact: true)} this month', style: BambooFonts.ui(11, color: BambooInk.ink500)),
+              Text(
+                'On track for ${projected.format(compact: true)} this month',
+                style: BambooFonts.ui(11, color: BambooInk.ink500),
+              ),
             ],
             if (!report.spend.rewards.isZero) ...[
               const SizedBox(height: 8),
               Container(height: 1, color: BambooInk.hairlineOnPaper),
               const SizedBox(height: 8),
-              Row(children: [
-                Text('Rewards earned', style: BambooFonts.ui(11, color: BambooInk.ink700)),
-                const Spacer(),
-                MoneyText(report.spend.rewards, confidence: Confidence.estimated, showConfidenceIcon: false, style: BambooFonts.ui(12, weight: FontWeight.w700, color: BambooInk.jade)),
-              ]),
+              Row(
+                children: [
+                  Text(
+                    'Rewards earned',
+                    style: BambooFonts.ui(11, color: BambooInk.ink700),
+                  ),
+                  const Spacer(),
+                  MoneyText(
+                    report.spend.rewards,
+                    confidence: Confidence.estimated,
+                    showConfidenceIcon: false,
+                    style: BambooFonts.ui(
+                      12,
+                      weight: FontWeight.w700,
+                      color: BambooInk.jade,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ],
         ),
@@ -264,12 +325,28 @@ class _HomeSpendChangePill extends StatelessWidget {
     final up = change >= 0;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: const Color(0xFFE7F8D8), borderRadius: BorderRadius.circular(8)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text('${up ? '↑' : '↓'} ${(change.abs() * 100).round()}%', style: BambooFonts.ui(11, weight: FontWeight.w800, color: const Color(0xFF1C7B35))),
-        const SizedBox(width: 4),
-        Text('vs last month', style: BambooFonts.ui(10, color: BambooInk.ink700)),
-      ]),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE7F8D8),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${up ? '↑' : '↓'} ${(change.abs() * 100).round()}%',
+            style: BambooFonts.ui(
+              11,
+              weight: FontWeight.w800,
+              color: const Color(0xFF1C7B35),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'vs last month',
+            style: BambooFonts.ui(10, color: BambooInk.ink700),
+          ),
+        ],
+      ),
     );
   }
 }

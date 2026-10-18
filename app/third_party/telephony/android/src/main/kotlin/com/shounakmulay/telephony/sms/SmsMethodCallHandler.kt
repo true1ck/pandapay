@@ -8,6 +8,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.RequiresApi
 import com.shounakmulay.telephony.PermissionsController
 import com.shounakmulay.telephony.utils.ActionType
@@ -44,6 +46,7 @@ import com.shounakmulay.telephony.utils.SmsAction
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
+import java.util.concurrent.Executors
 
 
 class SmsMethodCallHandler(
@@ -171,9 +174,8 @@ class SmsMethodCallHandler(
   }
 
   private fun handleGetSmsActions(smsAction: SmsAction) {
-    if (projection == null) {
-      projection = if (smsAction == SmsAction.GET_CONVERSATIONS) DEFAULT_CONVERSATION_PROJECTION else DEFAULT_SMS_PROJECTION
-    }
+    val requestedProjection = projection
+      ?: if (smsAction == SmsAction.GET_CONVERSATIONS) DEFAULT_CONVERSATION_PROJECTION else DEFAULT_SMS_PROJECTION
     val contentUri = when (smsAction) {
       SmsAction.GET_INBOX -> ContentUri.INBOX
       SmsAction.GET_SENT -> ContentUri.SENT
@@ -181,8 +183,24 @@ class SmsMethodCallHandler(
       SmsAction.GET_CONVERSATIONS -> ContentUri.CONVERSATIONS
       else -> throw IllegalArgumentException()
     }
-    val messages = smsController.getMessages(contentUri, projection!!, selection, selectionArgs, sortOrder)
-    result.success(messages)
+    val requestResult = result
+    val requestSelection = selection
+    val requestSelectionArgs = selectionArgs
+    val requestSortOrder = sortOrder
+    smsQueryExecutor.execute {
+      try {
+        val messages = smsController.getMessages(
+          contentUri,
+          requestedProjection,
+          requestSelection,
+          requestSelectionArgs,
+          requestSortOrder
+        )
+        mainHandler.post { requestResult.success(messages) }
+      } catch (error: Exception) {
+        mainHandler.post { requestResult.error(FAILED_FETCH, error.message, null) }
+      }
+    }
   }
 
   private fun handleSendSmsActions(smsAction: SmsAction) {
@@ -385,6 +403,15 @@ class SmsMethodCallHandler(
 
   fun setForegroundChannel(channel: MethodChannel) {
     foregroundChannel = channel
+  }
+
+  private companion object {
+    // Inbox reconciliation can read thousands of provider rows. Keep that
+    // query away from Android's UI thread so it cannot freeze app rendering.
+    val smsQueryExecutor = Executors.newSingleThreadExecutor { runnable ->
+      Thread(runnable, "pandapay-sms-query").apply { isDaemon = true }
+    }
+    val mainHandler = Handler(Looper.getMainLooper())
   }
 
   override fun onReceive(ctx: Context?, intent: Intent?) {
