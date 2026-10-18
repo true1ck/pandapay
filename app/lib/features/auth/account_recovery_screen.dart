@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
@@ -19,12 +20,14 @@ class AccountRecoveryScreen extends ConsumerStatefulWidget {
   const AccountRecoveryScreen({super.key});
 
   @override
-  ConsumerState<AccountRecoveryScreen> createState() => _AccountRecoveryScreenState();
+  ConsumerState<AccountRecoveryScreen> createState() =>
+      _AccountRecoveryScreenState();
 }
 
 class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
   final _emailController = TextEditingController();
   final _codeController = TextEditingController();
+  final _codeFocus = FocusNode();
   bool _otpRequested = false;
   bool _loading = false;
   String? _error;
@@ -33,6 +36,7 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
   void dispose() {
     _emailController.dispose();
     _codeController.dispose();
+    _codeFocus.dispose();
     super.dispose();
   }
 
@@ -48,7 +52,12 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
     });
     try {
       await ref.read(authApiProvider).requestEmailOtp(email);
-      if (mounted) setState(() => _otpRequested = true);
+      if (mounted) {
+        setState(() => _otpRequested = true);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _codeFocus.requestFocus();
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = userFacingErrorMessage(e));
     } finally {
@@ -65,13 +74,22 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
       final deviceId = await ref.read(localDeviceIdProvider.future);
       final tokens = await ref
           .read(authApiProvider)
-          .verifyEmailOtp(_emailController.text.trim(), _codeController.text.trim(), deviceId);
+          .verifyEmailOtp(
+            _emailController.text.trim(),
+            _codeController.text.trim(),
+            deviceId,
+          );
       final store = await ref.read(tokenStoreProvider.future);
-      await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+      await store.save(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      );
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
       await ref.read(profileApiProvider)!.ensureProfile();
       ref.invalidate(profileProvider);
-      if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       if (mounted) setState(() => _error = userFacingErrorMessage(e));
     } finally {
@@ -88,7 +106,10 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
         foregroundColor: BambooInk.onSlate,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text('Account recovery', style: BambooFonts.heading(17, color: BambooInk.onSlate)),
+        title: Text(
+          'Account recovery',
+          style: BambooFonts.heading(17, color: BambooInk.onSlate),
+        ),
       ),
       body: SafeArea(
         child: Padding(
@@ -106,7 +127,11 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
               if (!_otpRequested) ...[
                 Text(
                   'Email address',
-                  style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.onSlateMuted),
+                  style: BambooFonts.ui(
+                    13,
+                    weight: FontWeight.w600,
+                    color: BambooInk.onSlateMuted,
+                  ),
                 ),
                 const SizedBox(height: AppSpace.sm),
                 TextField(
@@ -115,8 +140,14 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                   style: BambooFonts.ui(15, color: BambooInk.onSlate),
                   decoration: InputDecoration(
                     hintText: 'you@example.com',
-                    hintStyle: BambooFonts.ui(14, color: BambooInk.onSlateMuted),
-                    prefixIcon: const Icon(Icons.mail_outline_rounded, color: BambooInk.onSlateMuted),
+                    hintStyle: BambooFonts.ui(
+                      14,
+                      color: BambooInk.onSlateMuted,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.mail_outline_rounded,
+                      color: BambooInk.onSlateMuted,
+                    ),
                     filled: true,
                     fillColor: BambooInk.slateLow,
                     border: OutlineInputBorder(
@@ -131,31 +162,55 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                     backgroundColor: BambooInk.lime,
                     foregroundColor: BambooInk.slate,
                     minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   onPressed: _loading ? null : _sendCode,
                   child: _loading
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.slate),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: BambooInk.slate,
+                          ),
                         )
                       : const Text('Send code'),
                 ),
               ] else ...[
                 Text(
                   'Verification code',
-                  style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.onSlateMuted),
+                  style: BambooFonts.ui(
+                    13,
+                    weight: FontWeight.w600,
+                    color: BambooInk.onSlateMuted,
+                  ),
                 ),
                 const SizedBox(height: AppSpace.sm),
                 TextField(
                   controller: _codeController,
+                  focusNode: _codeFocus,
+                  autofocus: true,
                   keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.oneTimeCode],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
+                  onSubmitted: (_) => _loading ? null : _verifyCode(),
                   style: BambooFonts.ui(15, color: BambooInk.onSlate),
                   decoration: InputDecoration(
-                    hintText: '6-digit code',
-                    hintStyle: BambooFonts.ui(14, color: BambooInk.onSlateMuted),
-                    prefixIcon: const Icon(Icons.pin_outlined, color: BambooInk.onSlateMuted),
+                    hintText: '4-digit code',
+                    hintStyle: BambooFonts.ui(
+                      14,
+                      color: BambooInk.onSlateMuted,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.pin_outlined,
+                      color: BambooInk.onSlateMuted,
+                    ),
                     filled: true,
                     fillColor: BambooInk.slateLow,
                     border: OutlineInputBorder(
@@ -170,14 +225,19 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                     backgroundColor: BambooInk.lime,
                     foregroundColor: BambooInk.slate,
                     minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   onPressed: _loading ? null : _verifyCode,
                   child: _loading
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: BambooInk.slate),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: BambooInk.slate,
+                          ),
                         )
                       : const Text('Verify & sign in'),
                 ),
@@ -199,7 +259,9 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                       ),
                     ),
                   ),
-                  style: TextButton.styleFrom(foregroundColor: BambooInk.onSlateMuted),
+                  style: TextButton.styleFrom(
+                    foregroundColor: BambooInk.onSlateMuted,
+                  ),
                   child: const Text("Lost access to both? Contact support"),
                 ),
               ),

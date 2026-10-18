@@ -74,8 +74,10 @@ void main() {
       );
       expect(find.text('Verify & continue'), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
-      await tester.enterText(find.byType(TextField), '12a345');
       final codeField = tester.widget<TextField>(find.byType(TextField));
+      expect(codeField.autofillHints, const [AutofillHints.oneTimeCode]);
+      expect(codeField.focusNode?.hasFocus, isTrue);
+      await tester.enterText(find.byType(TextField), '12a345');
       expect(codeField.controller!.text, '1234');
     },
   );

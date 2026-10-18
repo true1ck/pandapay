@@ -769,6 +769,7 @@ class _OtpStepState extends State<_OtpStep> {
                   controller: widget.controller,
                   focusNode: _focus,
                   enabled: !widget.loading,
+                  autofocus: true,
                   keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.done,
                   autofillHints: const [AutofillHints.oneTimeCode],
