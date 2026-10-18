@@ -7,7 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/import_repository.dart';
 import 'package:pandapay/data/import_models.dart';
-import 'package:pandapay/data/user_cards_repository.dart' show UserCard;
+import 'package:pandapay/data/user_cards_repository.dart'
+    show TxnInstrument, UserCard;
 import 'package:pandapay/features/import/statement_pdf_import_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -121,7 +122,7 @@ Future<void> waitForParsing(WidgetTester tester) async {
 
 void main() {
   testWidgets(
-    'mixed-account PDF requires source selection and supports non-card spending',
+    'mixed-account PDF auto-suggests sources and supports non-card spending',
     (tester) async {
       FilePickerPlatform.instance = _FakePdfFilePickerPlatform(
         _buildTestPdf(
@@ -144,12 +145,8 @@ void main() {
       await tester.tap(find.text('Choose file'));
       await waitForParsing(tester);
       expect(
-        tester
-            .widget<FilledButton>(
-              find.byType(FilledButton).last,
-            )
-            .onPressed,
-        isNull,
+        tester.widget<FilledButton>(find.byType(FilledButton).last).onPressed,
+        isNotNull,
       );
       await tester.ensureVisible(
         find.byType(DropdownButtonFormField<String>).first,
