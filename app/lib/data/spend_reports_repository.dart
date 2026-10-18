@@ -710,6 +710,27 @@ class SpendReportsRepository {
     }
   }
 
+  Future<void> updateRecurring(String seriesId, {
+    required String displayName,
+    required double amountInr,
+    required int cadenceDays,
+    required DateTime nextExpectedOn,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$apiBaseUrl/recurring/$seriesId'),
+      headers: _headers,
+      body: jsonEncode({
+        'displayName': displayName,
+        'typicalAmountInr': amountInr,
+        'cadenceDays': cadenceDays,
+        'nextExpectedOn': '${nextExpectedOn.year.toString().padLeft(4, '0')}-${nextExpectedOn.month.toString().padLeft(2, '0')}-${nextExpectedOn.day.toString().padLeft(2, '0')}',
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('PATCH /recurring failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
   Future<void> deleteBudget(String budgetId) async {
     final response = await _client.delete(
       Uri.parse('$apiBaseUrl/budgets/$budgetId'),
@@ -746,6 +767,7 @@ class RecurringSeries {
   final String? paymentMethod;
   final String detectionSource;
   final bool isMandate;
+  final bool isUserEdited;
   final Money annualCost;
 
   const RecurringSeries({
@@ -761,6 +783,7 @@ class RecurringSeries {
     this.paymentMethod,
     this.detectionSource = 'observed',
     this.isMandate = false,
+    this.isUserEdited = false,
   });
 
   /// Plain-language cadence. Approximate on purpose — "about every 5 weeks"
@@ -793,6 +816,7 @@ class RecurringSeries {
         detectionSource: json['detectionSource'] as String? ?? 'observed',
         isMandate:
             json['isMandate'] == true || json['detectionSource'] == 'mandate',
+        isUserEdited: json['isUserEdited'] == true,
       );
 
   Map<String, dynamic> toJson() => {
@@ -808,6 +832,7 @@ class RecurringSeries {
     'paymentMethod': paymentMethod,
     'detectionSource': detectionSource,
     'isMandate': isMandate,
+    'isUserEdited': isUserEdited,
   };
 }
 

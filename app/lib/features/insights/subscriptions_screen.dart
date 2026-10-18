@@ -173,7 +173,7 @@ class _TotalCard extends StatelessWidget {
   }
 }
 
-class _SeriesCard extends StatelessWidget {
+class _SeriesCard extends ConsumerWidget {
   final RecurringSeries series;
   const _SeriesCard({required this.series});
 
@@ -193,7 +193,7 @@ class _SeriesCard extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final next = series.nextExpectedOn;
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -248,8 +248,63 @@ class _SeriesCard extends StatelessWidget {
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],
+          const SizedBox(height: AppSpace.sm),
+          Wrap(spacing: AppSpace.sm, children: [
+            OutlinedButton.icon(
+              onPressed: () => _edit(context, ref),
+              icon: const Icon(Icons.edit_outlined, size: 17),
+              label: const Text('Edit'),
+            ),
+            TextButton.icon(
+              onPressed: () => _dismiss(context, ref),
+              icon: const Icon(Icons.visibility_off_outlined, size: 17),
+              label: const Text('Ignore'),
+            ),
+          ]),
         ],
       ),
     );
+  }
+
+  Future<void> _edit(BuildContext context, WidgetRef ref) async {
+    final name = TextEditingController(text: series.displayName);
+    final amount = TextEditingController(text: series.typicalAmount.rupees.toStringAsFixed(2));
+    final cadence = TextEditingController(text: series.cadenceDays.toString());
+    var next = series.nextExpectedOn ?? DateTime.now().add(const Duration(days: 30));
+    final formKey = GlobalKey<FormState>();
+    final saved = await showDialog<bool>(context: context, builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Edit subscription'),
+        content: Form(key: formKey, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextFormField(controller: name, decoration: const InputDecoration(labelText: 'Service name'), validator: (v) => (v == null || v.trim().length < 2) ? 'Enter a service name' : null),
+          TextFormField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Amount (₹)'), validator: (v) => (double.tryParse(v ?? '') ?? 0) <= 0 ? 'Enter a valid amount' : null),
+          TextFormField(controller: cadence, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Renewal interval (days)'), validator: (v) { final n = int.tryParse(v ?? ''); return n == null || n < 1 || n > 3650 ? 'Enter 1–3650 days' : null; }),
+          ListTile(contentPadding: EdgeInsets.zero, title: const Text('Next renewal'), subtitle: Text('${next.day} ${_months[next.month - 1]} ${next.year}'), trailing: const Icon(Icons.calendar_month_outlined), onTap: () async { final picked = await showDatePicker(context: context, initialDate: next, firstDate: DateTime(2000), lastDate: DateTime(2100)); if (picked != null) setDialogState(() => next = picked); }),
+        ]))),
+        actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')), FilledButton(onPressed: () { if (formKey.currentState!.validate()) Navigator.pop(context, true); }, child: const Text('Save'))],
+      ),
+    ));
+    if (saved == true && context.mounted) {
+      try {
+        await ref.read(spendReportsRepositoryProvider)!.updateRecurring(series.id, displayName: name.text.trim(), amountInr: double.parse(amount.text), cadenceDays: int.parse(cadence.text), nextExpectedOn: next);
+        ref.invalidate(recurringReportProvider);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Subscription updated.')));
+      } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e)))); }
+    }
+    name.dispose(); amount.dispose(); cadence.dispose();
+  }
+
+  Future<void> _dismiss(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Ignore this subscription?'),
+      content: Text('Hide ${series.displayName} from your subscriptions. You can still find its charges in Transactions.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ignore'))],
+    ));
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref.read(spendReportsRepositoryProvider)!.dismissRecurring(series.id);
+      ref.invalidate(recurringReportProvider);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Subscription hidden.')));
+    } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e)))); }
   }
 }

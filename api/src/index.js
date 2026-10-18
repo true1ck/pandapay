@@ -6444,15 +6444,15 @@ app.get('/recurring', requireAuth, async (req, res) => {
               first_seen_on, last_seen_on, next_expected_on)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
            ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
-             display_name = EXCLUDED.display_name,
+             display_name = CASE WHEN recurring_series.user_edited THEN recurring_series.display_name ELSE EXCLUDED.display_name END,
              category_id = EXCLUDED.category_id,
              user_card_id = EXCLUDED.user_card_id,
              payment_method = COALESCE(EXCLUDED.payment_method, recurring_series.payment_method),
-             typical_amount_inr = EXCLUDED.typical_amount_inr,
-             cadence_days = EXCLUDED.cadence_days,
+             typical_amount_inr = CASE WHEN recurring_series.user_edited THEN recurring_series.typical_amount_inr ELSE EXCLUDED.typical_amount_inr END,
+             cadence_days = CASE WHEN recurring_series.user_edited THEN recurring_series.cadence_days ELSE EXCLUDED.cadence_days END,
              occurrence_count = EXCLUDED.occurrence_count,
              last_seen_on = EXCLUDED.last_seen_on,
-             next_expected_on = EXCLUDED.next_expected_on,
+             next_expected_on = CASE WHEN recurring_series.user_edited THEN recurring_series.next_expected_on ELSE EXCLUDED.next_expected_on END,
              detection_source = 'observed',
              is_active = true,
              updated_at = now()`,
@@ -6468,7 +6468,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
         `SELECT rs.id, rs.merchant_key, rs.display_name, rs.typical_amount_inr,
                 rs.cadence_days, rs.occurrence_count, rs.first_seen_on, rs.last_seen_on,
                 rs.next_expected_on, rs.category_id, rs.user_card_id, rs.payment_method,
-                rs.detection_source,
+                rs.detection_source, rs.user_edited,
                 sc.name AS category_name, cp.name AS card_name, uc.nickname AS card_nickname
            FROM recurring_series rs
            LEFT JOIN spend_categories sc ON sc.id = rs.category_id
@@ -6500,6 +6500,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
         cardName: r.card_nickname || r.card_name,
         detectionSource: r.detection_source || 'observed',
         isMandate: r.detection_source === 'mandate',
+        isUserEdited: r.user_edited,
         annualCostInr: annualCost({
           typicalAmountInr: Number(r.typical_amount_inr),
           cadenceDays: r.cadence_days,
@@ -6514,6 +6515,29 @@ app.get('/recurring', requireAuth, async (req, res) => {
     res.json(payload);
   } catch (err) {
     console.error('GET /recurring error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+app.patch('/recurring/:id', requireAuth, async (req, res) => {
+  const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
+  if (typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 80 ||
+      !Number.isFinite(Number(typicalAmountInr)) || Number(typicalAmountInr) <= 0 || Number(typicalAmountInr) > 10000000 ||
+      !Number.isInteger(Number(cadenceDays)) || Number(cadenceDays) < 1 || Number(cadenceDays) > 3650 ||
+      typeof nextExpectedOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(nextExpectedOn) || Number.isNaN(Date.parse(`${nextExpectedOn}T00:00:00Z`))) {
+    return res.status(400).json({ error: 'invalid_subscription' });
+  }
+  try {
+    const result = await withUserClient(req.userId, (client) => client.query(
+      `UPDATE recurring_series SET display_name = $1, typical_amount_inr = $2,
+              cadence_days = $3, next_expected_on = $4, user_edited = true
+        WHERE id = $5 AND profile_id = $6 AND dismissed_at IS NULL RETURNING id`,
+      [displayName.trim(), Number(typicalAmountInr), Number(cadenceDays), nextExpectedOn, req.params.id, req.userId]
+    ));
+    if (!result.rows.length) return res.status(404).json({ error: 'not_found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('PATCH /recurring error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
