@@ -131,27 +131,26 @@ void main() {
   });
 
   testWidgets(
-    'income and investment are shown as their own lines, never folded into spend',
+    'income and investment do not add the removed cash flow summary',
     (tester) async {
-      // Blending them is the fastest way to make every figure on the screen
-      // wrong: money moved into an SIP is not money spent.
       await _pump(
         tester,
         _report(spend: 42000, income: 90000, investment: 15000),
       );
 
-      expect(find.text('Money in'), findsOneWidget);
-      expect(find.text('Spent'), findsOneWidget);
-      expect(find.text('Invested'), findsOneWidget);
-      expect(find.text('Left over'), findsOneWidget);
+      expect(find.text('Money in'), findsNothing);
+      expect(find.text('Spent'), findsNothing);
+      expect(find.text('Invested'), findsNothing);
+      expect(find.text('Left over'), findsNothing);
+      expect(find.textContaining('42,000'), findsWidgets);
     },
   );
 
   testWidgets(
-    'a period where more went out than came in reads as short, not as a negative',
+    'a negative net flow does not add the removed short-by summary',
     (tester) async {
       await _pump(tester, _report(spend: 90000, income: 40000));
-      expect(find.text('Short by'), findsOneWidget);
+      expect(find.text('Short by'), findsNothing);
       expect(find.text('Left over'), findsNothing);
     },
   );

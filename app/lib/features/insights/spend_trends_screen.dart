@@ -1333,12 +1333,6 @@ class _ReportBodyState extends State<_ReportBody> {
             onChanged: (tab) => setState(() => _tab = tab),
           ),
           const SizedBox(height: AppSpace.md),
-          if (!_filtersActive &&
-              (!report.income.total.isZero ||
-                  !report.investment.total.isZero)) ...[
-            _FlowCard(report: report),
-            const SizedBox(height: AppSpace.lg),
-          ],
           if (showFilteredLoading)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpace.xl),
@@ -2253,85 +2247,6 @@ class _SpendChangePill extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Income, spend and investment on their own lines, plus what's left.
-///
-/// Deliberately three separate figures rather than one blended total:
-/// an investment is not spending, and money moved into an SIP is not money
-/// gone. Folding them together is the fastest way to make every number on
-/// this screen wrong.
-class _FlowCard extends StatelessWidget {
-  final SpendReport report;
-  const _FlowCard({required this.report});
-
-  @override
-  Widget build(BuildContext context) {
-    final net = report.netFlow;
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Column(
-        children: [
-          _FlowRow(label: 'Money in', amount: report.income.total),
-          const SizedBox(height: AppSpace.sm),
-          _FlowRow(label: 'Spent', amount: report.spend.total),
-          if (!report.investment.total.isZero) ...[
-            const SizedBox(height: AppSpace.sm),
-            _FlowRow(label: 'Invested', amount: report.investment.total),
-          ],
-          const SizedBox(height: AppSpace.sm),
-          Container(height: 1, color: BambooInk.ink500.withValues(alpha: 0.15)),
-          const SizedBox(height: AppSpace.sm),
-          _FlowRow(
-            label: net.isNegative ? 'Short by' : 'Left over',
-            amount: net.isNegative ? -net : net,
-            emphasise: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FlowRow extends StatelessWidget {
-  final String label;
-  final Money amount;
-  final bool emphasise;
-  const _FlowRow({
-    required this.label,
-    required this.amount,
-    this.emphasise = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          label,
-          style: BambooFonts.ui(
-            13,
-            weight: emphasise ? FontWeight.w700 : FontWeight.w500,
-            color: BambooInk.ink900,
-          ),
-        ),
-        const Spacer(),
-        MoneyText(
-          amount,
-          confidence: Confidence.estimated,
-          style: BambooFonts.ui(
-            13.5,
-            weight: emphasise ? FontWeight.w700 : FontWeight.w500,
-            color: BambooInk.ink900,
-          ),
-        ),
-      ],
     );
   }
 }

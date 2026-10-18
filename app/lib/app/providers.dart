@@ -660,6 +660,7 @@ class SessionRefreshCoordinator {
         refreshToken: tokens.refreshToken,
       );
       writeAccessToken(tokens.accessToken);
+      debugPrint('PandaPay session refresh completed.');
       return tokens.accessToken;
     } catch (error) {
       if (error is ApiException && error.statusCode == 401) {
