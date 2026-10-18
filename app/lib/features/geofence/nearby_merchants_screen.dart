@@ -32,7 +32,6 @@ enum _LoadState { idle, locating, fetching, done, error }
 class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   _LoadState _state = _LoadState.idle;
   String? _errorMessage;
-  String? _discoveryNotice;
   List<NearbyMerchantMatch> _matches = const [];
   bool _refreshing = false;
   bool _showingCached = false;
@@ -57,7 +56,6 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     setState(() {
       _state = _LoadState.locating;
       _errorMessage = null;
-      _discoveryNotice = null;
       _refreshing = false;
       _showingCached = false;
       _placeResults = null;
@@ -95,17 +93,11 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
         setState(() => _state = _LoadState.fetching);
       }
 
-      List<NearbyMerchantCandidate> candidates = const [];
-      Object? publishedError;
-      try {
-        candidates = await repo.fetchNearby(
-          lat: position.latitude,
-          lng: position.longitude,
-          radiusM: nearbyMerchantSearchRadiusMeters,
-        );
-      } catch (err) {
-        publishedError = err;
-      }
+      final candidates = await repo.fetchNearby(
+        lat: position.latitude,
+        lng: position.longitude,
+        radiusM: nearbyMerchantSearchRadiusMeters,
+      );
 
       var matches = findNearbyMerchants(
         origin: GeoPoint(lat: position.latitude, lng: position.longitude),
@@ -113,51 +105,13 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
         radiusMeters: nearbyMerchantSearchRadiusMeters,
       );
 
-      // Keep the published PandaPay lookup authoritative when it has a match,
-      // but still try the read-only map provider when the directory is empty
-      // OR temporarily unavailable. A backend hiccup must not suppress the
-      // only useful result the user can receive at that moment.
-      if (matches.isEmpty && repo is NearbyMerchantDiscoveryRepository) {
-        try {
-          final discovered = await repo.discoverNearby(
-            lat: position.latitude,
-            lng: position.longitude,
-            radiusM: nearbyMerchantSearchRadiusMeters,
-          );
-          matches = findNearbyMerchants(
-            origin: GeoPoint(lat: position.latitude, lng: position.longitude),
-            candidates: discovered,
-            radiusMeters: nearbyMerchantSearchRadiusMeters,
-          );
-        } catch (_) {
-          _discoveryNotice =
-              'Map discovery is temporarily unavailable. You can retry or search for a place below.';
-        }
-      }
-
-      if (publishedError != null && matches.isEmpty && cached == null) {
-        // No source produced a result, so preserve the original actionable
-        // network error rather than pretending the area has no merchants.
-        throw publishedError;
-      }
-
       if (!mounted) return;
       setState(() {
         _matches = matches;
         _state = _LoadState.done;
         _refreshing = false;
-        _showingCached = cached != null && matches.isEmpty;
+        _showingCached = false;
       });
-      if (cached != null && matches.isEmpty) {
-        // The live request failed, but the cache is still useful. Keep it
-        // visible rather than replacing it with an error screen.
-        final cachedMatches = findNearbyMerchants(
-          origin: GeoPoint(lat: position.latitude, lng: position.longitude),
-          candidates: cached.candidates,
-          radiusMeters: nearbyMerchantSearchRadiusMeters,
-        );
-        setState(() => _matches = cachedMatches);
-      }
     } catch (err) {
       if (!mounted) return;
       setState(() {
@@ -493,8 +447,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     if (_matches.isEmpty) {
       return Center(
         child: Text(
-          _discoveryNotice ??
-              'No nearby merchants found yet. Try again closer to the store.',
+          'No Google Maps results found within 2 km. Try again or search for a place below.',
           textAlign: TextAlign.center,
           style: BambooFonts.ui(13.5, color: BambooInk.ink500),
         ),
@@ -510,7 +463,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
 String _placeDisplayName(NearbyMerchantCandidate candidate) {
   final name = candidate.displayName?.trim();
   if (name == null || name.isEmpty) return 'Business name unavailable';
-  final isMapCandidate = candidate.source?.startsWith('osm_') ?? false;
+  final isMapCandidate = candidate.source?.contains('candidate') ?? false;
   final generic = RegExp(
     r'^(petrol\s*pump|petrol\s*(station|bunk)|fuel(\s*station)?|gas\s*station|shop|store|supermarket|restaurant|cafe|pharmacy)$',
     caseSensitive: false,

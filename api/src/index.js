@@ -1006,6 +1006,49 @@ app.get('/merchants/nearby', async (req, res) => {
   }
 });
 
+/** Authenticated, Google Maps-backed foreground discovery. Coordinates stay
+ * in the POST body so request logs never contain a user's precise location. */
+app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
+  const lat = req.body?.lat;
+  const lng = req.body?.lng;
+  const radiusM = req.body?.radiusM === undefined ? 2000 : req.body.radiusM;
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+    return res.status(400).json({ error: 'lat must be between -90 and 90' });
+  }
+  if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: 'lng must be between -180 and 180' });
+  }
+  if (radiusM !== 2000) {
+    return res.status(400).json({ error: 'radiusM must be 2000' });
+  }
+  const scraperUrl = process.env.GOOGLE_MAPS_SCRAPER_URL;
+  if (!scraperUrl) {
+    return res.status(503).json({ error: 'nearby_discovery_unavailable', unavailable: true });
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
+  try {
+    const response = await fetch(`${scraperUrl.replace(/\/$/, '')}/nearby`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ lat, lng, radius_m: radiusM }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`scraper returned ${response.status}`);
+    const payload = await response.json();
+    res.json({ source: 'google_maps', radius_m: radiusM, merchants: payload.merchants || [] });
+  } catch (err) {
+    console.warn('POST /merchants/nearby/google unavailable', err.name === 'AbortError' ? 'timeout' : err.message);
+    res.status(503).json({
+      error: 'nearby_discovery_unavailable',
+      unavailable: true,
+      message: 'Google Maps nearby lookup is temporarily unavailable. Please retry.',
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+
 /**
  * GET /merchants/nearby/discover — free, read-only nearby place discovery.
  *

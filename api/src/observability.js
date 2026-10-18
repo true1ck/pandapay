@@ -117,6 +117,12 @@ function errorHandler(err, req, res, _next) {
     stack: err && err.stack,
   });
   if (res.headersSent) return;
+  // body-parser reports malformed JSON as a SyntaxError with a 400 status.
+  // Keep it a client error; returning 500 made a bad request look like an API
+  // outage and caused the nearby UI to show the wrong recovery state.
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'invalid_json', requestId: req.requestId });
+  }
   res.status(500).json({ error: 'internal_error', requestId: req.requestId });
 }
 

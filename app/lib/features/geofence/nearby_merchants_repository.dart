@@ -6,13 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/api_exception.dart';
 
-/// Foreground nearby-merchant lookup radius.
-///
-/// Production deliberately defaults to 2 km. A local/emulator test build can
-/// widen it without changing the production app by passing
-/// `--dart-define=PANDAPAY_NEARBY_RADIUS_METERS=5000`. The free discovery
-/// fallback currently supports up to 5 km, so do not use 10 km there unless
-/// that backend limit is raised and verified first.
+/// Foreground nearby-merchant lookup radius. Google Maps discovery is capped
+/// at 2 km to keep the home result and Nearby list aligned.
 const _nearbyMerchantSearchRadiusRaw = String.fromEnvironment(
   'PANDAPAY_NEARBY_RADIUS_METERS',
   defaultValue: '2000',
@@ -20,11 +15,10 @@ const _nearbyMerchantSearchRadiusRaw = String.fromEnvironment(
 
 final nearbyMerchantSearchRadiusMeters = () {
   final parsed = double.tryParse(_nearbyMerchantSearchRadiusRaw);
-  return parsed != null && parsed > 0 && parsed <= 5000 ? parsed : 2000.0;
+  return parsed != null && parsed > 0 && parsed <= 2000 ? parsed : 2000.0;
 }();
 
-/// UA-8.3: HTTP client for api/'s `GET /merchants/nearby` — public read, no
-/// auth required (same pattern as CatalogueRepository/CategoryRepository).
+/// HTTP client for PandaPay's authenticated Google Maps nearby endpoint.
 /// This is the thin IO boundary; the actual radius-matching math lives in
 /// packages/pandapay_domain's pure `findNearbyMerchants` (the API already
 /// filters server-side too, via its own SQL haversine expression — this
@@ -115,7 +109,7 @@ abstract class NearbyMerchantCacheRepository {
 /// The namespace is supplied by the app's session cache namespace so a cached
 /// location result from one signed-in profile is never shown to another.
 class SharedPreferencesNearbyMerchantCache {
-  static const _maxStale = Duration(hours: 24);
+  static const _maxStale = Duration(minutes: 10);
 
   final String namespace;
   final Future<SharedPreferences> _preferences;
@@ -182,13 +176,22 @@ class HttpNearbyMerchantsRepository
         NearbyPlaceSearchRepository {
   final String baseUrl;
   final http.Client _client;
+  final http.Client _authClient;
+  final bool _ownsClient;
   final SharedPreferencesNearbyMerchantCache? localCache;
 
   HttpNearbyMerchantsRepository({
     required this.baseUrl,
     http.Client? client,
+    http.Client? authClient,
     this.localCache,
-  }) : _client = client ?? http.Client();
+  }) : _client = client ?? http.Client(),
+       _authClient = authClient ?? client ?? http.Client(),
+       _ownsClient = client == null && authClient == null;
+
+  void close() {
+    if (_ownsClient) _client.close();
+  }
 
   @override
   Future<List<NearbyMerchantCandidate>> fetchNearby({
@@ -196,17 +199,15 @@ class HttpNearbyMerchantsRepository
     required double lng,
     double radiusM = 2000,
   }) async {
-    final uri = Uri.parse('$baseUrl/merchants/nearby').replace(
-      queryParameters: {
-        'lat': lat.toString(),
-        'lng': lng.toString(),
-        'radiusM': radiusM.toString(),
-      },
+    final uri = Uri.parse('$baseUrl/merchants/nearby/google');
+    final response = await _authClient.post(
+      uri,
+      headers: {'content-type': 'application/json'},
+      body: jsonEncode({'lat': lat, 'lng': lng, 'radiusM': 2000}),
     );
-    final response = await _client.get(uri);
     if (response.statusCode != 200) {
       throw ApiException(
-        'GET /merchants/nearby failed: ${response.statusCode} ${response.body}',
+        'POST /merchants/nearby/google failed: ${response.statusCode} ${response.body}',
       );
     }
     final payload = jsonDecode(response.body);

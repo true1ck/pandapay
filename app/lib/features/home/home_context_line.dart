@@ -6,6 +6,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../geofence/nearby_merchants_repository.dart';
+import 'home_screen.dart' show HomeScreen;
 
 enum _ContextState { locating, found, noPermission, noMatch, offlineOrError }
 
@@ -104,6 +105,10 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
       if (matches.isEmpty) {
         setState(() => _state = _ContextState.noMatch);
       } else {
+        final nearestCategory = matches.first.candidate.categoryId;
+        if (nearestCategory != null && HomeScreen.categoryLabelFor(nearestCategory) != null) {
+          ref.read(selectedCategoryProvider.notifier).state = nearestCategory;
+        }
         setState(() {
           _closest = matches.first;
           _state = _ContextState.found;
@@ -127,13 +132,16 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
       ),
       _ContextState.noMatch => (
         Icons.explore_off_rounded,
-        'Not sure where you are — scan or pick a category.',
+        'No nearby businesses found within 2 km — pick a category.',
       ),
       // ui-spec B1 States: "No location permission -> chips primary, no
       // nag" — this line stays factual and unobtrusive, never a permission
       // prompt/nag of its own.
       _ContextState.noPermission => (Icons.explore_off_rounded, 'Pick a category below.'),
-      _ContextState.offlineOrError => (Icons.explore_off_rounded, 'Pick a category below.'),
+      _ContextState.offlineOrError => (
+        Icons.cloud_off_rounded,
+        'Nearby lookup unavailable — tap to retry.',
+      ),
     };
 
     return Padding(
