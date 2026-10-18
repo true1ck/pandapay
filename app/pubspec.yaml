@@ -46,7 +46,7 @@ dependencies:
   flutter_secure_storage: ^11.0.0
   local_auth: ^3.0.2
 
-  # Design system: Google Fonts for the Plus Jakarta Sans/Inter pairing
+  # Design system: Google Fonts for Outfit UI and IBM Plex Sans money figures
   # (see lib/app/design/app_theme.dart) and flutter_animate for the
   # 150-300ms micro-interactions used across the redesigned screens.
   google_fonts: ^6.2.1

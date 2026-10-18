@@ -1,0 +1,82 @@
+default_platform(:android)
+
+platform :android do
+  APP_ID = "app.pandapay.pandapay"
+  PROD_API_URL = "https://api.pandapath.site"
+  PROD_AUTH_URL = "https://auth.pandapath.site"
+  PROD_LEGAL_URL = "https://api.pandapath.site/legal/"
+
+  private_lane :build_prod_bundle do |options|
+    build_number = Integer(options.fetch(:build_number))
+    UI.user_error!("build_number must be greater than zero") unless build_number.positive?
+
+    FastlaneCore::Helper.with_env_values(
+      "PANDAPAY_API_BASE_URL" => PROD_API_URL,
+      "PANDAPAY_AUTH_BASE_URL" => PROD_AUTH_URL,
+      "PANDAPAY_LEGAL_BASE_URL" => PROD_LEGAL_URL
+    ) do
+      sh(
+        File.expand_path("../../../scripts/build_app.sh", __dir__),
+        "prod",
+        "appbundle",
+        "--release",
+        "--build-number",
+        build_number.to_s
+      )
+    end
+
+    bundle_path = File.expand_path(
+      "../../build/app/outputs/bundle/prodRelease/app-prod-release.aab",
+      __dir__
+    )
+    UI.user_error!("Expected production AAB was not created: #{bundle_path}") unless File.file?(bundle_path)
+
+    bundle_path
+  end
+
+  private_lane :service_account_path do
+    path = ENV["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"] ||
+      File.expand_path("../keys/google-play-service-account.json", __dir__)
+    UI.user_error!("Set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON or place the Play service account JSON at #{path}") unless File.file?(path)
+
+    path
+  end
+
+  desc "Build PandaPay production AAB and publish it to Google Play internal testing"
+  lane :internal do |options|
+    build_number = options[:build_number] || ENV["PANDAPAY_BUILD_NUMBER"]
+    UI.user_error!("Pass build_number:N or set PANDAPAY_BUILD_NUMBER to a new Play version code") unless build_number
+    bundle_path = build_prod_bundle(build_number: build_number)
+
+    upload_to_play_store(
+      package_name: APP_ID,
+      json_key: service_account_path,
+      aab: bundle_path,
+      track: "internal",
+      release_status: "completed",
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
+  desc "Build PandaPay production AAB and upload a draft to the production track"
+  lane :production_draft do |options|
+    build_number = options[:build_number] || ENV["PANDAPAY_BUILD_NUMBER"]
+    UI.user_error!("Pass build_number:N or set PANDAPAY_BUILD_NUMBER to a new Play version code") unless build_number
+    bundle_path = build_prod_bundle(build_number: build_number)
+
+    upload_to_play_store(
+      package_name: APP_ID,
+      json_key: service_account_path,
+      aab: bundle_path,
+      track: "production",
+      release_status: "draft",
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+end

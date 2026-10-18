@@ -1,0 +1,4 @@
+source "https://rubygems.org"
+
+# Pin Fastlane so local release commands and CI use the same toolchain.
+gem "fastlane", "2.241.1"

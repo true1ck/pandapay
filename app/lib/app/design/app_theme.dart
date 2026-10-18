@@ -81,8 +81,8 @@ abstract final class AppRadius {
 /// ever on a slate surface, never as text/a number directly on paper,
 /// per the design chat's own P4 palette finding ("lime can't be a number
 /// on white") — and screens sit on white under a faint bamboo wash.
-/// Money is set in Bricolage Grotesque, everything else in Instrument
-/// Sans.
+/// Outfit carries headings and interface copy; IBM Plex Sans keeps monetary
+/// figures compact and easy to compare.
 ///
 /// Landed additively, alongside [AppColors]/[AppTheme] rather than
 /// replacing them: a global `ColorScheme`/`ThemeData` swap would silently
@@ -197,22 +197,19 @@ abstract final class BambooChartColors {
   static const chartTrack = Color(0xFFE8F0EC);
 }
 
-/// Bamboo Ink's two-face type system: Bricolage Grotesque for money and
-/// headings, Instrument Sans for everything else. These wrappers are also
-/// used by the global [ThemeData] below, so older screens and the newer
-/// Bamboo surfaces share one typographic voice instead of switching fonts
-/// as the user navigates through the app.
+/// Bamboo Ink's type system. Outfit carries headings and interface copy;
+/// IBM Plex Sans keeps monetary figures compact and easy to compare.
 abstract final class BambooFonts {
   static TextStyle money(
     double size, {
     FontWeight weight = FontWeight.w800,
     Color color = BambooInk.ink900,
     double? letterSpacing,
-  }) => GoogleFonts.bricolageGrotesque(
+  }) => GoogleFonts.ibmPlexSans(
     fontSize: size,
     fontWeight: weight,
     color: color,
-    letterSpacing: letterSpacing ?? -size * 0.045,
+    letterSpacing: letterSpacing ?? 0,
     height: 1.0,
     fontFeatures: const [FontFeature.tabularFigures()],
   );
@@ -223,7 +220,7 @@ abstract final class BambooFonts {
     Color color = BambooInk.ink900,
     double? letterSpacing,
     double? height,
-  }) => GoogleFonts.bricolageGrotesque(
+  }) => GoogleFonts.outfit(
     fontSize: size,
     fontWeight: weight,
     color: color,
@@ -236,7 +233,7 @@ abstract final class BambooFonts {
     FontWeight weight = FontWeight.w400,
     Color color = BambooInk.ink900,
     double? height,
-  }) => GoogleFonts.instrumentSans(
+  }) => GoogleFonts.outfit(
     fontSize: size,
     fontWeight: weight,
     color: color,
@@ -277,11 +274,9 @@ class AppTheme {
       error: AppColors.error,
     );
 
-    // Use the same display/body pairing as the Bamboo surfaces globally.
-    // This prevents the card, rewards, wallet, and utility screens from
-    // falling back to a second font system when they use Theme.of(context).
-    final display = GoogleFonts.bricolageGrotesqueTextTheme();
-    final body = GoogleFonts.instrumentSansTextTheme();
+    // Keep headings and body copy on Outfit throughout the app.
+    final display = GoogleFonts.outfitTextTheme();
+    final body = GoogleFonts.outfitTextTheme();
 
     final textTheme = body.copyWith(
       displayLarge: display.displayLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -518,12 +513,8 @@ class AppTheme {
       error: const Color(0xFFEF5350),
     );
 
-    final display = GoogleFonts.bricolageGrotesqueTextTheme(
-      ThemeData.dark().textTheme,
-    );
-    final body = GoogleFonts.instrumentSansTextTheme(
-      ThemeData.dark().textTheme,
-    );
+    final display = GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme);
+    final body = GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme);
 
     final textTheme = body.copyWith(
       displayLarge: display.displayLarge?.copyWith(fontWeight: FontWeight.w700),

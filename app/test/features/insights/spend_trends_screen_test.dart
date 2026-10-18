@@ -18,6 +18,7 @@ SpendReport _report({
   double rewards = 0,
   double elapsed = 0.5,
   List<SpendBreakdownRow> byCategory = const [],
+  List<SpendBreakdownRow> byMerchant = const [],
   List<CardSpendRow> byCard = const [],
   List<InstrumentSpendRow> byInstrument = const [],
   List<SpendSeriesPoint> series = const [],
@@ -47,7 +48,7 @@ SpendReport _report({
     rewards: const Money.zero(),
   ),
   byCategory: byCategory,
-  byMerchant: const [],
+  byMerchant: byMerchant,
   byCard: byCard,
   byInstrument: byInstrument,
   series: series,
@@ -278,6 +279,158 @@ void main() {
     expect(find.text('Cafe Central'), findsOneWidget);
     expect(find.textContaining('Rewards earned ₹'), findsNWidgets(2));
     expect(find.textContaining('12/08/2026'), findsOneWidget);
+  });
+
+  testWidgets(
+    'combined category and merchant filters match despite merchant casing',
+    (tester) async {
+      await _pump(
+        tester,
+        _report(
+          spend: 6749,
+          byCategory: [
+            SpendBreakdownRow(
+              label: 'Online Shopping',
+              total: Money.fromRupees(6749),
+              txnCount: 2,
+              categoryId: 'online',
+            ),
+          ],
+          // The report may still carry a differently-cased cached merchant.
+          byMerchant: [
+            SpendBreakdownRow(
+              label: 'Amazon',
+              total: Money.fromRupees(5299),
+              txnCount: 1,
+            ),
+          ],
+        ),
+        transactions: [
+          _detailEntry(
+            id: 'txn-amazon',
+            merchant: 'AMAZON',
+            amount: 5299,
+            categoryId: 'online',
+            categoryName: 'Online Shopping',
+            occurredAt: DateTime(2026, 8, 12),
+          ),
+          _detailEntry(
+            id: 'txn-flipkart',
+            merchant: 'FLIPKART',
+            amount: 1450,
+            categoryId: 'online',
+            categoryName: 'Online Shopping',
+            occurredAt: DateTime(2026, 8, 17),
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('Filters'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add category'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Online Shopping').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('All merchants'));
+      await tester.tap(find.text('All merchants'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Amazon').last);
+      await tester.pumpAndSettle();
+
+      final footerTexts = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .map((widget) => widget.text.toPlainText())
+          .join('\n');
+      expect(footerTexts, contains('1 matching transaction'));
+      expect(footerTexts, contains('₹5,299'));
+
+      await tester.tap(find.text('Show results'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('5,299'), findsWidgets);
+      expect(find.textContaining('1,450'), findsNothing);
+      expect(find.textContaining('6,749'), findsNothing);
+      expect(find.text('Filters ·'), findsOneWidget);
+    },
+  );
+
+  testWidgets('transaction detail load errors are visible and retryable', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+          ),
+          spendReportProvider.overrideWith(
+            (ref, query) async => _report(spend: 5299),
+          ),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => throw StateError('details unavailable'),
+          ),
+        ],
+        child: const MaterialApp(home: SpendTrendsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Something went wrong'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+  });
+
+  testWidgets('tapping a spending-mix slice shows its details in the donut', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _report(
+        spend: 500,
+        byCategory: [
+          SpendBreakdownRow(
+            label: 'Dining',
+            total: Money.fromRupees(250),
+            txnCount: 2,
+            categoryId: 'dining',
+          ),
+          SpendBreakdownRow(
+            label: 'Online Shopping',
+            total: Money.fromRupees(250),
+            txnCount: 1,
+            categoryId: 'online',
+          ),
+        ],
+      ),
+    );
+
+    final chart = find.byKey(const Key('spending_donut_chart'));
+    await tester.ensureVisible(chart);
+    await tester.pumpAndSettle();
+    final center = tester.getCenter(chart);
+    await tester.tapAt(center + const Offset(45, 0));
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(
+      tester.binding.transientCallbackCount,
+      greaterThan(0),
+      reason: 'selecting a slice should animate its highlight/details',
+    );
+    await tester.pumpAndSettle();
+
+    final selectedDetail = find.byKey(
+      const Key('spending_donut_selected_detail'),
+    );
+    expect(selectedDetail, findsOneWidget);
+    expect(
+      tester.widget<Semantics>(selectedDetail).properties.label,
+      contains('Dining'),
+    );
+    expect(
+      tester.widget<Semantics>(selectedDetail).properties.label,
+      contains('50% of spending'),
+    );
+
+    await tester.tap(find.byKey(const Key('spending_donut_center')));
+    await tester.pumpAndSettle();
+    expect(selectedDetail, findsNothing);
   });
 
   testWidgets('shows detected payment methods separately from card rows', (

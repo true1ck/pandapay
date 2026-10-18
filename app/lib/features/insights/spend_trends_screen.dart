@@ -144,6 +144,16 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
                           ref.invalidate(spendReportProvider(query)),
                     );
                   }
+                  if (transactions.hasError &&
+                      transactions.valueOrNull == null) {
+                    return ErrorState(
+                      message: userFacingErrorMessage(transactions.error!),
+                      onRetry: () {
+                        ref.invalidate(spendReportProvider(query));
+                        ref.invalidate(spendPeriodTransactionsProvider(query));
+                      },
+                    );
+                  }
                   return _ReportBody(
                     key: reportBodyKey,
                     query: query,
@@ -967,15 +977,26 @@ class _ReportBodyState extends State<_ReportBody> {
     String? card,
   }) {
     final selectedCategories = categories ?? _categoryFilters;
+    final selectedPayment = payment ?? _paymentFilter;
+    final selectedMerchant = merchant ?? _merchantFilter;
+    final selectedCard = card ?? _cardFilter;
     return _spendEntries.where((entry) {
-      if (payment != null && entry.instrument != payment) return false;
+      if (selectedPayment != null && entry.instrument != selectedPayment) {
+        return false;
+      }
       final category = _categoryName(entry).toLowerCase();
       if (selectedCategories.isNotEmpty &&
           !selectedCategories.contains(category)) {
         return false;
       }
-      if (merchant != null && _merchantName(entry) != merchant) return false;
-      if (card != null && _cardName(entry) != card) return false;
+      if (selectedMerchant != null &&
+          _merchantKey(_merchantName(entry)) !=
+              _merchantKey(selectedMerchant)) {
+        return false;
+      }
+      if (selectedCard != null && _cardName(entry) != selectedCard) {
+        return false;
+      }
       return true;
     }).toList();
   }
@@ -997,6 +1018,9 @@ class _ReportBodyState extends State<_ReportBody> {
       entry.merchantName?.trim().isNotEmpty == true
       ? entry.merchantName!.trim()
       : 'Unknown merchant';
+
+  String _merchantKey(String merchant) =>
+      merchant.trim().toLowerCase().split(RegExp(r'\s+')).join(' ');
 
   String _cardName(TransactionEntry entry) =>
       entry.cardDisplayName?.trim().isNotEmpty == true
@@ -1583,6 +1607,9 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
       ? entry.merchantName!.trim()
       : 'Unknown merchant';
 
+  String _merchantKey(String merchant) =>
+      merchant.trim().toLowerCase().split(RegExp(r'\s+')).join(' ');
+
   String _cardName(TransactionEntry entry) =>
       entry.cardDisplayName?.trim().isNotEmpty == true
       ? entry.cardDisplayName!.trim()
@@ -1594,7 +1621,10 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
         !_categories.contains(_category(entry).toLowerCase())) {
       return false;
     }
-    if (_merchant != null && _merchantName(entry) != _merchant) return false;
+    if (_merchant != null &&
+        _merchantKey(_merchantName(entry)) != _merchantKey(_merchant!)) {
+      return false;
+    }
     if (_card != null && _cardName(entry) != _card) return false;
     return true;
   }).toList();
@@ -2563,9 +2593,8 @@ class _MonthlyBarChartPainter extends CustomPainter {
 }
 
 /// A visual summary of the same category totals shown in the expandable rows
-/// below it. The chart is deliberately decorative rather than a second data
-/// source: every slice is built directly from [SpendReport.byCategory].
-class _SpendingMixCard extends StatelessWidget {
+/// below it. Every slice and its selected detail use [SpendReport.byCategory].
+class _SpendingMixCard extends StatefulWidget {
   final List<SpendBreakdownRow> rows;
   final Money total;
   final bool compact;
@@ -2579,8 +2608,36 @@ class _SpendingMixCard extends StatelessWidget {
   });
 
   @override
+  State<_SpendingMixCard> createState() => _SpendingMixCardState();
+}
+
+class _SpendingMixCardState extends State<_SpendingMixCard> {
+  String? _selectedCategoryKey;
+
+  String _categoryKey(SpendBreakdownRow row) => row.categoryId ?? row.label;
+
+  void _selectCategory(int? index) {
+    final rows = widget.rows.where((row) => !row.total.isZero).toList();
+    setState(() {
+      _selectedCategoryKey = index == null || index >= rows.length
+          ? null
+          : _categoryKey(rows[index]);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final rows = widget.rows;
+    final total = widget.total;
+    final compact = widget.compact;
+    final rangeLabel = widget.rangeLabel;
     final nonZeroRows = rows.where((row) => !row.total.isZero).toList();
+    final matchedIndex = _selectedCategoryKey == null
+        ? -1
+        : nonZeroRows.indexWhere(
+            (row) => _categoryKey(row) == _selectedCategoryKey,
+          );
+    final selectedIndex = matchedIndex < 0 ? null : matchedIndex;
     final visibleRows = nonZeroRows.take(compact ? 5 : 4).toList();
     final remaining = nonZeroRows.length - visibleRows.length;
 
@@ -2624,7 +2681,7 @@ class _SpendingMixCard extends StatelessWidget {
                     if (!compact) ...[
                       const SizedBox(height: 2),
                       Text(
-                        '${rows.length} ${rows.length == 1 ? 'category' : 'categories'} · tap a row below for details',
+                        '${nonZeroRows.length} ${nonZeroRows.length == 1 ? 'category' : 'categories'} · tap a slice for details',
                         style: BambooFonts.ui(12, color: BambooInk.ink500),
                       ),
                     ],
@@ -2640,7 +2697,12 @@ class _SpendingMixCard extends StatelessWidget {
               final legend = Column(
                 children: [
                   for (final row in visibleRows)
-                    _MixLegendRow(row: row, total: total, compact: compact),
+                    _MixLegendRow(
+                      row: row,
+                      total: total,
+                      compact: compact,
+                      onTap: () => _selectCategory(nonZeroRows.indexOf(row)),
+                    ),
                   if (remaining > 0) ...[
                     SizedBox(height: compact ? 2 : AppSpace.xs),
                     Align(
@@ -2664,7 +2726,12 @@ class _SpendingMixCard extends StatelessWidget {
               if (stack) {
                 return Column(
                   children: [
-                    _SpendingDonut(rows: rows, total: total),
+                    _SpendingDonut(
+                      rows: nonZeroRows,
+                      total: total,
+                      selectedIndex: selectedIndex,
+                      onSelected: _selectCategory,
+                    ),
                     const SizedBox(height: AppSpace.lg),
                     legend,
                   ],
@@ -2675,10 +2742,12 @@ class _SpendingMixCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   _SpendingDonut(
-                    rows: rows,
+                    rows: nonZeroRows,
                     total: total,
                     size: compact ? 106 : 132,
                     compact: compact,
+                    selectedIndex: selectedIndex,
+                    onSelected: _selectCategory,
                   ),
                   SizedBox(width: compact ? 7 : AppSpace.lg),
                   Expanded(child: legend),
@@ -2697,36 +2766,127 @@ class _SpendingDonut extends StatelessWidget {
   final Money total;
   final double size;
   final bool compact;
+  final int? selectedIndex;
+  final ValueChanged<int?> onSelected;
 
   const _SpendingDonut({
     required this.rows,
     required this.total,
     this.size = 132,
     this.compact = false,
+    required this.selectedIndex,
+    required this.onSelected,
   });
+
+  void _selectSlice(Offset point) {
+    final totalPaise = rows.fold<int>(0, (sum, row) => sum + row.total.paise);
+    if (totalPaise <= 0) return;
+
+    final offset = point - Offset(size / 2, size / 2);
+    final radius = offset.distance;
+    final ringRadius = size / 2 - 10;
+    final ringTolerance = compact ? 12.0 : 18.0;
+    if ((radius - ringRadius).abs() > ringTolerance) return;
+
+    var angle =
+        (math.atan2(offset.dy, offset.dx) + math.pi / 2) % (math.pi * 2);
+    if (angle < 0) angle += math.pi * 2;
+    var cumulative = 0.0;
+    for (var index = 0; index < rows.length; index++) {
+      final sweep = math.pi * 2 * rows[index].total.paise / totalPaise;
+      if (angle <= cumulative + sweep) {
+        onSelected(index);
+        return;
+      }
+      cumulative += sweep;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final selected = selectedIndex != null && selectedIndex! < rows.length
+        ? rows[selectedIndex!]
+        : null;
+    final share = selected == null || total.isZero
+        ? 0.0
+        : (selected.total.paise / total.paise).clamp(0.0, 1.0);
+
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 650),
       curve: Curves.easeOutCubic,
-      builder: (context, progress, child) => SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            CustomPaint(
-              size: Size.square(size),
-              painter: _SpendingDonutPainter(
-                rows: rows,
-                progress: progress,
-                strokeWidth: compact ? 12 : 18,
-              ),
+      builder: (context, progress, child) => Semantics(
+        key: const Key('spending_donut_chart'),
+        button: true,
+        label: selected == null
+            ? 'Spending mix, total ${total.format(hidePaise: false)}. Tap a slice to see category details.'
+            : 'Spending mix, selected ${selected.label}, ${selected.total.format(hidePaise: false)}, ${(share * 100).round()}% of spending. Tap the center to show total.',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (details) => _selectSlice(details.localPosition),
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                TweenAnimationBuilder<double>(
+                  key: ValueKey<int?>(selectedIndex),
+                  tween: Tween<double>(
+                    begin: 0,
+                    end: selectedIndex == null ? 0 : 1,
+                  ),
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, selectionProgress, _) => CustomPaint(
+                    size: Size.square(size),
+                    painter: _SpendingDonutPainter(
+                      rows: rows,
+                      progress: progress,
+                      selectionProgress: selectionProgress,
+                      strokeWidth: compact ? 12 : 18,
+                      selectedIndex: selectedIndex,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  key: const Key('spending_donut_center'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: selected == null ? null : () => onSelected(null),
+                  child: SizedBox(
+                    width: size * 0.60,
+                    height: size * 0.60,
+                    child: Center(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.94, end: 1)
+                                .animate(animation),
+                            child: child,
+                          ),
+                        ),
+                        child: selected == null
+                            ? KeyedSubtree(
+                                key: const ValueKey('donut-total'),
+                                child: child!,
+                              )
+                            : _SelectedMixDetail(
+                                key: ValueKey(selected.label),
+                                row: selected,
+                                share: share,
+                                compact: compact,
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            child!,
-          ],
+          ),
         ),
       ),
       child: Column(
@@ -2761,15 +2921,75 @@ class _SpendingDonut extends StatelessWidget {
   }
 }
 
+class _SelectedMixDetail extends StatelessWidget {
+  final SpendBreakdownRow row;
+  final double share;
+  final bool compact;
+
+  const _SelectedMixDetail({
+    super.key,
+    required this.row,
+    required this.share,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    key: const Key('spending_donut_selected_detail'),
+    label:
+        '${row.label}, ${row.total.format(hidePaise: false)}, ${(share * 100).round()}% of spending',
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          row.label,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: BambooFonts.ui(
+            compact ? 8.5 : 9.5,
+            weight: FontWeight.w600,
+            color: BambooInk.ink500,
+          ),
+        ),
+        const SizedBox(height: 1),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: MoneyText(
+            row.total,
+            confidence: Confidence.estimated,
+            showConfidenceIcon: false,
+            style: BambooFonts.ui(
+              compact ? 10.5 : 12,
+              weight: FontWeight.w800,
+              color: BambooInk.ink900,
+            ),
+          ),
+        ),
+        Text(
+          '${(share * 100).round()}% of spending',
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          style: BambooFonts.ui(compact ? 7.5 : 8.5, color: BambooInk.ink500),
+        ),
+      ],
+    ),
+  );
+}
+
 class _SpendingDonutPainter extends CustomPainter {
   final List<SpendBreakdownRow> rows;
   final double progress;
+  final double selectionProgress;
   final double strokeWidth;
+  final int? selectedIndex;
 
   const _SpendingDonutPainter({
     required this.rows,
     required this.progress,
+    this.selectionProgress = 1,
     this.strokeWidth = 18,
+    this.selectedIndex,
   });
 
   @override
@@ -2785,12 +3005,21 @@ class _SpendingDonutPainter extends CustomPainter {
     if (totalPaise == 0) return;
 
     var start = -math.pi / 2;
-    for (final row in rows) {
+    final activeIndex = selectedIndex != null && selectedIndex! < rows.length
+        ? selectedIndex
+        : null;
+    for (var index = 0; index < rows.length; index++) {
+      final row = rows[index];
       final sweep = math.pi * 2 * row.total.paise / totalPaise * progress;
+      final isSelected = activeIndex == index;
+      final alpha = activeIndex == null || isSelected
+          ? 1.0
+          : 1.0 - 0.66 * selectionProgress;
       final paint = Paint()
-        ..color = spendingCategoryVisual(row.label).accent
+        ..color = spendingCategoryVisual(row.label).accent.withValues(alpha: alpha)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth;
+        ..strokeWidth = strokeWidth +
+            (isSelected ? 6 * selectionProgress : 0);
       canvas.drawArc(rect.deflate(10), start, sweep, false, paint);
       start += sweep;
     }
@@ -2800,18 +3029,22 @@ class _SpendingDonutPainter extends CustomPainter {
   bool shouldRepaint(covariant _SpendingDonutPainter oldDelegate) =>
       oldDelegate.rows != rows ||
       oldDelegate.progress != progress ||
-      oldDelegate.strokeWidth != strokeWidth;
+      oldDelegate.selectionProgress != selectionProgress ||
+      oldDelegate.strokeWidth != strokeWidth ||
+      oldDelegate.selectedIndex != selectedIndex;
 }
 
 class _MixLegendRow extends StatelessWidget {
   final SpendBreakdownRow row;
   final Money total;
   final bool compact;
+  final VoidCallback? onTap;
 
   const _MixLegendRow({
     required this.row,
     required this.total,
     this.compact = false,
+    this.onTap,
   });
 
   @override
@@ -2822,48 +3055,55 @@ class _MixLegendRow extends StatelessWidget {
     final visual = spendingCategoryVisual(row.label);
     return Padding(
       padding: EdgeInsets.only(bottom: compact ? 4 : AppSpace.sm),
-      child: Row(
-        children: [
-          if (compact)
-            Container(
-              width: 9,
-              height: 9,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: visual.accent,
-              ),
-            )
-          else
-            _SpendingVisualBadge(visual: visual, size: 27),
-          SizedBox(width: compact ? 5 : AppSpace.sm),
-          Expanded(
-            child: Text(
-              '${row.label} · ${(ratio * 100).toStringAsFixed(0)}%',
-              style: BambooFonts.ui(
-                compact ? 9.5 : 12,
-                color: compact ? BambooInk.ink500 : BambooInk.ink900,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          SizedBox(width: compact ? 3 : AppSpace.xs),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
-              child: MoneyText(
-                row.total,
-                confidence: Confidence.estimated,
-                style: BambooFonts.ui(
-                  compact ? 9.5 : 12,
-                  weight: FontWeight.w700,
-                  color: BambooInk.ink900,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            children: [
+              if (compact)
+                Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: visual.accent,
+                  ),
+                )
+              else
+                _SpendingVisualBadge(visual: visual, size: 27),
+              SizedBox(width: compact ? 5 : AppSpace.sm),
+              Expanded(
+                child: Text(
+                  '${row.label} · ${(ratio * 100).toStringAsFixed(0)}%',
+                  style: BambooFonts.ui(
+                    compact ? 9.5 : 12,
+                    color: compact ? BambooInk.ink500 : BambooInk.ink900,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
+              SizedBox(width: compact ? 3 : AppSpace.xs),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: MoneyText(
+                    row.total,
+                    confidence: Confidence.estimated,
+                    style: BambooFonts.ui(
+                      compact ? 9.5 : 12,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

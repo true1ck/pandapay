@@ -56,10 +56,25 @@ if [ "$ENV_NAME" = "prod" ] && [ "$BUILD_TARGET" = "apk" ]; then
     *" --split-per-abi "*) ;;
     *) echo "Production phone APKs require --split-per-abi; build an app bundle separately for Play Console delivery." >&2; exit 1 ;;
   esac
-  case " $* " in
-    *" --build-number="[1-9][0-9]*"*) ;;
-    *) echo "Production builds require an explicit --build-number so an older APK cannot be shared by mistake." >&2; exit 1 ;;
-  esac
+  HAS_BUILD_NUMBER=0
+  for ((i = 1; i <= $#; i++)); do
+    arg="${!i}"
+    if [[ "$arg" =~ ^--build-number=[1-9][0-9]*$ ]]; then
+      HAS_BUILD_NUMBER=1
+      break
+    elif [ "$arg" = "--build-number" ] && [ "$i" -lt "$#" ]; then
+      next_i=$((i + 1))
+      next_arg="${!next_i}"
+      if [[ "$next_arg" =~ ^[1-9][0-9]*$ ]]; then
+        HAS_BUILD_NUMBER=1
+        break
+      fi
+    fi
+  done
+  if [ "$HAS_BUILD_NUMBER" -ne 1 ]; then
+    echo "Production builds require an explicit --build-number so an older APK cannot be shared by mistake." >&2
+    exit 1
+  fi
 fi
 
 case "$ENV_NAME" in
