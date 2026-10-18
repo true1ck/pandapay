@@ -232,8 +232,10 @@ class _NotificationSettingsBodyState
                   _update(context, ref, {'category_fee_waivers': v}),
             ),
             SwitchListTile(
-              title: const Text('Bill due dates'),
-              subtitle: const Text('Reminders before a payment is due'),
+              title: const Text('Bills and subscriptions'),
+              subtitle: const Text(
+                'Payment due dates and subscription renewals 3 days and 1 day before',
+              ),
               value: prefs.categoryBills,
               onChanged: (v) => _update(context, ref, {'category_bills': v}),
             ),

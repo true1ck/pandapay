@@ -3,6 +3,24 @@ import 'package:pandapay/features/notifications/notification_triggers.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 void main() {
+  group('subscription reminder windows', () {
+    final now = DateTime(2026, 10, 18, 23, 59);
+    test('early reminder covers three days and catches up at two days', () {
+      expect(NotificationTriggerRunner.subscriptionReminderStage(DateTime(2026, 10, 21), now), 3);
+      expect(NotificationTriggerRunner.subscriptionReminderStage(DateTime(2026, 10, 20), now), 3);
+    });
+    test('tomorrow uses a separate reminder stage', () {
+      expect(NotificationTriggerRunner.subscriptionReminderStage(DateTime(2026, 10, 19), now), 1);
+    });
+    test('no reminder on or after renewal or too early', () {
+      for (final day in [17, 18, 22]) {
+        expect(NotificationTriggerRunner.subscriptionReminderStage(DateTime(2026, 10, day), now), isNull);
+      }
+    });
+    test('calendar days work across year boundaries and UTC date values', () {
+      expect(NotificationTriggerRunner.subscriptionReminderStage(DateTime.utc(2027, 1, 1), DateTime(2026, 12, 29, 23)), 3);
+    });
+  });
   group('NotificationTriggerRunner.capPeriodBucket', () {
     test('calendarMonth buckets by year-month', () {
       expect(NotificationTriggerRunner.capPeriodBucket(CapPeriod.calendarMonth, DateTime(2026, 3, 15)), '2026-3');

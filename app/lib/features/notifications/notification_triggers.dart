@@ -47,6 +47,7 @@ class NotificationTriggerRunner {
       await _tryRun(_checkMilestones);
       await _tryRun(_checkFeeWaivers);
       await _tryRun(_checkBillsDue);
+      await _tryRun(_checkSubscriptions);
       await _tryRun(_checkPointsExpiry);
       await _tryRun(_checkMonthlyReport);
       await _tryRun(_checkNeedsReview);
@@ -199,6 +200,46 @@ class NotificationTriggerRunner {
             'your issuer\'s statement may be higher.',
         dedupeKey:
             'bill_due:${row.card.id}:${row.dueOn.toIso8601String().substring(0, 10)}',
+      );
+    }
+  }
+
+  /// Catch up the early reminder if the app was not opened exactly three
+  /// days before renewal. The final reminder has a separate dedupe bucket.
+  static int? subscriptionReminderStage(DateTime renewal, DateTime now) {
+    final days = DateTime.utc(
+      renewal.year,
+      renewal.month,
+      renewal.day,
+    ).difference(DateTime.utc(now.year, now.month, now.day)).inDays;
+    if (days == 1) return 1;
+    if (days == 2 || days == 3) return 3;
+    return null;
+  }
+
+  Future<void> _checkSubscriptions() async {
+    final report = await ref.read(recurringReportProvider.future);
+    if (report == null) return;
+    final now = DateTime.now();
+    final gate = ref.read(notificationGateProvider);
+    for (final series in report.series) {
+      final renewal = series.nextExpectedOn;
+      if (renewal == null || series.typicalAmount.paise <= 0) continue;
+      final stage = subscriptionReminderStage(renewal, now);
+      if (stage == null) continue;
+      final date = DateFormat('yyyy-MM-dd').format(renewal);
+      final when = stage == 1
+          ? 'tomorrow'
+          : 'in ${DateTime.utc(renewal.year, renewal.month, renewal.day).difference(DateTime.utc(now.year, now.month, now.day)).inDays} days';
+      await gate.fire(
+        category: 'bills',
+        title: '${series.displayName} subscription renews $when',
+        body:
+            'About ${series.typicalAmount.format()} is expected to be deducted '
+            'on ${DateFormat('d MMM yyyy').format(renewal)}. '
+            'Review your subscription and cancel with the provider before renewal if you no longer want it.',
+        deepLink: '/insights/subscriptions',
+        dedupeKey: 'subscription_due:${series.id}:$date:$stage',
       );
     }
   }
