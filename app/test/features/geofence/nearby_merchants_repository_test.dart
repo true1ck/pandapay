@@ -65,6 +65,25 @@ void main() {
       },
     );
 
+    test(
+      'an HTTP 200 provider outage is not treated as no merchants',
+      () async {
+        final repo = HttpNearbyMerchantsRepository(
+          baseUrl: 'http://localhost:4000',
+          client: MockClient(
+            (_) async => http.Response(
+              jsonEncode({'unavailable': true, 'merchants': []}),
+              200,
+            ),
+          ),
+        );
+        await expectLater(
+          repo.fetchNearby(lat: 0, lng: 0),
+          throwsA(isA<ApiException>()),
+        );
+      },
+    );
+
     test('a non-200 response throws NearbyMerchantsException', () async {
       final client = MockClient((request) async => http.Response('error', 500));
       final repo = HttpNearbyMerchantsRepository(

@@ -47,6 +47,7 @@ import '../data/upi_payment_service.dart';
 import '../data/user_cards_repository.dart';
 import '../data/user_settings_api.dart';
 import '../features/geofence/geofence_monitor_service.dart';
+import '../features/geofence/background_alerts_controller.dart';
 import '../features/geofence/nearby_merchants_repository.dart';
 import '../features/home_widget/home_widget_service.dart';
 import '../features/notifications/notification_gate.dart';
@@ -3889,10 +3890,7 @@ final pushNotificationLifecycleProvider = Provider<void>((ref) {
   });
 });
 
-/// Background geofence monitor — one instance for the app's lifetime, kept
-/// alive by `ref.keepAlive()` since starting/stopping it is a deliberate
-/// user action (a settings toggle), not something that should reset on
-/// every rebuild of whatever screen happens to read it.
+/// One native monitor for the current account's nearby repository.
 final geofenceMonitorServiceProvider = Provider<GeofenceMonitorService>((ref) {
   final service = GeofenceMonitorService(
     repo: ref.watch(nearbyMerchantsRepositoryProvider),
@@ -3921,11 +3919,24 @@ final geofenceMonitorServiceProvider = Provider<GeofenceMonitorService>((ref) {
   return service;
 });
 
-/// Whether background geofence monitoring is currently on — a plain
-/// StateProvider the toggle UI reads/writes; the actual start()/stop()
-/// call happens in the widget (needs a BuildContext for permission-denied
-/// messaging), this just tracks the resulting on/off state for display.
-final geofenceMonitoringEnabledProvider = StateProvider<bool>((ref) => false);
+final backgroundAlertsControllerProvider =
+    ChangeNotifierProvider<BackgroundAlertsController>((ref) {
+      return BackgroundAlertsController(
+        monitor: ref.watch(geofenceMonitorServiceProvider),
+        namespace: ref.watch(cacheNamespaceProvider),
+      );
+    });
+
+/// Restore the saved opt-in even when Nearby merchants is never opened.
+/// Recheck permissions and location services whenever the app resumes.
+final backgroundAlertsLifecycleProvider = Provider<void>((ref) {
+  final controller = ref.watch(backgroundAlertsControllerProvider.notifier);
+  unawaited(controller.restore());
+  final listener = AppLifecycleListener(
+    onResume: () => unawaited(controller.restore()),
+  );
+  ref.onDispose(listener.dispose);
+});
 
 /// UA-8.3 (B3): the trigger side — see notification_triggers.dart's own
 /// doc-comment for what it checks and why this is the realistic ceiling

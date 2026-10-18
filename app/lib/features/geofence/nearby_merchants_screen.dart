@@ -9,6 +9,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 import 'nearby_merchants_repository.dart';
+import 'geofence_monitor_service.dart';
 
 /// UA-8.1/8.3: "Nearby merchants" — the original foreground-triggered,
 /// one-shot check (button tap -> one location read -> `GET
@@ -35,8 +36,6 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   List<NearbyMerchantMatch> _matches = const [];
   bool _refreshing = false;
   bool _showingCached = false;
-  bool _backgroundToggleBusy = false;
-  String? _backgroundError;
   final _placeController = TextEditingController();
   List<NearbyMerchantCandidate>? _placeResults;
   bool _placeSearching = false;
@@ -51,37 +50,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   }
 
   Future<void> _toggleBackgroundMonitoring(bool enable) async {
-    setState(() {
-      _backgroundToggleBusy = true;
-      _backgroundError = null;
-    });
-    try {
-      final service = ref.read(geofenceMonitorServiceProvider);
-      if (enable) {
-        final granted = await service.requestPermissions();
-        if (!granted) {
-          if (mounted) {
-            setState(
-              () => _backgroundError =
-                  'Background location and notification permissions are needed for this — '
-                  'set location access to "Allow all the time" and enable notifications in Settings.',
-            );
-          }
-          return;
-        }
-        await service.start();
-      } else {
-        await service.stop();
-      }
-      ref.read(geofenceMonitoringEnabledProvider.notifier).state = enable;
-    } catch (e) {
-      // Anything the permission/stream/plugin path throws is contained here —
-      // the toggle stays in its previous state and the user sees why, rather
-      // than the app going down.
-      if (mounted) setState(() => _backgroundError = userFacingErrorMessage(e));
-    } finally {
-      if (mounted) setState(() => _backgroundToggleBusy = false);
-    }
+    await ref.read(backgroundAlertsControllerProvider).setEnabled(enable);
   }
 
   Future<void> _checkNearby() async {
@@ -273,7 +242,8 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final backgroundEnabled = ref.watch(geofenceMonitoringEnabledProvider);
+    final background = ref.watch(backgroundAlertsControllerProvider);
+    final notificationPrefs = ref.watch(notificationPreferencesProvider);
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -321,28 +291,64 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                       ),
                     ),
                     subtitle: Text(
-                      backgroundEnabled
-                          ? 'On — you\'ll get a notification when you\'re near a known merchant, '
-                                'even with the app closed. A persistent notification shows while this is active.'
-                          : 'Off — checks only run when you tap the button below.',
+                      background.description,
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                     activeTrackColor: BambooInk.jade,
                     activeThumbColor: BambooInk.lime,
-                    value: backgroundEnabled,
-                    onChanged: _backgroundToggleBusy
+                    value: background.enabled,
+                    onChanged: background.busy
                         ? null
                         : _toggleBackgroundMonitoring,
                   ),
                 ),
               ),
-              if (_backgroundError != null)
+              if (background.enabled)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    _backgroundError!,
-                    style: BambooFonts.ui(12, color: BambooInk.clay),
+                    'Works while PandaPay runs in the background, with a persistent notification. '
+                    'Force-stopping the app or restarting the phone stops monitoring until you reopen PandaPay. '
+                    'Your choice stays saved.',
+                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                   ),
+                ),
+              if (background.enabled &&
+                  !background.busy &&
+                  (background.status != GeofenceMonitorStatus.monitoring ||
+                      background.error != null))
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton(
+                      onPressed: background.restore,
+                      child: const Text('Retry monitoring'),
+                    ),
+                    if (background.status ==
+                            GeofenceMonitorStatus.locationOff ||
+                        background.status ==
+                            GeofenceMonitorStatus.permissionRequired ||
+                        background.status ==
+                            GeofenceMonitorStatus.notificationsOff)
+                      TextButton(
+                        onPressed: () async {
+                          if (background.status ==
+                              GeofenceMonitorStatus.locationOff) {
+                            await Geolocator.openLocationSettings();
+                          } else {
+                            await Geolocator.openAppSettings();
+                          }
+                        },
+                        child: const Text('Open Settings'),
+                      ),
+                  ],
+                ),
+              if (background.enabled &&
+                  notificationPrefs.valueOrNull?.categoryLocation == false)
+                Text(
+                  'Merchant notifications are muted. Enable location alerts in You → Notifications. '
+                  'Quiet hours and daily notification limits also apply.',
+                  style: BambooFonts.ui(11.5, color: BambooInk.clay),
                 ),
               const SizedBox(height: 12),
               FilledButton.icon(

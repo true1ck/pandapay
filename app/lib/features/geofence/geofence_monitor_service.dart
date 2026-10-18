@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -10,32 +10,34 @@ import 'package:permission_handler/permission_handler.dart' as ph;
 import '../notifications/notification_gate.dart';
 import 'nearby_merchants_repository.dart';
 
-/// UA-8, extended: real background geofence monitoring, closing the gap the
-/// original one-shot screen's doc-comment explicitly flagged ("always-on
-/// background geofence monitoring... needs a foreground service + platform
-/// review this sandbox can't responsibly build/verify").
-///
-/// What "background" means here, precisely: a `geolocator` position
-/// stream backed by an Android foreground service (a persistent, visible
-/// notification — required by Play policy for any background-location use,
-/// not optional chrome) or iOS's background-location-updates mode. Both
-/// keep the app PROCESS alive while backgrounded/screen-off; neither
-/// survives the user force-killing the app or a device reboot — that would
-/// need a headless callback entry point (`workmanager`/native
-/// AlarmManager/BGTaskScheduler), a materially bigger undertaking than
-/// this pass, and not attempted here. This is the same scope real
-/// consumer apps ship as "background location" — not full always-on
-/// tracking independent of the app's lifecycle.
-///
-/// A stream of coordinates that nothing surfaces isn't a geofence feature
-/// a user could ever notice, so this also adds the one genuinely new
-/// dependency in this pass — `flutter_local_notifications` — to actually
-/// post "you're near X" while the app is backgrounded. Tapping the
-/// notification opens the app; the existing NearbyMerchantsScreen/Home
-/// ranking machinery (already tested) is what computes which card to use,
-/// not this service — this service's only job is "detect proximity, tell
-/// the user," same separation as the foreground screen already had.
-class GeofenceMonitorService {
+/// Runtime health is separate from the account's saved opt-in.
+enum GeofenceMonitorStatus {
+  off,
+  starting,
+  monitoring,
+  locationOff,
+  permissionRequired,
+  notificationsOff,
+  unavailable,
+}
+
+abstract class BackgroundMerchantMonitor {
+  ValueListenable<GeofenceMonitorStatus> get status;
+  bool get isMonitoring;
+  Future<bool> requestPermissions();
+  Future<void> start();
+  Future<void> stop();
+}
+
+/// Watches published merchants while the process runs in the background.
+/// A force-stop or reboot ends this stream; the controller restores it when
+/// the signed-in app opens again. This service never discovers map candidates.
+class GeofenceMonitorService implements BackgroundMerchantMonitor {
+  @override
+  final ValueNotifier<GeofenceMonitorStatus> status = ValueNotifier(
+    GeofenceMonitorStatus.off,
+  );
+  int _generation = 0;
   final NearbyMerchantsRepository repo;
   final FlutterLocalNotificationsPlugin notifications;
   final NotificationGate? gate;
@@ -56,6 +58,7 @@ class GeofenceMonitorService {
     this.notifyCooldown = const Duration(minutes: 30),
   }) : notifications = notifications ?? FlutterLocalNotificationsPlugin();
 
+  @override
   bool get isMonitoring => _subscription != null;
 
   /// Pure decision logic — given when a merchant was last notified (if
@@ -77,8 +80,14 @@ class GeofenceMonitorService {
     if (_initialized) return;
     try {
       const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const iosInit = DarwinInitializationSettings();
-      await notifications.initialize(const InitializationSettings(android: androidInit, iOS: iosInit));
+      const iosInit = DarwinInitializationSettings(
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+      );
+      await notifications.initialize(
+        const InitializationSettings(android: androidInit, iOS: iosInit),
+      );
     } catch (e) {
       // A second initialize() on the same plugin instance (NotificationGate
       // shares it) is a no-op that can still throw on some platforms — the
@@ -95,6 +104,7 @@ class GeofenceMonitorService {
   /// false (does not throw) if the user declines either — callers show
   /// their own messaging, same "no fabricated success" posture as the
   /// original one-shot screen.
+  @override
   Future<bool> requestPermissions() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -125,9 +135,15 @@ class GeofenceMonitorService {
       await _ensureInitialized();
       if (Platform.isAndroid) {
         final androidPlugin = notifications
-            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
         final granted = await androidPlugin?.requestNotificationsPermission();
         if (granted == false) return false;
+      } else if (Platform.isIOS) {
+        if (!(await ph.Permission.notification.request()).isGranted) {
+          return false;
+        }
       }
       return true;
     } catch (e) {
@@ -136,8 +152,13 @@ class GeofenceMonitorService {
     }
   }
 
+  @override
   Future<void> start() async {
-    if (isMonitoring) return;
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      await stop();
+      status.value = GeofenceMonitorStatus.locationOff;
+      return;
+    }
     await _ensureInitialized();
 
     // Re-check the grant right before opening the stream: the user may have
@@ -146,17 +167,37 @@ class GeofenceMonitorService {
     // a SecurityException on Android 14+ that would otherwise crash the app.
     final permission = await Geolocator.checkPermission();
     if (permission != LocationPermission.always) {
-      throw StateError(
-        'Background location permission is not granted — enable "Allow all the time" in Settings.',
-      );
+      await stop();
+      status.value = GeofenceMonitorStatus.permissionRequired;
+      return;
     }
+
+    final notificationsAllowed = Platform.isAndroid
+        ? await notifications
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >()
+              ?.areNotificationsEnabled()
+        : await ph.Permission.notification.isGranted;
+    if (notificationsAllowed == false) {
+      await stop();
+      status.value = GeofenceMonitorStatus.notificationsOff;
+      return;
+    }
+    if (isMonitoring && status.value == GeofenceMonitorStatus.monitoring) {
+      return;
+    }
+    await stop();
+    status.value = GeofenceMonitorStatus.starting;
+    final generation = ++_generation;
 
     final locationSettings = Platform.isAndroid
         ? AndroidSettings(
             accuracy: LocationAccuracy.medium,
             distanceFilter: 150,
             foregroundNotificationConfig: const ForegroundNotificationConfig(
-              notificationText: 'Watching for nearby merchants you\'ve used before',
+              notificationText:
+                  'Watching for published PandaPay merchants nearby',
               notificationTitle: 'PandaPay is checking your location',
               enableWakeLock: true,
             ),
@@ -168,34 +209,58 @@ class GeofenceMonitorService {
                   pauseLocationUpdatesAutomatically: false,
                   showBackgroundLocationIndicator: true,
                 )
-              : const LocationSettings(accuracy: LocationAccuracy.medium, distanceFilter: 150));
+              : const LocationSettings(
+                  accuracy: LocationAccuracy.medium,
+                  distanceFilter: 150,
+                ));
 
-    _subscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
-      _onPosition,
-      // Without onError, a stream error (GPS disabled mid-session, a transient
-      // PlatformException, LocationServiceDisabledException) is an UNHANDLED
-      // async error — which terminates the app. Swallow it here: the monitor
-      // just stops producing updates until the next successful fix, same
-      // posture as a failed single poll in _onPosition.
-      onError: (Object e, StackTrace st) {
-        debugPrint('GeofenceMonitorService position stream error: $e');
-      },
-      cancelOnError: false,
-    );
+    _subscription =
+        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+          (position) => _onPosition(position, generation),
+          // Surface failures without losing the user's saved opt-in. A later
+          // successful fix or an app-resume retry can recover the monitor.
+          onError: (Object e, StackTrace st) {
+            debugPrint('GeofenceMonitorService position stream error: $e');
+            if (generation == _generation) {
+              status.value = e is LocationServiceDisabledException
+                  ? GeofenceMonitorStatus.locationOff
+                  : GeofenceMonitorStatus.unavailable;
+            }
+          },
+          onDone: () {
+            if (generation != _generation) return;
+            ++_generation;
+            _subscription = null;
+            status.value = GeofenceMonitorStatus.unavailable;
+          },
+          cancelOnError: false,
+        );
+    if (generation == _generation &&
+        status.value == GeofenceMonitorStatus.starting) {
+      status.value = GeofenceMonitorStatus.monitoring;
+    }
   }
 
+  @override
   Future<void> stop() async {
-    await _subscription?.cancel();
+    ++_generation;
+    final subscription = _subscription;
     _subscription = null;
+    status.value = GeofenceMonitorStatus.off;
+    await subscription?.cancel();
   }
 
-  Future<void> _onPosition(Position position) async {
+  Future<void> _onPosition(Position position, int generation) async {
     try {
-      final candidates = await repo.fetchNearby(
-        lat: position.latitude,
-        lng: position.longitude,
-        radiusM: radiusMeters,
-      );
+      final candidates = await repo
+          .fetchNearby(
+            lat: position.latitude,
+            lng: position.longitude,
+            radiusM: radiusMeters,
+          )
+          .timeout(const Duration(seconds: 15));
+      if (generation != _generation) return;
+      status.value = GeofenceMonitorStatus.monitoring;
       final matches = findNearbyMerchants(
         origin: GeoPoint(lat: position.latitude, lng: position.longitude),
         candidates: candidates,
@@ -211,21 +276,25 @@ class GeofenceMonitorService {
         )) {
           continue;
         }
-        _lastNotifiedAt[match.candidate.merchantId] = now;
-        await _notify(match);
+        if (generation != _generation) return;
+        if (await _notify(match)) {
+          _lastNotifiedAt[match.candidate.merchantId] = now;
+        }
       }
     } catch (_) {
-      // A single failed poll (network blip, transient GPS glitch) isn't
-      // fatal to the monitor — the next position update just retries.
-      // Nothing to surface to a UI that isn't necessarily visible right now.
+      if (generation == _generation) {
+        status.value = GeofenceMonitorStatus.unavailable;
+      }
     }
   }
 
-  Future<void> _notify(NearbyMerchantMatch match) async {
-    final name = match.candidate.displayName ?? 'a merchant you\'ve used before';
+  Future<bool> _notify(NearbyMerchantMatch match) async {
+    final name =
+        match.candidate.displayName ?? 'a merchant you\'ve used before';
     final merchantId = match.candidate.merchantId;
     final title = 'You\'re near $name';
-    final body = recommendationTextBuilder?.call(match) ??
+    final body =
+        recommendationTextBuilder?.call(match) ??
         'Open PandaPay to see which card to use here.';
 
     if (gate != null) {
@@ -242,14 +311,14 @@ class GeofenceMonitorService {
       // that's still over threshold next time the app foregrounds) — using
       // a per-merchant key here would let the FIRST visit of the day
       // permanently block every later one.
-      await gate!.fire(
+      return gate!.fire(
         category: 'location',
         title: title,
         body: body,
-        dedupeKey: 'geofence:$merchantId:${DateTime.now().millisecondsSinceEpoch}',
+        dedupeKey:
+            'geofence:$merchantId:${DateTime.now().millisecondsSinceEpoch}',
         merchantId: merchantId,
       );
-      return;
     }
 
     // Fallback for direct construction without a gate (e.g. unit tests that
@@ -260,11 +329,16 @@ class GeofenceMonitorService {
     const androidDetails = AndroidNotificationDetails(
       'geofence_nearby_merchant',
       'Nearby merchants',
-      channelDescription: 'Alerts when you\'re near a merchant you\'ve used before',
+      channelDescription:
+          'Alerts when you\'re near a merchant you\'ve used before',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
     );
-    const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(),
+    );
     await notifications.show(merchantId.hashCode, title, body, details);
+    return true;
   }
 }

@@ -139,6 +139,21 @@ All 365 API tests, 10 Flutter repository tests, and analysis of the changed
 Flutter screen/repository passed. This debug-signed build is for the connected
 device only. Future updates must exceed version `20046` and match its certificate.
 
+Verified background-alert persistence update on 2026-10-18:
+
+| Device | ABI | Installed package version | APK SHA-256 |
+| --- | --- | ---: | --- |
+| Motorola edge 50 fusion (`ZA222MS4SF`) | `arm64-v8a` | `20047` | `96789047D79B5F10423939345E5A3664626F0976D26CDCC0357911E2A1DC2E3E` |
+
+Built with `-BuildNumber 18047`, the production endpoints, and the explicit
+debug-signing device-test exception. The signing certificate matches the
+baseline above. Installed over version `20046` with `adb install -r`, preserving
+app data. On-device checks verified saved On/Off choices across force-stop and
+reopen, automatic monitoring restoration, and permission-loss/recovery status.
+See [background merchant alerts](background-merchant-alerts.md) for details.
+This is a connected-device test build only. Future updates for this phone must
+exceed version `20047` and match the same signing certificate.
+
 ## 5. Canonical build command
 
 Use the repository wrapper; do not assemble a production APK with an ad-hoc

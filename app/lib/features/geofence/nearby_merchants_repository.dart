@@ -209,6 +209,14 @@ class HttpNearbyMerchantsRepository
         'GET /merchants/nearby failed: ${response.statusCode} ${response.body}',
       );
     }
+    final payload = jsonDecode(response.body);
+    if (payload is Map && payload['unavailable'] == true) {
+      throw ApiException(
+        'Nearby merchant provider is unavailable',
+        userMessage:
+            'Nearby merchant data is temporarily unavailable. Please retry.',
+      );
+    }
     final candidates = parseNearbyMerchantsPayload(response.body);
     try {
       await localCache?.write(

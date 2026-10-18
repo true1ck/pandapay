@@ -261,6 +261,9 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     // launch or an app update. This closes the small session-restore race in
     // which the token was available while the shell was still transitioning.
     ref.watch(pushNotificationLifecycleProvider);
+    // Restore saved location monitoring for every entry point, including
+    // assistant links that open a screen outside the tab shell.
+    ref.watch(backgroundAlertsLifecycleProvider);
     return MaterialApp.router(
       title: 'PandaPay',
       theme: AppTheme.light(),
