@@ -2106,6 +2106,7 @@ class _HeadlineCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final change = report.changeVsPrevious;
     final projected = report.projectedSpend;
+    final shortBy = report.spend.total - report.income.total;
     return Container(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
@@ -2176,6 +2177,29 @@ class _HeadlineCard extends StatelessWidget {
               style: BambooFonts.ui(13, color: BambooInk.ink500),
             ),
           ],
+          const SizedBox(height: AppSpace.md),
+          Container(height: 1, color: BambooInk.hairlineOnPaper),
+          const SizedBox(height: AppSpace.sm),
+          _HeadlineMetricRow(
+            label: 'Money in',
+            amount: report.income.total,
+            color: BambooInk.ink900,
+          ),
+          const SizedBox(height: 8),
+          _HeadlineMetricRow(
+            label: 'Spent',
+            amount: report.spend.total,
+            color: BambooInk.ink900,
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Container(height: 1, color: BambooInk.hairlineOnPaper),
+          const SizedBox(height: AppSpace.sm),
+          _HeadlineMetricRow(
+            label: shortBy.isNegative ? 'Surplus' : 'Short by',
+            amount: shortBy.abs(),
+            color: shortBy.isNegative ? BambooInk.jade : BambooInk.ink900,
+            emphasized: true,
+          ),
           if (!report.spend.rewards.isZero) ...[
             const SizedBox(height: AppSpace.lg),
             Container(height: 1, color: BambooInk.hairlineOnPaper),
@@ -2213,6 +2237,45 @@ class _HeadlineCard extends StatelessWidget {
       SpendPeriod.custom => 'for this period',
     };
   }
+}
+
+class _HeadlineMetricRow extends StatelessWidget {
+  final String label;
+  final Money amount;
+  final Color color;
+  final bool emphasized;
+
+  const _HeadlineMetricRow({
+    required this.label,
+    required this.amount,
+    required this.color,
+    this.emphasized = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Text(
+        label,
+        style: BambooFonts.ui(
+          15,
+          weight: emphasized ? FontWeight.w800 : FontWeight.w600,
+          color: color,
+        ),
+      ),
+      const Spacer(),
+      MoneyText(
+        amount,
+        confidence: Confidence.estimated,
+        showConfidenceIcon: false,
+        style: BambooFonts.money(
+          17,
+          color: color,
+          weight: emphasized ? FontWeight.w800 : FontWeight.w600,
+        ),
+      ),
+    ],
+  );
 }
 
 class _SpendChangePill extends StatelessWidget {
