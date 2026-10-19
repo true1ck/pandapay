@@ -19,8 +19,8 @@ _cache: dict[str, tuple[float, list[dict], int]] = {}
 _inflight: dict[str, asyncio.Task] = {}
 _lock = asyncio.Lock()
 _scrape_semaphore = asyncio.Semaphore(3)
-_category_timeout_seconds = 18
-_lookup_timeout_seconds = 25
+_category_timeout_seconds = 45
+_lookup_timeout_seconds = 55
 _queries = (
     ("groceries", "supermarkets grocery stores"),
     ("fuel", "petrol pumps fuel stations"),
@@ -78,25 +78,30 @@ def coordinates_from_url(url: str):
 
 async def scrape_category(lat: float, lng: float, radius_m: int, category: str, query: str):
     async with _scrape_semaphore:
+        stage = "browser_context"
         context = await _browser.new_context(locale="en-IN", viewport={"width": 1365, "height": 900})
         page = await context.new_page()
         found = []
         try:
             search = quote(query, safe="")
             url = f"https://www.google.com/maps/search/{search}/@{lat},{lng},15z?hl=en"
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            stage = "navigation"
+            await page.goto(url, wait_until="domcontentloaded", timeout=35000)
             # Google can show its regional consent interstitial before Maps.
             # Accepting the site prompt lets the same browser continue to the
             # results feed; if the prompt is absent this is a quick no-op.
             try:
+                stage = "consent"
                 await page.get_by_role(
                     "button", name=re.compile(r"^(accept all|i agree)$", re.IGNORECASE)
                 ).click(timeout=2500)
                 await page.wait_for_timeout(500)
             except Exception:
                 pass
+            stage = "results_feed"
             feed = page.locator('div[role="feed"]')
-            await feed.wait_for(timeout=18000)
+            await feed.wait_for(timeout=25000)
+            stage = "collect_results"
             previous = -1
             for _ in range(4):
                 await feed.evaluate("el => el.scrollTo(0, el.scrollHeight)")
@@ -135,6 +140,17 @@ async def scrape_category(lat: float, lng: float, radius_m: int, category: str, 
                     })
                 except Exception:
                     continue
+        except asyncio.CancelledError:
+            logger.warning("Google Maps category scrape cancelled category=%s stage=%s", category, stage)
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Google Maps category scrape failed category=%s stage=%s reason=%s",
+                category,
+                stage,
+                type(exc).__name__,
+            )
+            raise
         finally:
             await context.close()
         return found
