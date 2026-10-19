@@ -2717,7 +2717,7 @@ class _SpendingMixCardState extends State<_SpendingMixCard> {
               if (stack) {
                 return Column(
                   children: [
-                    _SpendingDonut(
+                    SpendingDonut(
                       rows: nonZeroRows,
                       total: total,
                       selectedIndex: selectedIndex,
@@ -2732,7 +2732,7 @@ class _SpendingMixCardState extends State<_SpendingMixCard> {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  _SpendingDonut(
+                  SpendingDonut(
                     rows: nonZeroRows,
                     total: total,
                     size: compact ? 106 : 132,
@@ -2752,19 +2752,22 @@ class _SpendingMixCardState extends State<_SpendingMixCard> {
   }
 }
 
-class _SpendingDonut extends StatelessWidget {
+class SpendingDonut extends StatelessWidget {
   final List<SpendBreakdownRow> rows;
   final Money total;
   final double size;
   final bool compact;
+  final String? totalLabel;
   final int? selectedIndex;
   final ValueChanged<int?> onSelected;
 
-  const _SpendingDonut({
+  const SpendingDonut({
+    super.key,
     required this.rows,
     required this.total,
     this.size = 132,
     this.compact = false,
+    this.totalLabel,
     required this.selectedIndex,
     required this.onSelected,
   });
@@ -2835,7 +2838,7 @@ class _SpendingDonut extends StatelessWidget {
                       rows: rows,
                       progress: progress,
                       selectionProgress: selectionProgress,
-                      strokeWidth: compact ? 12 : 18,
+                      strokeWidth: 18,
                       selectedIndex: selectedIndex,
                     ),
                   ),
@@ -2902,7 +2905,7 @@ class _SpendingDonut extends StatelessWidget {
             ),
           ),
           Text(
-            compact ? 'Total spent' : 'spent',
+            totalLabel ?? (compact ? 'Total spent' : 'spent'),
             style: BambooFonts.ui(
               compact ? 8.5 : 10.5,
               color: BambooInk.ink500,

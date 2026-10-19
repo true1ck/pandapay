@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/app/router.dart' show AppRoute;
 import 'package:pandapay/features/comparison/comparison_view_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
 import 'package:pandapay/features/quickadd/quick_add_screen.dart';
+import 'package:pandapay/data/spend_reports_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -12,6 +15,124 @@ CardProduct _card(String id) =>
     CardProduct(id: id, name: 'Card $id', network: CardNetwork.visa);
 
 void main() {
+  testWidgets(
+    'home spending card opens Spending from whitespace and keeps donut selection',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final report = SpendReport(
+        period: SpendPeriod.month,
+        periodStart: DateTime(2026, 10, 1),
+        periodEnd: DateTime(2026, 11, 1),
+        elapsedFraction: 0.5,
+        spend: EntryKindTotals(
+          total: Money.fromRupees(100),
+          txnCount: 2,
+          rewards: Money.fromRupees(2),
+        ),
+        income: EntryKindTotals(
+          total: Money.fromRupees(150),
+          txnCount: 1,
+          rewards: const Money.zero(),
+        ),
+        investment: EntryKindTotals.zero,
+        previousSpend: EntryKindTotals(
+          total: Money.fromRupees(50),
+          txnCount: 1,
+          rewards: const Money.zero(),
+        ),
+        byCategory: [
+          SpendBreakdownRow(
+            label: 'Dining',
+            total: Money.fromRupees(80),
+            txnCount: 1,
+            categoryId: 'dining',
+          ),
+          SpendBreakdownRow(
+            label: 'Groceries',
+            total: Money.fromRupees(20),
+            txnCount: 1,
+            categoryId: 'groceries',
+          ),
+        ],
+        byMerchant: const [],
+        byCard: const [],
+        byInstrument: const [],
+        series: const [],
+      );
+
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => const Scaffold(body: HomeScreen()),
+          ),
+          GoRoute(
+            path: AppRoute.spendTrends,
+            builder: (context, state) => const Scaffold(
+              body: Center(child: Text('Spending tab opened')),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            spendReportProvider.overrideWith((ref, query) async => report),
+            rankedRecommendationsProvider.overrideWithValue(
+              const AsyncValue.data([]),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final chart = find.byKey(const Key('spending_donut_chart'));
+      await tester.scrollUntilVisible(
+        chart,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Money in'), findsOneWidget);
+      expect(find.text('Total spent'), findsOneWidget);
+      expect(find.text('Rewards earned'), findsOneWidget);
+      final projection = find.textContaining('On track for');
+      expect(projection, findsOneWidget);
+      expect(
+        tester.getTopLeft(projection).dy,
+        greaterThan(tester.getBottomRight(chart).dy),
+        reason: 'the projection belongs directly below the chart',
+      );
+
+      final center = tester.getCenter(chart);
+      await tester.tapAt(center + const Offset(0, -64));
+      await tester.pumpAndSettle();
+      expect(find.text('Spending tab opened'), findsNothing);
+
+      final selected = tester.widget<Semantics>(
+        find.byKey(const Key('spending_donut_selected_detail')),
+      );
+      expect(selected.properties.label, contains('Dining'));
+      expect(selected.properties.label, contains('80% of spending'));
+
+      await tester.tap(find.byKey(const Key('spending_donut_center')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('spending_donut_selected_detail')),
+        findsNothing,
+      );
+
+      final cardOrigin = tester.getTopLeft(
+        find.byKey(const Key('home_spend_summary')),
+      );
+      await tester.tapAt(cardOrigin + const Offset(5, 55));
+      await tester.pumpAndSettle();
+      expect(find.text('Spending tab opened'), findsOneWidget);
+    },
+  );
+
   testWidgets('rank-0 recommendation gets the compact best-card surface', (
     tester,
   ) async {
@@ -40,13 +161,29 @@ void main() {
     expect(find.text('Pay with this card'), findsOneWidget);
   });
 
-  // Merchant Search moved off Home to You -> Tools when Home was rebuilt to
-  // design 01, which has no action-icon row (see ToolsHubScreen). Home's own
-  // contract is now that it does NOT carry those icons; the destination
-  // itself is covered by the Tools hub's tests.
-  testWidgets('Home carries no secondary action icons — design 01 has none', (
+  testWidgets('Home quick actions open the tools hub and wallet', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final router = GoRouter(
+      initialLocation: AppRoute.home,
+      routes: [
+        GoRoute(
+          path: AppRoute.home,
+          builder: (_, _) => const Scaffold(body: HomeScreen()),
+        ),
+        GoRoute(
+          path: AppRoute.cards,
+          builder: (_, _) => const Scaffold(body: Text('Wallet opened')),
+        ),
+        GoRoute(
+          path: AppRoute.toolsHub,
+          builder: (_, _) => const Scaffold(body: Text('Tools opened')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -54,15 +191,32 @@ void main() {
             const AsyncValue.data([]),
           ),
         ],
-        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+        child: MaterialApp.router(routerConfig: router),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('Search merchants'), findsNothing);
-    expect(find.byTooltip('Quick add a transaction'), findsNothing);
-    expect(find.byTooltip('Big-purchase calculator'), findsNothing);
-    expect(find.text('What are you paying for?'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Quick actions'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Quick add'), findsOneWidget);
+    expect(find.text('Import'), findsOneWidget);
+    expect(find.text('Scan & pay'), findsOneWidget);
+    expect(find.text('View cards'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('See all'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tools opened'), findsOneWidget);
+
+    router.pop();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('View cards'));
+    await tester.tap(find.text('View cards'));
+    await tester.pumpAndSettle();
+    expect(find.text('Wallet opened'), findsOneWidget);
   });
 
   test('rent is available as a first-class spending category', () {

@@ -23,9 +23,13 @@ import '../insights/credit_utilization_screen.dart';
 import '../insights/credit_utilization_ui.dart';
 import '../insights/payments_due_screen.dart'
     show DuePayment, paymentsDueProvider;
+import '../insights/spend_trends_screen.dart' show SpendingDonut;
 import '../insights/spending_visuals.dart' show spendingCategoryVisual;
+import '../import/import_hub_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
 import '../quickadd/quick_add_screen.dart';
+import '../scan/scan_result_screen.dart';
+import '../scan/upi_qr_scanner_screen.dart';
 import '../cards/card_visual.dart';
 import 'home_alerts.dart';
 import 'home_context_line.dart';
@@ -49,10 +53,9 @@ import 'home_context_line.dart';
 ///   card" figure is still not shown anywhere: `GET /monthly-reports`
 ///   returns it hardcoded to 0 (see that route's doc-comment) so it would
 ///   read as "you saved ₹0" forever.
-/// - The mockup's three Home action icons (search / quick-add /
-///   calculator) aren't on design 01 at all — the deck files those under
-///   You → Tools (design 05), which is where they now live. Nothing became
-///   unreachable.
+/// - Quick actions below the spending summary link to transaction entry,
+///   imports, the UPI scanner and Wallet. The full Tools hub remains
+///   available through "See all" and You → Tools.
 /// - The greeting is time-of-day only, via `clockProvider`, never
 ///   `DateTime.now()` directly (see `no_datetime_now_outside_clock` in
 ///   packages/pandapay_lints). The mockup's "Evening, Aarav" needs a name
@@ -183,6 +186,7 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 const _UtilizationWarningBanner(),
                 const _HomeSpendHeadline(),
+                const _HomeQuickActions(),
                 const _HomeCategories(),
                 const _HomeDuesAndReminders(),
                 const _HomeAccountSnapshot(),
@@ -196,20 +200,215 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _HomeSpendHeadline extends ConsumerWidget {
+class _HomeQuickActions extends StatefulWidget {
+  const _HomeQuickActions();
+
+  @override
+  State<_HomeQuickActions> createState() => _HomeQuickActionsState();
+}
+
+class _HomeQuickActionsState extends State<_HomeQuickActions> {
+  bool _scanning = false;
+
+  Future<void> _scanToPay() async {
+    setState(() => _scanning = true);
+    try {
+      final parsed = await Navigator.of(context).push<ParsedUpiQr>(
+        MaterialPageRoute(builder: (_) => const UpiQrScannerScreen()),
+      );
+      if (parsed != null && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => ScanResultScreen(parsed: parsed)),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not start the scanner. ${userFacingErrorMessage(error)}',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      HomeScreen._gutter,
+      AppSpace.lg,
+      HomeScreen._gutter,
+      0,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Quick actions',
+                style: BambooFonts.heading(18, color: BambooInk.ink900),
+              ),
+            ),
+            Pressable(
+              semanticLabel: 'See all quick actions',
+              onTap: () => context.push(AppRoute.toolsHub),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'See all',
+                    style: BambooFonts.ui(
+                      12,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink700,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: BambooInk.ink700,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.xs),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: AppSpace.sm,
+          children: [
+            Expanded(
+              child: _HomeQuickActionTile(
+                label: 'Quick add',
+                icon: Icons.add_rounded,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const QuickAddScreen()),
+                ),
+              ),
+            ),
+            Expanded(
+              child: _HomeQuickActionTile(
+                label: 'Import',
+                icon: Icons.file_download_outlined,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ImportHubScreen()),
+                ),
+              ),
+            ),
+            Expanded(
+              child: _HomeQuickActionTile(
+                label: 'Scan & pay',
+                icon: Icons.qr_code_scanner_rounded,
+                onTap: _scanning ? null : _scanToPay,
+              ),
+            ),
+            Expanded(
+              child: _HomeQuickActionTile(
+                label: 'View cards',
+                icon: Icons.credit_card_rounded,
+                onTap: () => context.go(AppRoute.cards),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _HomeQuickActionTile extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _HomeQuickActionTile({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+    semanticLabel: label,
+    onTap: onTap,
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 3),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: BambooInk.wash.withValues(alpha: .65),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 23, color: BambooInk.slate),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            style: BambooFonts.ui(
+              10.5,
+              weight: FontWeight.w500,
+              color: BambooInk.ink700,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _HomeSpendHeadline extends ConsumerStatefulWidget {
   const _HomeSpendHeadline();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_HomeSpendHeadline> createState() => _HomeSpendHeadlineState();
+}
+
+class _HomeSpendHeadlineState extends ConsumerState<_HomeSpendHeadline> {
+  int? _selectedCategoryIndex;
+
+  void _selectCategory(int? index) => setState(() {
+    _selectedCategoryIndex = index;
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final report = ref
         .watch(
           spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
         )
         .valueOrNull;
-    if (report == null || report.spend.total.isZero)
+    if (report == null || report.spend.total.isZero) {
       return const SizedBox.shrink();
+    }
     final change = report.changeVsPrevious;
     final projected = report.projectedSpend;
+    final categories = report.byCategory
+        .where((row) => !row.total.isZero)
+        .toList();
+    final selectedCategoryIndex =
+        _selectedCategoryIndex != null &&
+            _selectedCategoryIndex! < categories.length
+        ? _selectedCategoryIndex
+        : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         HomeScreen._gutter,
@@ -217,92 +416,189 @@ class _HomeSpendHeadline extends ConsumerWidget {
         HomeScreen._gutter,
         0,
       ),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: BambooInk.paper,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: BambooInk.hairlineOnPaper),
-          boxShadow: [
-            BoxShadow(
-              color: BambooInk.ink900.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'TOTAL SPENT',
-                    style: BambooFonts.ui(
-                      10.5,
-                      weight: FontWeight.w700,
-                      color: BambooInk.ink500,
-                    ).copyWith(letterSpacing: .7),
-                  ),
-                ),
-                if (change != null) _HomeSpendChangePill(change: change),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: MoneyText(
-                      report.spend.total,
-                      confidence: Confidence.estimated,
-                      showConfidenceIcon: false,
-                      style: BambooFonts.money(24, color: BambooInk.ink900),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (projected != null && report.elapsedFraction < .95) ...[
-              const SizedBox(height: 4),
-              Text(
-                'On track for ${projected.format(compact: true)} this month',
-                style: BambooFonts.ui(11, color: BambooInk.ink500),
+      child: InkWell(
+        key: const Key('home_spend_summary'),
+        onTap: () => context.push(AppRoute.spendTrends),
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: BambooInk.paper,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+            boxShadow: [
+              BoxShadow(
+                color: BambooInk.ink900.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
-            if (!report.spend.rewards.isZero) ...[
-              const SizedBox(height: 8),
-              Container(height: 1, color: BambooInk.hairlineOnPaper),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    'Rewards earned',
-                    style: BambooFonts.ui(11, color: BambooInk.ink700),
-                  ),
-                  const Spacer(),
-                  MoneyText(
-                    report.spend.rewards,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'TOTAL SPENT',
+                        style: BambooFonts.ui(
+                          10.5,
+                          weight: FontWeight.w700,
+                          color: BambooInk.ink500,
+                        ).copyWith(letterSpacing: .7),
+                      ),
+                    ),
+                    if (change != null) _HomeSpendChangePill(change: change),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SpendingDonut(
+                          rows: categories,
+                          total: report.spend.total,
+                          size: 148,
+                          compact: true,
+                          totalLabel: 'spent',
+                          selectedIndex: selectedCategoryIndex,
+                          onSelected: _selectCategory,
+                        ),
+                        if (projected != null &&
+                            report.elapsedFraction < .95) ...[
+                          const SizedBox(height: 3),
+                          SizedBox(
+                            width: 154,
+                            child: Text(
+                              'On track for ${projected.format(compact: true)} this month',
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: BambooFonts.ui(
+                                9.5,
+                                color: BambooInk.ink500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _HomeSpendMetric(
+                            label: 'Money in',
+                            amount: report.income.total,
+                          ),
+                          const _HomeSpendMetricDivider(),
+                          _HomeSpendMetric(
+                            label: 'Total spent',
+                            amount: report.spend.total,
+                          ),
+                          const _HomeSpendMetricDivider(),
+                          _HomeSpendMetric(
+                            label: 'Rewards earned',
+                            amount: report.spend.rewards,
+                            reward: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeSpendMetric extends StatelessWidget {
+  final String label;
+  final Money amount;
+  final bool reward;
+
+  const _HomeSpendMetric({
+    required this.label,
+    required this.amount,
+    this.reward = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = reward
+        ? Icons.card_giftcard_rounded
+        : label == 'Money in'
+        ? Icons.south_rounded
+        : Icons.north_rounded;
+    final accent = reward ? BambooInk.amber : BambooInk.jade;
+    final tint = reward
+        ? const Color(0xFFFFF4E3)
+        : label == 'Money in'
+        ? const Color(0xFFE8F5EF)
+        : const Color(0xFFFFEFED);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+            child: Icon(icon, size: 18, color: accent),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(9.5, color: BambooInk.ink500),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: MoneyText(
+                    amount,
                     confidence: Confidence.estimated,
                     showConfidenceIcon: false,
                     style: BambooFonts.ui(
                       12,
                       weight: FontWeight.w700,
-                      color: BambooInk.jade,
+                      color: reward ? BambooInk.jade : BambooInk.ink900,
                     ),
                   ),
-                ],
-              ),
-            ],
-          ],
-        ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+class _HomeSpendMetricDivider extends StatelessWidget {
+  const _HomeSpendMetricDivider();
+
+  @override
+  Widget build(BuildContext context) =>
+      Container(height: 1, color: BambooInk.hairlineOnPaper);
 }
 
 class _HomeSpendChangePill extends StatelessWidget {
@@ -372,24 +668,32 @@ class _BrandHeader extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                MoneyText(
-                  key: const ValueKey('home-monthly-rewards'),
-                  summary.rewardsThisMonth,
-                  confidence: Confidence.estimated,
-                  style: BambooFonts.heading(17, color: BambooInk.ink900),
-                  suffix: ' earned',
-                  hidePaise: true,
-                  showConfidenceIcon: false,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: MoneyText(
+                    key: const ValueKey('home-monthly-rewards'),
+                    summary.rewardsThisMonth,
+                    confidence: Confidence.estimated,
+                    style: BambooFonts.heading(17, color: BambooInk.ink900),
+                    suffix: ' earned',
+                    hidePaise: true,
+                    showConfidenceIcon: false,
+                  ),
                 ),
                 const SizedBox(height: 2),
-                MoneyText(
-                  key: const ValueKey('home-all-time-rewards'),
-                  summary.rewardsAllTime,
-                  confidence: Confidence.estimated,
-                  style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                  suffix: ' all-time ›',
-                  hidePaise: true,
-                  showConfidenceIcon: false,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: MoneyText(
+                    key: const ValueKey('home-all-time-rewards'),
+                    summary.rewardsAllTime,
+                    confidence: Confidence.estimated,
+                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                    suffix: ' all-time ›',
+                    hidePaise: true,
+                    showConfidenceIcon: false,
+                  ),
                 ),
               ],
             ),
@@ -435,30 +739,38 @@ class _BrandHeader extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            MoneyText(
-                              key: const ValueKey('home-monthly-rewards'),
-                              summary.rewardsThisMonth,
-                              confidence: Confidence.estimated,
-                              style: BambooFonts.heading(
-                                17,
-                                color: BambooInk.ink900,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: MoneyText(
+                                key: const ValueKey('home-monthly-rewards'),
+                                summary.rewardsThisMonth,
+                                confidence: Confidence.estimated,
+                                style: BambooFonts.heading(
+                                  17,
+                                  color: BambooInk.ink900,
+                                ),
+                                suffix: ' earned',
+                                hidePaise: true,
+                                showConfidenceIcon: false,
                               ),
-                              suffix: ' earned',
-                              hidePaise: true,
-                              showConfidenceIcon: false,
                             ),
                             const SizedBox(height: 2),
-                            MoneyText(
-                              key: const ValueKey('home-all-time-rewards'),
-                              summary.rewardsAllTime,
-                              confidence: Confidence.estimated,
-                              style: BambooFonts.ui(
-                                11.5,
-                                color: BambooInk.ink500,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: MoneyText(
+                                key: const ValueKey('home-all-time-rewards'),
+                                summary.rewardsAllTime,
+                                confidence: Confidence.estimated,
+                                style: BambooFonts.ui(
+                                  11.5,
+                                  color: BambooInk.ink500,
+                                ),
+                                suffix: ' all-time ›',
+                                hidePaise: true,
+                                showConfidenceIcon: false,
                               ),
-                              suffix: ' all-time ›',
-                              hidePaise: true,
-                              showConfidenceIcon: false,
                             ),
                           ],
                         ),
@@ -468,9 +780,9 @@ class _BrandHeader extends ConsumerWidget {
         ),
         IconButton(
           tooltip: 'Add transaction',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const QuickAddScreen()),
-          ),
+          onPressed: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const QuickAddScreen())),
           icon: const Icon(Icons.add_rounded, color: BambooInk.jade),
         ),
       ],
