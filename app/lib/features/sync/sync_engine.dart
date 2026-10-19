@@ -9,6 +9,7 @@ import '../../data/local/sync_queue.dart';
 import '../../data/sync_api.dart';
 import 'split_sync.dart';
 import '../../data/local/financial_store.dart';
+import '../../data/user_categories_repository.dart';
 import 'dart:convert';
 
 /// Plan Phase 4 — the client-side sync loop.
@@ -123,7 +124,7 @@ class SyncEngine {
           .where((c) => accepted.contains(c.clientSeq))
           .map((c) => c.entity)
           .toSet();
-      if (entities.isNotEmpty) await _materialize(entities, queue);
+      if (entities.isNotEmpty) await _materialize(api, entities, queue);
       var applied = 0;
       for (final result in results) {
         if (result.clientSeq == null) continue;
@@ -188,7 +189,7 @@ class SyncEngine {
       // Neither the persisted cursor nor the server acknowledgment advances
       // until every affected entity has been committed. Failure replays the
       // backlog safely on the next cycle.
-      await _materialize(entities, queue);
+      await _materialize(api, entities, queue);
       _invalidateFor(entities);
       queue.lastServerSeq = since;
       await api.ack(deviceId: deviceId, serverSeq: since);
@@ -198,7 +199,11 @@ class SyncEngine {
     return (totalPulled, totalConflicts);
   }
 
-  Future<void> _materialize(Set<String> entities, SyncQueue queue) async {
+  Future<void> _materialize(
+    SyncApi api,
+    Set<String> entities,
+    SyncQueue queue,
+  ) async {
     final namespace = _ref.read(cacheNamespaceProvider);
     if (namespace != queue.namespace) {
       throw StateError('Account changed during sync');
@@ -246,6 +251,16 @@ class SyncEngine {
         jsonEncode({'overrides': overrides.map((o) => o.toJson()).toList()}),
       );
     }
+    if (entities.contains('user_categories')) {
+      final categories = await api.fetchUserCategories();
+      final categoriesRepository = const UserCategoriesRepository();
+      for (final category in categories) {
+        categoriesRepository.upsertRemote(cache.financialStore.database, namespace, category);
+      }
+      if (_ref.read(cacheNamespaceProvider) != namespace) {
+        throw StateError('Account changed during sync');
+      }
+    }
   }
 
   void _invalidateFor(Set<String> entities) {
@@ -264,6 +279,9 @@ class SyncEngine {
     }
     if (entities.contains('card_overrides')) {
       _ref.invalidate(cardOverridesProvider);
+    }
+    if (entities.contains('user_categories')) {
+      _ref.invalidate(categoriesProvider);
     }
     // The ranking depends on all three, so it is refreshed whenever any of
     // them moved rather than being enumerated per entity.

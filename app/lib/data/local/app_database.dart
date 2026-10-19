@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS transaction_outbox_entries (
   client_mutation_id TEXT,
   amount_paise INTEGER NOT NULL,
   category_id TEXT,
+  user_category_id TEXT,
   merchant_name TEXT,
   occurred_at INTEGER,
   note TEXT,
@@ -88,6 +89,18 @@ CREATE TABLE IF NOT EXISTS local_user_cards (
   sort_order REAL NOT NULL,
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS user_categories (
+  namespace TEXT NOT NULL,
+  id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(namespace, id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_categories_namespace_name
+  ON user_categories (namespace, name COLLATE NOCASE);
 
 -- Plan Phase 4 multi-device sync. One row per local edit that hasn't reached
 -- the server yet, plus the per-device cursor.
@@ -177,7 +190,8 @@ class AppDatabase {
         userCardColumn['notnull'] == 1 ||
         !names.contains('client_mutation_id') ||
         !names.contains('instrument') ||
-        !names.contains('entry_kind');
+        !names.contains('entry_kind') ||
+        !names.contains('user_category_id');
 
     if (needsRebuild) {
       db.execute('BEGIN IMMEDIATE');
@@ -186,10 +200,12 @@ class AppDatabase {
         db.execute('''
           CREATE TABLE transaction_outbox_entries_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            namespace TEXT NOT NULL DEFAULT 'legacy',
             user_card_id TEXT,
             client_mutation_id TEXT,
             amount_paise INTEGER NOT NULL,
             category_id TEXT,
+            user_category_id TEXT,
             merchant_name TEXT,
             occurred_at INTEGER,
             note TEXT,
@@ -208,13 +224,20 @@ class AppDatabase {
         final entryKindExpression = names.contains('entry_kind')
             ? "COALESCE(entry_kind, 'spend')"
             : "'spend'";
+        final userCategoryExpression = names.contains('user_category_id')
+            ? 'user_category_id'
+            : 'NULL';
+        final namespaceExpression = names.contains('namespace')
+            ? 'namespace'
+            : "'legacy'";
         db.execute('''
           INSERT INTO transaction_outbox_entries_new
-            (id, user_card_id, client_mutation_id, amount_paise, category_id,
+            (id, namespace, user_card_id, client_mutation_id, amount_paise, category_id,
+             user_category_id,
              merchant_name, occurred_at, note, instrument, entry_kind,
              created_at, last_error)
-          SELECT id, user_card_id, $mutationExpression, amount_paise,
-                 category_id, merchant_name, occurred_at, note,
+          SELECT id, $namespaceExpression, user_card_id, $mutationExpression, amount_paise,
+                 category_id, $userCategoryExpression, merchant_name, occurred_at, note,
                  $instrumentExpression, $entryKindExpression,
                  created_at, last_error
           FROM transaction_outbox_entries

@@ -15,6 +15,7 @@ class TransactionOutboxEntry {
   final String? userCardId;
   final int amountPaise;
   final String? categoryId;
+  final String? userCategoryId;
   final String? merchantName;
   final DateTime? occurredAt;
   final String? note;
@@ -29,6 +30,7 @@ class TransactionOutboxEntry {
     required this.userCardId,
     required this.amountPaise,
     this.categoryId,
+    this.userCategoryId,
     this.merchantName,
     this.occurredAt,
     this.note,
@@ -75,7 +77,10 @@ class TransactionOutboxRepository {
           amount: Money.fromPaise(entry.amountPaise),
           occurredAt: entry.occurredAt ?? entry.createdAt,
           userCardId: entry.userCardId,
-          categoryId: entry.categoryId,
+          categoryId: entry.categoryId ??
+              (entry.userCategoryId == null
+                  ? null
+                  : 'custom:${entry.userCategoryId}'),
           merchantName: entry.merchantName,
           note: entry.note,
           instrument: entry.instrument,
@@ -91,6 +96,7 @@ class TransactionOutboxRepository {
     String? userCardId,
     required Money amount,
     String? categoryId,
+    String? userCategoryId,
     String? merchantName,
     DateTime? occurredAt,
     String? note,
@@ -99,12 +105,16 @@ class TransactionOutboxRepository {
     String? clientMutationId,
   }) async {
     final mutationId = clientMutationId ?? const Uuid().v4();
+    final effectiveUserCategoryId = userCategoryId ??
+        (categoryId != null && categoryId.startsWith('custom:')
+            ? categoryId.substring('custom:'.length)
+            : null);
     _appDb.db.execute(
       '''
       INSERT INTO transaction_outbox_entries
-        (namespace, user_card_id, client_mutation_id, amount_paise, category_id, merchant_name,
+        (namespace, user_card_id, client_mutation_id, amount_paise, category_id, user_category_id, merchant_name,
          occurred_at, note, instrument, entry_kind, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       [
         namespace,
@@ -112,6 +122,7 @@ class TransactionOutboxRepository {
         mutationId,
         amount.paise,
         categoryId,
+        effectiveUserCategoryId,
         merchantName,
         occurredAt?.millisecondsSinceEpoch,
         note,
@@ -151,6 +162,7 @@ class TransactionOutboxRepository {
         userCardId: row['user_card_id'] as String?,
         amountPaise: row['amount_paise'] as int,
         categoryId: row['category_id'] as String?,
+        userCategoryId: row['user_category_id'] as String?,
         merchantName: row['merchant_name'] as String?,
         occurredAt: row['occurred_at'] == null
             ? null
@@ -176,7 +188,11 @@ class TransactionOutboxRepository {
         final id = await repo.logTransaction(
           userCardId: entry.userCardId,
           amount: Money.fromPaise(entry.amountPaise),
-          categoryId: entry.categoryId,
+          categoryId: entry.categoryId ??
+              (entry.userCategoryId == null
+                  ? null
+                  : 'custom:${entry.userCategoryId}'),
+          userCategoryId: entry.userCategoryId,
           merchantName: entry.merchantName,
           occurredAt: entry.occurredAt,
           note: entry.note,

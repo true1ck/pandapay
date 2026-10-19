@@ -9,8 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/category_picker.dart';
 import '../../app/providers.dart';
-import '../../data/catalogue_repository.dart'
-    show SpendCategory, categoryIdForServer;
+import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/user_cards_repository.dart' show TxnInstrument, UserCard;
 import 'voice_action_parser.dart';
 
@@ -343,7 +342,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
                 ? editor.selectedCardId
                 : null,
             amount: Money.fromRupees(value.amount!),
-            categoryId: categoryIdForServer(editor.selectedCategoryId),
+            categoryId: editor.selectedCategoryId,
             merchantName: editor.merchantController.text.trim().isEmpty
                 ? null
                 : editor.merchantController.text.trim(),

@@ -95,6 +95,33 @@ class SyncQueue {
     onChanged?.call();
   }
 
+  /// Records a locally-created row. Inserts are intentionally not coalesced:
+  /// each category has its own stable id and must remain independently
+  /// replayable when the device comes back online.
+  void enqueueInsert({
+    required String entity,
+    required String entityId,
+    required Map<String, Object?> fields,
+    DateTime? at,
+  }) {
+    if (fields.isEmpty) return;
+    final clockMs = (at ?? DateTime.now()).millisecondsSinceEpoch;
+    _appDb.db.execute(
+      'INSERT INTO sync_pending_changes '
+      '(namespace, entity, entity_id, op, payload_json, field_clocks_json, created_at) '
+      "VALUES (?, ?, ?, 'insert', ?, ?, ?)",
+      [
+        namespace,
+        entity,
+        entityId,
+        jsonEncode(fields),
+        jsonEncode({for (final k in fields.keys) k: clockMs}),
+        clockMs,
+      ],
+    );
+    onChanged?.call();
+  }
+
   /// Records a local delete.
   ///
   /// Any queued updates for the same row are dropped first: pushing an edit

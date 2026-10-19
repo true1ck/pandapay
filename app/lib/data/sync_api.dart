@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'api_exception.dart';
+import 'catalogue_repository.dart';
 
 /// Plan Phase 4 — the transport half of multi-device sync.
 ///
@@ -236,5 +237,22 @@ class SyncApi {
         'POST /sync/conflicts/$conflictId/acknowledge failed: ${response.statusCode}',
       );
     }
+  }
+
+  Future<List<SpendCategory>> fetchUserCategories() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/user-categories'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /user-categories failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['categories'] as List)
+        .cast<Map<String, dynamic>>()
+        .map((json) => SpendCategory.fromJson({...json, 'isCustom': true}))
+        .toList();
   }
 }

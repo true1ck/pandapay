@@ -8,7 +8,6 @@ import '../../app/design/widgets.dart';
 import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
-import '../../data/catalogue_repository.dart' show categoryIdForServer;
 import '../../data/needs_review_repository.dart';
 import '../../data/user_cards_repository.dart' show TxnInstrument;
 
@@ -152,7 +151,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           .logTransaction(
             userCardId: result.cardId,
             amount: Money.fromRupees(result.amount),
-            categoryId: categoryIdForServer(result.categoryId),
+            categoryId: result.categoryId,
             instrument: result.instrument,
           );
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);

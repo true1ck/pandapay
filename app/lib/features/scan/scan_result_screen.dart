@@ -681,7 +681,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         await _openPaymentSent(
           rec: rec,
           wallet: wallet,
-          categoryId: categoryIdForServer(categoryId),
+          categoryId: categoryId,
           autoLog: false,
         );
         break;
@@ -690,7 +690,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         await _openPaymentSent(
           rec: rec,
           wallet: wallet,
-          categoryId: categoryIdForServer(categoryId),
+          categoryId: categoryId,
           autoLog: false,
         );
         break;
@@ -746,7 +746,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     await _openPaymentSent(
       rec: rec,
       wallet: wallet,
-      categoryId: categoryIdForServer(categoryId),
+      categoryId: categoryId,
       autoLog: false,
     );
   }
@@ -774,7 +774,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           amount: _amount,
           cardName: rec.card.name,
           userCardId: owned?.id,
-          categoryId: categoryIdForServer(categoryId),
+          categoryId: categoryId,
           merchantVpa: widget.parsed.pa,
           mcc:
               widget.parsed.mc ??

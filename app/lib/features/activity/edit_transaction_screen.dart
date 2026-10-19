@@ -8,7 +8,8 @@ import '../../app/design/widgets.dart';
 import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
-import '../../data/catalogue_repository.dart' show categoryIdForServer;
+import '../../data/catalogue_repository.dart'
+    show categoryIdForServer, userCategoryIdForServer;
 import '../../data/user_cards_repository.dart';
 
 /// D3 Edit Transaction (ui-spec Group D). All fields editable, explicit
@@ -113,6 +114,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             'amount_inr': amount,
             'occurred_at': _occurredAt?.toIso8601String(),
             'category_id': categoryIdForServer(_categoryId),
+            'user_category_id': userCategoryIdForServer(_categoryId),
             'merchant_name': _merchantController.text.trim().isEmpty
                 ? null
                 : _merchantController.text.trim(),
@@ -174,7 +176,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       widget.transactionId,
       amountInr: amount,
       occurredAt: _occurredAt,
-      categoryId: categoryIdForServer(_categoryId),
+      categoryId: _categoryId,
       merchantName: _merchantController.text.trim().isEmpty
           ? null
           : _merchantController.text.trim(),

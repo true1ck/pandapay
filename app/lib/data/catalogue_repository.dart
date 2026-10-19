@@ -68,6 +68,12 @@ bool isCustomCategoryId(String? id) => id?.startsWith('custom:') == true;
 
 String? categoryIdForServer(String? id) => isCustomCategoryId(id) ? null : id;
 
+String? userCategoryIdForServer(String? id) {
+  if (!isCustomCategoryId(id)) return null;
+  final value = id!.substring('custom:'.length);
+  return value.isEmpty ? null : value;
+}
+
 abstract class CategoryRepository {
   Future<List<SpendCategory>> fetchCategories();
 }

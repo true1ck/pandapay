@@ -1116,6 +1116,7 @@ class UserCardsRepository {
     String? userCardId,
     required Money amount,
     String? categoryId,
+    String? userCategoryId,
     String? merchantName,
     String? merchantVpa,
     String? mcc,
@@ -1127,6 +1128,13 @@ class UserCardsRepository {
     String? clientMutationId,
   }) async {
     final mutationId = clientMutationId ?? const Uuid().v4();
+    final customCategoryId = userCategoryId ??
+        (categoryId != null && categoryId.startsWith('custom:')
+            ? categoryId.substring('custom:'.length)
+            : null);
+    final serverCategoryId = categoryId != null && categoryId.startsWith('custom:')
+        ? null
+        : categoryId;
     final response = await _client
         .post(
           Uri.parse('$apiBaseUrl/transactions'),
@@ -1134,7 +1142,8 @@ class UserCardsRepository {
           body: jsonEncode({
             'userCardId': ?userCardId,
             'amountInr': amount.rupees,
-            'categoryId': ?categoryId,
+            'categoryId': ?serverCategoryId,
+            'userCategoryId': ?customCategoryId,
             'merchantName': ?merchantName,
             'merchantVpa': ?merchantVpa,
             'mcc': ?mcc,
@@ -1449,6 +1458,7 @@ class UserCardsRepository {
     DateTime? to,
     String? cardId,
     String? categoryId,
+    String? userCategoryId,
     String? source,
     String? query,
   }) async {
@@ -1456,7 +1466,11 @@ class UserCardsRepository {
       if (from != null) 'from': _dateOnly(from),
       if (to != null) 'to': _dateOnly(to),
       'cardId': ?cardId,
-      'categoryId': ?categoryId,
+      if (categoryId != null && categoryId.startsWith('custom:'))
+        'userCategoryId': categoryId.substring('custom:'.length)
+      else
+        'categoryId': ?categoryId,
+      'userCategoryId': ?userCategoryId,
       'source': ?source,
       // Server-side match over merchant name and note. Blank/whitespace is
       // dropped rather than sent, so an empty search box is "no filter"
@@ -1506,16 +1520,25 @@ class UserCardsRepository {
     double? amountInr,
     DateTime? occurredAt,
     String? categoryId,
+    String? userCategoryId,
     String? merchantName,
     TxnRail? rail,
     String? userCardId,
     TxnInstrument? instrument,
     TxnEntryKind? entryKind,
   }) async {
+    final customCategoryId = userCategoryId ??
+        (categoryId != null && categoryId.startsWith('custom:')
+            ? categoryId.substring('custom:'.length)
+            : null);
+    final serverCategoryId = categoryId != null && categoryId.startsWith('custom:')
+        ? null
+        : categoryId;
     final body = <String, dynamic>{
       'amountInr': ?amountInr,
       if (occurredAt != null) 'occurredAt': occurredAt.toIso8601String(),
-      'categoryId': ?categoryId,
+      'categoryId': ?serverCategoryId,
+      'userCategoryId': ?customCategoryId,
       'merchantName': ?merchantName,
       if (rail != null) 'rail': _railToJson(rail),
       'userCardId': ?userCardId,
@@ -1905,6 +1928,7 @@ class TransactionEntry {
   final DateTime occurredAt;
   final String? merchantName;
   final String? categoryId;
+  final String? userCategoryId;
   final String? categoryName;
   final String? cardDisplayName; // nickname if set, else the card's own name
   /// Last four digits extracted from a card SMS when the saved card is not
@@ -1961,6 +1985,7 @@ class TransactionEntry {
     required this.occurredAt,
     this.merchantName,
     this.categoryId,
+    this.userCategoryId,
     this.categoryName,
     this.cardDisplayName,
     this.cardLast4,
@@ -1986,7 +2011,13 @@ class TransactionEntry {
     'amount_inr': amount.rupees,
     'occurred_at': occurredAt.toIso8601String(),
     'merchant_name': merchantName,
-    'category_id': categoryId,
+    'category_id': categoryId != null && categoryId.startsWith('custom:')
+        ? null
+        : categoryId,
+    'user_category_id': userCategoryId ??
+        (categoryId != null && categoryId.startsWith('custom:')
+            ? categoryId.substring('custom:'.length)
+            : null),
     'category_name': categoryName,
     'card_name': cardDisplayName,
     'card_nickname': null,
@@ -2024,7 +2055,10 @@ class TransactionEntry {
       amount: Money.fromRupees(_num(json['amount_inr'])),
       occurredAt: DateTime.parse(json['occurred_at'] as String),
       merchantName: json['merchant_name'] as String?,
-      categoryId: json['category_id'] as String?,
+      categoryId: json['user_category_id'] == null
+          ? json['category_id'] as String?
+          : 'custom:${json['user_category_id']}',
+      userCategoryId: json['user_category_id'] as String?,
       categoryName: _displayCategoryName(json['category_name'] as String?),
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
       cardLast4: json['card_last4'] as String?,

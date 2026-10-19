@@ -914,6 +914,25 @@ app.get('/categories', async (req, res) => {
   }
 });
 
+/** GET /user-categories — private categories belonging to the current user. */
+app.get('/user-categories', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
+        `SELECT id, slug, name
+           FROM user_categories
+          WHERE profile_id = $1
+          ORDER BY created_at, name COLLATE "C"`,
+        [req.userId],
+      ),
+    );
+    res.json({ categories: result.rows });
+  } catch (err) {
+    console.error('GET /user-categories error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 /**
  * GET /app-status — S5/S6 (ui-spec System Surfaces, GAP_ANALYSIS.md §3):
  * forced upgrade / maintenance mode. Public, no auth — called before a
@@ -1550,6 +1569,31 @@ app.post('/sync/push', requireAuth, async (req, res) => {
         }
         await client.query('SAVEPOINT sync_item');
         try {
+          if (entity === 'user_categories' && op === 'insert') {
+            const categoryResult = await client.query(
+              `SELECT out_applied, out_reason
+                 FROM pandapay.sync_insert_user_category($1, $2, $3, $4, $5, $6::jsonb, $7)`,
+              [
+                req.userId,
+                deviceId,
+                entityId,
+                typeof payload?.name === 'string' ? payload.name : null,
+                typeof payload?.slug === 'string' ? payload.slug : null,
+                JSON.stringify(fieldClocks || {}),
+                Number.isFinite(clientSeq) ? clientSeq : 0,
+              ]
+            );
+            const categoryRow = categoryResult.rows[0];
+            await client.query('RELEASE SAVEPOINT sync_item');
+            out.push({
+              clientSeq: clientSeq ?? null,
+              entityId,
+              applied: categoryRow.out_applied,
+              conflicts: 0,
+              reason: categoryRow.out_reason,
+            });
+            continue;
+          }
           const r = await client.query(
             `SELECT out_applied, out_conflicts, out_reason
                FROM pandapay.sync_apply_change($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`,
@@ -3314,7 +3358,7 @@ function clientMutationSourceKey(userId, source, clientMutationId) {
 }
 
 async function insertTransactionAndUpdateState(client, userId, {
-  userCardId, amount, occurred, categoryId, rail, merchantName, note, source,
+  userCardId, amount, occurred, categoryId, userCategoryId, rail, merchantName, note, source,
   merchantVpa, mcc, sourceKey, backfill, instrument, entryKind, accountLast4,
   observationMetadata, observedAt,
 }) {
@@ -3373,11 +3417,11 @@ async function insertTransactionAndUpdateState(client, userId, {
   // index only covers non-null keys.
   const txn = await client.query(
     `INSERT INTO transactions
-       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill, source_account_last4)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'estimated', $12, $13, $14, false, $15, $16)
+       (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, merchant_vpa, mcc, category_id, user_category_id, rail, source, note, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill, source_account_last4)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'estimated', $13, $14, $15, false, $16, $17)
      ON CONFLICT (profile_id, source_key) WHERE source_key IS NOT NULL DO NOTHING
      RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
-    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, backfill === true, resolvedAccountLast4]
+    [userId, movesCardState ? userCardId : (userCardId || null), amount, occurred, merchantName || null, merchantVpa || null, mcc || null, categoryId || null, userCategoryId || null, rail || 'unknown', resolvedSource, note || null, sourceKey || null, resolvedInstrument, resolvedEntryKind, backfill === true, resolvedAccountLast4]
   );
 
   // Zero rows back means the unique index rejected it: this exact message
@@ -4517,6 +4561,7 @@ app.post('/transactions', requireAuth, async (req, res) => {
     amountInr,
     occurredAt,
     categoryId,
+    userCategoryId,
     rail,
     merchantName,
     merchantVpa,
@@ -4543,6 +4588,12 @@ app.post('/transactions', requireAuth, async (req, res) => {
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     return res.status(400).json({ error: 'amountInr must be a positive number' });
+  }
+  if (userCategoryId !== undefined && userCategoryId !== null && (
+    typeof userCategoryId !== 'string'
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userCategoryId)
+  )) {
+    return res.status(400).json({ error: 'userCategoryId must be a valid UUID' });
   }
   const occurred = occurredAt ? new Date(occurredAt) : new Date();
   if (Number.isNaN(occurred.getTime())) {
@@ -4573,16 +4624,27 @@ app.post('/transactions', requireAuth, async (req, res) => {
           };
         }
       }
+      if (userCategoryId) {
+        const category = await client.query(
+          'SELECT 1 FROM user_categories WHERE id = $1 AND profile_id = $2',
+          [userCategoryId, req.userId],
+        );
+        if (category.rows.length === 0) {
+          return { status: 400, error: 'user category not found' };
+        }
+      }
       // QR/manual payments often arrive with a merchant name but without an
       // explicit category selection. Reuse the same conservative resolver as
       // SMS import so a known merchant is categorized before rewards and
       // spending reports are updated. An explicit category still wins.
-      const resolvedCategoryId = categoryId || await importResolvers.resolveCategoryForImport(client, req.userId, {
-        merchantName,
-        vpa: merchantVpa || null,
-        mcc: mcc || null,
-        messageText: null,
-      });
+      const resolvedCategoryId = userCategoryId
+        ? null
+        : categoryId || await importResolvers.resolveCategoryForImport(client, req.userId, {
+            merchantName,
+            vpa: merchantVpa || null,
+            mcc: mcc || null,
+            messageText: null,
+          });
       return insertTransactionAndUpdateState(client, req.userId, {
         userCardId: instrument === 'credit_card' || instrument === 'debit_card'
           ? userCardId
@@ -4590,6 +4652,7 @@ app.post('/transactions', requireAuth, async (req, res) => {
         amount,
         occurred,
         categoryId: resolvedCategoryId,
+        userCategoryId: userCategoryId || null,
         rail,
         merchantName,
         merchantVpa: merchantVpa || null,
@@ -5155,7 +5218,7 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
  * a caller doesn't need to think about timezone-of-day edge cases.
  */
 app.get('/transactions', requireAuth, async (req, res) => {
-  const { from, to, cardId, categoryId, source, q } = req.query;
+  const { from, to, cardId, categoryId, userCategoryId, source, q } = req.query;
   // Keep transaction-list consumers aligned with spend reports even before a
   // background reconciliation has run. Only a unique archived -> active
   // physical-card match is eligible; ambiguity remains visible as unmatched.
@@ -5195,6 +5258,10 @@ app.get('/transactions', requireAuth, async (req, res) => {
     params.push(categoryId);
     conditions.push(`t.category_id = $${params.length}`);
   }
+  if (userCategoryId) {
+    params.push(userCategoryId);
+    conditions.push(`t.user_category_id = $${params.length}`);
+  }
   if (source) {
     params.push(source);
     conditions.push(`t.source = $${params.length}`);
@@ -5230,7 +5297,8 @@ app.get('/transactions', requireAuth, async (req, res) => {
           HAVING COUNT(*) = 1
         )
         SELECT t.id, t.source_key, ${canonicalCardId} AS user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
-                t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
+                t.category_id, t.user_category_id,
+                COALESCE(ucat.name, sc.name) AS category_name, t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
                 COALESCE(t.source_account_last4,
@@ -5252,6 +5320,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
            LEFT JOIN user_cards uc ON uc.id = ${canonicalCardId}
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
            LEFT JOIN spend_categories sc ON sc.id = t.category_id
+           LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
           WHERE ${conditions.join(' AND ')}
           ORDER BY t.occurred_at DESC ${limitClause}`,
         params
@@ -5298,7 +5367,8 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
         )
         SELECT t.id, COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
                t.amount_inr, t.occurred_at, t.merchant_name,
-                t.category_id, sc.name AS category_name, t.rail, t.status, t.source, t.note,
+                t.category_id, t.user_category_id,
+                COALESCE(ucat.name, sc.name) AS category_name, t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
                 COALESCE(t.source_account_last4,
@@ -5320,6 +5390,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
            LEFT JOIN user_cards uc ON uc.id = COALESCE(replacement.active_card_id, t.user_card_id)
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
            LEFT JOIN spend_categories sc ON sc.id = t.category_id
+           LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
           WHERE t.id = $1 AND t.profile_id = $2`,
         [req.params.id, req.userId]
       )
@@ -5541,7 +5612,7 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
  */
 app.patch('/transactions/:id', requireAuth, async (req, res) => {
   const {
-    amountInr, occurredAt, categoryId, rail, merchantName, userCardId,
+    amountInr, occurredAt, categoryId, userCategoryId, rail, merchantName, userCardId,
     instrument, entryKind,
   } = req.body || {};
   if (instrument !== undefined && !TXN_INSTRUMENTS.includes(instrument)) {
@@ -5556,6 +5627,12 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
   if (occurredAt !== undefined && Number.isNaN(new Date(occurredAt).getTime())) {
     return res.status(400).json({ error: 'occurredAt is not a valid date' });
   }
+  if (userCategoryId !== undefined && userCategoryId !== null && (
+    typeof userCategoryId !== 'string'
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userCategoryId)
+  )) {
+    return res.status(400).json({ error: 'userCategoryId must be a valid UUID' });
+  }
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
@@ -5565,7 +5642,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
       // hard to detect after the fact. Locked for the lifetime of this
       // transaction, released on COMMIT/ROLLBACK by withUserClient.
       const existing = await client.query(
-        `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name, status,
+        `SELECT id, user_card_id, amount_inr, occurred_at, category_id, user_category_id, rail, merchant_name, status,
                 instrument, entry_kind, state_applied, is_backfill
            FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
         [req.params.id, req.userId]
@@ -5583,6 +5660,16 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         );
         if (Math.round(Number(shares.rows[0].total) * 100) > Math.round(Number(amountInr) * 100)) {
           return { status: 400, error: 'amount is less than saved split shares; edit or clear the split first' };
+        }
+      }
+
+      if (userCategoryId !== undefined && userCategoryId !== null) {
+        const category = await client.query(
+          'SELECT 1 FROM user_categories WHERE id = $1 AND profile_id = $2',
+          [userCategoryId, req.userId],
+        );
+        if (category.rows.length === 0) {
+          return { status: 400, error: 'user category not found' };
         }
       }
 
@@ -5631,7 +5718,10 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         userCardId: newUserCardId,
         amount: amountInr !== undefined ? Number(amountInr) : Number(old.amount_inr),
         occurred: occurredAt !== undefined ? new Date(occurredAt) : old.occurred_at,
-        categoryId: categoryId !== undefined ? categoryId : old.category_id,
+        categoryId: userCategoryId !== undefined && userCategoryId !== null
+          ? null
+          : categoryId !== undefined ? categoryId : old.category_id,
+        userCategoryId: userCategoryId !== undefined ? userCategoryId : old.user_category_id,
         rail: rail ?? old.rail,
         merchantName: merchantName !== undefined ? merchantName : old.merchant_name,
         instrument: newInstrument,
@@ -5647,14 +5737,16 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
 
       const updated = await client.query(
         `UPDATE transactions
-            SET user_card_id = $1, amount_inr = $2, occurred_at = $3, category_id = $4, rail = $5,
-                merchant_name = $6, instrument = $7, entry_kind = $8
-          WHERE id = $9
-          RETURNING id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name,
-                    instrument, entry_kind, status`,
+            SET user_card_id = $1, amount_inr = $2, occurred_at = $3, category_id = $4,
+                user_category_id = $5, rail = $6,
+                merchant_name = $7, instrument = $8, entry_kind = $9
+          WHERE id = $10
+          RETURNING id, user_card_id, amount_inr, occurred_at, category_id, user_category_id,
+                    rail, merchant_name, instrument, entry_kind, status`,
         [
           newValues.userCardId, newValues.amount, newValues.occurred, newValues.categoryId,
-          newValues.rail, newValues.merchantName, newValues.instrument, newValues.entryKind, old.id,
+          newValues.userCategoryId, newValues.rail, newValues.merchantName,
+          newValues.instrument, newValues.entryKind, old.id,
         ]
       );
 

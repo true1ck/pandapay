@@ -754,7 +754,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             ? _selectedUserCardId
             : null,
         amount: Money.fromRupees(amount),
-        categoryId: categoryIdForServer(_selectedCategoryId),
+        categoryId: _selectedCategoryId,
         merchantName: merchantName,
         occurredAt: effectiveOccurredAt,
         note: note,
@@ -885,7 +885,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 ? _selectedUserCardId
                 : null,
             amount: Money.fromRupees(amount),
-            categoryId: categoryIdForServer(_selectedCategoryId),
+            categoryId: _selectedCategoryId,
             merchantName: merchantName,
             occurredAt: effectiveOccurredAt,
             note: note,

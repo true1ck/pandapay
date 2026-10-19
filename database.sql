@@ -1847,10 +1847,21 @@ CREATE TABLE user_cards (
   updated_at INTEGER NOT NULL, dirty INTEGER NOT NULL DEFAULT 1, client_seq INTEGER NOT NULL
 );
 
+CREATE TABLE user_categories (
+  id TEXT PRIMARY KEY,
+  profile_id TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_user_categories_profile ON user_categories(profile_id, created_at, name);
+
 CREATE TABLE transactions (
   id TEXT PRIMARY KEY, user_card_id TEXT REFERENCES user_cards(id),
   amount_inr REAL NOT NULL, occurred_at INTEGER NOT NULL,
   merchant_name TEXT, merchant_vpa TEXT, mcc TEXT, category_slug TEXT,
+  user_category_id TEXT,
   rail TEXT NOT NULL DEFAULT 'unknown', source TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active', reward_state TEXT NOT NULL DEFAULT 'estimated',
   expected_points REAL, expected_value_inr REAL,

@@ -4028,7 +4028,7 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
 final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
   final cache = await _cacheOrNull(ref);
   final namespace = ref.read(cacheNamespaceProvider);
-  final customCategories = await _readCustomCategories(namespace);
+  final customCategories = await _readCustomCategories(ref, namespace);
   final cached = await cache?.get(_categoriesCacheKey);
   if (cached != null) {
     try {
@@ -4075,9 +4075,46 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
     // Category ids improve the ranking but are not required to produce a
     // truthful base-rate recommendation. The engine safely falls back to
     // catch-all card rules until the next refresh can load the ids.
-    return const [];
+    return customCategories;
   }
 });
+
+/// Adds a category for the current account and refreshes every category
+/// picker. The account namespace prevents one user's local categories from
+/// appearing after another user signs in on the same device.
+Future<SpendCategory?> addCustomCategory(WidgetRef ref, String name) async {
+  final namespace = ref.read(cacheNamespaceProvider);
+  if (namespace == 'signed-out') return null;
+  final cache = await ref.read(responseCacheProvider.future);
+  final queue = await ref.read(syncQueueProvider.future);
+  final category = await const UserCategoriesRepository().add(
+    database: cache.financialStore.database,
+    queue: queue,
+    namespace: namespace,
+    name: name,
+  );
+  ref.invalidate(categoriesProvider);
+  unawaited(ref.read(syncEngineProvider).sync());
+  return category;
+}
+
+Future<List<SpendCategory>> _readCustomCategories(Ref ref, String namespace) async {
+  try {
+    final cache = await ref.read(responseCacheProvider.future);
+    final preferences = await SharedPreferences.getInstance();
+    final queue = await ref.read(syncQueueProvider.future);
+    final repository = const UserCategoriesRepository();
+    await repository.migrateLegacy(
+      cache.financialStore.database,
+      queue,
+      preferences,
+      namespace,
+    );
+    return repository.readLocal(cache.financialStore.database, namespace);
+  } catch (_) {
+    return const [];
+  }
+}
 
 /// B1 category chips (ui-spec) — the primary card selector when there's no
 /// location/merchant context yet (scan flow, UA-4, isn't wired up either).
