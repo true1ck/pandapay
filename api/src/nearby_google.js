@@ -5,6 +5,16 @@ const { haversineDistanceMeters } = require('./nearby_discovery');
 // The mobile client gives this request 25 seconds. Keep the Google attempt
 // short enough to leave room for the bounded three-endpoint OSM fallback.
 const GOOGLE_LOOKUP_TIMEOUT_MS = 9000;
+const GOOGLE_CACHE_TTL_MS = 15 * 60 * 1000;
+const MAX_GOOGLE_CACHE_ENTRIES = 512;
+
+const defaultCache = new Map();
+const defaultInflight = new Map();
+
+function clearGoogleCache() {
+  defaultCache.clear();
+  defaultInflight.clear();
+}
 
 const GOOGLE_TYPE_TO_CATEGORY = {
   restaurant: 'dining',
@@ -137,66 +147,107 @@ async function discoverNearby({
   fetchImpl = globalThis.fetch,
   fallbackDiscover,
   timeoutMs = GOOGLE_LOOKUP_TIMEOUT_MS,
+  ttlMs = GOOGLE_CACHE_TTL_MS,
+  cache = defaultCache,
+  inflight = defaultInflight,
 }) {
-  let googleFailure;
+  const cacheKey = [
+    Number(lat).toFixed(3),
+    Number(lng).toFixed(3),
+    Math.round(radiusM),
+    categoryId || 'all',
+  ].join(':');
 
-  if (googleApiKey) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const merchants = await fetchGooglePlacesNearby({
-        lat,
-        lng,
-        radiusM,
-        categoryId,
-        apiKey: googleApiKey,
-        fetchImpl,
-        signal: controller.signal,
-      });
-      if (merchants.length > 0) {
-        return {
-          source: 'google_places',
-          radius_m: radiusM,
-          merchants,
-          partial: false,
-          failed_categories: 0,
-        };
-      }
-      googleFailure = new Error('Google Places returned no nearby merchants');
-    } catch (error) {
-      googleFailure = error;
-    } finally {
-      clearTimeout(timeout);
+  if (cache && cache.has(cacheKey)) {
+    const entry = cache.get(cacheKey);
+    if (entry && entry.expiresAt > Date.now()) {
+      return entry.value;
     }
-  } else {
-    googleFailure = new Error('Google Places API key is not configured');
+    cache.delete(cacheKey);
   }
 
+  if (inflight && inflight.has(cacheKey)) {
+    return await inflight.get(cacheKey);
+  }
+
+  const lookupPromise = (async () => {
+    let googleFailure;
+
+    if (googleApiKey) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const merchants = await fetchGooglePlacesNearby({
+          lat,
+          lng,
+          radiusM,
+          categoryId,
+          apiKey: googleApiKey,
+          fetchImpl,
+          signal: controller.signal,
+        });
+        if (merchants.length > 0) {
+          const result = {
+            source: 'google_places',
+            radius_m: radiusM,
+            merchants,
+            partial: false,
+            failed_categories: 0,
+          };
+          if (cache) {
+            cache.set(cacheKey, { expiresAt: Date.now() + ttlMs, value: result });
+            if (cache.size > MAX_GOOGLE_CACHE_ENTRIES) {
+              const oldestKey = cache.keys().next().value;
+              cache.delete(oldestKey);
+            }
+          }
+          return result;
+        }
+        googleFailure = new Error('Google Places returned no nearby merchants');
+      } catch (error) {
+        googleFailure = error;
+      } finally {
+        clearTimeout(timeout);
+      }
+    } else {
+      googleFailure = new Error('Google Places API key is not configured');
+    }
+
+    try {
+      const fallbackParams = { lat, lng, radiusM };
+      if (categoryId) fallbackParams.categoryId = categoryId;
+      const merchants = await fallbackDiscover(fallbackParams);
+      const isEmpty = googleFailure.message.includes('returned no nearby merchants');
+      return {
+        source: 'openstreetmap_fallback',
+        attribution: '© OpenStreetMap contributors',
+        radius_m: radiusM,
+        degraded: true,
+        fallback_reason: isEmpty ? 'google_empty' : 'google_unavailable',
+        merchants: Array.isArray(merchants) ? merchants : [],
+      };
+    } catch (fallbackError) {
+      const error = new Error('Nearby discovery providers are unavailable', {
+        cause: fallbackError,
+      });
+      error.googleFailure = googleFailure;
+      throw error;
+    }
+  })();
+
+  if (inflight) inflight.set(cacheKey, lookupPromise);
   try {
-    const fallbackParams = { lat, lng, radiusM };
-    if (categoryId) fallbackParams.categoryId = categoryId;
-    const merchants = await fallbackDiscover(fallbackParams);
-    const isEmpty = googleFailure.message.includes('returned no nearby merchants');
-    return {
-      source: 'openstreetmap_fallback',
-      attribution: '© OpenStreetMap contributors',
-      radius_m: radiusM,
-      degraded: true,
-      fallback_reason: isEmpty ? 'google_empty' : 'google_unavailable',
-      merchants: Array.isArray(merchants) ? merchants : [],
-    };
-  } catch (fallbackError) {
-    const error = new Error('Nearby discovery providers are unavailable', {
-      cause: fallbackError,
-    });
-    error.googleFailure = googleFailure;
-    throw error;
+    return await lookupPromise;
+  } finally {
+    if (inflight) inflight.delete(cacheKey);
   }
 }
 
 module.exports = {
   GOOGLE_LOOKUP_TIMEOUT_MS,
+  GOOGLE_CACHE_TTL_MS,
   categoryFromGoogleTypes,
   fetchGooglePlacesNearby,
   discoverNearby,
+  clearGoogleCache,
 };

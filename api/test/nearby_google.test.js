@@ -1,8 +1,12 @@
 'use strict';
 
-const test = require('node:test');
+const { test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { GOOGLE_LOOKUP_TIMEOUT_MS, discoverNearby } = require('../src/nearby_google');
+const { GOOGLE_LOOKUP_TIMEOUT_MS, discoverNearby, clearGoogleCache } = require('../src/nearby_google');
+
+beforeEach(() => {
+  clearGoogleCache();
+});
 
 const input = { lat: 18.5204, lng: 73.8567, radiusM: 2000 };
 
@@ -152,4 +156,84 @@ test('uses OSM fallback when Google Places API times out', async () => {
   assert.equal(result.fallback_reason, 'google_unavailable');
   assert.deepEqual(result.merchants, [candidate]);
 });
+
+test('caches successful Google Places results and does not hit API twice', async () => {
+  let apiCalls = 0;
+  const mockFetch = async () => {
+    apiCalls++;
+    return {
+      ok: true,
+      json: async () => ({
+        places: [
+          {
+            id: 'ChIJ_cached',
+            displayName: { text: 'Cached Cafe' },
+            primaryType: 'cafe',
+            types: ['cafe'],
+            formattedAddress: 'FC Road, Pune',
+            location: { latitude: 18.5204, longitude: 73.8567 },
+          },
+        ],
+      }),
+    };
+  };
+
+  const first = await discoverNearby({
+    ...input,
+    googleApiKey: 'test-google-key',
+    fetchImpl: mockFetch,
+    fallbackDiscover: async () => assert.fail('fallback must not run'),
+  });
+
+  assert.equal(apiCalls, 1);
+  assert.equal(first.merchants[0].merchant_id, 'gp_ChIJ_cached');
+
+  // Second call with slightly different float precision within ~100m grid cell
+  const second = await discoverNearby({
+    lat: 18.52044,
+    lng: 73.85672,
+    radiusM: 2000,
+    googleApiKey: 'test-google-key',
+    fetchImpl: mockFetch,
+    fallbackDiscover: async () => assert.fail('fallback must not run'),
+  });
+
+  assert.equal(apiCalls, 1, 'Google API must NOT be called a second time within cache window');
+  assert.equal(second.merchants[0].merchant_id, 'gp_ChIJ_cached');
+});
+
+test('coalesces concurrent in-flight requests into a single Google Places API call', async () => {
+  let apiCalls = 0;
+  const mockFetch = async () => {
+    apiCalls++;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return {
+      ok: true,
+      json: async () => ({
+        places: [
+          {
+            id: 'ChIJ_coalesce',
+            displayName: { text: 'Coalesced Store' },
+            primaryType: 'supermarket',
+            types: ['supermarket'],
+            formattedAddress: 'MG Road, Pune',
+            location: { latitude: 18.5204, longitude: 73.8567 },
+          },
+        ],
+      }),
+    };
+  };
+
+  const [res1, res2, res3] = await Promise.all([
+    discoverNearby({ ...input, googleApiKey: 'test-google-key', fetchImpl: mockFetch, fallbackDiscover: async () => [] }),
+    discoverNearby({ ...input, googleApiKey: 'test-google-key', fetchImpl: mockFetch, fallbackDiscover: async () => [] }),
+    discoverNearby({ ...input, googleApiKey: 'test-google-key', fetchImpl: mockFetch, fallbackDiscover: async () => [] }),
+  ]);
+
+  assert.equal(apiCalls, 1, 'Concurrent requests must coalesce into 1 Google API call');
+  assert.equal(res1.merchants[0].merchant_id, 'gp_ChIJ_coalesce');
+  assert.equal(res2.merchants[0].merchant_id, 'gp_ChIJ_coalesce');
+  assert.equal(res3.merchants[0].merchant_id, 'gp_ChIJ_coalesce');
+});
+
 
