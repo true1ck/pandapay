@@ -79,7 +79,9 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
   Future<void> _ensureInitialized() async {
     if (_initialized) return;
     try {
-      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidInit = AndroidInitializationSettings(
+        '@drawable/ic_notification',
+      );
       const iosInit = DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -333,6 +335,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
           'Alerts when you\'re near a merchant you\'ve used before',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
+      icon: '@drawable/ic_notification',
     );
     const details = NotificationDetails(
       android: androidDetails,
