@@ -8,7 +8,7 @@ import '../../app/providers.dart';
 import '../geofence/nearby_merchants_repository.dart';
 import 'home_screen.dart' show HomeScreen;
 
-enum _ContextState { locating, found, noPermission, noMatch, offlineOrError }
+enum _ContextState { locating, searching, found, noPermission, noMatch, offlineOrError }
 
 /// ui-spec B1.1 context line — *"You're at DMart Powai"* / *"Near Indian
 /// Oil"* / *"Pick a category"* — a thin presentation layer over the SAME
@@ -84,12 +84,8 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 12),
-        ),
-      );
+      final position = await _readCurrentLocationOnce();
+      if (mounted) setState(() => _state = _ContextState.searching);
       final repo = ref.read(nearbyMerchantsRepositoryProvider);
       final candidates = await repo.fetchNearby(
         lat: position.latitude,
@@ -119,6 +115,27 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
     }
   }
 
+  /// Android may already have a recent fused/network fix while a request for
+  /// a new high-accuracy GPS fix waits indefinitely (common indoors and on a
+  /// stationary test handset). Prefer a fresh cached fix, then make one
+  /// bounded current-position request; never leave Home in `locating`.
+  Future<Position> _readCurrentLocationOnce() async {
+    final lastKnown = await Geolocator.getLastKnownPosition();
+    if (lastKnown != null &&
+        DateTime.now().difference(lastKnown.timestamp).abs() <=
+            const Duration(minutes: 2) &&
+        lastKnown.accuracy <= 150) {
+      return lastKnown;
+    }
+
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 15),
+      ),
+    ).timeout(const Duration(seconds: 18));
+  }
+
   @override
   Widget build(BuildContext context) {
     final recommendation = _closest == null || _closest!.candidate.categoryId == null
@@ -126,6 +143,10 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
         : ref.watch(bestCardForMerchantProvider(_closest!.candidate.categoryId)).valueOrNull;
     final (icon, text) = switch (_state) {
       _ContextState.locating => (Icons.my_location_rounded, 'Finding where you are…'),
+      _ContextState.searching => (
+        Icons.radar_rounded,
+        'Checking nearby businesses…',
+      ),
       _ContextState.found => (
         Icons.place_rounded,
         "You're near ${_closest!.candidate.displayName ?? 'a known merchant'}",
@@ -161,7 +182,9 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
         constraints: const BoxConstraints(minHeight: 48),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          onTap: _state == _ContextState.locating ? null : () => _locate(auto: false),
+          onTap: _state == _ContextState.locating || _state == _ContextState.searching
+              ? null
+              : () => _locate(auto: false),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,

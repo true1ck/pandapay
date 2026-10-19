@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -12,6 +13,7 @@ const _nearbyMerchantSearchRadiusRaw = String.fromEnvironment(
   'PANDAPAY_NEARBY_RADIUS_METERS',
   defaultValue: '2000',
 );
+const _nearbyLookupTimeout = Duration(seconds: 25);
 
 final nearbyMerchantSearchRadiusMeters = () {
   final parsed = double.tryParse(_nearbyMerchantSearchRadiusRaw);
@@ -200,11 +202,26 @@ class HttpNearbyMerchantsRepository
     double radiusM = 2000,
   }) async {
     final uri = Uri.parse('$baseUrl/merchants/nearby/google');
-    final response = await _authClient.post(
-      uri,
-      headers: {'content-type': 'application/json'},
-      body: jsonEncode({'lat': lat, 'lng': lng, 'radiusM': 2000}),
-    );
+    late final http.Response response;
+    try {
+      response = await _authClient
+          .post(
+            uri,
+            headers: {'content-type': 'application/json'},
+            body: jsonEncode({
+              'lat': lat,
+              'lng': lng,
+              'radiusM': radiusM.round(),
+            }),
+          )
+          .timeout(_nearbyLookupTimeout);
+    } on TimeoutException {
+      throw ApiException(
+        'POST /merchants/nearby/google timed out',
+        userMessage:
+            'Nearby lookup took too long. Please retry when your connection is stable.',
+      );
+    }
     if (response.statusCode != 200) {
       throw ApiException(
         'POST /merchants/nearby/google failed: ${response.statusCode} ${response.body}',

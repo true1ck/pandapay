@@ -19,13 +19,15 @@ void main() {
 
   group('HttpNearbyMerchantsRepository', () {
     test(
-      'parses a real-shaped GET /merchants/nearby response into candidates',
+      'parses a real-shaped Google nearby response into candidates',
       () async {
         final client = MockClient((request) async {
-          expect(request.url.path, '/merchants/nearby');
-          expect(request.url.queryParameters['lat'], '12.9716');
-          expect(request.url.queryParameters['lng'], '77.5946');
-          expect(request.url.queryParameters['radiusM'], '1500.0');
+          expect(request.method, 'POST');
+          expect(request.url.path, '/merchants/nearby/google');
+          expect(
+            jsonDecode(request.body),
+            {'lat': 12.9716, 'lng': 77.5946, 'radiusM': 1500},
+          );
           return http.Response(
             jsonEncode({
               'merchants': [
@@ -48,6 +50,7 @@ void main() {
         final repo = HttpNearbyMerchantsRepository(
           baseUrl: 'http://localhost:4000',
           client: client,
+          authClient: client,
         );
         final result = await repo.fetchNearby(
           lat: 12.9716,
@@ -64,6 +67,25 @@ void main() {
         expect(result.first.location.lng, closeTo(77.5950, 0.0001));
       },
     );
+
+    test('Google nearby lookup sends the requested radius in its POST body', () async {
+      final client = MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/merchants/nearby/google');
+        expect(
+          jsonDecode(request.body),
+          {'lat': 15.4, 'lng': 74.0, 'radiusM': 1500},
+        );
+        return http.Response(jsonEncode({'merchants': []}), 200);
+      });
+
+      final repo = HttpNearbyMerchantsRepository(
+        baseUrl: 'http://localhost:4000',
+        client: client,
+        authClient: client,
+      );
+      await repo.fetchNearby(lat: 15.4, lng: 74.0, radiusM: 1500);
+    });
 
     test(
       'an HTTP 200 provider outage is not treated as no merchants',

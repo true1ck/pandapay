@@ -43,6 +43,22 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   Position? _lastPosition;
 
   @override
+  void initState() {
+    super.initState();
+    // Opening the list should show current nearby results without requiring
+    // an extra tap, but must not trigger an OS permission dialog by itself.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final permission = await Geolocator.checkPermission();
+      if (!mounted) return;
+      if (permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse) {
+        _checkNearby(auto: true);
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _placeController.dispose();
     super.dispose();
@@ -52,7 +68,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     await ref.read(backgroundAlertsControllerProvider).setEnabled(enable);
   }
 
-  Future<void> _checkNearby() async {
+  Future<void> _checkNearby({bool auto = false}) async {
     setState(() {
       _state = _LoadState.locating;
       _errorMessage = null;
@@ -62,7 +78,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     });
 
     try {
-      final position = await _readCurrentLocationOnce();
+      final position = await _readCurrentLocationOnce(auto: auto);
       if (!mounted) return;
       _lastPosition = position;
 
@@ -169,7 +185,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   /// no background mode requested. Permission handling is the minimum
   /// needed to make one honest request-and-check, not a full retry/settings-
   /// deeplink flow — flagged in PROGRESS.md as unverified on a real device.
-  Future<Position> _readCurrentLocationOnce() async {
+  Future<Position> _readCurrentLocationOnce({required bool auto}) async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       throw StateError('Location services are turned off on this device.');
@@ -177,6 +193,11 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
 
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
+      if (auto) {
+        throw StateError(
+          'Location permission is needed to find nearby merchants. Tap Check nearby merchants to allow it.',
+        );
+      }
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.denied ||
@@ -186,12 +207,20 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
       );
     }
 
+    final lastKnown = await Geolocator.getLastKnownPosition();
+    if (lastKnown != null &&
+        DateTime.now().difference(lastKnown.timestamp).abs() <=
+            const Duration(minutes: 2) &&
+        lastKnown.accuracy <= 150) {
+      return lastKnown;
+    }
+
     return Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 12),
+        timeLimit: Duration(seconds: 15),
       ),
-    );
+    ).timeout(const Duration(seconds: 18));
   }
 
   @override
@@ -319,7 +348,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                         _state == _LoadState.fetching ||
                         _refreshing
                     ? null
-                    : _checkNearby,
+                    : () => _checkNearby(),
                 icon: const Icon(Icons.my_location),
                 label: Text(switch (_state) {
                   _LoadState.locating => 'Getting your location…',

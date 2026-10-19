@@ -1026,7 +1026,10 @@ app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
     return res.status(503).json({ error: 'nearby_discovery_unavailable', unavailable: true });
   }
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
+  // The scraper applies its own per-category deadline. Keep this outer
+  // timeout bounded as well so a hung internal service cannot leave the app
+  // waiting for a minute before it can show a retry state.
+  const timeout = setTimeout(() => controller.abort(), 30000);
   try {
     const response = await fetch(`${scraperUrl.replace(/\/$/, '')}/nearby`, {
       method: 'POST',

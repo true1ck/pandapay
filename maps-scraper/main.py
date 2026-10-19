@@ -13,10 +13,11 @@ from playwright.async_api import async_playwright
 
 app = FastAPI(title="PandaPay nearby map discovery")
 _browser = None
-_cache: dict[str, tuple[float, list[dict]]] = {}
+_cache: dict[str, tuple[float, list[dict], int]] = {}
 _inflight: dict[str, asyncio.Task] = {}
 _lock = asyncio.Lock()
 _scrape_semaphore = asyncio.Semaphore(3)
+_category_timeout_seconds = 18
 _queries = (
     ("groceries", "supermarkets grocery stores"),
     ("fuel", "petrol pumps fuel stations"),
@@ -126,15 +127,25 @@ async def scrape_category(lat: float, lng: float, radius_m: int, category: str, 
         return found
 
 async def lookup(lat: float, lng: float, radius_m: int):
-    per_category = await asyncio.gather(*(
-        scrape_category(lat, lng, radius_m, category, query)
+    outcomes = await asyncio.gather(*(
+        asyncio.wait_for(
+            scrape_category(lat, lng, radius_m, category, query),
+            timeout=_category_timeout_seconds,
+        )
         for category, query in _queries
-    ))
+    ), return_exceptions=True)
     unique = {}
-    for result_set in per_category:
+    failures = 0
+    for outcome in outcomes:
+        if isinstance(outcome, Exception):
+            failures += 1
+            continue
+        result_set = outcome
         for merchant in result_set:
             unique.setdefault(merchant["merchant_id"], merchant)
-    return sorted(unique.values(), key=lambda item: item["distance_meters"])
+    if failures == len(outcomes):
+        raise RuntimeError("All Google Maps category searches failed")
+    return sorted(unique.values(), key=lambda item: item["distance_meters"]), failures
 
 
 @app.post("/nearby")
@@ -145,19 +156,27 @@ async def nearby(request: NearbyRequest):
     async with _lock:
         cached = _cache.get(key)
         if cached and cached[0] > time.monotonic():
-            return {"merchants": cached[1], "cached": True}
+            return {
+                "merchants": cached[1],
+                "cached": True,
+                "partial": cached[2] > 0,
+                "failed_categories": cached[2],
+            }
         task = _inflight.get(key)
         if task is None:
             task = asyncio.create_task(lookup(request.lat, request.lng, request.radius_m))
             _inflight[key] = task
     try:
-        merchants = await task
+        merchants, failed_categories = await task
         async with _lock:
-            _cache[key] = (time.monotonic() + 600, merchants)
-        return {"merchants": merchants, "cached": False}
+            _cache[key] = (time.monotonic() + 600, merchants, failed_categories)
+        return {
+            "merchants": merchants,
+            "cached": False,
+            "partial": failed_categories > 0,
+            "failed_categories": failed_categories,
+        }
     except Exception as exc:
-        async with _lock:
-            _cache[key] = (time.monotonic() + 60, [])
         raise HTTPException(status_code=502, detail="Google Maps lookup failed") from exc
     finally:
         async with _lock:
