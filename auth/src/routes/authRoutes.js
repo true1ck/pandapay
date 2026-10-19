@@ -13,6 +13,7 @@ const {
   verifyOtp,
   discardUndeliveredOtp,
 } = require('../services/otpService');
+const { isTestOtpIdentifier } = require('../utils/testOtp');
 const {
   signAccessToken,
   issueRefreshToken,
@@ -226,7 +227,11 @@ router.post(
         const { code, requestId } = await createOtp(normalizedPhone, 'phone', purpose);
 
         // A generated code is not useful unless the SMS provider accepted it.
-        const smsResult = await sendOtpSms(normalizedPhone, code);
+        // Only the explicit dev/test allowlist may bypass an external SMS
+        // provider. Production OTPs still require provider acceptance.
+        const smsResult = isTestOtpIdentifier(normalizedPhone)
+          ? { success: true, testMode: true }
+          : await sendOtpSms(normalizedPhone, code);
 
         // === SECURITY HARDENING: AUDIT LOGS & ANOMALY FLAGS ===
         // Log OTP request event

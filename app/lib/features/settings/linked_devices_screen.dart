@@ -191,7 +191,8 @@ class _LinkedDevicesScreenState extends ConsumerState<LinkedDevicesScreen> {
             return RefreshIndicator(
               onRefresh: () async {
                 try {
-                  await ref.refresh(linkedDevicesProvider.future);
+                  final refreshed = ref.refresh(linkedDevicesProvider.future);
+                  await refreshed;
                 } catch (_) {
                   // The provider's error state below displays the failure.
                 }

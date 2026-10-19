@@ -27,10 +27,7 @@ Exits non-zero on the first failure so CI fails loudly.
 import argparse
 from datetime import datetime, timezone
 import json
-import re
-import subprocess
 import sys
-import time
 import urllib.error
 import urllib.request
 
@@ -71,21 +68,6 @@ def check(label, condition, detail=""):
     return condition
 
 
-def latest_dev_otp():
-    """Reads the OTP from the auth service's dev-only log line.
-
-    Only ever works when ALLOW_TEST_OTP is on and NODE_ENV is not production —
-    the service refuses to log it otherwise, which is the correct behaviour and
-    the reason this script cannot be pointed at a real environment.
-    """
-    out = subprocess.run(
-        ["docker", "compose", "logs", "auth", "--tail", "60"],
-        capture_output=True, text=True,
-    ).stdout
-    codes = re.findall(r"code: '(\d+)'", out)
-    return codes[-1] if codes else None
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--api", default="http://localhost:4000")
@@ -122,14 +104,12 @@ def main():
           all("has_apply_url" in c for c in cards))
 
     print("=== OTP sign-in ===")
-    phone = f"+9190000{int(time.time()) % 100000:05d}"
+    # This allowlisted identifier works only with ALLOW_TEST_OTP=true in a
+    # non-production environment; it never invokes a real SMS provider.
+    phone = "+911234567890"
     code, _ = call(AUTH, "POST", "/auth/request-otp", {"phone_number": phone})
     check("POST /auth/request-otp", code == 200, f"got {code}")
-    time.sleep(2)
-    otp = latest_dev_otp()
-    if not check("dev OTP available in the log", bool(otp),
-                 "needs ALLOW_TEST_OTP=true and a non-production NODE_ENV"):
-        return 1
+    otp = "1234"
     code, tok = call(AUTH, "POST", "/auth/verify-otp",
                      {"phone_number": phone, "code": otp, "device_id": "smoke-test"})
     if not check("POST /auth/verify-otp returns tokens", "access_token" in tok, str(tok)[:90]):

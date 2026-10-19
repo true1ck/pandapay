@@ -6,6 +6,7 @@ const {
   markActiveOtp,
   clearActiveOtp,
 } = require('../middleware/rateLimitMiddleware');
+const { TEST_OTP_CODE, isTestOtpIdentifier } = require('../utils/testOtp');
 // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
 const { encryptPhoneNumber } = require('../utils/fieldEncryption');
 
@@ -22,10 +23,6 @@ const { encryptPhoneNumber } = require('../utils/fieldEncryption');
 // second, explicit opt-in that itself defaults OFF means a deploy has to
 // get TWO things wrong (not set NODE_ENV=production AND explicitly set
 // ALLOW_TEST_OTP=true) before this bypass can be live, instead of one.
-const TEST_OTP_ENABLED = !config.isProduction && process.env.ALLOW_TEST_OTP === 'true';
-const TEST_IDENTIFIERS = ['1234567890', '+911234567890', 'test@example.com', 'newuser4@example.com'];
-const TEST_OTP_CODE = '1234';
-
 // === ADDED FOR 2-MIN OTP VALIDITY & NO-RESEND ===
 // OTP validity changed from 10 minutes to 2 minutes (120 seconds)
 const OTP_TTL_SECONDS = parseInt(process.env.OTP_TTL_SECONDS || '120', 10); // 2 minutes
@@ -76,7 +73,7 @@ function generateOtpCode() {
 async function createOtp(identifier, type = 'phone', purpose = 'signin') {
   // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY, see constants above ===
   const normalizedIdentifier = identifier.trim().toLowerCase();
-  const isTestIdentifier = TEST_OTP_ENABLED && TEST_IDENTIFIERS.includes(normalizedIdentifier);
+  const isTestIdentifier = isTestOtpIdentifier(normalizedIdentifier);
 
   const code = isTestIdentifier ? TEST_OTP_CODE : generateOtpCode();
 
@@ -145,7 +142,7 @@ async function verifyOtp(identifier, code, type = 'phone') {
   const normalizedIdentifier = identifier.trim().toLowerCase();
 
   // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY, see constants above ===
-  if (TEST_OTP_ENABLED && TEST_IDENTIFIERS.includes(normalizedIdentifier) && codeStr === TEST_OTP_CODE) {
+  if (isTestOtpIdentifier(normalizedIdentifier) && codeStr === TEST_OTP_CODE) {
     console.log(`[OTP Service] 🔧 DEV MODE: Test OTP bypass activated for ${type}:`, normalizedIdentifier);
     return { ok: true };
   }
