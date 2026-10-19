@@ -92,7 +92,7 @@ jobs:
             printf 'export NOTIFICATION_SERVICE_URL=%q\n' "$NOTIFICATION_SERVICE_URL"
             printf 'export NOTIFICATION_SERVICE_API_KEY=%q\n' "$NOTIFICATION_SERVICE_API_KEY"
             cat deploy/deploy.sh
-          } | ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
+          } | ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
             "bash -s -- $SHA"
 
       - name: Verify production is healthy
@@ -100,7 +100,7 @@ jobs:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
             'curl -fsS -m 10 http://127.0.0.1:4000/ready && echo && curl -fsS -m 10 http://127.0.0.1:3210/ready'
 
       - name: Smoke test production Google Maps lookup
@@ -108,7 +108,7 @@ jobs:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
             'cd /home/ubuntu/apps/pandapay && docker compose --env-file .env -f docker-compose.prod.yml exec -T maps-scraper python -' <<'PY'
           import json, urllib.request
           from urllib.error import HTTPError
@@ -135,5 +135,5 @@ jobs:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
             'cd /home/ubuntu/apps/pandapay && docker compose --env-file .env -f docker-compose.prod.yml logs --tail=80 maps-scraper'
