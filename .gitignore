@@ -80,3 +80,9 @@ PEM_PandaPay/
 *.p12
 *.jks
 *.keystore
+
+.localappdata/
+.task-appdata/
+.tmp-dart-appdata/
+app/.tmp-dart-appdata/
+.docker-task-config/

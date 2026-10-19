@@ -1,21 +1,43 @@
 const { extractVpa } = require('./merchant_category');
 const { isUsableSubscriptionName } = require('./recurring');
 
-// This parser is intentionally narrower than the spend parser. A word such
-// as "autopay" in a bill reminder is not proof that a subscription exists;
-// the message must describe a mandate being created, registered, activated,
-// approved, or confirmed.
-const LIFECYCLE = /\b(?:created|registered|activated|approved|confirmed|enabled|set\s+up|initiated|accepted)\b/i;
-const MANDATE = /\b(?:e[-\s]?mandate|emandate|standing\s+instruction|recurring\s+(?:payment|debit)|subscription|auto[-\s]?pay|autopay)\b/i;
-const NEGATIVE = /\b(?:otp|verification\s+code|payment\s+due|amount\s+due|minimum\s+due|declined|failed|reversed|refund(?:ed)?|cancel(?:led|ed)?|revoked|stopped)\b/i;
+// This parser handles subscription e-mandates, Standing Instructions (SI),
+// and AutoPay notifications across Indian issuers (Axis, HDFC, ICICI, SBI, Kotak, UPI).
+const MANDATE = /\b(?:(?:upi|e)[-\s]?mandate|emandate|mandate|standing\s+instruction|recurring\s+(?:payment|debit|charge)|subscription|auto[-\s]?pay|autopay|si\b)\b/i;
+const ACTIVATION = /\b(?:created|registered|activat(?:ed|ion)|approved|confirmed|enabled|set\s+up|initiated|accepted|success(?:ful)?)\b/i;
+const CANCELLATION = /\b(?:cancel(?:led|ed)?|revoked|stopped|de-?activat(?:ed|ion)|disabled|terminated)\b/i;
+const NON_MANDATE = /\b(?:otp|verification\s+code|payment\s+due|amount\s+due|minimum\s+due|declined|failed|reversed|refund(?:ed)?)\b/i;
 
-function numberAfterCurrency(body) {
-  const match = String(body || '').match(
-    /(?:₹|\bINR\b|\bRS\.?)(?:\s*[:.]?\s*)([0-9][0-9,]*(?:\.\d{1,2})?)/i,
+function extractMandateAmount(body) {
+  const text = String(body || '');
+
+  // 1. Look for explicit max limit / mandate amount / monthly limit / up to
+  const limitMatch = text.match(
+    /(?:max(?:imum)?\s*(?:limit|amount|amt)|mandate\s*(?:limit|amount|amt)|monthly\s*(?:limit|amount|amt)|amount\s*up\s*to|max\s*amount|upto|up\s*to)\s*[:.-]?\s*(?:₹|\bINR\b|\bRS\.?)\s*([0-9][0-9,]*(?:\.\d{1,2})?)/i
+  ) || text.match(
+    /(?:₹|\bINR\b|\bRS\.?)\s*[:.-]?\s*([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:max(?:imum)?\s*(?:limit|amount|amt)|monthly|recurring|per\s+month)/i
   );
-  if (!match) return null;
-  const value = Number(match[1].replace(/,/g, ''));
-  return Number.isFinite(value) && value > 0 ? value : null;
+
+  if (limitMatch) {
+    const val = Number(limitMatch[1].replace(/,/g, ''));
+    if (Number.isFinite(val) && val > 0) return val;
+  }
+
+  // 2. Look for positive amount associated with of / for / amt (excluding 0)
+  const ofMatch = text.match(
+    /(?:of|for|amount|amt)\s*[:.-]?\s*(?:₹|\bINR\b|\bRS\.?)\s*([1-9][0-9,]*(?:\.\d{1,2})?)/i
+  );
+  if (ofMatch) {
+    const val = Number(ofMatch[1].replace(/,/g, ''));
+    if (Number.isFinite(val) && val > 0) return val;
+  }
+
+  // 3. Scan all positive currency amounts in the body (ignoring ₹0 authentication debits)
+  const allAmounts = [...text.matchAll(/(?:₹|\bINR\b|\bRS\.?)\s*[:.-]?\s*([0-9][0-9,]*(?:\.\d{1,2})?)/gi)]
+    .map((m) => Number(m[1].replace(/,/g, '')))
+    .filter((v) => Number.isFinite(v) && v > 0);
+
+  return allAmounts.length > 0 ? allAmounts[0] : null;
 }
 
 function cadenceDays(body) {
@@ -26,39 +48,68 @@ function cadenceDays(body) {
   if (/half[-\s]?yearly|six\s+months/.test(text)) return 182;
   if (/yearly|annual|every\s+year|12\s+months/.test(text)) return 365;
   if (/monthly|every\s+month|30\s+days?/.test(text)) return 30;
-  return null;
+  // AutoPay card mandates and Standing Instructions without a named cadence
+  // typically bill on a monthly cycle.
+  return 30;
 }
 
 function merchantFromBody(body) {
-  const text = String(body || '').replace(/\s+/g, ' ').trim();
-  const afterKeyword = text.match(
-    /\b(?:for|to|at|with|towards?|merchant)\s+([A-Za-z0-9][A-Za-z0-9 ._&@'/-]{1,80}?)(?=\s+(?:has|is|was|of|for|amount|maximum|every|monthly|weekly|quarterly|yearly|on|from|via|using|under|valid|reference|ref|mandate|upi)\b|\s*[,.;]|$)/i,
-  );
-  if (afterKeyword) return afterKeyword[1].trim();
+  const text = String(body || '');
 
-  // Many UPI mandate alerts omit a prose merchant but include a VPA.
-  const vpa = extractVpa(text);
+  // 1. Line-oriented or labeled format: "Merchant: OpenAILLC"
+  const labeled = text.match(
+    /(?:^|[\r\n\s])(?:merchant|towards?)\s*[:\-]\s*([A-Za-z0-9][A-Za-z0-9 ._&@'+/*-]{1,60}?)(?=\s*(?:[\r\n]|axis|card|bank|account|a\/c|max\s*limit|txn|id\s*:|manage|https?:\/\/|\bhas\b|\bis\b|\bwas\b|\bof\b|\bfor\b|\bamount\b|\bmaximum\b|\bevery\b|\bmonthly\b|\bweekly\b|\bquarterly\b|\byearly\b|\bon\b|\bfrom\b|\bvia\b|\busing\b|\bunder\b|\bvalid\b|\breference\b|\bref\b|\bmandate\b|\bupi\b|[,.;]|$))/im
+  );
+  if (labeled) {
+    return labeled[1].trim();
+  }
+
+  const flattened = text.replace(/\s+/g, ' ').trim();
+
+  // 2. Prose with explicit 'towards <merchant>'
+  const towards = flattened.match(
+    /\b(?:towards?)\s+([A-Za-z0-9][A-Za-z0-9 ._&@'+/*-]{1,80}?)(?=\s+(?:has|is|was|of|for|amount|maximum|every|monthly|weekly|quarterly|yearly|on|from|via|using|under|valid|reference|ref|mandate|upi|card|bank|axis)\b|\s*[,.;]|$)/i
+  );
+  if (towards) {
+    return towards[1].trim();
+  }
+
+  // 3. Prose with 'for <merchant>' where not followed by currency/numbers
+  const afterFor = flattened.match(
+    /\b(?:for|to|at|with)\s+(?!(?:₹|\bINR\b|\bRS\.?|\d))\s*([A-Za-z0-9][A-Za-z0-9 ._&@'+/*-]{1,80}?)(?=\s+(?:has|is|was|of|for|amount|maximum|every|monthly|weekly|quarterly|yearly|on|from|via|using|under|valid|reference|ref|mandate|upi|card|bank|axis)\b|\s*[,.;]|$)/i
+  );
+  if (afterFor) {
+    return afterFor[1].trim();
+  }
+
+  // 4. Many UPI mandate alerts omit a prose merchant but include a VPA.
+  const vpa = extractVpa(flattened);
   if (vpa) return vpa;
 
-  // Keep this fallback deliberately small and high-signal. It is only used
-  // when a well-known service is named elsewhere in the alert.
-  const known = text.match(/\b(?:chatgpt|openai|youtube|amazon\s+prime|prime\s+video|netflix|spotify|hotstar|google\s+one|swiggy|zomato|starbucks|reliance)\b/i);
+  // 5. Well-known recurring services named anywhere in the alert.
+  const known = flattened.match(
+    /\b(?:chatgpt|openai(?:llc)?|youtube|amazon\s+prime|prime\s+video|netflix|spotify|hotstar|google\s+one|swiggy|zomato|starbucks|reliance)\b/i
+  );
   return known ? known[0] : null;
 }
 
 function mandateReference(body) {
   const match = String(body || '').match(
-    /\b(?:mandate|instruction|umrn|reference|ref(?:erence)?(?:\s+no)?|txn(?:\s+id)?)\s*[:#-]?\s*([A-Za-z0-9-]{6,})\b/i,
+    /\b(?:umrn|umn|ref(?:erence)?(?:\s*(?:no\.?|num|id))?|txn(?:\s*id)?|mandate\s*(?:id|ref|no\.?)|instruction\s*(?:id|ref|no\.?)|\bid\b)\s*[:#-]?\s*([A-Za-z0-9-]{6,})\b/i
   );
   return match ? match[1] : null;
 }
 
 function parseSubscriptionMandate(sms) {
-  const body = String(sms?.body || '').replace(/\s+/g, ' ').trim();
+  const body = String(sms?.body || '').trim();
   if (!body) return { ok: false, reason: 'empty_body' };
   if (body.length > 20000) return { ok: false, reason: 'body_too_long' };
-  if (NEGATIVE.test(body)) return { ok: false, reason: 'non_mandate_alert' };
-  if (!MANDATE.test(body) || !LIFECYCLE.test(body)) return { ok: false, reason: 'no_mandate_match' };
+  if (NON_MANDATE.test(body)) return { ok: false, reason: 'non_mandate_alert' };
+  if (!MANDATE.test(body)) return { ok: false, reason: 'no_mandate_match' };
+
+  const isCancelled = CANCELLATION.test(body);
+  const isActive = !isCancelled && ACTIVATION.test(body);
+  if (!isCancelled && !isActive) return { ok: false, reason: 'no_mandate_match' };
 
   const merchant = merchantFromBody(body);
   if (!merchant) return { ok: false, reason: 'mandate_merchant_missing' };
@@ -67,18 +118,21 @@ function parseSubscriptionMandate(sms) {
   }
 
   const lower = body.toLowerCase();
-  const instrument = /\b(?:upi|vpa|e[-\s]?mandate|emandate)\b/.test(lower)
-    ? 'upi_bank'
-    : /\b(?:credit|debit)\s+card\b/.test(lower)
-      ? 'card'
+  const instrument = /\b(?:credit|debit|bank|forex)?\s*cards?\b|\bcard\s+(?:no|ending)\b/i.test(lower)
+    ? 'card'
+    : /\b(?:upi|vpa|account|a\/?c)\b/i.test(lower)
+      ? 'upi_bank'
       : 'unknown';
-  const last4Match = body.match(/\b(?:card|account|a\/?c\.?)\b[\s\S]{0,50}?(?:ending(?:\s+with)?|x{2,}|\*{2,}|last\s*4)\D{0,5}(\d{4})\b/i);
+  const last4Match = body.match(
+    /\b(?:card|account|a\/?c\.?)\b[\s\S]{0,50}?(?:ending(?:\s+with)?|x{2,}|\*{2,}|last\s*4|no\.?:?\s*[x*]*)\D{0,5}(\d{4})\b/i
+  );
 
   return {
     ok: true,
+    lifecycle: isCancelled ? 'cancelled' : 'active',
     fields: {
       merchant,
-      amountInr: numberAfterCurrency(body),
+      amountInr: extractMandateAmount(body),
       cadenceDays: cadenceDays(body),
       instrument,
       ...(last4Match ? { last4: last4Match[1] } : {}),

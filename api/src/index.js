@@ -78,6 +78,19 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
   const merchantKey = merchantSeriesKey(fields.merchant);
   if (!merchantKey) return null;
 
+  if (parsed.lifecycle === 'cancelled') {
+    const result = await client.query(
+      `UPDATE recurring_series
+          SET is_active = false,
+              dismissed_at = COALESCE(dismissed_at, now()),
+              updated_at = now()
+        WHERE profile_id = $1 AND merchant_key = $2
+        RETURNING id, detection_source`,
+      [userId, merchantKey]
+    );
+    return result.rows[0] || null;
+  }
+
   const card = await importResolvers.resolveUserCardForImport(client, userId, {
     last4: fields.last4,
     patternIssuerId,
@@ -92,9 +105,7 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
 
   const seenOn = new Date(occurred).toISOString().slice(0, 10);
   const cadenceDays = fields.cadenceDays || 30;
-  const nextExpected = fields.cadenceDays
-    ? new Date(new Date(occurred).getTime() + fields.cadenceDays * 86400000).toISOString().slice(0, 10)
-    : null;
+  const nextExpected = new Date(new Date(occurred).getTime() + cadenceDays * 86400000).toISOString().slice(0, 10);
   const typicalAmount = fields.amountInr || 0;
   const result = await client.query(
     `INSERT INTO recurring_series
@@ -118,10 +129,7 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
        END,
        last_seen_on = EXCLUDED.last_seen_on,
        next_expected_on = COALESCE(EXCLUDED.next_expected_on, recurring_series.next_expected_on),
-       detection_source = CASE
-         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.detection_source
-         ELSE 'mandate'
-       END,
+       detection_source = 'mandate',
        is_active = true,
        dismissed_at = NULL,
        updated_at = now()
@@ -6483,9 +6491,8 @@ app.get('/recurring', requireAuth, async (req, res) => {
              cadence_days = CASE WHEN recurring_series.user_edited THEN recurring_series.cadence_days ELSE EXCLUDED.cadence_days END,
              occurrence_count = EXCLUDED.occurrence_count,
              last_seen_on = EXCLUDED.last_seen_on,
-             next_expected_on = CASE WHEN recurring_series.user_edited THEN recurring_series.next_expected_on ELSE EXCLUDED.next_expected_on END,
-             detection_source = 'observed',
-             is_active = true,
+             detection_source = CASE WHEN recurring_series.detection_source = 'mandate' THEN 'mandate' ELSE 'observed' END,
+             is_active = CASE WHEN recurring_series.detection_source = 'mandate' AND recurring_series.is_active = false THEN false ELSE recurring_series.is_active END,
              updated_at = now()`,
           [
             req.userId, s.merchantKey, s.displayName, s.categoryId, s.userCardId,

@@ -49,6 +49,14 @@ function isUsableSubscriptionName(name) {
   if (value.length < 2 || value.length > 100) return false;
   if (!/[A-Za-z]{2,}/.test(value)) return false;
 
+  // Raw UPI VPAs (containing '@') are peer/merchant transfer handles, not subscriptions
+  if (value.includes('@')) return false;
+
+  // Ordinary fuel and vehicle fill-ups are variable spends, not subscriptions
+  if (/\b(?:petroleum|petrol|fuel|gas\s*station|oil\s*co|hpcl|bpcl|iocl)\b/i.test(value)) {
+    return false;
+  }
+
   const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   if (
     /^(?:daily|weekly|fortnightly|monthly|quarterly|half yearly|yearly|annual)(?:\s+(?:payment|charge|debit|subscription|mandate|autopay|plan))?$/.test(

@@ -17,6 +17,17 @@ bool _isDisplayableSubscription(RecurringSeries series) {
   if (series.typicalAmount.paise <= 0 || series.nextExpectedOn == null) {
     return false;
   }
+  // Raw UPI VPAs containing '@' are peer/merchant transfer handles, not subscriptions
+  if (name.contains('@')) {
+    return false;
+  }
+  // Fuel fill-ups and petrol pumps are variable spends, not subscriptions
+  if (RegExp(
+    r'\b(petroleum|petrol|fuel|gas\s*station|oil\s*co|hpcl|bpcl|iocl)\b',
+    caseSensitive: false,
+  ).hasMatch(name)) {
+    return false;
+  }
 
   final normalized = name
       .toLowerCase()
@@ -246,6 +257,36 @@ class _SeriesCard extends ConsumerWidget {
             Text(
               'Renews around ${next.day} ${_months[next.month - 1]} ${next.year}',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+          ],
+          if (series.isMandate || series.cardName != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                if (series.isMandate) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.teal50,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: AppColors.teal400.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      'AutoPay',
+                      style: BambooFonts.ui(11, weight: FontWeight.w600, color: AppColors.teal600),
+                    ),
+                  ),
+                ],
+                if (series.cardName != null)
+                  Expanded(
+                    child: Text(
+                      series.cardName!,
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
             ),
           ],
           const SizedBox(height: AppSpace.sm),

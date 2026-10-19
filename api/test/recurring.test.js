@@ -120,12 +120,18 @@ test('placeholder names from mandate alerts are never treated as merchants', () 
     ...monthly('7308080808', 2000, '2026-05-01', 3),
     ...monthly('31/12/2035', 1850, '2026-05-01', 3),
     ...monthly('MONTHLY', 1649, '2026-05-01', 3),
+    ...monthly('paytm-98510@ptys', 210, '2026-05-01', 5),
+    ...monthly('Kavlekar petroleum', 500, '2026-05-01', 4),
   ];
   assert.equal(detectRecurringSeries(rows).length, 0);
   assert.equal(isUsableSubscriptionName('OpenAI'), true);
+  assert.equal(isUsableSubscriptionName('OpenAILLC'), true);
   assert.equal(isUsableSubscriptionName('7308080808'), false);
   assert.equal(isUsableSubscriptionName('31/12/2035'), false);
   assert.equal(isUsableSubscriptionName('MONTHLY'), false);
+  assert.equal(isUsableSubscriptionName('paytm-98510@ptys'), false);
+  assert.equal(isUsableSubscriptionName('Kavlekar petroleum'), false);
+  assert.equal(isUsableSubscriptionName('Indian Oil Petrol Pump'), false);
 });
 
 test('merchant name formatting differences are one series, not several', () => {
