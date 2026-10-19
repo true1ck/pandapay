@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest
 import com.google.android.gms.auth.api.identity.Identity
@@ -32,6 +33,7 @@ class MainActivity : FlutterFragmentActivity() {
         const val CHANNEL = "app.pandapay/upi"
         const val ASSISTANT_CHANNEL = "app.pandapay/assistant"
         const val PHONE_NUMBER_HINT_CHANNEL = "app.pandapay/phone_number_hint"
+        const val DEVICE_INFO_CHANNEL = "app.pandapay/device_info"
         const val REQUEST_CODE = 0x5091 // arbitrary, local to this Activity
         const val PHONE_NUMBER_HINT_REQUEST_CODE = 0x5092
         const val MAX_ICON_PX = 96
@@ -82,6 +84,22 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_INFO_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getDeviceInfo" -> result.success(
+                        mapOf(
+                            "platform" to "android",
+                            "model" to listOf(Build.MANUFACTURER, Build.MODEL)
+                                .distinct()
+                                .joinToString(" ")
+                                .trim(),
+                            "os_version" to "Android ${Build.VERSION.RELEASE}",
+                        ),
+                    )
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getInstalledUpiApps" -> result.success(installedUpiApps())

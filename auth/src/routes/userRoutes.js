@@ -241,7 +241,7 @@ router.get('/me/devices', auth, userRateLimitRead, async (req, res) => {
         is_active
       FROM user_devices
       WHERE user_id = $1 AND is_active = true
-      ORDER BY last_seen_at DESC
+      ORDER BY last_seen_at DESC NULLS LAST
       `,
       [req.user.id]
     );

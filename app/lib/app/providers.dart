@@ -23,6 +23,7 @@ import '../data/card_requests_api.dart';
 import '../data/catalogue_repository.dart';
 import '../data/consents_api.dart';
 import '../data/device_identity.dart';
+import '../data/device_metadata.dart';
 import '../data/devices_api.dart';
 import '../data/emergency_contacts_repository.dart';
 import '../data/import_repository.dart';
@@ -124,6 +125,11 @@ final tokenStoreProvider = FutureProvider<TokenStore>(
 /// generate/persist/compare here before).
 final localDeviceIdProvider = FutureProvider<String>(
   (ref) => DeviceIdentity().localDeviceId(),
+);
+
+/// Device description sent alongside the install ID when an OTP is verified.
+final deviceMetadataProvider = FutureProvider<Map<String, Object?>>(
+  (ref) => loadDeviceMetadata(),
 );
 
 /// The signed-in access token, or null when signed out. Seeded on startup

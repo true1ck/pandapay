@@ -194,11 +194,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final code = _codeController.text.trim();
       final authApi = ref.read(authApiProvider);
       final deviceId = await ref.read(localDeviceIdProvider.future);
+      final deviceInfo = await ref.read(deviceMetadataProvider.future);
 
       final tokens = await authApi.verifyEmailOtp(
         identifier,
         code,
         deviceId,
+        deviceInfo: deviceInfo,
         // Only sign-up links the phone. Returning-user login is authorized by
         // the email OTP and keeps the existing account linkage unchanged.
         phoneNumber: _isSignUp ? _phoneController.text.trim() : null,

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +10,21 @@ import '../../app/providers.dart';
 import '../../data/analytics.dart';
 import '../../data/api_exception.dart';
 import '../../data/devices_api.dart';
+
+final _linkedDevicesCacheProvider =
+    StateProvider<Map<String, List<LinkedDevice>>>((ref) => const {});
+
+String? _userIdFromToken(String? token) {
+  if (token == null) return null;
+  try {
+    final payload = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(token.split('.')[1]))),
+    ) as Map<String, dynamic>;
+    return payload['sub'] as String?;
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Plan Phase 1.4 — design 20's "Linked devices", finally buildable.
 ///
@@ -24,12 +42,44 @@ import '../../data/devices_api.dart';
 /// holding someone's complete spending history, on a stack where the refresh
 /// token has no short expiry (see `TokenStore`'s own comment).
 final linkedDevicesProvider = FutureProvider.autoDispose<List<LinkedDevice>>((ref) async {
+  final userId = _userIdFromToken(ref.watch(accessTokenProvider));
+  final cached = userId == null
+      ? null
+      : ref.read(_linkedDevicesCacheProvider)[userId];
   final api = ref.watch(devicesApiProvider);
-  if (api == null) return const [];
+  if (api == null) return cached ?? const [];
+
+  Timer? refreshTimer;
+  var disposed = false;
+  ref.onDispose(() {
+    disposed = true;
+    refreshTimer?.cancel();
+  });
+
+  void scheduleRefresh() {
+    if (disposed) return;
+    // Wait 60 seconds after each response, so a slow or offline request
+    // cannot overlap with another automatic refresh.
+    refreshTimer = Timer(
+      const Duration(seconds: 60),
+      () => ref.invalidateSelf(),
+    );
+  }
+
   try {
-    return await api.fetchDevices();
-  } catch (error) {
-    if (isAuthenticationFailure(error)) return const [];
+    final devices = await api.fetchDevices();
+    if (userId != null) {
+      ref.read(_linkedDevicesCacheProvider.notifier).update(
+        (cache) => {...cache, userId: devices},
+      );
+    }
+    scheduleRefresh();
+    return devices;
+  } catch (_) {
+    scheduleRefresh();
+    // Reuse this account's last successful response while offline. The next
+    // retry still happens quietly in the background.
+    if (cached != null) return cached;
     rethrow;
   }
 });
@@ -106,16 +156,29 @@ class _LinkedDevicesScreenState extends ConsumerState<LinkedDevicesScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: Text('Linked devices', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh devices',
+            onPressed: () => ref.invalidate(linkedDevicesProvider),
+          ),
+        ],
       ),
       body: AppBackground(
         child: devices.when(
+          // On a failed refresh, keep showing the last successful list. The
+          // initial request still uses the error state because no cached data
+          // exists yet.
+          skipError: true,
           loading: () => const Padding(
             padding: EdgeInsets.all(AppSpace.lg),
             child: SkeletonList(),
           ),
-          error: (e, _) => ErrorState(
-            message: e is ApiException ? e.userMessage : 'Could not load your devices.',
-            onRetry: () => ref.invalidate(linkedDevicesProvider),
+          // Keep offline refresh failures quiet; if there is no prior list,
+          // leave the lightweight loading placeholders until a retry succeeds.
+          error: (_, _) => const Padding(
+            padding: EdgeInsets.all(AppSpace.lg),
+            child: SkeletonList(),
           ),
           data: (list) {
             if (list.isEmpty) {
@@ -125,20 +188,30 @@ class _LinkedDevicesScreenState extends ConsumerState<LinkedDevicesScreen> {
                 message: 'This is the only device signed in to your account.',
               );
             }
-            return ListView.separated(
-              padding: const EdgeInsets.all(AppSpace.lg),
-              itemCount: list.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: AppSpace.sm),
-              itemBuilder: (context, index) {
-                if (index == list.length) return const _DevicesFootnote();
-                final device = list[index];
-                return _DeviceTile(
-                  device: device,
-                  busy: _revoking == device.deviceIdentifier,
-                  isThisDevice: localDeviceId != null && device.deviceIdentifier == localDeviceId,
-                  onRevoke: () => _confirmAndRevoke(device),
-                );
+            return RefreshIndicator(
+              onRefresh: () async {
+                try {
+                  await ref.refresh(linkedDevicesProvider.future);
+                } catch (_) {
+                  // The provider's error state below displays the failure.
+                }
               },
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(AppSpace.lg),
+                itemCount: list.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: AppSpace.sm),
+                itemBuilder: (context, index) {
+                  if (index == list.length) return const _DevicesFootnote();
+                  final device = list[index];
+                  return _DeviceTile(
+                    device: device,
+                    busy: _revoking == device.deviceIdentifier,
+                    isThisDevice: localDeviceId != null && device.deviceIdentifier == localDeviceId,
+                    onRevoke: () => _confirmAndRevoke(device),
+                  );
+                },
+              ),
             );
           },
         ),
@@ -164,9 +237,10 @@ class _DeviceTile extends StatelessWidget {
   /// minute-level precision would imply a tracking fidelity the row does not
   /// have and the user has no reason to want.
   String _lastSeenLabel(DateTime? at) {
-    if (at == null) return 'Last seen: unknown';
+    if (at == null) return 'No activity recorded yet';
     final delta = DateTime.now().difference(at);
-    if (delta.inMinutes < 60) return 'Active now';
+    if (delta.inMinutes < 5) return 'Last active just now';
+    if (delta.inHours < 1) return 'Last active within the last hour';
     if (delta.inHours < 24) return 'Last active today';
     if (delta.inDays == 1) return 'Last active yesterday';
     if (delta.inDays < 30) return 'Last active ${delta.inDays} days ago';
@@ -176,7 +250,7 @@ class _DeviceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitle = [
-      if (device.platform != null) device.platform!,
+      if (device.platformLabel != null) device.platformLabel!,
       if (device.appVersion != null) 'app ${device.appVersion}',
     ].join(' · ');
 

@@ -58,6 +58,7 @@ class AuthApi {
     String code,
     String deviceId, {
     bool recoveryOnly = false,
+    Map<String, Object?>? deviceInfo,
   }) async {
     final response = await _client
         .post(
@@ -67,6 +68,7 @@ class AuthApi {
             'phone_number': phoneNumber,
             'code': code,
             'device_id': deviceId,
+            if (deviceInfo != null) 'device_info': deviceInfo,
             if (recoveryOnly) 'recovery_only': true,
           }),
         )
@@ -148,6 +150,7 @@ class AuthApi {
     String deviceId, {
     String? phoneNumber,
     bool recoveryOnly = false,
+    Map<String, Object?>? deviceInfo,
   }) async {
     final trimmedPhone = phoneNumber?.trim();
     final response = await _client
@@ -158,6 +161,7 @@ class AuthApi {
             'email': email,
             'code': code,
             'device_id': deviceId,
+            if (deviceInfo != null) 'device_info': deviceInfo,
             if (trimmedPhone != null && trimmedPhone.isNotEmpty)
               'phone_number': trimmedPhone,
             if (recoveryOnly) 'recovery_only': true,

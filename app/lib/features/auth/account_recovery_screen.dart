@@ -165,6 +165,7 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
     });
     try {
       final deviceId = await ref.read(localDeviceIdProvider.future);
+      final deviceInfo = await ref.read(deviceMetadataProvider.future);
       final auth = ref.read(authApiProvider);
       final tokens =
           _pendingTokens ??
@@ -174,12 +175,14 @@ class _AccountRecoveryScreenState extends ConsumerState<AccountRecoveryScreen> {
                   _codeController.text.trim(),
                   deviceId,
                   recoveryOnly: true,
+                  deviceInfo: deviceInfo,
                 )
               : await auth.verifyOtp(
                   _normalizedPhone!,
                   _codeController.text.trim(),
                   deviceId,
                   recoveryOnly: true,
+                  deviceInfo: deviceInfo,
                 ));
       _pendingTokens = tokens;
       // Keep credentials local until the user has seen the linked contact

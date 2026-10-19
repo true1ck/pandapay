@@ -38,21 +38,38 @@ class LinkedDevice {
 
   factory LinkedDevice.fromJson(Map<String, dynamic> json) {
     DateTime? parse(Object? v) => v == null ? null : DateTime.tryParse(v as String)?.toLocal();
+    String? clean(Object? v) {
+      if (v is! String) return null;
+      final value = v.trim();
+      if (value.isEmpty || value.toLowerCase() == 'unknown') return null;
+      return value;
+    }
+
     return LinkedDevice(
       deviceIdentifier: json['device_identifier'] as String,
-      platform: json['device_platform'] as String?,
-      model: json['device_model'] as String?,
-      osVersion: json['os_version'] as String?,
-      appVersion: json['app_version'] as String?,
+      platform: clean(json['device_platform'])?.toLowerCase(),
+      model: clean(json['device_model']),
+      osVersion: clean(json['os_version']),
+      appVersion: clean(json['app_version']),
       firstSeenAt: parse(json['first_seen_at']),
       lastSeenAt: parse(json['last_seen_at']),
     );
   }
 
-  /// What the row says when the device never reported a model — better than
-  /// rendering an empty tile, and deliberately not guessed at from the
-  /// platform string, which would be inventing information.
-  String get displayName => model ?? platform ?? 'Unknown device';
+  /// Older records often lack model data. Use a useful generic label instead
+  /// of exposing backend sentinel values such as "unknown" to the user.
+  String get displayName => model ?? switch (platform) {
+    'android' => 'Android device',
+    'ios' => 'iPhone or iPad',
+    _ => 'Mobile device',
+  };
+
+  String? get platformLabel => switch (platform) {
+    'android' => 'Android',
+    'ios' => 'iOS',
+    null => null,
+    final value => value,
+  };
 }
 
 /// Thrown when `auth/` answers a revoke with its `step_up_required` 403.
