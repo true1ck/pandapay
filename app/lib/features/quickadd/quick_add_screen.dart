@@ -17,8 +17,7 @@ import '../../app/design/widgets.dart';
 import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
-import '../../data/catalogue_repository.dart'
-    show SpendCategory, categoryIdForServer;
+import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/receipt_parser.dart' show parseReceiptLines;
 import '../../data/import_models.dart' show ParsedStatementLine;
 import '../../data/user_cards_repository.dart'
