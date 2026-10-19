@@ -2196,7 +2196,7 @@ class _HeadlineCard extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           _HeadlineMetricRow(
             label: shortBy.isNegative ? 'Surplus' : 'Short by',
-            amount: shortBy.abs(),
+            amount: Money.fromPaise(shortBy.paise.abs()),
             color: shortBy.isNegative ? BambooInk.jade : BambooInk.ink900,
             emphasized: true,
           ),

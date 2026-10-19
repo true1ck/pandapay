@@ -311,7 +311,7 @@ class _TxnCandidateCard extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Expanded(child: Text(label, style: BambooFonts.ui(11.5, weight: FontWeight.w700, color: selected ? BambooInk.jade : BambooInk.ink500, letterSpacing: 0.6))),
+          Expanded(child: Text(label, style: BambooFonts.ui(11.5, weight: FontWeight.w700, color: selected ? BambooInk.jade : BambooInk.ink500).copyWith(letterSpacing: 0.6))),
           Icon(selected ? Icons.radio_button_checked : Icons.radio_button_unchecked, size: 19, color: selected ? BambooInk.jade : BambooInk.ink500),
         ]),
         const SizedBox(height: 9),
