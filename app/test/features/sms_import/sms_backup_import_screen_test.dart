@@ -66,6 +66,7 @@ class _RecordingUserCardsRepository extends UserCardsRepository {
     required List<SmsBatchMessage> messages,
     bool backfill = true,
     bool captureLocally = true,
+    bool notifyNewTransactions = false,
   }) async {
     batches.add(messages);
     return SmsBatchImportResult(
