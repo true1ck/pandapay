@@ -35,6 +35,7 @@ class _EmptyCategoryRepository implements CategoryRepository {
 Future<void> _pumpApp(WidgetTester tester) async {
   SharedPreferences.setMockInitialValues({
     'pandapay_app.onboarding_complete_v1': true,
+    'pandapay_app.tutorial_seen_v1': true,
   });
   await tester.pumpWidget(
     ProviderScope(

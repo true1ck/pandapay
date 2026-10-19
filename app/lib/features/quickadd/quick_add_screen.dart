@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widget_previews.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,6 +17,8 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/receipt_parser.dart' show parseReceiptLines;
+import '../../data/import_models.dart' show ParsedStatementLine;
 import '../../data/user_cards_repository.dart'
     show TransactionEntry, TxnEntryKind, TxnInstrument, UserCard;
 import '../cards/card_summary.dart';
@@ -202,6 +206,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   _PendingReceipt? _receipt;
   bool _pickingReceipt = false;
+  bool _scanningReceipt = false;
+  String? _receiptScanMessage;
+  ParsedStatementLine? _scannedReceipt;
   AddFlowPage _activePage = AddFlowPage.quickAdd;
 
   /// What paid for it, and whether it is spending at all.
@@ -422,6 +429,71 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       }
     } finally {
       if (mounted) setState(() => _pickingReceipt = false);
+    }
+  }
+
+  Future<void> _scanReceipt([
+    _ReceiptPickOption source = _ReceiptPickOption.camera,
+  ]) async {
+    if (_pickingReceipt || _saving || _scanningReceipt) return;
+    setState(() {
+      _pickingReceipt = true;
+      _scanningReceipt = true;
+      _receiptScanMessage = null;
+    });
+    try {
+      final image = await _imagePicker.pickImage(
+        source: source == _ReceiptPickOption.camera
+            ? ImageSource.camera
+            : ImageSource.gallery,
+        imageQuality: 95,
+      );
+      if (image == null || !mounted) return;
+      final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      try {
+        final recognized = await recognizer.processImage(
+          InputImage.fromFilePath(image.path),
+        );
+        final lines = [
+          for (final block in recognized.blocks)
+            for (final line in block.lines) line.text,
+        ];
+        final parsed = parseReceiptLines(lines);
+        if (!mounted) return;
+        setState(() {
+          _receipt = _PendingReceipt(
+            name: image.name,
+            path: image.path,
+            mimeType: 'image/jpeg',
+          );
+          _scannedReceipt = parsed?.firstOrNull;
+          _receiptScanMessage = _scannedReceipt == null
+              ? 'Receipt photo attached. We couldn’t confidently read every field, so enter the details below.'
+              : 'Check the suggested merchant, date and total against your receipt.';
+          if (_scannedReceipt != null) {
+            final row = _scannedReceipt!;
+            _merchantController.text = row.description;
+            _amountController.text = row.amount.rupees.toStringAsFixed(2);
+            _date = row.date;
+          }
+          _activePage = AddFlowPage.quickAdd;
+        });
+      } finally {
+        await recognizer.close();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _receiptScanMessage =
+              'Couldn’t scan that receipt. Try a clearer photo or enter it manually.',
+        );
+      }
+    } finally {
+      if (mounted)
+        setState(() {
+          _pickingReceipt = false;
+          _scanningReceipt = false;
+        });
     }
   }
 
@@ -952,7 +1024,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                         ],
                       ),
                     ),
-                    AddFlowPage.scanBill => _buildScanPlaceholder(),
+                    AddFlowPage.scanBill => _buildScanBill(),
                     AddFlowPage.import => const ImportHubScreen(embedded: true),
                   },
                 ),
@@ -1711,35 +1783,115 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     ),
   );
 
-  Widget _buildScanPlaceholder() => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 76,
-            height: 76,
-            decoration: BoxDecoration(
-              color: BambooInk.slate.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: const Icon(
-              Icons.document_scanner_outlined,
-              size: 34,
-              color: BambooInk.ink900,
+  Widget _buildScanBill() => SingleChildScrollView(
+    padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          height: 250,
+          decoration: BoxDecoration(
+            color: BambooInk.slate.withValues(alpha: 0.045),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: BambooInk.hairlineOnPaper),
+          ),
+          child: _scanningReceipt
+              ? const Center(child: CircularProgressIndicator())
+              : _receipt?.path != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(23),
+                  child: Image.file(
+                    File(_receipt!.path!),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const Center(
+                      child: Icon(Icons.receipt_long_outlined, size: 54),
+                    ),
+                  ),
+                )
+              : const Center(
+                  child: Icon(
+                    Icons.document_scanner_outlined,
+                    size: 58,
+                    color: BambooInk.ink500,
+                  ),
+                ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          _receipt == null ? 'Scan a receipt' : 'Receipt review',
+          style: BambooFonts.heading(21, color: BambooInk.ink900),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _receiptScanMessage ??
+              'Take a clear photo of the full receipt. Text recognition runs on this device; check the suggested details before saving.',
+          style: BambooFonts.ui(14, color: BambooInk.ink700, height: 1.5),
+        ),
+        if (_receipt != null) ...[
+          const SizedBox(height: 14),
+          CardSummaryPanel(
+            elevated: false,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Suggested details',
+                  style: BambooFonts.ui(
+                    14,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _scannedReceipt == null
+                      ? 'No fields were filled automatically. You can still use this photo as the receipt attachment.'
+                      : '${_merchantController.text} · ₹${_amountController.text} · ${_date!.day}/${_date!.month}/${_date!.year}',
+                  style: BambooFonts.ui(13, color: BambooInk.ink700),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => setState(() => _activePage = AddFlowPage.quickAdd),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Review transaction details'),
+          ),
+        ] else ...[
           const SizedBox(height: 20),
-          Text('Scan Bill', style: BambooFonts.heading(21)),
-          const SizedBox(height: 8),
-          Text(
-            'Receipt scanning is being prepared. The scanner and bill review flow will appear here.',
-            textAlign: TextAlign.center,
-            style: BambooFonts.ui(14, color: BambooInk.ink700, height: 1.5),
+          FilledButton.icon(
+            onPressed: _pickingReceipt ? null : () => _scanReceipt(),
+            icon: const Icon(Icons.photo_camera_outlined),
+            label: Text(_scanningReceipt ? 'Scanning…' : 'Take receipt photo'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              backgroundColor: BambooInk.slate,
+              foregroundColor: BambooInk.lime,
+            ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _pickingReceipt
+                ? null
+                : () => _scanReceipt(_ReceiptPickOption.gallery),
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('Choose from gallery'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
           ),
         ],
-      ),
+        const SizedBox(height: 12),
+        Center(
+          child: TextButton.icon(
+            onPressed: () => setState(() => _activePage = AddFlowPage.quickAdd),
+            icon: const Icon(Icons.edit_note_rounded),
+            label: const Text('Enter details manually'),
+          ),
+        ),
+      ],
     ),
   );
 }

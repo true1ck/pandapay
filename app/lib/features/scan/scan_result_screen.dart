@@ -10,7 +10,8 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
-import '../../data/merchant_search_repository.dart' show MerchantResolution;
+import '../../data/merchant_search_repository.dart'
+    show MerchantResolution, safeMerchantMccForUpiHandoff;
 import '../../data/override_resolver.dart';
 import '../../data/scanned_merchant_category.dart';
 import '../../data/upi_payment_service.dart';
@@ -190,7 +191,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // directory knows the merchant is groceries). Keep widget.parsed.mc as
     // the raw QR value, but use the verified value for ranking/classification.
     final effectiveMcc = resolvedMerchant?.mcc ?? widget.parsed.mc;
-    final noMcc = widget.parsed.isLikelyP2P &&
+    final noMcc =
+        widget.parsed.isLikelyP2P &&
         (resolvedMerchant == null || resolvedMerchant.isP2p);
     final walletPeek = userCards.valueOrNull;
     if (noMcc &&
@@ -230,7 +232,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         )
         .firstOrNull
         ?.id;
-    final inferredCategoryId = resolvedCategoryId ??
+    final inferredCategoryId =
+        resolvedCategoryId ??
         categoryIdForScannedMerchant(
           merchantName: effectiveMerchantName ?? '',
           vpa: widget.parsed.pa,
@@ -602,6 +605,21 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     }
 
     final service = ref.read(upiPaymentServiceProvider);
+    // A static merchant QR can omit its acquiring-bank MCC. NPCI has
+    // documented that PSPs may then classify it as P2P, which can cause
+    // merchant payments to be declined. Use an exact-VPA directory MCC only
+    // when explicitly operator-verified. Never infer it from a user-entered
+    // category/name, and never alter a signed QR payload.
+    final resolvedMerchant = await ref
+        .read(merchantResolutionProvider(widget.parsed.pa).future)
+        .timeout(const Duration(seconds: 2), onTimeout: () => null);
+    if (!mounted) return;
+    final handoffMcc = safeMerchantMccForUpiHandoff(
+      qrMcc: widget.parsed.mc,
+      qrHasSignature: widget.parsed.sign != null,
+      resolution: resolvedMerchant,
+    );
+
     final uriString = buildUpiPayUri(
       pa: widget.parsed.pa,
       // Preserve the QR's original payee name for the PSP handoff. PandaPay
@@ -610,11 +628,10 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       pn: widget.parsed.pn,
       am: _amount,
       cu: widget.parsed.cu,
-      // Carry only the merchant fields that were actually present in the QR.
-      // For a static QR without `tr`, the selected PSP app is the component
-      // required to create the payment reference; PandaPay must not invent a
-      // merchant order id that the receiver bank has never issued.
-      mc: widget.parsed.mc,
+      // Preserve QR transaction fields. The MCC may also be filled from an
+      // sufficiently trusted exact-VPA record when the QR omitted it;
+      // never invent a transaction reference for a static QR.
+      mc: handoffMcc,
       tr: widget.parsed.tr,
       tn: widget.parsed.tn,
       mode: widget.parsed.mode,
@@ -756,7 +773,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           userCardId: owned?.id,
           categoryId: categoryId,
           merchantVpa: widget.parsed.pa,
-          mcc: widget.parsed.mc ??
+          mcc:
+              widget.parsed.mc ??
               ref
                   .read(merchantResolutionProvider(widget.parsed.pa))
                   .valueOrNull

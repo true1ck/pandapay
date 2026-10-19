@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
+import 'package:pandapay/data/merchant_search_repository.dart';
 import 'package:pandapay/data/upi_payment_service.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/scan/scan_result_screen.dart';
@@ -311,6 +312,61 @@ void main() {
       expect(find.text('REWARD IF THIS COMPLETES'), findsOneWidget);
     },
   );
+
+  testWidgets('static QR handoff adds an operator-verified exact-VPA MCC', (
+    tester,
+  ) async {
+    final fake = _FakeUpiService(
+      apps: const [UpiApp(packageName: 'in.slice.android', name: 'Slice')],
+    );
+    const parsed = ParsedUpiQr(
+      pa: 'paytmqr6z7fka@ptys',
+      pn: 'Paytm',
+      isLikelyP2P: false,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          upiPaymentServiceProvider.overrideWithValue(fake),
+          merchantResolutionProvider(parsed.pa).overrideWith(
+            (ref) async => const MerchantResolution(
+              merchantId: 'merchant-1',
+              vpa: 'paytmqr6z7fka@ptys',
+              mcc: '5411',
+              confidence: 'high',
+              confidenceScore: 0.98,
+              confirmationCount: 12,
+              isP2p: false,
+              mccOperatorVerified: true,
+            ),
+          ),
+          catalogueProvider.overrideWith(
+            (ref) async => [_card('c1', rate: 0.03)],
+          ),
+          categoriesProvider.overrideWith((ref) async => const []),
+          userCardsProvider.overrideWith((ref) async => [_owned('c1')]),
+          cardOverridesProvider.overrideWith((ref) async => const []),
+        ],
+        child: const MaterialApp(home: ScanResultScreen(parsed: parsed)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Pay with c1'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '30');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Pay with c1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Slice'));
+    await tester.pumpAndSettle();
+
+    expect(fake.lastPackage, 'in.slice.android');
+    expect(fake.lastUri, contains('pa=paytmqr6z7fka%40ptys'));
+    expect(fake.lastUri, contains('pn=Paytm'));
+    expect(fake.lastUri, contains('am=30.00'));
+    expect(fake.lastUri, contains('mc=5411'));
+    expect(fake.lastUri, isNot(contains('tr=')));
+  });
 
   testWidgets('Pay with a zero amount is blocked inline until one is entered', (
     tester,

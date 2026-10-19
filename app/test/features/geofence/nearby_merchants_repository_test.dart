@@ -368,5 +368,76 @@ void main() {
         expect(snapshot.candidates.single.source, 'published');
       },
     );
+
+    test('device cache keeps same-area results for up to 24 hours', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cache = SharedPreferencesNearbyMerchantCache(
+        namespace: 'profile:test',
+        preferences: Future.value(prefs),
+      );
+      final candidate = NearbyMerchantCandidate(
+        merchantId: 'osm:node:42',
+        displayName: 'Saved Petrol Station',
+        categoryId: 'fuel',
+        location: const GeoPoint(lat: 12.9717, lng: 77.5947),
+        source: 'osm_candidate',
+      );
+      final key = cache.key(lat: 12.9716, lng: 77.5946, radiusM: 2000);
+
+      await prefs.setString(
+        key,
+        jsonEncode({
+          'fetched_at': DateTime.now()
+              .subtract(const Duration(hours: 23))
+              .toIso8601String(),
+          'merchants': [
+            {
+              'merchant_id': candidate.merchantId,
+              'display_name': candidate.displayName,
+              'category_id': candidate.categoryId,
+              'grid_lat': '12.9717',
+              'grid_lng': '77.5947',
+              'source': candidate.source,
+            },
+          ],
+        }),
+      );
+
+      final snapshot = await cache.read(
+        lat: 12.9716,
+        lng: 77.5946,
+        radiusM: 2000,
+      );
+
+      expect(snapshot, isNotNull);
+      expect(snapshot!.candidates.single.displayName, 'Saved Petrol Station');
+    });
+
+    test('device cache expires results older than 24 hours', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cache = SharedPreferencesNearbyMerchantCache(
+        namespace: 'profile:test',
+        preferences: Future.value(prefs),
+      );
+      await prefs.setString(
+        cache.key(lat: 12.9716, lng: 77.5946, radiusM: 2000),
+        jsonEncode({
+          'fetched_at': DateTime.now()
+              .subtract(const Duration(hours: 25))
+              .toIso8601String(),
+          'merchants': [],
+        }),
+      );
+
+      final snapshot = await cache.read(
+        lat: 12.9716,
+        lng: 77.5946,
+        radiusM: 2000,
+      );
+
+      expect(snapshot, isNull);
+    });
   });
 }

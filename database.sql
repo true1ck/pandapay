@@ -849,6 +849,7 @@ create table merchants (
   is_p2p              boolean not null default false,
   is_published        boolean not null default false,   -- gate: N >= 2..3 (§6.3)
   operator_locked     boolean not null default false,   -- console manual override
+  mcc_operator_verified boolean not null default false, -- admin confirmed acquiring-bank MCC
   first_seen_on       date not null default current_date,  -- DATE not timestamp (R2)
   last_confirmed_on   date not null default current_date,
   updated_at          timestamptz not null default now()

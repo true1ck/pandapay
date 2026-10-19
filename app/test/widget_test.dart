@@ -30,6 +30,7 @@ final _noSessionInit = sessionInitProvider.overrideWith((ref) async {});
 void _simulateOnboardingComplete() {
   SharedPreferences.setMockInitialValues({
     'pandapay_app.onboarding_complete_v1': true,
+    'pandapay_app.tutorial_seen_v1': true,
   });
 }
 

@@ -17,7 +17,9 @@ abstract class MerchantSearchRepository {
   /// the stable identifier carried by a scanned QR, while the display name
   /// may be absent or provider-generic (for example, "Paytm").
   Future<MerchantResolution?> resolveVpa(String vpa) =>
-      throw UnimplementedError('VPA resolution is not supported by this repository');
+      throw UnimplementedError(
+        'VPA resolution is not supported by this repository',
+      );
 }
 
 class MerchantResolution {
@@ -32,6 +34,7 @@ class MerchantResolution {
   final double? confidenceScore;
   final int? confirmationCount;
   final bool isP2p;
+  final bool mccOperatorVerified;
 
   const MerchantResolution({
     required this.merchantId,
@@ -45,6 +48,7 @@ class MerchantResolution {
     this.confidenceScore,
     this.confirmationCount,
     this.isP2p = false,
+    this.mccOperatorVerified = false,
   });
 
   factory MerchantResolution.fromJson(Map<String, dynamic> json) {
@@ -64,8 +68,27 @@ class MerchantResolution {
           ? null
           : int.tryParse(confirmations.toString()),
       isP2p: json['is_p2p'] == true,
+      mccOperatorVerified: json['mcc_operator_verified'] == true,
     );
   }
+}
+
+/// Supplies an MCC for an outbound UPI intent without guessing from merchant
+/// name/category. QR-provided MCC remains authoritative. For unsigned static
+/// QRs with no MCC, only an exact-VPA MCC explicitly verified by an operator
+/// may be added; confidence scores alone do not prove the acquiring MCC.
+String? safeMerchantMccForUpiHandoff({
+  required String? qrMcc,
+  required bool qrHasSignature,
+  required MerchantResolution? resolution,
+}) {
+  if (qrMcc != null && qrMcc.isNotEmpty) return qrMcc;
+  if (qrHasSignature || resolution == null || resolution.isP2p) return null;
+  final mcc = resolution.mcc;
+  if (mcc == null || mcc.isEmpty || !resolution.mccOperatorVerified) {
+    return null;
+  }
+  return mcc;
 }
 
 class HttpMerchantSearchRepository implements MerchantSearchRepository {
@@ -77,10 +100,14 @@ class HttpMerchantSearchRepository implements MerchantSearchRepository {
 
   @override
   Future<List<NearbyMerchantCandidate>> search(String query) async {
-    final uri = Uri.parse('$baseUrl/merchants/search').replace(queryParameters: {'q': query});
+    final uri = Uri.parse(
+      '$baseUrl/merchants/search',
+    ).replace(queryParameters: {'q': query});
     final response = await _client.get(uri);
     if (response.statusCode != 200) {
-      throw ApiException('GET /merchants/search failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'GET /merchants/search failed: ${response.statusCode} ${response.body}',
+      );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final merchants = (body['merchants'] as List).cast<Map<String, dynamic>>();
@@ -108,9 +135,9 @@ class HttpMerchantSearchRepository implements MerchantSearchRepository {
   Future<MerchantResolution?> resolveVpa(String vpa) async {
     final normalized = vpa.trim().toLowerCase();
     if (normalized.isEmpty) return null;
-    final uri = Uri.parse('$baseUrl/merchants/resolve').replace(
-      queryParameters: {'vpa': normalized},
-    );
+    final uri = Uri.parse(
+      '$baseUrl/merchants/resolve',
+    ).replace(queryParameters: {'vpa': normalized});
     final response = await _client.get(uri);
     if (response.statusCode != 200) {
       throw ApiException(

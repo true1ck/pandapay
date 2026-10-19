@@ -106,7 +106,10 @@ abstract class NearbyMerchantCacheRepository {
 /// The namespace is supplied by the app's session cache namespace so a cached
 /// location result from one signed-in profile is never shown to another.
 class SharedPreferencesNearbyMerchantCache {
-  static const _maxStale = Duration(minutes: 10);
+  // Keep the last successful result available through short public-map
+  // provider outages. The cache key is rounded to ~100m and scoped to the
+  // signed-in session, so this remains a local, coarse location snapshot.
+  static const _maxStale = Duration(hours: 24);
 
   final String namespace;
   final Future<SharedPreferences> _preferences;

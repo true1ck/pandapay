@@ -1965,7 +1965,8 @@ app.get('/merchants/resolve', async (req, res) => {
       client.query(
         `SELECT m.id AS merchant_id, m.vpa, m.display_name, m.mcc,
                 m.category_id, sc.name AS category_name, sc.slug AS category_slug,
-                m.confidence, m.confidence_score, m.confirmation_count, m.is_p2p
+                m.confidence, m.confidence_score, m.confirmation_count, m.is_p2p,
+                m.mcc_operator_verified
            FROM merchants m
            LEFT JOIN spend_categories sc ON sc.id = m.category_id
           WHERE m.is_published = true AND m.vpa = $1
@@ -7706,6 +7707,9 @@ app.post('/admin/merchants/:id/override', requireAdmin, async (req, res) => {
                 category_id = COALESCE($2, category_id),
                 mcc = COALESCE($3, mcc),
                 operator_locked = true,
+                mcc_operator_verified = CASE WHEN $3::text IS NOT NULL
+                                                   AND btrim($3::text) <> ''
+                                             THEN true ELSE mcc_operator_verified END,
                 updated_at = now()
           WHERE id = $4
       RETURNING *`,
@@ -7810,8 +7814,17 @@ app.post('/admin/merchant-conflicts/:id/resolve', requireAdmin, async (req, res)
       }
 
       await client.query(
-        `UPDATE merchants SET ${field} = $1, operator_locked = true, confidence = 'operator_verified', updated_at = now() WHERE id = $2`,
-        [resolvedValue, merchantId]
+        `UPDATE merchants
+            SET ${field} = $1,
+                operator_locked = true,
+                mcc_operator_verified = CASE WHEN $3 = 'mcc'
+                                                   AND $1::text IS NOT NULL
+                                                   AND btrim($1::text) <> ''
+                                             THEN true ELSE mcc_operator_verified END,
+                confidence = 'operator_verified',
+                updated_at = now()
+          WHERE id = $2`,
+        [resolvedValue, merchantId, field]
       );
 
       const updated = await client.query(

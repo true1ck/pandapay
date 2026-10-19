@@ -470,9 +470,21 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     }
     if (_state == _LoadState.error) {
       return Center(
-        child: Text(
-          _errorMessage ?? 'Something went wrong.',
-          style: BambooFonts.ui(13.5, color: BambooInk.clay),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _errorMessage ?? 'Something went wrong.',
+              textAlign: TextAlign.center,
+              style: BambooFonts.ui(13.5, color: BambooInk.clay),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => _checkNearby(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try again'),
+            ),
+          ],
         ),
       );
     }

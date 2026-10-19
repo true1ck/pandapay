@@ -7,6 +7,7 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/features/home/home_screen.dart';
+import 'package:pandapay/features/onboarding/permissions_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -54,9 +55,12 @@ Future<void> _pumpApp(
       ),
     ),
   );
-  // Splash, then session/onboarding resolution, then the redirect settling —
-  // all async and chained, so settle rather than guess a pump count.
-  await tester.pumpAndSettle();
+  // The signed-in setup route has an indeterminate progress animation, so
+  // pump a bounded amount of time for startup/redirects instead of waiting
+  // for every frame to settle forever.
+  for (var i = 0; i < 12; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 void main() {
@@ -120,7 +124,7 @@ void main() {
   testWidgets('a signed-in new account starts required setup', (tester) async {
     await _pumpApp(tester, onboardingComplete: false, signedIn: true);
 
-    expect(find.text('Set up a few permissions'), findsOneWidget);
+    expect(find.byType(PermissionsScreen), findsOneWidget);
     expect(find.byType(HomeScreen), findsNothing);
   });
 }

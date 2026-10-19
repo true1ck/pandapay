@@ -40,35 +40,38 @@ void main() {
       expect(result.first.categoryId, 'groceries');
     });
 
-    test('handles a merchant with no confirmed location row (null grid_lat/lng)', () async {
-      final client = MockClient((request) async {
-        return http.Response(
-          jsonEncode({
-            'merchants': [
-              {
-                'merchant_id': 'm2',
-                'display_name': 'New Merchant',
-                'category_id': null,
-                'confidence': 'low',
-                'grid_lat': null,
-                'grid_lng': null,
-              },
-            ],
-          }),
-          200,
+    test(
+      'handles a merchant with no confirmed location row (null grid_lat/lng)',
+      () async {
+        final client = MockClient((request) async {
+          return http.Response(
+            jsonEncode({
+              'merchants': [
+                {
+                  'merchant_id': 'm2',
+                  'display_name': 'New Merchant',
+                  'category_id': null,
+                  'confidence': 'low',
+                  'grid_lat': null,
+                  'grid_lng': null,
+                },
+              ],
+            }),
+            200,
+          );
+        });
+        final repo = HttpMerchantSearchRepository(
+          baseUrl: 'http://localhost:4000',
+          client: client,
         );
-      });
-      final repo = HttpMerchantSearchRepository(
-        baseUrl: 'http://localhost:4000',
-        client: client,
-      );
 
-      final result = await repo.search('new');
+        final result = await repo.search('new');
 
-      expect(result, hasLength(1));
-      expect(result.first.location.lat, 0);
-      expect(result.first.location.lng, 0);
-    });
+        expect(result, hasLength(1));
+        expect(result.first.location.lat, 0);
+        expect(result.first.location.lng, 0);
+      },
+    );
 
     test('resolves the exact VPA before payment', () async {
       final client = MockClient((request) async {
@@ -88,6 +91,7 @@ void main() {
               'confidence_score': 0.98,
               'confirmation_count': 12,
               'is_p2p': false,
+              'mcc_operator_verified': false,
             },
           }),
           200,
@@ -103,7 +107,77 @@ void main() {
       expect(result?.displayName, 'Srimal Super Store');
       expect(result?.mcc, '5411');
       expect(result?.categorySlug, 'groceries');
+      expect(result?.mccOperatorVerified, isFalse);
+      expect(
+        safeMerchantMccForUpiHandoff(
+          qrMcc: null,
+          qrHasSignature: false,
+          resolution: result,
+        ),
+        isNull,
+      );
     });
+
+    test(
+      'does not use weak, personal, or signed-QR MCC values for handoff',
+      () {
+        const weak = MerchantResolution(
+          merchantId: 'merchant-1',
+          vpa: 'shop@upi',
+          mcc: '5411',
+          confidence: 'high',
+          confidenceScore: 0.98,
+          confirmationCount: 12,
+        );
+        const personal = MerchantResolution(
+          merchantId: 'person-1',
+          vpa: 'person@upi',
+          mcc: '5411',
+          confidence: 'operator_verified',
+          isP2p: true,
+          mccOperatorVerified: true,
+        );
+        const verified = MerchantResolution(
+          merchantId: 'merchant-2',
+          vpa: 'shop@upi',
+          mcc: '5411',
+          mccOperatorVerified: true,
+        );
+
+        expect(
+          safeMerchantMccForUpiHandoff(
+            qrMcc: null,
+            qrHasSignature: false,
+            resolution: weak,
+          ),
+          isNull,
+        );
+        expect(
+          safeMerchantMccForUpiHandoff(
+            qrMcc: null,
+            qrHasSignature: false,
+            resolution: personal,
+          ),
+          isNull,
+        );
+        expect(
+          safeMerchantMccForUpiHandoff(
+            qrMcc: null,
+            qrHasSignature: true,
+            resolution: verified,
+          ),
+          isNull,
+        );
+        expect(
+          safeMerchantMccForUpiHandoff(
+            qrMcc: null,
+            qrHasSignature: false,
+            resolution: verified,
+          ),
+          '5411',
+        );
+      },
+    );
 
     test('returns null when the exact VPA is not in the directory', () async {
       final client = MockClient((request) async {
