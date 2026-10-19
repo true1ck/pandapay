@@ -47,9 +47,6 @@ services:
   api:
     build:
       context: ./api
-    depends_on:
-      maps-scraper:
-        condition: service_healthy
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -70,7 +67,6 @@ services:
       PARTNER_WEBHOOK_SECRET: "${PARTNER_WEBHOOK_SECRET:?}"
       IMAP_ENCRYPTION_KEY: "${IMAP_ENCRYPTION_KEY:?}"
       GOOGLE_PLACES_API_KEY: "${GOOGLE_PLACES_API_KEY:-}"
-      GOOGLE_MAPS_SCRAPER_URL: http://maps-scraper:8000
       # Remote push delivery is optional at the API layer. Keep these empty
       # until the private notification provider is configured; the API then
       # exposes the notification routes and reports a truthful 503 instead of
@@ -80,19 +76,6 @@ services:
       NOTIFICATION_SERVICE_TIMEOUT_MS: "${NOTIFICATION_SERVICE_TIMEOUT_MS:-4000}"
     ports:
       - "127.0.0.1:4000:4000"
-
-  maps-scraper:
-    build:
-      context: ./maps-scraper
-    restart: unless-stopped
-    init: true
-    logging: *default-logging
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)"]
-      interval: 15s
-      timeout: 3s
-      retries: 20
-      start_period: 60s
 
   auth:
     build:

@@ -162,7 +162,7 @@ docker compose -f docker-compose.prod.yml --env-file .env \
   up --build --abort-on-container-exit --exit-code-from db-migrate db-migrate
 
 echo "==> Rebuilding and restarting services"
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build api auth backup maps-scraper
+docker compose -f docker-compose.prod.yml --env-file .env up -d --build api auth backup
 
 echo "==> Waiting for health"
 for i in $(seq 1 30); do
@@ -173,7 +173,7 @@ for i in $(seq 1 30); do
   fi
   if [ "$i" -eq 30 ]; then
     echo "FATAL: services did not become healthy"
-    docker compose -f docker-compose.prod.yml logs --tail=40 api auth maps-scraper
+    docker compose -f docker-compose.prod.yml logs --tail=40 api auth
     exit 1
   fi
   sleep 10

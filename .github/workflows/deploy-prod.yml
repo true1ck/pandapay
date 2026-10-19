@@ -139,7 +139,7 @@ jobs:
               partial: payload.partial === true,
             }));
             if (!response.ok || count < 0
-              || !['google_maps', 'openstreetmap_fallback'].includes(payload.source)) {
+              || !['google_places', 'google_maps', 'openstreetmap_fallback'].includes(payload.source)) {
               process.exitCode = 1;
             }
           }
@@ -150,11 +150,11 @@ jobs:
           });
           NODE
 
-      - name: Show sanitized maps scraper diagnostics
+      - name: Show sanitized API diagnostics
         if: failure()
         env:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}
         run: |
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
-            'cd /home/ubuntu/apps/pandapay && docker compose --env-file .env -f docker-compose.prod.yml logs --tail=80 maps-scraper'
+            'cd /home/ubuntu/apps/pandapay && docker compose --env-file .env -f docker-compose.prod.yml logs --tail=80 api'

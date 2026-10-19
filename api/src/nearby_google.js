@@ -127,14 +127,13 @@ async function fetchGooglePlacesNearby({
   return candidates;
 }
 
-/** Prefer Google Places (or legacy Maps scraper), then return explicitly labeled OSM candidates on error. */
+/** Prefer Google Places API (New), then return explicitly labeled OSM candidates on error or empty results. */
 async function discoverNearby({
   lat,
   lng,
   radiusM,
   categoryId,
   googleApiKey = process.env.GOOGLE_PLACES_API_KEY,
-  scraperUrl = process.env.GOOGLE_MAPS_SCRAPER_URL,
   fetchImpl = globalThis.fetch,
   fallbackDiscover,
   timeoutMs = GOOGLE_LOOKUP_TIMEOUT_MS,
@@ -169,38 +168,8 @@ async function discoverNearby({
     } finally {
       clearTimeout(timeout);
     }
-  } else if (scraperUrl) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetchImpl(`${scraperUrl.replace(/\/$/, '')}/nearby`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ lat, lng, radius_m: radiusM }),
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error(`scraper returned ${response.status}`);
-      const payload = await response.json();
-      if (!payload || !Array.isArray(payload.merchants)) {
-        throw new Error('scraper returned an invalid response');
-      }
-      if (payload.merchants.length > 0) {
-        return {
-          source: 'google_maps',
-          radius_m: radiusM,
-          merchants: payload.merchants,
-          partial: payload.partial === true,
-          failed_categories: Number(payload.failed_categories) || 0,
-        };
-      }
-      googleFailure = new Error('Google Maps returned no nearby merchants');
-    } catch (error) {
-      googleFailure = error;
-    } finally {
-      clearTimeout(timeout);
-    }
   } else {
-    googleFailure = new Error('Google Maps scraper is not configured');
+    googleFailure = new Error('Google Places API key is not configured');
   }
 
   try {

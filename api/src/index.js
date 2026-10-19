@@ -1025,7 +1025,6 @@ app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
   if (radiusM !== 2000) {
     return res.status(400).json({ error: 'radiusM must be 2000' });
   }
-  const scraperUrl = process.env.GOOGLE_MAPS_SCRAPER_URL;
   const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
   try {
     const result = await nearbyGoogle.discoverNearby({
@@ -1033,7 +1032,6 @@ app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
       lng,
       radiusM,
       googleApiKey,
-      scraperUrl,
       fallbackDiscover: (params) => nearbyGoogleFallback.discover(params),
     });
     if (result.degraded) {
