@@ -19,7 +19,7 @@ _cache: dict[str, tuple[float, list[dict], int]] = {}
 _inflight: dict[str, asyncio.Task] = {}
 _lock = asyncio.Lock()
 _scrape_semaphore = asyncio.Semaphore(3)
-_category_timeout_seconds = 45
+_category_timeout_seconds = 12
 _lookup_timeout_seconds = 55
 _queries = (
     ("groceries", "supermarkets grocery stores"),

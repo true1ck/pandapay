@@ -218,6 +218,7 @@ function createNearbyDiscovery({
   searchEndpoint = DEFAULT_SEARCH_ENDPOINT,
   searchEndpoints,
   ttlMs = DISCOVERY_TTL_MS,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('A fetch implementation is required');
   const providerEndpoints = [...new Set(
@@ -264,7 +265,7 @@ function createNearbyDiscovery({
       let lastError;
       for (const providerEndpoint of providerEndpoints) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
         try {
           const response = await fetchImpl(providerEndpoint, {
             method: 'POST',

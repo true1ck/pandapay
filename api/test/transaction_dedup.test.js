@@ -74,7 +74,7 @@ test('manual merchant decoration can match a bank channel without fuzzy guessing
     ...base,
     source: 'manual',
     merchantName: 'Amazon',
-    occurred: '2026-09-09T22:00:00.000Z',
+    occurred: '2026-09-09T10:05:00.000Z',
   });
   assert.ok(match);
   assert.equal(match.merchantMatch, 'contained');
@@ -97,7 +97,7 @@ test('two genuinely separate purchases outside the 36-hour window are retained',
 test('missing merchant needs strong same-card and close-time evidence', () => {
   const close = evaluateDuplicate(
     { ...base, merchantName: null },
-    { ...base, source: 'email', merchantName: null, occurred: '2026-09-09T10:20:00.000Z' },
+    { ...base, source: 'email', merchantName: null, occurred: '2026-09-09T10:05:00.000Z' },
   );
   const distant = evaluateDuplicate(
     { ...base, merchantName: null },

@@ -14,6 +14,7 @@ const importResolvers = require('./import_resolvers');
 const { testImapLogin } = require('./imap_test');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
+const nearbyGoogle = require('./nearby_google');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const rewardMath = require('./reward_math');
 const { registerSplitRoutes } = require('./transaction_splits');
@@ -52,6 +53,9 @@ const testNotificationLimiter = createTestNotificationLimiter();
 // tables. A future multi-instance deployment can replace this provider with a
 // shared cache without changing the mobile contract.
 const nearbyDiscovery = createNearbyDiscovery();
+// Bound each public OSM failover attempt for the Google-backed route so the
+// fallback fits within the mobile client's foreground request deadline.
+const nearbyGoogleFallback = createNearbyDiscovery({ timeoutMs: 2500 });
 
 function uniqueSmsPatternIssuerId(patterns, sender) {
   const issuerIds = new Set(
@@ -1022,48 +1026,31 @@ app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'radiusM must be 2000' });
   }
   const scraperUrl = process.env.GOOGLE_MAPS_SCRAPER_URL;
-  if (!scraperUrl) {
-    return res.status(503).json({ error: 'nearby_discovery_unavailable', unavailable: true });
-  }
-  const controller = new AbortController();
-  // The scraper runs three category searches in parallel and allows up to
-  // 25 seconds overall. Keep this deadline bounded but above the scraper's
-  // full lookup budget so it can return complete or partial results.
-  const timeout = setTimeout(() => controller.abort(), 70000);
   try {
-    const response = await fetch(`${scraperUrl.replace(/\/$/, '')}/nearby`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ lat, lng, radius_m: radiusM }),
-      signal: controller.signal,
+    const result = await nearbyGoogle.discoverNearby({
+      lat,
+      lng,
+      radiusM,
+      scraperUrl,
+      fallbackDiscover: (params) => nearbyGoogleFallback.discover(params),
     });
-    if (!response.ok) {
-      const error = new Error(`scraper returned ${response.status}`);
-      error.status = response.status;
-      throw error;
+    if (result.degraded) {
+      console.warn('POST /merchants/nearby/google using fallback provider', {
+        requestId: req.requestId,
+      });
     }
-    const payload = await response.json();
-    res.json({
-      source: 'google_maps',
-      radius_m: radiusM,
-      merchants: payload.merchants || [],
-      partial: payload.partial === true,
-      failed_categories: Number(payload.failed_categories) || 0,
-    });
+    res.json(result);
   } catch (err) {
-    // Do not include the request body: it contains precise user coordinates.
     console.warn('POST /merchants/nearby/google unavailable', {
       requestId: req.requestId,
-      reason: err.name === 'AbortError' ? 'scraper_timeout' : 'scraper_error',
-      status: err.status || null,
+      googleFailure: err.googleFailure?.name || 'unavailable',
+      fallbackFailure: err.cause?.name || 'unavailable',
     });
     res.status(503).json({
       error: 'nearby_discovery_unavailable',
       unavailable: true,
-      message: 'Google Maps nearby lookup is temporarily unavailable. Please retry.',
+      message: 'Nearby merchant lookup is temporarily unavailable. Please retry.',
     });
-  } finally {
-    clearTimeout(timeout);
   }
 });
 
