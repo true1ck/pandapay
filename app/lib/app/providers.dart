@@ -50,6 +50,7 @@ import '../data/sync_api.dart';
 import '../data/token_store.dart';
 import '../data/upi_payment_service.dart';
 import '../data/user_cards_repository.dart';
+import '../data/user_categories_repository.dart';
 import '../data/user_settings_api.dart';
 import '../features/geofence/geofence_monitor_service.dart';
 import '../features/geofence/background_alerts_controller.dart';
@@ -4026,6 +4027,8 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
 
 final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
   final cache = await _cacheOrNull(ref);
+  final namespace = ref.read(cacheNamespaceProvider);
+  final customCategories = await _readCustomCategories(namespace);
   final cached = await cache?.get(_categoriesCacheKey);
   if (cached != null) {
     try {
@@ -4034,7 +4037,10 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
           .cast<Map<String, dynamic>>()
           .map(SpendCategory.fromJson)
           .toList();
-      if (categories.isNotEmpty) return categories;
+      final hasEmi = categories.any((category) => category.slug == 'emi');
+      if (categories.isNotEmpty && hasEmi) {
+        return [...categories, ...customCategories];
+      }
     } catch (_) {}
   }
   try {
@@ -4050,15 +4056,17 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
     } catch (_) {
       // A cache write must never keep the Home recommendation state pending.
     }
-    return categories;
+    return [...categories, ...customCategories];
   } catch (_) {
     try {
       if (cached != null) {
         final body = jsonDecode(cached) as Map<String, dynamic>;
-        return (body['categories'] as List)
-            .cast<Map<String, dynamic>>()
-            .map(SpendCategory.fromJson)
-            .toList();
+        return [
+          ...(body['categories'] as List).cast<Map<String, dynamic>>().map(
+            SpendCategory.fromJson,
+          ),
+          ...customCategories,
+        ];
       }
     } catch (_) {
       // Fall through to the category-less ranking path below.

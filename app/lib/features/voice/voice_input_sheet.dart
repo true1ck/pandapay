@@ -7,8 +7,10 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/category_picker.dart';
 import '../../app/providers.dart';
-import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/catalogue_repository.dart'
+    show SpendCategory, categoryIdForServer;
 import '../../data/user_cards_repository.dart' show TxnInstrument, UserCard;
 import 'voice_action_parser.dart';
 
@@ -341,7 +343,7 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
                 ? editor.selectedCardId
                 : null,
             amount: Money.fromRupees(value.amount!),
-            categoryId: editor.selectedCategoryId,
+            categoryId: categoryIdForServer(editor.selectedCategoryId),
             merchantName: editor.merchantController.text.trim().isEmpty
                 ? null
                 : editor.merchantController.text.trim(),
@@ -621,17 +623,11 @@ class _VoiceInputSheetState extends ConsumerState<VoiceInputSheet> {
         ),
         const SizedBox(height: 12),
         if (draft.type == VoiceActionType.expense) ...[
-          DropdownButtonFormField<String>(
-            initialValue: editor.selectedCategoryId,
-            decoration: const InputDecoration(labelText: 'Category'),
-            items: [
-              for (final category in categories)
-                DropdownMenuItem(
-                  value: category.id,
-                  child: Text(category.name),
-                ),
-            ],
-            onChanged: (value) =>
+          CategoryPickerField(
+            categories: categories,
+            selectedId: editor.selectedCategoryId,
+            label: 'Category',
+            onSelected: (value) =>
                 setState(() => editor.selectedCategoryId = value),
           ),
           const SizedBox(height: 12),

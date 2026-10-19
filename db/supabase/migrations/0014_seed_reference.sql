@@ -14,6 +14,7 @@ insert into spend_categories (slug, name, is_primary_chip, sort_order) values
   ('wallet','Wallet Load',  false, 110),
   ('entertainment','Entertainment', false, 120),
   ('health','Health & Pharmacy', false, 130),
+  ('emi','EMI',                false, 140),
   ('other','Other',         false, 999)
 on conflict (slug) do nothing;
 

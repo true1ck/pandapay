@@ -4,10 +4,12 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart' show CardOverride;
-import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/catalogue_repository.dart'
+    show SpendCategory, categoryIdForServer;
 import '../../data/override_resolver.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
@@ -224,15 +226,16 @@ class _BigPurchaseCalculatorScreenState
         .where((c) => wallet.any((w) => w.cardProductId == c.id))
         .toList();
 
-    final categorySlug = _categoryId == null
+    final effectiveCategoryId = categoryIdForServer(_categoryId);
+    final categorySlug = effectiveCategoryId == null
         ? null
         : categories.valueOrNull
-              ?.where((c) => c.id == _categoryId)
+              ?.where((c) => c.id == effectiveCategoryId)
               .firstOrNull
               ?.slug;
     final context = RecommendationContext(
       amount: _amount,
-      categoryId: _categoryId,
+      categoryId: effectiveCategoryId,
       categorySlug: categorySlug,
       rail: TxnRail.swipe,
       now: DateTime.now(),
@@ -245,7 +248,7 @@ class _BigPurchaseCalculatorScreenState
     final overrideProductId = resolveActiveOverrideCardProductId(
       overrides: overrides.requireValue,
       wallet: wallet,
-      categoryId: _categoryId,
+      categoryId: effectiveCategoryId,
     );
     final snapshots = owned.map((c) {
       final uc = wallet.where((w) => w.cardProductId == c.id).first;
@@ -434,7 +437,7 @@ class _BigPurchaseCalculatorScreenState
   }
 }
 
-class _CategoryPicker extends StatelessWidget {
+class _CategoryPicker extends ConsumerWidget {
   final List<SpendCategory> categories;
   final String? selectedId;
   final ValueChanged<String?> onSelected;
@@ -446,50 +449,12 @@ class _CategoryPicker extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final validSelectedId =
-        categories.any((category) => category.id == selectedId)
-        ? selectedId
-        : null;
-
-    return DropdownButtonFormField<String>(
-      value: validSelectedId,
-      isExpanded: true,
-      icon: const Icon(Icons.keyboard_arrow_down_rounded),
-      style: BambooFonts.ui(
-        14,
-        weight: FontWeight.w600,
-        color: BambooInk.ink900,
-      ),
-      decoration: InputDecoration(
-        labelText: 'Purchase category',
-        labelStyle: BambooFonts.ui(12.5, color: BambooInk.ink500),
-        prefixIcon: const Icon(Icons.category_outlined, size: 20),
-        filled: true,
-        fillColor: BambooInk.glassFillOnPaper,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-        ),
-      ),
-      hint: const Text('Choose a category'),
-      items: [
-        for (final category in categories)
-          DropdownMenuItem<String>(
-            value: category.id,
-            child: Text(category.name, overflow: TextOverflow.ellipsis),
-          ),
-      ],
-      onChanged: onSelected,
+  Widget build(BuildContext context, WidgetRef ref) {
+    return CategoryPickerField(
+      categories: categories,
+      selectedId: selectedId,
+      onSelected: onSelected,
+      label: 'Purchase category',
     );
   }
 }

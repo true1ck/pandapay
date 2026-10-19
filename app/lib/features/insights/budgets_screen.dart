@@ -337,8 +337,10 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final categories =
-        ref.watch(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+    final categories = (ref.watch(categoriesProvider).valueOrNull ??
+            const <SpendCategory>[])
+        .where((category) => !category.isCustom)
+        .toList();
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
 
     return SafeArea(

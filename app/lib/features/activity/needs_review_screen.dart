@@ -5,8 +5,10 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
+import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/catalogue_repository.dart' show categoryIdForServer;
 import '../../data/needs_review_repository.dart';
 import '../../data/user_cards_repository.dart' show TxnInstrument;
 
@@ -150,7 +152,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           .logTransaction(
             userCardId: result.cardId,
             amount: Money.fromRupees(result.amount),
-            categoryId: result.categoryId,
+            categoryId: categoryIdForServer(result.categoryId),
             instrument: result.instrument,
           );
       await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
@@ -384,15 +386,11 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
             ),
           ],
           const SizedBox(height: AppSpace.lg),
-          DropdownButtonFormField<String>(
-            initialValue: _categoryId,
-            style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-            decoration: inputDecoration('Category (optional)'),
-            items: [
-              for (final c in categories)
-                DropdownMenuItem(value: c.id, child: Text(c.name)),
-            ],
-            onChanged: (v) => setState(() => _categoryId = v),
+          CategoryPickerField(
+            categories: categories,
+            selectedId: _categoryId,
+            label: 'Category (optional)',
+            onSelected: (v) => setState(() => _categoryId = v),
           ),
           const SizedBox(height: AppSpace.xl),
           FilledButton(

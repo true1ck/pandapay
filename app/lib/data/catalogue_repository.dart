@@ -40,13 +40,33 @@ class SpendCategory {
   final String id;
   final String slug;
   final String name;
-  const SpendCategory({required this.id, required this.slug, required this.name});
+  final bool isCustom;
+  const SpendCategory({
+    required this.id,
+    required this.slug,
+    required this.name,
+    this.isCustom = false,
+  });
 
   factory SpendCategory.fromJson(Map<String, dynamic> json) =>
-      SpendCategory(id: json['id'] as String, slug: json['slug'] as String, name: json['name'] as String);
+      SpendCategory(
+        id: json['id'] as String,
+        slug: json['slug'] as String,
+        name: json['name'] as String,
+        isCustom: json['isCustom'] == true || json['is_custom'] == true,
+      );
 
-  Map<String, dynamic> toJson() => {'id': id, 'slug': slug, 'name': name};
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'slug': slug,
+    'name': name,
+    if (isCustom) 'isCustom': true,
+  };
 }
+
+bool isCustomCategoryId(String? id) => id?.startsWith('custom:') == true;
+
+String? categoryIdForServer(String? id) => isCustomCategoryId(id) ? null : id;
 
 abstract class CategoryRepository {
   Future<List<SpendCategory>> fetchCategories();

@@ -14,9 +14,11 @@ import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
-import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/catalogue_repository.dart'
+    show SpendCategory, categoryIdForServer;
 import '../../data/receipt_parser.dart' show parseReceiptLines;
 import '../../data/import_models.dart' show ParsedStatementLine;
 import '../../data/user_cards_repository.dart'
@@ -667,38 +669,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Future<void> _chooseCategory(List<SpendCategory> categories) async {
-    final selection = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: BambooInk.paper,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-              child: Text(
-                'Choose a category',
-                style: BambooFonts.heading(18, color: BambooInk.ink900),
-              ),
-            ),
-            for (final category in categories)
-              ListTile(
-                leading: _CategoryIcon(
-                  label: category.name,
-                  size: 40,
-                  selected: _selectedCategoryId == category.id,
-                ),
-                title: Text(category.name),
-                trailing: _selectedCategoryId == category.id
-                    ? const Icon(Icons.check_circle, color: BambooInk.slate)
-                    : null,
-                onTap: () => Navigator.of(sheetContext).pop(category.id),
-              ),
-          ],
-        ),
-      ),
+    final selection = await showCategoryBottomSheet(
+      context,
+      ref,
+      categories,
+      selectedId: _selectedCategoryId,
     );
     if (selection != null && mounted) {
       setState(() => _selectedCategoryId = selection);
@@ -779,7 +754,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             ? _selectedUserCardId
             : null,
         amount: Money.fromRupees(amount),
-        categoryId: _selectedCategoryId,
+        categoryId: categoryIdForServer(_selectedCategoryId),
         merchantName: merchantName,
         occurredAt: effectiveOccurredAt,
         note: note,
@@ -910,7 +885,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 ? _selectedUserCardId
                 : null,
             amount: Money.fromRupees(amount),
-            categoryId: _selectedCategoryId,
+            categoryId: categoryIdForServer(_selectedCategoryId),
             merchantName: merchantName,
             occurredAt: effectiveOccurredAt,
             note: note,

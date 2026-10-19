@@ -71,7 +71,9 @@ class ManualOverridesScreen extends ConsumerWidget {
 
   Future<void> _openCreateSheet(BuildContext context, WidgetRef ref) async {
     final userCards = await ref.read(userCardsProvider.future);
-    final categories = await ref.read(categoriesProvider.future);
+    final categories = (await ref.read(categoriesProvider.future))
+        .where((category) => !category.isCustom)
+        .toList();
     if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,

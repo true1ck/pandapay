@@ -5,8 +5,10 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/catalogue_repository.dart' show categoryIdForServer;
 import '../../data/user_cards_repository.dart';
 
 /// D3 Edit Transaction (ui-spec Group D). All fields editable, explicit
@@ -110,7 +112,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           fields: {
             'amount_inr': amount,
             'occurred_at': _occurredAt?.toIso8601String(),
-            'category_id': _categoryId,
+            'category_id': categoryIdForServer(_categoryId),
             'merchant_name': _merchantController.text.trim().isEmpty
                 ? null
                 : _merchantController.text.trim(),
@@ -172,7 +174,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       widget.transactionId,
       amountInr: amount,
       occurredAt: _occurredAt,
-      categoryId: _categoryId,
+      categoryId: categoryIdForServer(_categoryId),
       merchantName: _merchantController.text.trim().isEmpty
           ? null
           : _merchantController.text.trim(),
@@ -383,15 +385,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       ),
                     ],
                     const SizedBox(height: AppSpace.lg),
-                    DropdownButtonFormField<String>(
-                      initialValue: _categoryId,
-                      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                      decoration: inputDecoration('Category'),
-                      items: [
-                        for (final c in categories)
-                          DropdownMenuItem(value: c.id, child: Text(c.name)),
-                      ],
-                      onChanged: (v) => setState(() => _categoryId = v),
+                    CategoryPickerField(
+                      categories: categories,
+                      selectedId: _categoryId,
+                      label: 'Category',
+                      onSelected: (v) => setState(() => _categoryId = v),
                     ),
                     const SizedBox(height: AppSpace.lg),
                     Material(

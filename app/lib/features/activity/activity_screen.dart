@@ -410,7 +410,9 @@ class _FilterRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
-    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final categories = (ref.watch(categoriesProvider).valueOrNull ?? const [])
+        .where((category) => !category.isCustom)
+        .toList();
 
     return SizedBox(
       height: 40,

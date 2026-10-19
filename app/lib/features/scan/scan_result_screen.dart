@@ -6,10 +6,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart';
-import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/catalogue_repository.dart'
+    show SpendCategory, categoryIdForServer;
 import '../../data/merchant_search_repository.dart'
     show MerchantResolution, safeMerchantMccForUpiHandoff;
 import '../../data/override_resolver.dart';
@@ -251,8 +253,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       mcc: effectiveMcc,
       categories: categoryList,
     );
-    final selectedCategoryForRanking =
-        activeCategoryId ?? localInferredCategoryId;
+    final selectedCategoryForRanking = categoryIdForServer(
+      activeCategoryId ?? localInferredCategoryId,
+    );
 
     // ui-spec B1 says "No cards → CTA to add one". B3 has no rule of its own,
     // so: with an empty wallet still rank the whole catalogue (a useful
@@ -678,7 +681,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         await _openPaymentSent(
           rec: rec,
           wallet: wallet,
-          categoryId: categoryId,
+          categoryId: categoryIdForServer(categoryId),
           autoLog: false,
         );
         break;
@@ -687,7 +690,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         await _openPaymentSent(
           rec: rec,
           wallet: wallet,
-          categoryId: categoryId,
+          categoryId: categoryIdForServer(categoryId),
           autoLog: false,
         );
         break;
@@ -743,7 +746,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     await _openPaymentSent(
       rec: rec,
       wallet: wallet,
-      categoryId: categoryId,
+      categoryId: categoryIdForServer(categoryId),
       autoLog: false,
     );
   }
@@ -771,7 +774,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
           amount: _amount,
           cardName: rec.card.name,
           userCardId: owned?.id,
-          categoryId: categoryId,
+          categoryId: categoryIdForServer(categoryId),
           merchantVpa: widget.parsed.pa,
           mcc:
               widget.parsed.mc ??
@@ -895,7 +898,7 @@ String? _upiResponseField(String? raw, String wantedKey) {
   return null;
 }
 
-class _CategoryPicker extends StatelessWidget {
+class _CategoryPicker extends ConsumerWidget {
   final List<SpendCategory> categories;
   final String? selectedId;
   final ValueChanged<String?> onSelected;
@@ -906,50 +909,12 @@ class _CategoryPicker extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final validSelectedId =
-        categories.any((category) => category.id == selectedId)
-        ? selectedId
-        : null;
-
-    return DropdownButtonFormField<String>(
-      initialValue: validSelectedId,
-      isExpanded: true,
-      icon: const Icon(Icons.keyboard_arrow_down_rounded),
-      style: BambooFonts.ui(
-        14,
-        weight: FontWeight.w600,
-        color: BambooInk.ink900,
-      ),
-      decoration: InputDecoration(
-        labelText: 'Purchase type',
-        labelStyle: BambooFonts.ui(12.5, color: BambooInk.ink500),
-        prefixIcon: const Icon(Icons.category_outlined, size: 20),
-        filled: true,
-        fillColor: BambooInk.glassFillOnPaper,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-        ),
-      ),
-      hint: const Text('Choose a category'),
-      items: [
-        for (final category in categories)
-          DropdownMenuItem<String>(
-            value: category.id,
-            child: Text(category.name, overflow: TextOverflow.ellipsis),
-          ),
-      ],
-      onChanged: onSelected,
+  Widget build(BuildContext context, WidgetRef ref) {
+    return CategoryPickerField(
+      categories: categories,
+      selectedId: selectedId,
+      onSelected: onSelected,
+      label: 'Purchase type',
     );
   }
 }
