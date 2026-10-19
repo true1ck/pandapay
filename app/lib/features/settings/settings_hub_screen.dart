@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/env.dart';
 import '../../app/providers.dart';
 import '../account/account_screen.dart' show AccountTile;
+import '../cards/card_skin_preview_screen.dart';
 import '../cards/my_cards_screen.dart';
 import '../home_widget/widget_settings_screen.dart';
 import '../import/import_hub_screen.dart';
@@ -119,6 +121,14 @@ class SettingsHubScreen extends ConsumerWidget {
                 }
               },
             ),
+            if (Env.isDev) ...[
+              const SizedBox(height: AppSpace.sm),
+              AccountTile(
+                icon: Icons.palette_outlined,
+                label: 'Preview card skins',
+                onTap: () => open(const CardSkinPreviewScreen()),
+              ),
+            ],
             const SizedBox(height: AppSpace.xxl),
 
             const _GroupHeader('Account'),

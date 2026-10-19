@@ -4,6 +4,33 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../data/user_cards_repository.dart';
 
+/// Stable, inspectable output of the generated card-skin resolver. The
+/// preview/diagnostic screen uses this without duplicating the visual rules.
+class CardVisualSpec {
+  final String family;
+  final String skin;
+  final Color primary;
+  final Color secondary;
+
+  const CardVisualSpec({
+    required this.family,
+    required this.skin,
+    required this.primary,
+    required this.secondary,
+  });
+}
+
+CardVisualSpec cardVisualSpecFor(CardProduct product) {
+  final skin = _skinFor(product);
+  final palette = _paletteFor(product, skin);
+  return CardVisualSpec(
+    family: _visualFamily(product).name,
+    skin: skin.name,
+    primary: palette.primary,
+    secondary: palette.secondary,
+  );
+}
+
 /// A recognisable, catalogue-driven card face used wherever PandaPay shows a
 /// card. Catalogue art is optional, so the fallback is deliberately generated
 /// from issuer, product and network data instead of showing a generic icon.
@@ -36,7 +63,9 @@ class CardVisual extends StatelessWidget {
     // Card colour is always derived from the catalogue product/issuer. There
     // is intentionally no neutral/silver override: the same HDFC, Axis,
     // Kotak, etc. palette must follow the card everywhere in the app.
-    final palette = _paletteFor(product);
+    final skin = _skinFor(product);
+    final palette = _paletteFor(product, skin);
+    final seed = _stableSeed('${product.id}:${product.name}');
     return LayoutBuilder(
       builder: (context, constraints) {
         // Picker rows and capability headers intentionally use a tiny card
@@ -71,9 +100,10 @@ class CardVisual extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 CustomPaint(
-                  painter: _CardPatternPainter(
+                  painter: _CardSkinPainter(
                     color: palette.foreground.withValues(alpha: 0.16),
-                    seed: product.id.hashCode.abs(),
+                    seed: seed,
+                    skin: skin,
                   ),
                 ),
                 if (compact) ...[
@@ -339,13 +369,118 @@ class _CardPalette {
   });
 }
 
-_CardPalette _paletteFor(CardProduct product) {
+enum _CardSkin {
+  orbit,
+  wave,
+  grid,
+  dots,
+  prism,
+  rings,
+  diagonal,
+  minimal,
+}
+
+enum _CardVisualFamily {
+  coBranded,
+  cashback,
+  travel,
+  premium,
+  digital,
+  debit,
+  everyday,
+}
+
+_CardVisualFamily _visualFamily(CardProduct product) {
+  final text = '${product.issuerName ?? ''} ${product.name}'.toLowerCase();
+  final type = product.cardType?.toLowerCase() ?? '';
+
+  if (type.contains('debit')) return _CardVisualFamily.debit;
+  if (RegExp(
+    r'amazon|flipkart|swiggy|tata\s+neu|airtel|indigo|ixigo|marriott|myntra|cleartrip|paytm|onecard|scapia',
+  ).hasMatch(text)) {
+    return _CardVisualFamily.coBranded;
+  }
+  if (RegExp(
+    r'cashback|cash\s*back|moneyback|ace|simplyclick|sbi card cash',
+  ).hasMatch(text)) {
+    return _CardVisualFamily.cashback;
+  }
+  if (RegExp(
+    r'travel|atlas|miles|vistara|flight|airport|voyage|scapia',
+  ).hasMatch(text)) {
+    return _CardVisualFamily.travel;
+  }
+  if (RegExp(
+    r'infinite|signature|regalia|diners club|platinum|metal|reserve|elite',
+  ).hasMatch(text)) {
+    return _CardVisualFamily.premium;
+  }
+  if (RegExp(r'neo|coral|pay|upi|digital|virtual').hasMatch(text)) {
+    return _CardVisualFamily.digital;
+  }
+  return _CardVisualFamily.everyday;
+}
+
+_CardSkin _skinFor(CardProduct product) {
+  final text = '${product.issuerName ?? ''} ${product.name}'.toLowerCase();
+
+  // A few recognisable families get a stable visual language. Everything
+  // else is distributed across the remaining skins using the product id, so
+  // two products from the same issuer do not all collapse into one template.
+  if (text.contains('amazon')) return _CardSkin.diagonal;
+  if (text.contains('swiggy')) return _CardSkin.dots;
+  if (text.contains('tata neu')) return _CardSkin.wave;
+  if (text.contains('moneyback')) return _CardSkin.prism;
+  if (text.contains('amex') || text.contains('american express')) {
+    return _CardSkin.rings;
+  }
+
+  final seed = _stableSeed('${product.id}:${product.name}');
+  final familySkins = switch (_visualFamily(product)) {
+    _CardVisualFamily.coBranded => const [
+      _CardSkin.wave,
+      _CardSkin.diagonal,
+      _CardSkin.dots,
+    ],
+    _CardVisualFamily.cashback => const [
+      _CardSkin.prism,
+      _CardSkin.grid,
+      _CardSkin.dots,
+    ],
+    _CardVisualFamily.travel => const [
+      _CardSkin.rings,
+      _CardSkin.orbit,
+      _CardSkin.wave,
+    ],
+    _CardVisualFamily.premium => const [
+      _CardSkin.minimal,
+      _CardSkin.rings,
+      _CardSkin.prism,
+    ],
+    _CardVisualFamily.digital => const [
+      _CardSkin.grid,
+      _CardSkin.diagonal,
+      _CardSkin.wave,
+    ],
+    _CardVisualFamily.debit => const [
+      _CardSkin.grid,
+      _CardSkin.minimal,
+      _CardSkin.dots,
+    ],
+    _CardVisualFamily.everyday => _CardSkin.values,
+  };
+  return familySkins[seed % familySkins.length];
+}
+
+_CardPalette _paletteFor(CardProduct product, _CardSkin skin) {
   final custom = _parseHexColor(product.artPrimaryColor);
   final text = '${product.issuerName ?? ''} ${product.name}'.toLowerCase();
 
-  final base = custom ?? _issuerBaseColor(text, product.id);
-  final secondary = Color.lerp(base, Colors.black, 0.28)!;
-  final foreground = base.computeLuminance() > 0.58
+  final seed = _stableSeed('${product.id}:${product.name}');
+  final base = custom ?? _productBaseColor(product, text, seed);
+  final secondary = _secondaryColor(base, seed, skin);
+  final backgroundTone = Color.lerp(base, secondary, 0.42)!;
+  final foreground = backgroundTone.computeLuminance() > 0.58
       ? BambooInk.ink900
       : Colors.white;
 
@@ -359,6 +494,59 @@ _CardPalette _paletteFor(CardProduct product) {
     foreground: foreground,
     foregroundMuted: foreground.withValues(alpha: 0.72),
   );
+}
+
+Color _productBaseColor(CardProduct product, String text, int seed) {
+  // Product-specific colours take precedence over the issuer colour. These
+  // are visual identifiers, not claims that the generated face is an exact
+  // reproduction of the bank's current artwork.
+  if (text.contains('tata neu')) return const Color(0xFF17856F);
+  if (text.contains('moneyback')) return const Color(0xFF0B4778);
+  if (text.contains('regalia')) return const Color(0xFF343A46);
+  if (text.contains('millennia')) return const Color(0xFF8E2345);
+  if (text.contains('amazon')) return const Color(0xFF173D67);
+  if (text.contains('swiggy')) return const Color(0xFFE75D4F);
+
+  final issuer = _issuerBaseColor(text);
+  final familyBase = switch (_visualFamily(product)) {
+    _CardVisualFamily.coBranded => const Color(0xFF168A78),
+    _CardVisualFamily.cashback => const Color(0xFFB24A3A),
+    _CardVisualFamily.travel => const Color(0xFF145A78),
+    _CardVisualFamily.premium => const Color(0xFF343A46),
+    _CardVisualFamily.digital => const Color(0xFF5B3A85),
+    _CardVisualFamily.debit => const Color(0xFF26705B),
+    _CardVisualFamily.everyday => const Color(0xFF3F4C8A),
+  };
+  final variants = [
+    familyBase,
+    const Color(0xFF146C94),
+    const Color(0xFF6A3A69),
+    const Color(0xFF247A68),
+    const Color(0xFF9A5C2E),
+    const Color(0xFF343B70),
+    const Color(0xFF7B304C),
+  ];
+  return Color.lerp(issuer, variants[seed % variants.length], 0.48)!;
+}
+
+Color _secondaryColor(Color base, int seed, _CardSkin skin) {
+  final accents = <Color>[
+    const Color(0xFF071B33),
+    const Color(0xFF0C5E67),
+    const Color(0xFF44235F),
+    const Color(0xFF8E3B37),
+    const Color(0xFFBE8C29),
+    const Color(0xFF202A4C),
+    Colors.black,
+    const Color(0xFF3A493F),
+  ];
+  final accent = accents[(seed + skin.index) % accents.length];
+  final amount = switch (skin) {
+    _CardSkin.minimal => 0.16,
+    _CardSkin.prism => 0.34,
+    _ => 0.28,
+  };
+  return Color.lerp(base, accent, amount)!;
 }
 
 class _CardDataPoint extends StatelessWidget {
@@ -447,8 +635,7 @@ String _monthShort(int month) => const [
   'Dec',
 ][month.clamp(1, 12).toInt()];
 
-Color _issuerBaseColor(String text, String productId) {
-  if (text.contains('swiggy')) return const Color(0xFFE75D4F);
+Color _issuerBaseColor(String text) {
   if (text.contains('icici')) return const Color(0xFF8E2345);
   if (text.contains('hdfc')) return const Color(0xFF0B4778);
   if (text.contains('sbi')) return const Color(0xFF07508E);
@@ -457,8 +644,19 @@ Color _issuerBaseColor(String text, String productId) {
   if (text.contains('amex') || text.contains('american express')) {
     return const Color(0xFF0864AE);
   }
-  if (text.contains('amazon')) return const Color(0xFF173D67);
-  return _fallbackColors[productId.hashCode.abs() % _fallbackColors.length];
+  return _fallbackColors[_stableSeed(text) % _fallbackColors.length];
+}
+
+/// String.hashCode is not a suitable visual identity key: its implementation
+/// is allowed to change between Dart versions. This small stable hash keeps a
+/// product's generated skin consistent across app versions and platforms.
+int _stableSeed(String value) {
+  var hash = 0x811c9dc5;
+  for (final unit in value.codeUnits) {
+    hash ^= unit;
+    hash = (hash * 0x01000193) & 0x7fffffff;
+  }
+  return hash;
 }
 
 const _fallbackColors = [
@@ -593,11 +791,16 @@ class _NetworkCircle extends StatelessWidget {
   );
 }
 
-class _CardPatternPainter extends CustomPainter {
+class _CardSkinPainter extends CustomPainter {
   final Color color;
   final int seed;
+  final _CardSkin skin;
 
-  const _CardPatternPainter({required this.color, required this.seed});
+  const _CardSkinPainter({
+    required this.color,
+    required this.seed,
+    required this.skin,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -606,26 +809,117 @@ class _CardPatternPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
     final shift = (seed % 38).toDouble();
-    canvas.drawCircle(
-      Offset(size.width * 0.88, size.height * 0.2),
-      size.height * 0.62,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(size.width * 0.96 + shift / 5, size.height * 0.42),
-      size.height * 0.4,
-      paint,
-    );
-    canvas.drawLine(
-      Offset(-20 + shift, size.height * 0.82),
-      Offset(size.width * 0.58 + shift, -10),
-      paint,
-    );
+
+    switch (skin) {
+      case _CardSkin.orbit:
+        canvas.drawCircle(
+          Offset(size.width * 0.88, size.height * 0.2),
+          size.height * 0.62,
+          paint,
+        );
+        canvas.drawCircle(
+          Offset(size.width * 0.96 + shift / 5, size.height * 0.42),
+          size.height * 0.4,
+          paint,
+        );
+        canvas.drawLine(
+          Offset(-20 + shift, size.height * 0.82),
+          Offset(size.width * 0.58 + shift, -10),
+          paint,
+        );
+      case _CardSkin.wave:
+        final path = Path();
+        for (var row = 0; row < 4; row++) {
+          final y = size.height * (0.18 + row * 0.22);
+          path.moveTo(-10, y);
+          path.cubicTo(
+            size.width * 0.25,
+            y - 20,
+            size.width * 0.48,
+            y + 20,
+            size.width + 10,
+            y - 8,
+          );
+        }
+        canvas.drawPath(path, paint);
+      case _CardSkin.grid:
+        for (var x = -1; x < 9; x++) {
+          final dx = x * size.width / 7 + shift / 3;
+          canvas.drawLine(Offset(dx, 0), Offset(dx + size.height, size.height), paint);
+        }
+        for (var y = -1; y < 6; y++) {
+          final dy = y * size.height / 4;
+          canvas.drawLine(Offset(0, dy), Offset(size.width, dy + size.width * 0.18), paint);
+        }
+      case _CardSkin.dots:
+        final dotPaint = Paint()..color = color..style = PaintingStyle.fill;
+        for (var row = 0; row < 5; row++) {
+          for (var column = 0; column < 9; column++) {
+            final dx = column * size.width / 8 + (row.isEven ? 8 : 0);
+            final dy = row * size.height / 4.2 + size.height * 0.04;
+            canvas.drawCircle(
+              Offset(dx, dy),
+              1.5 + ((seed + row + column) % 3) * 0.45,
+              dotPaint,
+            );
+          }
+        }
+      case _CardSkin.prism:
+        final path = Path()
+          ..moveTo(-10, size.height * 0.82)
+          ..lineTo(size.width * 0.35, -10)
+          ..lineTo(size.width * 0.7, -10)
+          ..lineTo(size.width * 0.22, size.height + 10)
+          ..close();
+        canvas.drawPath(path, paint);
+        canvas.drawLine(
+          Offset(size.width * 0.55, -10),
+          Offset(size.width + 10, size.height * 0.7),
+          paint,
+        );
+        canvas.drawLine(
+          Offset(size.width * 0.72, -10),
+          Offset(size.width + 10, size.height * 0.48),
+          paint,
+        );
+      case _CardSkin.rings:
+        for (var i = 0; i < 4; i++) {
+          canvas.drawCircle(
+            Offset(size.width * 0.86, size.height * 0.48),
+            size.height * (0.25 + i * 0.16),
+            paint,
+          );
+        }
+      case _CardSkin.diagonal:
+        for (var i = -2; i < 9; i++) {
+          final x = i * size.width / 6 + shift / 4;
+          canvas.drawLine(
+            Offset(x, size.height + 12),
+            Offset(x + size.height * 0.95, -12),
+            paint,
+          );
+        }
+      case _CardSkin.minimal:
+        final accentPaint = Paint()
+          ..color = color
+          ..style = PaintingStyle.fill;
+        canvas.drawOval(
+          Rect.fromLTWH(
+            size.width * 0.62,
+            -size.height * 0.35,
+            size.width * 0.8,
+            size.height * 1.5,
+          ),
+          accentPaint,
+        );
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _CardPatternPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.seed != seed;
+  bool shouldRepaint(covariant _CardSkinPainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.seed != seed ||
+      oldDelegate.skin != skin;
 }
 
 class _ChipPainter extends CustomPainter {
