@@ -41,6 +41,14 @@ const CATEGORY_TAGS = {
   ],
 };
 
+const PHOTON_CATEGORY_QUERIES = {
+  groceries: 'supermarket',
+  fuel: 'petrol pump',
+  dining: 'restaurant',
+  health: 'pharmacy',
+  other: 'bakery',
+};
+
 const ALL_TAGS = Object.values(CATEGORY_TAGS).flat();
 
 function safeNumber(value) {
@@ -167,7 +175,7 @@ function categoryForPlaceSearchResult(result, query) {
   return 'other';
 }
 
-function parsePlaceSearchResults(results = [], { query } = {}) {
+function parsePlaceSearchResults(results = [], { query, lat, lng, radiusM } = {}) {
   // Nominatim returns an array, while Photon returns GeoJSON. Keeping the
   // normalisation here means the provider failover below cannot change the
   // mobile API contract.
@@ -216,6 +224,14 @@ function parsePlaceSearchResults(results = [], { query } = {}) {
     });
     if (output.length >= MAX_RESULTS) break;
   }
+  if (validCoordinates(lat, lng) && Number.isFinite(radiusM) && radiusM > 0) {
+    return output.filter((place) => haversineDistanceMeters(
+      lat, lng, place.grid_lat, place.grid_lng,
+    ) <= radiusM).sort((a, b) => haversineDistanceMeters(
+      lat, lng, a.grid_lat, a.grid_lng,
+    ) - haversineDistanceMeters(lat, lng, b.grid_lat, b.grid_lng))
+      .slice(0, MAX_RESULTS);
+  }
   return output;
 }
 
@@ -223,6 +239,12 @@ function boundingBox({ lat, lng, radiusM }) {
   const latDelta = radiusM / 111320;
   const lngDelta = radiusM / (111320 * Math.max(0.1, Math.cos(lat * Math.PI / 180)));
   return `${lng - lngDelta},${lat + latDelta},${lng + lngDelta},${lat - latDelta}`;
+}
+
+function photonBoundingBox({ lat, lng, radiusM }) {
+  const latDelta = radiusM / 111320;
+  const lngDelta = radiusM / (111320 * Math.max(0.1, Math.cos(lat * Math.PI / 180)));
+  return `${lng - lngDelta},${lat - latDelta},${lng + lngDelta},${lat + latDelta}`;
 }
 
 function createNearbyDiscovery({
@@ -306,6 +328,8 @@ function createNearbyDiscovery({
           clearTimeout(timeout);
         }
       }
+      const photonResults = await discoverFromPhoton({ lat, lng, radiusM, categoryId });
+      if (photonResults.length > 0) return photonResults;
       throw lastError || new Error('OpenStreetMap discovery failed');
     })();
 
@@ -361,6 +385,11 @@ function createNearbyDiscovery({
           params.set('lat', String(lat));
           params.set('lon', String(lng));
           params.set('viewbox', boundingBox({ lat, lng, radiusM }));
+          params.set('bounded', '1');
+        } else if (isPhoton && lat !== undefined && lng !== undefined) {
+          params.set('lat', String(lat));
+          params.set('lon', String(lng));
+          params.set('bbox', photonBoundingBox({ lat, lng, radiusM }));
         }
 
         const controller = new AbortController();
@@ -376,7 +405,16 @@ function createNearbyDiscovery({
           });
           if (!response.ok) throw new Error(`OpenStreetMap place search failed: ${response.status}`);
           const body = await response.json();
-          const value = parsePlaceSearchResults(body, { query: cleanQuery });
+          const value = parsePlaceSearchResults(body, {
+            query: cleanQuery,
+            lat,
+            lng,
+            radiusM,
+          });
+          if (!isPhoton && lat !== undefined && value.length === 0 &&
+              placeSearchEndpoints.some((url) => url.toLowerCase().includes('photon'))) {
+            continue;
+          }
           searchCache.set(key, { expiresAt: now() + ttlMs, value });
           while (searchCache.size > MAX_CACHE_ENTRIES) {
             searchCache.delete(searchCache.keys().next().value);
@@ -399,12 +437,66 @@ function createNearbyDiscovery({
     }
   }
 
+  async function discoverFromPhoton({ lat, lng, radiusM, categoryId }) {
+    const photonEndpoint = placeSearchEndpoints.find((url) =>
+      url.toLowerCase().includes('photon'));
+    if (!photonEndpoint) return [];
+
+    const categories = categoryId ? [categoryId] : Object.keys(PHOTON_CATEGORY_QUERIES);
+    const results = await Promise.allSettled(categories.map(async (category) => {
+      const params = new URLSearchParams({
+        q: PHOTON_CATEGORY_QUERIES[category],
+        lat: String(lat),
+        lon: String(lng),
+        bbox: photonBoundingBox({ lat, lng, radiusM }),
+        limit: String(MAX_RESULTS),
+      });
+      for (const [key, values] of CATEGORY_TAGS[category] || []) {
+        for (const value of values.split('|')) {
+          params.append('osm_tag', `${key}:${value}`);
+        }
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetchImpl(`${photonEndpoint}?${params.toString()}`, {
+          headers: {
+            accept: 'application/json',
+            'user-agent': 'PandaPay/1.0 (nearby merchant discovery)',
+          },
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Photon discovery failed: ${response.status}`);
+        return parsePlaceSearchResults(await response.json(), {
+          query: PHOTON_CATEGORY_QUERIES[category],
+          lat,
+          lng,
+          radiusM,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+    }));
+
+    const byId = new Map();
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      for (const place of result.value) byId.set(place.merchant_id, place);
+    }
+    return [...byId.values()].sort((a, b) => haversineDistanceMeters(
+      lat, lng, a.grid_lat, a.grid_lng,
+    ) - haversineDistanceMeters(lat, lng, b.grid_lat, b.grid_lng))
+      .slice(0, MAX_RESULTS);
+  }
+
   return { discover, search, cache, inflight, searchCache, searchInflight };
 }
 
 module.exports = {
   buildOverpassQuery,
   boundingBox,
+  photonBoundingBox,
   categoryForPlaceSearchResult,
   classifyTags,
   createNearbyDiscovery,

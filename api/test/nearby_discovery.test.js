@@ -7,6 +7,7 @@ const {
   categoryForPlaceSearchResult,
   createNearbyDiscovery,
   parsePlaceSearchResults,
+  photonBoundingBox,
   parseOverpassElements,
 } = require('../src/nearby_discovery');
 
@@ -16,6 +17,13 @@ test('builds a bounded search box for a location-biased manual lookup', () => {
   assert.equal(parts.length, 4);
   assert.ok(parts[0] < 73.83 && parts[2] > 73.83);
   assert.ok(parts[1] > 15.49 && parts[3] < 15.49);
+});
+
+test('builds Photon bounding boxes in min-lon,min-lat,max-lon,max-lat order', () => {
+  const box = photonBoundingBox({ lat: 15.49, lng: 73.83, radiusM: 2000 });
+  const [west, south, east, north] = box.split(',').map(Number);
+  assert.ok(west < 73.83 && east > 73.83);
+  assert.ok(south < 15.49 && north > 15.49);
 });
 
 test('normalizes manual petrol-pump search results as unverified fuel candidates', () => {
@@ -126,6 +134,16 @@ test('normalizes Photon GeoJSON results into the same candidate shape', () => {
   assert.equal(result[0].category_id, 'dining');
 });
 
+test('location-scoped place search filters out-of-radius results and sorts nearest first', () => {
+  const result = parsePlaceSearchResults([
+    { osm_type: 'N', osm_id: 1, name: 'Far Fuel', lat: 15.5, lon: 74.1 },
+    { osm_type: 'N', osm_id: 2, name: 'Near Fuel', lat: 15.4002, lon: 74.0001 },
+    { osm_type: 'N', osm_id: 3, name: 'Also Near', lat: 15.401, lon: 74.001 },
+  ], { query: 'petrol pump', lat: 15.4, lng: 74.0, radiusM: 2000 });
+
+  assert.deepEqual(result.map((place) => place.display_name), ['Near Fuel', 'Also Near']);
+});
+
 test('coalesces concurrent searches and reuses the location cache', async () => {
   let calls = 0;
   let currentTime = 1000;
@@ -201,6 +219,52 @@ test('fails over to the next Overpass provider after a provider error', async ()
   ]);
 });
 
+test('nearby discovery falls back to radius-bounded Photon results when Overpass is unavailable', async () => {
+  const calls = [];
+  const provider = createNearbyDiscovery({
+    endpoints: ['https://overpass.test/interpreter'],
+    searchEndpoints: ['https://photon.test/api/'],
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url.includes('overpass.test')) return { ok: false, status: 503 };
+      const parsed = new URL(url);
+      assert.equal(parsed.searchParams.get('osm_tag'), 'amenity:fuel');
+      const [west, south, east, north] = parsed.searchParams.get('bbox').split(',').map(Number);
+      assert.ok(west < 74 && east > 74 && south < 15.4 && north > 15.4);
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            type: 'FeatureCollection',
+            features: [
+              {
+                geometry: { coordinates: [74.00435, 15.400272] },
+                properties: { osm_type: 'N', osm_id: 10, name: 'Ponda Petrol Pump' },
+              },
+              {
+                geometry: { coordinates: [74.02, 15.4] },
+                properties: { osm_type: 'N', osm_id: 11, name: 'Far Petrol Pump' },
+              },
+            ],
+          };
+        },
+      };
+    },
+  });
+
+  const result = await provider.discover({
+    lat: 15.4,
+    lng: 74.0,
+    radiusM: 2000,
+    categoryId: 'fuel',
+  });
+
+  assert.equal(calls.length, 2);
+  assert.deepEqual(result.map((place) => place.display_name), ['Ponda Petrol Pump']);
+  assert.equal(result[0].category_id, 'fuel');
+});
+
 test('fails over place search and caches successful results', async () => {
   const calls = [];
   const provider = createNearbyDiscovery({
@@ -231,6 +295,59 @@ test('fails over place search and caches successful results', async () => {
   assert.equal(calls.length, 2);
   assert.match(calls[0], /nominatim/);
   assert.match(calls[1], /photon/);
+});
+
+test('location-biased place search retries Photon when Nominatim has no in-radius result', async () => {
+  const calls = [];
+  const provider = createNearbyDiscovery({
+    searchEndpoints: ['https://nominatim.test/search', 'https://photon.komoot.io/api/'],
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url.includes('nominatim')) {
+        const parsed = new URL(url);
+        assert.equal(parsed.searchParams.get('bounded'), '1');
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return [{ osm_type: 'N', osm_id: 1, name: 'Far Fuel', lat: '20', lon: '80' }];
+          },
+        };
+      }
+
+      const parsed = new URL(url);
+      assert.ok(parsed.searchParams.has('bbox'));
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            type: 'FeatureCollection',
+            features: [
+              {
+                geometry: { coordinates: [74.001, 15.401] },
+                properties: { osm_type: 'N', osm_id: 2, name: 'Nearby Fuel' },
+              },
+              {
+                geometry: { coordinates: [80, 20] },
+                properties: { osm_type: 'N', osm_id: 3, name: 'Farther Fuel' },
+              },
+            ],
+          };
+        },
+      };
+    },
+  });
+
+  const result = await provider.search({
+    query: 'petrol pump',
+    lat: 15.4,
+    lng: 74.0,
+    radiusM: 2000,
+  });
+
+  assert.equal(calls.length, 2);
+  assert.deepEqual(result.map((place) => place.display_name), ['Nearby Fuel']);
 });
 
 test('rejects invalid radius before contacting the provider', async () => {
