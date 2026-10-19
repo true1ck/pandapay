@@ -13,6 +13,7 @@ class _FakeNearbyRepo implements NearbyMerchantsRepository {
     required double lat,
     required double lng,
     double radiusM = 2000,
+    bool forceRefresh = false,
   }) async {
     return const [];
   }
@@ -74,6 +75,7 @@ class _FakeFoundNearbyRepo implements NearbyMerchantsRepository {
     required double lat,
     required double lng,
     double radiusM = 2000,
+    bool forceRefresh = false,
   }) async {
     return [
       NearbyMerchantCandidate(
@@ -93,16 +95,22 @@ class _GrantedGeolocator extends GeolocatorPlatform {
   Future<bool> isLocationServiceEnabled() async => true;
 
   @override
-  Future<LocationPermission> checkPermission() async => LocationPermission.whileInUse;
+  Future<LocationPermission> checkPermission() async =>
+      LocationPermission.whileInUse;
 
   @override
-  Future<LocationPermission> requestPermission() async => LocationPermission.whileInUse;
+  Future<LocationPermission> requestPermission() async =>
+      LocationPermission.whileInUse;
 
   @override
-  Future<Position?> getLastKnownPosition({bool forceLocationManager = false}) async => null;
+  Future<Position?> getLastKnownPosition({
+    bool forceLocationManager = false,
+  }) async => null;
 
   @override
-  Future<Position> getCurrentPosition({LocationSettings? locationSettings}) async {
+  Future<Position> getCurrentPosition({
+    LocationSettings? locationSettings,
+  }) async {
     getCurrentPositionCalls++;
     return Position(
       latitude: 19.1197,
@@ -120,10 +128,16 @@ class _GrantedGeolocator extends GeolocatorPlatform {
 }
 
 void main() {
-  testWidgets('hides the context line when no place data is available', (tester) async {
+  testWidgets('hides the context line when no place data is available', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [nearbyMerchantsRepositoryProvider.overrideWithValue(_FakeNearbyRepo())],
+        overrides: [
+          nearbyMerchantsRepositoryProvider.overrideWithValue(
+            _FakeNearbyRepo(),
+          ),
+        ],
         child: const MaterialApp(home: Scaffold(body: HomeContextLine())),
       ),
     );
@@ -134,79 +148,92 @@ void main() {
     expect(find.byType(InkWell), findsNothing);
   });
 
-  testWidgets('shows context line and meets 48dp touch target when place data is available', (tester) async {
-    final originalGeolocator = GeolocatorPlatform.instance;
-    final fakeGeolocator = _GrantedGeolocator();
-    GeolocatorPlatform.instance = fakeGeolocator;
-    addTearDown(() => GeolocatorPlatform.instance = originalGeolocator);
+  testWidgets(
+    'shows context line and meets 48dp touch target when place data is available',
+    (tester) async {
+      final originalGeolocator = GeolocatorPlatform.instance;
+      final fakeGeolocator = _GrantedGeolocator();
+      GeolocatorPlatform.instance = fakeGeolocator;
+      addTearDown(() => GeolocatorPlatform.instance = originalGeolocator);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [nearbyMerchantsRepositoryProvider.overrideWithValue(_FakeFoundNearbyRepo())],
-        child: const MaterialApp(home: Scaffold(body: HomeContextLine())),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            nearbyMerchantsRepositoryProvider.overrideWithValue(
+              _FakeFoundNearbyRepo(),
+            ),
+          ],
+          child: const MaterialApp(home: Scaffold(body: HomeContextLine())),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text("You're near DMart Powai"), findsOneWidget);
+      expect(find.text("You're near DMart Powai"), findsOneWidget);
 
-    final inkWellFinder = find.byType(InkWell);
-    expect(inkWellFinder, findsOneWidget);
+      final inkWellFinder = find.byType(InkWell);
+      expect(inkWellFinder, findsOneWidget);
 
-    final size = tester.getSize(inkWellFinder);
-    expect(size.height, greaterThanOrEqualTo(48));
+      final size = tester.getSize(inkWellFinder);
+      expect(size.height, greaterThanOrEqualTo(48));
 
-    // Tapping re-triggers the one-shot location read.
-    await tester.tap(inkWellFinder);
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
+      // Tapping re-triggers the one-shot location read.
+      await tester.tap(inkWellFinder);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
 
-    expect(fakeGeolocator.getCurrentPositionCalls, greaterThanOrEqualTo(2));
-  });
+      expect(fakeGeolocator.getCurrentPositionCalls, greaterThanOrEqualTo(2));
+    },
+  );
 
   testWidgets(
-      'an automatic mount never calls requestPermission() — even across repeated '
-      'remounts simulating Home -> other tab -> Home navigation', (tester) async {
-    final originalGeolocator = GeolocatorPlatform.instance;
-    final fakeGeolocator = _DeniedGeolocator();
-    GeolocatorPlatform.instance = fakeGeolocator;
-    addTearDown(() => GeolocatorPlatform.instance = originalGeolocator);
+    'an automatic mount never calls requestPermission() — even across repeated '
+    'remounts simulating Home -> other tab -> Home navigation',
+    (tester) async {
+      final originalGeolocator = GeolocatorPlatform.instance;
+      final fakeGeolocator = _DeniedGeolocator();
+      GeolocatorPlatform.instance = fakeGeolocator;
+      addTearDown(() => GeolocatorPlatform.instance = originalGeolocator);
 
-    Widget host() => ProviderScope(
-          overrides: [nearbyMerchantsRepositoryProvider.overrideWithValue(_FakeNearbyRepo())],
-          child: const MaterialApp(home: Scaffold(body: HomeContextLine())),
-        );
+      Widget host() => ProviderScope(
+        overrides: [
+          nearbyMerchantsRepositoryProvider.overrideWithValue(
+            _FakeNearbyRepo(),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: HomeContextLine())),
+      );
 
-    // First mount (e.g. first time Home loads this session).
-    await tester.pumpWidget(host());
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
+      // First mount (e.g. first time Home loads this session).
+      await tester.pumpWidget(host());
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
 
-    // Simulate leaving and returning to the Home tab: since Home's route is
-    // a plain ShellRoute/GoRoute (not StatefulShellRoute.indexedStack — see
-    // app/lib/app/router.dart), the widget is disposed and rebuilt on every
-    // return, exactly like pumping a fresh widget tree here.
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-    await tester.pumpWidget(host());
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
+      // Simulate leaving and returning to the Home tab: since Home's route is
+      // a plain ShellRoute/GoRoute (not StatefulShellRoute.indexedStack — see
+      // app/lib/app/router.dart), the widget is disposed and rebuilt on every
+      // return, exactly like pumping a fresh widget tree here.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pumpWidget(host());
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-    await tester.pumpWidget(host());
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pumpWidget(host());
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
 
-    // Three automatic mounts, permission stuck at `denied` the whole time —
-    // checkPermission() (read-only, never surfaces a dialog) fires each
-    // time, but requestPermission() — the call that can pop a real system
-    // permission dialog — must never fire on an automatic mount. This is
-    // the exact regression the review flagged: without the fix, each mount
-    // would call requestPermission() and re-surface the OS dialog on
-    // ordinary tab navigation.
-    expect(fakeGeolocator.checkPermissionCalls, 3);
-    expect(fakeGeolocator.requestPermissionCalls, 0);
-  });
+      // Three automatic mounts, permission stuck at `denied` the whole time —
+      // checkPermission() (read-only, never surfaces a dialog) fires each
+      // time, but requestPermission() — the call that can pop a real system
+      // permission dialog — must never fire on an automatic mount. This is
+      // the exact regression the review flagged: without the fix, each mount
+      // would call requestPermission() and re-surface the OS dialog on
+      // ordinary tab navigation.
+      expect(fakeGeolocator.checkPermissionCalls, 3);
+      expect(fakeGeolocator.requestPermissionCalls, 0);
+    },
+  );
 }

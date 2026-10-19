@@ -101,6 +101,10 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
         lat: position.latitude,
         lng: position.longitude,
         radiusM: nearbyMerchantSearchRadiusMeters,
+        // A user-initiated check is an explicit refresh. Automatic screen
+        // entry remains cache-first and only revalidates once the client
+        // freshness window has elapsed.
+        forceRefresh: !auto,
       );
 
       var matches = findNearbyMerchants(

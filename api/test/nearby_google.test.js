@@ -202,6 +202,53 @@ test('caches successful Google Places results and does not hit API twice', async
   assert.equal(second.merchants[0].merchant_id, 'gp_ChIJ_cached');
 });
 
+test('caches OSM fallback results and reuses them across a grid boundary', async () => {
+  let googleCalls = 0;
+  let fallbackCalls = 0;
+  const cache = new Map();
+  const inflight = new Map();
+  const fallback = [{ merchant_id: 'osm:node:cached', source: 'osm_candidate' }];
+
+  const first = await discoverNearby({
+    lat: 18.52049,
+    lng: 73.8567,
+    radiusM: 2000,
+    googleApiKey: 'test-google-key',
+    cache,
+    inflight,
+    fetchImpl: async () => {
+      googleCalls++;
+      return { ok: false, status: 503 };
+    },
+    fallbackDiscover: async () => {
+      fallbackCalls++;
+      return fallback;
+    },
+  });
+
+  const second = await discoverNearby({
+    lat: 18.52051,
+    lng: 73.8567,
+    radiusM: 2000,
+    googleApiKey: 'test-google-key',
+    cache,
+    inflight,
+    fetchImpl: async () => {
+      googleCalls++;
+      return { ok: false, status: 503 };
+    },
+    fallbackDiscover: async () => {
+      fallbackCalls++;
+      return fallback;
+    },
+  });
+
+  assert.equal(first.source, 'openstreetmap_fallback');
+  assert.deepEqual(second, first);
+  assert.equal(googleCalls, 1, 'cached fallback must not retry Google');
+  assert.equal(fallbackCalls, 1, 'cached fallback must not retry OSM');
+});
+
 test('coalesces concurrent in-flight requests into a single Google Places API call', async () => {
   let apiCalls = 0;
   const mockFetch = async () => {

@@ -1066,10 +1066,14 @@ app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
  * POST /merchants/nearby/discover — free, read-only nearby place discovery.
  *
  * This is the primary discovery path for the Nearby screen. Results are
- * OpenStreetMap candidates only; they are never treated as VPA-verified
+ * OpenStreetMap candidates only by default; they are never treated as VPA-verified
  * merchants and are never inserted into spending or payment data by this route. Coordinates
  * stay in the request body so they do not appear in URL access logs. The GET
- * handler remains for compatibility with older app builds.
+ * handler remains for compatibility with older app builds. The paid Google
+ * provider is deliberately opt-in here (`NEARBY_DISCOVERY_USE_GOOGLE=true`);
+ * the authenticated `/merchants/nearby/google` route remains the explicit
+ * Google-backed path. Merely setting a Google key must not make every normal
+ * nearby refresh billable.
  */
 const nearbyDiscoveryHandler = async (req, res) => {
   const input = req.method === 'GET' ? req.query : req.body || {};
@@ -1095,7 +1099,9 @@ const nearbyDiscoveryHandler = async (req, res) => {
 
   try {
     const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (googleApiKey) {
+    const useGoogleForGenericDiscovery =
+      process.env.NEARBY_DISCOVERY_USE_GOOGLE === 'true';
+    if (googleApiKey && useGoogleForGenericDiscovery) {
       const result = await nearbyGoogle.discoverNearby({
         lat,
         lng,

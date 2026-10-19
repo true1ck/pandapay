@@ -6,6 +6,10 @@ const { haversineDistanceMeters } = require('./nearby_discovery');
 // short enough to leave room for the bounded three-endpoint OSM fallback.
 const GOOGLE_LOOKUP_TIMEOUT_MS = 9000;
 const GOOGLE_CACHE_TTL_MS = 15 * 60 * 1000;
+// Nearby results are returned for a 2 km circle. Reusing a result for a
+// modest movement is safe enough for discovery and avoids cache misses caused
+// by floating-point/grid boundaries while a person is standing or walking.
+const GOOGLE_CACHE_REUSE_RADIUS_M = 150;
 const MAX_GOOGLE_CACHE_ENTRIES = 512;
 
 const defaultCache = new Map();
@@ -150,6 +154,7 @@ async function discoverNearby({
   ttlMs = GOOGLE_CACHE_TTL_MS,
   cache = defaultCache,
   inflight = defaultInflight,
+  now = () => Date.now(),
 }) {
   const cacheKey = [
     Number(lat).toFixed(3),
@@ -158,16 +163,67 @@ async function discoverNearby({
     categoryId || 'all',
   ].join(':');
 
+  const cacheEntryIsFresh = (entry) => entry && entry.expiresAt > now();
+
   if (cache && cache.has(cacheKey)) {
     const entry = cache.get(cacheKey);
-    if (entry && entry.expiresAt > Date.now()) {
+    if (cacheEntryIsFresh(entry)) {
       return entry.value;
     }
     cache.delete(cacheKey);
   }
 
-  if (inflight && inflight.has(cacheKey)) {
-    return await inflight.get(cacheKey);
+  // `toFixed(3)` is only a cache index, not a spatial guarantee. Search the
+  // small set of live entries for a nearby centre before treating a new grid
+  // cell as a miss. This specifically prevents a 1–2 metre boundary crossing
+  // from charging Google again.
+  if (cache) {
+    for (const entry of cache.values()) {
+      if (!cacheEntryIsFresh(entry) ||
+          entry.radiusM !== Math.round(radiusM) ||
+          (entry.categoryId || 'all') !== (categoryId || 'all') ||
+          !Number.isFinite(entry.lat) || !Number.isFinite(entry.lng)) {
+        continue;
+      }
+      if (haversineDistanceMeters(lat, lng, entry.lat, entry.lng) <= GOOGLE_CACHE_REUSE_RADIUS_M) {
+        return entry.value;
+      }
+    }
+  }
+
+  const save = (value) => {
+    if (!cache) return;
+    cache.set(cacheKey, {
+      expiresAt: now() + ttlMs,
+      value,
+      lat,
+      lng,
+      radiusM: Math.round(radiusM),
+      categoryId: categoryId || 'all',
+    });
+    if (cache.size > MAX_GOOGLE_CACHE_ENTRIES) {
+      const oldestKey = cache.keys().next().value;
+      cache.delete(oldestKey);
+    }
+  };
+
+  if (inflight) {
+    for (const [pendingKey, pending] of inflight.entries()) {
+      const [pendingLat, pendingLng, pendingRadius, pendingCategory] =
+        pendingKey.split(':');
+      if (pendingRadius === String(Math.round(radiusM)) &&
+          (pendingCategory || 'all') === (categoryId || 'all') &&
+          Number.isFinite(Number(pendingLat)) &&
+          Number.isFinite(Number(pendingLng)) &&
+          haversineDistanceMeters(
+            lat,
+            lng,
+            Number(pendingLat),
+            Number(pendingLng),
+          ) <= GOOGLE_CACHE_REUSE_RADIUS_M) {
+        return await pending;
+      }
+    }
   }
 
   const lookupPromise = (async () => {
@@ -194,13 +250,7 @@ async function discoverNearby({
             partial: false,
             failed_categories: 0,
           };
-          if (cache) {
-            cache.set(cacheKey, { expiresAt: Date.now() + ttlMs, value: result });
-            if (cache.size > MAX_GOOGLE_CACHE_ENTRIES) {
-              const oldestKey = cache.keys().next().value;
-              cache.delete(oldestKey);
-            }
-          }
+          save(result);
           return result;
         }
         googleFailure = new Error('Google Places returned no nearby merchants');
@@ -218,7 +268,7 @@ async function discoverNearby({
       if (categoryId) fallbackParams.categoryId = categoryId;
       const merchants = await fallbackDiscover(fallbackParams);
       const isEmpty = googleFailure.message.includes('returned no nearby merchants');
-      return {
+      const result = {
         source: 'openstreetmap_fallback',
         attribution: '© OpenStreetMap contributors',
         radius_m: radiusM,
@@ -226,6 +276,10 @@ async function discoverNearby({
         fallback_reason: isEmpty ? 'google_empty' : 'google_unavailable',
         merchants: Array.isArray(merchants) ? merchants : [],
       };
+      // Cache the degraded result too. Otherwise every Home remount during a
+      // Google outage immediately retries Google and then OSM again.
+      save(result);
+      return result;
     } catch (fallbackError) {
       const error = new Error('Nearby discovery providers are unavailable', {
         cause: fallbackError,

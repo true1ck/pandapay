@@ -186,6 +186,28 @@ test('coalesces concurrent searches and reuses the location cache', async () => 
   assert.equal(calls, 2);
 });
 
+test('reuses discovery results across a rounded-grid boundary', async () => {
+  let calls = 0;
+  const provider = createNearbyDiscovery({
+    endpoints: ['https://overpass.test/interpreter'],
+    now: () => 1000,
+    fetchImpl: async () => {
+      calls++;
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { elements: [] };
+        },
+      };
+    },
+  });
+
+  await provider.discover({ lat: 15.49049, lng: 73.83, radiusM: 2000 });
+  await provider.discover({ lat: 15.49051, lng: 73.83, radiusM: 2000 });
+  assert.equal(calls, 1);
+});
+
 test('fails over to the next Overpass provider after a provider error', async () => {
   const calls = [];
   const provider = createNearbyDiscovery({

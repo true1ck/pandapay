@@ -4260,6 +4260,13 @@ final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((
   return repository;
 });
 
+/// Keeps the resolved Home context alive while the Home route is remounted
+/// during tab navigation. The snapshot is intentionally in memory only and
+/// is cleared when its freshness window expires by the consumer.
+final homeNearbyContextProvider = StateProvider<NearbyContextSnapshot?>(
+  (ref) => null,
+);
+
 /// UA-8.3 (B1): one FlutterLocalNotificationsPlugin instance for the whole
 /// app. Previously GeofenceMonitorService was the only caller and
 /// constructed its own — fine when it was the only notification path, but

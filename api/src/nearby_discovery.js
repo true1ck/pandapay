@@ -8,6 +8,7 @@
  */
 
 const DISCOVERY_TTL_MS = 10 * 60 * 1000;
+const DISCOVERY_CACHE_REUSE_RADIUS_M = 150;
 const MAX_CACHE_ENTRIES = 256;
 const MAX_RESULTS = 40;
 const DEFAULT_TIMEOUT_MS = 6500;
@@ -296,7 +297,50 @@ function createNearbyDiscovery({
     const key = cacheKey({ lat, lng, radiusM, categoryId });
     const cached = cache.get(key);
     if (cached && cached.expiresAt > now()) return cached.value;
-    if (inflight.has(key)) return inflight.get(key);
+    if (cached) cache.delete(key);
+
+    // The rounded key is only an index. Reuse a live result from a nearby
+    // centre so a small movement across a rounding boundary does not trigger
+    // another Overpass/Photon request.
+    for (const entry of cache.values()) {
+      if (entry.expiresAt <= now() ||
+          entry.radiusM !== Math.round(radiusM) ||
+          (entry.categoryId || 'all') !== (normalizeCategory(categoryId) || 'all') ||
+          !Number.isFinite(entry.lat) || !Number.isFinite(entry.lng)) {
+        continue;
+      }
+      if (haversineDistanceMeters(lat, lng, entry.lat, entry.lng) <= DISCOVERY_CACHE_REUSE_RADIUS_M) {
+        return entry.value;
+      }
+    }
+    for (const [pendingKey, pending] of inflight.entries()) {
+      const [pendingLat, pendingLng, pendingRadius, pendingCategory] =
+        pendingKey.split(':');
+      if (pendingRadius === String(Math.round(radiusM)) &&
+          (pendingCategory || 'all') === (normalizeCategory(categoryId) || 'all') &&
+          Number.isFinite(Number(pendingLat)) &&
+          Number.isFinite(Number(pendingLng)) &&
+          haversineDistanceMeters(
+            lat,
+            lng,
+            Number(pendingLat),
+            Number(pendingLng),
+          ) <= DISCOVERY_CACHE_REUSE_RADIUS_M) {
+        return pending;
+      }
+    }
+
+    const save = (value) => {
+      cache.set(key, {
+        expiresAt: now() + ttlMs,
+        value,
+        lat,
+        lng,
+        radiusM: Math.round(radiusM),
+        categoryId: normalizeCategory(categoryId) || 'all',
+      });
+      prune();
+    };
 
     const promise = (async () => {
       let lastError;
@@ -319,8 +363,7 @@ function createNearbyDiscovery({
           if (!response.ok) throw new Error(`OpenStreetMap discovery failed: ${response.status}`);
           const body = await response.json();
           const value = parseOverpassElements(body.elements, { categoryId, lat, lng });
-          cache.set(key, { expiresAt: now() + ttlMs, value });
-          prune();
+          save(value);
           return value;
         } catch (error) {
           lastError = error;
@@ -329,7 +372,10 @@ function createNearbyDiscovery({
         }
       }
       const photonResults = await discoverFromPhoton({ lat, lng, radiusM, categoryId });
-      if (photonResults.length > 0) return photonResults;
+      if (photonResults.length > 0) {
+        save(photonResults);
+        return photonResults;
+      }
       throw lastError || new Error('OpenStreetMap discovery failed');
     })();
 

@@ -89,6 +89,95 @@ void main() {
       await repo.fetchNearby(lat: 15.4, lng: 74.0, radiusM: 1500);
     });
 
+    test('fresh device cache avoids the backend request', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cache = SharedPreferencesNearbyMerchantCache(
+        namespace: 'profile:test',
+        preferences: Future.value(prefs),
+      );
+      await cache.write(
+        lat: 12.9716,
+        lng: 77.5946,
+        radiusM: 2000,
+        candidates: const [],
+      );
+
+      var calls = 0;
+      final repo = HttpNearbyMerchantsRepository(
+        baseUrl: 'http://localhost:4000',
+        client: MockClient((_) async {
+          calls++;
+          return http.Response(jsonEncode({'merchants': []}), 200);
+        }),
+        localCache: cache,
+      );
+
+      expect(await repo.fetchNearby(lat: 12.9716, lng: 77.5946), isEmpty);
+      expect(calls, 0);
+    });
+
+    test(
+      'movement inside the cached zone avoids the backend request',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final cache = SharedPreferencesNearbyMerchantCache(
+          namespace: 'profile:test',
+          preferences: Future.value(prefs),
+        );
+        await cache.write(
+          lat: 12.9716,
+          lng: 77.5946,
+          radiusM: 2000,
+          candidates: const [],
+        );
+
+        var calls = 0;
+        final repo = HttpNearbyMerchantsRepository(
+          baseUrl: 'http://localhost:4000',
+          client: MockClient((_) async {
+            calls++;
+            return http.Response(jsonEncode({'merchants': []}), 200);
+          }),
+          localCache: cache,
+        );
+
+        // Roughly 670m north: the cached list is still considered valid, but
+        // the nearest-first ranking is recalculated by the caller locally.
+        expect(await repo.fetchNearby(lat: 12.9776, lng: 77.5946), isEmpty);
+        expect(calls, 0);
+      },
+    );
+
+    test('explicit refresh bypasses a fresh device cache', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cache = SharedPreferencesNearbyMerchantCache(
+        namespace: 'profile:test',
+        preferences: Future.value(prefs),
+      );
+      await cache.write(
+        lat: 12.9716,
+        lng: 77.5946,
+        radiusM: 2000,
+        candidates: const [],
+      );
+
+      var calls = 0;
+      final repo = HttpNearbyMerchantsRepository(
+        baseUrl: 'http://localhost:4000',
+        client: MockClient((_) async {
+          calls++;
+          return http.Response(jsonEncode({'merchants': []}), 200);
+        }),
+        localCache: cache,
+      );
+
+      await repo.fetchNearby(lat: 12.9716, lng: 77.5946, forceRefresh: true);
+      expect(calls, 1);
+    });
+
     test('a non-200 response throws NearbyMerchantsException', () async {
       final client = MockClient((request) async => http.Response('error', 500));
       final repo = HttpNearbyMerchantsRepository(
@@ -256,7 +345,7 @@ void main() {
       },
     );
 
-    test('device cache keeps same-area results for up to 24 hours', () async {
+    test('device cache keeps same-zone results for up to 90 days', () async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final cache = SharedPreferencesNearbyMerchantCache(
@@ -276,7 +365,7 @@ void main() {
         key,
         jsonEncode({
           'fetched_at': DateTime.now()
-              .subtract(const Duration(hours: 23))
+              .subtract(const Duration(days: 89))
               .toIso8601String(),
           'merchants': [
             {
@@ -301,7 +390,7 @@ void main() {
       expect(snapshot!.candidates.single.displayName, 'Saved Petrol Station');
     });
 
-    test('device cache expires results older than 24 hours', () async {
+    test('device cache expires results older than 90 days', () async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final cache = SharedPreferencesNearbyMerchantCache(
@@ -312,7 +401,7 @@ void main() {
         cache.key(lat: 12.9716, lng: 77.5946, radiusM: 2000),
         jsonEncode({
           'fetched_at': DateTime.now()
-              .subtract(const Duration(hours: 25))
+              .subtract(const Duration(days: 91))
               .toIso8601String(),
           'merchants': [],
         }),
@@ -326,5 +415,59 @@ void main() {
 
       expect(snapshot, isNull);
     });
+
+    test(
+      'device cache survives a small movement across a grid boundary',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final cache = SharedPreferencesNearbyMerchantCache(
+          namespace: 'profile:test',
+          preferences: Future.value(prefs),
+        );
+        await cache.write(
+          lat: 12.97149,
+          lng: 77.5946,
+          radiusM: 2000,
+          candidates: const [],
+        );
+
+        final snapshot = await cache.read(
+          lat: 12.97151,
+          lng: 77.5946,
+          radiusM: 2000,
+          maxAge: nearbyMerchantClientFreshness,
+        );
+        expect(snapshot, isNotNull);
+      },
+    );
+
+    test(
+      'device cache survives movement across multiple rounded buckets inside the zone',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final cache = SharedPreferencesNearbyMerchantCache(
+          namespace: 'profile:test',
+          preferences: Future.value(prefs),
+        );
+        await cache.write(
+          lat: 12.9716,
+          lng: 77.5946,
+          radiusM: 2000,
+          candidates: const [],
+        );
+
+        // Roughly 670m north: outside the old 3x3 bucket search, but inside
+        // the movement-based 750m local reuse zone.
+        final snapshot = await cache.read(
+          lat: 12.9776,
+          lng: 77.5946,
+          radiusM: 2000,
+          maxAge: nearbyMerchantClientFreshness,
+        );
+        expect(snapshot, isNotNull);
+      },
+    );
   });
 }

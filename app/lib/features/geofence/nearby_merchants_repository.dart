@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -15,6 +16,28 @@ const _nearbyMerchantSearchRadiusRaw = String.fromEnvironment(
 );
 const _nearbyLookupTimeout = Duration(seconds: 25);
 
+/// A successful nearby result remains usable on the device for this long.
+///
+/// This is deliberately a long, local-only freshness window. Nearby places
+/// are slow-moving data, and the product is a convenience feature rather
+/// than a live map. Explicit refreshes still bypass this gate.
+const nearbyMerchantClientFreshness = Duration(days: 30);
+
+/// A cached result is reused while the device remains in the same practical
+/// nearby zone. The current location is still used to re-sort merchants, so
+/// moving inside this zone does not require a backend/provider request.
+const nearbyMerchantCacheReuseDistanceMeters = 750.0;
+
+/// Keep very old local results available as an offline fallback, but do not
+/// allow an unbounded location history to accumulate in SharedPreferences.
+const nearbyMerchantCacheMaxAge = Duration(days: 90);
+
+/// Home may paint this in-memory snapshot immediately while it obtains a
+/// current local GPS fix. The fix then decides whether the cached zone still
+/// applies; this prevents a tab remount from permanently showing a stale
+/// merchant after the user has travelled elsewhere.
+const nearbyMerchantHomeSnapshotWarmup = Duration(minutes: 5);
+
 final nearbyMerchantSearchRadiusMeters = () {
   final parsed = double.tryParse(_nearbyMerchantSearchRadiusRaw);
   return parsed != null && parsed > 0 && parsed <= 2000 ? parsed : 2000.0;
@@ -27,6 +50,7 @@ abstract class NearbyMerchantsRepository {
     required double lat,
     required double lng,
     double radiusM = 2000,
+    bool forceRefresh = false,
   });
 }
 
@@ -53,6 +77,21 @@ class NearbyMerchantCacheSnapshot {
   });
 }
 
+/// The last resolved Home context. This is deliberately an app-memory
+/// snapshot, not a persisted location history entry: it lets Home paint the
+/// previous answer while a fresh local position is checked after a remount.
+class NearbyContextSnapshot {
+  final DateTime resolvedAt;
+  final GeoPoint origin;
+  final NearbyMerchantMatch? match;
+
+  const NearbyContextSnapshot({
+    required this.resolvedAt,
+    required this.origin,
+    required this.match,
+  });
+}
+
 abstract class NearbyMerchantCacheRepository {
   Future<NearbyMerchantCacheSnapshot?> readCachedNearby({
     required double lat,
@@ -66,10 +105,11 @@ abstract class NearbyMerchantCacheRepository {
 /// The namespace is supplied by the app's session cache namespace so a cached
 /// location result from one signed-in profile is never shown to another.
 class SharedPreferencesNearbyMerchantCache {
-  // Keep the last successful result available through short public-map
-  // provider outages. The cache key is rounded to ~100m and scoped to the
-  // signed-in session, so this remains a local, coarse location snapshot.
-  static const _maxStale = Duration(hours: 24);
+  // Keep the last successful result available for a meaningful movement-based
+  // cache window. The cache key is only an index; the stored coordinates and
+  // Haversine distance decide whether a zone can actually be reused.
+  static const _maxStale = nearbyMerchantCacheMaxAge;
+  static const _maxCachedZones = 48;
 
   final String namespace;
   final Future<SharedPreferences> _preferences;
@@ -91,21 +131,57 @@ class SharedPreferencesNearbyMerchantCache {
     required double lat,
     required double lng,
     double radiusM = 2000,
+    Duration maxAge = _maxStale,
   }) async {
     try {
       final prefs = await _preferences;
-      final raw = prefs.getString(key(lat: lat, lng: lng, radiusM: radiusM));
-      if (raw == null) return null;
-      final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      final fetchedAt = DateTime.parse(decoded['fetched_at'] as String);
-      if (DateTime.now().difference(fetchedAt) > _maxStale) return null;
-      final candidates = parseNearbyMerchantsPayload(
-        jsonEncode({'merchants': decoded['merchants']}),
+      NearbyMerchantCacheSnapshot? best;
+      var bestDistance = double.infinity;
+
+      // Search all nearby-zone entries in this session instead of only a
+      // 3x3 set of rounded buckets. A three-decimal key is about 100m, while
+      // the reusable zone is intentionally larger; scanning the small local
+      // index makes movement across any bucket boundary harmless.
+      final radiusSuffix = ':${radiusM.round()}';
+      final keys = prefs.getKeys().where(
+        (candidateKey) =>
+            candidateKey.startsWith('$namespace:nearby_merchants:') &&
+            candidateKey.endsWith(radiusSuffix),
       );
-      return NearbyMerchantCacheSnapshot(
-        fetchedAt: fetchedAt,
-        candidates: candidates,
-      );
+
+      for (final candidateKey in keys) {
+        final raw = prefs.getString(candidateKey);
+        if (raw == null) continue;
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        final fetchedAt = DateTime.parse(decoded['fetched_at'] as String);
+        final age = DateTime.now().difference(fetchedAt);
+        if (age < Duration.zero || age > maxAge) continue;
+
+        // Entries written before the coordinate metadata was added remain
+        // readable in their exact bucket; adjacent legacy entries are not
+        // safe to reuse because their original centre is unknown.
+        final cachedLat = _number(decoded['lat']);
+        final cachedLng = _number(decoded['lng']);
+        final distance = cachedLat != null && cachedLng != null
+            ? _distanceMeters(lat, lng, cachedLat, cachedLng)
+            : candidateKey == key(lat: lat, lng: lng, radiusM: radiusM)
+            ? 0.0
+            : double.infinity;
+        if (distance > nearbyMerchantCacheReuseDistanceMeters ||
+            distance >= bestDistance) {
+          continue;
+        }
+
+        final candidates = parseNearbyMerchantsPayload(
+          jsonEncode({'merchants': decoded['merchants']}),
+        );
+        bestDistance = distance;
+        best = NearbyMerchantCacheSnapshot(
+          fetchedAt: fetchedAt,
+          candidates: candidates,
+        );
+      }
+      return best;
     } catch (_) {
       // A corrupt or unavailable local cache must never block the live lookup.
       return null;
@@ -123,9 +199,36 @@ class SharedPreferencesNearbyMerchantCache {
       key(lat: lat, lng: lng, radiusM: radiusM),
       jsonEncode({
         'fetched_at': DateTime.now().toIso8601String(),
+        'lat': lat,
+        'lng': lng,
         'merchants': candidates.map(_candidateToJson).toList(),
       }),
     );
+
+    // Keep the local index bounded. This is only local app cache data; it is
+    // safe to discard the oldest zones and prevents a long-lived commuter
+    // from growing SharedPreferences forever.
+    final entries = <String, DateTime>{};
+    for (final candidateKey in prefs.getKeys().where(
+      (candidateKey) =>
+          candidateKey.startsWith('$namespace:nearby_merchants:') &&
+          candidateKey.endsWith(':${radiusM.round()}'),
+    )) {
+      final raw = prefs.getString(candidateKey);
+      if (raw == null) continue;
+      try {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        entries[candidateKey] = DateTime.parse(decoded['fetched_at'] as String);
+      } catch (_) {
+        // Ignore malformed entries here; read() already treats them as a
+        // cache miss and a later write will naturally replace the index.
+      }
+    }
+    final staleKeys = entries.keys.toList()
+      ..sort((a, b) => entries[b]!.compareTo(entries[a]!));
+    for (final staleKey in staleKeys.skip(_maxCachedZones)) {
+      await prefs.remove(staleKey);
+    }
   }
 }
 
@@ -138,6 +241,7 @@ class HttpNearbyMerchantsRepository
   final bool _ownsClient;
   final Duration requestTimeout;
   final SharedPreferencesNearbyMerchantCache? localCache;
+  final Map<String, Future<List<NearbyMerchantCandidate>>> _inflight = {};
 
   HttpNearbyMerchantsRepository({
     required this.baseUrl,
@@ -174,6 +278,39 @@ class HttpNearbyMerchantsRepository
     required double lat,
     required double lng,
     double radiusM = 2000,
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = await localCache?.read(
+        lat: lat,
+        lng: lng,
+        radiusM: radiusM,
+        maxAge: nearbyMerchantClientFreshness,
+      );
+      if (cached != null) return cached.candidates;
+    }
+
+    // Home, Nearby, and the monitor can converge on the same fix at once.
+    // Coalesce that burst before it becomes multiple device -> API calls.
+    final requestKey = _requestKey(lat: lat, lng: lng, radiusM: radiusM);
+    final existing = _inflight[requestKey];
+    if (existing != null) return existing;
+
+    final request = _fetchAndCache(lat: lat, lng: lng, radiusM: radiusM);
+    _inflight[requestKey] = request;
+    try {
+      return await request;
+    } finally {
+      if (identical(_inflight[requestKey], request)) {
+        _inflight.remove(requestKey);
+      }
+    }
+  }
+
+  Future<List<NearbyMerchantCandidate>> _fetchAndCache({
+    required double lat,
+    required double lng,
+    required double radiusM,
   }) async {
     // Nearby checks and typed place searches use the same public OSM service.
     // The latitude/longitude endpoint avoids depending on the separate Google
@@ -229,6 +366,13 @@ class HttpNearbyMerchantsRepository
     if (cache == null) return Future.value(null);
     return cache.read(lat: lat, lng: lng, radiusM: radiusM);
   }
+
+  String _requestKey({
+    required double lat,
+    required double lng,
+    required double radiusM,
+  }) =>
+      '${lat.toStringAsFixed(3)}:${lng.toStringAsFixed(3)}:${radiusM.round()}';
 }
 
 List<NearbyMerchantCandidate> parseNearbyMerchantsPayload(
@@ -279,3 +423,20 @@ Map<String, dynamic> _candidateToJson(NearbyMerchantCandidate candidate) => {
   'grid_lat': candidate.location.lat,
   'grid_lng': candidate.location.lng,
 };
+
+double? _number(Object? value) =>
+    value is num ? value.toDouble() : double.tryParse('$value');
+
+double _distanceMeters(double latA, double lngA, double latB, double lngB) {
+  const earthRadiusMeters = 6371000.0;
+  final radians = math.pi / 180;
+  final dLat = (latB - latA) * radians;
+  final dLng = (lngB - lngA) * radians;
+  final a =
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(latA * radians) *
+          math.cos(latB * radians) *
+          math.sin(dLng / 2) *
+          math.sin(dLng / 2);
+  return 2 * earthRadiusMeters * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+}

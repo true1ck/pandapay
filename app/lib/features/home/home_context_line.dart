@@ -8,7 +8,14 @@ import '../../app/providers.dart';
 import '../geofence/nearby_merchants_repository.dart';
 import 'home_screen.dart' show HomeScreen;
 
-enum _ContextState { locating, searching, found, noPermission, noMatch, offlineOrError }
+enum _ContextState {
+  locating,
+  searching,
+  found,
+  noPermission,
+  noMatch,
+  offlineOrError,
+}
 
 /// ui-spec B1.1 context line — *"You're at DMart Powai"* / *"Near Indian
 /// Oil"* / *"Pick a category"* — a thin presentation layer over the SAME
@@ -57,11 +64,36 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
   @override
   void initState() {
     super.initState();
+    final snapshot = ref.read(homeNearbyContextProvider);
+    if (snapshot != null &&
+        ref.read(clockProvider).now().difference(snapshot.resolvedAt) <=
+            nearbyMerchantHomeSnapshotWarmup) {
+      _restoreSnapshot(snapshot);
+    }
+    // Always obtain a local position after a Home remount. This is not a
+    // network request: it lets the repository decide whether the device is
+    // still inside the cached zone, and lets the UI re-rank the saved places
+    // if the user moved. The repository performs the network call only after
+    // the zone/cache gate misses.
     _locate(auto: true);
   }
 
+  void _restoreSnapshot(NearbyContextSnapshot snapshot) {
+    _closest = snapshot.match;
+    _state = snapshot.match == null
+        ? _ContextState.noMatch
+        : _ContextState.found;
+    final categoryId = snapshot.match?.candidate.categoryId;
+    if (categoryId != null && HomeScreen.categoryLabelFor(categoryId) != null) {
+      ref.read(selectedCategoryProvider.notifier).state = categoryId;
+    }
+  }
+
   Future<void> _locate({required bool auto}) async {
-    if (mounted) setState(() => _state = _ContextState.locating);
+    final hasWarmSnapshot = _closest != null;
+    if (mounted && !hasWarmSnapshot) {
+      setState(() => _state = _ContextState.locating);
+    }
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -89,7 +121,8 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
         }
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         if (mounted) {
           setState(() {
             _closest = null;
@@ -100,12 +133,15 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
       }
 
       final position = await _readCurrentLocationOnce();
-      if (mounted) setState(() => _state = _ContextState.searching);
+      if (mounted && !hasWarmSnapshot) {
+        setState(() => _state = _ContextState.searching);
+      }
       final repo = ref.read(nearbyMerchantsRepositoryProvider);
       final candidates = await repo.fetchNearby(
         lat: position.latitude,
         lng: position.longitude,
         radiusM: nearbyMerchantSearchRadiusMeters,
+        forceRefresh: !auto,
       );
       final matches = findNearbyMerchants(
         origin: GeoPoint(lat: position.latitude, lng: position.longitude),
@@ -114,15 +150,30 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
       );
       if (!mounted) return;
       if (matches.isEmpty) {
+        ref
+            .read(homeNearbyContextProvider.notifier)
+            .state = NearbyContextSnapshot(
+          resolvedAt: ref.read(clockProvider).now(),
+          origin: GeoPoint(lat: position.latitude, lng: position.longitude),
+          match: null,
+        );
         setState(() {
           _closest = null;
           _state = _ContextState.noMatch;
         });
       } else {
         final nearestCategory = matches.first.candidate.categoryId;
-        if (nearestCategory != null && HomeScreen.categoryLabelFor(nearestCategory) != null) {
+        if (nearestCategory != null &&
+            HomeScreen.categoryLabelFor(nearestCategory) != null) {
           ref.read(selectedCategoryProvider.notifier).state = nearestCategory;
         }
+        ref
+            .read(homeNearbyContextProvider.notifier)
+            .state = NearbyContextSnapshot(
+          resolvedAt: ref.read(clockProvider).now(),
+          origin: GeoPoint(lat: position.latitude, lng: position.longitude),
+          match: matches.first,
+        );
         setState(() {
           _closest = matches.first;
           _state = _ContextState.found;
@@ -167,7 +218,11 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
 
     final recommendation = _closest!.candidate.categoryId == null
         ? null
-        : ref.watch(bestCardForMerchantProvider(_closest!.candidate.categoryId)).valueOrNull;
+        : ref
+              .watch(
+                bestCardForMerchantProvider(_closest!.candidate.categoryId),
+              )
+              .valueOrNull;
 
     return Padding(
       // B5 (Task 14): this widget's own leading padding is now owned by
@@ -194,7 +249,11 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.place_rounded, size: 16, color: BambooInk.ink500),
+                  const Icon(
+                    Icons.place_rounded,
+                    size: 16,
+                    color: BambooInk.ink500,
+                  ),
                   const SizedBox(width: AppSpace.xs),
                   Flexible(
                     child: Text(
@@ -210,7 +269,11 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
                   padding: const EdgeInsets.only(left: 20),
                   child: Text(
                     _recommendationText(recommendation),
-                    style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.jade),
+                    style: BambooFonts.ui(
+                      12,
+                      weight: FontWeight.w600,
+                      color: BambooInk.jade,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),

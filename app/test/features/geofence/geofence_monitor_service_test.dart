@@ -292,6 +292,7 @@ class _PollingRepo implements NearbyMerchantsRepository {
     required double lat,
     required double lng,
     double radiusM = 2000,
+    bool forceRefresh = false,
   }) async {
     radius = radiusM;
     if (fail) throw StateError('provider unavailable');
@@ -333,5 +334,6 @@ class _FakeNearbyMerchantsRepository implements NearbyMerchantsRepository {
     required double lat,
     required double lng,
     double radiusM = 2000,
+    bool forceRefresh = false,
   }) async => const [];
 }
