@@ -1,4 +1,5 @@
 import unittest
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import main
@@ -27,6 +28,18 @@ class LookupTests(unittest.IsolatedAsyncioTestCase):
             new=AsyncMock(side_effect=[TimeoutError(), RuntimeError(), OSError()]),
         ):
             with self.assertRaisesRegex(RuntimeError, "All Google Maps category searches failed"):
+                await main.lookup(15.4, 74.0, 2000)
+
+    async def test_overall_deadline_is_bounded(self):
+        async def slow_category(*_args):
+            await asyncio.sleep(1)
+
+        with patch.object(main, "_lookup_timeout_seconds", 0.01), patch.object(
+            main,
+            "scrape_category",
+            new=slow_category,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "overall deadline"):
                 await main.lookup(15.4, 74.0, 2000)
 
 

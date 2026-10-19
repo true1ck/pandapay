@@ -1026,10 +1026,10 @@ app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
     return res.status(503).json({ error: 'nearby_discovery_unavailable', unavailable: true });
   }
   const controller = new AbortController();
-  // The scraper applies its own per-category deadline. Keep this outer
-  // timeout bounded as well so a hung internal service cannot leave the app
-  // waiting for a minute before it can show a retry state.
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  // The scraper runs three category searches in parallel and allows up to
+  // 25 seconds overall. Keep this deadline bounded but above the scraper's
+  // full lookup budget so it can return complete or partial results.
+  const timeout = setTimeout(() => controller.abort(), 70000);
   try {
     const response = await fetch(`${scraperUrl.replace(/\/$/, '')}/nearby`, {
       method: 'POST',
@@ -1037,11 +1037,26 @@ app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
       body: JSON.stringify({ lat, lng, radius_m: radiusM }),
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`scraper returned ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(`scraper returned ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
     const payload = await response.json();
-    res.json({ source: 'google_maps', radius_m: radiusM, merchants: payload.merchants || [] });
+    res.json({
+      source: 'google_maps',
+      radius_m: radiusM,
+      merchants: payload.merchants || [],
+      partial: payload.partial === true,
+      failed_categories: Number(payload.failed_categories) || 0,
+    });
   } catch (err) {
-    console.warn('POST /merchants/nearby/google unavailable', err.name === 'AbortError' ? 'timeout' : err.message);
+    // Do not include the request body: it contains precise user coordinates.
+    console.warn('POST /merchants/nearby/google unavailable', {
+      requestId: req.requestId,
+      reason: err.name === 'AbortError' ? 'scraper_timeout' : 'scraper_error',
+      status: err.status || null,
+    });
     res.status(503).json({
       error: 'nearby_discovery_unavailable',
       unavailable: true,

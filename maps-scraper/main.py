@@ -18,6 +18,7 @@ _inflight: dict[str, asyncio.Task] = {}
 _lock = asyncio.Lock()
 _scrape_semaphore = asyncio.Semaphore(3)
 _category_timeout_seconds = 18
+_lookup_timeout_seconds = 25
 _queries = (
     ("groceries", "supermarkets grocery stores"),
     ("fuel", "petrol pumps fuel stations"),
@@ -127,13 +128,21 @@ async def scrape_category(lat: float, lng: float, radius_m: int, category: str, 
         return found
 
 async def lookup(lat: float, lng: float, radius_m: int):
-    outcomes = await asyncio.gather(*(
-        asyncio.wait_for(
-            scrape_category(lat, lng, radius_m, category, query),
-            timeout=_category_timeout_seconds,
+    async def scrape_all_categories():
+        return await asyncio.gather(*(
+            asyncio.wait_for(
+                scrape_category(lat, lng, radius_m, category, query),
+                timeout=_category_timeout_seconds,
+            )
+            for category, query in _queries
+        ), return_exceptions=True)
+
+    try:
+        outcomes = await asyncio.wait_for(
+            scrape_all_categories(), timeout=_lookup_timeout_seconds
         )
-        for category, query in _queries
-    ), return_exceptions=True)
+    except asyncio.TimeoutError as exc:
+        raise RuntimeError("Google Maps lookup exceeded its overall deadline") from exc
     unique = {}
     failures = 0
     for outcome in outcomes:

@@ -102,3 +102,24 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
             'curl -fsS -m 10 http://127.0.0.1:4000/ready && echo && curl -fsS -m 10 http://127.0.0.1:3210/ready'
+
+      - name: Smoke test production Google Maps lookup
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$DEPLOY_USER@$HOST" \
+            'cd /home/ubuntu/apps/pandapay && docker compose --env-file .env -f docker-compose.prod.yml exec -T maps-scraper python -c '\''
+          import json, urllib.request
+          request = urllib.request.Request(
+              "http://127.0.0.1:8000/nearby",
+              data=json.dumps({"lat": 18.5204, "lng": 73.8567, "radius_m": 2000}).encode(),
+              headers={"content-type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=60) as response:
+              payload = json.load(response)
+          count = len(payload.get("merchants", []))
+          print(json.dumps({"merchant_count": count, "partial": payload.get("partial", False), "failed_categories": payload.get("failed_categories", 0)}))
+          assert count > 0, "Google Maps scraper returned no nearby merchants for Pune smoke-test point"
+          '\''
