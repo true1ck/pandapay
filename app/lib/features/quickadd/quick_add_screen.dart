@@ -476,7 +476,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             _amountController.text = row.amount.rupees.toStringAsFixed(2);
             _date = row.date;
           }
-          _activePage = AddFlowPage.quickAdd;
+          // Stay on Scan Bill so the user reviews OCR results inline.
         });
       } finally {
         await recognizer.close();
@@ -489,11 +489,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         );
       }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _pickingReceipt = false;
           _scanningReceipt = false;
         });
+      }
     }
   }
 
@@ -1033,7 +1034,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: _activePage == AddFlowPage.quickAdd
+      bottomNavigationBar:
+          _activePage == AddFlowPage.quickAdd ||
+          (_activePage == AddFlowPage.scanBill && _receipt != null)
           ? _saveBar()
           : null,
     );
@@ -1783,117 +1786,227 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     ),
   );
 
-  Widget _buildScanBill() => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          height: 250,
-          decoration: BoxDecoration(
-            color: BambooInk.slate.withValues(alpha: 0.045),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: BambooInk.hairlineOnPaper),
-          ),
-          child: _scanningReceipt
-              ? const Center(child: CircularProgressIndicator())
-              : _receipt?.path != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(23),
-                  child: Image.file(
-                    File(_receipt!.path!),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const Center(
-                      child: Icon(Icons.receipt_long_outlined, size: 54),
-                    ),
-                  ),
-                )
-              : const Center(
-                  child: Icon(
-                    Icons.document_scanner_outlined,
-                    size: 58,
-                    color: BambooInk.ink500,
-                  ),
+  Widget _buildScanBill() {
+    final userCards = ref.watch(userCardsProvider);
+    final categories = ref.watch(categoriesProvider);
+    final history = ref.watch(transactionsProvider).valueOrNull ?? const [];
+    final merchants = _rankedMerchants(history);
+
+    // ── CAPTURE STATE (no receipt yet) ──────────────────────────────────────
+    if (_receipt == null) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Drop-zone placeholder
+            Container(
+              height: 200,
+              decoration: BoxDecoration(
+                color: BambooInk.slate.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: BambooInk.slate.withValues(alpha: 0.15),
+                  width: 1.5,
                 ),
+              ),
+              child: _scanningReceipt
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.document_scanner_outlined,
+                          size: 52,
+                          color: BambooInk.ink500,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Scan a receipt',
+                          style: BambooFonts.heading(19, color: BambooInk.ink900),
+                        ),
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 28),
+                          child: Text(
+                            'Take a clear photo of the full receipt. Text recognition runs on this device.',
+                            textAlign: TextAlign.center,
+                            style: BambooFonts.ui(13, color: BambooInk.ink500, height: 1.45),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 20),
+            // Primary action: camera
+            FilledButton.icon(
+              onPressed: _pickingReceipt ? null : () => _scanReceipt(),
+              icon: const Icon(Icons.photo_camera_outlined),
+              label: Text(_scanningReceipt ? 'Scanning…' : 'Take receipt photo'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Secondary: gallery (OCR the picked image)
+            OutlinedButton.icon(
+              onPressed: _pickingReceipt
+                  ? null
+                  : () => _scanReceipt(_ReceiptPickOption.gallery),
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Choose from gallery'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Tertiary: file attachment without OCR
+            Center(
+              child: TextButton.icon(
+                onPressed: _pickingReceipt
+                    ? null
+                    : () => _pickReceipt(_ReceiptPickOption.file),
+                icon: const Icon(Icons.upload_file_outlined, size: 18),
+                label: const Text('Upload from Files'),
+              ),
+            ),
+            const _ScanBillDivider(),
+            Center(
+              child: TextButton.icon(
+                onPressed: () => setState(() => _activePage = AddFlowPage.quickAdd),
+                icon: const Icon(Icons.edit_note_rounded, size: 18),
+                label: const Text('Enter details manually'),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 20),
-        Text(
-          _receipt == null ? 'Scan a receipt' : 'Receipt review',
-          style: BambooFonts.heading(21, color: BambooInk.ink900),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _receiptScanMessage ??
-              'Take a clear photo of the full receipt. Text recognition runs on this device; check the suggested details before saving.',
-          style: BambooFonts.ui(14, color: BambooInk.ink700, height: 1.5),
-        ),
-        if (_receipt != null) ...[
-          const SizedBox(height: 14),
+      );
+    }
+
+    // ── REVIEW STATE (receipt captured, OCR done) ───────────────────────────
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // --- Receipt hero with OCR badges ---
+          _ScanBillReceiptHero(
+            receipt: _receipt!,
+            scanning: _scanningReceipt,
+            merchant: _merchantController.text.trim().isEmpty
+                ? null
+                : _merchantController.text.trim(),
+            amount: _amountController.text.trim().isEmpty
+                ? null
+                : _amountController.text.trim(),
+            date: _date,
+            scanMessage: _receiptScanMessage,
+            onRetake: _pickingReceipt ? null : () => _scanReceipt(),
+            onGallery: _pickingReceipt
+                ? null
+                : () => _scanReceipt(_ReceiptPickOption.gallery),
+          ),
+          const SizedBox(height: 16),
+
+          // --- Amount + entry kind (identical to Quick Add) ---
+          _buildAmountHeader(),
+
+          // --- Merchant & Category card ---
           CardSummaryPanel(
             elevated: false,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Suggested details',
-                  style: BambooFonts.ui(
-                    14,
-                    weight: FontWeight.w700,
-                    color: BambooInk.ink900,
+                _buildMerchantField(merchants),
+                const _FormDivider(),
+                _buildCategories(categories),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // --- Payment & Date card ---
+          CardSummaryPanel(
+            elevated: false,
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildPaymentMethods(userCards),
+                const _FormDivider(),
+                _buildDateField(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // --- Note & receipt attachment toggle ---
+          CardSummaryPanel(
+            elevated: false,
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _FieldGroup(
+                  title: 'Note',
+                  trailing: Text(
+                    'Optional',
+                    style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+                  ),
+                  child: TextField(
+                    controller: _noteController,
+                    onTapOutside: (_) =>
+                        FocusManager.instance.primaryFocus?.unfocus(),
+                    style: BambooFonts.ui(14),
+                    decoration: _fieldDecoration(
+                      'What was it for?',
+                      icon: Icons.notes_rounded,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 6),
+                const _FormDivider(),
+                // Receipt photo attachment row
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.description_outlined,
+                      size: 18,
+                      color: BambooInk.ink700,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _receipt!.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: BambooFonts.ui(13),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove attachment',
+                      onPressed: _saving
+                          ? null
+                          : () => setState(() => _receipt = null),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text(
-                  _scannedReceipt == null
-                      ? 'No fields were filled automatically. You can still use this photo as the receipt attachment.'
-                      : '${_merchantController.text} · ₹${_amountController.text} · ${_date!.day}/${_date!.month}/${_date!.year}',
-                  style: BambooFonts.ui(13, color: BambooInk.ink700),
+                  'Receipt photo will be saved with this transaction.',
+                  style: BambooFonts.ui(11, color: BambooInk.ink500),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => setState(() => _activePage = AddFlowPage.quickAdd),
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Review transaction details'),
-          ),
-        ] else ...[
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: _pickingReceipt ? null : () => _scanReceipt(),
-            icon: const Icon(Icons.photo_camera_outlined),
-            label: Text(_scanningReceipt ? 'Scanning…' : 'Take receipt photo'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
-              backgroundColor: BambooInk.slate,
-              foregroundColor: BambooInk.lime,
-            ),
-          ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: _pickingReceipt
-                ? null
-                : () => _scanReceipt(_ReceiptPickOption.gallery),
-            icon: const Icon(Icons.photo_library_outlined),
-            label: const Text('Choose from gallery'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-            ),
-          ),
         ],
-        const SizedBox(height: 12),
-        Center(
-          child: TextButton.icon(
-            onPressed: () => setState(() => _activePage = AddFlowPage.quickAdd),
-            icon: const Icon(Icons.edit_note_rounded),
-            label: const Text('Enter details manually'),
-          ),
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 class _FieldGroup extends StatelessWidget {
@@ -2305,4 +2418,264 @@ class _MerchantSuggestions extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Compact receipt preview card shown on the Scan Bill tab after OCR runs.
+/// Renders the photo with floating overlay badges for merchant, date and
+/// amount, plus Retake / Gallery icon buttons so the user can swap the
+/// image without losing any edits they have already made to the form.
+class _ScanBillReceiptHero extends StatelessWidget {
+  final _PendingReceipt receipt;
+  final bool scanning;
+  final String? merchant;
+  final String? amount;
+  final DateTime? date;
+  final String? scanMessage;
+  final VoidCallback? onRetake;
+  final VoidCallback? onGallery;
+
+  const _ScanBillReceiptHero({
+    required this.receipt,
+    required this.scanning,
+    this.merchant,
+    this.amount,
+    this.date,
+    this.scanMessage,
+    this.onRetake,
+    this.onGallery,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // --- Photo with overlay badges ---
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            height: 180,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Receipt photo or loading state
+                if (scanning)
+                  ColoredBox(
+                    color: BambooInk.slate.withValues(alpha: 0.06),
+                    child: const Center(child: CircularProgressIndicator()),
+                  )
+                else if (receipt.path != null)
+                  Image.file(
+                    File(receipt.path!),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => ColoredBox(
+                      color: BambooInk.slate.withValues(alpha: 0.06),
+                      child: const Center(
+                        child: Icon(
+                          Icons.receipt_long_outlined,
+                          size: 48,
+                          color: BambooInk.ink500,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  ColoredBox(
+                    color: BambooInk.slate.withValues(alpha: 0.06),
+                    child: const Center(
+                      child: Icon(
+                        Icons.receipt_long_outlined,
+                        size: 48,
+                        color: BambooInk.ink500,
+                      ),
+                    ),
+                  ),
+
+                // Top-left badge: merchant
+                if (merchant != null && merchant!.isNotEmpty)
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: _OcrBadge(
+                      icon: Icons.storefront_outlined,
+                      label: merchant!,
+                    ),
+                  ),
+
+                // Top-right badge: date
+                if (date != null)
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: _OcrBadge(
+                      icon: Icons.calendar_today_outlined,
+                      label:
+                          '${date!.day} ${_monthAbbr(date!.month)} ${date!.year}',
+                    ),
+                  ),
+
+                // Bottom-left badge: amount
+                if (amount != null && amount!.isNotEmpty)
+                  Positioned(
+                    bottom: 10,
+                    left: 10,
+                    child: _OcrBadge(
+                      icon: Icons.currency_rupee_rounded,
+                      label: amount!,
+                      prominent: true,
+                    ),
+                  ),
+
+                // Bottom-right: Retake + Gallery icon buttons
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: Row(
+                    children: [
+                      _PhotoActionButton(
+                        icon: Icons.photo_camera_outlined,
+                        tooltip: 'Retake photo',
+                        onTap: onRetake,
+                      ),
+                      const SizedBox(width: 6),
+                      _PhotoActionButton(
+                        icon: Icons.photo_library_outlined,
+                        tooltip: 'Choose from gallery',
+                        onTap: onGallery,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // --- Optional scan message below the photo ---
+        if (scanMessage != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            scanMessage!,
+            style: BambooFonts.ui(12.5, color: BambooInk.ink700, height: 1.4),
+          ),
+        ],
+      ],
+    );
+  }
+
+  static String _monthAbbr(int month) => const [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ][month - 1];
+}
+
+/// Floating pill overlay on the receipt photo that shows an OCR-extracted
+/// field. Uses a semi-opaque white background so it reads on any photo.
+class _OcrBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool prominent;
+
+  const _OcrBadge({
+    required this.icon,
+    required this.label,
+    this.prominent = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = prominent
+        ? BambooInk.lime.withValues(alpha: 0.92)
+        : Colors.white.withValues(alpha: 0.88);
+    final fg = prominent ? BambooInk.slate : BambooInk.ink900;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: BambooFonts.ui(
+              12,
+              weight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small rounded icon button overlaid on the receipt photo (Retake / Gallery).
+class _PhotoActionButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  const _PhotoActionButton({
+    required this.icon,
+    required this.tooltip,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.88),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Icon(icon, size: 18, color: BambooInk.ink900),
+      ),
+    ),
+  );
+}
+
+/// "or" divider used between action buttons on the capture state.
+class _ScanBillDivider extends StatelessWidget {
+  const _ScanBillDivider();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    child: Row(
+      children: [
+        const Expanded(child: Divider(color: BambooInk.hairlineOnPaper)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'or',
+            style: BambooFonts.ui(12, color: BambooInk.ink500),
+          ),
+        ),
+        const Expanded(child: Divider(color: BambooInk.hairlineOnPaper)),
+      ],
+    ),
+  );
 }

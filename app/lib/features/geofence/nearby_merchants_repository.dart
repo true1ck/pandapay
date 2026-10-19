@@ -43,46 +43,6 @@ abstract class NearbyMerchantDiscoveryRepository
   }) => fetchNearby(lat: lat, lng: lng, radiusM: radiusM);
 }
 
-/// Manual place lookup used to test the proximity flow without relying on a
-/// fresh handset GPS fix. Results are unverified OSM candidates and must stay
-/// visibly separate from PandaPay's published merchant directory.
-abstract class NearbyPlaceSearchRepository {
-  Future<List<NearbyMerchantCandidate>> searchPlaces({
-    required String query,
-    double? lat,
-    double? lng,
-    double radiusM = 5000,
-  });
-
-  Future<NearbyPlaceSearchResult> searchPlacesWithStatus({
-    required String query,
-    double? lat,
-    double? lng,
-    double radiusM = 5000,
-  }) async {
-    return NearbyPlaceSearchResult(
-      candidates: await searchPlaces(
-        query: query,
-        lat: lat,
-        lng: lng,
-        radiusM: radiusM,
-      ),
-    );
-  }
-}
-
-class NearbyPlaceSearchResult {
-  final List<NearbyMerchantCandidate> candidates;
-  final bool unavailable;
-  final String? message;
-
-  const NearbyPlaceSearchResult({
-    required this.candidates,
-    this.unavailable = false,
-    this.message,
-  });
-}
-
 class NearbyMerchantCacheSnapshot {
   final DateTime fetchedAt;
   final List<NearbyMerchantCandidate> candidates;
@@ -172,8 +132,7 @@ class SharedPreferencesNearbyMerchantCache {
 class HttpNearbyMerchantsRepository
     implements
         NearbyMerchantDiscoveryRepository,
-        NearbyMerchantCacheRepository,
-        NearbyPlaceSearchRepository {
+        NearbyMerchantCacheRepository {
   final String baseUrl;
   final http.Client _client;
   final bool _ownsClient;
@@ -190,18 +149,6 @@ class HttpNearbyMerchantsRepository
 
   void close() {
     if (_ownsClient) _client.close();
-  }
-
-  Future<http.Response> _get(Uri uri) async {
-    try {
-      return await _client.get(uri).timeout(requestTimeout);
-    } on TimeoutException {
-      throw ApiException(
-        'GET ${uri.path} timed out',
-        userMessage:
-            'Nearby search took too long. Please check your connection and try again.',
-      );
-    }
   }
 
   Future<http.Response> _postJson(Uri uri, Map<String, Object?> body) async {
@@ -270,67 +217,6 @@ class HttpNearbyMerchantsRepository
       );
     }
     return parseNearbyMerchantsPayload(response.body);
-  }
-
-  @override
-  Future<List<NearbyMerchantCandidate>> searchPlaces({
-    required String query,
-    double? lat,
-    double? lng,
-    double radiusM = 5000,
-  }) async {
-    final result = await searchPlacesWithStatus(
-      query: query,
-      lat: lat,
-      lng: lng,
-      radiusM: radiusM,
-    );
-    return result.candidates;
-  }
-
-  @override
-  Future<NearbyPlaceSearchResult> searchPlacesWithStatus({
-    required String query,
-    double? lat,
-    double? lng,
-    double radiusM = 5000,
-  }) async {
-    final uri = Uri.parse('$baseUrl/merchants/nearby/search');
-    final response = await _postJson(uri, {
-      'q': query.trim(),
-      if (lat != null || lng != null) 'lat': lat,
-      if (lat != null || lng != null) 'lng': lng,
-      'radiusM': radiusM,
-    });
-    if (response.statusCode != 200) {
-      // Keep builds compatible with an API deployment from before the manual
-      // place-search route was added. The first-party directory is still a
-      // useful answer for queries such as "panda", and avoids turning an
-      // otherwise recoverable 404 into the generic error shown by the screen.
-      if (response.statusCode == 404) {
-        final directoryUri = Uri.parse(
-          '$baseUrl/merchants/search',
-        ).replace(queryParameters: {'q': query.trim()});
-        final directoryResponse = await _get(directoryUri);
-        if (directoryResponse.statusCode == 200) {
-          return NearbyPlaceSearchResult(
-            candidates: parseNearbyMerchantsPayload(
-              directoryResponse.body,
-              defaultSource: 'published',
-            ),
-          );
-        }
-      }
-      throw ApiException(
-        'GET /merchants/nearby/search failed: ${response.statusCode} ${response.body}',
-      );
-    }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    return NearbyPlaceSearchResult(
-      candidates: parseNearbyMerchantsPayload(response.body),
-      unavailable: decoded['unavailable'] == true,
-      message: decoded['message'] as String?,
-    );
   }
 
   @override

@@ -4260,18 +4260,6 @@ final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((
   return repository;
 });
 
-/// Manual place search shares the nearby repository when the production HTTP
-/// implementation is installed. The fallback keeps this test surface usable
-/// with a deliberately minimal fake nearby repository in widget tests.
-final nearbyPlaceSearchRepositoryProvider =
-    Provider<NearbyPlaceSearchRepository>((ref) {
-      final nearby = ref.watch(nearbyMerchantsRepositoryProvider);
-      // The concrete HTTP repository implements both public nearby contracts;
-      // test fakes may implement only the original merchant interface.
-      if (nearby is HttpNearbyMerchantsRepository) return nearby;
-      return HttpNearbyMerchantsRepository(baseUrl: _apiBaseUrl);
-    });
-
 /// UA-8.3 (B1): one FlutterLocalNotificationsPlugin instance for the whole
 /// app. Previously GeofenceMonitorService was the only caller and
 /// constructed its own — fine when it was the only notification path, but

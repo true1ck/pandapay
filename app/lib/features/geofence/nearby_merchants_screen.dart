@@ -36,12 +36,6 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   bool _refreshing = false;
   bool _showingCached = false;
   bool _cacheRefreshFailed = false;
-  final _placeController = TextEditingController();
-  List<NearbyMerchantCandidate>? _placeResults;
-  bool _placeSearching = false;
-  String? _placeSearchError;
-  bool _placeSearchUnavailable = false;
-  Position? _lastPosition;
 
   @override
   void initState() {
@@ -59,12 +53,6 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    _placeController.dispose();
-    super.dispose();
-  }
-
   Future<void> _toggleBackgroundMonitoring(bool enable) async {
     await ref.read(backgroundAlertsControllerProvider).setEnabled(enable);
   }
@@ -76,13 +64,11 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
       _refreshing = false;
       _showingCached = false;
       _cacheRefreshFailed = false;
-      _placeResults = null;
     });
 
     try {
       final position = await _readCurrentLocationOnce(auto: auto);
       if (!mounted) return;
-      _lastPosition = position;
 
       final repo = ref.read(nearbyMerchantsRepositoryProvider);
       final NearbyMerchantCacheRepository? cacheRepo =
@@ -144,50 +130,6 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
           _state = _LoadState.error;
         });
       }
-    }
-  }
-
-  Future<void> _searchPlace() async {
-    final query = _placeController.text.trim();
-    if (query.length < 2) {
-      setState(() => _placeSearchError = 'Enter at least 2 characters.');
-      return;
-    }
-    setState(() {
-      _placeSearching = true;
-      _placeSearchError = null;
-      _placeSearchUnavailable = false;
-      _placeResults = null;
-    });
-    try {
-      final position = _lastPosition;
-      final result = await ref
-          .read(nearbyPlaceSearchRepositoryProvider)
-          .searchPlacesWithStatus(
-            query: query,
-            lat: position?.latitude,
-            lng: position?.longitude,
-          );
-      if (mounted) {
-        setState(() {
-          _placeResults = result.candidates;
-          _placeSearchUnavailable = result.unavailable;
-          _placeSearchError = result.unavailable ? result.message : null;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          // Complete the interaction locally even when the API process is
-          // unreachable, instead of leaving the previous screen state active.
-          _placeResults = const [];
-          _placeSearchUnavailable = true;
-          _placeSearchError =
-              'Place search is unavailable right now. Please check your connection and try again.';
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _placeSearching = false);
     }
   }
 
@@ -369,64 +311,6 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                   _ => 'Check nearby merchants',
                 }),
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-                decoration: BoxDecoration(
-                  color: BambooInk.glassFillOnPaper,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: BambooInk.hairlineOnPaper),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _placeController,
-                        textInputAction: TextInputAction.search,
-                        style: BambooFonts.ui(14, color: BambooInk.ink900),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          border: InputBorder.none,
-                          hintText: 'Test a place or petrol pump',
-                          hintStyle: BambooFonts.ui(
-                            14,
-                            color: BambooInk.ink500,
-                          ),
-                        ),
-                        onSubmitted: (_) => _searchPlace(),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Search place',
-                      onPressed: _placeSearching ? null : _searchPlace,
-                      icon: _placeSearching
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.search_rounded),
-                    ),
-                  ],
-                ),
-              ),
-              if (_placeSearchError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    _placeSearchError!,
-                    style: BambooFonts.ui(12, color: BambooInk.clay),
-                  ),
-                ),
-              if (_placeResults != null &&
-                  !_placeResults!.any((result) => result.source == 'published'))
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    'Map candidates are not verified PandaPay merchants.',
-                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                  ),
-                ),
               if (_refreshing || _showingCached)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -450,24 +334,6 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   }
 
   Widget _buildBody() {
-    final placeResults = _placeResults;
-    if (placeResults != null) {
-      if (placeResults.isEmpty) {
-        return Center(
-          child: Text(
-            _placeSearchUnavailable
-                ? 'Place search is temporarily unavailable. Please try again.'
-                : 'No map place found for this search.',
-            textAlign: TextAlign.center,
-            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
-          ),
-        );
-      }
-      return ListView.builder(
-        itemCount: placeResults.length,
-        itemBuilder: (context, index) => _ManualPlaceTile(placeResults[index]),
-      );
-    }
     if (_state == _LoadState.error) {
       return Center(
         child: Column(
@@ -502,7 +368,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     if (_matches.isEmpty) {
       return Center(
         child: Text(
-          'No nearby places found within 2 km. Try again or search for a place below.',
+          'No nearby places found within 2 km. Try again.',
           textAlign: TextAlign.center,
           style: BambooFonts.ui(13.5, color: BambooInk.ink500),
         ),
@@ -526,63 +392,6 @@ String _placeDisplayName(NearbyMerchantCandidate candidate) {
   return isMapCandidate && generic.hasMatch(name)
       ? '$name · business name unavailable'
       : name;
-}
-
-class _ManualPlaceTile extends ConsumerWidget {
-  final NearbyMerchantCandidate candidate;
-
-  const _ManualPlaceTile(this.candidate);
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final best = ref.watch(bestCardForMerchantProvider(candidate.categoryId));
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _placeDisplayName(candidate),
-            style: BambooFonts.heading(15, color: BambooInk.ink900),
-          ),
-          if (candidate.address?.trim().isNotEmpty ?? false) ...[
-            const SizedBox(height: 3),
-            Text(
-              candidate.address!,
-              style: BambooFonts.ui(12, color: BambooInk.ink500),
-            ),
-          ],
-          const SizedBox(height: 3),
-          Text(
-            candidate.source == 'published'
-                ? 'PandaPay merchant · ${candidate.categoryId ?? 'other'}'
-                : 'Map candidate · ${candidate.categoryId ?? 'other'}',
-            style: BambooFonts.ui(12, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: 7),
-          best.when(
-            loading: () => const LinearProgressIndicator(),
-            error: (err, _) => Text(
-              'Could not rank cards: $err',
-              style: BambooFonts.ui(12.5, color: BambooInk.clay),
-            ),
-            data: (rec) => Text(
-              rec == null
-                  ? 'No usable card for this place yet.'
-                  : 'Suggested card: ${rec.card.name}',
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _NearbyMerchantTile extends ConsumerWidget {
