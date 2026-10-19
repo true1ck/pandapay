@@ -65,7 +65,12 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (mounted) setState(() => _state = _ContextState.noPermission);
+        if (mounted) {
+          setState(() {
+            _closest = null;
+            _state = _ContextState.noPermission;
+          });
+        }
         return;
       }
       var permission = await Geolocator.checkPermission();
@@ -74,13 +79,23 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
           // Never prompt on an automatic mount — checkPermission() alone
           // never surfaces a system dialog, but requestPermission() does,
           // and an automatic mount must stay silent per ui-spec B1 States.
-          if (mounted) setState(() => _state = _ContextState.noPermission);
+          if (mounted) {
+            setState(() {
+              _closest = null;
+              _state = _ContextState.noPermission;
+            });
+          }
           return;
         }
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-        if (mounted) setState(() => _state = _ContextState.noPermission);
+        if (mounted) {
+          setState(() {
+            _closest = null;
+            _state = _ContextState.noPermission;
+          });
+        }
         return;
       }
 
@@ -99,7 +114,10 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
       );
       if (!mounted) return;
       if (matches.isEmpty) {
-        setState(() => _state = _ContextState.noMatch);
+        setState(() {
+          _closest = null;
+          _state = _ContextState.noMatch;
+        });
       } else {
         final nearestCategory = matches.first.candidate.categoryId;
         if (nearestCategory != null && HomeScreen.categoryLabelFor(nearestCategory) != null) {
@@ -111,7 +129,12 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _state = _ContextState.offlineOrError);
+      if (mounted) {
+        setState(() {
+          _closest = null;
+          _state = _ContextState.offlineOrError;
+        });
+      }
     }
   }
 
@@ -138,32 +161,13 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
 
   @override
   Widget build(BuildContext context) {
-    final recommendation = _closest == null || _closest!.candidate.categoryId == null
+    if (_state != _ContextState.found || _closest == null) {
+      return const SizedBox.shrink();
+    }
+
+    final recommendation = _closest!.candidate.categoryId == null
         ? null
         : ref.watch(bestCardForMerchantProvider(_closest!.candidate.categoryId)).valueOrNull;
-    final (icon, text) = switch (_state) {
-      _ContextState.locating => (Icons.my_location_rounded, 'Finding where you are…'),
-      _ContextState.searching => (
-        Icons.radar_rounded,
-        'Checking nearby businesses…',
-      ),
-      _ContextState.found => (
-        Icons.place_rounded,
-        "You're near ${_closest!.candidate.displayName ?? 'a known merchant'}",
-      ),
-      _ContextState.noMatch => (
-        Icons.explore_off_rounded,
-        'No nearby businesses found within 2 km — pick a category.',
-      ),
-      // ui-spec B1 States: "No location permission -> chips primary, no
-      // nag" — this line stays factual and unobtrusive, never a permission
-      // prompt/nag of its own.
-      _ContextState.noPermission => (Icons.explore_off_rounded, 'Pick a category below.'),
-      _ContextState.offlineOrError => (
-        Icons.cloud_off_rounded,
-        'Nearby lookup unavailable — tap to retry.',
-      ),
-    };
 
     return Padding(
       // B5 (Task 14): this widget's own leading padding is now owned by
@@ -182,9 +186,7 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
         constraints: const BoxConstraints(minHeight: 48),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          onTap: _state == _ContextState.locating || _state == _ContextState.searching
-              ? null
-              : () => _locate(auto: false),
+          onTap: () => _locate(auto: false),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,14 +194,17 @@ class _HomeContextLineState extends ConsumerState<HomeContextLine> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 16, color: BambooInk.ink500),
+                  const Icon(Icons.place_rounded, size: 16, color: BambooInk.ink500),
                   const SizedBox(width: AppSpace.xs),
                   Flexible(
-                    child: Text(text, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
+                    child: Text(
+                      "You're near ${_closest!.candidate.displayName ?? 'a known merchant'}",
+                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                    ),
                   ),
                 ],
               ),
-              if (_state == _ContextState.found && recommendation != null) ...[
+              if (recommendation != null) ...[
                 const SizedBox(height: 2),
                 Padding(
                   padding: const EdgeInsets.only(left: 20),

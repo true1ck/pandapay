@@ -68,14 +68,59 @@ class _DeniedGeolocator extends GeolocatorPlatform {
   }
 }
 
+class _FakeFoundNearbyRepo implements NearbyMerchantsRepository {
+  @override
+  Future<List<NearbyMerchantCandidate>> fetchNearby({
+    required double lat,
+    required double lng,
+    double radiusM = 2000,
+  }) async {
+    return [
+      NearbyMerchantCandidate(
+        merchantId: 'dmart-1',
+        displayName: 'DMart Powai',
+        location: GeoPoint(lat: lat, lng: lng),
+        categoryId: 'groceries',
+      ),
+    ];
+  }
+}
+
+class _GrantedGeolocator extends GeolocatorPlatform {
+  int getCurrentPositionCalls = 0;
+
+  @override
+  Future<bool> isLocationServiceEnabled() async => true;
+
+  @override
+  Future<LocationPermission> checkPermission() async => LocationPermission.whileInUse;
+
+  @override
+  Future<LocationPermission> requestPermission() async => LocationPermission.whileInUse;
+
+  @override
+  Future<Position?> getLastKnownPosition({bool forceLocationManager = false}) async => null;
+
+  @override
+  Future<Position> getCurrentPosition({LocationSettings? locationSettings}) async {
+    getCurrentPositionCalls++;
+    return Position(
+      latitude: 19.1197,
+      longitude: 72.9051,
+      timestamp: DateTime(2026, 8, 8),
+      accuracy: 5,
+      altitude: 0,
+      altitudeAccuracy: 0,
+      heading: 0,
+      headingAccuracy: 0,
+      speed: 0,
+      speedAccuracy: 0,
+    );
+  }
+}
+
 void main() {
-  testWidgets('shows a single-line fallback when the location flow cannot complete in a test host', (tester) async {
-    // Geolocator has no platform implementation under flutter_test, so this
-    // exercises the catch-all noPermission/offlineOrError branch — the
-    // meaningful assertion is that SOME single-line context text renders,
-    // never a blank/crashed widget, since the exact fallback text is
-    // host-dependent (see nearby_merchants_screen.dart's own PROGRESS.md
-    // note that geolocation is unverified on a real device in this sandbox).
+  testWidgets('hides the context line when no place data is available', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [nearbyMerchantsRepositoryProvider.overrideWithValue(_FakeNearbyRepo())],
@@ -85,18 +130,26 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.byType(Text), findsOneWidget);
+    expect(find.byType(Text), findsNothing);
+    expect(find.byType(InkWell), findsNothing);
   });
 
-  testWidgets('the context line is tappable and meets the 48dp minimum touch target', (tester) async {
+  testWidgets('shows context line and meets 48dp touch target when place data is available', (tester) async {
+    final originalGeolocator = GeolocatorPlatform.instance;
+    final fakeGeolocator = _GrantedGeolocator();
+    GeolocatorPlatform.instance = fakeGeolocator;
+    addTearDown(() => GeolocatorPlatform.instance = originalGeolocator);
+
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [nearbyMerchantsRepositoryProvider.overrideWithValue(_FakeNearbyRepo())],
+        overrides: [nearbyMerchantsRepositoryProvider.overrideWithValue(_FakeFoundNearbyRepo())],
         child: const MaterialApp(home: Scaffold(body: HomeContextLine())),
       ),
     );
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text("You're near DMart Powai"), findsOneWidget);
 
     final inkWellFinder = find.byType(InkWell);
     expect(inkWellFinder, findsOneWidget);
@@ -104,12 +157,12 @@ void main() {
     final size = tester.getSize(inkWellFinder);
     expect(size.height, greaterThanOrEqualTo(48));
 
-    // Tapping re-triggers the one-shot location read without throwing.
+    // Tapping re-triggers the one-shot location read.
     await tester.tap(inkWellFinder);
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.byType(Text), findsOneWidget);
+    expect(fakeGeolocator.getCurrentPositionCalls, greaterThanOrEqualTo(2));
   });
 
   testWidgets(
@@ -155,34 +208,5 @@ void main() {
     // ordinary tab navigation.
     expect(fakeGeolocator.checkPermissionCalls, 3);
     expect(fakeGeolocator.requestPermissionCalls, 0);
-  });
-
-  testWidgets('an explicit tap is allowed to call requestPermission() once permission is denied',
-      (tester) async {
-    final originalGeolocator = GeolocatorPlatform.instance;
-    final fakeGeolocator = _DeniedGeolocator();
-    GeolocatorPlatform.instance = fakeGeolocator;
-    addTearDown(() => GeolocatorPlatform.instance = originalGeolocator);
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [nearbyMerchantsRepositoryProvider.overrideWithValue(_FakeNearbyRepo())],
-        child: const MaterialApp(home: Scaffold(body: HomeContextLine())),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-
-    // Automatic mount: no prompt yet.
-    expect(fakeGeolocator.requestPermissionCalls, 0);
-
-    // User explicitly taps the context line to correct/retry location —
-    // this IS allowed to prompt, matching nearby_merchants_screen.dart's
-    // own button-triggered flow.
-    await tester.tap(find.byType(InkWell));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-
-    expect(fakeGeolocator.requestPermissionCalls, 1);
   });
 }
