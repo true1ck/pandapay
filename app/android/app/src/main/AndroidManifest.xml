@@ -109,6 +109,12 @@
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="ocr,barcode" />
 
+        <!-- Android's status-bar glyph is a small, monochrome mark rather than
+             the full-color launcher artwork. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+
         <!-- UA-8.2 (Chunk 32): home-screen widget provider. Fully-qualified
              class name ensures flavor applicationIdSuffix (.dev2, .staging)
              does not misroute the class lookup. -->
