@@ -69,6 +69,7 @@ services:
       INBOUND_EMAIL_WEBHOOK_SECRET: "${INBOUND_EMAIL_WEBHOOK_SECRET:?}"
       PARTNER_WEBHOOK_SECRET: "${PARTNER_WEBHOOK_SECRET:?}"
       IMAP_ENCRYPTION_KEY: "${IMAP_ENCRYPTION_KEY:?}"
+      GOOGLE_PLACES_API_KEY: "${GOOGLE_PLACES_API_KEY:-}"
       GOOGLE_MAPS_SCRAPER_URL: http://maps-scraper:8000
       # Remote push delivery is optional at the API layer. Keep these empty
       # until the private notification provider is configured; the API then

@@ -494,6 +494,7 @@ function createNearbyDiscovery({
 }
 
 module.exports = {
+  haversineDistanceMeters,
   buildOverpassQuery,
   boundingBox,
   photonBoundingBox,

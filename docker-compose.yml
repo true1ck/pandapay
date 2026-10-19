@@ -156,6 +156,7 @@ services:
       INBOUND_EMAIL_WEBHOOK_SECRET: dev_inbound_secret_change_me
       PARTNER_WEBHOOK_SECRET: dev_partner_secret_change_me
       IMAP_ENCRYPTION_KEY: dev_imap_key_change_me_32_bytes_ok
+      GOOGLE_PLACES_API_KEY: "${GOOGLE_PLACES_API_KEY:-}"
       GOOGLE_MAPS_SCRAPER_URL: http://maps-scraper:8000
       # The lightweight notification service is a separate compose project on
       # the host during local development. host.docker.internal is the Docker

@@ -1026,11 +1026,13 @@ app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'radiusM must be 2000' });
   }
   const scraperUrl = process.env.GOOGLE_MAPS_SCRAPER_URL;
+  const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
   try {
     const result = await nearbyGoogle.discoverNearby({
       lat,
       lng,
       radiusM,
+      googleApiKey,
       scraperUrl,
       fallbackDiscover: (params) => nearbyGoogleFallback.discover(params),
     });
@@ -1086,6 +1088,24 @@ const nearbyDiscoveryHandler = async (req, res) => {
   }
 
   try {
+    const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
+    if (googleApiKey) {
+      const result = await nearbyGoogle.discoverNearby({
+        lat,
+        lng,
+        radiusM,
+        categoryId,
+        googleApiKey,
+        fallbackDiscover: (params) => nearbyDiscovery.discover(params),
+      });
+      return res.json({
+        source: result.source,
+        attribution: result.source === 'google_places' ? 'Google Places' : '© OpenStreetMap contributors',
+        degraded: result.degraded === true,
+        merchants: result.merchants,
+      });
+    }
+
     const merchants = await nearbyDiscovery.discover({ lat, lng, radiusM, categoryId });
     res.json({
       source: 'openstreetmap',
