@@ -7,8 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/api_exception.dart';
 
-/// Foreground nearby-merchant lookup radius. Google Maps discovery is capped
-/// at 2 km to keep the home result and Nearby list aligned.
+/// Foreground nearby lookup radius. Keep it at or below 2 km so Home and the
+/// Nearby list search the same area.
 const _nearbyMerchantSearchRadiusRaw = String.fromEnvironment(
   'PANDAPAY_NEARBY_RADIUS_METERS',
   defaultValue: '2000',
@@ -20,13 +20,8 @@ final nearbyMerchantSearchRadiusMeters = () {
   return parsed != null && parsed > 0 && parsed <= 2000 ? parsed : 2000.0;
 }();
 
-/// HTTP client for PandaPay's authenticated Google Maps nearby endpoint.
-/// This is the thin IO boundary; the actual radius-matching math lives in
-/// packages/pandapay_domain's pure `findNearbyMerchants` (the API already
-/// filters server-side too, via its own SQL haversine expression — this
-/// repository just deserializes what comes back into the same
-/// [NearbyMerchantCandidate] shape the pure Dart matcher understands, so a
-/// caller could re-filter/re-sort client-side without duplicating parsing).
+/// HTTP client for nearby recommendations and typed place search. Both use
+/// OpenStreetMap data and normalize to the same candidate model.
 abstract class NearbyMerchantsRepository {
   Future<List<NearbyMerchantCandidate>> fetchNearby({
     required double lat,
@@ -37,8 +32,8 @@ abstract class NearbyMerchantsRepository {
 
 abstract class NearbyMerchantDiscoveryRepository
     implements NearbyMerchantsRepository {
-  /// Free discovery fallback. The default deliberately delegates to the
-  /// published-merchant lookup so existing fakes and background monitoring
+  /// Free discovery lookup. The default deliberately delegates to the
+  /// nearby lookup so existing fakes and background monitoring
   /// keep their old behaviour unless a concrete repository opts in.
   Future<List<NearbyMerchantCandidate>> discoverNearby({
     required double lat,
@@ -178,21 +173,50 @@ class HttpNearbyMerchantsRepository
         NearbyPlaceSearchRepository {
   final String baseUrl;
   final http.Client _client;
-  final http.Client _authClient;
   final bool _ownsClient;
+  final Duration requestTimeout;
   final SharedPreferencesNearbyMerchantCache? localCache;
 
   HttpNearbyMerchantsRepository({
     required this.baseUrl,
     http.Client? client,
-    http.Client? authClient,
+    this.requestTimeout = _nearbyLookupTimeout,
     this.localCache,
   }) : _client = client ?? http.Client(),
-       _authClient = authClient ?? client ?? http.Client(),
-       _ownsClient = client == null && authClient == null;
+       _ownsClient = client == null;
 
   void close() {
     if (_ownsClient) _client.close();
+  }
+
+  Future<http.Response> _get(Uri uri) async {
+    try {
+      return await _client.get(uri).timeout(requestTimeout);
+    } on TimeoutException {
+      throw ApiException(
+        'GET ${uri.path} timed out',
+        userMessage:
+            'Nearby search took too long. Please check your connection and try again.',
+      );
+    }
+  }
+
+  Future<http.Response> _postJson(Uri uri, Map<String, Object?> body) async {
+    try {
+      return await _client
+          .post(
+            uri,
+            headers: const {'content-type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(requestTimeout);
+    } on TimeoutException {
+      throw ApiException(
+        'POST ${uri.path} timed out',
+        userMessage:
+            'Nearby search took too long. Please check your connection and try again.',
+      );
+    }
   }
 
   @override
@@ -201,41 +225,14 @@ class HttpNearbyMerchantsRepository
     required double lng,
     double radiusM = 2000,
   }) async {
-    final uri = Uri.parse('$baseUrl/merchants/nearby/google');
-    late final http.Response response;
-    try {
-      response = await _authClient
-          .post(
-            uri,
-            headers: {'content-type': 'application/json'},
-            body: jsonEncode({
-              'lat': lat,
-              'lng': lng,
-              'radiusM': radiusM.round(),
-            }),
-          )
-          .timeout(_nearbyLookupTimeout);
-    } on TimeoutException {
-      throw ApiException(
-        'POST /merchants/nearby/google timed out',
-        userMessage:
-            'Nearby lookup took too long. Please retry when your connection is stable.',
-      );
-    }
-    if (response.statusCode != 200) {
-      throw ApiException(
-        'POST /merchants/nearby/google failed: ${response.statusCode} ${response.body}',
-      );
-    }
-    final payload = jsonDecode(response.body);
-    if (payload is Map && payload['unavailable'] == true) {
-      throw ApiException(
-        'Nearby merchant provider is unavailable',
-        userMessage:
-            'Nearby merchant data is temporarily unavailable. Please retry.',
-      );
-    }
-    final candidates = parseNearbyMerchantsPayload(response.body);
+    // Nearby checks and typed place searches use the same public OSM service.
+    // The latitude/longitude endpoint avoids depending on the separate Google
+    // scraper for the primary Nearby button flow.
+    final candidates = await discoverNearby(
+      lat: lat,
+      lng: lng,
+      radiusM: radiusM,
+    );
     try {
       await localCache?.write(
         lat: lat,
@@ -257,16 +254,13 @@ class HttpNearbyMerchantsRepository
     double radiusM = 2000,
     String? categoryId,
   }) async {
-    final uri = Uri.parse('$baseUrl/merchants/nearby/discover').replace(
-      queryParameters: {
-        'lat': lat.toString(),
-        'lng': lng.toString(),
-        'radiusM': radiusM.toString(),
-        if (categoryId != null && categoryId.isNotEmpty)
-          'categoryId': categoryId,
-      },
-    );
-    final response = await _client.get(uri);
+    final uri = Uri.parse('$baseUrl/merchants/nearby/discover');
+    final response = await _postJson(uri, {
+      'lat': lat,
+      'lng': lng,
+      'radiusM': radiusM,
+      if (categoryId != null && categoryId.isNotEmpty) 'categoryId': categoryId,
+    });
     if (response.statusCode != 200) {
       throw ApiException(
         'GET /merchants/nearby/discover failed: ${response.statusCode} ${response.body}',
@@ -298,15 +292,13 @@ class HttpNearbyMerchantsRepository
     double? lng,
     double radiusM = 5000,
   }) async {
-    final uri = Uri.parse('$baseUrl/merchants/nearby/search').replace(
-      queryParameters: {
-        'q': query.trim(),
-        if (lat != null) 'lat': lat.toString(),
-        if (lng != null) 'lng': lng.toString(),
-        'radiusM': radiusM.toString(),
-      },
-    );
-    final response = await _client.get(uri);
+    final uri = Uri.parse('$baseUrl/merchants/nearby/search');
+    final response = await _postJson(uri, {
+      'q': query.trim(),
+      if (lat != null || lng != null) 'lat': lat,
+      if (lat != null || lng != null) 'lng': lng,
+      'radiusM': radiusM,
+    });
     if (response.statusCode != 200) {
       // Keep builds compatible with an API deployment from before the manual
       // place-search route was added. The first-party directory is still a
@@ -316,7 +308,7 @@ class HttpNearbyMerchantsRepository
         final directoryUri = Uri.parse(
           '$baseUrl/merchants/search',
         ).replace(queryParameters: {'q': query.trim()});
-        final directoryResponse = await _client.get(directoryUri);
+        final directoryResponse = await _get(directoryUri);
         if (directoryResponse.statusCode == 200) {
           return NearbyPlaceSearchResult(
             candidates: parseNearbyMerchantsPayload(

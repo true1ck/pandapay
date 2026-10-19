@@ -13,8 +13,8 @@ import 'geofence_monitor_service.dart';
 
 /// UA-8.1/8.3: "Nearby merchants" — the original foreground-triggered,
 /// one-shot check (button tap -> one location read -> `GET
-/// /merchants/nearby` -> rank via the same `rankedRecommendationsProvider`/
-/// engine machinery Home uses), plus a toggle for real background
+/// /merchants/nearby/discover` -> rank via the same recommendation engine
+/// machinery Home uses), plus a toggle for real background
 /// monitoring (GeofenceMonitorService) added in a later pass — see that
 /// service's doc-comment for exactly what "background" does and doesn't
 /// mean here (app-process-alive background, not survives-a-reboot
@@ -35,6 +35,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   List<NearbyMerchantMatch> _matches = const [];
   bool _refreshing = false;
   bool _showingCached = false;
+  bool _cacheRefreshFailed = false;
   final _placeController = TextEditingController();
   List<NearbyMerchantCandidate>? _placeResults;
   bool _placeSearching = false;
@@ -74,6 +75,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
       _errorMessage = null;
       _refreshing = false;
       _showingCached = false;
+      _cacheRefreshFailed = false;
       _placeResults = null;
     });
 
@@ -127,13 +129,21 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
         _state = _LoadState.done;
         _refreshing = false;
         _showingCached = false;
+        _cacheRefreshFailed = false;
       });
     } catch (err) {
       if (!mounted) return;
-      setState(() {
-        _errorMessage = userFacingErrorMessage(err);
-        _state = _LoadState.error;
-      });
+      if (_showingCached) {
+        setState(() {
+          _refreshing = false;
+          _cacheRefreshFailed = true;
+        });
+      } else {
+        setState(() {
+          _errorMessage = userFacingErrorMessage(err);
+          _state = _LoadState.error;
+        });
+      }
     }
   }
 
@@ -181,10 +191,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     }
   }
 
-  /// A single, foreground, one-shot read — not a subscription/stream, and
-  /// no background mode requested. Permission handling is the minimum
-  /// needed to make one honest request-and-check, not a full retry/settings-
-  /// deeplink flow — flagged in PROGRESS.md as unverified on a real device.
+  /// A single, foreground, one-shot read — not a subscription/stream.
   Future<Position> _readCurrentLocationOnce({required bool auto}) async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
@@ -207,10 +214,15 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
       );
     }
 
-    final lastKnown = await Geolocator.getLastKnownPosition();
+    Position? lastKnown;
+    try {
+      lastKnown = await Geolocator.getLastKnownPosition();
+    } catch (_) {
+      // A last-known fix is only an optimization; continue to a live fix.
+    }
     if (lastKnown != null &&
         DateTime.now().difference(lastKnown.timestamp).abs() <=
-            const Duration(minutes: 2) &&
+            const Duration(seconds: 45) &&
         lastKnown.accuracy <= 150) {
       return lastKnown;
     }
@@ -246,9 +258,9 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Checks your current location and looks for merchants you or '
-                'other PandaPay users have transacted at nearby, then suggests '
-                'which of your cards to use.',
+                'Checks your current location for nearby businesses and '
+                'suggests which of your cards to use. Map places may not be '
+                'verified PandaPay merchants.',
                 style: BambooFonts.ui(13, color: BambooInk.ink500),
               ),
               const SizedBox(height: 12),
@@ -411,7 +423,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    'Manual results are map candidates for testing, not verified PandaPay merchants.',
+                    'Map candidates are not verified PandaPay merchants.',
                     style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                   ),
                 ),
@@ -421,6 +433,8 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                   child: Text(
                     _refreshing
                         ? 'Showing saved places while checking for updates…'
+                        : _cacheRefreshFailed
+                        ? 'Could not refresh. Showing saved nearby places.'
                         : 'Showing saved nearby places.',
                     textAlign: TextAlign.center,
                     style: BambooFonts.ui(12, color: BambooInk.ink500),
@@ -476,7 +490,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     if (_matches.isEmpty) {
       return Center(
         child: Text(
-          'No Google Maps results found within 2 km. Try again or search for a place below.',
+          'No nearby places found within 2 km. Try again or search for a place below.',
           textAlign: TextAlign.center,
           style: BambooFonts.ui(13.5, color: BambooInk.ink500),
         ),

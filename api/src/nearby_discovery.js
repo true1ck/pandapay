@@ -99,7 +99,18 @@ function placeAddress(tags = {}) {
     .map((value) => value.trim()))].join(', ') || null;
 }
 
-function parseOverpassElements(elements = [], { categoryId } = {}) {
+function haversineDistanceMeters(latA, lngA, latB, lngB) {
+  const radians = Math.PI / 180;
+  const dLat = (latB - latA) * radians;
+  const dLng = (lngB - lngA) * radians;
+  const lat1 = latA * radians;
+  const lat2 = latB * radians;
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function parseOverpassElements(elements = [], { categoryId, lat, lng } = {}) {
   const requestedCategory = normalizeCategory(categoryId);
   const output = [];
   const seen = new Set();
@@ -127,9 +138,13 @@ function parseOverpassElements(elements = [], { categoryId } = {}) {
       confidence: 'low',
       address: placeAddress(tags),
     });
-    if (output.length >= MAX_RESULTS) break;
   }
-  return output;
+  if (validCoordinates(lat, lng)) {
+    output.sort((a, b) => haversineDistanceMeters(
+      lat, lng, a.grid_lat, a.grid_lng,
+    ) - haversineDistanceMeters(lat, lng, b.grid_lat, b.grid_lng));
+  }
+  return output.slice(0, MAX_RESULTS);
 }
 
 function categoryForPlaceSearchResult(result, query) {
@@ -281,7 +296,7 @@ function createNearbyDiscovery({
           });
           if (!response.ok) throw new Error(`OpenStreetMap discovery failed: ${response.status}`);
           const body = await response.json();
-          const value = parseOverpassElements(body.elements, { categoryId });
+          const value = parseOverpassElements(body.elements, { categoryId, lat, lng });
           cache.set(key, { expiresAt: now() + ttlMs, value });
           prune();
           return value;
@@ -349,7 +364,7 @@ function createNearbyDiscovery({
         }
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
         try {
           const response = await fetchImpl(`${endpointUrl}?${params.toString()}`, {
             headers: {

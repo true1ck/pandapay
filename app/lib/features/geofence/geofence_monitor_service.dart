@@ -198,8 +198,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
             accuracy: LocationAccuracy.medium,
             distanceFilter: 150,
             foregroundNotificationConfig: const ForegroundNotificationConfig(
-              notificationText:
-                  'Watching for published PandaPay merchants nearby',
+              notificationText: 'Checking for nearby businesses',
               notificationTitle: 'PandaPay is checking your location',
               enableWakeLock: true,
             ),
@@ -291,8 +290,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
   }
 
   Future<bool> _notify(NearbyMerchantMatch match) async {
-    final name =
-        match.candidate.displayName ?? 'a merchant you\'ve used before';
+    final name = match.candidate.displayName ?? 'a nearby business';
     final merchantId = match.candidate.merchantId;
     final title = 'You\'re near $name';
     final body =
@@ -332,7 +330,7 @@ class GeofenceMonitorService implements BackgroundMerchantMonitor {
       'geofence_nearby_merchant',
       'Nearby merchants',
       channelDescription:
-          'Alerts when you\'re near a merchant you\'ve used before',
+          'Alerts when nearby businesses are detected while monitoring is on',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
       icon: '@drawable/ic_notification',

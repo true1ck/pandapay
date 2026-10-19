@@ -84,6 +84,25 @@ test('normalizes OSM nodes and ways into PandaPay candidates', () => {
   assert.equal(result[1].grid_lat, 15.491);
 });
 
+test('nearby discovery keeps the 40 closest candidates instead of the first 40 by map order', () => {
+  const elements = Array.from({ length: 45 }, (_, index) => {
+    const distanceRank = 45 - index;
+    return {
+      type: 'node',
+      id: distanceRank,
+      lat: 15.49 + distanceRank * 0.0001,
+      lon: 73.83,
+      tags: { name: `Cafe ${distanceRank}`, amenity: 'cafe' },
+    };
+  });
+
+  const result = parseOverpassElements(elements, { lat: 15.49, lng: 73.83 });
+
+  assert.equal(result.length, 40);
+  assert.equal(result[0].merchant_id, 'osm:node:1');
+  assert.equal(result.at(-1).merchant_id, 'osm:node:40');
+});
+
 test('normalizes Photon GeoJSON results into the same candidate shape', () => {
   const result = parsePlaceSearchResults({
     type: 'FeatureCollection',

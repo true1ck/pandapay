@@ -35,7 +35,7 @@ class BackgroundAlertsController extends ChangeNotifier {
     if (!enabled) return 'Off — checks only run when you tap the button below.';
     return switch (status) {
       GeofenceMonitorStatus.monitoring =>
-        'On — watching for published PandaPay merchants within 300 m.',
+        'On — watching for nearby mapped places within 300 m.',
       GeofenceMonitorStatus.locationOff =>
         'Saved as On · paused — turn on device location.',
       GeofenceMonitorStatus.permissionRequired =>

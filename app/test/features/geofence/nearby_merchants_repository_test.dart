@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -19,15 +20,17 @@ void main() {
 
   group('HttpNearbyMerchantsRepository', () {
     test(
-      'parses a real-shaped Google nearby response into candidates',
+      'parses a real-shaped OpenStreetMap nearby response into candidates',
       () async {
         final client = MockClient((request) async {
           expect(request.method, 'POST');
-          expect(request.url.path, '/merchants/nearby/google');
-          expect(
-            jsonDecode(request.body),
-            {'lat': 12.9716, 'lng': 77.5946, 'radiusM': 1500},
-          );
+          expect(request.url.path, '/merchants/nearby/discover');
+          expect(request.url.queryParameters, isEmpty);
+          expect(jsonDecode(request.body), {
+            'lat': 12.9716,
+            'lng': 77.5946,
+            'radiusM': 1500.0,
+          });
           return http.Response(
             jsonEncode({
               'merchants': [
@@ -50,7 +53,6 @@ void main() {
         final repo = HttpNearbyMerchantsRepository(
           baseUrl: 'http://localhost:4000',
           client: client,
-          authClient: client,
         );
         final result = await repo.fetchNearby(
           lat: 12.9716,
@@ -68,43 +70,24 @@ void main() {
       },
     );
 
-    test('Google nearby lookup sends the requested radius in its POST body', () async {
+    test('nearby discovery sends the requested radius', () async {
       final client = MockClient((request) async {
         expect(request.method, 'POST');
-        expect(request.url.path, '/merchants/nearby/google');
-        expect(
-          jsonDecode(request.body),
-          {'lat': 15.4, 'lng': 74.0, 'radiusM': 1500},
-        );
+        expect(request.url.path, '/merchants/nearby/discover');
+        expect(jsonDecode(request.body), {
+          'lat': 15.4,
+          'lng': 74.0,
+          'radiusM': 1500.0,
+        });
         return http.Response(jsonEncode({'merchants': []}), 200);
       });
 
       final repo = HttpNearbyMerchantsRepository(
         baseUrl: 'http://localhost:4000',
         client: client,
-        authClient: client,
       );
       await repo.fetchNearby(lat: 15.4, lng: 74.0, radiusM: 1500);
     });
-
-    test(
-      'an HTTP 200 provider outage is not treated as no merchants',
-      () async {
-        final repo = HttpNearbyMerchantsRepository(
-          baseUrl: 'http://localhost:4000',
-          client: MockClient(
-            (_) async => http.Response(
-              jsonEncode({'unavailable': true, 'merchants': []}),
-              200,
-            ),
-          ),
-        );
-        await expectLater(
-          repo.fetchNearby(lat: 0, lng: 0),
-          throwsA(isA<ApiException>()),
-        );
-      },
-    );
 
     test('a non-200 response throws NearbyMerchantsException', () async {
       final client = MockClient((request) async => http.Response('error', 500));
@@ -120,11 +103,41 @@ void main() {
     });
 
     test(
+      'nearby network calls stop waiting at the configured timeout',
+      () async {
+        final client = MockClient((_) => Completer<http.Response>().future);
+        final repo = HttpNearbyMerchantsRepository(
+          baseUrl: 'http://localhost:4000',
+          client: client,
+          requestTimeout: const Duration(milliseconds: 10),
+        );
+
+        await expectLater(
+          repo.fetchNearby(lat: 12.97, lng: 77.59),
+          throwsA(
+            isA<ApiException>().having(
+              (error) => error.userMessage,
+              'userMessage',
+              contains('took too long'),
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
       'discovery requests the isolated fallback endpoint and preserves provenance',
       () async {
         final client = MockClient((request) async {
           expect(request.url.path, '/merchants/nearby/discover');
-          expect(request.url.queryParameters['categoryId'], 'groceries');
+          expect(request.method, 'POST');
+          expect(request.url.queryParameters, isEmpty);
+          expect(jsonDecode(request.body), {
+            'lat': 12.9716,
+            'lng': 77.5946,
+            'radiusM': 2000.0,
+            'categoryId': 'groceries',
+          });
           return http.Response(
             jsonEncode({
               'source': 'openstreetmap',
@@ -165,7 +178,14 @@ void main() {
     test('manual place search requests the place-search endpoint', () async {
       final client = MockClient((request) async {
         expect(request.url.path, '/merchants/nearby/search');
-        expect(request.url.queryParameters['q'], 'petrol pump');
+        expect(request.method, 'POST');
+        expect(request.url.queryParameters, isEmpty);
+        expect(jsonDecode(request.body), {
+          'q': 'petrol pump',
+          'lat': 12.9716,
+          'lng': 77.5946,
+          'radiusM': 5000.0,
+        });
         return http.Response(
           jsonEncode({
             'source': 'openstreetmap',
@@ -189,7 +209,11 @@ void main() {
         baseUrl: 'http://localhost:4000',
         client: client,
       );
-      final result = await repo.searchPlaces(query: 'petrol pump');
+      final result = await repo.searchPlaces(
+        query: 'petrol pump',
+        lat: 12.9716,
+        lng: 77.5946,
+      );
 
       expect(result, hasLength(1));
       expect(result.first.displayName, 'Example Petrol Pump');
@@ -202,6 +226,7 @@ void main() {
       () async {
         final client = MockClient((request) async {
           expect(request.url.path, '/merchants/nearby/search');
+          expect(request.method, 'POST');
           return http.Response(
             jsonEncode({
               'source': 'unavailable',
@@ -266,9 +291,12 @@ void main() {
     test(
       'an empty merchants list parses to an empty list, not an error',
       () async {
-        final client = MockClient(
-          (request) async => http.Response(jsonEncode({'merchants': []}), 200),
-        );
+        final client = MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/merchants/nearby/discover');
+          expect(request.url.queryParameters, isEmpty);
+          return http.Response(jsonEncode({'merchants': []}), 200);
+        });
         final repo = HttpNearbyMerchantsRepository(
           baseUrl: 'http://localhost:4000',
           client: client,

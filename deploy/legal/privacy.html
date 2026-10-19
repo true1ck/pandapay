@@ -34,7 +34,7 @@
 </ul>
 
 <h2>4. Location</h2>
-<p>If you grant location access, your device's precise location is sent to our servers only to look up nearby merchants and suggest the best card — this is optional and only used while the feature is active. Merchant location data shown in the app (not your own location) is rounded to roughly 11 metres before it is ever stored or shared.</p>
+<p>If you grant location access, your device's precise location is sent to PandaPay's API when nearby checks or background alerts run. The API forwards it to OpenStreetMap-based place-search providers to find nearby map places and suggest a card. This is optional and only used while the feature is active. Merchant location data shown in the app (not your own location) is rounded to roughly 11 metres before it is ever stored or shared.</p>
 
 <h2>5. Crowdsourced contributions</h2>
 <p>Contributions (e.g. confirming a merchant accepts a card, or correcting a category) are stored without your name, email, account ID, or any other identifying field — enforced by an automated check that runs before every release and blocks deployment if it finds an identifying column. Merchant coordinates are rounded to ~11m, amounts are excluded entirely, and timestamps are stored to the day only, never the minute. Internally, contributions are linked across a single calendar month using a one-way hash that is rotated and discarded at the end of each month, so contributions from different months cannot be linked to each other or back to you.</p>

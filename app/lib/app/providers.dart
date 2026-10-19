@@ -4252,7 +4252,6 @@ final nearbyMerchantsRepositoryProvider = Provider<NearbyMerchantsRepository>((
 ) {
   final repository = HttpNearbyMerchantsRepository(
     baseUrl: _apiBaseUrl,
-    authClient: ref.read(authenticatedHttpClientProvider),
     localCache: SharedPreferencesNearbyMerchantCache(
       namespace: ref.watch(cacheNamespaceProvider),
     ),
@@ -4270,10 +4269,7 @@ final nearbyPlaceSearchRepositoryProvider =
       // The concrete HTTP repository implements both public nearby contracts;
       // test fakes may implement only the original merchant interface.
       if (nearby is HttpNearbyMerchantsRepository) return nearby;
-      return HttpNearbyMerchantsRepository(
-        baseUrl: _apiBaseUrl,
-        authClient: ref.read(authenticatedHttpClientProvider),
-      );
+      return HttpNearbyMerchantsRepository(baseUrl: _apiBaseUrl);
     });
 
 /// UA-8.3 (B1): one FlutterLocalNotificationsPlugin instance for the whole

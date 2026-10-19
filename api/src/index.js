@@ -1055,19 +1055,21 @@ app.post('/merchants/nearby/google', requireAuth, async (req, res) => {
 });
 
 /**
- * GET /merchants/nearby/discover — free, read-only nearby place discovery.
+ * POST /merchants/nearby/discover — free, read-only nearby place discovery.
  *
- * This is a fallback for the Nearby merchants screen when PandaPay has no
- * published merchant at the current location. Results are OpenStreetMap
- * candidates only; they are never treated as VPA-verified merchants and are
- * never inserted into spending or payment data by this route.
+ * This is the primary discovery path for the Nearby screen. Results are
+ * OpenStreetMap candidates only; they are never treated as VPA-verified
+ * merchants and are never inserted into spending or payment data by this route. Coordinates
+ * stay in the request body so they do not appear in URL access logs. The GET
+ * handler remains for compatibility with older app builds.
  */
-app.get('/merchants/nearby/discover', async (req, res) => {
-  const lat = Number(req.query.lat);
-  const lng = Number(req.query.lng);
-  const radiusM = req.query.radiusM !== undefined ? Number(req.query.radiusM) : 2000;
-  const categoryId = typeof req.query.categoryId === 'string' && req.query.categoryId.trim()
-    ? req.query.categoryId.trim().toLowerCase()
+const nearbyDiscoveryHandler = async (req, res) => {
+  const input = req.method === 'GET' ? req.query : req.body || {};
+  const lat = Number(input.lat);
+  const lng = Number(input.lng);
+  const radiusM = input.radiusM !== undefined ? Number(input.radiusM) : 2000;
+  const categoryId = typeof input.categoryId === 'string' && input.categoryId.trim()
+    ? input.categoryId.trim().toLowerCase()
     : null;
 
   if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
@@ -1091,29 +1093,32 @@ app.get('/merchants/nearby/discover', async (req, res) => {
       merchants,
     });
   } catch (err) {
-    // Discovery is optional, but do not turn a provider outage into a false
-    // "no merchants nearby" result. The app can still show its existing
-    // published merchant result and will render an honest retry/search state.
-    console.warn('GET /merchants/nearby/discover unavailable', err.message);
+    // Do not turn a provider outage into a false "no merchants nearby" result.
+    console.warn('Nearby place discovery unavailable', err.message);
     res.status(503).json({
       error: 'nearby_discovery_unavailable',
       message: 'The public nearby-place provider is temporarily unavailable',
     });
   }
-});
+};
+app.get('/merchants/nearby/discover', nearbyDiscoveryHandler);
+app.post('/merchants/nearby/discover', nearbyDiscoveryHandler);
 
 /**
- * GET /merchants/nearby/search — a manual place lookup for testing the
+ * POST /merchants/nearby/search — a manual place lookup for testing the
  * location flow without depending on the handset's current GPS fix. The route
  * prefers published PandaPay directory matches and otherwise returns OSM
  * candidates; neither path writes to payment data. `lat`/`lng` are optional
  * and only bias the external search toward the tester's current area.
+ * Coordinates are carried in the request body to keep them out of URL logs;
+ * GET remains supported for older app builds.
  */
-app.get('/merchants/nearby/search', async (req, res) => {
-  const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-  const lat = req.query.lat === undefined ? undefined : Number(req.query.lat);
-  const lng = req.query.lng === undefined ? undefined : Number(req.query.lng);
-  const radiusM = req.query.radiusM !== undefined ? Number(req.query.radiusM) : 5000;
+const nearbyPlaceSearchHandler = async (req, res) => {
+  const input = req.method === 'GET' ? req.query : req.body || {};
+  const query = typeof input.q === 'string' ? input.q.trim() : '';
+  const lat = input.lat === undefined ? undefined : Number(input.lat);
+  const lng = input.lng === undefined ? undefined : Number(input.lng);
+  const radiusM = input.radiusM !== undefined ? Number(input.radiusM) : 5000;
 
   if (query.length < 2 || query.length > 120) {
     return res.status(400).json({ error: 'q must be between 2 and 120 characters' });
@@ -1157,7 +1162,7 @@ app.get('/merchants/nearby/search', async (req, res) => {
     } catch (directoryError) {
       // Map search is still useful when the directory is temporarily down.
       // The outer route catch should only represent failure of every source.
-      console.warn('GET /merchants/nearby/search directory unavailable', directoryError.message);
+      console.warn('Nearby search directory unavailable', directoryError.message);
     }
     if (directoryRows.length > 0) {
       return res.json({
@@ -1177,7 +1182,7 @@ app.get('/merchants/nearby/search', async (req, res) => {
       merchants,
     });
   } catch (err) {
-    console.warn('GET /merchants/nearby/search unavailable', err.message);
+    console.warn('Nearby place search unavailable', err.message);
     // Returning a valid empty payload is deliberate: this endpoint is a
     // best-effort place search, not a payment-critical operation. The app
     // can now always complete the request and present a retryable empty state
@@ -1189,7 +1194,9 @@ app.get('/merchants/nearby/search', async (req, res) => {
       message: 'The public place search provider is temporarily unavailable',
     });
   }
-});
+};
+app.get('/merchants/nearby/search', nearbyPlaceSearchHandler);
+app.post('/merchants/nearby/search', nearbyPlaceSearchHandler);
 
 const CARD_NETWORKS = ['rupay', 'visa', 'mastercard', 'amex', 'diners'];
 
