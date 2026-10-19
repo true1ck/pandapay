@@ -23,7 +23,9 @@ import 'sync_backup_screen.dart';
 /// silently, matching the Cross-Cutting Requirements' offline-first
 /// discipline for screens that legitimately can't work offline.
 class ImportHubScreen extends ConsumerWidget {
-  const ImportHubScreen({super.key});
+  final bool embedded;
+
+  const ImportHubScreen({super.key, this.embedded = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -39,6 +41,203 @@ class ImportHubScreen extends ConsumerWidget {
           orElse: () => true,
         );
 
+    final body = AppBackground(
+      child: ListView(
+        padding: const EdgeInsets.all(AppSpace.lg),
+        children: [
+          Text(
+            'Bring your existing spending history into PandaPay, or keep it flowing automatically.',
+            style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: AppSpace.lg),
+          // Task S-1b: the backup-file import needs NO SMS permission —
+          // the user exports their own messages and picks the file — so
+          // it remains available alongside live SMS auto-import in every
+          // flavor. The two paths stay as separate tiles deliberately.
+          //
+          // `smsBackupImportEnabled` is the server-side kill switch
+          // (migration 0036) — a bad import's blast radius is the user's
+          // whole transaction history, and the input is a file format
+          // this codebase doesn't control. Fails open when app-status is
+          // unreachable, same as every other read of it.
+          if (smsBackupEnabled) ...[
+            _ChannelCard(
+              icon: Icons.upload_file_outlined,
+              title: 'Import SMS backup file',
+              status: smsBatches.when(
+                data: (batches) => batches.isEmpty
+                    ? const _Status(
+                        'One-off action — tap to import a backup export',
+                        BambooInk.ink500,
+                      )
+                    : _Status(
+                        'Imported ${batches.length} time${batches.length == 1 ? '' : 's'}',
+                        BambooInk.jade,
+                      ),
+                loading: () => const _Status('Checking…', BambooInk.ink500),
+                error: (_, _) => const _Status(
+                  'One-off action — tap to import a backup export',
+                  BambooInk.ink500,
+                ),
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SmsBackupImportScreen(),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+          ],
+          // The live auto-read path is available in every flavor. The user
+          // still grants SMS permission explicitly before listening starts.
+          _ChannelCard(
+            icon: Icons.sms_outlined,
+            title: 'SMS auto-import (live)',
+            status: smsBatches.when(
+              data: (batches) => batches.isEmpty
+                  ? const _Status('Not set up', BambooInk.ink500)
+                  : _Status(
+                      'Active — ${batches.length} import${batches.length == 1 ? '' : 's'}',
+                      BambooInk.jade,
+                    ),
+              loading: () => const _Status('Checking…', BambooInk.ink500),
+              error: (_, _) => const _Status('Error', BambooInk.clay),
+            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
+          ),
+          const SizedBox(height: AppSpace.md),
+          _ChannelCard(
+            icon: Icons.picture_as_pdf_outlined,
+            title: 'Import spending file',
+            status: const _Status(
+              'PDF, CSV, TSV, Excel XLSX, or JSON',
+              BambooInk.ink500,
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const StatementPdfImportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          _ChannelCard(
+            icon: Icons.image_search_outlined,
+            title: 'Import spending screenshots',
+            status: const _Status(
+              'On-device OCR — transaction rows only',
+              BambooInk.ink500,
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SpendingScreenshotImportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          _ChannelCard(
+            icon: Icons.email_outlined,
+            title: 'Email forwarding',
+            status: forwarding.when(
+              data: (addr) {
+                if (addr == null)
+                  return const _Status('Not set up', BambooInk.ink500);
+                if (addr.emailCount > 0) {
+                  return _Status(
+                    'Connected — ${addr.emailCount} received',
+                    BambooInk.jade,
+                  );
+                }
+                return const _Status(
+                  'Waiting for first email…',
+                  BambooInk.amber,
+                );
+              },
+              loading: () => const _Status('Checking…', BambooInk.ink500),
+              error: (_, _) => const _Status('Error', BambooInk.clay),
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const EmailForwardingScreen()),
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          // Task F-10: this tile used to read "IMAP connection
+          // (fallback)" with a "Connected" status, which implied a
+          // working sync. There is no poller behind it — it can test a
+          // login and nothing else — and none is planned: Google has
+          // ended basic-auth IMAP for Workspace and is deprecating app
+          // passwords, so building one would mean building on a
+          // foundation being removed. Email forwarding covers the same
+          // need without holding anyone's credentials. Labelled for what
+          // it actually does until it's removed outright.
+          _ChannelCard(
+            icon: Icons.alternate_email_rounded,
+            title: 'IMAP connection (test only)',
+            status: imap.when(
+              data: (conn) {
+                if (conn == null)
+                  return const _Status(
+                    'Not set up — use Email forwarding instead',
+                    BambooInk.ink500,
+                  );
+                if (conn.verifiedAt != null) {
+                  return const _Status(
+                    'Login verified — does not sync mail',
+                    BambooInk.ink500,
+                  );
+                }
+                return const _Status(
+                  'Set up — not yet verified',
+                  BambooInk.amber,
+                );
+              },
+              loading: () => const _Status('Checking…', BambooInk.ink500),
+              error: (_, _) => const _Status('Error', BambooInk.clay),
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ImapConnectionScreen()),
+            ),
+          ),
+          const SizedBox(height: AppSpace.xxl),
+          Text(
+            'Data',
+            style: BambooFonts.ui(
+              12.5,
+              weight: FontWeight.w700,
+              color: BambooInk.ink900,
+            ),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          _ChannelCard(
+            icon: Icons.cloud_sync_outlined,
+            title: 'Sync & backup',
+            status: const _Status(
+              'Backup status & conflict log',
+              BambooInk.ink500,
+            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SyncBackupScreen())),
+          ),
+          const SizedBox(height: AppSpace.md),
+          _ChannelCard(
+            icon: Icons.ios_share_rounded,
+            title: 'Import or export data',
+            status: const _Status(
+              'CSV and PDF · your data is yours',
+              BambooInk.ink500,
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DataTransferScreen()),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (embedded) return body;
+
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -51,202 +250,7 @@ class ImportHubScreen extends ConsumerWidget {
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
       ),
-      body: AppBackground(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpace.lg),
-          children: [
-            Text(
-              'Bring your existing spending history into PandaPay, or keep it flowing automatically.',
-              style: BambooFonts.ui(13.5, color: BambooInk.ink500),
-            ),
-            const SizedBox(height: AppSpace.lg),
-            // Task S-1b: the backup-file import needs NO SMS permission —
-            // the user exports their own messages and picks the file — so
-            // it remains available alongside live SMS auto-import in every
-            // flavor. The two paths stay as separate tiles deliberately.
-            //
-            // `smsBackupImportEnabled` is the server-side kill switch
-            // (migration 0036) — a bad import's blast radius is the user's
-            // whole transaction history, and the input is a file format
-            // this codebase doesn't control. Fails open when app-status is
-            // unreachable, same as every other read of it.
-            if (smsBackupEnabled) ...[
-              _ChannelCard(
-                icon: Icons.upload_file_outlined,
-                title: 'Import SMS backup file',
-                status: smsBatches.when(
-                  data: (batches) => batches.isEmpty
-                      ? const _Status(
-                          'One-off action — tap to import a backup export',
-                          BambooInk.ink500,
-                        )
-                      : _Status(
-                          'Imported ${batches.length} time${batches.length == 1 ? '' : 's'}',
-                          BambooInk.jade,
-                        ),
-                  loading: () => const _Status('Checking…', BambooInk.ink500),
-                  error: (_, _) => const _Status(
-                    'One-off action — tap to import a backup export',
-                    BambooInk.ink500,
-                  ),
-                ),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const SmsBackupImportScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpace.md),
-            ],
-            // The live auto-read path is available in every flavor. The user
-            // still grants SMS permission explicitly before listening starts.
-            _ChannelCard(
-              icon: Icons.sms_outlined,
-              title: 'SMS auto-import (live)',
-              status: smsBatches.when(
-                data: (batches) => batches.isEmpty
-                    ? const _Status('Not set up', BambooInk.ink500)
-                    : _Status(
-                        'Active — ${batches.length} import${batches.length == 1 ? '' : 's'}',
-                        BambooInk.jade,
-                      ),
-                loading: () => const _Status('Checking…', BambooInk.ink500),
-                error: (_, _) => const _Status('Error', BambooInk.clay),
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SmsImportScreen()),
-              ),
-            ),
-            const SizedBox(height: AppSpace.md),
-            _ChannelCard(
-              icon: Icons.picture_as_pdf_outlined,
-              title: 'Import spending file',
-              status: const _Status(
-                'PDF, CSV, TSV, Excel XLSX, or JSON',
-                BambooInk.ink500,
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const StatementPdfImportScreen(),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpace.md),
-            _ChannelCard(
-              icon: Icons.image_search_outlined,
-              title: 'Import spending screenshots',
-              status: const _Status(
-                'On-device OCR — transaction rows only',
-                BambooInk.ink500,
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const SpendingScreenshotImportScreen(),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpace.md),
-            _ChannelCard(
-              icon: Icons.email_outlined,
-              title: 'Email forwarding',
-              status: forwarding.when(
-                data: (addr) {
-                  if (addr == null)
-                    return const _Status('Not set up', BambooInk.ink500);
-                  if (addr.emailCount > 0) {
-                    return _Status(
-                      'Connected — ${addr.emailCount} received',
-                      BambooInk.jade,
-                    );
-                  }
-                  return const _Status(
-                    'Waiting for first email…',
-                    BambooInk.amber,
-                  );
-                },
-                loading: () => const _Status('Checking…', BambooInk.ink500),
-                error: (_, _) => const _Status('Error', BambooInk.clay),
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const EmailForwardingScreen(),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpace.md),
-            // Task F-10: this tile used to read "IMAP connection
-            // (fallback)" with a "Connected" status, which implied a
-            // working sync. There is no poller behind it — it can test a
-            // login and nothing else — and none is planned: Google has
-            // ended basic-auth IMAP for Workspace and is deprecating app
-            // passwords, so building one would mean building on a
-            // foundation being removed. Email forwarding covers the same
-            // need without holding anyone's credentials. Labelled for what
-            // it actually does until it's removed outright.
-            _ChannelCard(
-              icon: Icons.alternate_email_rounded,
-              title: 'IMAP connection (test only)',
-              status: imap.when(
-                data: (conn) {
-                  if (conn == null)
-                    return const _Status(
-                      'Not set up — use Email forwarding instead',
-                      BambooInk.ink500,
-                    );
-                  if (conn.verifiedAt != null) {
-                    return const _Status(
-                      'Login verified — does not sync mail',
-                      BambooInk.ink500,
-                    );
-                  }
-                  return const _Status(
-                    'Set up — not yet verified',
-                    BambooInk.amber,
-                  );
-                },
-                loading: () => const _Status('Checking…', BambooInk.ink500),
-                error: (_, _) => const _Status('Error', BambooInk.clay),
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ImapConnectionScreen()),
-              ),
-            ),
-            const SizedBox(height: AppSpace.xxl),
-            Text(
-              'Data',
-              style: BambooFonts.ui(
-                12.5,
-                weight: FontWeight.w700,
-                color: BambooInk.ink900,
-              ),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            _ChannelCard(
-              icon: Icons.cloud_sync_outlined,
-              title: 'Sync & backup',
-              status: const _Status(
-                'Backup status & conflict log',
-                BambooInk.ink500,
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SyncBackupScreen()),
-              ),
-            ),
-            const SizedBox(height: AppSpace.md),
-            _ChannelCard(
-              icon: Icons.ios_share_rounded,
-              title: 'Import or export data',
-              status: const _Status(
-                'CSV and PDF · your data is yours',
-                BambooInk.ink500,
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const DataTransferScreen()),
-              ),
-            ),
-          ],
-        ),
-      ),
+      body: body,
     );
   }
 }

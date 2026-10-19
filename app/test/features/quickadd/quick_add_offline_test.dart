@@ -18,7 +18,8 @@ class _EmptyMerchantSearchRepository implements MerchantSearchRepository {
 }
 
 class _OfflineUserCardsRepository extends UserCardsRepository {
-  _OfflineUserCardsRepository() : super(apiBaseUrl: 'http://localhost', accessToken: 't');
+  _OfflineUserCardsRepository()
+    : super(apiBaseUrl: 'http://localhost', accessToken: 't');
 
   @override
   Future<String> logTransaction({
@@ -39,81 +40,89 @@ class _OfflineUserCardsRepository extends UserCardsRepository {
   }
 }
 
-/// The Quick Add form is a ListView and, since the "Kind" and "Paid with"
-/// selectors were added for non-card entries (cash, income, investments),
-/// the Save button sits below the fold of the 600px test viewport. A
-/// ListView doesn't build off-screen children, so Save has to be scrolled
-/// into existence before any finder can reach it.
+/// Save stays in the sticky footer while the transaction form scrolls.
 Future<Finder> _saveButton(WidgetTester tester) async {
-  final finder = find.widgetWithText(FilledButton, 'Save');
-  await tester.dragUntilVisible(finder, find.byType(ListView), const Offset(0, -120));
-  await tester.pumpAndSettle();
-  return finder;
+  return find.ancestor(
+    of: find.byIcon(Icons.save_outlined),
+    matching: find.byType(FilledButton),
+  );
 }
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('a save that fails while offline queues to the outbox instead of showing a bare error', (
-    tester,
-  ) async {
-    const card = UserCard(id: 'card-1', cardProductId: 'product-1', cardName: 'Test Card', isDefault: true);
-    final container = ProviderContainer(
-      overrides: [
-        userCardsProvider.overrideWith((ref) async => const [card]),
-        userCardsRepositoryProvider.overrideWithValue(_OfflineUserCardsRepository()),
-        categoriesProvider.overrideWith((ref) async => const []),
-        merchantSearchRepositoryProvider.overrideWithValue(_EmptyMerchantSearchRepository()),
-        isOnlineProvider.overrideWith((ref) => Stream.value(false)),
-      ],
-    );
-    addTearDown(container.dispose);
-    // Force isOnlineProvider to start emitting before _save() reads it —
-    // StreamProviders are lazy and nothing else in this widget tree
-    // watches it, so without this its first read would still be
-    // AsyncLoading (a Stream's first event is never synchronous, even for
-    // Stream.value), defaulting _save()'s `?? true` fallback to "online."
-    container.listen(isOnlineProvider, (_, _) {});
+  testWidgets(
+    'a save that fails while offline queues to the outbox instead of showing a bare error',
+    (tester) async {
+      const card = UserCard(
+        id: 'card-1',
+        cardProductId: 'product-1',
+        cardName: 'Test Card',
+        isDefault: true,
+      );
+      final container = ProviderContainer(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => const [card]),
+          userCardsRepositoryProvider.overrideWithValue(
+            _OfflineUserCardsRepository(),
+          ),
+          categoriesProvider.overrideWith((ref) async => const []),
+          merchantSearchRepositoryProvider.overrideWithValue(
+            _EmptyMerchantSearchRepository(),
+          ),
+          isOnlineProvider.overrideWith((ref) => Stream.value(false)),
+        ],
+      );
+      addTearDown(container.dispose);
+      // Force isOnlineProvider to start emitting before _save() reads it —
+      // StreamProviders are lazy and nothing else in this widget tree
+      // watches it, so without this its first read would still be
+      // AsyncLoading (a Stream's first event is never synchronous, even for
+      // Stream.value), defaulting _save()'s `?? true` fallback to "online."
+      container.listen(isOnlineProvider, (_, _) {});
 
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          home: Builder(
-            builder: (context) => Scaffold(
-              body: Center(
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const QuickAddScreen()),
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            const QuickAddScreen(initialUserCardId: 'card-1'),
+                      ),
+                    ),
+                    child: const Text('open quick add'),
                   ),
-                  child: const Text('open quick add'),
                 ),
               ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('open quick add'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('open quick add'));
+      await tester.pumpAndSettle();
 
-    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '250');
-    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Test Card').last);
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('quick-add-amount-field')),
+        '250',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(await _saveButton(tester));
+      await tester.pumpAndSettle();
 
-    await tester.tap(await _saveButton(tester));
-    await tester.pumpAndSettle();
+      expect(find.textContaining("Saved offline"), findsOneWidget);
 
-    expect(find.textContaining("Saved offline"), findsOneWidget);
-
-    final outbox = await container.read(outboxRepositoryProvider.future);
-    final pending = await outbox.pending();
-    expect(pending, hasLength(1));
-    expect(pending.single.userCardId, 'card-1');
-    expect(pending.single.amountPaise, Money.fromRupees(250).paise);
-  });
+      final outbox = await container.read(outboxRepositoryProvider.future);
+      final pending = await outbox.pending();
+      expect(pending, hasLength(1));
+      expect(pending.single.userCardId, 'card-1');
+      expect(pending.single.amountPaise, Money.fromRupees(250).paise);
+    },
+  );
 }
