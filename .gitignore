@@ -47,6 +47,8 @@ __pycache__/
 .session-localappdata/
 .card_rule_test.log
 artifacts/ui-verification/
+# throwaway emulator/device screenshots from test runs
+artifacts/device-screen*.png
 
 # macOS
 .DS_Store
