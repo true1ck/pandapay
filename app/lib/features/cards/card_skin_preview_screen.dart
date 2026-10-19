@@ -9,7 +9,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import 'card_visual.dart';
 
-/// Developer-only catalogue QA surface for the generated card skins.
+/// Catalogue surface for the generated card skins.
 ///
 /// It intentionally renders the same [CardVisual] used by the product, rather
 /// than a second preview implementation. This makes it useful for spotting
@@ -29,7 +29,7 @@ class CardSkinPreviewScreen extends ConsumerWidget {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: Text(
-          'Card skin preview',
+          'Card styles',
           style: BambooFonts.heading(18, color: BambooInk.ink900),
         ),
       ),
