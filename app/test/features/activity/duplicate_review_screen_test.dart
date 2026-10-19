@@ -71,6 +71,24 @@ void main() {
     expect(find.text('Amazon'), findsNWidgets(2));
   });
 
+  testWidgets('auto-selects the statement record and enables merge immediately', (tester) async {
+    await _pump(tester, repo: _FakeUserCardsRepository([_pair()]));
+    expect(find.text('Auto-select recommended (1)'), findsOneWidget);
+    expect(find.text('Keeping this one'), findsOneWidget);
+    expect(find.text('Ready to merge: 1 of 1 pairs resolved'), findsOneWidget);
+    final button = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Confirm & Merge 1 Items'));
+    expect(button.onPressed, isNotNull);
+  });
+
+  testWidgets('Keep all separate clears auto selections', (tester) async {
+    await _pump(tester, repo: _FakeUserCardsRepository([_pair()]));
+    await tester.tap(find.text('Keep all separate'));
+    await tester.pumpAndSettle();
+    expect(find.text('Auto-select recommended (0)'), findsOneWidget);
+    expect(find.text('Ready to merge: 1 of 1 pairs resolved'), findsOneWidget);
+    expect(find.text('Kept separate'), findsOneWidget);
+  });
+
   testWidgets('Keep this one resolves as deleted_one with the tapped transaction kept', (tester) async {
     final repo = _FakeUserCardsRepository([_pair()]);
     await _pump(tester, repo: repo);

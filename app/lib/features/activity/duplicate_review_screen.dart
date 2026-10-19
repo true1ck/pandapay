@@ -9,8 +9,8 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 
-/// D5 Duplicate Review. Each suspected pair keeps its own explicit decision;
-/// the summary controls help users move through the list without auto-merging.
+/// D5 Duplicate Review. Recommended keep-side choices are local UI state until
+/// the user confirms the merge.
 class DuplicateReviewScreen extends ConsumerWidget {
   const DuplicateReviewScreen({super.key});
 
@@ -64,11 +64,47 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
   bool _busy = false;
 
   @override
+  void initState() {
+    super.initState();
+    _autoSelectRecommended(widget.candidates);
+  }
+
+  void _autoSelectRecommended(List<DuplicateCandidate> candidates) {
+    for (final candidate in candidates) {
+      if (!_keptBoth.contains(candidate.id)) {
+        _keptTransactions.putIfAbsent(candidate.id, () => _recommendedTransaction(candidate).id);
+      }
+    }
+  }
+
+  DuplicateTransactionSummary _recommendedTransaction(DuplicateCandidate candidate) {
+    // Prefer the bank/statement record, which normally carries better data;
+    // use the more complete side for other channel combinations.
+    final aRank = _sourceRank(candidate.txnA.source);
+    final bRank = _sourceRank(candidate.txnB.source);
+    if (aRank != bRank) return aRank > bRank ? candidate.txnA : candidate.txnB;
+    final aCompleteness = (candidate.txnA.merchantName?.trim().isNotEmpty == true ? 1 : 0) +
+        (candidate.txnA.cardDisplayName?.trim().isNotEmpty == true ? 1 : 0);
+    final bCompleteness = (candidate.txnB.merchantName?.trim().isNotEmpty == true ? 1 : 0) +
+        (candidate.txnB.cardDisplayName?.trim().isNotEmpty == true ? 1 : 0);
+    if (aCompleteness != bCompleteness) return aCompleteness > bCompleteness ? candidate.txnA : candidate.txnB;
+    return candidate.txnA;
+  }
+
+  int _sourceRank(String source) => switch (source) {
+        'statement' || 'imported' => 3,
+        'email' => 2,
+        'sms' || 'sms_bulk' => 1,
+        _ => 0,
+      };
+
+  @override
   void didUpdateWidget(covariant _DuplicateReviewList oldWidget) {
     super.didUpdateWidget(oldWidget);
     final ids = widget.candidates.map((candidate) => candidate.id).toSet();
     _keptTransactions.removeWhere((key, _) => !ids.contains(key));
     _keptBoth.removeWhere((key) => !ids.contains(key));
+    _autoSelectRecommended(widget.candidates);
   }
 
   bool _isExactAmount(DuplicateCandidate candidate) =>
@@ -91,6 +127,8 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
       );
 
   int get _resolvedCount => _keptTransactions.length + _keptBoth.length;
+  bool get _allAutoSelected =>
+      _keptTransactions.length == widget.candidates.length && _keptBoth.isEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -99,34 +137,49 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
           decoration: const BoxDecoration(
             color: BambooInk.glassFillOnPaper,
             border: Border(bottom: BorderSide(color: BambooInk.hairlineOnPaper)),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
+              const Icon(Icons.hourglass_bottom_rounded, size: 14, color: Color(0xFF986300)),
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(color: BambooInk.rankBadgeBg, borderRadius: BorderRadius.circular(20)),
+                decoration: BoxDecoration(color: BambooInk.rankBadgeBg, borderRadius: BorderRadius.circular(8)),
                 child: Text('${widget.candidates.length} pairs', style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.rankBadgeInk)),
               ),
-              const Spacer(),
-              Text('Potential overlap', style: BambooFonts.ui(12, color: BambooInk.ink500)),
             ]),
             const SizedBox(height: 5),
             Text('₹${_overlap.toStringAsFixed(2)} potential overlap detected', style: BambooFonts.ui(13, color: BambooInk.ink500)),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Row(children: [
-              Icon(Icons.check_box_rounded, size: 21, color: BambooInk.jade),
+              Icon(_keptTransactions.isNotEmpty ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded, size: 21, color: BambooInk.jade),
               const SizedBox(width: 8),
-              Expanded(child: Text('Review each recommended pair', style: BambooFonts.ui(14, weight: FontWeight.w600))),
+              Expanded(child: Text('Auto-select recommended (${_keptTransactions.length})', style: BambooFonts.ui(14, weight: FontWeight.w600))),
               TextButton(
-                onPressed: () => setState(() { _filter = 'All'; }),
-                child: Text('Show all', style: BambooFonts.ui(13, color: BambooInk.jade)),
+                onPressed: _allAutoSelected
+                    ? () => setState(() {
+                        _keptTransactions.clear();
+                        _keptBoth
+                          ..clear()
+                          ..addAll(widget.candidates.map((candidate) => candidate.id));
+                      })
+                    : () => setState(() {
+                        _keptBoth.clear();
+                        _keptTransactions
+                          ..clear()
+                          ..addEntries(widget.candidates.map((candidate) => MapEntry(candidate.id, _recommendedTransaction(candidate).id)));
+                      }),
+                child: Text(
+                  _allAutoSelected ? 'Keep all separate' : 'Auto-select all',
+                  style: BambooFonts.ui(13, color: BambooInk.jade),
+                ),
               ),
             ]),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(children: [
@@ -168,6 +221,7 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
         _ReviewFooter(
           total: widget.candidates.length,
           resolved: _resolvedCount,
+          mergeCount: _keptTransactions.length,
           overlap: _overlap,
           onConfirm: _keptTransactions.isNotEmpty && !_busy
               ? () => _confirmAndMerge(context)
@@ -260,10 +314,10 @@ class _DuplicatePairCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: BambooInk.hairlineOnPaper),
         boxShadow: const [BoxShadow(color: Color(0x0A2B313A), blurRadius: 8, offset: Offset(0, 2))],
       ),
@@ -273,7 +327,7 @@ class _DuplicatePairCard extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(child: Text(candidate.matchReason, style: BambooFonts.ui(12.5, color: BambooInk.ink700))),
           const SizedBox(width: 8),
-          Text(keptBoth ? 'Kept separate' : keptTransactionId == null ? 'Review' : 'Resolved', style: BambooFonts.ui(11.5, color: BambooInk.ink500)),
+          Text(keptBoth ? 'Not duplicate' : keptTransactionId == null ? 'Review' : 'Not duplicate', style: BambooFonts.ui(11.5, color: BambooInk.ink500)),
         ]),
         const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: BambooInk.hairlineOnPaper)),
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -284,8 +338,8 @@ class _DuplicatePairCard extends StatelessWidget {
         const SizedBox(height: 10),
         TextButton(
           onPressed: onKeepBoth,
-          style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
-          child: Text(keptBoth ? '✓ Kept both — not actually duplicates' : 'Keep both — not actually duplicates', textAlign: TextAlign.center),
+          style: TextButton.styleFrom(foregroundColor: BambooInk.jade, padding: const EdgeInsets.symmetric(vertical: 8)),
+                child: Text(keptBoth ? '✓ Kept both — not actually duplicates' : 'Keep both — not actually duplicates', textAlign: TextAlign.center),
         ),
       ]),
     );
@@ -306,23 +360,23 @@ class _TxnCandidateCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: selected ? const Color(0xFFF8FFFB) : BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: border, width: selected ? 2 : 1),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Expanded(child: Text(label, style: BambooFonts.ui(11.5, weight: FontWeight.w700, color: selected ? BambooInk.jade : BambooInk.ink500, letterSpacing: 0.6))),
+          Expanded(child: Text(label, style: BambooFonts.ui(11.5, weight: FontWeight.w700, color: selected ? BambooInk.jade : BambooInk.ink500).copyWith(letterSpacing: 0.6))),
           Icon(selected ? Icons.radio_button_checked : Icons.radio_button_unchecked, size: 19, color: selected ? BambooInk.jade : BambooInk.ink500),
         ]),
         const SizedBox(height: 9),
-        MoneyText(txn.amount, confidence: Confidence.estimated, style: BambooFonts.money(18)),
+        MoneyText(txn.amount, confidence: Confidence.estimated, style: BambooFonts.money(17)),
         const SizedBox(height: 5),
         Text(txn.merchantName ?? 'Spend', maxLines: 2, overflow: TextOverflow.ellipsis, style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink900)),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(color: selected ? const Color(0xFFD9F6EA) : const Color(0xFFECEBE7), borderRadius: BorderRadius.circular(6)),
-          child: Text(_sourceLabel(txn.source), maxLines: 1, overflow: TextOverflow.ellipsis, style: BambooFonts.ui(10.5, weight: FontWeight.w600, color: BambooInk.ink700)),
+          child: Text(_sourceLabel(txn.source), maxLines: 1, overflow: TextOverflow.ellipsis, style: BambooFonts.ui(10.5, weight: FontWeight.w600, color: selected ? const Color(0xFF005D45) : BambooInk.ink700)),
         ),
         const SizedBox(height: 6),
         Text(txn.cardDisplayName ?? _formatDate(txn.occurredAt), maxLines: 1, overflow: TextOverflow.ellipsis, style: BambooFonts.ui(11, color: BambooInk.ink500)),
@@ -330,7 +384,7 @@ class _TxnCandidateCard extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: selected
-              ? FilledButton.icon(onPressed: null, icon: const Icon(Icons.check, size: 16), label: const Text('Keeping this one'), style: FilledButton.styleFrom(backgroundColor: BambooInk.jade, disabledBackgroundColor: BambooInk.jade, disabledForegroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10), textStyle: BambooFonts.ui(11, weight: FontWeight.w700)))
+              ? FilledButton.icon(onPressed: null, icon: const Icon(Icons.check, size: 16), label: const Text('Keep this one ✓'), style: FilledButton.styleFrom(backgroundColor: BambooInk.jade, disabledBackgroundColor: BambooInk.jade, disabledForegroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), textStyle: BambooFonts.ui(11, weight: FontWeight.w700)))
               : OutlinedButton(onPressed: onKeep, style: OutlinedButton.styleFrom(foregroundColor: BambooInk.ink900, side: const BorderSide(color: BambooInk.hairlineOnPaper), padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: Text('Keep this one', style: BambooFonts.ui(11, weight: FontWeight.w600))),
         ),
       ]),
@@ -351,16 +405,17 @@ class _TxnCandidateCard extends StatelessWidget {
 }
 
 class _ReviewFooter extends StatelessWidget {
-  const _ReviewFooter({required this.total, required this.resolved, required this.overlap, required this.onConfirm, required this.onDismiss});
+  const _ReviewFooter({required this.total, required this.resolved, required this.mergeCount, required this.overlap, required this.onConfirm, required this.onDismiss});
   final int total;
   final int resolved;
+  final int mergeCount;
   final double overlap;
   final VoidCallback? onConfirm;
   final VoidCallback? onDismiss;
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 8),
         decoration: BoxDecoration(color: BambooInk.paper, border: const Border(top: BorderSide(color: BambooInk.hairlineOnPaper)), boxShadow: const [BoxShadow(color: Color(0x0D2B313A), blurRadius: 12, offset: Offset(0, -3))]),
         child: SafeArea(
           top: false,
@@ -369,17 +424,18 @@ class _ReviewFooter extends StatelessWidget {
               Icon(Icons.circle, size: 10, color: onConfirm == null ? BambooInk.ink500 : BambooInk.jade),
               const SizedBox(width: 8),
               Expanded(child: Text('Ready to merge: $resolved of $total pairs resolved', style: BambooFonts.ui(12.5, color: BambooInk.ink900))),
-              Text('₹${overlap.toStringAsFixed(2)}', style: BambooFonts.ui(12, color: BambooInk.ink500)),
+              Text('Overlaps: ₹${overlap.toStringAsFixed(2)}', style: BambooFonts.ui(12, color: BambooInk.ink500)),
             ]),
             const SizedBox(height: 10),
             SizedBox(width: double.infinity, child: FilledButton.icon(
               onPressed: onConfirm,
               icon: const Icon(Icons.check, size: 19),
-              label: Text('Confirm & Merge $total Items'),
-              style: FilledButton.styleFrom(backgroundColor: BambooInk.jade, disabledBackgroundColor: BambooInk.ink500, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), textStyle: BambooFonts.ui(16, weight: FontWeight.w700)),
+              label: Text('Confirm & Merge $mergeCount Items'),
+              style: FilledButton.styleFrom(backgroundColor: BambooInk.jade, disabledBackgroundColor: BambooInk.ink500, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), textStyle: BambooFonts.ui(16, weight: FontWeight.w700)),
             )),
             TextButton(onPressed: onDismiss, child: Text('Dismiss & keep all as distinct expenses', style: BambooFonts.ui(13, color: BambooInk.ink500))),
           ]),
         ),
       );
+
 }
