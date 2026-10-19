@@ -124,7 +124,7 @@ class _SpendingScreenshotImportScreenState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Import spending screenshots')),
+    appBar: AppBar(title: const Text('Import from screenshots')),
     body: AppBackground(
       child: Padding(
         padding: const EdgeInsets.all(20),

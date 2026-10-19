@@ -1,27 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../data/import_repository.dart';
 import '../sms_import/sms_backup_import_screen.dart';
-import '../sms_import/sms_import_screen.dart';
-import 'data_transfer_screen.dart';
-import 'email_forwarding_screen.dart';
-import 'imap_connection_screen.dart';
 import 'statement_pdf_import_screen.dart';
 import 'screenshot_spending_import_screen.dart';
-import 'sync_backup_screen.dart';
 
 /// ui-spec.md F1 Import Hub — implementation-plan-group-e-f-g.md §3, "build
 /// this LAST among the F screens, once F2/F3/F4/F7 exist enough to have a
 /// real status to report." Built last in this pass, per that guidance.
 ///
-/// Offline behaviour: every status card below needs a network round-trip
-/// to say anything real (forwarding-address issuance, IMAP config) — this
-/// screen requires connectivity and shows ErrorState rather than hanging
-/// silently, matching the Cross-Cutting Requirements' offline-first
-/// discipline for screens that legitimately can't work offline.
+/// The hub keeps the visible import choices focused while retaining the
+/// existing import routes and showing completed-import history below them.
 class ImportHubScreen extends ConsumerWidget {
   final bool embedded;
 
@@ -29,8 +23,7 @@ class ImportHubScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final forwarding = ref.watch(forwardingAddressProvider);
-    final imap = ref.watch(imapConnectionProvider);
+    final statementImports = ref.watch(statementImportsProvider);
     final smsBatches = ref.watch(smsImportBatchesProvider);
     // Fails open: an unreachable app-status endpoint must not withdraw a
     // working feature, only a deliberate flag flip should.
@@ -50,17 +43,35 @@ class ImportHubScreen extends ConsumerWidget {
             style: BambooFonts.ui(13.5, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.lg),
-          // Task S-1b: the backup-file import needs NO SMS permission —
-          // the user exports their own messages and picks the file — so
-          // it remains available alongside live SMS auto-import in every
-          // flavor. The two paths stay as separate tiles deliberately.
-          //
-          // `smsBackupImportEnabled` is the server-side kill switch
-          // (migration 0036) — a bad import's blast radius is the user's
-          // whole transaction history, and the input is a file format
-          // this codebase doesn't control. Fails open when app-status is
-          // unreachable, same as every other read of it.
-          if (smsBackupEnabled) ...[
+          _ChannelCard(
+            icon: Icons.picture_as_pdf_outlined,
+            title: 'Import spending file',
+            status: const _Status(
+              'PDF, CSV, TSV, Excel XLSX, or JSON',
+              BambooInk.ink500,
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const StatementPdfImportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          _ChannelCard(
+            icon: Icons.image_search_outlined,
+            title: 'Import from screenshots',
+            status: const _Status(
+              'On-device OCR — transaction rows only',
+              BambooInk.ink500,
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SpendingScreenshotImportScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          if (smsBackupEnabled)
             _ChannelCard(
               icon: Icons.upload_file_outlined,
               title: 'Import SMS backup file',
@@ -86,151 +97,15 @@ class ImportHubScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            const SizedBox(height: AppSpace.md),
-          ],
-          // The live auto-read path is available in every flavor. The user
-          // still grants SMS permission explicitly before listening starts.
-          _ChannelCard(
-            icon: Icons.sms_outlined,
-            title: 'SMS auto-import (live)',
-            status: smsBatches.when(
-              data: (batches) => batches.isEmpty
-                  ? const _Status('Not set up', BambooInk.ink500)
-                  : _Status(
-                      'Active — ${batches.length} import${batches.length == 1 ? '' : 's'}',
-                      BambooInk.jade,
-                    ),
-              loading: () => const _Status('Checking…', BambooInk.ink500),
-              error: (_, _) => const _Status('Error', BambooInk.clay),
-            ),
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SmsImportScreen())),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ChannelCard(
-            icon: Icons.picture_as_pdf_outlined,
-            title: 'Import spending file',
-            status: const _Status(
-              'PDF, CSV, TSV, Excel XLSX, or JSON',
-              BambooInk.ink500,
-            ),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const StatementPdfImportScreen(),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ChannelCard(
-            icon: Icons.image_search_outlined,
-            title: 'Import spending screenshots',
-            status: const _Status(
-              'On-device OCR — transaction rows only',
-              BambooInk.ink500,
-            ),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const SpendingScreenshotImportScreen(),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ChannelCard(
-            icon: Icons.email_outlined,
-            title: 'Email forwarding',
-            status: forwarding.when(
-              data: (addr) {
-                if (addr == null)
-                  return const _Status('Not set up', BambooInk.ink500);
-                if (addr.emailCount > 0) {
-                  return _Status(
-                    'Connected — ${addr.emailCount} received',
-                    BambooInk.jade,
-                  );
-                }
-                return const _Status(
-                  'Waiting for first email…',
-                  BambooInk.amber,
-                );
-              },
-              loading: () => const _Status('Checking…', BambooInk.ink500),
-              error: (_, _) => const _Status('Error', BambooInk.clay),
-            ),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const EmailForwardingScreen()),
-            ),
-          ),
-          const SizedBox(height: AppSpace.md),
-          // Task F-10: this tile used to read "IMAP connection
-          // (fallback)" with a "Connected" status, which implied a
-          // working sync. There is no poller behind it — it can test a
-          // login and nothing else — and none is planned: Google has
-          // ended basic-auth IMAP for Workspace and is deprecating app
-          // passwords, so building one would mean building on a
-          // foundation being removed. Email forwarding covers the same
-          // need without holding anyone's credentials. Labelled for what
-          // it actually does until it's removed outright.
-          _ChannelCard(
-            icon: Icons.alternate_email_rounded,
-            title: 'IMAP connection (test only)',
-            status: imap.when(
-              data: (conn) {
-                if (conn == null)
-                  return const _Status(
-                    'Not set up — use Email forwarding instead',
-                    BambooInk.ink500,
-                  );
-                if (conn.verifiedAt != null) {
-                  return const _Status(
-                    'Login verified — does not sync mail',
-                    BambooInk.ink500,
-                  );
-                }
-                return const _Status(
-                  'Set up — not yet verified',
-                  BambooInk.amber,
-                );
-              },
-              loading: () => const _Status('Checking…', BambooInk.ink500),
-              error: (_, _) => const _Status('Error', BambooInk.clay),
-            ),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ImapConnectionScreen()),
-            ),
-          ),
+          if (smsBackupEnabled) const SizedBox(height: AppSpace.md),
           const SizedBox(height: AppSpace.xxl),
-          Text(
-            'Data',
-            style: BambooFonts.ui(
-              12.5,
-              weight: FontWeight.w700,
-              color: BambooInk.ink900,
-            ),
-          ),
-          const SizedBox(height: AppSpace.sm),
-          _ChannelCard(
-            icon: Icons.cloud_sync_outlined,
-            title: 'Sync & backup',
-            status: const _Status(
-              'Backup status & conflict log',
-              BambooInk.ink500,
-            ),
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SyncBackupScreen())),
-          ),
-          const SizedBox(height: AppSpace.md),
-          _ChannelCard(
-            icon: Icons.ios_share_rounded,
-            title: 'Import or export data',
-            status: const _Status(
-              'CSV and PDF · your data is yours',
-              BambooInk.ink500,
-            ),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const DataTransferScreen()),
-            ),
+          _ImportHistorySection(
+            statementImports: statementImports,
+            smsBatches: smsBatches,
+            onRetry: () {
+              ref.invalidate(statementImportsProvider);
+              ref.invalidate(smsImportBatchesProvider);
+            },
           ),
         ],
       ),
@@ -251,6 +126,176 @@ class ImportHubScreen extends ConsumerWidget {
         ),
       ),
       body: body,
+    );
+  }
+}
+
+class _ImportHistorySection extends StatelessWidget {
+  final AsyncValue<List<StatementImport>> statementImports;
+  final AsyncValue<List<SmsImportBatch>> smsBatches;
+  final VoidCallback onRetry;
+
+  const _ImportHistorySection({
+    required this.statementImports,
+    required this.smsBatches,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = <_ImportHistoryEntry>[
+      for (final batch in statementImports.valueOrNull ?? const [])
+        _ImportHistoryEntry(
+          title: 'Spending import',
+          detail:
+              '${batch.txnCount} ${batch.txnCount == 1 ? 'row' : 'rows'} processed',
+          importedAt: batch.importedAt,
+          icon: Icons.description_outlined,
+        ),
+      for (final batch in smsBatches.valueOrNull ?? const [])
+        _ImportHistoryEntry(
+          title: 'SMS backup import',
+          detail:
+              '${batch.parsedCount} ${batch.parsedCount == 1 ? 'message' : 'messages'} processed',
+          importedAt: batch.importedAt,
+          icon: Icons.sms_outlined,
+        ),
+    ]..sort((a, b) => b.importedAt.compareTo(a.importedAt));
+
+    final isLoading =
+        (statementImports.isLoading && statementImports.valueOrNull == null) ||
+        (smsBatches.isLoading && smsBatches.valueOrNull == null);
+    final hasError = statementImports.hasError || smsBatches.hasError;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
+        color: BambooInk.glassFillOnPaper,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: BambooInk.hairlineOnPaper),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.history_rounded,
+                color: BambooInk.jade,
+                size: 21,
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Text(
+                'Import history',
+                style: BambooFonts.heading(16, color: BambooInk.ink900),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            'Your latest completed imports, with the time they were added.',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: AppSpace.md),
+          if (isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpace.md),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (entries.isEmpty && hasError)
+            _ImportHistoryMessage(onRetry: onRetry)
+          else if (entries.isEmpty)
+            Text(
+              'Completed imports will appear here.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            )
+          else
+            for (final entry in entries.take(5)) _ImportHistoryRow(entry: entry),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportHistoryEntry {
+  final String title;
+  final String detail;
+  final DateTime importedAt;
+  final IconData icon;
+
+  const _ImportHistoryEntry({
+    required this.title,
+    required this.detail,
+    required this.importedAt,
+    required this.icon,
+  });
+}
+
+class _ImportHistoryRow extends StatelessWidget {
+  final _ImportHistoryEntry entry;
+
+  const _ImportHistoryRow({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final importedAt = DateFormat(
+      'd MMM yyyy, h:mm a',
+    ).format(entry.importedAt.toLocal());
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(entry.icon, color: BambooInk.ink500, size: 19),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.title,
+                  style: BambooFonts.ui(
+                    13,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${entry.detail} · $importedAt',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportHistoryMessage extends StatelessWidget {
+  final VoidCallback onRetry;
+
+  const _ImportHistoryMessage({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.cloud_off_outlined, size: 18, color: BambooInk.ink500),
+        const SizedBox(width: AppSpace.sm),
+        Expanded(
+          child: Text(
+            'Import history could not be loaded.',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+        ),
+        TextButton(onPressed: onRetry, child: const Text('Retry')),
+      ],
     );
   }
 }
