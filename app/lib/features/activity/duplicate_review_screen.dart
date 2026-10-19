@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -127,8 +128,36 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
       );
 
   int get _resolvedCount => _keptTransactions.length + _keptBoth.length;
-  bool get _allAutoSelected =>
-      _keptTransactions.length == widget.candidates.length && _keptBoth.isEmpty;
+  bool get _allAutoSelected {
+    if (_keptBoth.isNotEmpty ||
+        _keptTransactions.length != widget.candidates.length) {
+      return false;
+    }
+    return widget.candidates.every(
+      (candidate) =>
+          _keptTransactions[candidate.id] ==
+          _recommendedTransaction(candidate).id,
+    );
+  }
+
+  void _toggleAutoSelect() {
+    setState(() {
+      if (_allAutoSelected) {
+        _keptTransactions.clear();
+        _keptBoth
+          ..clear()
+          ..addAll(widget.candidates.map((candidate) => candidate.id));
+      } else {
+        _keptBoth.clear();
+        _keptTransactions
+          ..clear()
+          ..addEntries(widget.candidates.map((candidate) => MapEntry(
+                candidate.id,
+                _recommendedTransaction(candidate).id,
+              )));
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -155,30 +184,42 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
             const SizedBox(height: 5),
             Text('₹${_overlap.toStringAsFixed(2)} potential overlap detected', style: BambooFonts.ui(13, color: BambooInk.ink500)),
             const SizedBox(height: 12),
-            Row(children: [
-              Icon(_keptTransactions.isNotEmpty ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded, size: 21, color: BambooInk.jade),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Auto-select recommended (${_keptTransactions.length})', style: BambooFonts.ui(14, weight: FontWeight.w600))),
-              TextButton(
-                onPressed: _allAutoSelected
-                    ? () => setState(() {
-                        _keptTransactions.clear();
-                        _keptBoth
-                          ..clear()
-                          ..addAll(widget.candidates.map((candidate) => candidate.id));
-                      })
-                    : () => setState(() {
-                        _keptBoth.clear();
-                        _keptTransactions
-                          ..clear()
-                          ..addEntries(widget.candidates.map((candidate) => MapEntry(candidate.id, _recommendedTransaction(candidate).id)));
-                      }),
-                child: Text(
-                  _allAutoSelected ? 'Keep all separate' : 'Auto-select all',
-                  style: BambooFonts.ui(13, color: BambooInk.jade),
+            Semantics(
+              container: true,
+              button: true,
+              toggled: _allAutoSelected,
+              label: 'Auto-select recommended transactions',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: _toggleAutoSelect,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(children: [
+                    Icon(
+                      _allAutoSelected
+                          ? Icons.check_box_rounded
+                          : Icons.check_box_outline_blank_rounded,
+                      size: 21,
+                      color: BambooInk.jade,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Auto-select recommended (${_keptTransactions.length})',
+                        style: BambooFonts.ui(14, weight: FontWeight.w600),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _toggleAutoSelect,
+                      child: Text(
+                        _allAutoSelected ? 'Keep all separate' : 'Auto-select all',
+                        style: BambooFonts.ui(13, color: BambooInk.jade),
+                      ),
+                    ),
+                  ]),
                 ),
               ),
-            ]),
+            ),
             const SizedBox(height: 6),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -236,28 +277,44 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
     final ref = ProviderScope.containerOf(context, listen: false);
     final repository = ref.read(userCardsRepositoryProvider)!;
     setState(() => _busy = true);
+    var alreadyResolved = 0;
     try {
       for (final candidate in widget.candidates) {
         final keptId = _keptTransactions[candidate.id];
-        if (keptId != null) {
-          await repository.resolveDuplicateCandidate(
-            candidate.id,
-            resolution: 'merged',
-            keepTransactionId: keptId,
-          );
-        } else if (_keptBoth.contains(candidate.id)) {
-          await repository.resolveDuplicateCandidate(candidate.id, resolution: 'kept_both');
+        try {
+          if (keptId != null) {
+            await repository.resolveDuplicateCandidate(
+              candidate.id,
+              resolution: 'merged',
+              keepTransactionId: keptId,
+            );
+          } else if (_keptBoth.contains(candidate.id)) {
+            await repository.resolveDuplicateCandidate(
+              candidate.id,
+              resolution: 'kept_both',
+            );
+          }
+        } catch (error) {
+          if (_isAlreadyResolved(error)) {
+            alreadyResolved++;
+            continue;
+          }
+          rethrow;
         }
       }
       ref.invalidate(duplicateCandidatesProvider);
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Duplicate review complete')));
+        await _showResolutionDialog(
+          context,
+          alreadyResolved: alreadyResolved > 0,
+          count: alreadyResolved,
+        );
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+        await _showResolutionError(context, error);
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -268,19 +325,104 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
     final ref = ProviderScope.containerOf(context, listen: false);
     final repository = ref.read(userCardsRepositoryProvider)!;
     setState(() => _busy = true);
+    var alreadyResolved = 0;
     try {
       for (final candidate in widget.candidates) {
-        await repository.resolveDuplicateCandidate(candidate.id, resolution: 'kept_both');
+        try {
+          await repository.resolveDuplicateCandidate(
+            candidate.id,
+            resolution: 'kept_both',
+          );
+        } catch (error) {
+          if (_isAlreadyResolved(error)) {
+            alreadyResolved++;
+            continue;
+          }
+          rethrow;
+        }
       }
       ref.invalidate(duplicateCandidatesProvider);
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
+      if (context.mounted) {
+        await _showResolutionDialog(
+          context,
+          alreadyResolved: alreadyResolved > 0,
+          count: alreadyResolved,
+        );
+      }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+        await _showResolutionError(context, error);
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  bool _isAlreadyResolved(Object error) {
+    if (error is! ApiException || error.statusCode != 409) return false;
+    final code = error.errorCode?.toLowerCase() ?? '';
+    return code.startsWith('already resolved') ||
+        error.userMessage.toLowerCase().contains('already resolved');
+  }
+
+  Future<void> _showResolutionDialog(
+    BuildContext context, {
+    required bool alreadyResolved,
+    int count = 0,
+  }) async {
+    if (!context.mounted) return;
+    final title = alreadyResolved ? 'Already resolved' : 'Review resolved';
+    final message = alreadyResolved
+        ? '${count == 1 ? 'This duplicate was' : '$count duplicates were'} already resolved. The review list has been refreshed.'
+        : 'Your duplicate choices have been saved successfully.';
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _goToInsights(context);
+            },
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showResolutionError(BuildContext context, Object error) async {
+    if (_isAlreadyResolved(error)) {
+      await _showResolutionDialog(context, alreadyResolved: true, count: 1);
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Could not save changes'),
+        content: Text(userFacingErrorMessage(error)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _goToInsights(BuildContext context) {
+    if (!context.mounted) return;
+    final router = GoRouter.maybeOf(context);
+    if (router != null) {
+      context.go('/insights');
+    } else if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
 }
@@ -356,14 +498,21 @@ class _TxnCandidateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final border = selected ? BambooInk.jade : BambooInk.hairlineOnPaper;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: selected ? const Color(0xFFF8FFFB) : BambooInk.paperMuted,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label, ${selected ? 'selected' : 'not selected'}',
+      child: InkWell(
+        onTap: onKeep,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: border, width: selected ? 2 : 1),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFF8FFFB) : BambooInk.paperMuted,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: border, width: selected ? 2 : 1),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(child: Text(label, style: BambooFonts.ui(11.5, weight: FontWeight.w700, color: selected ? BambooInk.jade : BambooInk.ink500).copyWith(letterSpacing: 0.6))),
           Icon(selected ? Icons.radio_button_checked : Icons.radio_button_unchecked, size: 19, color: selected ? BambooInk.jade : BambooInk.ink500),
@@ -384,10 +533,12 @@ class _TxnCandidateCard extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: selected
-              ? FilledButton.icon(onPressed: null, icon: const Icon(Icons.check, size: 16), label: const Text('Keep this one ✓'), style: FilledButton.styleFrom(backgroundColor: BambooInk.jade, disabledBackgroundColor: BambooInk.jade, disabledForegroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), textStyle: BambooFonts.ui(11, weight: FontWeight.w700)))
+              ? FilledButton.icon(onPressed: onKeep, icon: const Icon(Icons.check, size: 16), label: const Text('Keep this one ✓'), style: FilledButton.styleFrom(backgroundColor: BambooInk.jade, disabledBackgroundColor: BambooInk.jade, disabledForegroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), textStyle: BambooFonts.ui(11, weight: FontWeight.w700)))
               : OutlinedButton(onPressed: onKeep, style: OutlinedButton.styleFrom(foregroundColor: BambooInk.ink900, side: const BorderSide(color: BambooInk.hairlineOnPaper), padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: Text('Keep this one', style: BambooFonts.ui(11, weight: FontWeight.w600))),
         ),
-      ]),
+          ]),
+        ),
+      ),
     );
   }
 
