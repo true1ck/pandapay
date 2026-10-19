@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { discoverNearby } = require('../src/nearby_google');
+const { GOOGLE_LOOKUP_TIMEOUT_MS, discoverNearby } = require('../src/nearby_google');
 
 const input = { lat: 18.5204, lng: 73.8567, radiusM: 2000 };
 
@@ -48,7 +48,25 @@ test('returns explicitly attributed OSM fallback after Google failure', async ()
 
   assert.equal(result.source, 'openstreetmap_fallback');
   assert.equal(result.degraded, true);
+  assert.equal(result.fallback_reason, 'google_unavailable');
   assert.equal(result.attribution, '© OpenStreetMap contributors');
+  assert.deepEqual(result.merchants, [candidate]);
+});
+
+test('uses OSM fallback when Google succeeds but returns no nearby merchants', async () => {
+  const candidate = { merchant_id: 'osm:node:1', source: 'osm_candidate' };
+  const result = await discoverNearby({
+    ...input,
+    scraperUrl: 'http://scraper',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ merchants: [], partial: false, failed_categories: 0 }),
+    }),
+    fallbackDiscover: async () => [candidate],
+  });
+
+  assert.equal(result.source, 'openstreetmap_fallback');
+  assert.equal(result.fallback_reason, 'google_empty');
   assert.deepEqual(result.merchants, [candidate]);
 });
 
@@ -59,7 +77,12 @@ test('uses OSM when Google scraper is not configured', async () => {
   });
 
   assert.equal(result.source, 'openstreetmap_fallback');
+  assert.equal(result.fallback_reason, 'google_unavailable');
   assert.deepEqual(result.merchants, []);
+});
+
+test('keeps the Google attempt bounded so provider fallback fits the app deadline', () => {
+  assert.equal(GOOGLE_LOOKUP_TIMEOUT_MS, 9000);
 });
 
 test('fails transparently when both providers fail', async () => {
