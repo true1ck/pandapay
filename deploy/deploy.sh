@@ -117,6 +117,11 @@ if [ -n "${NOTIFICATION_SERVICE_URL:-}" ] || [ -n "${NOTIFICATION_SERVICE_API_KE
   echo "    notification provider configuration updated"
 fi
 
+if [ -n "${GOOGLE_PLACES_API_KEY:-}" ]; then
+  upsert_env_value GOOGLE_PLACES_API_KEY "$GOOGLE_PLACES_API_KEY"
+  echo "    google places api key configuration updated"
+fi
+
 echo "==> Backing up the database before migrating"
 mkdir -p "$BACKUP_DIR"
 DBURL="$(grep -E '^ADMIN_DATABASE_URL=' .env | cut -d= -f2- | tr -d '"'"'"'')"
