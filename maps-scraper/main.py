@@ -86,7 +86,19 @@ async def scrape_category(lat: float, lng: float, radius_m: int, category: str, 
             search = quote(query, safe="")
             url = f"https://www.google.com/maps/search/{search}/@{lat},{lng},15z?hl=en"
             stage = "navigation"
-            await page.goto(url, wait_until="domcontentloaded", timeout=35000)
+            # Google Maps keeps loading a large client bundle after the first
+            # response. Waiting for DOMContentLoaded can exceed the whole
+            # search budget on a headless production host even though the
+            # results page is already streaming. Continue at response commit
+            # and wait explicitly for the results feed below.
+            response = await page.goto(url, wait_until="commit", timeout=25000)
+            if response is not None and response.status >= 400:
+                logger.warning(
+                    "Google Maps navigation failed category=%s http_status=%s",
+                    category,
+                    response.status,
+                )
+                raise RuntimeError("Google Maps navigation returned an error status")
             # Google can show its regional consent interstitial before Maps.
             # Accepting the site prompt lets the same browser continue to the
             # results feed; if the prompt is absent this is a quick no-op.
