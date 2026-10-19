@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import logging
 import math
 import re
 import time
@@ -11,6 +12,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright
 
+logger = logging.getLogger("pandapay.maps_scraper")
 app = FastAPI(title="PandaPay nearby map discovery")
 _browser = None
 _cache: dict[str, tuple[float, list[dict], int]] = {}
@@ -83,6 +85,16 @@ async def scrape_category(lat: float, lng: float, radius_m: int, category: str, 
             search = quote(query, safe="")
             url = f"https://www.google.com/maps/search/{search}/@{lat},{lng},15z?hl=en"
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            # Google can show its regional consent interstitial before Maps.
+            # Accepting the site prompt lets the same browser continue to the
+            # results feed; if the prompt is absent this is a quick no-op.
+            try:
+                await page.get_by_role(
+                    "button", name=re.compile(r"^(accept all|i agree)$", re.IGNORECASE)
+                ).click(timeout=2500)
+                await page.wait_for_timeout(500)
+            except Exception:
+                pass
             feed = page.locator('div[role="feed"]')
             await feed.wait_for(timeout=18000)
             previous = -1
@@ -142,17 +154,21 @@ async def lookup(lat: float, lng: float, radius_m: int):
             scrape_all_categories(), timeout=_lookup_timeout_seconds
         )
     except asyncio.TimeoutError as exc:
+        logger.warning("Google Maps lookup failed reason=overall_timeout")
         raise RuntimeError("Google Maps lookup exceeded its overall deadline") from exc
     unique = {}
     failures = 0
-    for outcome in outcomes:
+    for (category, _query), outcome in zip(_queries, outcomes):
         if isinstance(outcome, Exception):
             failures += 1
+            reason = "timeout" if isinstance(outcome, (TimeoutError, asyncio.TimeoutError)) else type(outcome).__name__
+            logger.warning("Google Maps category lookup failed category=%s reason=%s", category, reason)
             continue
         result_set = outcome
         for merchant in result_set:
             unique.setdefault(merchant["merchant_id"], merchant)
     if failures == len(outcomes):
+        logger.warning("Google Maps lookup failed reason=all_categories_failed")
         raise RuntimeError("All Google Maps category searches failed")
     return sorted(unique.values(), key=lambda item: item["distance_meters"]), failures
 
