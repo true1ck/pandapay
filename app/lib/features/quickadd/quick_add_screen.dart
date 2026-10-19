@@ -27,6 +27,7 @@ import '../cards/card_visual.dart';
 import '../import/import_hub_screen.dart';
 import '../insights/spending_visuals.dart'
     show spendingCategoryVisual, spendingInstrumentVisual;
+import '../../main.dart' show MoneyText;
 
 const _lastUsedCardKey = 'pandapay_app.quick_add_last_used_card_v1';
 const _recentMerchantsKey = 'pandapay_app.quick_add_recent_merchants_v1';
@@ -223,6 +224,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   TxnInstrument _instrument = TxnInstrument.creditCard;
   TxnEntryKind _entryKind = TxnEntryKind.spend;
   bool _saving = false;
+  bool _recommendationsExpanded = false;
   String? _amountError;
   String? _pendingClientMutationId;
   String? _pendingPayloadFingerprint;
@@ -932,6 +934,28 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final categories = ref.watch(categoriesProvider);
     final history = ref.watch(transactionsProvider).valueOrNull ?? const [];
     final merchants = _rankedMerchants(history);
+    final amount = double.tryParse(_amountController.text);
+    final recommendationQuery =
+        _entryKind == TxnEntryKind.spend &&
+            _instrument == TxnInstrument.creditCard &&
+            amount != null &&
+            amount > 0
+        ? (
+            amount: Money.fromRupees(amount),
+            categoryId: _selectedCategoryId,
+            categorySlug: categories.valueOrNull
+                ?.where((category) => category.id == _selectedCategoryId)
+                .firstOrNull
+                ?.slug,
+            merchantName: _merchantController.text.trim().isEmpty
+                ? null
+                : _merchantController.text.trim(),
+            transactionDate: _date,
+          )
+        : null;
+    final recommendations = recommendationQuery == null
+        ? null
+        : ref.watch(quickAddRecommendationsProvider(recommendationQuery));
 
     return Scaffold(
       backgroundColor: BambooInk.paper,
@@ -969,6 +993,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _buildAmountHeader(),
+                          if (recommendations != null)
+                            _buildSpendRecommendation(
+                              recommendations,
+                              userCards,
+                            ),
                           CardSummaryPanel(
                             elevated: false,
                             padding: const EdgeInsets.all(18),
@@ -1013,6 +1042,360 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           (_activePage == AddFlowPage.scanBill && _receipt != null)
           ? _saveBar()
           : null,
+    );
+  }
+
+  Widget _buildSpendRecommendation(
+    AsyncValue<List<Recommendation>> ranked,
+    AsyncValue<List<UserCard>> userCards,
+  ) {
+    final wallet = userCards.valueOrNull;
+    if (wallet == null) return const SizedBox.shrink();
+
+    final ownedByProduct = {
+      for (final card in wallet) card.cardProductId: card,
+    };
+    final recommendations = (ranked.valueOrNull ?? const <Recommendation>[])
+        .where(
+          (recommendation) =>
+              !recommendation.isExcluded &&
+              ownedByProduct.containsKey(recommendation.card.id),
+        )
+        .toList();
+    if (ranked.isLoading && recommendations.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (recommendations.isEmpty) {
+      if (wallet.isEmpty || ranked.hasError) return const SizedBox.shrink();
+      return Container(
+        key: const ValueKey('quick-add-no-reward-match'),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: BambooInk.paperCool.withValues(alpha: 0.82),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded, color: BambooInk.ink700),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'No reward-earning card matched this spend. You can still choose a card below.',
+                style: BambooFonts.ui(
+                  12,
+                  color: BambooInk.ink700,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final catalogue = ref.watch(catalogueProvider).valueOrNull ?? const [];
+    final best = recommendations.first;
+    final bestUserCard = ownedByProduct[best.card.id]!;
+    final selected = _selectedUserCardId == bestUserCard.id;
+    final alternatives = recommendations.skip(1).toList();
+    final visibleAlternatives = _recommendationsExpanded
+        ? alternatives
+        : alternatives.take(1).toList();
+    final moreCount = alternatives.length - visibleAlternatives.length;
+    final rate = best.effectiveRatePerRupee;
+    final rateLabel = rate == null
+        ? null
+        : '${(rate * 100).toStringAsFixed(rate * 100 == (rate * 100).roundToDouble() ? 0 : 1)}% rewards';
+
+    return Container(
+      key: const ValueKey('quick-add-card-recommendation'),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: BambooInk.lime.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: BambooInk.slate.withValues(alpha: 0.16),
+            blurRadius: 14,
+            offset: const Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.auto_awesome_rounded,
+                size: 15,
+                color: BambooInk.lime,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'RECOMMENDED FOR THIS SPEND',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(
+                    10,
+                    weight: FontWeight.w700,
+                    color: BambooInk.onSlateMuted,
+                  ).copyWith(letterSpacing: 0.65),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: BambooInk.lime,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'BEST MATCH',
+                  style: BambooFonts.ui(
+                    9,
+                    weight: FontWeight.w700,
+                    color: BambooInk.slate,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          Row(
+            children: [
+              CardVisual(
+                product: best.card,
+                userCard: bestUserCard,
+                width: 58,
+                height: 40,
+                showProductName: false,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      bestUserCard.nickname?.isNotEmpty == true
+                          ? bestUserCard.nickname!
+                          : best.card.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.heading(14, color: BambooInk.onSlate),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      best.card.issuerName ?? bestUserCard.cardName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(11, color: BambooInk.onSlateMuted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  MoneyText(
+                    best.expectedValue,
+                    confidence: best.confidence,
+                    style: BambooFonts.money(18, color: BambooInk.lime),
+                    hidePaise: true,
+                    showConfidenceIcon: false,
+                  ),
+                  Text(
+                    'estimated rewards',
+                    style: BambooFonts.ui(9.5, color: BambooInk.onSlateMuted),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          if (rateLabel != null || best.reasonLines.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              [
+                ?rateLabel,
+                if (best.reasonLines.isNotEmpty) best.reasonLines.first,
+              ].join(' · '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: BambooFonts.ui(
+                11,
+                color: BambooInk.onSlateMuted,
+                height: 1.3,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 42,
+            child: FilledButton.icon(
+              key: ValueKey('quick-add-use-recommended-${bestUserCard.id}'),
+              onPressed: selected
+                  ? null
+                  : () => setState(() => _selectedUserCardId = bestUserCard.id),
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.lime,
+                foregroundColor: BambooInk.slate,
+                disabledBackgroundColor: BambooInk.lime.withValues(alpha: 0.88),
+                disabledForegroundColor: BambooInk.slate,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: BambooFonts.ui(12, weight: FontWeight.w700),
+              ),
+              icon: Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.credit_card_rounded,
+                size: 17,
+              ),
+              label: Text(selected ? 'Using this card' : 'Pay with this card'),
+            ),
+          ),
+          if (visibleAlternatives.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(height: 1, color: Color(0x33FBFAF5)),
+            ),
+            for (final alternative in visibleAlternatives)
+              _buildRecommendationAlternative(
+                alternative,
+                ownedByProduct[alternative.card.id]!,
+                catalogue,
+              ),
+            if (moreCount > 0)
+              TextButton.icon(
+                key: const ValueKey('quick-add-show-more-cards'),
+                onPressed: () =>
+                    setState(() => _recommendationsExpanded = true),
+                style: TextButton.styleFrom(
+                  foregroundColor: BambooInk.lime,
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                ),
+                icon: const Icon(Icons.expand_more_rounded, size: 18),
+                label: Text(
+                  'Show $moreCount more card${moreCount == 1 ? '' : 's'}',
+                ),
+              ),
+            if (_recommendationsExpanded && alternatives.length > 1)
+              TextButton.icon(
+                onPressed: () =>
+                    setState(() => _recommendationsExpanded = false),
+                style: TextButton.styleFrom(
+                  foregroundColor: BambooInk.onSlateMuted,
+                  minimumSize: const Size(0, 36),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                ),
+                icon: const Icon(Icons.expand_less_rounded, size: 18),
+                label: const Text('Show fewer cards'),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecommendationAlternative(
+    Recommendation recommendation,
+    UserCard userCard,
+    List<CardProduct> catalogue,
+  ) {
+    final isSelected = userCard.id == _selectedUserCardId;
+    final product = catalogue
+        .where((card) => card.id == recommendation.card.id)
+        .firstOrNull;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Material(
+        color: BambooInk.onSlate.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          key: ValueKey('quick-add-alternative-${userCard.id}'),
+          onTap: () => setState(() => _selectedUserCardId = userCard.id),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            child: Row(
+              children: [
+                if (product != null)
+                  CardVisual(
+                    product: product,
+                    userCard: userCard,
+                    width: 46,
+                    height: 32,
+                    showProductName: false,
+                  )
+                else
+                  const Icon(
+                    Icons.credit_card_rounded,
+                    color: BambooInk.onSlateMuted,
+                  ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        userCard.nickname?.isNotEmpty == true
+                            ? userCard.nickname!
+                            : recommendation.card.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: BambooFonts.ui(
+                          11.5,
+                          weight: FontWeight.w600,
+                          color: BambooInk.onSlate,
+                        ),
+                      ),
+                      if (recommendation.reasonLines.isNotEmpty)
+                        Text(
+                          recommendation.reasonLines.first,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: BambooFonts.ui(
+                            9.5,
+                            color: BambooInk.onSlateMuted,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 7),
+                MoneyText(
+                  recommendation.expectedValue,
+                  confidence: recommendation.confidence,
+                  style: BambooFonts.money(13, color: BambooInk.lime),
+                  hidePaise: true,
+                  showConfidenceIcon: false,
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.chevron_right_rounded,
+                  size: 17,
+                  color: isSelected ? BambooInk.lime : BambooInk.onSlateMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

@@ -102,21 +102,59 @@ TransactionEntry _detailEntry({
 
 void main() {
   testWidgets(
-    'shows the period total and how it compares to the period before',
+    'shows the period total and comparison in the spending mix card',
     (tester) async {
-      // The comparison is the entire point: "₹42,000" alone says nothing.
-      await _pump(tester, _report(spend: 42000, previousSpend: 35000));
+      await _pump(
+        tester,
+        _report(
+          spend: 42000,
+          previousSpend: 35000,
+          byCategory: [
+            SpendBreakdownRow(
+              label: 'Dining',
+              total: Money.fromRupees(42000),
+              txnCount: 12,
+              categoryId: 'dining',
+            ),
+          ],
+        ),
+      );
 
       expect(find.textContaining('42,000'), findsWidgets);
       expect(find.text('20%'), findsOneWidget);
       expect(find.text('vs last month'), findsOneWidget);
+      expect(find.text('TOTAL SPENT'), findsNothing);
+      expect(find.textContaining('On track for'), findsNothing);
+      final chartTitle = tester.getRect(find.text('Spending mix'));
+      final comparison = tester.getRect(
+        find.byKey(const ValueKey('spending_mix_comparison')),
+      );
+      final metrics = tester.getRect(
+        find.byKey(const ValueKey('spending_summary_card')),
+      );
+      expect(comparison.left, greaterThan(chartTitle.right));
+      expect(comparison.top, lessThan(metrics.top));
     },
   );
 
   testWidgets('a drop is reported as less, not as a negative increase', (
     tester,
   ) async {
-    await _pump(tester, _report(spend: 28000, previousSpend: 35000));
+    await _pump(
+      tester,
+      _report(
+        spend: 28000,
+        previousSpend: 35000,
+        byCategory: [
+          SpendBreakdownRow(
+            label: 'Dining',
+            total: Money.fromRupees(28000),
+            txnCount: 8,
+            categoryId: 'dining',
+          ),
+        ],
+      ),
+    );
     expect(find.text('20%'), findsOneWidget);
     expect(find.text('vs last month'), findsOneWidget);
   });
@@ -124,45 +162,148 @@ void main() {
   testWidgets('no comparison is shown when the previous period had no spend', (
     tester,
   ) async {
-    // "Up 100%" from zero is arithmetically true and useless to read.
-    await _pump(tester, _report(spend: 42000, previousSpend: 0));
-    expect(find.textContaining('more than last month'), findsNothing);
-    expect(find.textContaining('less than last month'), findsNothing);
+    await _pump(
+      tester,
+      _report(
+        spend: 42000,
+        previousSpend: 0,
+        byCategory: [
+          SpendBreakdownRow(
+            label: 'Dining',
+            total: Money.fromRupees(42000),
+            txnCount: 12,
+            categoryId: 'dining',
+          ),
+        ],
+      ),
+    );
+    expect(find.text('20%'), findsNothing);
+    expect(find.text('vs last month'), findsNothing);
   });
 
   testWidgets(
-    'income and investment do not add the removed cash flow summary',
+    'compact summary shows money in and net balance without investment',
     (tester) async {
       await _pump(
         tester,
         _report(spend: 42000, income: 90000, investment: 15000),
       );
 
-      expect(find.text('Money in'), findsNothing);
-      expect(find.text('Spent'), findsNothing);
+      expect(find.text('Money in'), findsOneWidget);
+      expect(find.text('Spent'), findsOneWidget);
+      expect(find.text('Surplus'), findsOneWidget);
       expect(find.text('Invested'), findsNothing);
       expect(find.text('Left over'), findsNothing);
       expect(find.textContaining('42,000'), findsWidgets);
     },
   );
 
+  testWidgets('negative net flow is shown as short by in the compact summary', (
+    tester,
+  ) async {
+    await _pump(tester, _report(spend: 90000, income: 40000));
+    expect(find.text('Short by'), findsOneWidget);
+    expect(find.text('Left over'), findsNothing);
+  });
+
   testWidgets(
-    'a negative net flow does not add the removed short-by summary',
+    'compact summary keeps all four metrics when income and rewards are zero',
     (tester) async {
-      await _pump(tester, _report(spend: 90000, income: 40000));
-      expect(find.text('Short by'), findsNothing);
-      expect(find.text('Left over'), findsNothing);
+      await _pump(tester, _report(spend: 42000));
+      expect(find.text('Money in'), findsOneWidget);
+      expect(find.text('Spent'), findsOneWidget);
+      expect(find.text('Short by'), findsOneWidget);
+      expect(find.text('Rewards earned'), findsOneWidget);
+      expect(find.textContaining('₹0.00'), findsWidgets);
     },
   );
 
   testWidgets(
-    'the flow card is hidden entirely when there is no income or investment',
+    'category chart stays above compact two-column spending summary',
     (tester) async {
-      // Most users only have card spend; a row of zeroes would be noise.
-      await _pump(tester, _report(spend: 42000));
-      expect(find.text('Money in'), findsNothing);
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pump(
+        tester,
+        _report(
+          spend: 42000,
+          previousSpend: 35000,
+          income: 12000,
+          rewards: 420,
+          byCategory: [
+            SpendBreakdownRow(
+              label: 'Dining',
+              total: Money.fromRupees(28000),
+              txnCount: 8,
+              categoryId: 'dining',
+            ),
+            SpendBreakdownRow(
+              label: 'Shopping',
+              total: Money.fromRupees(14000),
+              txnCount: 4,
+              categoryId: 'shopping',
+            ),
+          ],
+        ),
+      );
+
+      final chartTitle = tester.getTopLeft(find.text('Spending mix'));
+      final summaryRect = tester.getRect(
+        find.byKey(const ValueKey('spending_summary_card')),
+      );
+      expect(chartTitle.dy, lessThan(summaryRect.top));
+      expect(find.text('TOTAL SPENT'), findsNothing);
+      expect(find.textContaining('On track for'), findsNothing);
+      expect(find.text('20%'), findsOneWidget);
+      expect(summaryRect.height, lessThan(180));
+
+      final moneyIn = tester.getRect(find.text('Money in'));
+      final spent = tester.getRect(find.text('Spent'));
+      final shortBy = tester.getRect(find.text('Short by'));
+      final rewards = tester.getRect(find.text('Rewards earned'));
+      expect(spent.left, greaterThan(moneyIn.left));
+      expect(rewards.left, greaterThan(shortBy.left));
+      expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('compact summary stacks metrics on narrow screens', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pump(
+      tester,
+      _report(
+        spend: 42000,
+        income: 12000,
+        rewards: 420,
+        byCategory: [
+          SpendBreakdownRow(
+            label: 'Dining',
+            total: Money.fromRupees(28000),
+            txnCount: 8,
+            categoryId: 'dining',
+          ),
+          SpendBreakdownRow(
+            label: 'Shopping',
+            total: Money.fromRupees(14000),
+            txnCount: 4,
+            categoryId: 'shopping',
+          ),
+        ],
+      ),
+    );
+
+    final moneyIn = tester.getTopLeft(find.text('Money in'));
+    final spent = tester.getTopLeft(find.text('Spent'));
+    final shortBy = tester.getTopLeft(find.text('Short by'));
+    final rewards = tester.getTopLeft(find.text('Rewards earned'));
+    expect(moneyIn.dy, lessThan(spent.dy));
+    expect(spent.dy, lessThan(shortBy.dy));
+    expect(shortBy.dy, lessThan(rewards.dy));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'a card row reports the rate it actually paid, not its headline rate',

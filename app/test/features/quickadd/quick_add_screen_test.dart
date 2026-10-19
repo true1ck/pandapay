@@ -417,6 +417,157 @@ void main() {
   );
 
   testWidgets(
+    'Quick Add recommends a wallet card, shows alternatives, and selects the chosen card',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const bestProduct = CardProduct(
+        id: 'product-best',
+        name: 'Best Rewards Card',
+        issuerName: 'Panda Bank',
+        network: CardNetwork.visa,
+        cardType: 'credit',
+      );
+      const alternateProduct = CardProduct(
+        id: 'product-alternate',
+        name: 'Alternate Rewards Card',
+        issuerName: 'Bamboo Bank',
+        network: CardNetwork.mastercard,
+        cardType: 'credit',
+      );
+      const thirdProduct = CardProduct(
+        id: 'product-third',
+        name: 'Third Rewards Card',
+        issuerName: 'Panda Bank',
+        network: CardNetwork.rupay,
+        cardType: 'credit',
+      );
+      const wallet = <UserCard>[
+        UserCard(
+          id: 'wallet-best',
+          cardProductId: 'product-best',
+          cardName: 'Best Rewards Card',
+          isDefault: true,
+        ),
+        UserCard(
+          id: 'wallet-alternate',
+          cardProductId: 'product-alternate',
+          cardName: 'Alternate Rewards Card',
+          isDefault: false,
+        ),
+        UserCard(
+          id: 'wallet-third',
+          cardProductId: 'product-third',
+          cardName: 'Third Rewards Card',
+          isDefault: false,
+        ),
+      ];
+      const recommendations = [
+        Recommendation(
+          card: bestProduct,
+          expectedValue: Money.fromPaise(6500),
+          confidence: Confidence.estimated,
+          reasonLines: ['6.5% on dining'],
+          effectiveRatePerRupee: 0.065,
+        ),
+        Recommendation(
+          card: alternateProduct,
+          expectedValue: Money.fromPaise(4000),
+          confidence: Confidence.estimated,
+          reasonLines: ['4% on dining'],
+          effectiveRatePerRupee: 0.04,
+        ),
+        Recommendation(
+          card: thirdProduct,
+          expectedValue: Money.fromPaise(2000),
+          confidence: Confidence.estimated,
+          reasonLines: ['2% base rewards'],
+          effectiveRatePerRupee: 0.02,
+        ),
+      ];
+      final query = (
+        amount: const Money.fromPaise(125000),
+        categoryId: null,
+        categorySlug: null,
+        merchantName: null,
+        transactionDate: null,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userCardsProvider.overrideWith((ref) async => wallet),
+            catalogueProvider.overrideWith(
+              (ref) async => const [
+                bestProduct,
+                alternateProduct,
+                thirdProduct,
+              ],
+            ),
+            categoriesProvider.overrideWith((ref) async => const []),
+            transactionsProvider.overrideWith((ref) async => const []),
+            merchantSearchRepositoryProvider.overrideWithValue(
+              _EmptyMerchantSearchRepository(),
+            ),
+            quickAddRecommendationsProvider(
+              query,
+            ).overrideWithValue(const AsyncValue.data(recommendations)),
+          ],
+          child: const MaterialApp(
+            home: QuickAddScreen(
+              initialAmount: Money.fromPaise(125000),
+              autofocus: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('quick-add-card-recommendation')),
+        findsOneWidget,
+      );
+      expect(find.text('Best Rewards Card'), findsOneWidget);
+      expect(find.text('Pay with this card'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('quick-add-use-recommended-wallet-best')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Using this card'), findsOneWidget);
+
+      final showMore = find.byKey(const ValueKey('quick-add-show-more-cards'));
+      await tester.ensureVisible(showMore);
+      await tester.pumpAndSettle();
+      await tester.tap(showMore);
+      await tester.pumpAndSettle();
+      expect(find.text('Third Rewards Card'), findsOneWidget);
+
+      final alternate = find.byKey(
+        const ValueKey('quick-add-alternative-wallet-alternate'),
+      );
+      await tester.ensureVisible(alternate);
+      await tester.pumpAndSettle();
+      await tester.tap(alternate);
+      await tester.pumpAndSettle();
+      final selector = find.byKey(const ValueKey('quick-add-card-selector'));
+      await tester.ensureVisible(selector);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: selector,
+          matching: find.text('Alternate Rewards Card'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'typing a merchant query shows live search suggestions and picking one auto-fills category',
     (tester) async {
       final repo = _FakeMerchantSearchRepository({

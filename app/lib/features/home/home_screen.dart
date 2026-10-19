@@ -104,12 +104,9 @@ class HomeScreen extends ConsumerWidget {
     final tutorialKeys = ref.watch(tutorialKeysProvider);
     final now = ref.watch(clockProvider).now();
 
-    // Section order is design 01's, top to bottom: header, "What are you
-    // paying for?", purchase selector, amount, the verdict,
-    // backups, utilisation warning, categories, dues, then the protected
-    // bank-account snapshot. It used to run header → action icons → rewards
-    // strip → amount → chips, which buried the question the screen exists to
-    // answer under two strips of chrome.
+    // Keep the page hierarchy clear: greeting, spending summary, quick actions,
+    // then the purchase controls and the recommendation they drive.
+    // Context, warnings, category detail, dues and account data continue below.
     return AppBackground(
       child: CustomScrollView(
         slivers: [
@@ -127,15 +124,18 @@ class HomeScreen extends ConsumerWidget {
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
+                  padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 0),
                   child: _BrandHeader(greeting: _greetingFor(now)),
                 ),
+                const _HomeSpendHeadline(),
+                const _HomeQuickActions(),
+                const _HomeSectionDivider(),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(_gutter, 18, _gutter, 0),
+                  padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 0),
                   child: Text(
                     'What are you paying for?',
                     style: BambooFonts.heading(
-                      24,
+                      18,
                       color: BambooInk.ink900,
                       height: 1.15,
                     ),
@@ -153,7 +153,7 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   child: HomeContextLine(),
                 ),
-                const SizedBox(height: AppSpace.lg),
+                const SizedBox(height: AppSpace.xs),
                 Padding(
                   key: tutorialKeys.categoryChips,
                   padding: const EdgeInsets.symmetric(horizontal: _gutter),
@@ -168,14 +168,12 @@ class HomeScreen extends ConsumerWidget {
                   key: tutorialKeys.amountField,
                   padding: const EdgeInsets.fromLTRB(
                     _gutter,
-                    AppSpace.lg,
+                    AppSpace.xs,
                     _gutter,
                     0,
                   ),
                   child: const _AmountCard(),
                 ),
-                const SizedBox(height: AppSpace.sm),
-                const _AlertsStrip(),
                 const SizedBox(height: AppSpace.xs),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: _gutter),
@@ -184,9 +182,8 @@ class HomeScreen extends ConsumerWidget {
                     tutorialKeys: tutorialKeys,
                   ),
                 ),
+                const _AlertsStrip(),
                 const _UtilizationWarningBanner(),
-                const _HomeSpendHeadline(),
-                const _HomeQuickActions(),
                 const _HomeCategories(),
                 const _HomeDuesAndReminders(),
                 const _HomeAccountSnapshot(),
@@ -238,9 +235,10 @@ class _HomeQuickActionsState extends State<_HomeQuickActions> {
 
   @override
   Widget build(BuildContext context) => Padding(
+    key: const ValueKey('home-quick-actions-layout'),
     padding: const EdgeInsets.fromLTRB(
       HomeScreen._gutter,
-      AppSpace.lg,
+      AppSpace.xs,
       HomeScreen._gutter,
       0,
     ),
@@ -324,6 +322,25 @@ class _HomeQuickActionsState extends State<_HomeQuickActions> {
   );
 }
 
+class _HomeSectionDivider extends StatelessWidget {
+  const _HomeSectionDivider();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      HomeScreen._gutter,
+      AppSpace.xl,
+      HomeScreen._gutter,
+      AppSpace.lg,
+    ),
+    child: Container(
+      key: const ValueKey('home-quick-actions-divider'),
+      height: 1,
+      color: BambooInk.hairlineOnPaper.withValues(alpha: .10),
+    ),
+  );
+}
+
 class _HomeQuickActionTile extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -341,7 +358,7 @@ class _HomeQuickActionTile extends StatelessWidget {
     onTap: onTap,
     child: Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 3),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 3),
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -350,21 +367,21 @@ class _HomeQuickActionTile extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
               color: BambooInk.wash.withValues(alpha: .65),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 23, color: BambooInk.slate),
+            child: Icon(icon, size: 18, color: BambooInk.slate),
           ),
-          const SizedBox(height: AppSpace.sm),
+          const SizedBox(height: AppSpace.xs),
           Text(
             label,
             textAlign: TextAlign.center,
-            maxLines: 2,
+            maxLines: 1,
             style: BambooFonts.ui(
-              10.5,
+              9.5,
               weight: FontWeight.w500,
               color: BambooInk.ink700,
             ),
@@ -412,7 +429,7 @@ class _HomeSpendHeadlineState extends ConsumerState<_HomeSpendHeadline> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         HomeScreen._gutter,
-        AppSpace.lg,
+        AppSpace.xs,
         HomeScreen._gutter,
         0,
       ),
@@ -434,7 +451,7 @@ class _HomeSpendHeadlineState extends ConsumerState<_HomeSpendHeadline> {
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(9),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -453,42 +470,51 @@ class _HomeSpendHeadlineState extends ConsumerState<_HomeSpendHeadline> {
                     if (change != null) _HomeSpendChangePill(change: change),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SpendingDonut(
-                          rows: categories,
-                          total: report.spend.total,
-                          size: 148,
-                          compact: true,
-                          totalLabel: 'spent',
-                          selectedIndex: selectedCategoryIndex,
-                          onSelected: _selectCategory,
-                        ),
-                        if (projected != null &&
-                            report.elapsedFraction < .95) ...[
-                          const SizedBox(height: 3),
-                          SizedBox(
-                            width: 154,
-                            child: Text(
-                              'On track for ${projected.format(compact: true)} this month',
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: BambooFonts.ui(
-                                9.5,
-                                color: BambooInk.ink500,
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          SpendingDonut(
+                            rows: categories,
+                            total: report.spend.total,
+                            size: 124,
+                            compact: true,
+                            totalLabel: 'spent',
+                            selectedIndex: selectedCategoryIndex,
+                            onSelected: _selectCategory,
+                          ),
+                          if (projected != null &&
+                              report.elapsedFraction < .95) ...[
+                            const SizedBox(height: 3),
+                            SizedBox(
+                              width: 150,
+                              child: Text(
+                                'On track for ${projected.format(compact: true)} this month',
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: BambooFonts.ui(
+                                  9.5,
+                                  color: BambooInk.ink500,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 1,
+                      height: 138,
+                      color: BambooInk.hairlineOnPaper,
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -548,16 +574,16 @@ class _HomeSpendMetric extends StatelessWidget {
         : const Color(0xFFFFEFED);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 28,
+            height: 28,
             decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
-            child: Icon(icon, size: 18, color: accent),
+            child: Icon(icon, size: 15, color: accent),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -567,9 +593,9 @@ class _HomeSpendMetric extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: BambooFonts.ui(9.5, color: BambooInk.ink500),
+                  style: BambooFonts.ui(9, color: BambooInk.ink500),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
@@ -578,7 +604,7 @@ class _HomeSpendMetric extends StatelessWidget {
                     confidence: Confidence.estimated,
                     showConfidenceIcon: false,
                     style: BambooFonts.ui(
-                      12,
+                      11.5,
                       weight: FontWeight.w700,
                       color: reward ? BambooInk.jade : BambooInk.ink900,
                     ),
@@ -636,10 +662,7 @@ class _HomeSpendChangePill extends StatelessWidget {
   }
 }
 
-/// Design 01's header row, transcribed from the mockup: a bare 42pt panda
-/// mark (no bordered tile), then greeting-over-earnings, then a slate
-/// streak pill. Tapping the earnings line opens the monthly recap, exactly
-/// as the mockup's `<a href="#screen-recap">` does.
+/// Compact Home header: panda mark, greeting, all-time rewards and streak.
 ///
 /// Every figure here comes from `homeSummaryProvider` (GET /home-summary).
 /// Where the mockup hardcodes "₹1,842 earned · ₹24,180 all-time" and a
@@ -653,136 +676,62 @@ class _BrandHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(homeSummaryProvider).valueOrNull;
-    final hasEarnings = summary != null && summary.transactionCount > 0;
-
-    final earnings = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(greeting, style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
-        if (hasEarnings)
-          GestureDetector(
-            onTap: () => context.push(AppRoute.monthlySavings),
-            behavior: HitTestBehavior.opaque,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: MoneyText(
-                    key: const ValueKey('home-monthly-rewards'),
-                    summary.rewardsThisMonth,
-                    confidence: Confidence.estimated,
-                    style: BambooFonts.heading(17, color: BambooInk.ink900),
-                    suffix: ' earned',
-                    hidePaise: true,
-                    showConfidenceIcon: false,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: MoneyText(
-                    key: const ValueKey('home-all-time-rewards'),
-                    summary.rewardsAllTime,
-                    confidence: Confidence.estimated,
-                    style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                    suffix: ' all-time ›',
-                    hidePaise: true,
-                    showConfidenceIcon: false,
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-
     final streakDays = summary?.streakDays ?? 0;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const PandaMark(size: 42),
-        const SizedBox(width: AppSpace.md),
+        const PandaMark(size: 38),
+        const SizedBox(width: AppSpace.sm),
         Expanded(
-          child: streakDays == 0
-              ? earnings
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            greeting,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: BambooFonts.ui(
-                              12.5,
-                              color: BambooInk.ink500,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpace.sm),
-                        _StreakPill(days: streakDays),
-                      ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      greeting,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(13, color: BambooInk.ink500),
                     ),
-                    if (hasEarnings)
-                      GestureDetector(
-                        onTap: () => context.push(AppRoute.monthlySavings),
-                        behavior: HitTestBehavior.opaque,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: MoneyText(
-                                key: const ValueKey('home-monthly-rewards'),
-                                summary.rewardsThisMonth,
-                                confidence: Confidence.estimated,
-                                style: BambooFonts.heading(
-                                  17,
-                                  color: BambooInk.ink900,
-                                ),
-                                suffix: ' earned',
-                                hidePaise: true,
-                                showConfidenceIcon: false,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: MoneyText(
-                                key: const ValueKey('home-all-time-rewards'),
-                                summary.rewardsAllTime,
-                                confidence: Confidence.estimated,
-                                style: BambooFonts.ui(
-                                  11.5,
-                                  color: BambooInk.ink500,
-                                ),
-                                suffix: ' all-time ›',
-                                hidePaise: true,
-                                showConfidenceIcon: false,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                  ),
+                  if (streakDays > 0) ...[
+                    const SizedBox(width: AppSpace.xs),
+                    _StreakPill(days: streakDays),
                   ],
+                ],
+              ),
+              if (summary != null)
+                GestureDetector(
+                  onTap: () => context.push(AppRoute.monthlySavings),
+                  behavior: HitTestBehavior.opaque,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: MoneyText(
+                      key: const ValueKey('home-all-time-rewards'),
+                      summary.rewardsAllTime,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+                      suffix: ' earned all-time ›',
+                      hidePaise: true,
+                      showConfidenceIcon: false,
+                    ),
+                  ),
                 ),
+            ],
+          ),
         ),
         IconButton(
           tooltip: 'Add transaction',
           onPressed: () => Navigator.of(
             context,
           ).push(MaterialPageRoute(builder: (_) => const QuickAddScreen())),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+          iconSize: 21,
           icon: const Icon(Icons.add_rounded, color: BambooInk.jade),
         ),
       ],
@@ -1199,7 +1148,7 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
     final currentAmount = ref.watch(enteredAmountProvider);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(18),
@@ -1229,7 +1178,6 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
               ),
             ],
           ),
-          const SizedBox(height: 1),
           TextField(
             controller: _controller,
             focusNode: _amountFocusNode,
@@ -1237,7 +1185,7 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'^[\d,]*\.?\d{0,2}')),
             ],
-            style: BambooFonts.money(31),
+            style: BambooFonts.money(25),
             decoration: InputDecoration(
               // filled: false — without this, the ambient InputDecorationTheme
               // (app_theme.dart's AppTheme.light()/.dark(), still applied
@@ -1251,7 +1199,7 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
               prefixText: '₹',
-              prefixStyle: BambooFonts.money(31, color: BambooInk.ink900),
+              prefixStyle: BambooFonts.money(25, color: BambooInk.ink900),
             ),
             onChanged: (value) {
               final parsed = double.tryParse(value.replaceAll(',', ''));
@@ -1261,14 +1209,7 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
               }
             },
           ),
-          GestureDetector(
-            onTap: () => _amountFocusNode.requestFocus(),
-            child: Text(
-              'Tap to edit',
-              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-            ),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 2),
           Row(
             children: [
               for (var i = 0; i < _quickAmounts.length; i++)
@@ -1308,7 +1249,7 @@ class _QuickAmountChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 7),
+        padding: const EdgeInsets.symmetric(vertical: 5),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? BambooInk.lime : BambooInk.paperMuted,
@@ -1317,7 +1258,7 @@ class _QuickAmountChip extends StatelessWidget {
         child: Text(
           label,
           style: BambooFonts.ui(
-            13,
+            12,
             weight: FontWeight.w600,
             color: BambooInk.ink900,
           ),
@@ -1348,8 +1289,8 @@ class _RankedSection extends StatefulWidget {
 }
 
 class _RankedSectionState extends State<_RankedSection> {
-  bool _expanded = false;
   final Set<String> _expandedRecommendationIds = <String>{};
+  bool _alternativesExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1368,69 +1309,31 @@ class _RankedSectionState extends State<_RankedSection> {
                 'Add a card to see personalized reward recommendations here.',
           );
         }
-        // ui-spec B1.4: the first non-excluded runner-up after the hero
-        // (index 0), if one exists.
-        final backup = recommendations
+        final alternatives = recommendations
             .skip(1)
-            .firstWhereOrNull((r) => !r.isExcluded);
-        final hasMoreCards = recommendations.length > 1;
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpace.sm),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Best from your wallet',
-                      style: BambooFonts.heading(18, color: BambooInk.ink900),
-                    ),
-                  ),
-                  Text(
-                    '${recommendations.length} cards compared',
-                    style: BambooFonts.ui(11, color: BambooInk.ink500),
-                  ),
-                ],
-              ),
-            ),
-            _rankedCard(recommendations.first, 0),
-            if (backup != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.md),
-                child: _BackupCardRow(backup),
-              ),
-            if (hasMoreCards) ...[
-              _CardListToggle(
-                expanded: _expanded,
-                hiddenCount: recommendations.length - 1,
-                onPressed: () => setState(() => _expanded = !_expanded),
-              ),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: _expanded
-                    ? Padding(
-                        key: const ValueKey('ranked-cards-expanded'),
-                        padding: const EdgeInsets.only(top: AppSpace.md),
-                        child: Column(
-                          children: [
-                            for (var i = 1; i < recommendations.length; i++)
-                              _rankedCard(recommendations[i], i),
-                          ],
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ],
+            .where((recommendation) => !recommendation.isExcluded)
+            .toList(growable: false);
+        return _rankedCard(
+          recommendations.first,
+          0,
+          comparedCount: recommendations.length,
+          alternatives: alternatives,
+          alternativesExpanded: _alternativesExpanded,
+          onAlternativesToggle: () =>
+              setState(() => _alternativesExpanded = !_alternativesExpanded),
         );
       },
     );
   }
 
-  Widget _rankedCard(Recommendation recommendation, int rank) {
+  Widget _rankedCard(
+    Recommendation recommendation,
+    int rank, {
+    required int comparedCount,
+    required List<Recommendation> alternatives,
+    required bool alternativesExpanded,
+    required VoidCallback onAlternativesToggle,
+  }) {
     return Padding(
       key: ValueKey(recommendation.card.id),
       padding: const EdgeInsets.only(bottom: AppSpace.md),
@@ -1451,6 +1354,10 @@ class _RankedSectionState extends State<_RankedSection> {
         cardAnchorKey: rank == 0
             ? widget.tutorialKeys.firstRecommendationCard
             : null,
+        comparedCount: comparedCount,
+        alternatives: alternatives,
+        alternativesExpanded: alternativesExpanded,
+        onAlternativesToggle: onAlternativesToggle,
       ),
     );
   }
@@ -1460,11 +1367,13 @@ class _CardListToggle extends StatelessWidget {
   final bool expanded;
   final int hiddenCount;
   final VoidCallback onPressed;
+  final bool onDarkSurface;
 
   const _CardListToggle({
     required this.expanded,
     required this.hiddenCount,
     required this.onPressed,
+    this.onDarkSurface = false,
   });
 
   @override
@@ -1482,9 +1391,15 @@ class _CardListToggle extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 48),
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
           decoration: BoxDecoration(
-            color: BambooInk.paperMuted,
+            color: onDarkSurface
+                ? BambooInk.onSlate.withValues(alpha: .07)
+                : BambooInk.paperMuted,
             borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: BambooInk.hairlineOnPaper),
+            border: Border.all(
+              color: onDarkSurface
+                  ? BambooInk.onSlate.withValues(alpha: .09)
+                  : BambooInk.hairlineOnPaper,
+            ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1499,7 +1414,9 @@ class _CardListToggle extends StatelessWidget {
                   style: BambooFonts.ui(
                     13,
                     weight: FontWeight.w600,
-                    color: BambooInk.ink900,
+                    color: onDarkSurface
+                        ? BambooInk.onSlateSubtle
+                        : BambooInk.ink900,
                   ),
                 ),
               ),
@@ -1508,9 +1425,11 @@ class _CardListToggle extends StatelessWidget {
                 turns: expanded ? 0.5 : 0,
                 duration: const Duration(milliseconds: 260),
                 curve: Curves.easeOutCubic,
-                child: const Icon(
+                child: Icon(
                   Icons.keyboard_arrow_down_rounded,
-                  color: BambooInk.ink500,
+                  color: onDarkSurface
+                      ? BambooInk.onSlateMuted
+                      : BambooInk.ink500,
                   size: 22,
                 ),
               ),
@@ -1529,44 +1448,62 @@ String _issuerLabel(CardProduct product) {
   return words.isEmpty ? 'Card issuer' : words.first;
 }
 
-/// ui-spec B1.4 backup card row. Unchanged in behaviour from before this
-/// pass — see the original file's doc-comment (preserved in git history)
-/// for why this is the next-best ranked card, not real crowdsourced
-/// acceptance data.
+/// Compact next-best card row, rendered on either the paper surface or
+/// inside the dark recommendation hero.
 class _BackupCardRow extends StatelessWidget {
   final Recommendation backup;
-  const _BackupCardRow(this.backup);
+  final bool onDarkSurface;
+  final bool showLabel;
+
+  const _BackupCardRow(
+    this.backup, {
+    this.onDarkSurface = false,
+    this.showLabel = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
       decoration: BoxDecoration(
-        color: BambooInk.paper,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
+        color: onDarkSurface
+            ? BambooInk.onSlate.withValues(alpha: .07)
+            : BambooInk.paper,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: onDarkSurface
+              ? BambooInk.onSlate.withValues(alpha: .09)
+              : BambooInk.hairlineOnPaper,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Alternative',
-            style: BambooFonts.ui(10.5, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: 4),
+          if (showLabel) ...[
+            Text(
+              'Alternative',
+              style: BambooFonts.ui(
+                10.5,
+                color: onDarkSurface
+                    ? BambooInk.onSlateMuted
+                    : BambooInk.ink500,
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
           Row(
             children: [
               SizedBox(
-                width: 64,
-                height: 36,
+                width: 58,
+                height: 34,
                 child: CardVisual(
                   product: backup.card,
-                  width: 64,
-                  height: 36,
+                  width: 58,
+                  height: 34,
                   showProductName: false,
                 ),
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1576,16 +1513,23 @@ class _BackupCardRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: BambooFonts.ui(
-                        13,
+                        11.5,
                         weight: FontWeight.w700,
-                        color: BambooInk.ink900,
+                        color: onDarkSurface
+                            ? BambooInk.onSlate
+                            : BambooInk.ink900,
                       ),
                     ),
                     Text(
                       _issuerLabel(backup.card),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: BambooFonts.ui(11, color: BambooInk.ink500),
+                      style: BambooFonts.ui(
+                        10,
+                        color: onDarkSurface
+                            ? BambooInk.onSlateMuted
+                            : BambooInk.ink500,
+                      ),
                     ),
                   ],
                 ),
@@ -1598,23 +1542,30 @@ class _BackupCardRow extends StatelessWidget {
                     backup.expectedValue,
                     confidence: backup.confidence,
                     style: BambooFonts.ui(
-                      14,
+                      12.5,
                       weight: FontWeight.w700,
-                      color: BambooInk.ink900,
+                      color: onDarkSurface ? BambooInk.lime : BambooInk.ink900,
                     ),
                     hidePaise: true,
                     showConfidenceIcon: false,
                   ),
                   Text(
                     'Est. rewards',
-                    style: BambooFonts.ui(10, color: BambooInk.ink500),
+                    style: BambooFonts.ui(
+                      9,
+                      color: onDarkSurface
+                          ? BambooInk.onSlateMuted
+                          : BambooInk.ink500,
+                    ),
                   ),
                 ],
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 size: 21,
-                color: BambooInk.ink500,
+                color: onDarkSurface
+                    ? BambooInk.onSlateMuted
+                    : BambooInk.ink500,
               ),
             ],
           ),
@@ -1629,6 +1580,10 @@ class _RecommendationCard extends ConsumerStatefulWidget {
   final int rank;
   final bool expanded;
   final VoidCallback onReasonToggle;
+  final int comparedCount;
+  final List<Recommendation> alternatives;
+  final bool alternativesExpanded;
+  final VoidCallback? onAlternativesToggle;
   // Anchor GlobalKey for the onboarding tutorial overlay to measure this
   // card's position when it's the rank-0 (hero) card. Deliberately NOT
   // this widget's own `key` — this widget's identity (and thus its
@@ -1643,6 +1598,10 @@ class _RecommendationCard extends ConsumerStatefulWidget {
     required this.expanded,
     required this.onReasonToggle,
     this.cardAnchorKey,
+    this.comparedCount = 1,
+    this.alternatives = const [],
+    this.alternativesExpanded = false,
+    this.onAlternativesToggle,
   });
 
   @override
@@ -2137,7 +2096,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
 
     final hero = Container(
       key: widget.cardAnchorKey,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -2158,10 +2117,25 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
         children: [
           Row(
             children: [
+              Expanded(
+                child: Text(
+                  'Best from your wallet',
+                  style: BambooFonts.heading(16, color: BambooInk.onSlate),
+                ),
+              ),
+              Text(
+                '${widget.comparedCount} cards compared',
+                style: BambooFonts.ui(10, color: BambooInk.onSlateMuted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Row(
+            children: [
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
-                  vertical: 4,
+                  vertical: 3,
                 ),
                 decoration: BoxDecoration(
                   color: BambooInk.lime,
@@ -2170,7 +2144,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                 child: Text(
                   'BEST PICK',
                   style: BambooFonts.ui(
-                    9.5,
+                    9,
                     weight: FontWeight.w800,
                     color: BambooInk.slate,
                   ).copyWith(letterSpacing: 0.7),
@@ -2189,20 +2163,20 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 5),
           Row(
             children: [
               SizedBox(
-                width: 96,
-                height: 52,
+                width: 82,
+                height: 45,
                 child: CardVisual(
                   product: recommendation.card,
-                  width: 96,
-                  height: 52,
+                  width: 82,
+                  height: 45,
                   showProductName: false,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2212,7 +2186,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: BambooFonts.ui(
-                        15,
+                        14,
                         weight: FontWeight.w700,
                         color: BambooInk.onSlate,
                       ),
@@ -2260,14 +2234,14 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 5),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               MoneyText(
                 recommendation.expectedValue,
                 confidence: recommendation.confidence,
-                style: BambooFonts.money(31, color: BambooInk.lime),
+                style: BambooFonts.money(26, color: BambooInk.lime),
                 hidePaise: true,
                 showConfidenceIcon: false,
               ),
@@ -2278,7 +2252,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                   children: [
                     Text(
                       'Estimated rewards',
-                      style: BambooFonts.ui(11, color: BambooInk.onSlateMuted),
+                      style: BambooFonts.ui(10, color: BambooInk.onSlateMuted),
                     ),
                     const SizedBox(width: 4),
                     const Icon(
@@ -2294,7 +2268,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   rateLabel,
-                  style: BambooFonts.ui(11, color: BambooInk.onSlateMuted),
+                  style: BambooFonts.ui(10, color: BambooInk.onSlateMuted),
                 ),
               ),
             ],
@@ -2305,7 +2279,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
               breakdown: recommendation.breakdown!,
               onDarkSurface: true,
             ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 5),
           Row(
             children: [
               Expanded(
@@ -2335,9 +2309,9 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                   style: FilledButton.styleFrom(
                     backgroundColor: BambooInk.lime,
                     foregroundColor: BambooInk.slate,
-                    minimumSize: const Size(0, 36),
+                    minimumSize: const Size(0, 34),
                     padding: EdgeInsets.zero,
-                    textStyle: BambooFonts.ui(13, weight: FontWeight.w700),
+                    textStyle: BambooFonts.ui(12, weight: FontWeight.w700),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(13),
                     ),
@@ -2356,7 +2330,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 2,
-                    vertical: 8,
+                    vertical: 6,
                   ),
                   child: Text(
                     'Details ↗',
@@ -2370,6 +2344,58 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
               ),
             ],
           ),
+          if (widget.alternatives.isNotEmpty) ...[
+            const SizedBox(height: 9),
+            Container(
+              height: 1,
+              color: BambooInk.onSlateMuted.withValues(alpha: .22),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              'Alternative',
+              style: BambooFonts.ui(10, color: BambooInk.onSlateMuted),
+            ),
+            const SizedBox(height: 5),
+            _BackupCardRow(
+              widget.alternatives.first,
+              onDarkSurface: true,
+              showLabel: false,
+            ),
+            if (widget.alternatives.length > 1) ...[
+              const SizedBox(height: 5),
+              _CardListToggle(
+                expanded: widget.alternativesExpanded,
+                hiddenCount: widget.alternatives.length - 1,
+                onPressed: widget.onAlternativesToggle ?? () {},
+                onDarkSurface: true,
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: widget.alternativesExpanded
+                    ? Padding(
+                        key: const ValueKey('ranked-cards-expanded'),
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Column(
+                          children: [
+                            for (final alternative in widget.alternatives.skip(
+                              1,
+                            )) ...[
+                              _BackupCardRow(
+                                alternative,
+                                onDarkSurface: true,
+                                showLabel: false,
+                              ),
+                              const SizedBox(height: 5),
+                            ],
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ],
         ],
       ),
     );

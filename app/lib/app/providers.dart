@@ -4167,93 +4167,121 @@ final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
 /// milestone-progress state (that's user-usage tracking, a separate,
 /// larger surface than "which cards does this person actually have") —
 /// every card is evaluated as if its caps/milestones are fully fresh.
-final rankedRecommendationsProvider = Provider<AsyncValue<List<Recommendation>>>(
-  (ref) {
-    final catalogue = ref.watch(catalogueProvider);
-    final categories = ref.watch(categoriesProvider);
-    final userCards = ref.watch(userCardsProvider);
-    final overrides = ref.watch(cardOverridesProvider);
-    final selectedSlug = ref.watch(selectedCategoryProvider);
-    final engine = ref.watch(recommendationEngineProvider);
+final rankedRecommendationsProvider =
+    Provider<AsyncValue<List<Recommendation>>>(
+      (ref) => _rankRecommendations(
+        ref,
+        amount: ref.watch(enteredAmountProvider),
+        categorySlug: ref.watch(selectedCategoryProvider),
+      ),
+    );
 
-    // Riverpod keeps the previous value on an AsyncValue while a provider is
-    // being refreshed. Do not throw that value away just because one of the
-    // dependencies is temporarily loading: Home can continue to show the
-    // last known recommendations while the refresh completes. Returning a
-    // fresh loading state here made SMS reconciliation, wallet sync, and
-    // auth/session refreshes replace a stable Home section with a spinner.
-    final allCards = catalogue.valueOrNull;
-    // Category ids and overrides enrich the verdict, but neither is required
-    // to render a safe base-rate recommendation. They may be loading after a
-    // cold start or recovering from a transient API failure; do not make the
-    // whole Home section wait for either optional dependency.
-    final categoryList = categories.valueOrNull ?? const <SpendCategory>[];
-    final wallet = userCards.valueOrNull;
-    final overrideList = overrides.valueOrNull ?? const <CardOverride>[];
-    final combinedError = catalogue.error ?? userCards.error;
+/// Context passed by Quick Add as the user fills in a transaction. Keeping
+/// the rank request tied to the actual form values makes its card verdict use
+/// the same engine, wallet state, caps, overrides, and reward rules as Home.
+typedef QuickAddRecommendationQuery = ({
+  Money amount,
+  String? categoryId,
+  String? categorySlug,
+  String? merchantName,
+  DateTime? transactionDate,
+});
 
-    // No previous value exists on the first load. In that case preserve the
-    // normal loading/error states; during a refresh, the valueOrNull checks
-    // below are satisfied and the stale data path remains usable.
-    if (allCards == null || wallet == null) {
-      if (combinedError != null) {
-        return AsyncValue.error(
-          combinedError,
-          catalogue.stackTrace ??
-              userCards.stackTrace ??
-              categories.stackTrace ??
-              overrides.stackTrace ??
-              StackTrace.current,
-        );
-      }
-      return const AsyncValue.loading();
+final quickAddRecommendationsProvider = Provider.autoDispose
+    .family<AsyncValue<List<Recommendation>>, QuickAddRecommendationQuery>(
+      (ref, query) => _rankRecommendations(
+        ref,
+        amount: query.amount,
+        categoryId: query.categoryId,
+        categorySlug: query.categorySlug,
+        merchantName: query.merchantName,
+        transactionDate: query.transactionDate,
+        ownedCardType: 'credit',
+      ),
+    );
+
+AsyncValue<List<Recommendation>> _rankRecommendations(
+  Ref ref, {
+  required Money amount,
+  String? categoryId,
+  String? categorySlug,
+  String? merchantName,
+  DateTime? transactionDate,
+  String? ownedCardType,
+}) {
+  final catalogue = ref.watch(catalogueProvider);
+  final categories = ref.watch(categoriesProvider);
+  final userCards = ref.watch(userCardsProvider);
+  final overrides = ref.watch(cardOverridesProvider);
+  final engine = ref.watch(recommendationEngineProvider);
+
+  // Riverpod keeps the previous value on an AsyncValue while a provider is
+  // being refreshed. Continue to use those snapshots rather than replacing
+  // a stable recommendation with a spinner during wallet sync/session refresh.
+  final allCards = catalogue.valueOrNull;
+  final categoryList = categories.valueOrNull ?? const <SpendCategory>[];
+  final wallet = userCards.valueOrNull;
+  final overrideList = overrides.valueOrNull ?? const <CardOverride>[];
+  final combinedError = catalogue.error ?? userCards.error;
+
+  if (allCards == null || wallet == null) {
+    if (combinedError != null) {
+      return AsyncValue.error(
+        combinedError,
+        catalogue.stackTrace ??
+            userCards.stackTrace ??
+            categories.stackTrace ??
+            overrides.stackTrace ??
+            StackTrace.current,
+      );
     }
+    return const AsyncValue.loading();
+  }
 
-    final categoryId = categoryList
-        .firstWhereOrNull((c) => c.slug == selectedSlug)
-        ?.id;
+  final resolvedCategory = categoryId == null
+      ? categoryList.firstWhereOrNull(
+          (category) => category.slug == categorySlug,
+        )
+      : categoryList.firstWhereOrNull((category) => category.id == categoryId);
+  final resolvedCategoryId = categoryId ?? resolvedCategory?.id;
+  final resolvedCategorySlug = categorySlug ?? resolvedCategory?.slug;
 
-    final cards = wallet.isEmpty
-        ? allCards
-        : allCards
-              .where((c) => wallet.any((w) => w.cardProductId == c.id))
-              .toList();
+  final cards = ownedCardType == null && wallet.isEmpty
+      ? allCards
+      : allCards.where((product) {
+          final owned = wallet.firstWhereOrNull(
+            (card) => card.cardProductId == product.id,
+          );
+          if (owned == null) return false;
+          if (ownedCardType == null) return true;
+          final type = (owned.cardType ?? product.cardType)?.toLowerCase();
+          return type == null || type == ownedCardType;
+        }).toList();
 
-    // B8: resolve once per rank() call — Home only carries category context
-    // (no merchant/vpa yet, that's B3's scan-result context), so vpa/
-    // merchantName are omitted here on purpose.
-    final overrideProductId = resolveActiveOverrideCardProductId(
-      overrides: overrideList,
-      wallet: wallet,
-      categoryId: categoryId,
-    );
-
-    final context = RecommendationContext(
-      amount: ref.watch(enteredAmountProvider),
-      categoryId: categoryId,
-      categorySlug: selectedSlug,
-      rail: TxnRail.swipe,
-      // G1: the toggle. Everything else about ranking is unchanged — this is
-      // the entire wiring the plan called "the cheapest part of G1."
-      travelMode: ref.watch(travelModeProvider),
-      // Rules carry a catalogue validity window and the engine only checks it
-      // when given a date. Without this, a promo rate that ended last quarter
-      // would keep winning Home's verdict indefinitely.
-      now: ref.watch(clockProvider).now(),
-    );
-    // Chunk 17: real capRemaining/milestoneProgress for owned cards, derived
-    // from cap_states.consumed / milestone_states.qualified_spend — a card
-    // not in the wallet (whole-catalogue fallback above) has no state to
-    // look up, so it's evaluated as freshly-uncapped, same as before Chunk 17.
-    final snapshots = _userCardSnapshots(
-      cards,
-      wallet,
-      forcedOverrideCardId: overrideProductId,
-    );
-    final ranked = engine.rank(context, snapshots);
-    return AsyncValue.data(wallet.isEmpty ? ranked.take(3).toList() : ranked);
-  },
-);
+  final overrideProductId = resolveActiveOverrideCardProductId(
+    overrides: overrideList,
+    wallet: wallet,
+    categoryId: resolvedCategoryId,
+  );
+  final context = RecommendationContext(
+    amount: amount,
+    categoryId: resolvedCategoryId,
+    categorySlug: resolvedCategorySlug,
+    merchantName: merchantName,
+    rail: TxnRail.swipe,
+    travelMode: ref.watch(travelModeProvider),
+    now: transactionDate ?? ref.watch(clockProvider).now(),
+  );
+  final snapshots = _userCardSnapshots(
+    cards,
+    wallet,
+    forcedOverrideCardId: overrideProductId,
+  );
+  final ranked = engine.rank(context, snapshots);
+  return AsyncValue.data(
+    ownedCardType == null && wallet.isEmpty ? ranked.take(3).toList() : ranked,
+  );
+}
 
 /// Chunk 38: factored out of rankedRecommendationsProvider and
 /// bestCardForMerchantProvider, which both built an identical

@@ -939,22 +939,6 @@ bool _spansMultipleCalendarMonths(SpendReportQuery query) {
   }
 }
 
-int _selectedMonthCount(SpendReportQuery query) {
-  switch (query.period) {
-    case SpendPeriod.week:
-    case SpendPeriod.month:
-      return 1;
-    case SpendPeriod.quarter:
-      return 3;
-    case SpendPeriod.year:
-      return 12;
-    case SpendPeriod.custom:
-      final from = query.from!;
-      final to = query.to!;
-      return (to.year - from.year) * 12 + to.month - from.month + 1;
-  }
-}
-
 class _ReportBodyState extends State<_ReportBody> {
   _SpendingTab _tab = _SpendingTab.categories;
   TxnInstrument? _paymentFilter;
@@ -1297,7 +1281,6 @@ class _ReportBodyState extends State<_ReportBody> {
     final total = _visibleTotal();
     final series = _seriesFor(report);
     final multiMonth = _spansMultipleCalendarMonths(widget.query);
-    final monthCount = _selectedMonthCount(widget.query);
     final categoryEntries = _transactionsForCategory;
     final showFilteredLoading =
         _filtersActive &&
@@ -1318,25 +1301,27 @@ class _ReportBodyState extends State<_ReportBody> {
             key: widget.overviewKey,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _HeadlineCard(
-                report: _filtersActive
-                    ? _filteredReport(report, total)
-                    : report,
-                multiMonth: multiMonth,
-                monthCount: monthCount,
-              ),
-              const SizedBox(height: AppSpace.lg),
-              if (multiMonth) ...[
-                _MonthlyComparisonCard(series: series),
-                const SizedBox(height: AppSpace.lg),
-              ],
               if (categoryRows.isNotEmpty) ...[
                 _SpendingMixCard(
                   rows: categoryRows,
                   total: total,
                   compact: multiMonth,
                   rangeLabel: multiMonth ? _reportRangeLabel(report) : null,
+                  change: !_filtersActive && !multiMonth
+                      ? report.changeVsPrevious
+                      : null,
+                  comparisonLabel: report.previousDisplayLabel,
                 ),
+                const SizedBox(height: AppSpace.lg),
+              ],
+              _SpendMetricsCard(
+                report: _filtersActive
+                    ? _filteredReport(report, total)
+                    : report,
+              ),
+              const SizedBox(height: AppSpace.lg),
+              if (multiMonth) ...[
+                _MonthlyComparisonCard(series: series),
                 const SizedBox(height: AppSpace.lg),
               ],
             ],
@@ -2086,34 +2071,18 @@ class _FilterLabel extends StatelessWidget {
   );
 }
 
-/// The headline: what was spent, how that compares, and where it's heading.
-///
-/// The comparison is the point. A bare "₹42,000" says almost nothing; the
-/// same figure next to "18% more than last month" is a fact someone can act
-/// on.
-class _HeadlineCard extends StatelessWidget {
+/// Compact supporting figures shown below the interactive spending mix.
+class _SpendMetricsCard extends StatelessWidget {
   final SpendReport report;
-  final bool multiMonth;
-  final int monthCount;
 
-  const _HeadlineCard({
-    required this.report,
-    required this.multiMonth,
-    required this.monthCount,
-  });
+  const _SpendMetricsCard({required this.report});
 
   @override
   Widget build(BuildContext context) {
-    final change = report.changeVsPrevious;
-    final projected = report.projectedSpend;
     final shortBy = report.spend.total - report.income.total;
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpace.lg,
-        AppSpace.lg,
-        AppSpace.lg,
-        AppSpace.md,
-      ),
+      key: const ValueKey('spending_summary_card'),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: BambooInk.paper,
         borderRadius: BorderRadius.circular(24),
@@ -2131,150 +2100,162 @@ class _HeadlineCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            multiMonth ? 'TOTAL SPENT · $monthCount MONTHS' : 'TOTAL SPENT',
-            style: BambooFonts.ui(
-              12.5,
-              weight: FontWeight.w700,
-              color: BambooInk.ink500,
-            ).copyWith(letterSpacing: 0.7),
-          ),
-          const SizedBox(height: AppSpace.xs),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: MoneyText(
-                    report.spend.total,
-                    confidence: Confidence.estimated,
-                    showConfidenceIcon: false,
-                    style: BambooFonts.money(34, color: BambooInk.ink900),
-                  ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final metrics = [
+                _SpendMetricTile(
+                  label: 'Money in',
+                  amount: report.income.total,
+                  icon: Icons.south_rounded,
+                  accent: BambooInk.jade,
+                  tint: BambooInk.jade.withValues(alpha: .09),
                 ),
-              ),
-              if (!multiMonth && change != null) ...[
-                const SizedBox(width: AppSpace.sm),
-                _SpendChangePill(
-                  change: change,
-                  comparisonLabel: report.previousDisplayLabel,
+                _SpendMetricTile(
+                  label: 'Spent',
+                  amount: report.spend.total,
+                  icon: Icons.north_rounded,
+                  accent: BambooInk.ink700,
+                  tint: BambooInk.paperCool,
                 ),
-              ],
-            ],
-          ),
-          if (multiMonth) ...[
-            const SizedBox(height: AppSpace.xs),
-            Text(
-              '$monthCount monthly totals',
-              style: BambooFonts.ui(13, color: BambooInk.ink500),
-            ),
-          ] else if (projected != null && report.elapsedFraction < 0.95) ...[
-            const SizedBox(height: AppSpace.xs),
-            Text(
-              'On track for ${projected.format(compact: true)} ${_projectionPeriodLabel(report)}',
-              style: BambooFonts.ui(13, color: BambooInk.ink500),
-            ),
-          ],
-          const SizedBox(height: AppSpace.md),
-          Container(height: 1, color: BambooInk.hairlineOnPaper),
-          const SizedBox(height: AppSpace.sm),
-          _HeadlineMetricRow(
-            label: 'Money in',
-            amount: report.income.total,
-            color: BambooInk.ink900,
-          ),
-          const SizedBox(height: 8),
-          _HeadlineMetricRow(
-            label: 'Spent',
-            amount: report.spend.total,
-            color: BambooInk.ink900,
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Container(height: 1, color: BambooInk.hairlineOnPaper),
-          const SizedBox(height: AppSpace.sm),
-          _HeadlineMetricRow(
-            label: shortBy.isNegative ? 'Surplus' : 'Short by',
-            amount: Money.fromPaise(shortBy.paise.abs()),
-            color: shortBy.isNegative ? BambooInk.jade : BambooInk.ink900,
-            emphasized: true,
-          ),
-          if (!report.spend.rewards.isZero) ...[
-            const SizedBox(height: AppSpace.lg),
-            Container(height: 1, color: BambooInk.hairlineOnPaper),
-            const SizedBox(height: AppSpace.sm),
-            Row(
-              children: [
-                Text(
-                  'Rewards earned',
-                  style: BambooFonts.ui(13, color: BambooInk.ink900),
+                _SpendMetricTile(
+                  label: shortBy.isNegative ? 'Surplus' : 'Short by',
+                  amount: Money.fromPaise(shortBy.paise.abs()),
+                  icon: shortBy.isNegative
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.adjust_rounded,
+                  accent: shortBy.isNegative ? BambooInk.jade : BambooInk.clay,
+                  tint: (shortBy.isNegative ? BambooInk.jade : BambooInk.clay)
+                      .withValues(alpha: .09),
                 ),
-                const Spacer(),
-                MoneyText(
-                  report.spend.rewards,
-                  confidence: Confidence.estimated,
-                  style: BambooFonts.ui(
-                    15,
-                    weight: FontWeight.w700,
-                    color: BambooInk.jade,
-                  ),
+                _SpendMetricTile(
+                  label: 'Rewards earned',
+                  amount: report.spend.rewards,
+                  icon: Icons.emoji_events_outlined,
+                  accent: BambooInk.amber,
+                  tint: BambooInk.amber.withValues(alpha: .10),
+                  amountColor: BambooInk.jade,
                 ),
-              ],
-            ),
-          ],
+              ];
+              if (constraints.maxWidth < 280) {
+                return Column(
+                  children: [
+                    for (var index = 0; index < metrics.length; index++) ...[
+                      if (index > 0) ...[
+                        const SizedBox(height: AppSpace.xs),
+                        Container(height: 1, color: BambooInk.hairlineOnPaper),
+                        const SizedBox(height: AppSpace.xs),
+                      ],
+                      metrics[index],
+                    ],
+                  ],
+                );
+              }
+              return Column(
+                children: [
+                  _SpendMetricPair(left: metrics[0], right: metrics[1]),
+                  const SizedBox(height: AppSpace.xs),
+                  Container(height: 1, color: BambooInk.hairlineOnPaper),
+                  const SizedBox(height: AppSpace.xs),
+                  _SpendMetricPair(left: metrics[2], right: metrics[3]),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
   }
-
-  static String _projectionPeriodLabel(SpendReport report) {
-    return switch (report.period) {
-      SpendPeriod.week => 'this week',
-      SpendPeriod.month => 'this month',
-      SpendPeriod.quarter => 'this quarter',
-      SpendPeriod.year => 'this year',
-      SpendPeriod.custom => 'for this period',
-    };
-  }
 }
 
-class _HeadlineMetricRow extends StatelessWidget {
+class _SpendMetricPair extends StatelessWidget {
+  final Widget left;
+  final Widget right;
+
+  const _SpendMetricPair({required this.left, required this.right});
+
+  @override
+  Widget build(BuildContext context) => IntrinsicHeight(
+    child: Row(
+      children: [
+        Expanded(child: left),
+        Container(
+          width: 1,
+          margin: const EdgeInsets.symmetric(horizontal: AppSpace.xs),
+          color: BambooInk.hairlineOnPaper,
+        ),
+        Expanded(child: right),
+      ],
+    ),
+  );
+}
+
+class _SpendMetricTile extends StatelessWidget {
   final String label;
   final Money amount;
-  final Color color;
-  final bool emphasized;
+  final IconData icon;
+  final Color accent;
+  final Color tint;
+  final Color? amountColor;
 
-  const _HeadlineMetricRow({
+  const _SpendMetricTile({
     required this.label,
     required this.amount,
-    required this.color,
-    this.emphasized = false,
+    required this.icon,
+    required this.accent,
+    required this.tint,
+    this.amountColor,
   });
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Text(
-        label,
-        style: BambooFonts.ui(
-          15,
-          weight: emphasized ? FontWeight.w800 : FontWeight.w600,
-          color: color,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+          child: Icon(icon, size: 17, color: accent),
         ),
-      ),
-      const Spacer(),
-      MoneyText(
-        amount,
-        confidence: Confidence.estimated,
-        showConfidenceIcon: false,
-        style: BambooFonts.money(
-          17,
-          color: color,
-          weight: emphasized ? FontWeight.w800 : FontWeight.w600,
+        const SizedBox(width: 5),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(
+                  11.5,
+                  weight: FontWeight.w500,
+                  color: BambooInk.ink700,
+                ),
+              ),
+              const SizedBox(height: 1),
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: MoneyText(
+                    amount,
+                    confidence: Confidence.estimated,
+                    showConfidenceIcon: false,
+                    style: BambooFonts.money(
+                      14,
+                      color: amountColor ?? BambooInk.ink900,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 }
 
@@ -2288,7 +2269,8 @@ class _SpendChangePill extends StatelessWidget {
   Widget build(BuildContext context) {
     final increase = change >= 0;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      key: const ValueKey('spending_mix_comparison'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: increase ? const Color(0xFFE8F8D9) : const Color(0xFFE8F1FA),
         borderRadius: BorderRadius.circular(18),
@@ -2303,14 +2285,14 @@ class _SpendChangePill extends StatelessWidget {
                 increase
                     ? Icons.arrow_upward_rounded
                     : Icons.arrow_downward_rounded,
-                size: 18,
+                size: 16,
                 color: increase ? BambooInk.jade : BambooChartColors.blue,
               ),
               const SizedBox(width: 3),
               Text(
                 '${(change.abs() * 100).toStringAsFixed(0)}%',
                 style: BambooFonts.ui(
-                  17,
+                  15,
                   weight: FontWeight.w800,
                   color: increase ? BambooInk.jade : BambooChartColors.blue,
                 ),
@@ -2319,7 +2301,7 @@ class _SpendChangePill extends StatelessWidget {
           ),
           Text(
             'vs $comparisonLabel',
-            style: BambooFonts.ui(11, color: BambooInk.ink900),
+            style: BambooFonts.ui(10, color: BambooInk.ink900),
           ),
         ],
       ),
@@ -2590,12 +2572,16 @@ class _SpendingMixCard extends StatefulWidget {
   final Money total;
   final bool compact;
   final String? rangeLabel;
+  final double? change;
+  final String? comparisonLabel;
 
   const _SpendingMixCard({
     required this.rows,
     required this.total,
     this.compact = false,
     this.rangeLabel,
+    this.change,
+    this.comparisonLabel,
   });
 
   @override
@@ -2622,6 +2608,8 @@ class _SpendingMixCardState extends State<_SpendingMixCard> {
     final total = widget.total;
     final compact = widget.compact;
     final rangeLabel = widget.rangeLabel;
+    final change = widget.change;
+    final comparisonLabel = widget.comparisonLabel;
     final nonZeroRows = rows.where((row) => !row.total.isZero).toList();
     final matchedIndex = _selectedCategoryKey == null
         ? -1
@@ -2679,6 +2667,13 @@ class _SpendingMixCardState extends State<_SpendingMixCard> {
                   ],
                 ),
               ),
+              if (change != null && comparisonLabel != null) ...[
+                const SizedBox(width: AppSpace.sm),
+                _SpendChangePill(
+                  change: change,
+                  comparisonLabel: comparisonLabel,
+                ),
+              ],
             ],
           ),
           SizedBox(height: compact ? 6 : AppSpace.lg),
@@ -3277,13 +3272,19 @@ class _ExpandableCategoryRow extends StatelessWidget {
                   style: BambooFonts.ui(12, color: BambooInk.ink500),
                 ),
                 const SizedBox(width: AppSpace.sm),
-                MoneyText(
-                  row.total,
-                  confidence: Confidence.estimated,
-                  style: BambooFonts.ui(
-                    13.5,
-                    weight: FontWeight.w600,
-                    color: BambooInk.ink900,
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: MoneyText(
+                      row.total,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.ui(
+                        13.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
                   ),
                 ),
               ],

@@ -27,12 +27,14 @@ class _FailingCategoryRepository implements CategoryRepository {
 CardProduct _flatRateCard(
   String id,
   double ratePercent, {
+  String? cardType,
   ForexRule? forexRule,
 }) {
   return CardProduct(
     id: id,
     name: 'Card $id',
     network: CardNetwork.rupay,
+    cardType: cardType,
     isUpiLinkable: true,
     rewardRules: [
       RewardRule(
@@ -168,6 +170,70 @@ void main() {
       });
     });
   });
+
+  test(
+    'Quick Add ranks the entered spend against owned credit cards and transaction context',
+    () async {
+      const diningId = 'category-dining';
+      final creditCard = CardProduct(
+        id: 'owned-credit',
+        name: 'Owned Credit Card',
+        network: CardNetwork.visa,
+        cardType: 'credit',
+        rewardRules: const [
+          RewardRule(
+            id: 'blue-tokai-dining',
+            categoryId: diningId,
+            merchantPattern: 'Blue Tokai',
+            unit: RewardUnit.cashbackPercent,
+            rate: 5,
+          ),
+        ],
+      );
+      final debitCard = _flatRateCard('owned-debit', 50, cardType: 'debit');
+      final unownedCard = _flatRateCard(
+        'unowned-credit',
+        20,
+        cardType: 'credit',
+      );
+      final container = ProviderContainer(
+        overrides: [
+          catalogueProvider.overrideWith(
+            (ref) async => [creditCard, debitCard, unownedCard],
+          ),
+          userCardsProvider.overrideWith(
+            (ref) async => [_owned('owned-credit'), _owned('owned-debit')],
+          ),
+          categoriesProvider.overrideWith(
+            (ref) async => const [
+              SpendCategory(id: diningId, slug: 'dining', name: 'Dining'),
+            ],
+          ),
+          cardOverridesProvider.overrideWith((ref) async => const []),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(catalogueProvider.future);
+      await container.read(userCardsProvider.future);
+      await container.read(categoriesProvider.future);
+      await container.read(cardOverridesProvider.future);
+
+      final ranked = container.read(
+        quickAddRecommendationsProvider((
+          amount: Money.fromRupees(1000),
+          categoryId: diningId,
+          categorySlug: 'dining',
+          merchantName: 'Blue Tokai Coffee Roasters',
+          transactionDate: DateTime(2026, 10, 1),
+        )),
+      );
+
+      expect(ranked.requireValue, hasLength(1));
+      expect(ranked.requireValue.single.card.id, 'owned-credit');
+      expect(ranked.requireValue.single.expectedValue, Money.fromRupees(50));
+    },
+  );
 
   group('travelModeProvider', () {
     test('defaults to off', () {

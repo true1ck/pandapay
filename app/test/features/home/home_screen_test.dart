@@ -107,7 +107,9 @@ void main() {
       );
 
       final center = tester.getCenter(chart);
-      await tester.tapAt(center + const Offset(0, -64));
+      // Target the ring itself, not the clear space just outside it (which
+      // intentionally opens the full Spending screen).
+      await tester.tapAt(center + const Offset(0, -52));
       await tester.pumpAndSettle();
       expect(find.text('Spending tab opened'), findsNothing);
 
@@ -201,6 +203,21 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    final quickActionsRect = tester.getRect(
+      find.byKey(const ValueKey('home-quick-actions-layout')),
+    );
+    final dividerRect = tester.getRect(
+      find.byKey(const ValueKey('home-quick-actions-divider')),
+    );
+    final spendingPromptRect = tester.getRect(
+      find.text('What are you paying for?'),
+    );
+    expect(dividerRect.top - quickActionsRect.bottom, greaterThanOrEqualTo(24));
+    expect(
+      spendingPromptRect.top - dividerRect.bottom,
+      greaterThanOrEqualTo(16),
+    );
+
     expect(find.text('Quick add'), findsOneWidget);
     expect(find.text('Import'), findsOneWidget);
     expect(find.text('Scan & pay'), findsOneWidget);
@@ -223,7 +240,7 @@ void main() {
     expect(HomeScreen.categoryLabelFor('rent'), 'Rent');
   });
 
-  testWidgets('rewards header keeps the streak on the greeting row', (
+  testWidgets('compact header shows all-time rewards below greeting', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(360, 800));
@@ -249,15 +266,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final monthly = tester.getTopLeft(
-      find.byKey(const ValueKey('home-monthly-rewards')),
-    );
-    final allTime = tester.getTopLeft(
-      find.byKey(const ValueKey('home-all-time-rewards')),
-    );
+    final greeting = find.textContaining('Good ');
+    final allTimeFinder = find.byKey(const ValueKey('home-all-time-rewards'));
+    final allTime = tester.getTopLeft(allTimeFinder);
     final streak = tester.getTopLeft(find.text('18-day streak'));
-    expect(allTime.dy, greaterThan(monthly.dy));
-    expect(streak.dy, lessThan(monthly.dy));
+    expect(allTime.dy, greaterThan(tester.getBottomRight(greeting).dy));
+    expect(streak.dy, lessThan(allTime.dy));
+    expect(find.byKey(const ValueKey('home-monthly-rewards')), findsNothing);
   });
 
   testWidgets('an override pill navigates to Manual Overrides on tap', (
@@ -292,70 +307,54 @@ void main() {
     expect(find.text('Manual overrides'), findsOneWidget);
   });
 
-  testWidgets(
-    'expand state does not leak across cards when the ranking reorders',
-    (tester) async {
-      // Regression test: _RecommendationCard is a StatefulWidget holding its
-      // own "Why this card?" expand flag. If _RankedList doesn't key each
-      // card by a stable identity, ListView.builder reuses the Element at a
-      // given index across a reorder and the new occupant inherits the old
-      // one's expanded state.
-      final cardA = Recommendation(
+  testWidgets('more wallet cards expand inside the best-pick card', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final recs = [
+      Recommendation(
         card: _card('card-a'),
         expectedValue: Money.fromRupees(120),
         confidence: Confidence.estimated,
-        reasonLines: const ['A reason one', 'A reason two'],
-      );
-      final cardB = Recommendation(
+        reasonLines: const ['A reason one'],
+      ),
+      Recommendation(
         card: _card('card-b'),
         expectedValue: Money.fromRupees(90),
         confidence: Confidence.estimated,
-        reasonLines: const ['B reason one', 'B reason two'],
-      );
+        reasonLines: const ['B reason one'],
+      ),
+      Recommendation(
+        card: _card('card-c'),
+        expectedValue: Money.fromRupees(60),
+        confidence: Confidence.estimated,
+        reasonLines: const ['C reason one'],
+      ),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          rankedRecommendationsProvider.overrideWithValue(
+            AsyncValue.data(recs),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: HomeScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      final recsProvider = StateProvider<List<Recommendation>>(
-        (ref) => [cardA, cardB],
-      );
+    expect(find.text('Best from your wallet'), findsOneWidget);
+    expect(find.text('Alternative'), findsOneWidget);
+    expect(find.textContaining('Card card-b'), findsOneWidget);
+    expect(find.textContaining('Card card-c'), findsNothing);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            rankedRecommendationsProvider.overrideWith(
-              (ref) => AsyncValue.data(ref.watch(recsProvider)),
-            ),
-          ],
-          child: const MaterialApp(home: Scaffold(body: HomeScreen())),
-        ),
-      );
-      await tester.pumpAndSettle();
+    final showMore = find.text('Show 1 more card');
+    await tester.tap(showMore);
+    await tester.pumpAndSettle();
 
-      // The ranked list is collapsed by default. Open it before exercising
-      // the per-card expansion state.
-      await tester.ensureVisible(find.text('Show 1 more card'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Show 1 more card'));
-      await tester.pumpAndSettle();
-
-      // The compact hero has no per-card disclosure. Expand the detail-rich
-      // runner-up and then reorder it into the hero position.
-      final cardBWhy = find.byKey(const ValueKey('why-card-b'));
-      await tester.ensureVisible(cardBWhy);
-      await tester.tap(cardBWhy);
-      await tester.pumpAndSettle();
-      expect(find.textContaining('B reason two'), findsOneWidget);
-
-      // Reorder: card B now occupies the compact hero position and card A
-      // moves to the detail-rich runner-up position.
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(HomeScreen)),
-      );
-      container.read(recsProvider.notifier).state = [cardB, cardA];
-      await tester.pumpAndSettle();
-
-      // Card A must not inherit card B's expanded disclosure state.
-      expect(find.textContaining('A reason two'), findsNothing);
-    },
-  );
+    expect(find.textContaining('Card card-c'), findsOneWidget);
+  });
 
   testWidgets('shows a backup-card row for the runner-up when one exists', (
     tester,
