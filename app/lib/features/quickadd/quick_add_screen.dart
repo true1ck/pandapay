@@ -180,7 +180,7 @@ class QuickAddScreen extends ConsumerStatefulWidget {
   final String? initialMerchant;
   final String? initialCategoryName;
   final bool autofocus;
-  final Key? amountFieldKey;
+  final Key? manualEntryKey;
 
   const QuickAddScreen({
     super.key,
@@ -190,7 +190,7 @@ class QuickAddScreen extends ConsumerStatefulWidget {
     this.initialMerchant,
     this.initialCategoryName,
     this.autofocus = true,
-    this.amountFieldKey,
+    this.manualEntryKey,
   });
 
   @override
@@ -1449,6 +1449,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Widget _buildAmountHeader() => Padding(
+    key: widget.manualEntryKey,
     padding: const EdgeInsets.only(top: 18, bottom: 16),
     child: Column(
       children: [
@@ -1492,9 +1493,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 SizedBox(
                   width: width,
                   child: TextField(
-                    key:
-                        widget.amountFieldKey ??
-                        const ValueKey('quick-add-amount-field'),
+                    key: const ValueKey('quick-add-amount-field'),
                     controller: _amountController,
                     autofocus: widget.autofocus,
                     onTapOutside: (_) =>
@@ -1703,27 +1702,30 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 style: BambooFonts.ui(12, color: BambooInk.ink500),
               );
             }
-            final visible = list.take(4).toList();
             final selected = list
                 .where((item) => item.id == _selectedCategoryId)
                 .firstOrNull;
-            if (selected != null &&
-                !visible.any((item) => item.id == selected.id)) {
-              visible[visible.length - 1] = selected;
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final category in visible)
-                  Expanded(
+            final textScale = MediaQuery.textScalerOf(context).scale(1);
+            return SizedBox(
+              height: 58 + 30 * textScale,
+              child: ListView.separated(
+                key: const ValueKey('quick-add-categories'),
+                scrollDirection: Axis.horizontal,
+                itemCount: list.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                itemBuilder: (context, index) {
+                  final category = list[index];
+                  return SizedBox(
+                    width: 72,
                     child: _CategoryChoice(
                       category: category,
-                      selected: _selectedCategoryId == category.id,
+                      selected: selected?.id == category.id,
                       onTap: () =>
                           setState(() => _selectedCategoryId = category.id),
                     ),
-                  ),
-              ],
+                  );
+                },
+              ),
             );
           },
         ),

@@ -889,23 +889,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         ],
                       ),
                   ],
-                  if (_localSplit != null && !_localSplit!.pending)
-                    TextButton(
-                      onPressed: () async {
-                        try {
-                          await _splitStore?.refresh(widget.entry.id);
-                        } catch (error) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(userFacingErrorMessage(error)),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      child: const Text('Refresh split'),
-                    ),
                   if (_loadingSplits) ...[
                     const SizedBox(height: AppSpace.sm),
                     const LinearProgressIndicator(minHeight: 2),

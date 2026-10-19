@@ -1058,7 +1058,7 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
         await Future<void>.delayed(Duration.zero);
       }
     },
-    onSmsUploaded: (messages, results) async {
+    onSmsUploaded: (messages, results, notifyNewTransactions) async {
       if (ref.read(cacheNamespaceProvider) != namespace) return;
       final cache = await ref.read(responseCacheProvider.future);
       final store = cache.financialStore;
@@ -1096,6 +1096,30 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
                 )
                 .toList() ??
             const <TransactionEntry>[];
+        if (notifyNewTransactions && outcome == 'imported') {
+          final recorded = matched
+              .where((transaction) => transaction.id == serverId)
+              .where((transaction) => transaction.status == 'active')
+              .firstOrNull;
+          if (recorded != null) {
+            final merchant = recorded.merchantName?.trim();
+            final detail = merchant == null || merchant.isEmpty
+                ? '${recorded.amount.format(hidePaise: true)} was added to your spending.'
+                : '${recorded.amount.format(hidePaise: true)} at $merchant was added to your spending.';
+            try {
+              await ref
+                  .read(notificationGateProvider)
+                  .fire(
+                    category: 'transactions',
+                    title: 'Transaction recorded',
+                    body: detail,
+                    dedupeKey: 'transaction_recorded:${recorded.id}',
+                  );
+            } catch (_) {
+              // A notification failure must never hold up SMS reconciliation.
+            }
+          }
+        }
         final negative =
             outcome == 'unparsed' &&
             [
@@ -5017,6 +5041,7 @@ class SmsAutoImportController {
             messages: messages,
             backfill: backfill,
             captureLocally: false,
+            notifyNewTransactions: !backfill,
           );
           imported += result.imported;
           duplicates += result.duplicate;

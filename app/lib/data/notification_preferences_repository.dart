@@ -18,6 +18,7 @@ class NotificationPreferences {
   final bool categoryExpiry;
   final bool categoryMonthlyReport;
   final bool categoryNeedsReview;
+  final bool categoryTransactions;
 
   /// Two budget categories, not one. "Over budget" is a post-mortem and
   /// "running ahead of pace" is still actionable — someone who wants the
@@ -43,6 +44,7 @@ class NotificationPreferences {
     required this.categoryExpiry,
     required this.categoryMonthlyReport,
     required this.categoryNeedsReview,
+    this.categoryTransactions = true,
     this.categoryBudgetWarning = true,
     this.categoryBudgetExceeded = true,
     this.quietHoursStart,
@@ -60,6 +62,7 @@ class NotificationPreferences {
       categoryExpiry: json['category_expiry'] as bool? ?? true,
       categoryMonthlyReport: json['category_monthly_report'] as bool? ?? false,
       categoryNeedsReview: json['category_needs_review'] as bool? ?? true,
+      categoryTransactions: json['category_transactions'] as bool? ?? true,
       categoryBudgetWarning: json['category_budget_warning'] as bool? ?? true,
       categoryBudgetExceeded: json['category_budget_exceeded'] as bool? ?? true,
       quietHoursStart: json['quiet_hours_start'] as String?,

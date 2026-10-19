@@ -153,7 +153,7 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   child: HomeContextLine(),
                 ),
-                const SizedBox(height: AppSpace.xs),
+                const SizedBox(height: AppSpace.sm),
                 Padding(
                   key: tutorialKeys.categoryChips,
                   padding: const EdgeInsets.symmetric(horizontal: _gutter),
@@ -168,13 +168,13 @@ class HomeScreen extends ConsumerWidget {
                   key: tutorialKeys.amountField,
                   padding: const EdgeInsets.fromLTRB(
                     _gutter,
-                    AppSpace.xs,
+                    AppSpace.md,
                     _gutter,
                     0,
                   ),
                   child: const _AmountCard(),
                 ),
-                const SizedBox(height: AppSpace.xs),
+                const SizedBox(height: AppSpace.sm),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: _gutter),
                   child: _RankedSection(
@@ -810,12 +810,12 @@ class _PurchaseTypeSelector extends StatelessWidget {
 
     return SizedBox(
       key: const ValueKey('home-purchase-type'),
-      height: 38,
+      height: 42,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
         itemCount: orderedCategories.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        separatorBuilder: (_, _) => const SizedBox(width: 9),
         itemBuilder: (context, index) {
           final (slug, label, icon) = orderedCategories[index];
           return _PurchaseTypeIconButton(
@@ -864,8 +864,8 @@ class _PurchaseTypeIconButton extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 11),
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: 13),
               decoration: BoxDecoration(
                 color: selected ? BambooInk.slate : BambooInk.paper,
                 borderRadius: BorderRadius.circular(12),
@@ -877,7 +877,7 @@ class _PurchaseTypeIconButton extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(icon, size: 17, color: foreground),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Text(
                     label,
                     style: BambooFonts.ui(
@@ -1148,7 +1148,7 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
     final currentAmount = ref.watch(enteredAmountProvider);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+      padding: const EdgeInsets.fromLTRB(18, 15, 18, 14),
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(18),
@@ -1160,9 +1160,11 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'Spending amount',
-                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              Expanded(
+                child: Text(
+                  'Spending amount',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
               ),
               IconButton(
                 tooltip: 'Edit spending amount',
@@ -1171,13 +1173,14 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
                 color: BambooInk.ink500,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints.tightFor(
-                  width: 24,
-                  height: 24,
+                  width: 32,
+                  height: 32,
                 ),
                 onPressed: () => _amountFocusNode.requestFocus(),
               ),
             ],
           ),
+          const SizedBox(height: 8),
           TextField(
             controller: _controller,
             focusNode: _amountFocusNode,
@@ -1185,7 +1188,7 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'^[\d,]*\.?\d{0,2}')),
             ],
-            style: BambooFonts.money(25),
+            style: BambooFonts.money(28),
             decoration: InputDecoration(
               // filled: false — without this, the ambient InputDecorationTheme
               // (app_theme.dart's AppTheme.light()/.dark(), still applied
@@ -1194,12 +1197,12 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
               // widget's own glass Container.
               filled: false,
               isDense: true,
-              contentPadding: EdgeInsets.zero,
+              contentPadding: const EdgeInsets.symmetric(vertical: 2),
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
               prefixText: '₹',
-              prefixStyle: BambooFonts.money(25, color: BambooInk.ink900),
+              prefixStyle: BambooFonts.money(28, color: BambooInk.ink900),
             ),
             onChanged: (value) {
               final parsed = double.tryParse(value.replaceAll(',', ''));
@@ -1209,14 +1212,14 @@ class _AmountCardState extends ConsumerState<_AmountCard> {
               }
             },
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 13),
           Row(
             children: [
               for (var i = 0; i < _quickAmounts.length; i++)
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(
-                      right: i == _quickAmounts.length - 1 ? 0 : 8,
+                      right: i == _quickAmounts.length - 1 ? 0 : 10,
                     ),
                     child: _QuickAmountChip(
                       label: '₹${_formatAmount(_quickAmounts[i])}',
@@ -1249,7 +1252,7 @@ class _QuickAmountChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 5),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? BambooInk.lime : BambooInk.paperMuted,

@@ -943,7 +943,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
     final Widget? preview = switch (page) {
       TutorialPage.manual => QuickAddScreen(
         autofocus: false,
-        amountFieldKey: keys.manualAmount,
+        manualEntryKey: keys.manualEntry,
       ),
       TutorialPage.spending => SpendTrendsScreen(
         periodSelectorKey: keys.spendingPeriod,

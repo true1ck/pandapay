@@ -26,6 +26,7 @@ const {
   detectRecurringSeries,
   annualCost,
   merchantSeriesKey,
+  isUsableSubscriptionName,
   isDisplayableSubscriptionRecord,
 } = require('./recurring');
 const { buildMonthlyReport } = require('./monthly_report');
@@ -6588,8 +6589,12 @@ app.get('/recurring', requireAuth, async (req, res) => {
              typical_amount_inr = CASE WHEN recurring_series.user_edited THEN recurring_series.typical_amount_inr ELSE EXCLUDED.typical_amount_inr END,
              cadence_days = CASE WHEN recurring_series.user_edited THEN recurring_series.cadence_days ELSE EXCLUDED.cadence_days END,
              occurrence_count = EXCLUDED.occurrence_count,
+             first_seen_on = COALESCE(recurring_series.first_seen_on, EXCLUDED.first_seen_on),
              last_seen_on = EXCLUDED.last_seen_on,
-             detection_source = CASE WHEN recurring_series.detection_source = 'mandate' THEN 'mandate' ELSE 'observed' END,
+             detection_source = CASE
+               WHEN recurring_series.detection_source IN ('mandate', 'manual') THEN recurring_series.detection_source
+               ELSE 'observed'
+             END,
              is_active = CASE WHEN recurring_series.detection_source = 'mandate' AND recurring_series.is_active = false THEN false ELSE recurring_series.is_active END,
              updated_at = now()`,
           [
@@ -6603,7 +6608,8 @@ app.get('/recurring', requireAuth, async (req, res) => {
       const stored = await client.query(
         `SELECT rs.id, rs.merchant_key, rs.display_name, rs.typical_amount_inr,
                 rs.cadence_days, rs.occurrence_count, rs.first_seen_on, rs.last_seen_on,
-                rs.next_expected_on, rs.category_id, rs.user_card_id, rs.payment_method,
+                TO_CHAR(rs.next_expected_on, 'YYYY-MM-DD') AS next_expected_on,
+                rs.category_id, rs.user_card_id, rs.payment_method,
                 rs.detection_source, rs.user_edited,
                 sc.name AS category_name, cp.name AS card_name, uc.nickname AS card_nickname
            FROM recurring_series rs
@@ -6651,6 +6657,53 @@ app.get('/recurring', requireAuth, async (req, res) => {
     res.json(payload);
   } catch (err) {
     console.error('GET /recurring error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+app.post('/recurring', requireAuth, async (req, res) => {
+  const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
+  const name = typeof displayName === 'string' ? displayName.trim() : '';
+  const amount = Number(typicalAmountInr);
+  const cadence = Number(cadenceDays);
+  const dateIsValid = typeof nextExpectedOn === 'string'
+    && /^\d{4}-\d{2}-\d{2}$/.test(nextExpectedOn)
+    && !Number.isNaN(Date.parse(`${nextExpectedOn}T00:00:00Z`))
+    && new Date(`${nextExpectedOn}T00:00:00Z`).toISOString().slice(0, 10) === nextExpectedOn;
+
+  if (!isUsableSubscriptionName(name) || name.length > 80 ||
+      !Number.isFinite(amount) || amount <= 0 || amount > 10000000 ||
+      ![30, 365].includes(cadence) ||
+      !dateIsValid) {
+    return res.status(400).json({ error: 'invalid_subscription' });
+  }
+
+  const merchantKey = merchantSeriesKey(name);
+  if (!merchantKey) return res.status(400).json({ error: 'invalid_subscription' });
+
+  try {
+    const result = await withUserClient(req.userId, (client) => client.query(
+      `INSERT INTO recurring_series
+         (profile_id, merchant_key, display_name, typical_amount_inr,
+          cadence_days, occurrence_count, first_seen_on, last_seen_on,
+          next_expected_on, detection_source, user_edited)
+       VALUES ($1, $2, $3, $4, $5, 0, NULL, NULL, $6, 'manual', true)
+       ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
+         display_name = EXCLUDED.display_name,
+         typical_amount_inr = EXCLUDED.typical_amount_inr,
+         cadence_days = EXCLUDED.cadence_days,
+         next_expected_on = EXCLUDED.next_expected_on,
+         detection_source = 'manual',
+         user_edited = true,
+         is_active = true,
+         dismissed_at = NULL,
+         updated_at = now()
+       RETURNING id`,
+      [req.userId, merchantKey, name, amount, cadence, nextExpectedOn]
+    ));
+    res.status(201).json({ id: result.rows[0].id });
+  } catch (err) {
+    console.error('POST /recurring error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -6983,6 +7036,7 @@ app.post('/notifications', requireAuth, async (req, res) => {
     expiry: 'category_expiry',
     monthly_report: 'category_monthly_report',
     needs_review: 'category_needs_review',
+    transactions: 'category_transactions',
     // Two categories, not one: "over budget" is a post-mortem and
     // "running ahead of pace" is still actionable, so someone who wants
     // the early warning shouldn't be forced to take the late one too.
@@ -7377,6 +7431,7 @@ const NOTIFICATION_PREF_DEFAULTS = {
   category_expiry: true,
   category_monthly_report: false,
   category_needs_review: true,
+  category_transactions: true,
   // Both default ON: unlike location and the monthly report (opt-in by
   // design), a budget is something the user explicitly set up, and having
   // set one then not hearing about it would be the surprising outcome.

@@ -695,6 +695,32 @@ class SpendReportsRepository {
     );
   }
 
+  Future<void> createRecurring({
+    required String displayName,
+    required double amountInr,
+    required int cadenceDays,
+    required DateTime nextExpectedOn,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/recurring'),
+      headers: _headers,
+      body: jsonEncode({
+        'displayName': displayName,
+        'typicalAmountInr': amountInr,
+        'cadenceDays': cadenceDays,
+        'nextExpectedOn':
+            '${nextExpectedOn.year.toString().padLeft(4, '0')}-'
+            '${nextExpectedOn.month.toString().padLeft(2, '0')}-'
+            '${nextExpectedOn.day.toString().padLeft(2, '0')}',
+      }),
+    );
+    if (response.statusCode != 201) {
+      throw ApiException(
+        'POST /recurring failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
   /// "I cancelled this." Marks the series dismissed server-side so the next
   /// detection run doesn't immediately re-add it — a dismissal that lasted
   /// only until the screen was reopened would make the feature feel broken.
@@ -710,7 +736,8 @@ class SpendReportsRepository {
     }
   }
 
-  Future<void> updateRecurring(String seriesId, {
+  Future<void> updateRecurring(
+    String seriesId, {
     required String displayName,
     required double amountInr,
     required int cadenceDays,
@@ -723,11 +750,14 @@ class SpendReportsRepository {
         'displayName': displayName,
         'typicalAmountInr': amountInr,
         'cadenceDays': cadenceDays,
-        'nextExpectedOn': '${nextExpectedOn.year.toString().padLeft(4, '0')}-${nextExpectedOn.month.toString().padLeft(2, '0')}-${nextExpectedOn.day.toString().padLeft(2, '0')}',
+        'nextExpectedOn':
+            '${nextExpectedOn.year.toString().padLeft(4, '0')}-${nextExpectedOn.month.toString().padLeft(2, '0')}-${nextExpectedOn.day.toString().padLeft(2, '0')}',
       }),
     );
     if (response.statusCode != 200) {
-      throw ApiException('PATCH /recurring failed: ${response.statusCode} ${response.body}');
+      throw ApiException(
+        'PATCH /recurring failed: ${response.statusCode} ${response.body}',
+      );
     }
   }
 

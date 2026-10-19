@@ -894,6 +894,7 @@ class UserCardsRepository {
   final Future<void> Function(
     List<SmsBatchMessage>,
     List<Map<String, dynamic>>,
+    bool,
   )?
   onSmsUploaded;
 
@@ -1308,6 +1309,7 @@ class UserCardsRepository {
           'transaction': json['transaction'],
         },
       ],
+      false,
     );
     return SmsImportResult(
       parsed: json['parsed'] == true,
@@ -1394,6 +1396,7 @@ class UserCardsRepository {
     required List<SmsBatchMessage> messages,
     bool backfill = true,
     bool captureLocally = true,
+    bool notifyNewTransactions = false,
   }) async {
     if (captureLocally) await captureSmsMessages(messages);
     final response = await _client
@@ -1424,7 +1427,7 @@ class UserCardsRepository {
     final results = (json['results'] as List? ?? const [])
         .cast<Map<String, dynamic>>()
         .toList();
-    await onSmsUploaded?.call(messages, results);
+    await onSmsUploaded?.call(messages, results, notifyNewTransactions);
     return SmsBatchImportResult(
       imported: (summary['imported'] as num?)?.toInt() ?? 0,
       duplicate: (summary['duplicate'] as num?)?.toInt() ?? 0,

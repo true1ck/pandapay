@@ -54,6 +54,8 @@ class NotificationGate {
         return prefs.categoryMonthlyReport;
       case 'needs_review':
         return prefs.categoryNeedsReview;
+      case 'transactions':
+        return prefs.categoryTransactions;
       case 'budget_warning':
         return prefs.categoryBudgetWarning;
       case 'budget_exceeded':

@@ -9,7 +9,7 @@ class TutorialKeys {
   final firstRecommendationCard = GlobalKey();
   final scanFab = GlobalKey();
   final voiceFab = GlobalKey();
-  final manualAmount = GlobalKey();
+  final manualEntry = GlobalKey();
   final spendingPeriod = GlobalKey();
   final spendingSummary = GlobalKey();
 }

@@ -263,6 +263,15 @@ class _NotificationSettingsBodyState
               onChanged: (v) =>
                   _update(context, ref, {'category_needs_review': v}),
             ),
+            SwitchListTile(
+              title: const Text('New transactions'),
+              subtitle: const Text(
+                'When a bank SMS adds a transaction, including merchant and amount',
+              ),
+              value: prefs.categoryTransactions,
+              onChanged: (v) =>
+                  _update(context, ref, {'category_transactions': v}),
+            ),
             // Two budget toggles rather than one: the early warning is the
             // useful half, and someone who wants it shouldn't have to
             // accept the after-the-fact one too.

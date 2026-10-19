@@ -7,47 +7,18 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
+import '../cards/card_summary.dart';
 import '../../main.dart' show MoneyText;
 
-const _subscriptionTones = <_SubscriptionTone>[
-  _SubscriptionTone(
-    accent: BambooChartColors.teal,
-    tint: Color(0xFFE8F7F0),
-    icon: Icons.autorenew_rounded,
-  ),
-  _SubscriptionTone(
-    accent: BambooChartColors.blue,
-    tint: Color(0xFFEAF2FC),
-    icon: Icons.play_circle_outline_rounded,
-  ),
-  _SubscriptionTone(
-    accent: BambooChartColors.amber,
-    tint: Color(0xFFFFF4E2),
-    icon: Icons.receipt_long_outlined,
-  ),
-  _SubscriptionTone(
-    accent: BambooChartColors.violet,
-    tint: Color(0xFFF1EDFA),
-    icon: Icons.workspace_premium_outlined,
-  ),
-  _SubscriptionTone(
-    accent: BambooChartColors.coral,
-    tint: Color(0xFFFFEEE9),
-    icon: Icons.favorite_border_rounded,
-  ),
+const _subscriptionIcons = <IconData>[
+  Icons.autorenew_rounded,
+  Icons.play_circle_outline_rounded,
+  Icons.receipt_long_outlined,
+  Icons.workspace_premium_outlined,
+  Icons.favorite_border_rounded,
 ];
-
-class _SubscriptionTone {
-  final Color accent;
-  final Color tint;
-  final IconData icon;
-
-  const _SubscriptionTone({
-    required this.accent,
-    required this.tint,
-    required this.icon,
-  });
-}
+const _subscriptionAccent = BambooInk.jade;
+const _subscriptionTint = BambooInk.rankBadgeBg;
 
 bool _isDisplayableSubscription(RecurringSeries series) {
   final name = series.displayName.trim();
@@ -115,6 +86,15 @@ class SubscriptionsScreen extends ConsumerWidget {
           'Subscriptions',
           style: BambooFonts.heading(20, color: BambooInk.ink900),
         ),
+        actions: [
+          if (signedIn)
+            IconButton(
+              tooltip: 'Add subscription',
+              onPressed: () => _addSubscription(context, ref),
+              icon: const Icon(Icons.add_rounded, size: 27),
+              color: BambooInk.jade,
+            ),
+        ],
       ),
       body: AppBackground(
         child: report.when(
@@ -211,41 +191,505 @@ class SubscriptionsScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _addSubscription(BuildContext context, WidgetRef ref) async {
+    final draft = await showDialog<_SubscriptionDraft>(
+      context: context,
+      builder: (_) => const _AddSubscriptionDialog(),
+    );
+    if (draft == null || !context.mounted) return;
+
+    final repository = ref.read(spendReportsRepositoryProvider);
+    if (repository == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to add a subscription.')),
+      );
+      return;
+    }
+
+    try {
+      await repository.createRecurring(
+        displayName: draft.displayName,
+        amountInr: draft.amountInr,
+        cadenceDays: draft.cadenceDays,
+        nextExpectedOn: draft.nextExpectedOn,
+      );
+      ref.invalidate(recurringReportProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Subscription added.')));
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    }
+  }
 }
 
-class _CardSilhouette extends StatelessWidget {
-  final double size;
-  final Color color;
+class _SubscriptionDraft {
+  final String displayName;
+  final double amountInr;
+  final int cadenceDays;
+  final DateTime nextExpectedOn;
 
-  const _CardSilhouette({required this.size, required this.color});
+  const _SubscriptionDraft({
+    required this.displayName,
+    required this.amountInr,
+    required this.cadenceDays,
+    required this.nextExpectedOn,
+  });
+}
+
+class _AddSubscriptionDialog extends StatefulWidget {
+  const _AddSubscriptionDialog();
+
+  @override
+  State<_AddSubscriptionDialog> createState() => _AddSubscriptionDialogState();
+}
+
+class _AddSubscriptionDialogState extends State<_AddSubscriptionDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _amountController = TextEditingController();
+  int _cadenceDays = 30;
+  DateTime _nextExpectedOn = _dateAfterCycle(30);
+  bool _renewalDateEdited = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: color.withValues(alpha: 0.55), width: 1.5),
-        ),
-        child: Center(
-          child: Container(
-            width: size * 0.68,
-            height: size * 0.68,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: color.withValues(alpha: 0.7),
-                width: 1.5,
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.88;
+    return Dialog(
+      backgroundColor: BambooInk.paper,
+      surfaceTintColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 480, maxHeight: maxHeight),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Add subscription',
+                        style: BambooFonts.heading(19, color: BambooInk.ink900),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                      color: BambooInk.ink500,
+                    ),
+                  ],
+                ),
               ),
-            ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      CardSummaryPanel(
+                        elevated: false,
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _FormFieldGroup(
+                              title: 'Service name',
+                              child: TextFormField(
+                                controller: _nameController,
+                                textCapitalization: TextCapitalization.words,
+                                style: BambooFonts.ui(
+                                  14,
+                                  weight: FontWeight.w500,
+                                ),
+                                decoration: _fieldDecoration(
+                                  'e.g. Music or video plan',
+                                  icon: Icons.subscriptions_outlined,
+                                ),
+                                validator: (value) {
+                                  final name = value?.trim() ?? '';
+                                  if (name.length < 2 ||
+                                      !RegExp(r'[A-Za-z]{2,}').hasMatch(name)) {
+                                    return 'Enter a service name';
+                                  }
+                                  if (name.length > 80) {
+                                    return 'Use 80 characters or fewer';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            const _SubscriptionFormDivider(),
+                            _FormFieldGroup(
+                              title: 'Typical amount',
+                              child: TextFormField(
+                                controller: _amountController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                style: BambooFonts.ui(
+                                  14,
+                                  weight: FontWeight.w500,
+                                ),
+                                decoration: _fieldDecoration(
+                                  '0.00',
+                                  icon: Icons.currency_rupee_rounded,
+                                ),
+                                validator: (value) {
+                                  final amount = double.tryParse(
+                                    value?.trim() ?? '',
+                                  );
+                                  if (amount == null ||
+                                      amount <= 0 ||
+                                      amount > 10000000) {
+                                    return 'Enter a valid amount';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpace.md),
+                      CardSummaryPanel(
+                        elevated: false,
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _FormFieldGroup(
+                              title: 'Billing frequency',
+                              child: _CycleSelector(
+                                selectedDays: _cadenceDays,
+                                onChanged: _selectCadence,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpace.md),
+                            _FormFieldGroup(
+                              title: 'Next renewal',
+                              child: _renewalDateField(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpace.md),
+                      Container(
+                        padding: const EdgeInsets.all(AppSpace.md),
+                        decoration: BoxDecoration(
+                          color: BambooInk.rankBadgeBg,
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.info_outline_rounded,
+                              size: 18,
+                              color: BambooInk.jade,
+                            ),
+                            const SizedBox(width: AppSpace.sm),
+                            Expanded(
+                              child: Text(
+                                'This tracks the renewal date. A payment appears in Expenses when it is recorded by SMS or added as a transaction.',
+                                style: BambooFonts.ui(
+                                  11.5,
+                                  color: BambooInk.ink700,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                child: Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        foregroundColor: BambooInk.ink700,
+                        minimumSize: const Size(76, 48),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: AppSpace.sm),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _save,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BambooInk.slate,
+                          foregroundColor: BambooInk.lime,
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
+                        ),
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: const Text('Add subscription'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+
+  Widget _renewalDateField() => Material(
+    color: BambooInk.slate.withValues(alpha: 0.035),
+    borderRadius: BorderRadius.circular(12),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: _pickRenewalDate,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            const Icon(Icons.event_outlined, size: 19, color: BambooInk.ink700),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '${_nextExpectedOn.day} ${_monthName(_nextExpectedOn.month)} ${_nextExpectedOn.year}',
+                style: BambooFonts.ui(
+                  14,
+                  weight: FontWeight.w500,
+                  color: BambooInk.ink900,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.edit_calendar_outlined,
+              color: BambooInk.ink500,
+              size: 19,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  InputDecoration _fieldDecoration(String hint, {required IconData icon}) =>
+      InputDecoration(
+        hintText: hint,
+        hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+        filled: true,
+        fillColor: BambooInk.slate.withValues(alpha: 0.035),
+        prefixIcon: Icon(icon, size: 19, color: BambooInk.ink700),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: BambooInk.slate),
+        ),
+      );
+
+  void _selectCadence(int cadenceDays) {
+    setState(() {
+      _cadenceDays = cadenceDays;
+      if (!_renewalDateEdited) {
+        _nextExpectedOn = _dateAfterCycle(cadenceDays);
+      }
+    });
+  }
+
+  Future<void> _pickRenewalDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _nextExpectedOn,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _nextExpectedOn = DateUtils.dateOnly(picked);
+        _renewalDateEdited = true;
+      });
+    }
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(
+      context,
+      _SubscriptionDraft(
+        displayName: _nameController.text.trim(),
+        amountInr: double.parse(_amountController.text.trim()),
+        cadenceDays: _cadenceDays,
+        nextExpectedOn: _nextExpectedOn,
+      ),
+    );
+  }
+
+  static String _monthName(int month) => const [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][month - 1];
+
+  static DateTime _dateAfterCycle(int cadenceDays) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final targetYear = cadenceDays == 365 ? today.year + 1 : today.year;
+    final targetMonth = cadenceDays == 365 ? today.month : today.month + 1;
+    final normalizedYear = targetMonth > 12 ? targetYear + 1 : targetYear;
+    final normalizedMonth = targetMonth > 12 ? targetMonth - 12 : targetMonth;
+    final lastDay = DateTime(normalizedYear, normalizedMonth + 1, 0).day;
+    return DateTime(
+      normalizedYear,
+      normalizedMonth,
+      today.day.clamp(1, lastDay),
+    );
+  }
+}
+
+class _FormFieldGroup extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const _FormFieldGroup({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        title,
+        style: BambooFonts.ui(
+          12,
+          weight: FontWeight.w600,
+          color: BambooInk.ink700,
+        ),
+      ),
+      const SizedBox(height: 10),
+      child,
+    ],
+  );
+}
+
+class _SubscriptionFormDivider extends StatelessWidget {
+  const _SubscriptionFormDivider();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 14),
+    child: Divider(height: 1, color: BambooInk.hairlineOnPaper),
+  );
+}
+
+class _CycleSelector extends StatelessWidget {
+  final int selectedDays;
+  final ValueChanged<int> onChanged;
+
+  const _CycleSelector({required this.selectedDays, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(4),
+    decoration: BoxDecoration(
+      color: BambooInk.slate.withValues(alpha: 0.045),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Row(
+      children: [
+        for (final option in const [(30, 'Monthly'), (365, 'Yearly')])
+          Expanded(
+            child: _CycleOption(
+              label: option.$2,
+              selected: selectedDays == option.$1,
+              onTap: () => onChanged(option.$1),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _CycleOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CycleOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    child: Material(
+      color: selected ? BambooInk.lime : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: BambooFonts.ui(
+              12,
+              weight: selected ? FontWeight.w600 : FontWeight.w500,
+              color: selected ? BambooInk.ink900 : BambooInk.ink700,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _InfoPill extends StatelessWidget {
@@ -309,16 +753,6 @@ class _TotalCard extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            const Positioned(
-              right: -34,
-              top: -42,
-              child: _CardSilhouette(size: 148, color: Color(0x20CDF564)),
-            ),
-            const Positioned(
-              right: 62,
-              bottom: -64,
-              child: _CardSilhouette(size: 118, color: Color(0x12FFFFFF)),
-            ),
             Padding(
               padding: const EdgeInsets.all(AppSpace.lg),
               child: Column(
@@ -434,7 +868,7 @@ class _SeriesCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final next = series.nextExpectedOn;
-    final tone = _subscriptionTones[toneIndex % _subscriptionTones.length];
+    final icon = _subscriptionIcons[toneIndex % _subscriptionIcons.length];
     return Container(
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,
@@ -443,195 +877,171 @@ class _SeriesCard extends ConsumerWidget {
         boxShadow: const [
           BoxShadow(
             color: Color(0x0D2B313A),
-            blurRadius: 18,
-            offset: Offset(0, 8),
+            blurRadius: 14,
+            offset: Offset(0, 6),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 14, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              child: Container(width: 5, color: tone.accent),
-            ),
-            Positioned(
-              top: -44,
-              right: -32,
-              child: _CardSilhouette(size: 118, color: tone.tint),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 14, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: tone.tint,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(tone.icon, color: tone.accent, size: 19),
-                      ),
-                      const SizedBox(width: AppSpace.md),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 1),
-                          child: Text(
-                            series.displayName,
-                            style: BambooFonts.heading(
-                              16,
-                              color: BambooInk.ink900,
-                              height: 1.15,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpace.sm),
-                      if (series.typicalAmount.paise > 0)
-                        Flexible(
-                          child: MoneyText(
-                            series.typicalAmount,
-                            confidence: Confidence.estimated,
-                            style: BambooFonts.money(
-                              16,
-                              color: BambooInk.ink900,
-                            ),
-                          ),
-                        )
-                      else
-                        Text(
-                          'Amount varies',
-                          style: BambooFonts.ui(12, color: BambooInk.ink500),
-                        ),
-                    ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: _subscriptionTint,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: AppSpace.md),
-                  Wrap(
-                    spacing: AppSpace.xs,
-                    runSpacing: AppSpace.xs,
-                    children: [
-                      _InfoPill(
-                        icon: Icons.schedule_rounded,
-                        label: series.cadenceLabel,
-                        color: tone.accent,
-                        background: tone.tint,
+                  child: Icon(icon, color: _subscriptionAccent, size: 19),
+                ),
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Text(
+                      series.displayName,
+                      style: BambooFonts.heading(
+                        16,
+                        color: BambooInk.ink900,
+                        height: 1.15,
                       ),
-                      if (series.isMandate)
-                        const _InfoPill(
-                          icon: Icons.bolt_rounded,
-                          label: 'AutoPay',
-                          color: AppColors.teal600,
-                          background: AppColors.teal50,
-                        ),
-                    ],
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  const SizedBox(height: AppSpace.xs),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                if (series.typicalAmount.paise > 0)
+                  Flexible(
+                    child: MoneyText(
+                      series.typicalAmount,
+                      confidence: Confidence.estimated,
+                      style: BambooFonts.money(16, color: BambooInk.ink900),
+                    ),
+                  )
+                else
                   Text(
-                    series.typicalAmount.paise > 0
-                        ? '${series.annualCost.format(hidePaise: true)} estimated per year'
-                        : 'Amount not stated in the SMS',
+                    'Amount varies',
                     style: BambooFonts.ui(12, color: BambooInk.ink500),
                   ),
-                  if (next != null) ...[
-                    const SizedBox(height: AppSpace.xs),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.event_available_outlined,
-                          size: 16,
-                          color: tone.accent,
-                        ),
-                        const SizedBox(width: AppSpace.xs),
-                        Expanded(
-                          child: Text(
-                            'Renews around ${next.day} ${_months[next.month - 1]} ${next.year}',
-                            style: BambooFonts.ui(
-                              12,
-                              weight: FontWeight.w600,
-                              color: BambooInk.ink700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (series.cardName != null) ...[
-                    const SizedBox(height: AppSpace.xs),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.credit_card_outlined,
-                          size: 16,
-                          color: BambooInk.ink500,
-                        ),
-                        const SizedBox(width: AppSpace.xs),
-                        Expanded(
-                          child: Text(
-                            series.cardName!,
-                            style: BambooFonts.ui(
-                              11.5,
-                              color: BambooInk.ink500,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: AppSpace.md),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _edit(context, ref),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(42),
-                            foregroundColor: BambooInk.ink900,
-                            side: BorderSide(
-                              color: tone.accent.withValues(alpha: 0.45),
-                            ),
-                            backgroundColor: Colors.white.withValues(
-                              alpha: 0.52,
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                            ),
-                          ),
-                          icon: const Icon(Icons.edit_outlined, size: 16),
-                          label: const Text('Edit'),
-                        ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            Wrap(
+              spacing: AppSpace.xs,
+              runSpacing: AppSpace.xs,
+              children: [
+                _InfoPill(
+                  icon: Icons.schedule_rounded,
+                  label: series.cadenceLabel,
+                  color: _subscriptionAccent,
+                  background: _subscriptionTint,
+                ),
+                if (series.detectionSource == 'manual')
+                  const _InfoPill(
+                    icon: Icons.edit_outlined,
+                    label: 'Added by you',
+                    color: _subscriptionAccent,
+                    background: _subscriptionTint,
+                  ),
+                if (series.isMandate)
+                  const _InfoPill(
+                    icon: Icons.bolt_rounded,
+                    label: 'AutoPay',
+                    color: _subscriptionAccent,
+                    background: _subscriptionTint,
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.xs),
+            Text(
+              series.typicalAmount.paise > 0
+                  ? '${series.annualCost.format(hidePaise: true)} estimated per year'
+                  : 'Amount not stated in the SMS',
+              style: BambooFonts.ui(12, color: BambooInk.ink500),
+            ),
+            if (next != null) ...[
+              const SizedBox(height: AppSpace.xs),
+              Row(
+                children: [
+                  Icon(
+                    Icons.event_available_outlined,
+                    size: 16,
+                    color: _subscriptionAccent,
+                  ),
+                  const SizedBox(width: AppSpace.xs),
+                  Expanded(
+                    child: Text(
+                      'Renews around ${next.day} ${_months[next.month - 1]} ${next.year}',
+                      style: BambooFonts.ui(
+                        12,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink700,
                       ),
-                      const SizedBox(width: AppSpace.sm),
-                      Expanded(
-                        child: TextButton.icon(
-                          onPressed: () => _dismiss(context, ref),
-                          style: TextButton.styleFrom(
-                            minimumSize: const Size.fromHeight(42),
-                            foregroundColor: BambooInk.ink700,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                          ),
-                          icon: const Icon(
-                            Icons.visibility_off_outlined,
-                            size: 16,
-                          ),
-                          label: const Text('Ignore'),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),
+            ],
+            if (series.cardName != null) ...[
+              const SizedBox(height: AppSpace.xs),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.credit_card_outlined,
+                    size: 16,
+                    color: BambooInk.ink500,
+                  ),
+                  const SizedBox(width: AppSpace.xs),
+                  Expanded(
+                    child: Text(
+                      series.cardName!,
+                      style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: AppSpace.md),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _edit(context, ref),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(42),
+                      foregroundColor: BambooInk.ink900,
+                      side: BorderSide(color: BambooInk.hairlineOnPaper),
+                      backgroundColor: Colors.white.withValues(alpha: 0.52),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                    ),
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Edit'),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => _dismiss(context, ref),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size.fromHeight(42),
+                      foregroundColor: BambooInk.ink700,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    icon: const Icon(Icons.visibility_off_outlined, size: 16),
+                    label: const Text('Ignore'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

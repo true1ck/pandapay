@@ -33,10 +33,10 @@ const _steps = [
   ),
   _TutorialStep(
     page: TutorialPage.manual,
-    title: 'Add a transaction yourself.',
+    title: 'Add a transaction your way.',
     body:
-        'Tap + on Home to open Quick add. Add the amount, payment method and category, and attach a receipt photo or file if you like. Save when you’re ready. This tour won’t save a transaction.',
-    targetKey: _manualAmount,
+        'Quick Add lets you enter the amount, merchant, category, payment method and date. You can attach a receipt photo or file too. Scan Bill reads a receipt, and Import brings in a statement. This tour won’t save anything.',
+    targetKey: _manualEntry,
   ),
   _TutorialStep(
     page: TutorialPage.scan,
@@ -62,7 +62,7 @@ const _steps = [
 ];
 
 GlobalKey _amountField(TutorialKeys keys) => keys.amountField;
-GlobalKey _manualAmount(TutorialKeys keys) => keys.manualAmount;
+GlobalKey _manualEntry(TutorialKeys keys) => keys.manualEntry;
 GlobalKey _scanFab(TutorialKeys keys) => keys.scanFab;
 GlobalKey _voiceFab(TutorialKeys keys) => keys.voiceFab;
 GlobalKey _spendingPeriod(TutorialKeys keys) =>
@@ -103,7 +103,6 @@ class _TutorialOverlayState extends ConsumerState<TutorialOverlay>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_showStep(0));
-      _trackTarget(Duration.zero);
     });
   }
 
@@ -119,6 +118,11 @@ class _TutorialOverlayState extends ConsumerState<TutorialOverlay>
       // Remeasure after returning from the background without resetting or
       // advancing the current step.
       setState(() => _targetRect = null);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _moving || _finishing) return;
+        final target = _localTargetRect();
+        if (target != _targetRect) setState(() => _targetRect = target);
+      });
     }
   }
 
@@ -145,6 +149,11 @@ class _TutorialOverlayState extends ConsumerState<TutorialOverlay>
           target,
           alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
         );
+      } else if (mounted) {
+        setState(
+          () => _message =
+              'This screen has changed, so the highlight is unavailable. You can still continue or skip the tour.',
+        );
       }
       await WidgetsBinding.instance.endOfFrame;
     } catch (_) {
@@ -162,18 +171,6 @@ class _TutorialOverlayState extends ConsumerState<TutorialOverlay>
         });
       }
     }
-  }
-
-  /// Observe real rendered frames, including data refreshes, scrolling and
-  /// size changes. Registering the next callback does not request a frame;
-  /// only a changed rectangle needs a repaint, so the guide stays idle too.
-  void _trackTarget(Duration _) {
-    if (!mounted) return;
-    if (!_moving && !_finishing) {
-      final target = _localTargetRect();
-      if (target != _targetRect) setState(() => _targetRect = target);
-    }
-    WidgetsBinding.instance.addPostFrameCallback(_trackTarget);
   }
 
   Rect? _localTargetRect() {
