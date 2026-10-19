@@ -29,6 +29,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     DateTime? to,
     String? cardId,
     String? categoryId,
+    String? userCategoryId,
     String? source,
     String? query,
   }) async =>

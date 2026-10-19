@@ -25,6 +25,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     double? amountInr,
     DateTime? occurredAt,
     String? categoryId,
+    String? userCategoryId,
     String? merchantName,
     TxnRail? rail,
     String? userCardId,

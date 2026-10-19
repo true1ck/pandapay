@@ -64,6 +64,7 @@ import '../features/sms_import/sms_inbox_scanner.dart';
 import '../features/sms_import/sms_capture_worker.dart';
 import '../features/sms_import/sms_background_queue.dart';
 import '../features/settings/settings_sync.dart';
+import '../features/sync/sync_engine.dart';
 import 'env.dart';
 
 /// api/'s and auth/'s base URLs, fixed at compile time by `--dart-define`

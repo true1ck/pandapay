@@ -2005,34 +2005,36 @@ class TransactionEntry {
   /// Local snapshot form. This intentionally mirrors only the fields needed
   /// by [fromJson]; it is not a write payload and must never be sent back to
   /// the API as a transaction mutation.
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'source_key': sourceKey,
-    'amount_inr': amount.rupees,
-    'occurred_at': occurredAt.toIso8601String(),
-    'merchant_name': merchantName,
-    'category_id': categoryId != null && categoryId.startsWith('custom:')
-        ? null
-        : categoryId,
-    'user_category_id': userCategoryId ??
-        (categoryId != null && categoryId.startsWith('custom:')
-            ? categoryId.substring('custom:'.length)
-            : null),
-    'category_name': categoryName,
-    'card_name': cardDisplayName,
-    'card_nickname': null,
-    'card_last4': cardLast4,
-    'account_last4': accountLast4,
-    'user_card_id': userCardId,
-    'rail': instrumentKnown ? _railToJson(rail) : null,
-    'instrument': instrumentKnown ? instrument.wireValue : null,
-    'entry_kind': entryKind.wireValue,
-    'source': source,
-    'status': status,
-    'reward_state': rewardState,
-    'note': note,
-    'expected_value_inr': rewardValue?.rupees,
-  };
+  Map<String, dynamic> toJson() {
+    final rawCategoryId = categoryId;
+    final customCategoryId = rawCategoryId != null &&
+        rawCategoryId.startsWith('custom:')
+        ? rawCategoryId.substring('custom:'.length)
+        : null;
+    return {
+      'id': id,
+      'source_key': sourceKey,
+      'amount_inr': amount.rupees,
+      'occurred_at': occurredAt.toIso8601String(),
+      'merchant_name': merchantName,
+      'category_id': customCategoryId == null ? categoryId : null,
+      'user_category_id': userCategoryId ?? customCategoryId,
+      'category_name': categoryName,
+      'card_name': cardDisplayName,
+      'card_nickname': null,
+      'card_last4': cardLast4,
+      'account_last4': accountLast4,
+      'user_card_id': userCardId,
+      'rail': instrumentKnown ? _railToJson(rail) : null,
+      'instrument': instrumentKnown ? instrument.wireValue : null,
+      'entry_kind': entryKind.wireValue,
+      'source': source,
+      'status': status,
+      'reward_state': rewardState,
+      'note': note,
+      'expected_value_inr': rewardValue?.rupees,
+    };
+  }
 
   static String _railToJson(TxnRail rail) {
     final buffer = StringBuffer();

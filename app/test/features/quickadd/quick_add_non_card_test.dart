@@ -35,6 +35,7 @@ class _RecordingUserCardsRepository extends UserCardsRepository {
     String? userCardId,
     required Money amount,
     String? categoryId,
+    String? userCategoryId,
     String? merchantName,
     String? merchantVpa,
     String? mcc,

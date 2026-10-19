@@ -18,6 +18,7 @@ class _AuthFailingRepository implements UserCardsRepository {
     DateTime? to,
     String? cardId,
     String? categoryId,
+    String? userCategoryId,
     String? source,
     String? query,
   }) async {
@@ -37,6 +38,7 @@ class _EmptyRepository implements UserCardsRepository {
     DateTime? to,
     String? cardId,
     String? categoryId,
+    String? userCategoryId,
     String? source,
     String? query,
   }) async => const [];
