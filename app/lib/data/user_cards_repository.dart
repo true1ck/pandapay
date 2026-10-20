@@ -1526,6 +1526,27 @@ class UserCardsRepository {
         .toList();
   }
 
+  /// Soft-deleted transactions stay available here so users can recover an
+  /// accidental delete without exposing them in the normal Activity feed.
+  Future<List<TransactionEntry>> fetchDeletedTransactions() async {
+    final uri = Uri.parse(
+      '$apiBaseUrl/transactions',
+    ).replace(queryParameters: const {'status': 'deleted'});
+    final response = await _client
+        .get(uri, headers: _headers)
+        .timeout(_transactionRequestTimeout);
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'GET /transactions?status=deleted failed: ${response.statusCode} ${response.body}',
+      );
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['transactions'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(TransactionEntry.fromJson)
+        .toList();
+  }
+
   /// Task D-2: single-transaction fetch, deliberately NOT filtered to
   /// status='active' server-side (see the route's own doc-comment) — D2
   /// must be able to show an ignored transaction too.
@@ -1612,6 +1633,18 @@ class UserCardsRepository {
     if (response.statusCode != 200) {
       throw ApiException(
         'POST /transactions/:id/ignore failed: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
+  Future<void> restoreTransaction(String id) async {
+    final response = await _client.post(
+      Uri.parse('$apiBaseUrl/transactions/$id/restore'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'POST /transactions/:id/restore failed: ${response.statusCode} ${response.body}',
       );
     }
   }
@@ -2063,6 +2096,12 @@ class TransactionEntry {
   final TxnEntryKind entryKind;
   final String source;
 
+  /// The latest time an SMS observation for this transaction was received by
+  /// the device. This is intentionally separate from [occurredAt]: the bank's
+  /// transaction date drives accounting, while the activity row should show
+  /// the actual SMS time when the source is SMS.
+  final DateTime? smsReceivedAt;
+
   /// Privacy-safe records of the channels that reported this payment.
   final List<TransactionObservation> observations;
   final String status;
@@ -2113,6 +2152,7 @@ class TransactionEntry {
     this.instrumentKnown = true,
     this.entryKind = TxnEntryKind.spend,
     required this.source,
+    this.smsReceivedAt,
     this.observations = const [],
     required this.status,
     this.rewardState = 'estimated',
@@ -2155,6 +2195,7 @@ class TransactionEntry {
       'instrument': instrumentKnown ? instrument.wireValue : null,
       'entry_kind': entryKind.wireValue,
       'source': source,
+      'sms_received_at': smsReceivedAt?.toIso8601String(),
       'observations': observations
           .map((observation) => observation.toJson())
           .toList(),
@@ -2208,6 +2249,9 @@ class TransactionEntry {
       instrumentKnown: json['instrument'] != null,
       entryKind: TxnEntryKind.fromJson(json['entry_kind'] as String?),
       source: json['source'] as String? ?? 'manual',
+      smsReceivedAt: json['sms_received_at'] == null
+          ? null
+          : DateTime.parse(json['sms_received_at'] as String),
       observations: (json['observations'] as List? ?? const [])
           .map(
             (item) =>

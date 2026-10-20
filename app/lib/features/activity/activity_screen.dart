@@ -14,6 +14,7 @@ import '../../data/spending_selection.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
+import 'deleted_transactions_screen.dart';
 
 /// D1 Transaction List (ui-spec Group D, implementation-plan-group-c-d.md)
 /// — extends the original flat list (UA-3+/Chunk 18) with date grouping,
@@ -201,7 +202,22 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             ),
             child: Column(
               children: [
-                const _SearchField(),
+                Row(
+                  children: [
+                    const Expanded(child: _SearchField()),
+                    const SizedBox(width: AppSpace.xs),
+                    IconButton(
+                      tooltip: 'Deleted transactions',
+                      color: AppColors.error,
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const DeletedTransactionsScreen(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.history),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: AppSpace.sm),
                 _FilterRow(filter: filter),
                 if (tagRepository != null)
@@ -430,7 +446,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   static String _timeLabel(BuildContext context, DateTime timestamp) {
     return MaterialLocalizations.of(context).formatTimeOfDay(
-      TimeOfDay.fromDateTime(timestamp),
+      TimeOfDay.fromDateTime(timestamp.toLocal()),
       alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
     );
   }
@@ -1345,11 +1361,13 @@ class _TransactionTile extends StatelessWidget {
         : isMoneyOut
         ? BambooInk.clay
         : BambooInk.ink900;
+    final isSmsImported = entry.source == 'sms' || entry.source == 'sms_bulk';
     final timeLabel = _ActivityScreenState._timeLabel(
       context,
-      entry.occurredAt,
+      isSmsImported
+          ? (entry.smsReceivedAt ?? entry.occurredAt)
+          : entry.occurredAt,
     );
-    final isSmsImported = entry.source == 'sms' || entry.source == 'sms_bulk';
     final subtitleParts = <String>[
       isSmsImported ? '$timeLabel · SMS' : timeLabel,
       if (entry.entryKind != TxnEntryKind.spend) entryLabel,

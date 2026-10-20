@@ -5499,12 +5499,18 @@ app.get('/transactions', requireAuth, async (req, res) => {
   let tagFilter;
   try { tagFilter = transactionTags.readTagFilter(req.query); }
   catch (error) { return res.status(400).json({ error: error.message }); }
-  const { from, to, cardId, categoryId, userCategoryId, source, q } = req.query;
+  const { from, to, cardId, categoryId, userCategoryId, source, q, status = 'active' } = req.query;
+  if (!['active', 'deleted'].includes(status)) {
+    return res.status(400).json({ error: 'status must be active or deleted' });
+  }
   // Keep transaction-list consumers aligned with spend reports even before a
   // background reconciliation has run. Only a unique archived -> active
   // physical-card match is eligible; ambiguity remains visible as unmatched.
   const canonicalCardId = 'COALESCE(replacement.active_card_id, t.user_card_id)';
-  const conditions = [`t.profile_id = $1`, `t.status = 'active'`];
+  const statusCondition = status === 'deleted'
+    ? `(t.status = 'deleted' OR (t.status = 'ignored' AND t.note LIKE '[ignored: transfer]%'))`
+    : `t.status = 'active'`;
+  const conditions = [`t.profile_id = $1`, statusCondition];
   const params = [req.userId];
   // Task D-1's last missing filter: free-text search. activity_screen.dart
   // shipped without a search box because there was no server-side text
@@ -6156,10 +6162,8 @@ transactionTags.registerTagRoutes(app, { requireAuth, withUserClient });
  * POST /transactions/:id/ignore — Task C-0c (ui-spec D2 "mark ignored
  * (refund/reversal/transfer)"). Reverses this transaction's cap/milestone/
  * points/fee-waiver contribution (via [reverseTransactionState]) and sets
- * status='ignored' — the row itself is kept (R4-style "never hard-delete",
- * same precedent as user_cards/card_requests), just excluded from
- * GET /transactions (`WHERE status = 'active'`) and from all state going
- * forward. No dedicated ignore-reason column exists on `transactions`
+ * status='ignored' — or status='deleted' for the former transfer option —
+ * while keeping the row for recovery. No dedicated ignore-reason column exists on `transactions`
  * (checked database.sql — only a free-text `note`) so the reason is
  * recorded there as `[ignored: <reason>] <existing note>` rather than
  * silently dropped; a structured column is a real follow-up if reporting
@@ -6192,12 +6196,16 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
         await reverseTransactionState(client, req.userId, card, txn);
       }
 
-      const noteTag = `[ignored: ${reason}]`;
+      // The former transfer option is now the user's soft-delete action.
+      // Keep the existing endpoint/reason for backwards compatibility while
+      // giving deleted transactions their own status for history/restore.
+      const deleted = reason === 'transfer';
+      const noteTag = deleted ? '[deleted]' : `[ignored: ${reason}]`;
       const newNote = txn.note ? `${noteTag} ${txn.note}` : noteTag;
       const updated = await client.query(
-        `UPDATE transactions SET status = 'ignored', note = $1, state_applied = false
-          WHERE id = $2 RETURNING id, status, note`,
-        [newNote, txn.id]
+        `UPDATE transactions SET status = $1, note = $2, state_applied = false
+          WHERE id = $3 RETURNING id, status, note`,
+        [deleted ? 'deleted' : 'ignored', newNote, txn.id]
       );
       return { status: 200, transaction: updated.rows[0] };
     });
@@ -6206,6 +6214,62 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('POST /transactions/:id/ignore error', err);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * POST /transactions/:id/restore — restore a soft-deleted transaction.
+ * Re-applies card state before making the row active again so spending totals,
+ * caps, milestones, points, and fee-waiver progress all move together.
+ */
+app.post('/transactions/:id/restore', requireAuth, async (req, res) => {
+  try {
+    const result = await withUserClient(req.userId, async (client) => {
+      const existing = await client.query(
+        `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail,
+                merchant_name, status, note, instrument, entry_kind,
+                state_applied, is_backfill
+           FROM transactions
+          WHERE id = $1 AND profile_id = $2
+            AND (status = 'deleted' OR (status = 'ignored' AND note LIKE '[ignored: transfer]%'))
+          FOR UPDATE`,
+        [req.params.id, req.userId]
+      );
+      if (existing.rows.length === 0) return { status: 404, error: 'deleted transaction not found' };
+      const txn = existing.rows[0];
+      const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend';
+      if (movesCardState && txn.state_applied !== true) {
+        const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
+        if (!card) return { status: 404, error: 'user_card for this transaction not found or archived' };
+        await applyTransactionState(client, req.userId, card, {
+          txnId: txn.id,
+          userCardId: txn.user_card_id,
+          amount: Number(txn.amount_inr),
+          occurred: txn.occurred_at,
+          categoryId: txn.category_id,
+          merchantName: txn.merchant_name,
+          rail: txn.rail,
+          sign: 1,
+        });
+      }
+
+      const restoredNote = String(txn.note || '')
+        .replace(/^\[(?:deleted|ignored: transfer)\]\s*/i, '')
+        .trim() || null;
+      const updated = await client.query(
+        `UPDATE transactions
+            SET status = 'active', note = $1, state_applied = $2
+          WHERE id = $3 RETURNING id, status, note`,
+        [restoredNote, movesCardState, txn.id]
+      );
+      return { status: 200, transaction: updated.rows[0] };
+    });
+
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('POST /transactions/:id/restore error', err);
     res.status(500).json({ error: 'internal_error' });
   }
 });

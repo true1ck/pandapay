@@ -544,9 +544,15 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             ),
             for (final r in const ['refund', 'reversal', 'transfer'])
               ListTile(
+                leading: r == 'transfer'
+                    ? const Icon(Icons.delete_outline, color: AppColors.error)
+                    : null,
                 title: Text(
                   _reasonLabel(r),
-                  style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+                  style: BambooFonts.ui(
+                    14.5,
+                    color: r == 'transfer' ? AppColors.error : BambooInk.ink900,
+                  ),
                 ),
                 onTap: () => Navigator.of(context).pop(r),
               ),
@@ -554,7 +560,31 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         ),
       ),
     );
-    if (reason != null) await _markIgnored(reason);
+    if (reason == 'transfer') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Delete transaction?'),
+          content: const Text(
+            'This will remove it from your spending totals. You can restore it later from Deleted transactions.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) await _markIgnored(reason);
+    } else if (reason != null) {
+      await _markIgnored(reason);
+    }
   }
 
   static String _reasonLabel(String r) => switch (r) {
