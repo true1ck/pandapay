@@ -126,39 +126,9 @@ class SmsImportStore {
         if (observation.disposition == LocalSmsDisposition.localIgnore) {
           intake.acknowledge(namespace, key);
         }
-        if (observation.dueDate != null && observation.cardLast4 != null) {
-          final matching = cards
-              .where((c) => !c.isArchived && c.last4 == observation.cardLast4)
-              .toList();
-          if (matching.length == 1 && matching.single.dueDay == null) {
-            final updated = UserCard.fromJson({
-              ...matching.single.toJson(),
-              'due_day': observation.dueDate!.day,
-            });
-            // Later messages in this same batch must see the established day.
-            cards[cards.indexWhere((card) => card.id == updated.id)] = updated;
-            store.replaceCards(namespace, [
-              for (final card in cards.where((c) => !c.isArchived))
-                if (card.id == updated.id) updated else card,
-            ]);
-          }
-        }
-        if (observation.statementDate != null && observation.cardLast4 != null) {
-          final matching = cards
-              .where((c) => !c.isArchived && c.last4 == observation.cardLast4)
-              .toList();
-          if (matching.length == 1 && matching.single.statementDay == null) {
-            final updated = UserCard.fromJson({
-              ...matching.single.toJson(),
-              'statement_day': observation.statementDate!.day,
-            });
-            cards[cards.indexWhere((card) => card.id == updated.id)] = updated;
-            store.replaceCards(namespace, [
-              for (final card in cards.where((c) => !c.isArchived))
-                if (card.id == updated.id) updated else card,
-            ]);
-          }
-        }
+        // Billing dates are selected across the captured inbox by the server.
+        // A capture page is not a complete cycle, so writing the first date
+        // here would lock in an older or reminder SMS before history arrives.
       }
       db.execute('RELEASE SAVEPOINT sms_capture');
     } catch (_) {

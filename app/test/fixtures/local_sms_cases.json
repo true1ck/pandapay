@@ -15,7 +15,7 @@
     "body": "Rs.500 debited from A/c XX1234 to SHOP via UPI on 16-10-26. Ref 123456789012.",
     "amount": 500,
     "instrument": "upi_bank",
-    "kind": "transfer"
+    "kind": "spend"
   },
   {
     "body": "INR 100 spent using debit card XX1234 at SHOP on 16-10-26.",

@@ -2912,7 +2912,8 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
                 : existingBalanceAt);
       merged[index] = BankAccountSummary(
         accountLast4: primary.accountLast4,
-        availableBalance: balancePrimary.availableBalance ??
+        availableBalance:
+            balancePrimary.availableBalance ??
             balanceSecondary.availableBalance,
         latestBalanceSmsAt: latestBalanceAt,
         latestSmsAt: latestAt,
@@ -2946,8 +2947,8 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
                 (account) => {
                   'accountLast4': account.accountLast4,
                   'availableBalanceInr': account.availableBalance?.rupees,
-                  'latestBalanceSmsAt':
-                      account.latestBalanceSmsAt?.toIso8601String(),
+                  'latestBalanceSmsAt': account.latestBalanceSmsAt
+                      ?.toIso8601String(),
                   'latestSmsAt': account.latestSmsAt?.toIso8601String(),
                   'smsCount': account.smsCount,
                   'issuerSlug': account.issuerSlug,
@@ -4568,10 +4569,12 @@ AsyncValue<List<Recommendation>> _rankRecommendations(
     requestedCategoryId,
     categoryList,
   );
-  final resolvedCategorySlug = categoryList
-      .where((category) => category.id == resolvedCategoryId)
-      .firstOrNull
-      ?.slug ?? categorySlug;
+  final resolvedCategorySlug =
+      categoryList
+          .where((category) => category.id == resolvedCategoryId)
+          .firstOrNull
+          ?.slug ??
+      categorySlug;
 
   final cards = ownedCardType == null && wallet.isEmpty
       ? allCards
@@ -4824,7 +4827,10 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
 
   Future<int> flush() async {
     final summary = await ref.read(smsAutoImportProvider).syncPendingMessages();
-    return summary.imported + summary.needsReview + summary.dueDatesUpdated + summary.statementDaysUpdated;
+    return summary.imported +
+        summary.needsReview +
+        summary.dueDatesUpdated +
+        summary.statementDaysUpdated;
   }
 
   // Parser improvements must also help messages that were already placed in
@@ -4865,7 +4871,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       }
     }
     if (changed || dueDayUpdated || statementDayUpdated) {
-      if (dueDayUpdated || statementDayUpdated) await _clearUserCardsCacheForRef(ref);
+      if (dueDayUpdated || statementDayUpdated)
+        await _clearUserCardsCacheForRef(ref);
       ref.invalidate(needsReviewItemsProvider);
       ref.invalidate(needsReviewCountProvider);
       ref.invalidate(userCardsProvider);
@@ -5325,7 +5332,11 @@ class SmsAutoImportController {
           _ref.read(isOnlineProvider).valueOrNull == false) {
         break;
       }
-      final pending = intake.pending(namespace, readyOnly: true);
+      final pending = intake.pending(
+        namespace,
+        readyOnly: true,
+        billingPriority: true,
+      );
       if (pending.isEmpty) break;
       try {
         // Historical statement alerts must reach the server before the
@@ -5383,8 +5394,12 @@ class SmsAutoImportController {
       await Future<void>.delayed(Duration.zero);
     }
     if (_ref.read(cacheNamespaceProvider) == namespace &&
-        (imported > 0 || needsReview > 0 || dueDatesUpdated > 0 || statementDaysUpdated > 0)) {
-      if (dueDatesUpdated > 0 || statementDaysUpdated > 0) await _clearUserCardsCacheForRef(_ref);
+        (imported > 0 ||
+            needsReview > 0 ||
+            dueDatesUpdated > 0 ||
+            statementDaysUpdated > 0)) {
+      if (dueDatesUpdated > 0 || statementDaysUpdated > 0)
+        await _clearUserCardsCacheForRef(_ref);
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(myCardsProvider);
       _ref.invalidate(transactionsProvider);

@@ -139,6 +139,7 @@ test('syncs statement day from the historical statement alert date', async () =>
     body,
     observedAt: new Date('2026-09-05T10:00:00.000Z'),
     patternIssuerId: null,
+    asOf: new Date('2026-10-20T10:00:00.000Z'),
   });
 
   assert.equal(result.updated, true);
@@ -151,8 +152,54 @@ test('does not learn statement day from a purchase SMS', async () => {
   const result = await syncStatementDayFromSms({ query: async () => { throw new Error('should not query'); } }, 'user-1', {
     body: 'INR 500 spent on your credit card ending 8708 at SHOP on 05/09/2026.',
     observedAt: new Date('2026-09-05T10:00:00.000Z'),
+    asOf: new Date('2026-10-20T10:00:00.000Z'),
   });
   assert.equal(result, null);
+});
+
+test('does not lock the billing day from current or older-than-two-month alerts', async () => {
+  for (const observedAt of ['2026-10-05T10:00:00Z', '2026-07-05T10:00:00Z']) {
+    const result = await syncStatementDayFromSms({ query: async () => { throw new Error('should not query'); } }, 'user-1', {
+      body: 'Your credit card ending 8708 statement is generated.',
+      observedAt,
+      asOf: new Date('2026-10-20T10:00:00Z'),
+    });
+    assert.equal(result, null);
+  }
+});
+
+test('uses a printed prior-cycle statement date even when SMS arrives in the current month', async () => {
+  const client = fakeClient([[{ id: 'axis-card' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    return client.calls.length === 1
+      ? { rows: [{ id: 'axis-card' }] }
+      : { rows: [{ id: 'axis-card' }], rowCount: 1 };
+  };
+  const result = await syncStatementDayFromSms(client, 'user-1', {
+    body: 'Your Axis credit card ending 7105 statement was generated on 15-Sep-2026. Due on 02-Oct-2026.',
+    observedAt: new Date('2026-10-01T10:00:00Z'),
+    asOf: new Date('2026-10-20T10:00:00Z'),
+  });
+  assert.equal(result.updated, true);
+  assert.equal(result.detected.day, 15);
+});
+
+test('accepts a current-month statement only when the generation date is printed', async () => {
+  const client = fakeClient([[{ id: 'axis-card' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    return client.calls.length === 1
+      ? { rows: [{ id: 'axis-card' }] }
+      : { rows: [{ id: 'axis-card' }], rowCount: 1 };
+  };
+  const result = await syncStatementDayFromSms(client, 'user-1', {
+    body: 'Your Axis credit card ending 7105 statement generated on 15-Oct-2026. Due on 02-Nov-2026.',
+    observedAt: new Date('2026-10-16T10:00:00Z'),
+    asOf: new Date('2026-10-20T10:00:00Z'),
+  });
+  assert.equal(result.updated, true);
+  assert.equal(result.detected.day, 15);
 });
 
 test('category fallback recognises a fuel-station merchant when no rule exists', async () => {

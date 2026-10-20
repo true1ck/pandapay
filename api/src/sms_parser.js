@@ -128,34 +128,44 @@ function withAvailableBalance(fields, body) {
   return balance === null ? fields : { ...fields, availableBalanceInr: balance };
 }
 
-// A few issuers describe an account-to-account transfer as
-// "Sent ... From <bank> A/C *1797 To <recipient>". This is a money
-// movement, not merchant spend. The explicit source-account-then-recipient
-// shape is intentionally required so a normal "sent to merchant@upi from
-// account" alert still follows the purchase parser.
+function isExplicitOwnAccountTransfer(body) {
+  const text = String(body || '');
+  return /\b(?:self[ -]?transfer|own\s+(?:bank\s+)?account|between\s+(?:my|your)\s+(?:bank\s+)?accounts)\b/i.test(text)
+    || /\bfrom\s+your\b[\s\S]{0,100}\bto\s+your\b[\s\S]{0,80}\b(?:a\/?c\.?|account)\b/i.test(text);
+}
+
+// Some issuers describe an account payment as
+// "Sent ... From <bank> A/C *1797 To <recipient>". An own-account
+// destination is a transfer; an explicit person or merchant destination is
+// money out and counts as spend.
 function parseBuiltInAccountTransfer(sms) {
   const body = String(sms?.body || '');
-  if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_account_transfer_match' };
+  const ownTransfer = isExplicitOwnAccountTransfer(body);
+  if (!isSuccessfulSpend(body)) {
+    return { ok: false, reason: 'no_account_transfer_match' };
+  }
 
   const sourceMatch = body.match(
-    /\bfrom\b[\s\S]{0,80}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*\d{4}\b/i,
+    /\bfrom\b[\s\S]{0,80}?\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*\d{4}\b/i,
   );
-  if (!sourceMatch) return { ok: false, reason: 'no_account_transfer_match' };
+  if (!sourceMatch) return { ok: false, reason: 'no_transfer_source_account' };
 
   const afterSource = body.slice(sourceMatch.index + sourceMatch[0].length);
   const recipientMatch = afterSource.match(
-    /^\s*to\s+([A-Za-z][A-Za-z0-9 .&'\/-]{1,100}?)(?=\s+\b(?:on|ref(?:erence)?|txn(?:action)?|not\s+you|call|sms\s+block)\b|[.,;]|$)/i,
+    /^\s*to\s+([A-Za-z][A-Za-z0-9 .&'\/-]{1,100}?)(?=\s+\b(?:on|ref(?:erence)?|txn(?:action)?|not\s+you|call|sms\s+block)\b|\s+[*xX-]*\d{4}\b|[.,;]|$)/i,
   );
-  if (!recipientMatch) return { ok: false, reason: 'no_account_transfer_match' };
+  if (!recipientMatch && !/\bself[ -]?transfer\b/i.test(body)) {
+    return { ok: false, reason: 'no_transfer_destination' };
+  }
 
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
-  if (!amountMatch) return { ok: false, reason: 'no_account_transfer_match' };
+  if (!amountMatch) return { ok: false, reason: 'no_transfer_amount' };
   const accountLast4 = extractAccountLast4(body);
-  if (!accountLast4) return { ok: false, reason: 'no_account_transfer_match' };
+  if (!accountLast4) return { ok: false, reason: 'no_transfer_source_suffix' };
 
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
-  const transferParty = recipientMatch[1].trim();
+  const transferParty = recipientMatch?.[1]?.trim() || 'own account';
 
   return {
     ok: true,
@@ -165,12 +175,12 @@ function parseBuiltInAccountTransfer(sms) {
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
       merchant: 'Transfer to ' + transferParty,
       transferParty,
-      transferKind: 'account_to_account',
+      transferKind: ownTransfer ? 'account_to_account' : 'payment_to_person',
       accountLast4,
       ...(dateMatch ? { date: dateMatch[1] } : {}),
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       instrument: 'upi_bank',
-      entryKind: 'transfer',
+      entryKind: ownTransfer ? 'transfer' : 'spend',
     }, body),
   };
 }
@@ -211,12 +221,22 @@ function parseBuiltInAccountCredit(sms) {
     return { ok: false, reason: 'balance_only_alert' };
   }
 
-  const accountLast4 = extractAccountLast4(body);
+  const ownTransfer = isExplicitOwnAccountTransfer(body);
+  const accountReferences = body.match(/\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*\d{4}\b/gi) || [];
+  if (!ownTransfer && accountReferences.length >= 2) {
+    return { ok: false, reason: 'unverified_incoming_transfer' };
+  }
+  const destinationAccount = body.match(/\bto\s+your\b[\s\S]{0,70}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*(\d{4})\b/i);
+  const accountLast4 = ownTransfer && destinationAccount
+    ? destinationAccount[1]
+    : extractAccountLast4(body);
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?|utr)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
   const partyMatch = body.match(/\b(?:from|by|via)\s+([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:on|for|ref(?:erence)?|txn|utr|a\/?c\.?|account|bal(?:ance)?|avl|available)\b|[.,;]|$)/i);
   const lower = body.toLowerCase();
-  const merchant = /\bsalary\b/i.test(body)
+  const merchant = ownTransfer
+    ? 'Transfer between own accounts'
+    : /\bsalary\b/i.test(body)
     ? 'Salary'
     : /\bcashback\b/i.test(body)
       ? 'Cashback'
@@ -235,7 +255,7 @@ function parseBuiltInAccountCredit(sms) {
       ...(dateMatch ? { date: dateMatch[1] } : {}),
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       instrument: /\b(?:wallet|cashback)\b/i.test(lower) ? 'wallet' : 'upi_bank',
-      entryKind: 'income',
+      entryKind: ownTransfer ? 'transfer' : 'income',
     }, body),
   };
 }
@@ -299,6 +319,16 @@ function parseBuiltInAccountDebit(sms) {
     return { ok: false, reason: 'no_account_debit_match' };
   }
 
+  if (/\bfrom\b[\s\S]{0,80}\b(?:a\/?c\.?|account)\b[\s\S]{0,80}\bto\s+[A-Za-z]/i.test(body)) {
+    return { ok: false, reason: 'unverified_account_transfer' };
+  }
+
+  // Without a beneficiary or an explicit own-account destination, the debit
+  // could be a purchase, loan, transfer, or cash movement. Ask for review.
+  const payeeMatch = body.match(/\b(?:at|to|for|fvg|beneficiary|payee)\s+([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80})/i);
+  if (!payeeMatch || /^(?:rs|inr|rupees?)(?:\b|$)/i.test(payeeMatch[1])) {
+    return { ok: false, reason: 'ambiguous_account_debit' };
+  }
   const accountLast4 = extractAccountLast4(body);
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_account_debit_match' };
@@ -359,13 +389,19 @@ function isSuccessfulSpend(body) {
 function parseBuiltInCardBillPayment(sms) {
   const body = String(sms?.body || '');
   if (isSecurityOrOtpMessage(body)) return { ok: false, reason: 'security_message' };
+  if (/\b(?:payment|amount|minimum)\s+due\b|\bdue\s+on\b/i.test(body)
+      && !/\b(?:paid|payment)\s+(?:successfully|completed)\b|\bpayment\s+received\b/i.test(body)) {
+    return { ok: false, reason: 'card_bill_reminder' };
+  }
   const lower = body.toLowerCase();
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_card_bill_payment_match' };
 
   const towardCard = /\b(?:payment|amount)\b[\s\S]{0,90}\b(?:received|credited)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\bcredit\s+card\b/i.test(body)
     || /\b(?:payment|paid|debited|debit)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\b(?:your\s+)?credit\s+card(?:\s+bill|\s+account)?\b/i.test(body)
-    || /\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid)\b/i.test(body);
+    || /\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid|successful|completed)\b/i.test(body)
+    || /\b(?:paid|payment|debited)\b[\s\S]{0,90}\b(?:to|for)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card(?:\s+bill)?\b/i.test(body)
+    || /\b(?:payment|bill)\b[\s\S]{0,60}\b(?:for|on|of)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card\b[\s\S]{0,90}\b(?:paid|received|successful|completed)\b/i.test(body);
   if (!towardCard) return { ok: false, reason: 'no_card_bill_payment_match' };
 
   const last4Match = body.match(/\b(?:credit\s+card|card)\b[\s\S]{0,50}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|last\s*4|no\.?)\D{0,5}(\d{4})\b/i);
@@ -382,6 +418,33 @@ function parseBuiltInCardBillPayment(sms) {
       merchant: 'Credit card bill payment',
       instrument,
       entryKind: 'transfer',
+    }, body),
+  };
+}
+
+function parseBuiltInNonSpendDebit(sms) {
+  const body = String(sms?.body || '');
+  if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_non_spend_debit' };
+  const cashWithdrawal = /\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn)\b/i.test(body);
+  const investment = !cashWithdrawal
+    && /\b(?:sip|mutual\s+fund)\b/i.test(body)
+    && /\b(?:debited|paid|transferred|invested)\b/i.test(body);
+  if (!cashWithdrawal && !investment) return { ok: false, reason: 'no_non_spend_debit' };
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_non_spend_amount' };
+  const last4Match = body.match(/\b(?:card)\b[\s\S]{0,45}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|last\s*4|no\.?)\D{0,5}(\d{4})\b/i);
+  const accountLast4 = extractAccountLast4(body);
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: cashWithdrawal ? 'builtin_cash_withdrawal' : 'builtin_investment_debit',
+    fields: withAvailableBalance({
+      amountInr: Number(amountMatch[1].replace(/,/g, '')),
+      merchant: cashWithdrawal ? 'Cash withdrawal' : 'Investment contribution',
+      ...(last4Match ? { last4: last4Match[1] } : {}),
+      ...(accountLast4 ? { accountLast4 } : {}),
+      instrument: cashWithdrawal && last4Match ? 'debit_card' : 'upi_bank',
+      entryKind: cashWithdrawal ? 'transfer' : 'investment',
     }, body),
   };
 }
@@ -673,6 +736,8 @@ function parseSmsAgainstPatterns(patterns, sms) {
   // receipt is intentionally retained as a non-spend transfer.
   const billPayment = parseBuiltInCardBillPayment(sms);
   if (billPayment.ok) return billPayment;
+  const nonSpendDebit = parseBuiltInNonSpendDebit(sms);
+  if (nonSpendDebit.ok) return nonSpendDebit;
   const accountCredit = parseBuiltInAccountCredit(sms);
   if (accountCredit.ok) return accountCredit;
   if (isRejectedTransaction(sms?.body)) {
@@ -844,11 +909,13 @@ module.exports = {
   parseSmsAgainstPatterns,
   parseConservativeBankSpend,
   parseBuiltInCardBillPayment,
+  parseBuiltInAccountTransfer,
   parseBuiltInAccountCredit,
   senderMatches,
   redactSmsShape,
   parseTransactionDate,
   isAmbiguousAccountDebit,
+  isExplicitOwnAccountTransfer,
   KNOWN_FIELDS,
   extractAvailableBalance,
   isBankAccountMessage,

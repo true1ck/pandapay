@@ -144,3 +144,13 @@ test('does not learn a statement day from an ordinary card purchase', () => {
     null,
   );
 });
+
+test('does not treat a due reminder or outstanding amount as statement generation', () => {
+  for (const body of [
+    'Your credit card ending 7105 payment is due by 20-Oct-2026. Total amount due Rs 900.',
+    'Your credit card ending 7105 statement amount due Rs 900. Pay by 20-Oct-2026.',
+  ]) {
+    assert.equal(isCreditCardStatementAlert(body), false);
+    assert.equal(extractStatementDate(body, new Date('2026-10-18T10:00:00Z')), null);
+  }
+});

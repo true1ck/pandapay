@@ -214,6 +214,25 @@ test('credit-card bill payment receipts become transfers, not spending', () => {
   assert.equal(result.fields.entryKind, 'transfer');
 });
 
+test('paid card bills remain transfers while purchases on the same card remain spend', () => {
+  const payments = [
+    'Your Axis Bank Credit Card bill of Rs. 80000 paid successfully for card ending 2006.',
+    'Rs. 80000 debited from your account for Axis Bank Flipkart Credit Card ending 2006.',
+    'Payment of INR 80000 to your credit card ending 2006 completed.',
+  ];
+  for (const body of payments) {
+    const result = parseSmsAgainstPatterns([], { sender: 'AXISBK', body });
+    assert.equal(result.ok, true, body);
+    assert.equal(result.fields.entryKind, 'transfer', body);
+  }
+  const purchase = parseSmsAgainstPatterns([], {
+    sender: 'AXISBK',
+    body: 'Rs. 80000 spent on your Axis Bank Flipkart Credit Card ending 2006 at FLIPKART INTERNET.',
+  });
+  assert.equal(purchase.ok, true);
+  assert.equal(purchase.fields.entryKind, 'spend');
+});
+
 test('bank-account credits become incoming income entries', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'HDFCBK',
@@ -392,6 +411,17 @@ test('ATM withdrawal alerts are debit-card transactions, not credit-card purchas
   assert.equal(result.fields.amountInr, 20000);
   assert.equal(result.fields.instrument, 'debit_card');
   assert.equal(result.fields.last4, '8406');
+  assert.equal(result.fields.entryKind, 'transfer');
+});
+
+test('a posted mutual fund SIP is an investment, not consumption', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Your HDFC Bank A/c *1797 was debited by Rs.5000 for Mutual Fund SIP on 13/10/26. Ref 131234538577',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'investment');
+  assert.equal(result.fields.accountLast4, '1797');
 });
 
 test('explicit debit-card purchase alerts stay debit-card transactions', () => {
@@ -428,27 +458,19 @@ test('built-in UPI fallback stops merchant extraction before the source-account 
   assert.equal(result.fields.instrument, 'upi_bank');
 });
 
-test('account debit without explicit UPI is imported automatically as bank spend', () => {
+test('account debit without a payee needs review instead of inflating spending', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'UBIN-BANK',
     body: 'A/c *8565 Debited for Rs:2.00 on 08-07-2025 12:50:01 by Mob Bk ref no 4987654321 Avl Bal Rs 900.00',
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.parserKind, 'builtin_account_debit');
-  assert.equal(result.fields.amountInr, 2);
-  assert.equal(result.fields.merchant, 'Bank transfer');
-  assert.equal(result.fields.instrument, 'upi_bank');
-  assert.equal(result.fields.accountLast4, '8565');
-  assert.equal(result.fields.entryKind, 'spend');
-  assert.equal(result.fields.reference, '4987654321');
-  assert.equal(result.fields.availableBalanceInr, 900);
+  assert.equal(result.ok, false);
 });
 
-test('account-to-account transfer is recorded as a transfer, not spending', () => {
+test('explicit own-account transfer is recorded as a transfer, not spending', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'VM-HDFCBK-T',
-    body: 'Sent Rs.5000.00 From HDFC Bank A/C *1797 To SUJAY SHANTARAM KURTIKAR On 13/10/26 Ref 131234538577 Not You?',
+    body: 'Sent Rs.5000.00 From your HDFC Bank A/C *1797 To your Canara Bank A/C *5702 On 13/10/26 Ref 131234538577 Not You?',
   });
 
   assert.equal(result.ok, true);
@@ -457,10 +479,30 @@ test('account-to-account transfer is recorded as a transfer, not spending', () =
   assert.equal(result.fields.instrument, 'upi_bank');
   assert.equal(result.fields.entryKind, 'transfer');
   assert.equal(result.fields.accountLast4, '1797');
-  assert.equal(result.fields.transferParty, 'SUJAY SHANTARAM KURTIKAR');
+  assert.equal(result.fields.transferParty, 'your Canara Bank A/C');
   assert.equal(result.fields.transferKind, 'account_to_account');
   assert.equal(result.fields.date, '13/10/26');
   assert.equal(result.fields.reference, '131234538577');
+});
+
+test('incoming leg of an own-account transfer is not income', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'CANARA',
+    body: 'Your Canara Bank account *5702 was credited with Rs.5000 from your HDFC Bank account *1797 to your Canara Bank account *5702. Ref 131234538577',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.accountLast4, '5702');
+});
+
+test('a payment to a named person remains money out, not a self-transfer', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Sent Rs.5000.00 From HDFC Bank A/C *1797 To ANOTHER PERSON On 13/10/26 Ref 131234538577',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'spend');
+  assert.equal(result.fields.transferKind, 'payment_to_person');
 });
 
 test('named mobile-banking beneficiary debit is imported as a cardless spend', () => {
@@ -508,7 +550,7 @@ test('transaction matrix auto-classifies bank, UPI, debit-card and credit-card a
       parserKind: undefined,
     },
     {
-      body: 'Sent Rs.5000.00 From HDFC Bank A/C *1797 To SUJAY SHANTARAM KURTIKAR On 13/10/26 Ref 131234538577',
+      body: 'Sent Rs.5000.00 From your HDFC Bank A/C *1797 To your Canara Bank A/C *5702 On 13/10/26 Ref 131234538577',
       instrument: 'upi_bank',
       entryKind: 'transfer',
       parserKind: 'builtin_account_transfer',

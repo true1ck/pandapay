@@ -400,12 +400,9 @@ class LocalSmsParser {
         _re(
           r'\b(?:credit\s+card|card\b[\s\S]{0,45}\b(?:ending|last\s*4|no\.?|number|xx|x{2,}|\*{2,})\s*[:#.-]?\s*\d{4})\b',
         ).hasMatch(body) &&
-        (_re(
-              r'\b(?:e[- ]?statement|statement|bill)\b[\s\S]{0,70}\b(?:generated|ready|available|issued|created|raised|prepared)\b',
-            ).hasMatch(body) ||
-            _re(
-              r'\b(?:total|minimum|amount|payment|bill)\s+(?:amount\s+)?due\b|\b(?:statement|bill)\b[\s\S]{0,60}\b(?:payable|pay\s+by|due)\b',
-            ).hasMatch(body));
+        _re(
+          r'\b(?:e[- ]?statement|statement|bill)\b[\s\S]{0,70}\b(?:generated|ready|available|issued|created|raised|prepared)\b',
+        ).hasMatch(body);
     if (statementAlert) {
       for (final phrase in [
         r'\b(?:statement|e[- ]?statement|bill)\b[\s\S]{0,45}?\b(?:generated|issued|created|raised|prepared|dated|date)\b\s*(?:on|is|:|-)?\s*',

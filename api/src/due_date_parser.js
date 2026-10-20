@@ -132,9 +132,9 @@ function isCreditCardStatementAlert(body) {
   if (!hasCardContext) return false;
 
   const generated = /\b(?:e[- ]?statement|statement|bill)\b[\s\S]{0,70}\b(?:generated|ready|available|issued|created|raised|prepared)\b/i.test(text);
-  const amountDue = /\b(?:total|minimum|amount|payment|bill)\s+(?:amount\s+)?due\b/i.test(text)
-    || /\b(?:statement|bill)\b[\s\S]{0,60}\b(?:payable|pay\s+by|due)\b/i.test(text);
-  return generated || amountDue;
+  // A due reminder or outstanding-balance notice is not evidence of when
+  // the statement was generated, even if it repeats the bill amount.
+  return generated;
 }
 
 function extractExplicitStatementDate(body) {

@@ -79,4 +79,35 @@ void main() {
     expect(intake.pending('a'), hasLength(1));
     expect(intake.pending('b'), hasLength(1));
   });
+  test(
+    'billing upload visits previous month then two months back before other alerts',
+    () {
+      final ordered = SmsIntakeRepository(
+        db,
+        now: () => DateTime(2026, 10, 20),
+      );
+      for (final (body, date) in [
+        ('old cycle', DateTime(2026, 7, 15)),
+        ('august statement', DateTime(2026, 8, 15)),
+        ('september statement', DateTime(2026, 9, 15)),
+        ('october payment', DateTime(2026, 10, 2)),
+        ('october statement generated', DateTime(2026, 10, 15)),
+      ]) {
+        ordered.capture(
+          'a',
+          QueuedSms(sender: 'VM-AXIS', body: body, receivedAt: date),
+        );
+      }
+      expect(
+        ordered.pending('a', billingPriority: true).map((e) => e.message.body),
+        [
+          'september statement',
+          'august statement',
+          'october statement generated',
+          'october payment',
+          'old cycle',
+        ],
+      );
+    },
+  );
 }

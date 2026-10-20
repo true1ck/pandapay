@@ -124,24 +124,41 @@ class SmsIntakeRepository {
     String namespace, {
     int limit = 200,
     bool readyOnly = false,
-  }) => database.db
-      .select(
-        'SELECT * FROM sms_intake WHERE namespace=?${readyOnly ? ' AND next_attempt<=?' : ''} ORDER BY received_at, id LIMIT ?',
-        [namespace, if (readyOnly) now().millisecondsSinceEpoch, limit],
-      )
-      .map(
-        (r) => SmsIntakeEntry(
-          r['id'] as String,
-          QueuedSms(
-            sender: r['sender'] as String,
-            body: r['body'] as String,
-            receivedAt: DateTime.fromMillisecondsSinceEpoch(
-              r['received_at'] as int,
+    bool billingPriority = false,
+  }) {
+    final today = now();
+    final previousStart = DateTime(today.year, today.month - 1);
+    final currentStart = DateTime(today.year, today.month);
+    final olderStart = DateTime(today.year, today.month - 2);
+    return database.db
+        .select(
+          'SELECT * FROM sms_intake WHERE namespace=?${readyOnly ? ' AND next_attempt<=?' : ''} '
+        '${billingPriority ? "ORDER BY CASE WHEN received_at>=? AND received_at<? THEN 0 WHEN received_at>=? AND received_at<? THEN 1 ELSE 2 END, CASE WHEN lower(body) LIKE '%statement%generated%' OR lower(body) LIKE '%statement%ready%' OR lower(body) LIKE '%statement%available%' OR lower(body) LIKE '%bill%generated%' THEN 0 ELSE 1 END, received_at, id" : 'ORDER BY received_at, id'} LIMIT ?',
+          [
+            namespace,
+            if (readyOnly) today.millisecondsSinceEpoch,
+            if (billingPriority) previousStart.millisecondsSinceEpoch,
+            if (billingPriority) currentStart.millisecondsSinceEpoch,
+            if (billingPriority) olderStart.millisecondsSinceEpoch,
+            if (billingPriority) previousStart.millisecondsSinceEpoch,
+            limit,
+          ],
+        )
+        .map(
+          (r) => SmsIntakeEntry(
+            r['id'] as String,
+            QueuedSms(
+              sender: r['sender'] as String,
+              body: r['body'] as String,
+              receivedAt: DateTime.fromMillisecondsSinceEpoch(
+                r['received_at'] as int,
+              ),
             ),
           ),
-        ),
-      )
-      .toList();
+        )
+        .toList();
+  }
+
   void acknowledge(String ns, String id) {
     database.db.execute('SAVEPOINT sms_ack');
     try {

@@ -4826,6 +4826,7 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
       });
       const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
         body,
+        observedAt: occurred,
         patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
         explicitUserCardId: userCardId,
       });
@@ -5053,8 +5054,8 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           ? detected.date.getMonth() + 1
           : Number(parts.find((part) => part.type === 'month')?.value);
         const distance = nowMonthIndex - (year * 12 + month - 1);
-        if (distance === 1 || distance === 2) {
-          statementCandidates.push({ index: i, distance });
+        if (distance === 1 || distance === 2 || (distance === 0 && detected.explicit)) {
+          statementCandidates.push({ index: i, distance, explicit: detected.explicit, receivedAt: occurred.getTime() });
         }
       }
       statementCandidates.sort((a, b) => {
@@ -5064,6 +5065,8 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
               : distance === 0 ? 3 : 4;
         return rank(a.distance) - rank(b.distance)
           || a.distance - b.distance
+          || Number(b.explicit) - Number(a.explicit)
+          || a.receivedAt - b.receivedAt
           || a.index - b.index;
       });
       for (const candidate of statementCandidates) {
@@ -5105,6 +5108,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
         const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
           body,
+          observedAt: occurred,
           patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
           explicitUserCardId: userCardId,
         });

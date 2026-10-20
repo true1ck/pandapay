@@ -153,7 +153,7 @@ async function resolveUserCardForImport(client, userId, {
  * an already-selected card in the UI, but it must not be allowed to cross the
  * credit/debit boundary established by the SMS itself.
  */
-async function userCardMatchesInstrument(client, userId, userCardId, instrument) {
+async function userCardMatchesInstrument(client, userId, userCardId, instrument, smsLast4 = null) {
   const cardType = cardTypeForInstrument(instrument);
   if (!cardType || !userCardId) return true;
   const result = await client.query(
@@ -161,8 +161,9 @@ async function userCardMatchesInstrument(client, userId, userCardId, instrument)
        FROM user_cards uc
        JOIN card_products cp ON cp.id = uc.card_product_id
       WHERE uc.id = $1 AND uc.profile_id = $2 AND uc.is_archived = false
-        AND cp.card_type::text = $3::text`,
-    [userCardId, userId, cardType]
+        AND cp.card_type::text = $3::text
+        AND ($4::text IS NULL OR uc.last4 = $4::text)`,
+    [userCardId, userId, cardType, smsLast4]
   );
   return result.rows.length === 1;
 }
@@ -218,12 +219,28 @@ async function syncDueDayFromSms(client, userId, {
   body,
   patternIssuerId,
   explicitUserCardId,
+  observedAt,
+  asOf = new Date(),
 }) {
   const detected = extractDueDate(body);
   if (!detected) return null;
+  if (observedAt) {
+    const observed = new Date(observedAt);
+    const today = new Date(asOf);
+    if (Number.isNaN(observed.getTime()) || Number.isNaN(today.getTime())) return null;
+    const monthIndex = (date) => {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit',
+      }).formatToParts(date);
+      return Number(parts.find((part) => part.type === 'year')?.value) * 12
+        + Number(parts.find((part) => part.type === 'month')?.value);
+    };
+    const distance = monthIndex(today) - monthIndex(observed);
+    if (distance < 0 || distance > 2) return null;
+  }
 
   const card = explicitUserCardId
-    ? (await userCardMatchesInstrument(client, userId, explicitUserCardId, 'credit_card')
+    ? (await userCardMatchesInstrument(client, userId, explicitUserCardId, 'credit_card', extractLast4(body))
       ? { userCardId: explicitUserCardId, basis: 'explicit-user-card' }
       : null)
     : await resolveUserCardForImport(client, userId, {
@@ -259,12 +276,31 @@ async function syncStatementDayFromSms(client, userId, {
   patternIssuerId,
   observedAt,
   explicitUserCardId,
+  asOf = new Date(),
 }) {
+  // Only the two completed billing cycles are evidence for a recurring day.
+  // In particular, a current-month live alert must not win before a newly
+  // granted inbox permission has supplied the previous month's history.
+  const observed = observedAt && new Date(observedAt);
+  const today = new Date(asOf);
+  if (!observed || Number.isNaN(observed.getTime()) || Number.isNaN(today.getTime())) return null;
+  const monthInIndia = (date) => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit',
+    }).formatToParts(date);
+    return Number(parts.find((part) => part.type === 'year')?.value) * 12
+      + Number(parts.find((part) => part.type === 'month')?.value);
+  };
   const detected = extractStatementDate(body, observedAt);
   if (!detected) return null;
+  const evidenceMonth = detected.explicit
+    ? detected.date.getFullYear() * 12 + detected.date.getMonth() + 1
+    : monthInIndia(observed);
+  const monthsAgo = monthInIndia(today) - evidenceMonth;
+  if (monthsAgo !== 1 && monthsAgo !== 2 && !(monthsAgo === 0 && detected.explicit)) return null;
 
   const card = explicitUserCardId
-    ? (await userCardMatchesInstrument(client, userId, explicitUserCardId, 'credit_card')
+    ? (await userCardMatchesInstrument(client, userId, explicitUserCardId, 'credit_card', extractLast4(body))
       ? { userCardId: explicitUserCardId, basis: 'explicit-user-card' }
       : null)
     : await resolveUserCardForImport(client, userId, {
