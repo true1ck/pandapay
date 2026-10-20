@@ -59,6 +59,7 @@ TransactionEntry _txn({
   String? categoryName,
   String userCardId = 'uc1',
   TxnEntryKind entryKind = TxnEntryKind.spend,
+  String source = 'manual',
 }) {
   return TransactionEntry(
     id: id,
@@ -69,7 +70,7 @@ TransactionEntry _txn({
     categoryName: categoryName,
     userCardId: userCardId,
     entryKind: entryKind,
-    source: 'manual',
+    source: source,
     status: 'active',
   );
 }
@@ -194,6 +195,71 @@ void main() {
     expect(find.text('−₹1,250'), findsOneWidget);
     expect(find.byIcon(Icons.arrow_downward_rounded), findsOneWidget);
     expect(find.byIcon(Icons.arrow_upward_rounded), findsOneWidget);
+  });
+
+  testWidgets('compacts large summary totals to keep both metrics visible', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'income',
+        amount: Money.fromRupees(3388662.84),
+        occurredAt: DateTime.now(),
+        entryKind: TxnEntryKind.income,
+      ),
+      _txn(
+        id: 'spend',
+        amount: Money.fromRupees(4008896.21),
+        occurredAt: DateTime.now(),
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    expect(find.text('+₹33.89L'), findsOneWidget);
+    expect(find.text('−₹40.09L'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows the transaction time and identifies SMS timestamps', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'sms-time',
+        amount: Money.fromRupees(1200),
+        occurredAt: DateTime(2026, 10, 20, 15, 20),
+        source: 'sms',
+        merchantName: 'Timestamped Shop',
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    expect(find.textContaining('3:20 PM · SMS'), findsOneWidget);
+  });
+
+  testWidgets('offers useful date presets for faster activity tracking', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'monthly',
+        amount: Money.fromRupees(500),
+        occurredAt: DateTime.now(),
+      ),
+    ]);
+    await _pump(tester, repo: repo, cards: const []);
+
+    await tester.tap(find.text('Date range'));
+    await tester.pumpAndSettle();
+    expect(find.text('This month'), findsOneWidget);
+    expect(find.text('Last month'), findsOneWidget);
+    expect(find.text('Last 90 days'), findsOneWidget);
+
+    await tester.tap(find.text('This month'));
+    await tester.pumpAndSettle();
+    expect(find.text('This month'), findsOneWidget);
+    expect(repo.lastFetchArgs!.first['from'], isNotNull);
+    expect(repo.lastFetchArgs!.first['to'], isNotNull);
   });
 
   testWidgets('tapping a transaction navigates to its detail route', (

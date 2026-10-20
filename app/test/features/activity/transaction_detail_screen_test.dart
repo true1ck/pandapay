@@ -207,7 +207,9 @@ void main() {
     );
     await _pump(tester, repo: repo);
 
-    await tester.tap(find.text('Edit transaction'));
+    final editButton = find.text('Edit transaction');
+    await tester.ensureVisible(editButton);
+    await tester.tap(editButton);
     await tester.pumpAndSettle();
 
     expect(find.text('edit screen'), findsOneWidget);

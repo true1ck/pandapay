@@ -70,7 +70,7 @@ class ActivityScreen extends ConsumerWidget {
               ),
               error: (err, _) => ErrorState(
                 message: userFacingErrorMessage(err),
-              onRetry: () => ref.invalidate(activityTransactionsProvider),
+                onRetry: () => ref.invalidate(activityTransactionsProvider),
               ),
               data: (entries) {
                 if (entries.isEmpty) {
@@ -86,7 +86,9 @@ class ActivityScreen extends ConsumerWidget {
                 }
                 final grouped = _groupByDay(entries);
                 final incomingEntries = entries.where(_isMoneyInEntry).toList();
-                final outgoingEntries = entries.where(_isMoneyOutEntry).toList();
+                final outgoingEntries = entries
+                    .where(_isMoneyOutEntry)
+                    .toList();
                 final totalIncoming = incomingEntries.fold<Money>(
                   const Money.zero(),
                   (a, e) => a + e.amount,
@@ -105,6 +107,7 @@ class ActivityScreen extends ConsumerWidget {
                   ),
                   children: [
                     _SummaryCard(
+                      title: _summaryTitle(filter),
                       totalIncoming: totalIncoming,
                       totalOutgoing: totalOutgoing,
                       count: entries.length,
@@ -181,6 +184,13 @@ class ActivityScreen extends ConsumerWidget {
     return '${day.day} ${months[day.month - 1]} ${day.year}';
   }
 
+  static String _timeLabel(BuildContext context, DateTime timestamp) {
+    return MaterialLocalizations.of(context).formatTimeOfDay(
+      TimeOfDay.fromDateTime(timestamp),
+      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+    );
+  }
+
   static bool _isMoneyInEntry(TransactionEntry entry) =>
       entry.status == 'active' &&
       entry.entryKind == TxnEntryKind.income &&
@@ -193,13 +203,18 @@ class ActivityScreen extends ConsumerWidget {
       entry.amount.paise > 0;
 }
 
+String _summaryTitle(ActivityFilter filter) {
+  if (filter.from == null && filter.to == null) return 'All activity';
+  return 'Activity · ${_dateFilterLabel(filter)}';
+}
+
 class _DayGroup {
   final DateTime day;
   final List<TransactionEntry> entries;
   const _DayGroup(this.day, this.entries);
 }
 
-/// D1's filter state — card + category + date range. A plain immutable
+/// D1's filter state — card + category + date preset/range. A plain immutable
 /// value class over a StateProvider, same shape as other multi-field
 /// filter state in this app (none yet reused a common pattern, kept local).
 class ActivityFilter {
@@ -216,6 +231,7 @@ class ActivityFilter {
   /// transactions.
   final String? query;
   final _ActivityTypeFilter type;
+  final _ActivityDatePreset datePreset;
 
   const ActivityFilter({
     this.cardId,
@@ -225,6 +241,7 @@ class ActivityFilter {
     this.to,
     this.query,
     this.type = _ActivityTypeFilter.all,
+    this.datePreset = _ActivityDatePreset.allTime,
   });
 
   bool get isActive =>
@@ -246,15 +263,19 @@ class ActivityFilter {
     DateTime? Function()? to,
     String? Function()? query,
     _ActivityTypeFilter? type,
+    _ActivityDatePreset? datePreset,
   }) {
     return ActivityFilter(
       cardId: cardId != null ? cardId() : this.cardId,
       categoryId: categoryId != null ? categoryId() : this.categoryId,
-      subcategoryId: subcategoryId != null ? subcategoryId() : this.subcategoryId,
+      subcategoryId: subcategoryId != null
+          ? subcategoryId()
+          : this.subcategoryId,
       from: from != null ? from() : this.from,
       to: to != null ? to() : this.to,
       query: query != null ? query() : this.query,
       type: type ?? this.type,
+      datePreset: datePreset ?? this.datePreset,
     );
   }
 }
@@ -307,6 +328,64 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
 
 enum _ActivityTypeFilter { all, moneyIn, moneyOut, transfers, investments }
 
+enum _ActivityDatePreset {
+  allTime,
+  today,
+  thisWeek,
+  thisMonth,
+  lastMonth,
+  last30Days,
+  last90Days,
+  thisYear,
+  custom,
+}
+
+extension on _ActivityDatePreset {
+  String get label => switch (this) {
+    _ActivityDatePreset.allTime => 'All time',
+    _ActivityDatePreset.today => 'Today',
+    _ActivityDatePreset.thisWeek => 'This week',
+    _ActivityDatePreset.thisMonth => 'This month',
+    _ActivityDatePreset.lastMonth => 'Last month',
+    _ActivityDatePreset.last30Days => 'Last 30 days',
+    _ActivityDatePreset.last90Days => 'Last 90 days',
+    _ActivityDatePreset.thisYear => 'This year',
+    _ActivityDatePreset.custom => 'Custom range',
+  };
+
+  DateTimeRange? range(DateTime now) {
+    final today = DateTime(now.year, now.month, now.day);
+    return switch (this) {
+      _ActivityDatePreset.allTime || _ActivityDatePreset.custom => null,
+      _ActivityDatePreset.today => DateTimeRange(start: today, end: today),
+      _ActivityDatePreset.thisWeek => DateTimeRange(
+        start: today.subtract(Duration(days: today.weekday - 1)),
+        end: today,
+      ),
+      _ActivityDatePreset.thisMonth => DateTimeRange(
+        start: DateTime(today.year, today.month),
+        end: today,
+      ),
+      _ActivityDatePreset.lastMonth => DateTimeRange(
+        start: DateTime(today.year, today.month - 1),
+        end: DateTime(today.year, today.month, 0),
+      ),
+      _ActivityDatePreset.last30Days => DateTimeRange(
+        start: today.subtract(const Duration(days: 29)),
+        end: today,
+      ),
+      _ActivityDatePreset.last90Days => DateTimeRange(
+        start: today.subtract(const Duration(days: 89)),
+        end: today,
+      ),
+      _ActivityDatePreset.thisYear => DateTimeRange(
+        start: DateTime(today.year),
+        end: today,
+      ),
+    };
+  }
+}
+
 extension on _ActivityTypeFilter {
   String get label => switch (this) {
     _ActivityTypeFilter.all => 'All activity',
@@ -319,10 +398,12 @@ extension on _ActivityTypeFilter {
   bool matches(TransactionEntry entry) => switch (this) {
     _ActivityTypeFilter.all => true,
     _ActivityTypeFilter.moneyIn => entry.entryKind == TxnEntryKind.income,
-    _ActivityTypeFilter.moneyOut => entry.entryKind == TxnEntryKind.spend ||
-        entry.entryKind == TxnEntryKind.investment,
+    _ActivityTypeFilter.moneyOut =>
+      entry.entryKind == TxnEntryKind.spend ||
+          entry.entryKind == TxnEntryKind.investment,
     _ActivityTypeFilter.transfers => entry.entryKind == TxnEntryKind.transfer,
-    _ActivityTypeFilter.investments => entry.entryKind == TxnEntryKind.investment,
+    _ActivityTypeFilter.investments =>
+      entry.entryKind == TxnEntryKind.investment,
   };
 }
 
@@ -418,7 +499,9 @@ class _FilterRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
-    final topLevelCategories = categories.where((c) => !c.isSubcategory).toList();
+    final topLevelCategories = categories
+        .where((c) => !c.isSubcategory)
+        .toList();
     final subcategories = categories.where((c) => c.isSubcategory).toList();
 
     return SizedBox(
@@ -544,25 +627,99 @@ class _FilterRow extends ConsumerWidget {
           ),
           const SizedBox(width: AppSpace.xs),
           _FilterChipButton(
-            label: filter.from == null && filter.to == null
-                ? 'Date range'
-                : '${filter.from?.toString().split(' ').first ?? '…'} – ${filter.to?.toString().split(' ').first ?? '…'}',
+            label: _dateFilterLabel(filter),
             active: filter.from != null || filter.to != null,
             onTap: () async {
-              final range = await showDateRangePicker(
+              final picked = await showModalBottomSheet<_ActivityDatePreset>(
                 context: context,
-                firstDate: DateTime.now().subtract(
-                  const Duration(days: 365 * 3),
+                builder: (sheetContext) => SafeArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpace.lg,
+                            AppSpace.sm,
+                            AppSpace.lg,
+                            AppSpace.xs,
+                          ),
+                          child: Text(
+                            'Track activity by time',
+                            style: BambooFonts.heading(
+                              17,
+                              color: BambooInk.ink900,
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpace.lg,
+                            0,
+                            AppSpace.lg,
+                            AppSpace.sm,
+                          ),
+                          child: Text(
+                            'Choose a quick period or set your own dates.',
+                            style: BambooFonts.ui(13, color: BambooInk.ink500),
+                          ),
+                        ),
+                        for (final preset in _ActivityDatePreset.values)
+                          ListTile(
+                            leading: Icon(
+                              _datePresetIcon(preset),
+                              color: preset == filter.datePreset
+                                  ? BambooInk.jade
+                                  : BambooInk.ink500,
+                            ),
+                            title: Text(
+                              preset.label,
+                              style: BambooFonts.ui(
+                                14,
+                                weight: FontWeight.w600,
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                            selected: preset == filter.datePreset,
+                            selectedTileColor: BambooInk.paperMuted,
+                            onTap: () => Navigator.of(sheetContext).pop(preset),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-                lastDate: DateTime.now(),
-                initialDateRange: filter.from != null && filter.to != null
-                    ? DateTimeRange(start: filter.from!, end: filter.to!)
-                    : null,
               );
-              if (range != null) {
-                ref.read(_activityFilterProvider.notifier).state = filter
-                    .copyWith(from: () => range.start, to: () => range.end);
+              if (picked == null) return;
+
+              if (picked == _ActivityDatePreset.custom) {
+                final range = await showDateRangePicker(
+                  context: context,
+                  firstDate: DateTime.now().subtract(
+                    const Duration(days: 365 * 3),
+                  ),
+                  lastDate: DateTime.now(),
+                  initialDateRange: filter.from != null && filter.to != null
+                      ? DateTimeRange(start: filter.from!, end: filter.to!)
+                      : null,
+                );
+                if (range != null) {
+                  ref.read(_activityFilterProvider.notifier).state = filter
+                      .copyWith(
+                        from: () => range.start,
+                        to: () => range.end,
+                        datePreset: _ActivityDatePreset.custom,
+                      );
+                }
+                return;
               }
+
+              final range = picked.range(DateTime.now());
+              ref.read(_activityFilterProvider.notifier).state = filter
+                  .copyWith(
+                    from: () => range?.start,
+                    to: () => range?.end,
+                    datePreset: picked,
+                  );
             },
           ),
           if (filter.isActive) ...[
@@ -579,6 +736,50 @@ class _FilterRow extends ConsumerWidget {
     );
   }
 }
+
+String _dateFilterLabel(ActivityFilter filter) {
+  if (filter.datePreset != _ActivityDatePreset.allTime) {
+    if (filter.datePreset != _ActivityDatePreset.custom ||
+        filter.from != null ||
+        filter.to != null) {
+      return filter.datePreset == _ActivityDatePreset.custom
+          ? '${_shortDateLabel(filter.from)} – ${_shortDateLabel(filter.to)}'
+          : filter.datePreset.label;
+    }
+  }
+  return 'Date range';
+}
+
+String _shortDateLabel(DateTime? date) {
+  if (date == null) return '…';
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${date.day} ${months[date.month - 1]} ${date.year}';
+}
+
+IconData _datePresetIcon(_ActivityDatePreset preset) => switch (preset) {
+  _ActivityDatePreset.allTime => Icons.all_inclusive_rounded,
+  _ActivityDatePreset.today => Icons.today_rounded,
+  _ActivityDatePreset.thisWeek => Icons.view_week_rounded,
+  _ActivityDatePreset.thisMonth => Icons.calendar_month_rounded,
+  _ActivityDatePreset.lastMonth => Icons.history_rounded,
+  _ActivityDatePreset.last30Days => Icons.date_range_rounded,
+  _ActivityDatePreset.last90Days => Icons.event_repeat_rounded,
+  _ActivityDatePreset.thisYear => Icons.calendar_today_rounded,
+  _ActivityDatePreset.custom => Icons.tune_rounded,
+};
 
 class _FilterChipButton extends StatelessWidget {
   final String label;
@@ -611,10 +812,12 @@ class _FilterChipButton extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
+  final String title;
   final Money totalIncoming;
   final Money totalOutgoing;
   final int count;
   const _SummaryCard({
+    required this.title,
     required this.totalIncoming,
     required this.totalOutgoing,
     required this.count,
@@ -636,8 +839,10 @@ class _SummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'All activity',
+            title,
             style: BambooFonts.ui(12.5, color: BambooInk.onSlateMuted),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: AppSpace.sm),
           Row(
@@ -700,18 +905,29 @@ class _SummaryMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Keep headline totals readable on narrow phones. Once a total reaches a
+    // lakh, the denomination is more useful than shrinking a long rupee
+    // string until it becomes hard to scan. FittedBox still protects smaller
+    // values and large accessibility text settings from clipping.
+    final useCompactDenomination = amount.rupees.abs() >= 100000;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: BambooFonts.ui(12, color: BambooInk.onSlateMuted)),
         const SizedBox(height: 2),
-        MoneyText(
-          amount,
-          prefix: prefix,
-          confidence: Confidence.estimated,
-          style: BambooFonts.money(21, color: color),
-          showConfidenceIcon: false,
-          hidePaise: true,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: MoneyText(
+            amount,
+            prefix: prefix,
+            confidence: Confidence.estimated,
+            style: BambooFonts.money(21, color: color),
+            showConfidenceIcon: false,
+            hidePaise: true,
+            compact: useCompactDenomination,
+          ),
         ),
       ],
     );
@@ -727,15 +943,23 @@ class _TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isIncome = entry.entryKind == TxnEntryKind.income;
     final entryLabel = entry.entryKind.label;
-    final isMoneyOut = entry.entryKind == TxnEntryKind.spend ||
+    final isMoneyOut =
+        entry.entryKind == TxnEntryKind.spend ||
         entry.entryKind == TxnEntryKind.investment;
-    final amountPrefix = isIncome ? '+' : isMoneyOut ? '−' : null;
+    final amountPrefix = isIncome
+        ? '+'
+        : isMoneyOut
+        ? '−'
+        : null;
     final directionColor = isIncome
         ? BambooInk.jade
         : isMoneyOut
-            ? BambooInk.clay
-            : BambooInk.ink900;
+        ? BambooInk.clay
+        : BambooInk.ink900;
+    final timeLabel = ActivityScreen._timeLabel(context, entry.occurredAt);
+    final isSmsImported = entry.source == 'sms' || entry.source == 'sms_bulk';
     final subtitleParts = <String>[
+      isSmsImported ? '$timeLabel · SMS' : timeLabel,
       if (entry.entryKind != TxnEntryKind.spend) entryLabel,
       if (entry.cardDisplayName != null) entry.cardDisplayName!,
       if (entry.cardDisplayName == null &&
@@ -777,10 +1001,10 @@ class _TransactionTile extends StatelessWidget {
                 isIncome
                     ? Icons.arrow_downward_rounded
                     : isMoneyOut
-                        ? Icons.arrow_upward_rounded
-                        : entry.entryKind == TxnEntryKind.transfer
-                            ? Icons.swap_horiz_rounded
-                            : Icons.trending_up_rounded,
+                    ? Icons.arrow_upward_rounded
+                    : entry.entryKind == TxnEntryKind.transfer
+                    ? Icons.swap_horiz_rounded
+                    : Icons.trending_up_rounded,
                 size: 18,
                 color: directionColor,
               ),

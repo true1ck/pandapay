@@ -1,4 +1,6 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
+
+import 'investment_classifier.dart';
 import 'user_cards_repository.dart';
 import 'local/sms_intake_repository.dart';
 
@@ -99,6 +101,20 @@ class LocalSmsParser {
   /// rows captured by an older app version.
   static bool isNonTransactionNoise(String sender, String body) {
     final text = body.replaceAll(RegExp(r'\s+'), ' ');
+    // A real amount due or statement remains useful even when the issuer
+    // appends an offer. Let the bill parser handle it.
+    if (_re(
+      r'\b(?:payment|amount|minimum|total)\s+due\b|\bdue\s+date\b|\b(?:statement|bill|premium)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b',
+    ).hasMatch(text))
+      return false;
+    // Past aggregate spend is often quoted solely to sell an EMI conversion.
+    // It is not a new debit alert.
+    if (_re(
+          r'\b(?:eligible\s+for\s+conversion|convert(?:ion)?\s+(?:to|into)\s+(?:flexipay\s+)?emi|flexipay\s+emis?)\b',
+        ).hasMatch(text) &&
+        !_re(r'\b(?:your\s+)?(?:txn|transaction)\s+of\b').hasMatch(text)) {
+      return true;
+    }
     final completed = _re(
       r'\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase)\b[\s\S]{0,45}\b(?:successful|completed))',
     ).hasMatch(text);
@@ -164,7 +180,7 @@ class LocalSmsParser {
     r'\b(?:self[ -]?transfer|own\s+(?:bank\s+)?account|between\s+(?:my|your)\s+(?:bank\s+)?accounts)\b|\bfrom\s+your\b[\s\S]{0,100}\bto\s+your\b[\s\S]{0,80}\b(?:a\/?c\.?|account)\b',
   ).hasMatch(body);
   static bool sensitive(String body) => RegExp(
-    r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b|\b(?:do not|don't|never)\s+share\b|\bvalid\s+(?:for|till|until)\b",
+    r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
     caseSensitive: false,
   ).hasMatch(body);
   static RegExp _re(String s) => RegExp(s, caseSensitive: false);
@@ -516,7 +532,7 @@ class LocalSmsParser {
     final hasBillMarker =
         due != null ||
         _re(
-          r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\b(?:statement|bill|invoice)\b[\s\S]{0,40}\b(?:generated|ready|available)\b|\b(?:subscription|membership)\b[\s\S]{0,50}\b(?:renew|renewal|due|expires?)\b',
+          r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\b(?:statement|bill|invoice)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b|\b(?:subscription|membership)\b[\s\S]{0,50}\b(?:renew|renewal|due|expires?)\b',
         ).hasMatch(body);
     final hasCompletedMovement =
         _re(
@@ -673,8 +689,7 @@ class LocalSmsParser {
     ).hasMatch(body);
     final investmentDebit =
         !cashWithdrawal &&
-        _re(r'\b(?:sip|mutual\s+fund)\b').hasMatch(body) &&
-        _re(r'\b(?:debited|paid|transferred|invested)\b').hasMatch(body);
+        isInvestmentMovementDescription(body);
     if (!credit &&
         !billPayment &&
         !_re(

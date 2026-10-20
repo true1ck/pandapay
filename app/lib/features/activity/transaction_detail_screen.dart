@@ -8,12 +8,14 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/local/split_repository.dart';
+import '../../data/local/sms_intake_repository.dart';
 import '../../data/local/transaction_attachments_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
@@ -146,6 +148,19 @@ final _transactionProvider = FutureProvider.family<TransactionEntry?, String>((
     if (isAuthenticationFailure(error) || fallback != null) return fallback;
     rethrow;
   }
+});
+
+final _capturedSmsProvider = FutureProvider.family<SmsIntakeEntry?, String>((
+  ref,
+  sourceKey,
+) async {
+  if (sourceKey.isEmpty) return null;
+  final namespace = ref.read(cacheNamespaceProvider);
+  if (namespace == 'signed-out') return null;
+  final cache = await ref.read(responseCacheProvider.future);
+  return SmsIntakeRepository(
+    cache.financialStore.database,
+  ).capturedById(namespace, sourceKey);
 });
 
 extension _TransactionFirstOrNull on Iterable<TransactionEntry> {
@@ -669,6 +684,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       );
       return;
     }
+    final opened = await launchUrl(
+      Uri.file(attachment.localPath),
+      mode: LaunchMode.externalApplication,
+    );
+    if (opened) return;
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(attachment.localPath, mimeType: attachment.mimeType)],
@@ -767,10 +787,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   ),
                   const SizedBox(height: AppSpace.xl),
                   _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
-                  _DetailRow(
-                    label: 'Category',
-                    value: entry.categoryLabel,
-                  ),
+                  _DetailRow(label: 'Category', value: entry.categoryLabel),
                   if (isActive &&
                       (entry.categoryName == null ||
                           [
@@ -798,11 +815,59 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     value: _sourceLabel(entry.source),
                   ),
                   _DetailRow(
+                    label: 'Verification',
+                    value: _verificationLabel(entry),
+                  ),
+                  if (entry.observations.isNotEmpty)
+                    _DetailRow(
+                      label: 'Reported by',
+                      value: entry.observations
+                          .map(
+                            (observation) => _sourceLabel(observation.source),
+                          )
+                          .toSet()
+                          .join(', '),
+                    ),
+                  if (entry.observations.any(
+                    (observation) =>
+                        (observation.source == 'sms' ||
+                            observation.source == 'sms_bulk') &&
+                        observation.reference?.isNotEmpty == true,
+                  ))
+                    _DetailRow(
+                      label: 'SMS reference',
+                      value: entry.observations
+                          .firstWhere(
+                            (observation) =>
+                                (observation.source == 'sms' ||
+                                    observation.source == 'sms_bulk') &&
+                                observation.reference?.isNotEmpty == true,
+                          )
+                          .reference!,
+                    ),
+                  if (entry.observations.any(
+                    (observation) =>
+                        observation.source == 'sms' ||
+                        observation.source == 'sms_bulk',
+                  ))
+                    _DetailRow(
+                      label: 'SMS received',
+                      value: _smsReceivedLabel(entry),
+                    ),
+                  _DetailRow(
                     label: 'Status',
                     value:
                         entry.status[0].toUpperCase() +
                         entry.status.substring(1),
                   ),
+                  if (entry.source == 'sms' ||
+                      entry.source == 'sms_bulk' ||
+                      entry.observations.any(
+                        (observation) =>
+                            observation.source == 'sms' ||
+                            observation.source == 'sms_bulk',
+                      ))
+                    _SmsEvidenceSection(entry: entry),
                   if (_note != null && _note!.isNotEmpty)
                     _DetailRow(label: 'Note', value: _note!),
                   if (isActive) ...[
@@ -998,6 +1063,29 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     _ => source,
   };
 
+  static String _verificationLabel(TransactionEntry entry) {
+    final sources = entry.observations
+        .map((observation) => observation.source)
+        .toSet();
+    final hasSms = sources.contains('sms') || sources.contains('sms_bulk');
+    if (hasSms && sources.length > 1)
+      return 'Matched to SMS and another source';
+    if (hasSms) return 'Matched to SMS';
+    if (sources.length > 1) return 'Matched to multiple sources';
+    if (sources.isNotEmpty) return 'Single source report';
+    return 'No verification evidence';
+  }
+
+  static String _smsReceivedLabel(TransactionEntry entry) {
+    final sms = entry.observations.firstWhere(
+      (observation) =>
+          observation.source == 'sms' || observation.source == 'sms_bulk',
+    );
+    final received = sms.observedAt?.toLocal();
+    if (received == null) return 'Available';
+    return received.toString().split('.').first;
+  }
+
   static String _cardOrPaymentLabel(TransactionEntry entry) {
     if (entry.cardDisplayName != null && entry.cardDisplayName!.isNotEmpty) {
       return entry.cardDisplayName!;
@@ -1102,7 +1190,7 @@ class _ReceiptSection extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: BambooFonts.ui(12.5, color: BambooInk.ink900),
                 ),
-                subtitle: const Text('Tap to view or share'),
+                subtitle: const Text('Tap to open'),
                 onTap: () => onOpen(attachment),
                 trailing: IconButton(
                   tooltip: 'Remove attachment',
@@ -1127,6 +1215,154 @@ class _ReceiptSection extends StatelessWidget {
           Text(
             'Stored privately on this device',
             style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmsEvidenceSection extends ConsumerWidget {
+  final TransactionEntry entry;
+
+  const _SmsEvidenceSection({required this.entry});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final smsEvidence = entry.observations
+        .where(
+          (observation) =>
+              observation.source == 'sms' || observation.source == 'sms_bulk',
+        )
+        .toList();
+    final sms = smsEvidence.isEmpty ? null : smsEvidence.first;
+    final captured = sms?.sourceKey == null
+        ? null
+        : ref.watch(_capturedSmsProvider(sms!.sourceKey!)).valueOrNull;
+    final received = sms?.observedAt?.toLocal();
+    final receivedLabel = received == null
+        ? 'Received time unavailable'
+        : received.toString().split('.').first;
+
+    return CardSummaryPanel(
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+          childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpace.md,
+            0,
+            AppSpace.md,
+            AppSpace.md,
+          ),
+          leading: const Icon(Icons.sms_outlined, color: BambooInk.ink500),
+          title: Text(
+            'SMS evidence',
+            style: BambooFonts.ui(
+              14,
+              weight: FontWeight.w700,
+              color: BambooInk.ink900,
+            ),
+          ),
+          subtitle: Text(
+            'Detected from the bank SMS · $receivedLabel',
+            style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+          ),
+          children: [
+            _EvidenceLine(
+              label: 'Amount detected',
+              value: entry.amount.format(),
+            ),
+            _EvidenceLine(
+              label: 'Merchant detected',
+              value: entry.merchantName ?? 'Not provided by SMS',
+            ),
+            _EvidenceLine(
+              label: 'Date detected',
+              value: entry.occurredAt.toLocal().toString().split('.').first,
+            ),
+            _EvidenceLine(
+              label: 'Payment rail',
+              value: _DetailBodyState._railLabel(entry.rail),
+            ),
+            if (entry.cardLast4?.isNotEmpty == true)
+              _EvidenceLine(
+                label: 'Card detected',
+                value: '•••• ${entry.cardLast4}',
+              ),
+            if (entry.accountLast4?.isNotEmpty == true)
+              _EvidenceLine(
+                label: 'Account detected',
+                value: 'Bank account ending ${entry.accountLast4}',
+              ),
+            if (sms?.reference?.isNotEmpty == true)
+              _EvidenceLine(label: 'Bank reference', value: sms!.reference!),
+            if (captured != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              _EvidenceLine(label: 'Sender', value: captured.message.sender),
+              Text(
+                'Original SMS captured on this device',
+                style: BambooFonts.ui(
+                  11.5,
+                  weight: FontWeight.w700,
+                  color: BambooInk.ink900,
+                ),
+              ),
+              const SizedBox(height: AppSpace.xs),
+              SelectableText(
+                _maskSmsText(captured.message.body),
+                style: BambooFonts.ui(12, color: BambooInk.ink900),
+              ),
+            ],
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              captured != null
+                  ? 'This message is stored locally for cross-checking and is not uploaded as transaction evidence.'
+                  : sms == null
+                  ? 'This transaction is marked as SMS sourced, but the original evidence is not available on this device. Attach a screenshot in “Receipts & proof” to keep it with this payment.'
+                  : 'Raw SMS text stays on this device and is not uploaded as transaction evidence. Attach a screenshot in “Receipts & proof” if you want to keep the original message with this payment.',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _maskSmsText(String text) {
+  return text.replaceAllMapped(RegExp(r'\b\d{8,}\b'), (match) {
+    final value = match.group(0)!;
+    return '•••• ${value.substring(value.length - 4)}';
+  });
+}
+
+class _EvidenceLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _EvidenceLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 132,
+            child: Text(
+              label,
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink900),
+            ),
           ),
         ],
       ),

@@ -331,6 +331,10 @@ class MoneyText extends ConsumerWidget {
   /// so nothing is rounded away.
   final bool hidePaise;
 
+  /// Uses the short Indian denomination form (K/L/Cr) for dense headline
+  /// layouts. The accessible label continues to use the full amount.
+  final bool compact;
+
   const MoneyText(
     this.amount, {
     super.key,
@@ -340,13 +344,17 @@ class MoneyText extends ConsumerWidget {
     this.suffix,
     this.showConfidenceIcon = true,
     this.hidePaise = false,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final baseStyle = style ?? Theme.of(context).textTheme.titleMedium;
     final numberFormat = ref.watch(numberFormatProvider);
-    final formatted = '${prefix ?? ''}${amount.format(format: numberFormat, hidePaise: hidePaise)}${suffix ?? ''}';
+    final fullFormatted =
+        '${prefix ?? ''}${amount.format(format: numberFormat, hidePaise: hidePaise)}${suffix ?? ''}';
+    final formatted =
+        '${prefix ?? ''}${amount.format(compact: compact, format: numberFormat, hidePaise: hidePaise)}${suffix ?? ''}';
 
     // One Semantics wrapper here covers every money figure in the app —
     // 40+ call sites — rather than each screen remembering to label its
@@ -357,7 +365,9 @@ class MoneyText extends ConsumerWidget {
     // icon; a user who can't see it would otherwise take an estimate for a
     // settled figure.
     return Semantics(
-      label: confidence.isConfirmed ? formatted : '$formatted, estimated',
+      label: confidence.isConfirmed
+          ? fullFormatted
+          : '$fullFormatted, estimated',
       excludeSemantics: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,

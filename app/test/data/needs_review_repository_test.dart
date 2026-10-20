@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -55,6 +57,29 @@ void main() {
     final all = await repo.fetchAll();
     expect(all, hasLength(1));
     expect(all.first.id, '2');
+  });
+
+  test('cleans old promotional review items while retaining real alerts', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final oldOffer = NeedsReviewItem(
+      id: 'old-offer',
+      sender: 'TX-WAKFTT-P',
+      body: 'Treat yourself to a sofa at just Rs.28,125. Grab offer now.',
+      receivedAt: DateTime(2026, 1, 1),
+    );
+    final realTxn = NeedsReviewItem(
+      id: 'real-txn',
+      sender: 'AD-FEDSCP-S',
+      body: 'Your txn of Rs.1018 at a restaurant earned you 5% rewards.',
+      receivedAt: DateTime(2026, 1, 2),
+    );
+    await prefs.setStringList('pandapay_app.needs_review_queue_v1', [
+      jsonEncode(oldOffer.toJson()),
+      jsonEncode(realTxn.toJson()),
+    ]);
+    final repo = NeedsReviewRepository();
+    expect((await repo.fetchAll()).map((item) => item.id), ['real-txn']);
+    expect(prefs.getStringList('pandapay_app.needs_review_queue_v1'), hasLength(1));
   });
 
   test('fetchAll on an empty store returns an empty list, not an error', () async {

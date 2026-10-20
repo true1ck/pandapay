@@ -94,6 +94,25 @@ class SmsIntakeRepository {
     ],
   );
 
+  /// Returns the original SMS captured on this device for a source key.
+  /// Raw text never leaves the device through this read path.
+  SmsIntakeEntry? capturedById(String namespace, String id) {
+    final rows = database.db.select(
+      'SELECT id, sender, body, received_at FROM sms_captured_messages WHERE namespace=? AND id=? LIMIT 1',
+      [namespace, id],
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    return SmsIntakeEntry(
+      row['id'] as String,
+      QueuedSms(
+        sender: row['sender'] as String,
+        body: row['body'] as String,
+        receivedAt: DateTime.fromMillisecondsSinceEpoch(row['received_at'] as int),
+      ),
+    );
+  }
+
   bool wasProcessed(String namespace, String id) => database.db.select(
     'SELECT 1 FROM sms_captured_messages WHERE namespace=? AND id=? AND processed=1',
     [namespace, id],

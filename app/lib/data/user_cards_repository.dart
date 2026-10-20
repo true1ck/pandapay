@@ -1934,6 +1934,35 @@ class UserCardsRepository {
   }
 }
 
+class TransactionObservation {
+  final String source;
+  final String? sourceKey;
+  final DateTime? observedAt;
+  final String? reference;
+
+  const TransactionObservation({
+    required this.source,
+    this.sourceKey,
+    this.observedAt,
+    this.reference,
+  });
+
+  factory TransactionObservation.fromJson(Map<String, dynamic> json) =>
+      TransactionObservation(
+        source: json['source'] as String? ?? 'unknown',
+        sourceKey: json['source_key'] as String?,
+        observedAt: DateTime.tryParse(json['observed_at'] as String? ?? ''),
+        reference: json['reference'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+    'source': source,
+    'source_key': sourceKey,
+    'observed_at': observedAt?.toIso8601String(),
+    'reference': reference,
+  };
+}
+
 class TransactionEntry {
   final String? sourceKey;
   final String id;
@@ -1973,6 +2002,8 @@ class TransactionEntry {
   final bool instrumentKnown;
   final TxnEntryKind entryKind;
   final String source;
+  /// Privacy-safe records of the channels that reported this payment.
+  final List<TransactionObservation> observations;
   final String status;
   final String rewardState;
   final String? note;
@@ -2017,6 +2048,7 @@ class TransactionEntry {
     this.instrumentKnown = true,
     this.entryKind = TxnEntryKind.spend,
     required this.source,
+    this.observations = const [],
     required this.status,
     this.rewardState = 'estimated',
     this.note,
@@ -2057,6 +2089,7 @@ class TransactionEntry {
       'instrument': instrumentKnown ? instrument.wireValue : null,
       'entry_kind': entryKind.wireValue,
       'source': source,
+      'observations': observations.map((observation) => observation.toJson()).toList(),
       'status': status,
       'reward_state': rewardState,
       'note': note,
@@ -2102,6 +2135,9 @@ class TransactionEntry {
       instrumentKnown: json['instrument'] != null,
       entryKind: TxnEntryKind.fromJson(json['entry_kind'] as String?),
       source: json['source'] as String? ?? 'manual',
+      observations: (json['observations'] as List? ?? const [])
+          .map((item) => TransactionObservation.fromJson(item as Map<String, dynamic>))
+          .toList(),
       status: json['status'] as String? ?? 'active',
       rewardState: json['reward_state'] as String? ?? 'estimated',
       note: json['note'] as String?,

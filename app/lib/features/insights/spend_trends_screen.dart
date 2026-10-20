@@ -941,6 +941,7 @@ bool _spansMultipleCalendarMonths(SpendReportQuery query) {
 
 class _ReportBodyState extends State<_ReportBody> {
   _SpendingTab _tab = _SpendingTab.categories;
+  final _spendingTabsKey = GlobalKey();
   TxnInstrument? _paymentFilter;
   Set<String> _categoryFilters = <String>{};
   String? _merchantFilter;
@@ -1272,6 +1273,21 @@ class _ReportBodyState extends State<_ReportBody> {
     widget.onFiltersActiveChanged(_filtersActive);
   }
 
+  void _showAllCategories() {
+    if (!mounted) return;
+    setState(() => _tab = _SpendingTab.categories);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final targetContext = _spendingTabsKey.currentContext;
+      if (!mounted || targetContext == null) return;
+      Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final report = widget.report;
@@ -1312,6 +1328,7 @@ class _ReportBodyState extends State<_ReportBody> {
                       ? report.changeVsPrevious
                       : null,
                   comparisonLabel: report.previousDisplayLabel,
+                  onViewAll: multiMonth ? _showAllCategories : null,
                 ),
                 const SizedBox(height: AppSpace.lg),
               ],
@@ -1327,9 +1344,12 @@ class _ReportBodyState extends State<_ReportBody> {
               ],
             ],
           ),
-          _SpendingTabs(
-            selected: _tab,
-            onChanged: (tab) => setState(() => _tab = tab),
+          KeyedSubtree(
+            key: _spendingTabsKey,
+            child: _SpendingTabs(
+              selected: _tab,
+              onChanged: (tab) => setState(() => _tab = tab),
+            ),
           ),
           const SizedBox(height: AppSpace.md),
           if (showFilteredLoading)
@@ -2307,10 +2327,17 @@ class _SpendChangePill extends StatelessWidget {
   }
 }
 
-class _MonthlyComparisonCard extends StatelessWidget {
+class _MonthlyComparisonCard extends StatefulWidget {
   final List<SpendSeriesPoint> series;
 
   const _MonthlyComparisonCard({required this.series});
+
+  @override
+  State<_MonthlyComparisonCard> createState() => _MonthlyComparisonCardState();
+}
+
+class _MonthlyComparisonCardState extends State<_MonthlyComparisonCard> {
+  int _selectedIndex = 0;
 
   static String _monthLabel(DateTime date) {
     const months = <String>[
@@ -2333,7 +2360,10 @@ class _MonthlyComparisonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final series = widget.series;
     if (series.length < 2) return const SizedBox.shrink();
+    final selectedIndex = _selectedIndex.clamp(0, series.length - 1).toInt();
+    final selected = series[selectedIndex];
     final latest = series.last;
     final previous = series[series.length - 2];
     final difference = latest.spend.paise - previous.spend.paise;
@@ -2363,20 +2393,55 @@ class _MonthlyComparisonCard extends StatelessWidget {
                   style: BambooFonts.heading(13, color: BambooInk.ink900),
                 ),
               ),
-              Icon(
-                Icons.info_outline_rounded,
-                color: BambooInk.ink500,
-                size: 18,
+              Tooltip(
+                message: 'Tap or swipe across a bar to inspect that month',
+                child: Icon(
+                  Icons.info_outline_rounded,
+                  color: BambooInk.ink500,
+                  size: 18,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          SizedBox(
+          const SizedBox(height: 7),
+          Container(
             width: double.infinity,
-            height: 145,
-            child: CustomPaint(
-              painter: _MonthlyBarChartPainter(series: series),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: BambooInk.paper,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: BambooInk.hairlineOnPaper),
             ),
+            child: Row(
+              children: [
+                Icon(Icons.touch_app_rounded, size: 16, color: BambooInk.jade),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _monthLabel(selected.periodStart),
+                    style: BambooFonts.ui(
+                      11,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                ),
+                Text(
+                  selected.spend.format(hidePaise: false),
+                  style: BambooFonts.ui(
+                    12,
+                    weight: FontWeight.w800,
+                    color: BambooInk.ink900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 2),
+          _InteractiveMonthlyBarChart(
+            series: series,
+            selectedIndex: selectedIndex,
+            onSelected: (index) => setState(() => _selectedIndex = index),
           ),
           const SizedBox(height: 5),
           Container(
@@ -2406,7 +2471,7 @@ class _MonthlyComparisonCard extends StatelessWidget {
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    '$comparisonText\nTap a bar to see that month’s category mix.',
+                    '$comparisonText\nTap or swipe across bars to inspect each month.',
                     style: BambooFonts.ui(10.5, color: BambooInk.ink900),
                   ),
                 ),
@@ -2419,16 +2484,78 @@ class _MonthlyComparisonCard extends StatelessWidget {
   }
 }
 
+class _InteractiveMonthlyBarChart extends StatelessWidget {
+  final List<SpendSeriesPoint> series;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  const _InteractiveMonthlyBarChart({
+    required this.series,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  void _selectAt(Offset position, Size size) {
+    const left = 48.0;
+    const right = 4.0;
+    if (position.dx < left || position.dx > size.width - right) return;
+    final chartWidth = math.max(1.0, size.width - left - right).toDouble();
+    final slot = chartWidth / series.length;
+    final index = ((position.dx - left) / slot).floor();
+    if (index >= 0 && index < series.length) onSelected(index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 145,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = Size(constraints.maxWidth, 145);
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: (details) => _selectAt(details.localPosition, size),
+            onHorizontalDragUpdate: (details) =>
+                _selectAt(details.localPosition, size),
+            child: Semantics(
+              label:
+                  'Monthly spending chart. Swipe or tap a bar to select a month.',
+              child: CustomPaint(
+                painter: _MonthlyBarChartPainter(
+                  series: series,
+                  selectedIndex: selectedIndex,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _MonthlyBarChartPainter extends CustomPainter {
   final List<SpendSeriesPoint> series;
+  final int selectedIndex;
 
-  const _MonthlyBarChartPainter({required this.series});
+  const _MonthlyBarChartPainter({
+    required this.series,
+    required this.selectedIndex,
+  });
 
   String _axisLabel(int paise) {
     final rupees = paise / 100;
     if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
     if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(0)}K';
     return '₹${rupees.toStringAsFixed(0)}';
+  }
+
+  String _barLabel(Money amount) {
+    final rupees = amount.paise / 100;
+    if (rupees >= 100000) return '₹${(rupees / 100000).toStringAsFixed(1)}L';
+    if (rupees >= 1000) return '₹${(rupees / 1000).toStringAsFixed(1)}K';
+    return amount.format(hidePaise: true);
   }
 
   static String _monthLabel(DateTime date) {
@@ -2528,7 +2655,7 @@ class _MonthlyBarChartPainter extends CustomPainter {
       final x = left + slot * index + (slot - barWidth) / 2;
       final y = top + chartHeight - barHeight;
       final barPaint = Paint()
-        ..color = index == series.length - 1
+        ..color = index == selectedIndex
             ? BambooInk.lime
             : BambooInk.ink500.withValues(alpha: 0.25);
       canvas.drawRRect(
@@ -2541,7 +2668,7 @@ class _MonthlyBarChartPainter extends CustomPainter {
       );
       _text(
         canvas,
-        point.spend.format(hidePaise: true),
+        _barLabel(point.spend),
         Offset(left + slot * index, math.max(0, y - 19)),
         slot,
         BambooFonts.ui(10.5, weight: FontWeight.w700, color: BambooInk.ink900),
@@ -2560,7 +2687,8 @@ class _MonthlyBarChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MonthlyBarChartPainter oldDelegate) =>
-      oldDelegate.series != series;
+      oldDelegate.series != series ||
+      oldDelegate.selectedIndex != selectedIndex;
 }
 
 /// A visual summary of the same category totals shown in the expandable rows
@@ -2572,6 +2700,7 @@ class _SpendingMixCard extends StatefulWidget {
   final String? rangeLabel;
   final double? change;
   final String? comparisonLabel;
+  final VoidCallback? onViewAll;
 
   const _SpendingMixCard({
     required this.rows,
@@ -2580,6 +2709,7 @@ class _SpendingMixCard extends StatefulWidget {
     this.rangeLabel,
     this.change,
     this.comparisonLabel,
+    this.onViewAll,
   });
 
   @override
@@ -2687,23 +2817,42 @@ class _SpendingMixCardState extends State<_SpendingMixCard> {
                       compact: compact,
                       onTap: () => _selectCategory(nonZeroRows.indexOf(row)),
                     ),
-                  if (remaining > 0) ...[
-                    SizedBox(height: compact ? 2 : AppSpace.xs),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        compact
-                            ? '$remaining smaller ${remaining == 1 ? 'category' : 'categories'} · View all  ›'
-                            : '+$remaining more ${remaining == 1 ? 'category' : 'categories'} below',
-                        style: BambooFonts.ui(
-                          compact ? 9.5 : 11.5,
-                          color: compact
-                              ? BambooChartColors.violet
-                              : BambooInk.ink500,
-                        ),
+                  if (remaining > 0)
+                    Padding(
+                      padding: EdgeInsets.only(top: compact ? 2 : AppSpace.xs),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: compact
+                            ? Semantics(
+                                button: true,
+                                label: 'View all $remaining smaller categories',
+                                child: InkWell(
+                                  key: const ValueKey('spending_mix_view_all'),
+                                  onTap: widget.onViewAll,
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 4,
+                                    ),
+                                    child: Text(
+                                      '$remaining smaller ${remaining == 1 ? 'category' : 'categories'} · View all  ›',
+                                      style: BambooFonts.ui(
+                                        9.5,
+                                        color: BambooChartColors.violet,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Text(
+                                '+$remaining more ${remaining == 1 ? 'category' : 'categories'} below',
+                                style: BambooFonts.ui(
+                                  11.5,
+                                  color: BambooInk.ink500,
+                                ),
+                              ),
                       ),
                     ),
-                  ],
                 ],
               );
 

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import 'investment_classifier.dart';
 import 'pdf_statement_parser.dart';
 
 /// Excel commonly exports UTF-16 tab-separated text, while other apps use UTF-8.
@@ -485,14 +486,15 @@ ParsedStatementLine? _parseRow(
             typeIndex < row.length &&
             _normalise(row[typeIndex]) == 'transfer';
   final investment =
-      typeIndex != null &&
-      typeIndex < row.length &&
-      [
-        'investment',
-        'invest',
-        'mutual fund',
-        'sip',
-      ].contains(_normalise(row[typeIndex]));
+      (typeIndex != null &&
+          typeIndex < row.length &&
+          [
+            'investment',
+            'invest',
+            'mutual fund',
+            'sip',
+          ].contains(_normalise(row[typeIndex]))) ||
+      isInvestmentMovementDescription(description);
   final dateText = row[dateIndex].trim().replaceFirst(
     RegExp(r'\s+\d{1,2}:\d{2}.*$'),
     '',

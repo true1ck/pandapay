@@ -247,6 +247,46 @@ void main() {
     },
   );
 
+  test('keeps bills and posted purchases with offer footers', () {
+    expect(
+      LocalSmsParser.isNonTransactionNoise(
+        'VM-BANK-S',
+        'Your card XX1234 was debited Rs.500 at STORE. Get 5% cashback on your next purchase.',
+      ),
+      isFalse,
+    );
+    expect(
+      LocalSmsParser.isNonTransactionNoise(
+        'VM-BANK-S',
+        'Your credit card bill of Rs.5000 is due on 25 Oct. Get cashback when you pay.',
+      ),
+      isFalse,
+    );
+    expect(
+      LocalSmsParser.sensitive(
+        'Purchase of Rs.1200 completed. Offer valid for next order.',
+      ),
+      isFalse,
+    );
+    expect(LocalSmsParser.sensitive('123456 valid for 10 minutes.'), isTrue);
+    expect(
+      LocalSmsParser.isNonTransactionNoise(
+        'BP-SBICRD-S',
+        'You spent Rs.40016 on your SBI Credit Card and are eligible for conversion to Flexipay EMIs.',
+      ),
+      isTrue,
+    );
+    final bill = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-BANK-S',
+      body:
+          'Your credit card bill of Rs.5000 is due on 25 Oct. Get cashback when you pay.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(bill?.eventType, LocalSmsEventType.bill);
+    expect(bill?.disposition, LocalSmsDisposition.localObservation);
+  });
+
   test('does not ignore a completed recharge that also contains an offer', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',

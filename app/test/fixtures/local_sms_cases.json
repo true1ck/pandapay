@@ -36,6 +36,12 @@
     "kind": "transfer"
   },
   {
+    "body": "Your A/c *1797 is debited by Rs.5000 towards Groww. Ref 123456789012.",
+    "amount": 5000,
+    "instrument": "upi_bank",
+    "kind": "investment"
+  },
+  {
     "body": "OTP 123456 for transaction INR 500 on card XX4321. Do not share.",
     "amount": null
   },

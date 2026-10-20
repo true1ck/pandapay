@@ -934,11 +934,27 @@ class _SeriesCard extends ConsumerWidget {
   static String _formatDate(DateTime date) =>
       '${date.day} ${_months[date.month - 1]} ${date.year}';
 
+  static DateTime _advanceCycle(DateTime date, int cadenceDays) {
+    final current = DateUtils.dateOnly(date);
+    if (cadenceDays >= 350) {
+      final year = current.year + 1;
+      final lastDay = DateTime(year, current.month + 1, 0).day;
+      return DateTime(year, current.month, current.day.clamp(1, lastDay));
+    }
+    if (cadenceDays >= 26 && cadenceDays <= 32) {
+      final nextMonth = current.month == 12 ? 1 : current.month + 1;
+      final year = current.month == 12 ? current.year + 1 : current.year;
+      final lastDay = DateTime(year, nextMonth + 1, 0).day;
+      return DateTime(year, nextMonth, current.day.clamp(1, lastDay));
+    }
+    return current.add(Duration(days: cadenceDays));
+  }
+
   static DateTime _nextEditableDate(DateTime date, int cadenceDays) {
     var next = DateUtils.dateOnly(date);
     final today = DateUtils.dateOnly(DateTime.now());
     while (next.isBefore(today)) {
-      next = next.add(Duration(days: cadenceDays));
+      next = _advanceCycle(next, cadenceDays);
     }
     return next;
   }

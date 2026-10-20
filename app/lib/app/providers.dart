@@ -84,7 +84,8 @@ const _authBaseUrl = Env.authBaseUrl;
 /// recorded by the server as transactions; card attribution is optional.
 bool _isIgnorableSmsResult(SmsImportResult result) =>
     result.reason == 'security_message' ||
-    result.reason == 'not_a_successful_spend';
+    result.reason == 'not_a_successful_spend' ||
+    result.reason == 'non_transaction_message';
 
 final authApiProvider = Provider<AuthApi>(
   (ref) => AuthApi(authBaseUrl: _authBaseUrl),

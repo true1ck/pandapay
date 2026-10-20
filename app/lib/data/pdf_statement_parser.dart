@@ -4,6 +4,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import 'import_models.dart';
+import 'investment_classifier.dart';
 export 'import_models.dart';
 
 class StatementParseException implements Exception {
@@ -224,10 +225,7 @@ ParsedStatementLine? _parseTransactionBlock(
       isTransfer: account != null
           ? account.group(2)!.toLowerCase() == 'no'
           : _isRepaymentOrTransfer(description),
-      isInvestment: RegExp(
-        r'\b(?:MUTUAL FUND|SIP|INVESTMENT)\b',
-        caseSensitive: false,
-      ).hasMatch(description),
+      isInvestment: isInvestmentMovementDescription(description),
     );
   }
   final candidates = _amountToken.allMatches(afterDate).toList();
@@ -257,10 +255,7 @@ ParsedStatementLine? _parseTransactionBlock(
     amount: amount,
     isCredit: isCredit,
     isTransfer: _isRepaymentOrTransfer(description),
-    isInvestment: RegExp(
-      r'\b(?:MUTUAL FUND|SIP|INVESTMENT)\b',
-      caseSensitive: false,
-    ).hasMatch(description),
+    isInvestment: isInvestmentMovementDescription(description),
     reviewReasons: [
       ...reasons,
       if (candidates.length > 1)

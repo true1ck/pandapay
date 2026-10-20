@@ -305,6 +305,52 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('view all in a multi-month mix opens the full categories list', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => SpendReportQuery.custom(
+              from: DateTime(2026, 8, 1),
+              to: DateTime(2026, 10, 31),
+            ),
+          ),
+          spendReportProvider.overrideWith(
+            (ref, query) async => _report(
+              spend: 2100,
+              byCategory: [
+                for (var index = 1; index <= 6; index++)
+                  SpendBreakdownRow(
+                    label: 'Category $index',
+                    total: Money.fromRupees(100 * index),
+                    txnCount: index,
+                    categoryId: 'category-$index',
+                  ),
+              ],
+            ),
+          ),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => const [],
+          ),
+        ],
+        child: const MaterialApp(home: SpendTrendsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final viewAll = find.byKey(const ValueKey('spending_mix_view_all'));
+    expect(viewAll, findsOneWidget);
+    await tester.tap(viewAll);
+    await tester.pumpAndSettle();
+
+    expect(find.text('CATEGORIES'), findsOneWidget);
+    expect(find.text('Category 6'), findsOneWidget);
+  });
+
   testWidgets(
     'a card row reports the rate it actually paid, not its headline rate',
     (tester) async {
