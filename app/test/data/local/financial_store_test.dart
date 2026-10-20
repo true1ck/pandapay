@@ -46,6 +46,20 @@ void main() {
     },
   );
 
+  test('card archive patches the cache-first wallet snapshot', () {
+    const card = UserCard(
+      id: 'card-1',
+      cardProductId: 'product-1',
+      cardName: 'Test Card',
+      isDefault: false,
+    );
+    store.replaceCards('a', [card]);
+
+    store.patchCard('a', card.id, {'is_archived': true});
+
+    expect(store.entities('a', 'cards').single['is_archived'], isTrue);
+  });
+
   test('large-history duplicate replay stays quiet', () async {
     final history = [for (var i = 0; i < 3000; i++) row('transaction-$i')];
     store.saveTransactions('a', history, completeQuery: all);

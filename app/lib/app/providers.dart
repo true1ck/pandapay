@@ -3516,6 +3516,28 @@ Future<void> clearUserCardsCache(WidgetRef ref) async {
   await _clearUserCardsCacheValues(cache, ref.read(cacheNamespaceProvider));
 }
 
+/// Publishes a card archive/unarchive to the local-first snapshot immediately
+/// after a successful write or an offline queue. The next provider read checks
+/// this snapshot before attempting the network, so a removed card cannot
+/// reappear while the authoritative refresh is still in flight.
+Future<void> applyUserCardArchiveToCache(
+  WidgetRef ref, {
+  required String userCardId,
+  required bool archived,
+}) async {
+  try {
+    final cache = await ref.read(responseCacheProvider.future);
+    cache.financialStore.patchCard(
+      ref.read(cacheNamespaceProvider),
+      userCardId,
+      {'is_archived': archived},
+    );
+  } catch (_) {
+    // Cache repair is best effort; the server write or sync queue remains the
+    // source of truth and the next full fetch will repair this snapshot.
+  }
+}
+
 Future<CachedResponse?> _readCacheOrNull(
   Ref ref,
   ResponseCache? cache,

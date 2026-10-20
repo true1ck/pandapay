@@ -77,22 +77,77 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
   /// archiving is the only real operation underneath. They differ in intent
   /// and in how loudly they say so, which is why Remove confirms first.
   Future<bool> _setPaused(bool paused) async {
+    if (_busy) return false;
     final repo = ref.read(userCardsRepositoryProvider);
     final local = repo == null
         ? await ref.read(localUserCardsRepositoryProvider.future)
         : null;
-    return _run(
-      () async => paused
-          ? (repo != null
-                ? repo.archiveCard(widget.card.id)
-                : local!.archiveCard(widget.card.id))
-          : (repo != null
-                ? repo.unarchiveCard(widget.card.id)
-                : local!.unarchiveCard(widget.card.id)),
-      paused
-          ? '$_displayName paused — it will not be ranked.'
-          : '$_displayName is back in the ranking.',
-    );
+    if (!mounted) return false;
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    var queuedOffline = false;
+    try {
+      try {
+        if (paused) {
+          if (repo != null) {
+            await repo.archiveCard(widget.card.id);
+          } else {
+            await local!.archiveCard(widget.card.id);
+          }
+        } else {
+          if (repo != null) {
+            await repo.unarchiveCard(widget.card.id);
+          } else {
+            await local!.unarchiveCard(widget.card.id);
+          }
+        }
+      } catch (error) {
+        final offline = ref.read(isOnlineProvider).valueOrNull == false;
+        if (!paused || repo == null || !offline) rethrow;
+        final queue = await ref.read(syncQueueProvider.future);
+        queue.enqueueUpdate(
+          entity: 'user_cards',
+          entityId: widget.card.id,
+          fields: {'is_archived': true},
+        );
+        queuedOffline = true;
+        ref.invalidate(pendingSyncCountProvider);
+      }
+
+      await applyUserCardArchiveToCache(
+        ref,
+        userCardId: widget.card.id,
+        archived: paused,
+      );
+      await clearUserCardsCache(ref);
+      ref.invalidate(myCardsProvider);
+      ref.invalidate(userCardsProvider);
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+      ref.invalidate(spendReportProvider);
+      ref.invalidate(budgetsProvider);
+      ref.invalidate(recurringReportProvider);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            queuedOffline
+                ? 'Removed offline — will sync when you reconnect.'
+                : paused
+                ? '$_displayName paused — it will not be ranked.'
+                : '$_displayName is back in the ranking.',
+          ),
+        ),
+      );
+      return true;
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(userFacingErrorMessage(error))),
+      );
+      return false;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _setDefault() async {

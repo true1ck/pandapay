@@ -586,6 +586,35 @@ class FinancialStore {
     }
   }
 
+  /// Applies a small optimistic card mutation to the durable display
+  /// snapshot. Card writes can succeed (or be queued offline) before the
+  /// next full wallet refresh; keeping this snapshot current prevents the
+  /// cache-first wallet from immediately resurrecting the old card state.
+  void patchCard(
+    String ns,
+    String cardId,
+    Map<String, dynamic> patch, {
+    DateTime? at,
+  }) {
+    if (patch.isEmpty) return;
+    final rows = database.db.select(
+      "SELECT payload, observed_at FROM financial_entities "
+      "WHERE namespace=? AND entity='cards' AND id=?",
+      [ns, cardId],
+    );
+    if (rows.isEmpty) return;
+    final body =
+        jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>;
+    final observedAt = rows.single['observed_at'] as int;
+    final requestedAt = (at ?? DateTime.now()).millisecondsSinceEpoch;
+    final timestamp = requestedAt > observedAt ? requestedAt : observedAt + 1;
+    final changed = _upsert(ns, 'cards', cardId, {
+      ...body,
+      ...patch,
+    }, timestamp);
+    if (changed) _notify(ns, entity: 'cards');
+  }
+
   void setSyncStatus(String ns, String state) {
     if (syncStatus(ns) == state) return;
     _transientStatus[ns] = state;

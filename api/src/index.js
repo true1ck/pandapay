@@ -2876,18 +2876,25 @@ app.post('/user-cards/import', requireAuth, async (req, res) => {
  */
 app.post('/user-cards/:id/archive', requireAuth, async (req, res) => {
   try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const archived = await client.query(
+    // Commit the user-visible card mutation independently. SMS-history repair
+    // is valuable, but it is a secondary reconciliation pass and must not
+    // turn a successful archive into a failed request if its larger scan hits
+    // a transient database or data-shape problem.
+    const result = await withUserClient(req.userId, (client) =>
+      client.query(
         `UPDATE user_cards SET is_archived = true, archived_at = now()
           WHERE id = $1 AND profile_id = $2
           RETURNING id`,
         [req.params.id, req.userId]
-      );
-      if (archived.rows.length === 0) return archived;
-      await repairSmsHistory(client, req.userId);
-      return archived;
-    });
+      )
+    );
     if (result.rows.length === 0) return res.status(404).json({ error: 'user_card not found' });
+
+    try {
+      await withUserClient(req.userId, (client) => repairSmsHistory(client, req.userId));
+    } catch (repairError) {
+      console.error('POST /user-cards/:id/archive repair warning', repairError);
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('POST /user-cards/:id/archive error', err);

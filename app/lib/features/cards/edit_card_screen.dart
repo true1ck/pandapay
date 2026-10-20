@@ -267,6 +267,11 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       } else {
         await repo.archiveCard(widget.userCardId);
       }
+      await applyUserCardArchiveToCache(
+        ref,
+        userCardId: widget.userCardId,
+        archived: true,
+      );
       await clearUserCardsCache(ref);
       ref.invalidate(myCardsProvider);
       ref.invalidate(userCardsProvider);
@@ -294,6 +299,11 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
           entity: 'user_cards',
           entityId: widget.userCardId,
           fields: {'is_archived': true},
+        );
+        await applyUserCardArchiveToCache(
+          ref,
+          userCardId: widget.userCardId,
+          archived: true,
         );
         ref.invalidate(pendingSyncCountProvider);
         if (mounted) {

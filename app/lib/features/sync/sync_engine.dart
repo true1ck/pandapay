@@ -230,6 +230,8 @@ class SyncEngine {
       if (_ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError('Account changed during sync');
       }
+      cache.financialStore.replaceCards(namespace, cards);
+      cache.financialStore.replaceCards(namespace, archived, archived: true);
       await cache.put(
         '$namespace:user_cards',
         jsonEncode({'userCards': cards.map((c) => c.toJson()).toList()}),
