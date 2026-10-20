@@ -111,8 +111,8 @@ class AccountScreen extends ConsumerWidget {
             // month view and the per-card reminder toggles, which design 13
             // has no room for.
             AccountTile(
-              icon: Icons.event_available_outlined,
-              label: 'Payments due',
+              icon: Icons.receipt_long_outlined,
+              label: 'Bills & commitments',
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const PaymentsDueScreen()),
               ),

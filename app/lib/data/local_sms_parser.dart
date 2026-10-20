@@ -2,17 +2,87 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import 'user_cards_repository.dart';
 import 'local/sms_intake_repository.dart';
 
+enum LocalSmsEventType {
+  transaction,
+  bill,
+  autopay,
+  promotion,
+  balance,
+  failed,
+  security,
+  unknown,
+}
+
+enum LocalSmsDisposition { sync, localObservation, localIgnore, review }
+
+extension LocalSmsEventTypeWire on LocalSmsEventType {
+  String get wireValue => switch (this) {
+    LocalSmsEventType.transaction => 'transaction',
+    LocalSmsEventType.bill => 'bill',
+    LocalSmsEventType.autopay => 'autopay',
+    LocalSmsEventType.promotion => 'promotion',
+    LocalSmsEventType.balance => 'balance',
+    LocalSmsEventType.failed => 'failed',
+    LocalSmsEventType.security => 'security',
+    LocalSmsEventType.unknown => 'unknown',
+  };
+}
+
+extension LocalSmsDispositionWire on LocalSmsDisposition {
+  String get wireValue => switch (this) {
+    LocalSmsDisposition.sync => 'sync',
+    LocalSmsDisposition.localObservation => 'local_observation',
+    LocalSmsDisposition.localIgnore => 'local_ignore',
+    LocalSmsDisposition.review => 'review',
+  };
+}
+
 class LocalSmsObservation {
   final TransactionEntry? transaction;
   final String? cardLast4, accountLast4;
+  final String? billerName;
+  final String? cadenceHint;
   final DateTime? dueDate;
-  final Money? availableBalance;
+  final Money? availableBalance, amountDue, minimumDue, autopayLimit;
+  final LocalSmsEventType eventType;
+  final LocalSmsDisposition disposition;
+  final List<String> reasonCodes;
+  final double confidence;
   const LocalSmsObservation({
     this.transaction,
     this.cardLast4,
     this.accountLast4,
+    this.billerName,
+    this.cadenceHint,
     this.dueDate,
     this.availableBalance,
+    this.amountDue,
+    this.minimumDue,
+    this.autopayLimit,
+    this.eventType = LocalSmsEventType.unknown,
+    this.disposition = LocalSmsDisposition.review,
+    this.reasonCodes = const [],
+    this.confidence = 0,
+  });
+}
+
+/// Best-effort values for the manual review sheet. These are suggestions only:
+/// the user must confirm them before anything is written as a transaction.
+class LocalSmsReviewDraft {
+  final Money? amount;
+  final String? merchantName;
+  final DateTime occurredAt;
+  final String? cardLast4;
+  final TxnInstrument instrument;
+  final TxnEntryKind entryKind;
+
+  const LocalSmsReviewDraft({
+    required this.amount,
+    required this.merchantName,
+    required this.occurredAt,
+    required this.cardLast4,
+    required this.instrument,
+    required this.entryKind,
   });
 }
 
@@ -20,12 +90,40 @@ class LocalSmsObservation {
 /// formats remain durable intake for server parsing; they never become guessed
 /// spending. Values are local observations until server reconciliation.
 class LocalSmsParser {
-  static const version = 3;
+  static const version = 4;
   static bool sensitive(String body) => RegExp(
     r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b|\b(?:do not|don't|never)\s+share\b|\bvalid\s+(?:for|till|until)\b",
     caseSensitive: false,
   ).hasMatch(body);
   static RegExp _re(String s) => RegExp(s, caseSensitive: false);
+
+  /// Extracts a display-safe biller name without retaining the raw SMS.
+  /// Bank sender IDs are transport identifiers (for example, TNBPAY), not
+  /// the provider name a person should see in a commitment list.
+  static String? extractBillerName(String body) {
+    final text = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final patterns = [
+      _re(
+        r'\b(?:your|the)\s+([A-Za-z][A-Za-z0-9 .&\x27/-]{2,80}?)\s+(?:bill|invoice|premium)\b',
+      ),
+      _re(
+        r'\b(?:bill|invoice|premium)\s+(?:from|of)\s+([A-Za-z][A-Za-z0-9 .&\x27/-]{2,80}?)(?=\s+(?:of|is|due|pay|dated|for)\b|[,.;]|$)',
+      ),
+    ];
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(text);
+      final candidate = match?.group(1)?.trim();
+      if (candidate == null || candidate.length < 3) continue;
+      if (_re(
+        r'^(?:credit card|card|account|bank|payment|electricity|water|gas|utility|internet|mobile|phone|broadband|insurance|premium)$',
+      ).hasMatch(candidate)) {
+        continue;
+      }
+      return candidate.replaceAll(RegExp(r'\s+'), ' ');
+    }
+    return null;
+  }
+
   static const dateToken =
       r'(?:\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}(?:st|nd|rd|th)?[\s./-]+[A-Za-z]{3,9}[,\s./-]+\d{2,4}|[A-Za-z]{3,9}[\s./-]+\d{1,2}(?:st|nd|rd|th)?[,]?[\s./-]+\d{2,4})';
 
@@ -83,6 +181,123 @@ class LocalSmsParser {
         : null;
   }
 
+  /// Extracts review suggestions without changing the automatic transaction
+  /// grammar. This is intentionally allowed to be incomplete because it is
+  /// only used to reduce typing in a user-confirmed form.
+  static LocalSmsReviewDraft reviewDraft({
+    required String namespace,
+    required String sender,
+    required String body,
+    required DateTime receivedAt,
+    List<UserCard> cards = const [],
+  }) {
+    final parsed = parse(
+      namespace: namespace,
+      sender: sender,
+      body: body,
+      receivedAt: receivedAt,
+      cards: cards,
+    );
+    final transaction = parsed?.transaction;
+    if (transaction != null) {
+      return LocalSmsReviewDraft(
+        amount: transaction.amount,
+        merchantName: transaction.merchantName,
+        occurredAt: transaction.occurredAt,
+        cardLast4: transaction.cardLast4,
+        instrument: transaction.instrument,
+        entryKind: transaction.entryKind,
+      );
+    }
+
+    // These messages should normally never enter the manual queue because
+    // capture handles them locally. Keep the review helper defensive anyway:
+    // a hosted-parser response or an older cached queue must not turn a bill,
+    // promotion, failure, or security amount into a suggested transaction.
+    final localOnly =
+        sensitive(body) ||
+        (parsed != null && parsed.disposition != LocalSmsDisposition.review);
+
+    Money? money(String? text) {
+      if (text == null) return null;
+      final match = RegExp(
+        r'^(\d+)(?:\.(\d{1,2}))?$',
+      ).firstMatch(text.replaceAll(',', ''));
+      if (match == null) return null;
+      final paise =
+          int.parse(match[1]!) * 100 +
+          int.parse((match[2] ?? '').padRight(2, '0'));
+      final value = Money.fromPaise(paise);
+      return value.paise > 0 ? value : null;
+    }
+
+    final completedSignal = _re(
+      r'\b(?:spent|debit|debited|paid|purchase|purchased|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed|successful|successfully|completed)\b',
+    ).hasMatch(body);
+    final nonFinalSignal = _re(
+      r'\b(?:pending|processing|initiated|declined|failed|failure|cancelled|canceled)\b|\b(?:will|shall|would)\s+be\b|\b(?:not|never)\s+(?:be\s+)?(?:credited|received|deposited|refunded|reversed)\b',
+    ).hasMatch(body);
+    final amount = !localOnly && completedSignal && !nonFinalSignal
+        ? money(
+            _re(
+              r'(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
+            ).firstMatch(body)?.group(1),
+          )
+        : null;
+    final cardLast4 =
+        parsed?.cardLast4 ??
+        _re(
+          r'\b(?:credit|debit)\s+card\b[\s\S]{0,45}?\b(?:ending|last\s*4|no\.?)\D{0,8}(\d{4})\b',
+        ).firstMatch(body)?.group(1);
+    final dateMatch = _re(dateToken).firstMatch(body);
+    final parsedDate = dateMatch == null
+        ? null
+        : parseDate(dateMatch.group(0)!);
+    final occurredAt =
+        !localOnly &&
+            parsedDate != null &&
+            !parsedDate.isAfter(receivedAt.add(const Duration(days: 1)))
+        ? parsedDate
+        : receivedAt;
+    final merchant = localOnly
+        ? null
+        : _re(
+            r'\b(?:at|to|for|from|by)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
+          ).firstMatch(body)?.group(1)?.trim();
+    final accountLike = _re(
+      r'\b(?:a/c|account|upi|imps|neft)\b',
+    ).hasMatch(body);
+    final instrument =
+        accountLike && !_re(r'\b(?:credit|debit)\s+card\b').hasMatch(body)
+        ? TxnInstrument.upiBank
+        : _re(
+            r'\bdebit\s+card\b|\b(?:atm|cash\s+withdrawal|withdrawn)\b',
+          ).hasMatch(body)
+        ? TxnInstrument.debitCard
+        : _re(r'\bcredit\s+card\b|\bcard\b').hasMatch(body)
+        ? TxnInstrument.creditCard
+        : TxnInstrument.other;
+    final entryKind =
+        _re(
+          r'\b(?:credited|received|deposited|refund(?:ed)?|reversed)\b',
+        ).hasMatch(body)
+        ? TxnEntryKind.income
+        : _re(
+            r'\bfrom\b[\s\S]{0,80}\b(?:a/c|account)\b[\s\S]{0,80}\bto\b',
+          ).hasMatch(body)
+        ? TxnEntryKind.transfer
+        : TxnEntryKind.spend;
+
+    return LocalSmsReviewDraft(
+      amount: amount,
+      merchantName: merchant,
+      occurredAt: occurredAt,
+      cardLast4: cardLast4,
+      instrument: instrument,
+      entryKind: entryKind,
+    );
+  }
+
   static LocalSmsObservation? parse({
     required String namespace,
     required String sender,
@@ -108,6 +323,7 @@ class LocalSmsParser {
     for (final phrase in [
       r'\bdue\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
       r'\b(?:payment|bill|amount)\s+due\s+date\b[\s\S]{0,120}?\b(?:is|on|by)\s*[:\-]?\s*',
+      r'\b(?:renew(?:s|al|ing)?|expires?)\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
     ]) {
       final token = _re('$phrase($dateToken)').firstMatch(body)?.group(1);
       if (token != null) {
@@ -131,24 +347,157 @@ class LocalSmsParser {
     }
 
     final balance = money(balanceText);
-    LocalSmsObservation observation([TransactionEntry? row]) =>
-        LocalSmsObservation(
-          transaction: row,
-          cardLast4: cardLast4,
-          accountLast4: accountLast4,
-          dueDate: due,
-          availableBalance: balance,
-        );
-    // Reminders and offers are observations, never purchases.
-    if (due != null ||
+    final billerName = extractBillerName(body);
+    final cadenceHint = _re(r'\bmonthly\b').hasMatch(body)
+        ? 'monthly'
+        : _re(r'\bquarterly\b').hasMatch(body)
+        ? 'quarterly'
+        : _re(r'\b(?:half[- ]yearly|half[- ]annual)\b').hasMatch(body)
+        ? 'halfYearly'
+        : _re(r'\b(?:annual|yearly)\b').hasMatch(body)
+        ? 'annual'
+        : null;
+    final amountDue = money(
+      _re(
+        r'\b(?:total|full|statement|amount)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
+      ).firstMatch(body)?.group(1),
+    );
+    final billAmount = money(
+      _re(
+        r'\b(?:bill|invoice|premium)\s+(?:of|amount(?:\s+is)?)\s*(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)',
+      ).firstMatch(body)?.group(1),
+    );
+    final minimumDue = money(
+      _re(
+        r'\b(?:minimum|min)\s*(?:amount\s*)?due\b\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
+      ).firstMatch(body)?.group(1),
+    );
+    final autopayLimit = money(
+      _re(
+        r'\b(?:max(?:imum)?|mandate)\s*(?:limit|amount)?\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*:?[\s]*([\d,]+(?:\.\d{1,2})?)',
+      ).firstMatch(body)?.group(1),
+    );
+    final hasAutopay = _re(
+      r'\b(?:auto[- ]?pay|autopay|mandate|e[- ]?mandate)\b',
+    ).hasMatch(body);
+    final autopaySetup =
+        hasAutopay &&
         _re(
-          r'\b(?:payment|amount|minimum)\s+due\b|\b(?:statement|bill)\b[\s\S]{0,40}\b(?:generated|ready|available)\b|\b(?:offer|cashback|reward|voucher|eligible|campaign)\b[\s\S]{0,80}\b(?:spend|card)\b|\bspend\s*(?:₹|rs\.?|inr)[\s\S]{0,50}\b(?:get|earn|cashback|reward|voucher)\b',
+          r'\b(?:activation|activated|enabled|registered|created|set\s+up|maximum|max\s+limit|e[- ]?mandate)\b',
+        ).hasMatch(body) &&
+        !_re(
+          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b',
+        ).hasMatch(body);
+    final promotion = _re(
+      r'\b(?:offer|promotion|promotional|campaign|eligible|cashback|reward|voucher)\b[\s\S]{0,80}\b(?:spend|card)\b|\bspend\s*(?:₹|rs\.?|inr)[\s\S]{0,50}\b(?:get|earn|cashback|reward|voucher)\b|\bbuy\s+\d+\s+get\s+\d+\b|\bget\s+(?:free|additional)\b|\brecharge\b[\s\S]{0,80}\b(?:free|offer|bonus|additional)\b',
+    ).hasMatch(body);
+    final failed = _re(
+      r'\b(?:declined|failed|failure|cancelled|canceled|pending|processing)\b',
+    ).hasMatch(body);
+    final balanceOnly = _re(
+      r'\b(?:available|avail|avl|current|closing)\s*(?:balance|bal)\b|\bcredit\s+limit\b',
+    ).hasMatch(body);
+    final hasBillMarker =
+        due != null ||
+        _re(
+          r'\b(?:payment|amount|minimum|total|premium)\s+due\b|\b(?:statement|bill|invoice)\b[\s\S]{0,40}\b(?:generated|ready|available)\b|\b(?:subscription|membership)\b[\s\S]{0,50}\b(?:renew|renewal|due|expires?)\b',
+        ).hasMatch(body);
+    final hasCompletedMovement =
+        _re(
+          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed)\b',
+        ).hasMatch(body) ||
+        _re(
+          r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred)\b[\s\S]{0,40}\b(?:successful|successfully|completed)\b',
+        ).hasMatch(body);
+    LocalSmsObservation observation([
+      TransactionEntry? row,
+      LocalSmsEventType? type,
+      LocalSmsDisposition? disposition,
+      List<String> reasons = const [],
+    ]) => LocalSmsObservation(
+      transaction: row,
+      cardLast4: cardLast4,
+      accountLast4: accountLast4,
+      billerName: billerName,
+      cadenceHint: cadenceHint,
+      dueDate: due,
+      availableBalance: balance,
+      amountDue: amountDue ?? billAmount,
+      minimumDue: minimumDue,
+      autopayLimit: autopayLimit,
+      eventType:
+          type ??
+          (row == null
+              ? LocalSmsEventType.unknown
+              : LocalSmsEventType.transaction),
+      disposition:
+          disposition ??
+          (row == null ? LocalSmsDisposition.review : LocalSmsDisposition.sync),
+      reasonCodes: reasons,
+      confidence: type == LocalSmsEventType.bill
+          ? (0.55 +
+                    (billerName == null ? 0 : 0.2) +
+                    (due == null ? 0 : 0.2) +
+                    ((amountDue ?? billAmount) == null ? 0 : 0.1) +
+                    (accountLast4 == null ? 0 : 0.05))
+                .clamp(0, 0.95)
+                .toDouble()
+          : 1,
+    );
+    // Reminders and offers are observations, never purchases.
+    if (hasBillMarker && !autopaySetup && !hasCompletedMovement) {
+      return observation(
+        null,
+        LocalSmsEventType.bill,
+        LocalSmsDisposition.localObservation,
+        [if (due != null) 'due_date_detected'],
+      );
+    }
+    if (autopaySetup) {
+      return observation(
+        null,
+        LocalSmsEventType.autopay,
+        LocalSmsDisposition.localIgnore,
+        ['autopay_setup'],
+      );
+    }
+    if (promotion &&
+        !hasCompletedMovement &&
+        !_re(r'\b(?:credited|received|deposited|refunded)\b').hasMatch(body)) {
+      return observation(
+        null,
+        LocalSmsEventType.promotion,
+        LocalSmsDisposition.localIgnore,
+        ['promotional_message'],
+      );
+    }
+    // A failure/decline notice is non-spending only when it contains no
+    // evidence that money actually moved. Some issuers send both messages
+    // together (for example, "payment failed but account debited"); keep
+    // those cases reviewable instead of acknowledging them as noise.
+    if (failed && !hasCompletedMovement) {
+      return observation(
+        null,
+        LocalSmsEventType.failed,
+        LocalSmsDisposition.localIgnore,
+        ['unsuccessful_transaction'],
+      );
+    }
+    if (balanceOnly &&
+        !_re(
+          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b',
         ).hasMatch(body)) {
-      return observation();
+      return observation(
+        null,
+        LocalSmsEventType.balance,
+        LocalSmsDisposition.localIgnore,
+        ['balance_or_limit_notice'],
+      );
     }
     if (_re(
-      r'\b(?:declined|failed|failure|cancelled|canceled|pending|processing|initiated)\b',
-    ).hasMatch(body)) {
+          r'\b(?:declined|failed|failure|cancelled|canceled|pending|processing|initiated)\b',
+        ).hasMatch(body) &&
+        !hasCompletedMovement) {
       return observation();
     }
     final amount = money(

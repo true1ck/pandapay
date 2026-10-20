@@ -61,6 +61,71 @@ void main() {
   );
 
   test(
+    'high-confidence promotion and AutoPay messages stop locally without spending',
+    () {
+      SmsImportStore(cache.financialStore).captureBatch('user:account-a', [
+        QueuedSms(
+          sender: 'JM-JIOINF-P',
+          body:
+              'Want to keep your number active? Recharge with Rs.349 today and get an additional Rs.349 recharge FREE. Offer valid today.',
+          receivedAt: DateTime(2026, 10, 18),
+        ),
+        QueuedSms(
+          sender: 'VM-AXISBK-S',
+          body:
+              'AutoPay activation successful. Txn amt: INR 0.00 Merchant: OpenAI LLC Axis Bank Card no.: XX7105 Max limit: INR 1999.00.',
+          receivedAt: DateTime(2026, 10, 18),
+        ),
+      ]);
+
+      expect(SmsIntakeRepository(db).pending('user:account-a'), isEmpty);
+      expect(
+        cache.financialStore.transactions(
+          'user:account-a',
+          const TransactionQuery(),
+        ),
+        isNull,
+      );
+      final observations = cache.financialStore.entities(
+        'user:account-a',
+        'sms_observations',
+      );
+      expect(
+        observations.map((row) => row['event_type']),
+        containsAll(<String>['promotion', 'autopay']),
+      );
+    },
+  );
+
+  test(
+    'balance-only SMS feeds account snapshots without creating spending',
+    () {
+      SmsImportStore(cache.financialStore).capture(
+        'user:account-a',
+        QueuedSms(
+          sender: 'VM-HDFCBK-B',
+          body: 'Your account XX1234 available balance is INR 3000.',
+          receivedAt: DateTime(2026, 10, 18),
+        ),
+      );
+
+      expect(SmsIntakeRepository(db).pending('user:account-a'), isEmpty);
+      expect(
+        cache.financialStore.transactions(
+          'user:account-a',
+          const TransactionQuery(),
+        ),
+        isNull,
+      );
+      final account = cache.financialStore
+          .bankAccounts('user:account-a')
+          .single;
+      expect(account.accountLast4, '1234');
+      expect(account.availableBalance?.rupees, 3000);
+    },
+  );
+
+  test(
     'unsupported formats move into account-scoped review without becoming spending',
     () async {
       final client = AuthenticatedHttpClient(

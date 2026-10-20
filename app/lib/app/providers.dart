@@ -21,6 +21,7 @@ import '../data/card_feedback_repository.dart';
 import '../data/card_overrides_repository.dart';
 import '../data/card_requests_api.dart';
 import '../data/catalogue_repository.dart';
+import '../data/commitments_repository.dart';
 import '../data/consents_api.dart';
 import '../data/device_identity.dart';
 import '../data/device_metadata.dart';
@@ -961,6 +962,96 @@ final needsReviewCountProvider = Provider<int>((ref) {
   return ref.watch(needsReviewItemsProvider).valueOrNull?.length ?? 0;
 });
 
+final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {
+  return CommitmentsRepository(namespace: ref.watch(cacheNamespaceProvider));
+});
+
+final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
+  final repo = ref.watch(commitmentsRepositoryProvider);
+  final manualList = await repo.fetchAll();
+
+  try {
+    final cache = await ref.watch(responseCacheProvider.future);
+    final ns = ref.watch(cacheNamespaceProvider);
+    final observations = cache.financialStore.entities(ns, 'sms_observations');
+
+    final detectedByIdentity = <String, Commitment>{};
+    String identityFor(
+      CommitmentCategory category,
+      String title,
+      String? account,
+    ) {
+      final suffix = RegExp(r'(\d{4})$').firstMatch(account ?? '')?.group(1);
+      return [
+        category.name,
+        title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ''),
+        suffix ?? account ?? '',
+      ].join('|');
+    }
+
+    final manualIdentities = <String>{
+      for (final item in manualList)
+        identityFor(item.category, item.title, item.identifier),
+    };
+    final orderedObservations = observations.toList()
+      ..sort(
+        (a, b) => ((b['received_at'] as String?) ?? '').compareTo(
+          (a['received_at'] as String?) ?? '',
+        ),
+      );
+    for (final obs in orderedObservations) {
+      if (obs['event_type'] != 'bill') continue;
+      // Card dues with card_last4 belong to Credit Card Dues section
+      if (obs['card_last4'] != null) continue;
+
+      final dueDateStr = obs['due_date'] as String?;
+      if (dueDateStr == null) continue;
+      final dueDate = DateTime.tryParse(dueDateStr);
+      if (dueDate == null) continue;
+
+      final sender = (obs['sender_bank'] as String? ?? 'Bill').trim();
+      final biller = (obs['biller_name'] as String?)?.trim();
+      final title = biller == null || biller.isEmpty ? sender : biller;
+      final amountPaise = (obs['amount_due_paise'] as num?)?.toInt();
+      final account = obs['account_last4'] as String?;
+      final category = CommitmentCategory.fromText('$title $sender');
+      final identity = identityFor(category, title, account);
+      final cadenceHint = obs['cadence_hint'] as String?;
+      final cadence = CommitmentCadence.values.firstWhere(
+        (value) => value.name == cadenceHint,
+        orElse: () => category == CommitmentCategory.insurance
+            ? CommitmentCadence.annual
+            : CommitmentCadence.monthly,
+      );
+
+      // Observations are evidence, not separate bills. Keep the newest
+      // reminder for one biller/account pair so monthly alerts do not create
+      // a growing list of duplicate commitments.
+      if (manualIdentities.contains(identity) ||
+          detectedByIdentity.containsKey(identity)) {
+        continue;
+      }
+
+      detectedByIdentity[identity] = Commitment(
+        id: 'sms-commitment-${sha256.convert(utf8.encode(identity))}',
+        title: title,
+        category: category,
+        amount: amountPaise != null ? Money.fromPaise(amountPaise) : null,
+        dueOn: dueDate,
+        identifier: account != null ? '••••$account' : null,
+        cadence: cadence,
+        status: CommitmentStatus.due,
+        source: CommitmentSource.sms,
+        confidence: (obs['confidence'] as num?)?.toDouble() ?? 0.55,
+      );
+    }
+
+    return [...manualList, ...detectedByIdentity.values];
+  } catch (_) {
+    return manualList;
+  }
+});
+
 /// UA-3: the signed-in user's own profiles row (owner-scoped via RLS —
 /// api/'s GET /profile, proved end to end back in Chunk 1 but never called
 /// from the app itself until this chunk). Null when signed out or when a
@@ -1045,6 +1136,7 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
           receivedAt: message.occurredAt,
         ),
       );
+      ref.invalidate(commitmentsProvider);
     },
     onSmsBatchCaptured: (messages) async {
       final cache = await ref.read(responseCacheProvider.future);
@@ -1062,6 +1154,7 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
               receivedAt: message.occurredAt,
             ),
         ]);
+        ref.invalidate(commitmentsProvider);
         await Future<void>.delayed(Duration.zero);
       }
     },
@@ -1070,6 +1163,12 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       final cache = await ref.read(responseCacheProvider.future);
       final store = cache.financialStore;
       final intake = SmsIntakeRepository(store.database);
+      final localEventByKey = <String, String>{
+        for (final observation in store.entities(namespace, 'sms_observations'))
+          if (observation['id'] is String &&
+              observation['event_type'] is String)
+            observation['id'] as String: observation['event_type'] as String,
+      };
       List<TransactionEntry>? confirmed;
       try {
         // One reconciliation request per batch, not one request per message.
@@ -1153,6 +1252,14 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
                   ? serverId
                   : null,
             );
+            intake.acknowledge(namespace, key);
+          });
+        } else if (localEventByKey[key] == 'bill') {
+          // A bill observation is intentionally not a transaction. If the
+          // hosted transaction parser does not understand it, acknowledge the
+          // intake here and leave any bill-specific review item untouched.
+          acknowledgements.add(() {
+            store.discardProvisional(namespace, key);
             intake.acknowledge(namespace, key);
           });
         } else if (outcome == 'needs_review' || outcome == 'unparsed') {
@@ -2708,10 +2815,6 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   final localAccounts = cache?.financialStore.bankAccounts(
     ref.read(cacheNamespaceProvider),
   );
-  if (localAccounts != null && localAccounts.isNotEmpty) {
-    ready = true;
-    return localAccounts;
-  }
   final key = _scopedCacheKey(ref, cacheKey);
   final cached = await _readCacheOrNull(ref, cache, key);
   List<BankAccountSummary> decode(CachedResponse snapshot) =>
@@ -2721,16 +2824,76 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
           .map(BankAccountSummary.fromJson)
           .toList();
 
-  if (_isKnownOffline() && cached != null) return decode(cached);
+  bool sameAccount(BankAccountSummary a, BankAccountSummary b) {
+    if (a.accountLast4 != b.accountLast4) return false;
+    final issuerA = (a.issuerSlug ?? a.issuerShortName ?? a.issuerName ?? '')
+        .trim()
+        .toLowerCase();
+    final issuerB = (b.issuerSlug ?? b.issuerShortName ?? b.issuerName ?? '')
+        .trim()
+        .toLowerCase();
+    return issuerA.isEmpty || issuerB.isEmpty || issuerA == issuerB;
+  }
+
+  List<BankAccountSummary> mergeAccounts(
+    List<BankAccountSummary> local,
+    List<BankAccountSummary> remote,
+  ) {
+    final merged = [...local];
+    for (final incoming in remote) {
+      final index = merged.indexWhere(
+        (existing) => sameAccount(existing, incoming),
+      );
+      if (index < 0) {
+        merged.add(incoming);
+        continue;
+      }
+      final existing = merged[index];
+      final existingAt = existing.latestSmsAt;
+      final incomingAt = incoming.latestSmsAt;
+      final incomingIsNewer =
+          existingAt == null ||
+          (incomingAt != null &&
+              existingAt != null &&
+              incomingAt.isAfter(existingAt));
+      final primary = incomingIsNewer ? incoming : existing;
+      final secondary = incomingIsNewer ? existing : incoming;
+      final latestAt = existingAt == null
+          ? incomingAt
+          : incomingAt == null
+          ? existingAt
+          : (incomingAt.isAfter(existingAt) ? incomingAt : existingAt);
+      merged[index] = BankAccountSummary(
+        accountLast4: primary.accountLast4,
+        availableBalance:
+            primary.availableBalance ?? secondary.availableBalance,
+        latestSmsAt: latestAt,
+        smsCount: existing.smsCount > incoming.smsCount
+            ? existing.smsCount
+            : incoming.smsCount,
+        issuerSlug: primary.issuerSlug ?? secondary.issuerSlug,
+        issuerName: primary.issuerName ?? secondary.issuerName,
+        issuerShortName: primary.issuerShortName ?? secondary.issuerShortName,
+        issuerLogoUrl: primary.issuerLogoUrl ?? secondary.issuerLogoUrl,
+      );
+    }
+    return merged;
+  }
+
+  if (_isKnownOffline()) {
+    if (localAccounts != null && localAccounts.isNotEmpty) return localAccounts;
+    if (cached != null) return decode(cached);
+  }
   try {
     final accounts = await repo.fetchBankAccountSummaries().timeout(
       _homeRequestTimeout,
     );
+    final combined = mergeAccounts(localAccounts ?? const [], accounts);
     try {
       await cache?.put(
         key,
         jsonEncode({
-          'accounts': accounts
+          'accounts': combined
               .map(
                 (account) => {
                   'accountLast4': account.accountLast4,
@@ -2747,8 +2910,13 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
         }),
       );
     } catch (_) {}
-    return accounts;
+    ready = true;
+    return combined;
   } catch (error) {
+    if (localAccounts != null && localAccounts.isNotEmpty) {
+      ready = true;
+      return localAccounts;
+    }
     if (!_canUseReadCache(error) || cached == null) {
       if (_isAuthenticationFailure(error)) {
         return const [];
@@ -4905,6 +5073,7 @@ class SmsAutoImportController {
       }
       store.notifyExternalChanges(namespace, changed);
     }
+    _ref.invalidate(commitmentsProvider);
     _ref.invalidate(pendingRecoveryStatusProvider);
   }
 

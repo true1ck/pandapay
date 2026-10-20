@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'local/app_database.dart';
 
+enum NeedsReviewKind { transaction, commitment }
+
 /// Task D-4 (ui-spec D4 Needs Review Queue) — one raw SMS the parser
 /// couldn't match, kept entirely ON-DEVICE.
 ///
@@ -26,6 +28,7 @@ class NeedsReviewItem {
   final String body;
   final String? reason;
   final DateTime receivedAt;
+  final NeedsReviewKind kind;
 
   const NeedsReviewItem({
     required this.id,
@@ -33,6 +36,7 @@ class NeedsReviewItem {
     required this.body,
     this.reason,
     required this.receivedAt,
+    this.kind = NeedsReviewKind.transaction,
   });
 
   Map<String, dynamic> toJson() => {
@@ -41,6 +45,7 @@ class NeedsReviewItem {
     'body': body,
     'reason': reason,
     'receivedAt': receivedAt.toIso8601String(),
+    'kind': kind.name,
   };
 
   factory NeedsReviewItem.fromJson(Map<String, dynamic> json) =>
@@ -50,10 +55,31 @@ class NeedsReviewItem {
         body: json['body'] as String,
         reason: json['reason'] as String?,
         receivedAt: DateTime.parse(json['receivedAt'] as String),
+        kind: NeedsReviewKind.values.firstWhere(
+          (kind) => kind.name == json['kind'],
+          orElse: () => NeedsReviewKind.transaction,
+        ),
       );
 }
 
 const _needsReviewKey = 'pandapay_app.needs_review_queue_v1';
+
+/// Synchronous capture path used by the local SMS parser, which deliberately
+/// remains synchronous so foreground/background capture share one transaction.
+/// The stable SMS id makes this insert idempotent.
+void addNeedsReviewSync(
+  AppDatabase database,
+  String namespace,
+  NeedsReviewItem item,
+) {
+  database.db.execute(
+    'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
+  );
+  database.db.execute(
+    'INSERT OR REPLACE INTO local_needs_review VALUES (?,?,?)',
+    [namespace, item.id, jsonEncode(item.toJson())],
+  );
+}
 
 /// Plain on-device store, same SharedPreferences mechanism
 /// dueDateRemindersProvider (providers.dart) already uses for a similar

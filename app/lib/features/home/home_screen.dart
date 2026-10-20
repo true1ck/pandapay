@@ -2599,19 +2599,30 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
               <TransactionEntry>[])
         if (transaction.cardLast4 != null) transaction.cardLast4!,
     };
-    final summariesByLast4 = <String, BankAccountSummary>{
-      for (final account in accounts)
-        if (RegExp(r'^\d{4}$').hasMatch(account.accountLast4) &&
-            !cardSuffixes.contains(account.accountLast4))
-          account.accountLast4: account,
-    };
-    final accountLast4s = summariesByLast4.keys.toSet();
-    final sortedAccountLast4s = accountLast4s.toList()..sort();
-    final accountCount = sortedAccountLast4s.length;
+    // Keep the issuer in the identity. Two different banks can legitimately
+    // have accounts ending in the same four digits; keying only by suffix
+    // silently dropped one account and produced an incorrect total.
+    final visibleAccounts =
+        accounts
+            .where(
+              (account) =>
+                  RegExp(r'^\d{4}$').hasMatch(account.accountLast4) &&
+                  !cardSuffixes.contains(account.accountLast4),
+            )
+            .toList()
+          ..sort((a, b) {
+            final issuer = (a.issuerShortName ?? a.issuerName ?? '').compareTo(
+              b.issuerShortName ?? b.issuerName ?? '',
+            );
+            return issuer != 0
+                ? issuer
+                : a.accountLast4.compareTo(b.accountLast4);
+          });
+    final accountCount = visibleAccounts.length;
 
     var total = const Money.zero();
     var balancesFound = 0;
-    for (final account in summariesByLast4.values) {
+    for (final account in visibleAccounts) {
       final balance = account.availableBalance;
       if (balance == null) continue;
       total += balance;
@@ -2763,7 +2774,7 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
             ),
             const SizedBox(height: AppSpace.xs),
             Text(
-              'Detected from categorized spending. A balance will appear when a bank SMS includes one.',
+              'Detected from imported bank SMS. A balance appears only when the SMS includes one.',
               style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
             ),
             if (hasBalances) ...[
@@ -2784,7 +2795,7 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
               alignment: Alignment.topCenter,
-              child: _expanded && sortedAccountLast4s.isNotEmpty
+              child: _expanded && visibleAccounts.isNotEmpty
                   ? Padding(
                       key: const ValueKey('home-bank-accounts-expanded'),
                       padding: const EdgeInsets.only(top: AppSpace.md),
@@ -2792,10 +2803,13 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
                         children: [
                           Container(height: 1, color: BambooInk.slateHairline),
                           const SizedBox(height: AppSpace.sm),
-                          for (final last4 in sortedAccountLast4s)
+                          for (final account in visibleAccounts)
                             _HomeBankAccountRow(
-                              last4: last4,
-                              summary: summariesByLast4[last4],
+                              key: ValueKey(
+                                '${account.issuerSlug ?? account.issuerShortName ?? account.issuerName ?? 'bank'}:${account.accountLast4}',
+                              ),
+                              last4: account.accountLast4,
+                              summary: account,
                               revealed: _unlocked,
                             ),
                         ],
@@ -2816,6 +2830,7 @@ class _HomeBankAccountRow extends StatelessWidget {
   final bool revealed;
 
   const _HomeBankAccountRow({
+    super.key,
     required this.last4,
     required this.summary,
     required this.revealed,

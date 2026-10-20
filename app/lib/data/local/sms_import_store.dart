@@ -1,4 +1,5 @@
 import '../local_sms_parser.dart';
+import '../needs_review_repository.dart';
 import '../user_cards_repository.dart';
 import '../../features/sms_import/sms_background_queue.dart';
 import 'financial_store.dart';
@@ -76,11 +77,47 @@ class SmsImportStore {
           'received_at': message.receivedAt.toUtc().toIso8601String(),
           'account_last4': observation.accountLast4,
           'card_last4': observation.cardLast4,
+          'biller_name': observation.billerName,
+          'cadence_hint': observation.cadenceHint,
           'balance_paise': observation.availableBalance?.paise,
+          'amount_due_paise': observation.amountDue?.paise,
+          'minimum_due_paise': observation.minimumDue?.paise,
+          'autopay_limit_paise': observation.autopayLimit?.paise,
           'due_date': observation.dueDate?.toIso8601String(),
+          'event_type': observation.eventType.wireValue,
+          'disposition': observation.disposition.wireValue,
+          'reason_codes': observation.reasonCodes,
+          'confidence': observation.confidence,
         });
         if (observation.transaction != null) {
           store.saveProvisional(namespace, observation.transaction!);
+        }
+        if (observation.eventType == LocalSmsEventType.bill &&
+            observation.cardLast4 == null &&
+            (observation.dueDate == null || observation.confidence < .85)) {
+          addNeedsReviewSync(
+            store.database,
+            namespace,
+            NeedsReviewItem(
+              id: 'commitment:$key',
+              sender: message.sender,
+              body: message.body,
+              reason: observation.reasonCodes.isEmpty
+                  ? 'bill_needs_confirmation'
+                  : observation.reasonCodes.join(', '),
+              receivedAt: message.receivedAt,
+              kind: NeedsReviewKind.commitment,
+            ),
+          );
+        }
+        // High-confidence non-spending classifications are terminal on the
+        // device. They must not wait for the hosted parser, where they would
+        // otherwise be uploaded as raw SMS and potentially reappear as
+        // review items. Transaction and bill observations retain the
+        // existing sync behavior until their structured server contracts are
+        // added.
+        if (observation.disposition == LocalSmsDisposition.localIgnore) {
+          intake.acknowledge(namespace, key);
         }
         if (observation.dueDate != null && observation.cardLast4 != null) {
           final matching = cards
