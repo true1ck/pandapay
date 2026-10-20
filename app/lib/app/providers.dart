@@ -1108,6 +1108,12 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
 
   try {
     final profile = await api.fetchProfile();
+    if (profile != null) {
+      cache?.financialStore.database.saveProfileDisplayName(
+        ref.read(cacheNamespaceProvider),
+        profile['display_name'] as String?,
+      );
+    }
     try {
       await cache?.put(key, jsonEncode({'profile': profile}));
     } catch (_) {}
@@ -1128,7 +1134,12 @@ final profileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       }
       rethrow;
     }
-    return decodeCached();
+    final cachedProfile = decodeCached();
+    cache?.financialStore.database.saveProfileDisplayName(
+      ref.read(cacheNamespaceProvider),
+      cachedProfile?['display_name'] as String?,
+    );
+    return cachedProfile;
   }
 });
 

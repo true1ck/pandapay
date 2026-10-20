@@ -3415,6 +3415,107 @@ async function recordTransactionObservation(client, userId, transactionId, {
   );
 }
 
+// Pair the two legs of an explicitly account-to-account movement without
+// collapsing either ledger row. This is deliberately evidence-gated: an
+// Pair only when both transaction legs share an exact bank reference and
+// cross-reference the destination/account suffix. Suffixes and timing alone
+// are not proof that both accounts belong to this user.
+async function pairTransferObservation(client, userId, transactionId) {
+  const current = await client.query(
+    `SELECT t.id, t.amount_inr, t.occurred_at,
+            o.metadata->>'transferKind' AS transfer_kind,
+            o.metadata->>'accountLast4' AS account_last4,
+            o.metadata->>'destinationAccountLast4' AS destination_account_last4,
+            o.metadata->>'bankReference' AS bank_reference,
+            o.metadata->>'transferGroupId' AS transfer_group_id
+       FROM transactions t
+       JOIN transaction_observations o
+         ON o.transaction_id = t.id AND o.profile_id = t.profile_id
+      WHERE t.id = $1 AND t.profile_id = $2
+        AND o.source IN ('sms', 'sms_bulk')
+      ORDER BY o.observed_at DESC
+      LIMIT 1`,
+    [transactionId, userId],
+  );
+  const row = current.rows[0];
+  if (!row || !row.transfer_kind || !Number.isFinite(Number(row.amount_inr))) return null;
+  // Pairing is idempotent. Exact source-key retries must not create a new
+  // group and overwrite the evidence attached to an already matched pair.
+  if (row.transfer_group_id) return null;
+  const debitKinds = new Set(['account_to_account', 'account_to_account_candidate']);
+  const creditKinds = new Set(['incoming_bank_transfer_candidate', 'unclassified_credit']);
+  const isDebit = debitKinds.has(row.transfer_kind) && row.destination_account_last4;
+  const isCredit = creditKinds.has(row.transfer_kind) && row.account_last4;
+  if (!isDebit && !isCredit) return null;
+  if (!row.bank_reference) return null;
+
+  const candidates = await client.query(
+    `SELECT t.id,
+            o.metadata->>'transferKind' AS transfer_kind,
+            o.metadata->>'accountLast4' AS account_last4,
+            o.metadata->>'destinationAccountLast4' AS destination_account_last4,
+            o.metadata->>'bankReference' AS bank_reference,
+            o.metadata->>'transferGroupId' AS transfer_group_id
+       FROM transactions t
+       JOIN transaction_observations o
+         ON o.transaction_id = t.id AND o.profile_id = t.profile_id
+      WHERE t.profile_id = $1
+        AND t.id <> $2
+        AND t.status = 'active'
+        AND t.entry_kind = 'transfer'
+        AND t.amount_inr = $3
+        AND t.occurred_at >= $4::timestamptz - interval '48 hours'
+        AND t.occurred_at <= $4::timestamptz + interval '48 hours'
+        AND o.source IN ('sms', 'sms_bulk')
+        AND o.metadata->>'transferGroupId' IS NULL
+        AND (
+          ($5::text IS NOT NULL AND o.metadata->>'accountLast4' = $5)
+          OR ($6::text IS NOT NULL AND o.metadata->>'destinationAccountLast4' = $6)
+        )
+      ORDER BY
+        CASE WHEN $7::text IS NOT NULL AND o.metadata->>'bankReference' = $7 THEN 0 ELSE 1 END,
+        abs(extract(epoch FROM (t.occurred_at - $4::timestamptz)))
+      LIMIT 2`,
+    [
+      userId,
+      transactionId,
+      row.amount_inr,
+      row.occurred_at,
+      isDebit ? row.destination_account_last4 : null,
+      isCredit ? row.account_last4 : null,
+      row.bank_reference || null,
+    ],
+  );
+  const counterpart = candidates.rows.find((candidate) => {
+    const counterpartIsCredit = creditKinds.has(candidate.transfer_kind);
+    const counterpartIsDebit = debitKinds.has(candidate.transfer_kind)
+      && candidate.destination_account_last4;
+    if (isDebit) {
+      return counterpartIsCredit
+        && candidate.account_last4 === row.destination_account_last4
+        && candidate.bank_reference === row.bank_reference;
+    }
+    return counterpartIsDebit
+      && candidate.destination_account_last4 === row.account_last4
+      && candidate.bank_reference === row.bank_reference;
+  });
+  if (!counterpart || candidates.rows.length !== 1) return null;
+
+  const transferGroupId = crypto.randomUUID();
+  const metadata = JSON.stringify({
+    transferGroupId,
+    pairedTransactionId: counterpart.id,
+    pairEvidence: 'bank_reference_and_account_suffix',
+  });
+  await client.query(
+    `UPDATE transaction_observations
+        SET metadata = metadata || $1::jsonb
+      WHERE profile_id = $2 AND transaction_id IN ($3, $4)`,
+    [metadata, userId, transactionId, counterpart.id],
+  );
+  return { transferGroupId, counterpartId: counterpart.id };
+}
+
 function clientMutationSourceKey(userId, source, clientMutationId) {
   return crypto
     .createHash('sha256')
@@ -3501,11 +3602,40 @@ async function insertTransactionAndUpdateState(client, userId, {
     // make the bug permanent. Refresh only stronger parser evidence here:
     // never alter amount/date/merchant and never replace an existing card.
     const existing = await client.query(
-      `SELECT id
-         FROM transactions WHERE profile_id = $1 AND source_key = $2 LIMIT 1`,
+      `SELECT t.*
+         FROM transactions t
+        WHERE t.profile_id = $1 AND t.source_key = $2
+        LIMIT 1
+        FOR UPDATE`,
       [userId, sourceKey]
     );
     if (!existing.rows[0]) throw new Error('source_key conflict without an existing transaction');
+    const old = existing.rows[0];
+    const lockResult = await client.query(
+      `SELECT COALESCE(bool_or(metadata->>'classificationLocked' = 'true'), false) AS locked
+         FROM transaction_observations
+        WHERE profile_id = $1 AND transaction_id = $2`,
+      [userId, old.id],
+    );
+    const classificationLocked = lockResult.rows[0]?.locked === true;
+    const oldMovesCardState = old.instrument === 'credit_card'
+      && old.entry_kind === 'spend'
+      && Boolean(old.user_card_id);
+    const shouldReclassify = !classificationLocked && old.entry_kind !== resolvedEntryKind;
+    const oldCard = oldMovesCardState
+      ? await loadUserCardForState(client, userId, old.user_card_id)
+      : null;
+    if (shouldReclassify && oldMovesCardState && old.state_applied !== false && !oldCard) {
+      throw new Error('cannot reclassify applied card transaction without its card state');
+    }
+    if (oldMovesCardState && old.state_applied !== false && oldCard && shouldReclassify) {
+      await reverseTransactionState(client, userId, oldCard, old);
+    }
+    const refreshedEntryKind = shouldReclassify ? resolvedEntryKind : old.entry_kind;
+    const effectiveInstrument = old.instrument === 'other' ? resolvedInstrument : old.instrument;
+    const refreshedMovesCardState = effectiveInstrument === 'credit_card'
+      && refreshedEntryKind === 'spend'
+      && Boolean(old.user_card_id || userCardId);
     const refreshed = await client.query(
       `UPDATE transactions t
           SET instrument = CASE
@@ -3519,17 +3649,43 @@ async function insertTransactionAndUpdateState(client, userId, {
                   THEN $4::uuid
                 ELSE t.user_card_id
               END,
-              source_account_last4 = COALESCE(t.source_account_last4, $5)
+              source_account_last4 = COALESCE(t.source_account_last4, $5),
+              entry_kind = $6::txn_entry_kind,
+              state_applied = CASE
+                WHEN $7::boolean THEN false
+                ELSE t.state_applied
+              END
         WHERE t.id = $1 AND t.profile_id = $2
       RETURNING id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill`,
-      [existing.rows[0].id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4]
+      [old.id, userId, resolvedInstrument, userCardId || null, resolvedAccountLast4, refreshedEntryKind, Boolean(shouldReclassify)]
     );
+    if (shouldReclassify && refreshedMovesCardState && !old.is_backfill) {
+      const card = oldCard || (userCardId ? await loadUserCardForState(client, userId, userCardId) : null);
+      if (!card) throw new Error('cannot apply reclassified card transaction without its card state');
+      await applyTransactionState(client, userId, card, {
+          txnId: old.id,
+          userCardId: old.user_card_id || userCardId,
+          amount: Number(old.amount_inr),
+          occurred: old.occurred_at,
+          categoryId: old.category_id,
+          merchantName: old.merchant_name,
+          rail: old.rail,
+          sign: 1,
+      });
+      await client.query(`UPDATE transactions SET state_applied = true WHERE id = $1`, [old.id]);
+    }
     await recordTransactionObservation(client, userId, refreshed.rows[0].id, {
       source: resolvedSource,
       sourceKey,
       observedAt: observedAt || occurred,
       metadata: { ...(observationMetadata || {}), exactRetry: true },
     });
+    // Keep the extracted ingestion writer used by the duplicate-ingestion
+    // tests self-contained; the production module always has this helper in
+    // scope, while the test intentionally evaluates only this function.
+    if (typeof pairTransferObservation === 'function') {
+      await pairTransferObservation(client, userId, refreshed.rows[0].id);
+    }
     return { status: 200, duplicate: true, duplicateKind: 'exact_retry', transaction: refreshed.rows[0] };
   }
 
@@ -3539,6 +3695,9 @@ async function insertTransactionAndUpdateState(client, userId, {
     observedAt: observedAt || occurred,
     metadata: observationMetadata,
   });
+  if (typeof pairTransferObservation === 'function') {
+    await pairTransferObservation(client, userId, txn.rows[0].id);
+  }
 
   // smsextractionimple.md §0.1 D2: a backfilled historical message inserts
   // the transaction but must not touch cap/milestone/fee-waiver state.
@@ -3672,6 +3831,10 @@ async function importParsedMessage(client, userId, {
     ...(parsed.fields.reference ? { bankReference: parsed.fields.reference } : {}),
     ...(parsed.fields.transferParty ? { transferParty: parsed.fields.transferParty } : {}),
     ...(parsed.fields.transferKind ? { transferKind: parsed.fields.transferKind } : {}),
+    ...(parsed.fields.entryKind ? { parserEntryKind: parsed.fields.entryKind } : {}),
+    ...(parsed.fields.destinationAccountLast4
+      ? { destinationAccountLast4: parsed.fields.destinationAccountLast4 }
+      : {}),
     ...(parsed.fields.accountLast4 && parsed.fields.availableBalanceInr != null
       ? { availableBalanceInr: parsed.fields.availableBalanceInr }
       : {}),
@@ -3902,8 +4065,114 @@ async function reconcileArchivedCardReferences(client, userId) {
   };
 }
 
+// The parser uses the owner's profile name to recognize self transfers that
+// address the user by name (UPI/QR "To SUJAY ..."). Mainly defensive: a
+// missing profile row just yields null and the heuristic stays dormant.
+async function profileDisplayName(db, userId) {
+  try {
+    const row = await db.query(
+      'SELECT display_name FROM profiles WHERE id = $1 LIMIT 1',
+      [userId],
+    );
+    return row.rows[0]?.display_name || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function repairSmsHistory(client, userId) {
   const cardReplacement = await reconcileArchivedCardReferences(client, userId);
+  // Parser upgrades retain their strongest decision in observation metadata.
+  // Reconcile those rows before duplicate repair so a card-bill/transfer row
+  // that was previously imported as spend cannot inflate totals or be merged
+  // with a real purchase. User corrections are explicitly locked by PATCH
+  // /transactions and are never changed here.
+  const classificationEvidence = await client.query(
+    `SELECT DISTINCT ON (t.id)
+            t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.category_id,
+            t.merchant_name, t.rail, t.instrument, t.entry_kind,
+            t.state_applied, t.is_backfill,
+            o.metadata->>'transferKind' AS transfer_kind,
+            o.metadata->>'parserEntryKind' AS parser_entry_kind
+       FROM transactions t
+       JOIN transaction_observations o
+         ON o.transaction_id = t.id AND o.profile_id = t.profile_id
+      WHERE t.profile_id = $1
+        AND t.status = 'active'
+        AND t.source IN ('sms', 'sms_bulk')
+        AND (o.metadata->>'transferKind' IS NOT NULL OR o.metadata->>'parserEntryKind' IS NOT NULL)
+        AND NOT EXISTS (
+          SELECT 1 FROM transaction_observations locked_observation
+           WHERE locked_observation.profile_id = t.profile_id
+             AND locked_observation.transaction_id = t.id
+             AND locked_observation.metadata->>'classificationLocked' = 'true'
+        )
+      ORDER BY t.id, o.observed_at DESC` ,
+    [userId],
+  );
+  const transferKinds = new Set([
+    'account_to_account', 'account_to_account_candidate', 'wallet_load',
+    'card_bill', 'cash_withdrawal', 'loan_repayment', 'refund', 'reversal',
+    'reward', 'loan_disbursement', 'investment_proceeds', 'cash_deposit',
+    'gift_received', 'reimbursement', 'incoming_bank_transfer_candidate',
+    'unclassified_credit', 'card_adjustment',
+  ]);
+  let classificationReclassified = 0;
+  for (const row of classificationEvidence.rows) {
+    const desiredKind = row.transfer_kind === 'fee' || row.transfer_kind === 'payment_to_person'
+      ? 'spend'
+      : transferKinds.has(row.transfer_kind)
+      ? 'transfer'
+      : ['spend', 'income', 'investment', 'transfer'].includes(row.parser_entry_kind)
+      ? row.parser_entry_kind
+      : null;
+    if (!desiredKind || desiredKind === row.entry_kind) continue;
+
+    const oldMovesCardState = row.instrument === 'credit_card'
+      && row.entry_kind === 'spend'
+      && Boolean(row.user_card_id);
+    const oldCard = oldMovesCardState
+      ? await loadUserCardForState(client, userId, row.user_card_id)
+      : null;
+    if (oldMovesCardState && row.state_applied !== false && !oldCard) {
+      throw new Error('cannot repair classification without reversing its applied card state');
+    }
+    if (oldMovesCardState && row.state_applied !== false && oldCard) {
+      await reverseTransactionState(client, userId, oldCard, row);
+    }
+    await client.query(
+      `UPDATE transactions
+          SET entry_kind = $1::txn_entry_kind,
+              state_applied = false,
+              updated_at = now()
+        WHERE id = $2 AND profile_id = $3`,
+      [desiredKind, row.id, userId],
+    );
+    const newMovesCardState = row.instrument === 'credit_card'
+      && desiredKind === 'spend'
+      && Boolean(row.user_card_id)
+      && !row.is_backfill;
+    if (newMovesCardState) {
+      const card = oldCard || await loadUserCardForState(client, userId, row.user_card_id);
+      if (card) {
+        await applyTransactionState(client, userId, card, {
+          txnId: row.id,
+          userCardId: row.user_card_id,
+          amount: Number(row.amount_inr),
+          occurred: row.occurred_at,
+          categoryId: row.category_id,
+          merchantName: row.merchant_name,
+          rail: row.rail,
+          sign: 1,
+        });
+        await client.query(
+          `UPDATE transactions SET state_applied = true WHERE id = $1 AND profile_id = $2`,
+          [row.id, userId],
+        );
+      }
+    }
+    classificationReclassified += 1;
+  }
   const duplicateRows = await client.query(
     `WITH groups AS (
        SELECT amount_inr, instrument, entry_kind, user_card_id, occurred_at,
@@ -4160,6 +4429,7 @@ async function repairSmsHistory(client, userId) {
     duplicateSuppressed: duplicateRows.rowCount + notificationDuplicateRows.rowCount,
     linkedCards,
     reclassified,
+    classificationReclassified,
     remainingLegacyRows: Math.max(0, legacyRows.rowCount - reclassified),
     replacementCards: cardReplacement.replacementCards,
     remappedTransactions: cardReplacement.remappedTransactions,
@@ -4773,7 +5043,12 @@ app.post('/transactions', requireAuth, async (req, res) => {
         sourceKey: clientMutationId
           ? clientMutationSourceKey(req.userId, 'manual', clientMutationId)
           : null,
-        observationMetadata: clientMutationId ? { clientMutation: true } : null,
+        observationMetadata: {
+          ...(clientMutationId ? { clientMutation: true } : {}),
+          ...(Object.prototype.hasOwnProperty.call(req.body || {}, 'entryKind')
+            ? { classificationLocked: true, classificationSource: 'user' }
+            : {}),
+        },
         instrument, entryKind,
       });
     });
@@ -4833,7 +5108,11 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
           ORDER BY version DESC`
       );
 
-      const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
+      const parsed = parseSmsAgainstPatterns(patterns.rows, {
+  sender,
+  body,
+  ownUserName: await profileDisplayName(client, req.userId),
+});
       const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
       const statementDaySync = await importResolvers.syncStatementDayFromSms(client, req.userId, {
         body,
@@ -5121,7 +5400,11 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         const statementDateDetected = Boolean(
           importResolvers.extractStatementDate(body, occurred),
         );
-        const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
+        const parsed = parseSmsAgainstPatterns(patterns.rows, {
+  sender,
+  body,
+  ownUserName: await profileDisplayName(client, req.userId),
+});
         const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
         const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
           body,
@@ -5610,6 +5893,10 @@ app.get('/transactions', requireAuth, async (req, res) => {
                 t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
+                (SELECT MAX(o.observed_at)
+                   FROM transaction_observations o
+                  WHERE o.transaction_id = t.id
+                    AND o.source IN ('sms', 'sms_bulk')) AS sms_received_at,
                 COALESCE(t.source_account_last4,
                   (SELECT o.metadata->>'accountLast4'
                      FROM transaction_observations o
@@ -6079,6 +6366,18 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
           newValues.instrument, newValues.entryKind, old.id,
         ]
       );
+
+      // A user-selected entry kind is an explicit classification correction.
+      // Persist the lock in the privacy-safe observation metadata so a later
+      // SMS replay or parser upgrade cannot silently overwrite it.
+      if (entryKind !== undefined) {
+        await client.query(
+          `UPDATE transaction_observations
+              SET metadata = metadata || '{"classificationLocked":true,"classificationSource":"user"}'::jsonb
+            WHERE profile_id = $1 AND transaction_id = $2`,
+          [req.userId, old.id],
+        );
+      }
 
       const stateUpdates = old.is_backfill || !newMovesCardState
         ? {}
@@ -9229,6 +9528,14 @@ app.post('/inbound-emails/webhook', async (req, res) => {
     }
 
     // Turn the parsed mail into an actual transaction.
+    const ownUserName = await profileDisplayName(pool, row.user_id);
+    // Re-parse with the owner's profile name so self-transfer naming rules
+    // see it. The first parse stays intake-only for the RPC signals.
+    const parsed = parseSmsAgainstPatterns(patternsResult.rows, {
+      sender: from,
+      body,
+      ownUserName,
+    });
     //
     // This route used to stop at "stored, parsed_ok = true" and go no
     // further, so a forwarded bank email became a row in `inbound_emails`
@@ -9405,7 +9712,11 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
         `SELECT id, issuer_id, sender_pattern, regex, field_map
            FROM parser_patterns WHERE channel = 'email' AND is_active = true ORDER BY version DESC`
       );
-      const parsed = parseSmsAgainstPatterns(patterns.rows, { sender: email.sender, body: email.body_text || '' });
+      const parsed = parseSmsAgainstPatterns(patterns.rows, {
+  sender: email.sender,
+  body: email.body_text || '',
+  ownUserName: await profileDisplayName(client, req.userId),
+});
       if (!parsed.ok) {
         return { status: 422, error: 'could_not_parse_this_email', reason: parsed.reason };
       }

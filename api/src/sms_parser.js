@@ -19,7 +19,7 @@ const KNOWN_FIELDS = [
   'direction', 'mcc', 'availableBalance', 'balance',
 ];
 const MAX_MESSAGE_LENGTH = 20000;
-const { isInvestmentFundingMessage } = require('./recurring');
+const { isInvestmentFundingMessage, isBrokerSettlementMessage } = require('./recurring');
 
 // OTP/security alerts can contain the same words as a transaction alert
 // ("txn", "INR", "card ending") but must never become spending records.
@@ -72,7 +72,7 @@ function isNonTransactionAlert(body) {
 function isBankAccountUpiMessage(body) {
   const text = String(body || '').toLowerCase();
   return /\b(?:upi|a\/?c\.?|account)\b/.test(text)
-    && /\b(?:debit(?:ed)?|paid|spent|sent|transferred)\b/.test(text)
+    && (/\b(?:debit(?:ed)?|paid|spent|sent|transferred)\b/.test(text) || isWalletLoadMessage(text))
     && !/\b(?:credit|debit)\s+card\b/.test(text);
 }
 
@@ -118,7 +118,7 @@ function isBankAccountMessage(body, sender = '') {
   // The suffix must be accompanied by explicit account/bank language. A
   // balance phrase by itself is not enough because investment and policy
   // alerts can also contain "balance" wording.
-  return accountMarker && bankIdentityMarker && (balanceMarker || movementMarker);
+  return accountMarker && bankIdentityMarker && (balanceMarker || movementMarker || isWalletLoadMessage(text));
 }
 
 // Only accept an explicitly labelled available/current balance. The spend
@@ -142,6 +142,51 @@ function withAvailableBalance(fields, body) {
   return balance === null ? fields : { ...fields, availableBalanceInr: balance };
 }
 
+function isWalletLoadMessage(body) {
+  const text = String(body || '');
+  // Require a wallet-ish noun within a short window after the load verb. A
+  // bare "add funds" cannot win: broker alerts say "add funds back to your
+  // Dhan account" as an instruction for the next action, which is not this
+  // transaction. Named-wallet branches below carry the common real shapes.
+  return /\b(?:wallet\s+load|load(?:ed|ing)?\s+(?:the\s+)?(?:paytm|phonepe|amazon\s*pay|mobikwik|wallet)|money\s+added\s+to\s+(?:the\s+)?wallet|add\s+(?:money|funds?)|top[ -]?up|money\s+added)\b[\s\S]{0,40}\b(?:paytm|phonepe|amazon\s*pay|mobikwik|wallet)\b/i.test(text)
+    || /\b(?:paytm|phonepe|amazon\s*pay|mobikwik)\b[\s\S]{0,40}\b(?:add\s+(?:money|funds?)|top[ -]?up|wallet\s+load|added)\b/i.test(text)
+    || /\b(?:added|loaded|credited)\s+to\s+(?:the\s+)?(?:paytm|phonepe|amazon\s*pay|mobikwik)\s+wallet\b/i.test(text)
+    || /\b(?:paytm|phonepe|amazon\s*pay|mobikwik)\s+wallet\b[\s\S]{0,30}\b(?:added|loaded|credited)\b/i.test(text);
+}
+
+// A broker reporting a settlement payout is detected in recurring.js
+// (isBrokerSettlementMessage) so the debit/investment collectors share the
+// same notion and cannot register a payout as an outflow.
+
+// UPI/QR transfers frequently address a person by name instead of an
+// account suffix. When that name is the account owner's own profile name,
+// the movement is a self transfer even though the SMS never says so. The
+// match is deliberately strict: at least two significant tokens of the
+// profile name must appear in the recipient/party text, so a namesake
+// store ("Sujay Enterprises") or a relative sharing one name cannot count.
+const OWN_NAME_NOISE = new Set(['mr', 'mrs', 'ms', 'shri', 'smt', 'dr', 'prof']);
+
+function personNameTokens(value) {
+  return (String(value || '').toLowerCase().match(/[a-z][a-z']+/g) || [])
+    .filter((token) => token.length >= 3 && !OWN_NAME_NOISE.has(token));
+}
+
+function isOwnPersonName(candidate, ownUserName) {
+  const nameTokens = personNameTokens(ownUserName);
+  if (nameTokens.length < 2) return false; // ceiling: few owners have a one-token legal name; add initial handling if real profiles need it
+  const candidateTokens = String(candidate || '').toLowerCase().match(/[a-z][a-z']+/g) || [];
+  let matched = 0;
+  for (const nameToken of nameTokens) {
+    if (candidateTokens.some((token) =>
+      token === nameToken
+      || (token.length >= 2 && nameToken.startsWith(token))
+      || (nameToken.length >= 2 && token.startsWith(nameToken)))) {
+      matched += 1;
+    }
+  }
+  return matched >= 2;
+}
+
 function isExplicitOwnAccountTransfer(body) {
   const text = String(body || '');
   return /\b(?:self[ -]?transfer|own\s+(?:bank\s+)?account|between\s+(?:my|your)\s+(?:bank\s+)?accounts)\b/i.test(text)
@@ -154,19 +199,21 @@ function isExplicitOwnAccountTransfer(body) {
 // money out and counts as spend.
 function parseBuiltInAccountTransfer(sms) {
   const body = String(sms?.body || '');
-  const ownTransfer = isExplicitOwnAccountTransfer(body);
+  const explicitOwnTransfer = isExplicitOwnAccountTransfer(body);
   if (!isSuccessfulSpend(body)) {
     return { ok: false, reason: 'no_account_transfer_match' };
   }
 
   const sourceMatch = body.match(
     /\bfrom\b[\s\S]{0,80}?\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*\d{4}\b/i,
+  ) || body.match(
+    /\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*\d{4}\b(?=[\s\S]{0,35}\b(?:debited|sent|transferred|paid)\b)/i,
   );
   if (!sourceMatch) return { ok: false, reason: 'no_transfer_source_account' };
 
   const afterSource = body.slice(sourceMatch.index + sourceMatch[0].length);
   const recipientMatch = afterSource.match(
-    /^\s*to\s+([A-Za-z][A-Za-z0-9 .&'\/-]{1,100}?)(?=\s+\b(?:on|ref(?:erence)?|txn(?:action)?|not\s+you|call|sms\s+block)\b|\s+[*xX-]*\d{4}\b|[.,;]|$)/i,
+    /\b(?:to|towards?)\s+([A-Za-z][A-Za-z0-9 .&'\/-]{1,100}?)(?=\s+\b(?:on|ref(?:erence)?|txn(?:action)?|not\s+you|call|sms\s+block|via|upi)\b|\s+[*xX-]*\d{4}\b|[.,;]|$)/i,
   );
   if (!recipientMatch && !/\bself[ -]?transfer\b/i.test(body)) {
     return { ok: false, reason: 'no_transfer_destination' };
@@ -177,9 +224,31 @@ function parseBuiltInAccountTransfer(sms) {
   const accountLast4 = extractAccountLast4(body);
   if (!accountLast4) return { ok: false, reason: 'no_transfer_source_suffix' };
 
+  // Bank alerts commonly omit "your" and say simply
+  // "from A/c XX2626 to HDFC Bank A/c XX9080". The destination account
+  // suffix is stronger evidence than the recipient bank name alone. Treat it
+  // as a transfer candidate so the debit cannot inflate spending; a later
+  // account-pair matcher can confirm ownership when both account legs exist.
+  const destinationAccountMatch = afterSource.match(
+    /\b(?:to|towards?)\b[\s\S]{0,100}?\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending\s+with|last\s*4)\s*)?[*xX-]*(\d{4})\b/i,
+  );
+  const destinationAccountLast4 = destinationAccountMatch?.[1] || null;
+  const accountToAccountCandidate = Boolean(destinationAccountLast4);
+  const transferParty = recipientMatch?.[1]?.trim() || 'own account';
+  // A UPI/QR debit to the owner's own name is a self transfer even when the
+  // SMS says no "self transfer" words.
+  const ownNameTransfer = isOwnPersonName(transferParty, sms?.ownUserName);
+  const ownTransfer = explicitOwnTransfer
+    || accountToAccountCandidate
+    || ownNameTransfer;
+  const transferKind = explicitOwnTransfer || ownNameTransfer
+    ? 'account_to_account'
+    : accountToAccountCandidate
+    ? 'account_to_account_candidate'
+    : 'payment_to_person';
+
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
-  const transferParty = recipientMatch?.[1]?.trim() || 'own account';
 
   return {
     ok: true,
@@ -187,10 +256,11 @@ function parseBuiltInAccountTransfer(sms) {
     parserKind: 'builtin_account_transfer',
     fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
-      merchant: 'Transfer to ' + transferParty,
+      merchant: ownNameTransfer ? 'Transfer between own accounts' : 'Transfer to ' + transferParty,
       transferParty,
-      transferKind: ownTransfer ? 'account_to_account' : 'payment_to_person',
+      transferKind,
       accountLast4,
+      ...(destinationAccountLast4 ? { destinationAccountLast4 } : {}),
       ...(dateMatch ? { date: dateMatch[1] } : {}),
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       instrument: 'upi_bank',
@@ -222,7 +292,11 @@ function parseBuiltInAccountCredit(sms) {
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_account_credit_match' };
 
-  const incomingMarker = /\b(?:credited|received|deposited|refunded|reversed)\b/i.test(body);
+  const incomingMarker = /\b(?:credited|received|deposited|refunded|reversed)\b/i.test(body)
+    // "We have transferred Rs X to your bank account" is the same event with
+    // a passive transferred verb; only allow it when the target is the
+    // user's own account so debit phrasing never mines false credits.
+    || /\btransferred\b[\s\S]{0,30}\bto\s+(?:your|the\s+user'?s)\b/i.test(body);
   const accountEvidence = /\b(?:a\/?c\.?|account|savings|bank|wallet)\b/i.test(body);
   const namedIncoming = /\b(?:money|amount|payment|funds?)\b[\s\S]{0,40}\b(?:received|credited|deposited)\b/i.test(body);
   if (!incomingMarker || (!accountEvidence && !namedIncoming)) {
@@ -235,28 +309,106 @@ function parseBuiltInAccountCredit(sms) {
     return { ok: false, reason: 'balance_only_alert' };
   }
 
-  const ownTransfer = isExplicitOwnAccountTransfer(body);
   const accountReferences = body.match(/\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*\d{4}\b/gi) || [];
-  if (!ownTransfer && accountReferences.length >= 2) {
-    return { ok: false, reason: 'unverified_incoming_transfer' };
-  }
   const destinationAccount = body.match(/\bto\s+your\b[\s\S]{0,70}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*(\d{4})\b/i);
-  const accountLast4 = ownTransfer && destinationAccount
-    ? destinationAccount[1]
-    : extractAccountLast4(body);
+  const creditedAccount = body.match(/\b(?:credited|received|deposited)\b[\s\S]{0,70}\b(?:to|into|in)\s+(?:(?:your|the)\s+)?(?:[A-Za-z]+\s+){0,3}(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*(\d{4})\b/i);
+  const partyMatch = body.match(/\b(?:from|by|via)\s+([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:on|for|ref(?:erence)?|txn|utr|a\/?c\.?|account|bal(?:ance)?|avl|available)\b|[.,;]|$)/i);
+  // Money received from the owner's own name is the other leg of a UPI/QR
+  // self transfer — not earned income and not an unclassified credit.
+  const ownTransfer = isExplicitOwnAccountTransfer(body)
+    || isOwnPersonName(partyMatch?.[1]?.trim(), sms?.ownUserName);
+  const accountLast4 = creditedAccount?.[1]
+    || (ownTransfer && destinationAccount ? destinationAccount[1] : extractAccountLast4(body));
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?|utr)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
-  const partyMatch = body.match(/\b(?:from|by|via)\s+([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:on|for|ref(?:erence)?|txn|utr|a\/?c\.?|account|bal(?:ance)?|avl|available)\b|[.,;]|$)/i);
   const lower = body.toLowerCase();
+  const salaryCredit = /\bsalary\b/i.test(body);
+  const nonIncomeCredit = /\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|investment|mutual\s+fund|shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b/i.test(body);
+  const earnedIncomeCredit = !nonIncomeCredit
+    && !/\bsalary\s+advance\b/i.test(body)
+    && /\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|business\s+(?:receipt|income)|invoice\s+paid)\b/i.test(body);
+  const cashbackCredit = /\bcashback\b/i.test(body);
+  const rewardCredit = /\b(?:reward|rewards|points?|miles?)\b/i.test(body);
+  const refundCredit = /\b(?:refund(?:ed)?|chargeback)\b/i.test(body);
+  const reversalCredit = /\b(?:reversal|reversed)\b/i.test(body);
+  const loanDisbursement = /\b(?:loan|personal\s+loan|salary\s+advance|credit\s+line)\b[\s\S]{0,70}\b(?:credited|received|disbursed|disbursement)\b/i.test(body);
+  const investmentProceeds = /\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b[\s\S]{0,80}\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b/i.test(body)
+    || /\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b[\s\S]{0,80}\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b/i.test(body);
+  const cashDeposit = /\bcash\s+(?:deposit|deposited)\b/i.test(body);
+  const giftCredit = /\b(?:gift|gifted|present)\b/i.test(body);
+  const reimbursementCredit = /\b(?:reimburse(?:ment|d)?|expense\s+claim)\b/i.test(body);
+  const brokerSettlement = isBrokerSettlementMessage(body);
+  const walletLoad = !brokerSettlement && isWalletLoadMessage(body);
+  const incomingBankTransferCandidate = !ownTransfer
+    && !walletLoad
+    && !brokerSettlement
+    && !earnedIncomeCredit
+    && !cashbackCredit
+    && !rewardCredit
+    && !refundCredit
+    && !reversalCredit
+    && !loanDisbursement
+    && !investmentProceeds
+    && !cashDeposit
+    && !giftCredit
+    && !reimbursementCredit
+    && (/\bfrom\b[\s\S]{0,80}\b(?:bank|a\/?c\.?|account)\b/i.test(body)
+      // Two masked account references identify a movement between accounts,
+      // even when the credit alert does not say "own" or "self". Keep it as
+      // a transfer candidate until the opposite debit is paired.
+      || accountReferences.length >= 2);
+  const transferKind = ownTransfer
+    ? 'account_to_account'
+    : brokerSettlement
+    ? 'investment_proceeds'
+    : walletLoad
+    ? 'wallet_load'
+    : refundCredit
+    ? 'refund'
+    : reversalCredit
+    ? 'reversal'
+    : cashbackCredit || rewardCredit
+    ? 'reward'
+    : loanDisbursement
+    ? 'loan_disbursement'
+    : investmentProceeds
+    ? 'investment_proceeds'
+    : cashDeposit
+    ? 'cash_deposit'
+    : giftCredit
+    ? 'gift_received'
+    : reimbursementCredit
+    ? 'reimbursement'
+    : incomingBankTransferCandidate
+    ? 'incoming_bank_transfer_candidate'
+    : 'unclassified_credit';
   const merchant = ownTransfer
     ? 'Transfer between own accounts'
-    : /\bsalary\b/i.test(body)
+    : brokerSettlement
+    ? 'Investment proceeds'
+    : walletLoad
+    ? 'Wallet load'
+    : refundCredit
+    ? 'Refund'
+    : reversalCredit
+    ? 'Reversal'
+    : cashbackCredit || rewardCredit
+    ? 'Reward or cashback'
+    : loanDisbursement
+    ? 'Loan disbursement'
+    : investmentProceeds
+    ? 'Investment proceeds'
+    : cashDeposit
+    ? 'Cash deposit'
+    : giftCredit
+    ? 'Gift received'
+    : reimbursementCredit
+    ? 'Reimbursement'
+    : incomingBankTransferCandidate
+    ? 'Bank transfer'
+    : salaryCredit
     ? 'Salary'
-    : /\bcashback\b/i.test(body)
-      ? 'Cashback'
-      : /\brefund(?:ed)?\b/i.test(body)
-        ? 'Refund'
-        : partyMatch?.[1]?.trim() || 'Money received';
+    : partyMatch?.[1]?.trim() || 'Money received';
 
   return {
     ok: true,
@@ -269,7 +421,10 @@ function parseBuiltInAccountCredit(sms) {
       ...(dateMatch ? { date: dateMatch[1] } : {}),
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       instrument: /\b(?:wallet|cashback)\b/i.test(lower) ? 'wallet' : 'upi_bank',
-      entryKind: ownTransfer ? 'transfer' : 'income',
+      ...(!earnedIncomeCredit || ownTransfer || incomingBankTransferCandidate || walletLoad || brokerSettlement
+        ? { transferKind }
+        : {}),
+      entryKind: earnedIncomeCredit && !ownTransfer ? 'income' : 'transfer',
     }, body),
   };
 }
@@ -349,6 +504,7 @@ function parseBuiltInAccountDebit(sms) {
 
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
+  const walletLoad = isWalletLoadMessage(body);
 
   return {
     ok: true,
@@ -356,12 +512,13 @@ function parseBuiltInAccountDebit(sms) {
     parserKind: 'builtin_account_debit',
     fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
-      merchant: 'Bank transfer',
+      merchant: walletLoad ? 'Wallet load' : 'Bank transfer',
       ...(accountLast4 ? { accountLast4 } : {}),
       ...(dateMatch ? { date: dateMatch[1] } : {}),
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       instrument: 'upi_bank',
-      entryKind: 'spend',
+      ...(walletLoad ? { transferKind: 'wallet_load' } : {}),
+      entryKind: walletLoad ? 'transfer' : 'spend',
     }, body),
   };
 }
@@ -392,7 +549,9 @@ function isSuccessfulSpend(body) {
   if (isSecurityOrOtpMessage(text)) return false;
   if (isRejectedTransaction(text)) return false;
   if (isNonTransactionAlert(text)) return false;
-  return /\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b/.test(text);
+  return /\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b/.test(text)
+    || /\b(?:payment|purchase|transaction)\b[\s\S]{0,80}\b(?:successful|successfully|completed)\b/.test(text)
+    || isWalletLoadMessage(text);
 }
 
 // Paying a credit-card bill is a movement of money between the user's bank
@@ -415,7 +574,16 @@ function parseBuiltInCardBillPayment(sms) {
     || /\b(?:payment|paid|debited|debit)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\b(?:your\s+)?credit\s+card(?:\s+bill|\s+account)?\b/i.test(body)
     || /\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid|successful|completed)\b/i.test(body)
     || /\b(?:paid|payment|debited)\b[\s\S]{0,90}\b(?:to|for)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card(?:\s+bill)?\b/i.test(body)
-    || /\b(?:payment|bill)\b[\s\S]{0,60}\b(?:for|on|of)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card\b[\s\S]{0,90}\b(?:paid|received|successful|completed)\b/i.test(body);
+    // A normal purchase can say "payment ... on your credit card ...
+    // successful". Only the explicit bill form is safe here; generic
+    // payment wording is handled above when it says received/credited/
+    // towards.
+    || /\bbill\b[\s\S]{0,60}\b(?:for|on|of)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card\b[\s\S]{0,90}\b(?:paid|received|successful|completed)\b/i.test(body)
+    // Issuer and bill-pay apps often abbreviate the same event as CC PMT,
+    // CARD BILL PAY, or "towards your card" without the words credit card.
+    || /\b(?:card\s+bill\s*(?:payment|pmt)|cc\s*(?:bill\s*)?(?:payment|pmt)|card\s+bill\s+pay)\b[\s\S]{0,90}\b(?:paid|received|debited|successful|completed|credited)\b/i.test(body)
+    || /\b(?:payment|paid|debited|debit|transferred)\b[\s\S]{0,90}\b(?:towards?|for|to)\s+(?:your\s+)?(?:card|cc)\b/i.test(body)
+    || /\b(?:imps|neft|upi)\b[\s\S]{0,80}\b(?:cc|credit\s+card)\s*(?:bill\s*)?(?:pmt|payment)\b/i.test(body);
   if (!towardCard) return { ok: false, reason: 'no_card_bill_payment_match' };
 
   const last4Match = body.match(/\b(?:credit\s+card|card)\b[\s\S]{0,50}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|last\s*4|no\.?)\D{0,5}(\d{4})\b/i);
@@ -430,7 +598,52 @@ function parseBuiltInCardBillPayment(sms) {
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
       ...(last4Match ? { last4: last4Match[1] } : {}),
       merchant: 'Credit card bill payment',
+      transferKind: 'card_bill',
       instrument,
+      entryKind: 'transfer',
+    }, body),
+  };
+}
+
+// A card issuer can also report a refund, reversal, cashback, or generic
+// statement credit against the card liability. These are real adjustments to
+// the card account, but they are never a new purchase or earned income. Keep
+// them as transfer rows so the event remains visible without inflating either
+// total. Card bill receipts are intentionally handled by the bill-payment
+// parser above and must win first.
+function parseBuiltInCardCredit(sms) {
+  const body = String(sms?.body || '');
+  if (isSecurityOrOtpMessage(body) || !/\b(?:credit|debit)\s+card\b|\bcard\b/i.test(body)) {
+    return { ok: false, reason: 'no_card_credit_match' };
+  }
+  if (/\b(?:payment|amount|minimum)\s+due\b|\bdue\s+on\b/i.test(body)) {
+    return { ok: false, reason: 'card_bill_reminder' };
+  }
+  if (/\b(?:declined|failed|pending|processing|initiated|cancelled|canceled)\b/i.test(body)
+      && !/\b(?:reversed|refunded|credited)\b/i.test(body)) {
+    return { ok: false, reason: 'not_a_completed_card_credit' };
+  }
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_card_credit_match' };
+  const adjustmentMarker = /\b(?:credited|received|refunded|refund|cashback|reward|statement\s+credit|balance\s+adjustment)\b/i.test(body)
+    || (/\b(?:reversed|reversal)\b/i.test(body) && /\b(?:posted|applied|credited)\b/i.test(body));
+  if (!adjustmentMarker) {
+    return { ok: false, reason: 'no_card_credit_match' };
+  }
+  const refund = /\b(?:refund(?:ed)?|reversed?|chargeback)\b/i.test(body);
+  const reward = /\b(?:cashback|reward|rewards|points?|miles?)\b/i.test(body);
+  const transferKind = refund ? 'refund' : reward ? 'reward' : /\breversed?|reversal\b/i.test(body) ? 'reversal' : 'card_adjustment';
+  const last4Match = body.match(/\b(?:credit\s+card|card)\b[\s\S]{0,50}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|last\s*4|no\.?)\D{0,5}(\d{4})\b/i);
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: 'builtin_card_credit',
+    fields: withAvailableBalance({
+      amountInr: Number(amountMatch[1].replace(/,/g, '')),
+      ...(last4Match ? { last4: last4Match[1] } : {}),
+      merchant: refund ? 'Refund' : reward ? 'Reward or cashback' : transferKind === 'reversal' ? 'Reversal' : 'Card statement adjustment',
+      transferKind,
+      instrument: 'credit_card',
       entryKind: 'transfer',
     }, body),
   };
@@ -440,9 +653,13 @@ function parseBuiltInNonSpendDebit(sms) {
   const body = String(sms?.body || '');
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_non_spend_debit' };
   const cashWithdrawal = /\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn)\b/i.test(body);
+  const feeCharge = !cashWithdrawal && /\b(?:bank\s+charge|service\s+charge|processing\s+fee|convenience\s+fee|late\s+fee|annual\s+fee|maintenance\s+fee|finance\s+charge|interest\s+charge|interest\s+(?:on\s+)?(?:loan|emi)|(?:loan|emi)\s+interest|commission|brokerage\s+fee|gst\s+on\s+(?:fee|charge))\b/i.test(body);
+  const loanRepayment = !cashWithdrawal && !feeCharge && /\b(?:loan|personal\s+loan|home\s+loan|car\s+loan|education\s+loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|debited|repaid|repayment|deducted|transferred)\b/i.test(body);
   const investment = !cashWithdrawal
+    && !loanRepayment
+    && !feeCharge
     && isInvestmentFundingMessage(body);
-  if (!cashWithdrawal && !investment) return { ok: false, reason: 'no_non_spend_debit' };
+  if (!cashWithdrawal && !loanRepayment && !feeCharge && !investment) return { ok: false, reason: 'no_non_spend_debit' };
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_non_spend_amount' };
   const last4Match = body.match(/\b(?:card)\b[\s\S]{0,45}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|last\s*4|no\.?)\D{0,5}(\d{4})\b/i);
@@ -450,14 +667,29 @@ function parseBuiltInNonSpendDebit(sms) {
   return {
     ok: true,
     patternId: null,
-    parserKind: cashWithdrawal ? 'builtin_cash_withdrawal' : 'builtin_investment_debit',
+    parserKind: cashWithdrawal
+      ? 'builtin_cash_withdrawal'
+      : loanRepayment
+      ? 'builtin_loan_repayment'
+      : feeCharge
+      ? 'builtin_fee_charge'
+      : 'builtin_investment_debit',
     fields: withAvailableBalance({
       amountInr: Number(amountMatch[1].replace(/,/g, '')),
-      merchant: cashWithdrawal ? 'Cash withdrawal' : 'Investment contribution',
+      merchant: cashWithdrawal
+        ? 'Cash withdrawal'
+        : loanRepayment
+        ? 'Loan or EMI repayment'
+        : feeCharge
+        ? 'Bank or service fee'
+        : 'Investment contribution',
       ...(last4Match ? { last4: last4Match[1] } : {}),
       ...(accountLast4 ? { accountLast4 } : {}),
       instrument: cashWithdrawal && last4Match ? 'debit_card' : 'upi_bank',
-      entryKind: cashWithdrawal ? 'transfer' : 'investment',
+      ...(cashWithdrawal ? { transferKind: 'cash_withdrawal' } : {}),
+      ...(loanRepayment ? { transferKind: 'loan_repayment' } : {}),
+      ...(feeCharge ? { transferKind: 'fee' } : {}),
+      entryKind: cashWithdrawal || loanRepayment ? 'transfer' : feeCharge ? 'spend' : 'investment',
     }, body),
   };
 }
@@ -468,6 +700,8 @@ function parseBuiltInInvestmentMovement(sms) {
   if (!isInvestmentFundingMessage(body)) {
     return { ok: false, reason: 'no_investment_movement_match' };
   }
+  const investmentProceeds = /\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b[\s\S]{0,80}\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b/i.test(body)
+    || /\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b[\s\S]{0,80}\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b/i.test(body);
   if (/\b(?:autopay|auto[- ]?pay|mandate|standing\s+instruction)\b/i.test(body) &&
       !/\b(?:debited|credited|paid|transferred|invested|purchased|bought|funds?\s+added|money\s+added)\b/i.test(body)) {
     return { ok: false, reason: 'investment_mandate_setup' };
@@ -495,12 +729,13 @@ function parseBuiltInInvestmentMovement(sms) {
     parserKind: 'builtin_investment_movement',
     fields: withAvailableBalance({
       amountInr,
-      merchant: provider || 'Investment contribution',
+      merchant: investmentProceeds ? 'Investment proceeds' : provider || 'Investment contribution',
       ...(accountLast4 ? { accountLast4 } : {}),
       ...(dateMatch ? { date: dateMatch[1] } : {}),
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       instrument: bankInstrument ? 'upi_bank' : 'other',
-      entryKind: 'investment',
+      ...(investmentProceeds ? { transferKind: 'investment_proceeds' } : {}),
+      entryKind: investmentProceeds ? 'transfer' : 'investment',
     }, body),
   };
 }
@@ -518,6 +753,7 @@ function parseBuiltInUpiDebit(sms) {
   const merchantMatch = body.match(/\b(?:to|at|for)\s+([A-Za-z0-9][A-Za-z0-9 ._&@-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl)\b|\s*\(|[.,]|$)/i);
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:upi\s*)?(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
+  const walletLoad = isWalletLoadMessage(body);
   return {
     ok: true,
     patternId: null,
@@ -528,7 +764,8 @@ function parseBuiltInUpiDebit(sms) {
       ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
       ...(extractMcc(body) ? { mcc: extractMcc(body) } : {}),
       instrument,
-      entryKind: 'spend',
+      ...(walletLoad ? { merchant: 'Wallet load', transferKind: 'wallet_load' } : {}),
+      entryKind: walletLoad ? 'transfer' : 'spend',
     }, body),
   };
 }
@@ -799,6 +1036,8 @@ function parseSmsAgainstPatterns(patterns, sms) {
   if (investmentMovement.ok) return investmentMovement;
   const nonSpendDebit = parseBuiltInNonSpendDebit(sms);
   if (nonSpendDebit.ok) return nonSpendDebit;
+  const cardCredit = parseBuiltInCardCredit(sms);
+  if (cardCredit.ok) return cardCredit;
   const accountCredit = parseBuiltInAccountCredit(sms);
   if (accountCredit.ok) return accountCredit;
   if (isRejectedTransaction(sms?.body)) {

@@ -94,7 +94,7 @@ class LocalSmsReviewDraft {
 /// formats remain durable intake for server parsing; they never become guessed
 /// spending. Values are local observations until server reconciliation.
 class LocalSmsParser {
-  static const version = 5;
+  static const version = 6;
 
   /// Messages with a quoted price or a card name are not necessarily a
   /// payment. Apply this before either upload or manual review, including to
@@ -179,6 +179,111 @@ class LocalSmsParser {
   static bool _ownAccountTransfer(String body) => _re(
     r'\b(?:self[ -]?transfer|own\s+(?:bank\s+)?account|between\s+(?:my|your)\s+(?:bank\s+)?accounts)\b|\bfrom\s+your\b[\s\S]{0,100}\bto\s+your\b[\s\S]{0,80}\b(?:a\/?c\.?|account)\b',
   ).hasMatch(body);
+
+  static bool _accountToAccountTransfer(String body) => _re(
+    r'\bfrom\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}[\s\S]{0,100}\b(?:to|towards?)\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}\b|\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}[\s\S]{0,35}\b(?:debited|sent|transferred|paid)\b[\s\S]{0,100}\b(?:to|towards?)\b[\s\S]{0,100}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}\b',
+  ).hasMatch(body);
+
+  static bool _walletLoad(String body) => _re(
+    // Require a wallet-ish noun within a short window after the load verb. A
+    // bare "add funds" cannot win: broker alerts say "add funds back to your
+    // Dhan account" as an instruction for the next action, which is not this
+    // transaction. Named-wallet branches below carry the common real shapes.
+    r'\b(?:wallet\s+load|load(?:ed|ing)?\s+(?:the\s+)?(?:paytm|phonepe|amazon\s*pay|mobikwik|wallet)|money\s+added\s+to\s+(?:the\s+)?wallet|add\s+(?:money|funds?)|top[ -]?up|money\s+added)\b[\s\S]{0,40}\b(?:paytm|phonepe|amazon\s*pay|mobikwik|wallet)\b|\b(?:paytm|phonepe|amazon\s*pay|mobikwik)\b[\s\S]{0,40}\b(?:add\s+(?:money|funds?)|top[ -]?up|wallet\s+load|added)\b|\b(?:added|loaded|credited)\s+to\s+(?:the\s+)?(?:paytm|phonepe|amazon\s*pay|mobikwik)\s+wallet\b|\b(?:paytm|phonepe|amazon\s*pay|mobikwik)\s+wallet\b[\s\S]{0,30}\b(?:added|loaded|credited)\b',
+  ).hasMatch(body);
+
+  static bool _brokerSettlement(String body) => isBrokerSettlementMessage(body);
+
+  static const _ownNameNoise = {'mr', 'mrs', 'ms', 'shri', 'smt', 'dr', 'prof'};
+
+  static List<String> _personNameTokens(String value) => RegExp(r"[a-z][a-z']+")
+      .allMatches(value.toLowerCase())
+      .map((m) => m.group(0)!)
+      .where((t) => t.length >= 3 && !_ownNameNoise.contains(t))
+      .toList();
+
+  /// UPI/QR transfers frequently address a person by name instead of an
+  /// account suffix. When that name is the account owner's profile name the
+  /// movement is a self transfer even though the SMS never says so. Deliberately
+  /// strict: at least two profile-name tokens must appear, so a namesake
+  /// store ("Sujay Enterprises") or a relative sharing one name cannot count.
+  /// Ceiling: one-token profile names never match; add initial handling only
+  /// if real profiles need it.
+  static bool _isOwnPersonName(String candidate, String? ownUserName) {
+    final nameTokens = _personNameTokens(ownUserName ?? '');
+    if (nameTokens.length < 2) return false;
+    final recipientTokens = _personNameTokens(candidate);
+    if (recipientTokens.isEmpty) return false;
+    var matched = 0;
+    for (final nameToken in nameTokens) {
+      if (recipientTokens.any((token) =>
+          token == nameToken ||
+          (token.length >= 2 && nameToken.startsWith(token)) ||
+          (nameToken.length >= 2 && token.startsWith(nameToken)))) {
+        matched += 1;
+      }
+    }
+    return matched >= 2;
+  }
+
+  /// Credit rows say "credited to your A/C *9080 from NAME", so the shared
+  /// merchant capture grabs the account clause instead of the person. This
+  /// reads the person out of the from-clause directly for own-name matching.
+  static bool _ownNameInFromClause(String body, String? ownUserName) {
+    if (ownUserName == null) return false;
+    final match = _re(
+      r"\bfrom\s+([A-Za-z][A-Za-z0-9 .&'@_/-]{1,80}?)(?=\s+(?:on|for|ref(?:erence)?|txn|utr|a\/?c\.?|account|bal(?:ance)?|avl|available)\b|[.,;]|$)",
+    ).firstMatch(body);
+    return match != null && _isOwnPersonName(match.group(1)!.trim(), ownUserName);
+  }
+
+  static bool _incomingBankTransferCandidate(String body) =>
+      !_re(r'\b(?:salary|cashback|refund(?:ed)?)\b').hasMatch(body) &&
+      _re(r'\bfrom\b[\s\S]{0,80}\b(?:bank|a\/?c\.?|account)\b').hasMatch(body);
+
+  static bool _earnedIncomeCredit(String body) =>
+      !_re(
+        r'\b(?:refund(?:ed)?|chargeback|reversal|reversed|cashback|reward|rewards|points?|miles?|loan|personal\s+loan|credit\s+line|investment|mutual\s+fund|shares?|stocks?|demat|portfolio|cash\s+deposit|gift|reimburse(?:ment|d)?|expense\s+claim)\b',
+      ).hasMatch(body) &&
+      !_re(r'\bsalary\s+advance\b').hasMatch(body) &&
+      _re(
+        r'\b(?:salary|wages?|payroll|pension|interest|dividend|rent|commission|consulting|business\s+(?:receipt|income)|invoice\s+paid)\b',
+      ).hasMatch(body);
+
+  static bool _loanRepayment(String body) => !_feeCharge(body) && _re(
+    r'\b(?:loan|personal\s+loan|home\s+loan|car\s+loan|education\s+loan|emi|equated\s+monthly\s+installment|instalment)\b[\s\S]{0,90}\b(?:paid|payment|debited|repaid|repayment|deducted|transferred)\b',
+  ).hasMatch(body);
+
+  static bool _feeCharge(String body) => _re(
+    r'\b(?:bank\s+charge|service\s+charge|processing\s+fee|convenience\s+fee|late\s+fee|annual\s+fee|maintenance\s+fee|finance\s+charge|interest\s+charge|interest\s+(?:on\s+)?(?:loan|emi)|(?:loan|emi)\s+interest|commission|brokerage\s+fee|gst\s+on\s+(?:fee|charge))\b',
+  ).hasMatch(body);
+
+  static bool _investmentProceeds(String body) =>
+      (_re(r'\b(?:redeemed?|redemption|sold|sale\s+proceeds?|withdrawn?)\b')
+              .hasMatch(body) &&
+          _re(r'\b(?:mutual\s+fund|sip|investment|shares?|stocks?|equity|zerodha|groww|upstox|angel\s+one|dhan|demat|portfolio)\b')
+              .hasMatch(body));
+
+  static bool _cardCredit(String body) {
+    if (!_re(r'\b(?:credit|debit)\s+card\b|\bcard\b').hasMatch(body)) {
+      return false;
+    }
+    if (_re(r'\b(?:payment|amount|minimum)\s+due\b|\bdue\s+on\b')
+        .hasMatch(body)) {
+      return false;
+    }
+    if (_re(
+      r'\b(?:declined|failed|pending|processing|initiated|cancelled|canceled)\b',
+    ).hasMatch(body) &&
+        !_re(r'\b(?:reversed|refunded|credited)\b').hasMatch(body)) {
+      return false;
+    }
+    return _re(
+          r'\b(?:credited|received|refunded|refund|cashback|reward|statement\s+credit|balance\s+adjustment)\b',
+        ).hasMatch(body) ||
+        (_re(r'\b(?:reversed|reversal)\b').hasMatch(body) &&
+            _re(r'\b(?:posted|applied|credited)\b').hasMatch(body));
+  }
   static bool sensitive(String body) => RegExp(
     r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b|\b(?:do not|don't|never)\s+share\b|\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b",
     caseSensitive: false,
@@ -278,6 +383,7 @@ class LocalSmsParser {
     required String body,
     required DateTime receivedAt,
     List<UserCard> cards = const [],
+    String? ownUserName,
   }) {
     final parsed = parse(
       namespace: namespace,
@@ -285,6 +391,7 @@ class LocalSmsParser {
       body: body,
       receivedAt: receivedAt,
       cards: cards,
+      ownUserName: ownUserName,
     );
     final transaction = parsed?.transaction;
     if (transaction != null) {
@@ -366,12 +473,20 @@ class LocalSmsParser {
         ? TxnInstrument.creditCard
         : TxnInstrument.other;
     final entryKind =
-        _re(
-          r'\b(?:credited|received|deposited|refund(?:ed)?|reversed)\b',
-        ).hasMatch(body)
-        ? TxnEntryKind.income
-        : _ownAccountTransfer(body)
+        _ownAccountTransfer(body) ||
+            _accountToAccountTransfer(body) ||
+            _brokerSettlement(body) ||
+            _walletLoad(body) ||
+            _cardCredit(body) ||
+            (merchant != null &&
+                ownUserName != null &&
+                _isOwnPersonName(merchant, ownUserName)) ||
+            _ownNameInFromClause(body, ownUserName) ||
+            _re(r'\b(?:refund(?:ed)?|reversal|reversed|cashback|reward|salary\s+advance|loan\s+disbursement|cash\s+deposit|cash\s+withdrawal)\b').hasMatch(body)
         ? TxnEntryKind.transfer
+        : _re(r'\b(?:credited|received|deposited)\b').hasMatch(body) &&
+            _earnedIncomeCredit(body)
+        ? TxnEntryKind.income
         : TxnEntryKind.spend;
 
     return LocalSmsReviewDraft(
@@ -390,6 +505,7 @@ class LocalSmsParser {
     required String body,
     required DateTime receivedAt,
     List<UserCard> cards = const [],
+    String? ownUserName,
   }) {
     if (body.length > 20000 || sensitive(body)) return null;
     final cardLast4 =
@@ -637,10 +753,7 @@ class LocalSmsParser {
         ['unsuccessful_transaction'],
       );
     }
-    if (balanceOnly &&
-        !_re(
-          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b',
-        ).hasMatch(body)) {
+    if (balanceOnly && !hasCompletedMovement) {
       return observation(
         null,
         LocalSmsEventType.balance,
@@ -674,7 +787,7 @@ class LocalSmsParser {
               r'\b(?:money|amount|payment|funds?)\b[\s\S]{0,40}\b(?:received|credited|deposited)\b',
             ).hasMatch(body));
     final billPaymentCandidate = _re(
-      r'\b(?:payment|paid|debited|debit|amount)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\b(?:your\s+)?credit\s+card\b|\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid|successful|completed)\b|\b(?:paid|payment|debited)\b[\s\S]{0,90}\b(?:to|for)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card(?:\s+bill)?\b|\b(?:payment|bill)\b[\s\S]{0,60}\b(?:for|on|of)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card\b[\s\S]{0,90}\b(?:paid|received|successful|completed)\b',
+      r'\b(?:payment|paid|debited|debit|amount)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\b(?:your\s+)?credit\s+card\b|\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid|successful|completed)\b|\b(?:paid|payment|debited)\b[\s\S]{0,90}\b(?:to|for)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card(?:\s+bill)?\b|\bbill\b[\s\S]{0,60}\b(?:for|on|of)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card\b[\s\S]{0,90}\b(?:paid|received|successful|completed)\b|\b(?:card\s+bill\s*(?:payment|pmt)|cc\s*(?:bill\s*)?(?:payment|pmt)|card\s+bill\s+pay)\b[\s\S]{0,90}\b(?:paid|received|debited|successful|completed|credited)\b|\b(?:payment|paid|debited|debit|transferred)\b[\s\S]{0,90}\b(?:towards?|for|to)\s+(?:your\s+)?(?:card|cc)\b|\b(?:imps|neft|upi)\b[\s\S]{0,80}\b(?:cc|credit\s+card)\s*(?:bill\s*)?(?:pmt|payment)\b',
     ).hasMatch(body);
     final billPayment =
         billPaymentCandidate &&
@@ -687,17 +800,43 @@ class LocalSmsParser {
     final cashWithdrawal = _re(
       r'\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn)\b',
     ).hasMatch(body);
+    final loanRepayment = !cashWithdrawal && _loanRepayment(body);
+    final feeCharge = !cashWithdrawal && !loanRepayment && _feeCharge(body);
+    final brokerSettlement = _brokerSettlement(body);
     final investmentDebit =
         !cashWithdrawal &&
+        !loanRepayment &&
+        !feeCharge &&
+        !brokerSettlement &&
         isInvestmentMovementDescription(body);
+    final walletLoad = _walletLoad(body) && !brokerSettlement;
+    final refundCredit = _re(r'\b(?:refund(?:ed)?|chargeback)\b').hasMatch(body);
+    final reversalCredit = _re(r'\b(?:reversal|reversed)\b').hasMatch(body);
+    final rewardCredit = _re(r'\b(?:cashback|reward|rewards|points?|miles?)\b')
+        .hasMatch(body);
+    final loanDisbursement = _re(
+      r'\b(?:loan|personal\s+loan|salary\s+advance|credit\s+line)\b[\s\S]{0,70}\b(?:credited|received|disbursed|disbursement)\b',
+    ).hasMatch(body);
+    final investmentProceeds = _investmentProceeds(body);
+    final cashDeposit = _re(r'\bcash\s+(?:deposit|deposited)\b').hasMatch(body);
+    final giftCredit = _re(r'\b(?:gift|gifted|present)\b').hasMatch(body);
+    final reimbursementCredit = _re(
+      r'\b(?:reimburse(?:ment|d)?|expense\s+claim)\b',
+    ).hasMatch(body);
+    final cardCredit = _cardCredit(body);
     if (!credit &&
+        !cardCredit &&
         !billPayment &&
+        !walletLoad &&
+        !loanRepayment &&
+        !feeCharge &&
         !_re(
           r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred)\b',
         ).hasMatch(body)) {
       return observation();
     }
     if (!credit &&
+        !cardCredit &&
         !billPayment &&
         _re(
           r'\b(?:credited|refund(?:ed)?|reversed|reversal)\b',
@@ -708,6 +847,8 @@ class LocalSmsParser {
         accountShaped && !_re(r'\b(?:credit|debit)\s+card\b').hasMatch(body);
     final instrument = billPayment
         ? (bankDebit ? TxnInstrument.upiBank : TxnInstrument.other)
+        : cardCredit
+        ? TxnInstrument.creditCard
         : credit && _re(r'\bwallet\b').hasMatch(body)
         ? TxnInstrument.wallet
         : bankDebit || credit
@@ -720,18 +861,22 @@ class LocalSmsParser {
         ? TxnInstrument.creditCard
         : null;
     if (instrument == null) return observation();
-    final transfer =
+    var transfer =
         billPayment ||
+        cardCredit ||
         cashWithdrawal ||
-        (_ownAccountTransfer(body) &&
-            _re(
-              r'\bfrom\b[\s\S]{0,80}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}\s+to\s+[A-Za-z]',
-            ).hasMatch(body));
-    final kind = transfer
+        walletLoad ||
+        brokerSettlement ||
+        loanRepayment ||
+        investmentProceeds ||
+        _accountToAccountTransfer(body);
+    var kind = transfer
         ? TxnEntryKind.transfer
+        : feeCharge
+        ? TxnEntryKind.spend
         : investmentDebit
         ? TxnEntryKind.investment
-        : credit && _ownAccountTransfer(body)
+        : credit && !_earnedIncomeCredit(body)
         ? TxnEntryKind.transfer
         : credit
         ? TxnEntryKind.income
@@ -746,6 +891,10 @@ class LocalSmsParser {
         ).hasMatch(merchant)) {
       merchant = null;
     }
+    final ownNameTransfer =
+        merchant != null &&
+        ownUserName != null &&
+        _isOwnPersonName(merchant, ownUserName);
     if (bankDebit &&
         !credit &&
         !transfer &&
@@ -760,16 +909,62 @@ class LocalSmsParser {
     }
     if (billPayment) {
       merchant = 'Credit card bill payment';
+    } else if (ownNameTransfer) {
+      merchant = 'Transfer between own accounts';
+    } else if (brokerSettlement) {
+      merchant = 'Investment proceeds';
+    } else if (cardCredit) {
+      merchant = _re(r'\b(?:refund(?:ed)?|reversed?|reversal|chargeback)\b')
+          .hasMatch(body)
+          ? 'Refund'
+          : _re(r'\b(?:cashback|reward|rewards|points?|miles?)\b')
+                .hasMatch(body)
+          ? 'Reward or cashback'
+          : _re(r'\breversed?|reversal\b').hasMatch(body)
+          ? 'Reversal'
+          : 'Card statement adjustment';
+    } else if (walletLoad) {
+      merchant = 'Wallet load';
     } else if (cashWithdrawal) {
       merchant = 'Cash withdrawal';
+    } else if (loanRepayment) {
+      merchant = 'Loan or EMI repayment';
+    } else if (investmentProceeds) {
+      merchant = 'Investment proceeds';
+    } else if (feeCharge) {
+      merchant = 'Bank or service fee';
     } else if (investmentDebit) {
       merchant = 'Investment contribution';
+    } else if (credit && refundCredit) {
+      merchant = 'Refund';
+    } else if (credit && reversalCredit) {
+      merchant = 'Reversal';
+    } else if (credit && rewardCredit) {
+      merchant = 'Reward or cashback';
+    } else if (credit && loanDisbursement) {
+      merchant = 'Loan disbursement';
+    } else if (credit && investmentProceeds) {
+      merchant = 'Investment proceeds';
+    } else if (credit && cashDeposit) {
+      merchant = 'Cash deposit';
+    } else if (credit && giftCredit) {
+      merchant = 'Gift received';
+    } else if (credit && reimbursementCredit) {
+      merchant = 'Reimbursement';
+    } else if (credit && _incomingBankTransferCandidate(body)) {
+      merchant = 'Bank transfer';
     } else if (credit && _re(r'\bsalary\b').hasMatch(body)) {
       merchant = 'Salary';
     } else if (credit) {
       merchant ??= 'Money received';
     } else {
       merchant ??= bankDebit ? 'Bank transfer' : null;
+    }
+    final ownNameCredit = credit && _ownNameInFromClause(body, ownUserName);
+    if (ownNameCredit) merchant = 'Transfer between own accounts';
+    if (ownNameTransfer || ownNameCredit) {
+      transfer = true;
+      kind = TxnEntryKind.transfer;
     }
     final matching = cards
         .where(

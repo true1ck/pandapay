@@ -51,7 +51,9 @@
   },
   {
     "body": "INR 500 refunded to credit card XX4321.",
-    "amount": null
+    "amount": 500,
+    "instrument": "credit_card",
+    "kind": "transfer"
   },
   {
     "body": "Your credit card XX4321 payment due on 20-Oct-2026. Total amount due INR 3000.",
@@ -70,31 +72,31 @@
     "body": "Payment received INR 2500 from RAVI via UPI.",
     "amount": 2500,
     "instrument": "upi_bank",
-    "kind": "income"
+    "kind": "transfer"
   },
   {
     "body": "INR 500 refunded to your bank account XX1234.",
     "amount": 500,
     "instrument": "upi_bank",
-    "kind": "income"
+    "kind": "transfer"
   },
   {
     "body": "INR 200 reversed to your account XX1234.",
     "amount": 200,
     "instrument": "upi_bank",
-    "kind": "income"
+    "kind": "transfer"
   },
   {
     "body": "INR 1200 deposited into your wallet.",
     "amount": 1200,
     "instrument": "wallet",
-    "kind": "income"
+    "kind": "transfer"
   },
   {
     "body": "Your bank account XX1234 received INR 4500 from RAVI.",
     "amount": 4500,
     "instrument": "upi_bank",
-    "kind": "income"
+    "kind": "transfer"
   },
   {
     "body": "INR 500 will be credited to account XX1234.",

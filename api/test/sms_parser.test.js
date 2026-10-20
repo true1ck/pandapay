@@ -233,6 +233,152 @@ test('paid card bills remain transfers while purchases on the same card remain s
   assert.equal(purchase.fields.entryKind, 'spend');
 });
 
+test('a successful card purchase called a payment is not mistaken for a bill payment', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'AXISBK',
+    body: 'Your payment of INR 2500 on your credit card ending 2006 at AMAZON was successful.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'spend');
+  assert.notEqual(result.fields.transferKind, 'card_bill');
+});
+
+test('bank-to-bank account narration without the word self is not spending', () => {
+  const cases = [
+    'Rs.80000 transferred from Canara Bank A/c XX2626 to HDFC Bank A/c XX9080. UTR 123456789012.',
+    'A/c XX2626 debited Rs.80000 towards HDFC Bank A/c XX9080 via IMPS Ref 123456789012.',
+  ];
+  for (const body of cases) {
+    const result = parseSmsAgainstPatterns([], { sender: 'CANBNK', body });
+    assert.equal(result.ok, true, body);
+    assert.equal(result.fields.entryKind, 'transfer', body);
+    assert.equal(result.fields.transferKind, 'account_to_account_candidate', body);
+    assert.equal(result.fields.destinationAccountLast4, '9080', body);
+  }
+});
+
+test('the incoming credit leg of an account transfer is retained as a transfer candidate', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'INR 80000 credited to HDFC Bank A/c XX9080 from Canara Bank A/c XX2626. UTR 123456789012.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.transferKind, 'incoming_bank_transfer_candidate');
+  assert.equal(result.fields.accountLast4, '9080');
+});
+
+test('wallet top-ups are transfers while wallet merchant payments remain spend', () => {
+  const topUp = parseSmsAgainstPatterns([], {
+    sender: 'PAYTM',
+    body: 'Rs.5000 added to Paytm wallet from your bank account. UPI Ref 123456789012.',
+  });
+  assert.equal(topUp.ok, true);
+  assert.equal(topUp.fields.entryKind, 'transfer');
+  assert.equal(topUp.fields.transferKind, 'wallet_load');
+
+  const purchase = parseSmsAgainstPatterns([], {
+    sender: 'PAYTM',
+    body: 'Rs.5000 paid to grocery@upi from your bank account via UPI. UPI Ref 123456789012.',
+  });
+  assert.equal(purchase.ok, true);
+  assert.equal(purchase.fields.entryKind, 'spend');
+});
+
+test('wallet credit leg of a top-up is also a transfer', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'PAYTM',
+    body: 'Paytm wallet credited with Rs.5000 from your bank account. UPI Ref 123456789012.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.transferKind, 'wallet_load');
+  assert.equal(result.fields.merchant, 'Wallet load');
+});
+
+test('a broker settlement payout is an investment-proceeds money-in, not wallet load', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'VM-DHANHQ-S',
+    body: 'Dear Sujay We have transferred Rs 93.82 to your bank account ending with XXXXXXX2626 as a part of running account settlement vide Ref No PO26101713812965. To continue trading and investing, add funds back to your Dhan account.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.transferKind, 'investment_proceeds');
+  assert.equal(result.fields.merchant, 'Investment proceeds');
+  assert.equal(result.fields.accountLast4, '2626');
+});
+
+test('a genuine wallet instruction over its own payload still parses as wallet load', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'PAYTM',
+    body: 'Rs.5000 added to Paytm wallet from your bank account. UPI Ref 123456789012.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.transferKind, 'wallet_load');
+});
+
+test('a debit addressed to the profile name is a self-transfer, not spending', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Sent Rs.5000.00 From HDFC Bank A/C *1797 To SUJAY SHANTARAM KURTIKAR. Not you? Call 1800. Ref 12345678',
+    ownUserName: 'Sujay Shantaram Kurtikar',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.transferKind, 'account_to_account');
+  assert.equal(result.fields.merchant, 'Transfer between own accounts');
+});
+
+test('same person named without a profile name stays a person payment', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Sent Rs.5000.00 From HDFC Bank A/C *1797 To SUJAY SHANTARAM KURTIKAR. Not you? Call 1800. Ref 12345678',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'spend');
+  assert.equal(result.fields.transferKind, 'payment_to_person');
+});
+
+test('a different named recipient is spending even with a profile name', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Sent Rs.5000.00 From HDFC Bank A/C *1797 To PRIYA VASANTA RAJAN. Not you? Call 1800. Ref 12345678',
+    ownUserName: 'Sujay Shantaram Kurtikar',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'spend');
+  assert.equal(result.fields.transferKind, 'payment_to_person');
+});
+
+test('a credit received from the profile name is the paired self-transfer leg', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Rs.5000.0 credited to your HDFC Bank A/C *9080 from SUJAY SHANTARAM KURTIKAR on 20-10-26. Ref 99887765',
+    ownUserName: 'Sujay Shantaram Kurtikar',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.transferKind, 'account_to_account');
+  assert.equal(result.fields.merchant, 'Transfer between own accounts');
+  // The credited leg keeps its own account suffix, not the debit leg's.
+  assert.equal(result.fields.accountLast4, '9080');
+});
+
+test('abbreviated card bill payment messages are transfers', () => {
+  const cases = [
+    'CARD BILL PAY of Rs.80000 successful. Ref 123456789012.',
+    'IMPS CC PMT Rs.80000 debited from Canara A/c XX2626. UTR 123456789012.',
+    'Rs.80000 debited towards your card payment. Ref 123456789012.',
+  ];
+  for (const body of cases) {
+    const result = parseSmsAgainstPatterns([], { sender: 'CANBNK', body });
+    assert.equal(result.ok, true, body);
+    assert.equal(result.fields.entryKind, 'transfer', body);
+    assert.equal(result.fields.transferKind, 'card_bill', body);
+  }
+});
+
 test('bank-account credits become incoming income entries', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'HDFCBK',
@@ -246,6 +392,49 @@ test('bank-account credits become incoming income entries', () => {
   assert.equal(result.fields.accountLast4, '1797');
   assert.equal(result.fields.merchant, 'Salary');
   assert.equal(result.fields.reference, '123456789012');
+});
+
+test('generic bank-origin credits are transfer candidates until paired', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Your HDFC Bank A/c XX9080 is credited with Rs.80,000 from CANARA BANK. UTR 123456789012. Avl Bal Rs.1,20,000.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'builtin_account_credit');
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.transferKind, 'incoming_bank_transfer_candidate');
+  assert.equal(result.fields.merchant, 'Bank transfer');
+});
+
+test('posted reversal and refund wording override overlapping income keywords', () => {
+  const cases = [
+    ['Interest reversal of Rs.500 credited to your account ending 2626.', 'reversal'],
+    ['Salary advance of Rs.10000 credited to your account ending 2626.', 'loan_disbursement'],
+    ['Dividend refund of Rs.250 credited to your account ending 2626.', 'refund'],
+  ];
+  for (const [body, transferKind] of cases) {
+    const result = parseSmsAgainstPatterns([], { sender: 'BANK', body });
+    assert.equal(result.ok, true, body);
+    assert.equal(result.fields.entryKind, 'transfer', body);
+    assert.equal(result.fields.transferKind, transferKind, body);
+  }
+});
+
+test('loan interest charges remain spend while principal repayments stay transfers', () => {
+  const fee = parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'Loan interest charge of Rs.500 debited from your account ending 2626.',
+  });
+  const repayment = parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'Loan repayment of Rs.5000 debited from your account ending 2626.',
+  });
+  assert.equal(fee.ok, true);
+  assert.equal(fee.fields.entryKind, 'spend');
+  assert.equal(fee.fields.transferKind, 'fee');
+  assert.equal(repayment.ok, true);
+  assert.equal(repayment.fields.entryKind, 'transfer');
+  assert.equal(repayment.fields.transferKind, 'loan_repayment');
 });
 
 test('bank-account summary evidence excludes insurance and investment account suffixes', () => {
@@ -291,13 +480,14 @@ test('bank-account summary evidence excludes insurance and investment account su
   );
 });
 
-test('refunds and cashbacks are incoming, while credit-card bill receipts stay transfers', () => {
+test('refunds and rewards are non-income movements, while credit-card bill receipts stay transfers', () => {
   const refund = parseSmsAgainstPatterns([], {
     sender: 'BANK',
     body: 'Refund of Rs. 250 received in your savings account ending 5799 from AMAZON on 02-10-26.',
   });
   assert.equal(refund.ok, true);
-  assert.equal(refund.fields.entryKind, 'income');
+  assert.equal(refund.fields.entryKind, 'transfer');
+  assert.equal(refund.fields.transferKind, 'refund');
   assert.equal(refund.fields.merchant, 'Refund');
 
   const cashback = parseSmsAgainstPatterns([], {
@@ -305,8 +495,77 @@ test('refunds and cashbacks are incoming, while credit-card bill receipts stay t
     body: 'Cashback of INR 80 credited to your wallet on 03-10-26.',
   });
   assert.equal(cashback.ok, true);
-  assert.equal(cashback.fields.entryKind, 'income');
+  assert.equal(cashback.fields.entryKind, 'transfer');
+  assert.equal(cashback.fields.transferKind, 'reward');
   assert.equal(cashback.fields.instrument, 'wallet');
+});
+
+test('card refunds, reversals and statement rewards remain visible transfers', () => {
+  for (const [body, kind, merchant] of [
+    ['Your credit card ending 7788 was credited Rs.250 as refund from AMAZON.', 'refund', 'Refund'],
+    ['Reversal of Rs.500 posted to your credit card ending 7788.', 'reversal', 'Reversal'],
+    ['Cashback of Rs.80 credited to your credit card ending 7788.', 'reward', 'Reward or cashback'],
+    ['Statement credit of Rs.100 applied to card ending 7788.', 'card_adjustment', 'Card statement adjustment'],
+  ]) {
+    const result = parseSmsAgainstPatterns([], { sender: 'BANK', body });
+    assert.equal(result.ok, true, body);
+    assert.equal(result.fields.entryKind, 'transfer', body);
+    assert.equal(result.fields.transferKind, kind, body);
+    assert.equal(result.fields.merchant, merchant, body);
+  }
+});
+
+test('salary advances are loan disbursements, not earned salary', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'Salary advance of Rs.25,000 credited to your bank account.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.transferKind, 'loan_disbursement');
+});
+
+test('unlabelled credits stay out of earned income until classified', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'HDFCBK',
+    body: 'Your HDFC Bank A/c XX9080 is credited with Rs.80,000. UTR 123456789012. Avl Bal Rs.1,20,000.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.entryKind, 'transfer');
+  assert.equal(result.fields.transferKind, 'unclassified_credit');
+});
+
+test('loan repayments and bank fees do not inflate purchase spending', () => {
+  const loan = parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'EMI repayment of Rs.12,000 debited from your bank account. Ref 123456789012.',
+  });
+  assert.equal(loan.ok, true);
+  assert.equal(loan.fields.entryKind, 'transfer');
+  assert.equal(loan.fields.transferKind, 'loan_repayment');
+
+  const fee = parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'Service charge of Rs.250 debited from your bank account. Ref 123456789012.',
+  });
+  assert.equal(fee.ok, true);
+  assert.equal(fee.fields.entryKind, 'spend');
+  assert.equal(fee.fields.transferKind, 'fee');
+});
+
+test('loan disbursement, investment proceeds, gifts and reimbursements are not earned income by default', () => {
+  const cases = [
+    ['Loan disbursement of Rs.50000 credited to your bank account.', 'loan_disbursement'],
+    ['Mutual fund redemption proceeds of Rs.50000 credited to your bank account.', 'investment_proceeds'],
+    ['Gift of Rs.5000 received in your savings account.', 'gift_received'],
+    ['Expense reimbursement of Rs.5000 credited to your bank account.', 'reimbursement'],
+  ];
+  for (const [body, transferKind] of cases) {
+    const result = parseSmsAgainstPatterns([], { sender: 'BANK', body });
+    assert.equal(result.ok, true, body);
+    assert.equal(result.fields.entryKind, 'transfer', body);
+    assert.equal(result.fields.transferKind, transferKind, body);
+  }
 });
 
 test('offers and service notices never become transactions', () => {

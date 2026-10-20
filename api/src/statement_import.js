@@ -7,6 +7,31 @@ const HASH = /^[a-f0-9]{64}$/i;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const { importTagNames } = require('./transaction_tags');
 
+/**
+ * Statement rows do not always carry a trustworthy type column. Apply the
+ * same conservative movement rules used by SMS imports to the narration,
+ * while preserving an explicit user/source classification when supplied.
+ */
+function inferStatementEntryKind(transaction) {
+  if (ENTRY_KINDS.has(transaction?.entryKind)) return transaction.entryKind;
+  const text = String(transaction?.merchantName || transaction?.description || '').toLowerCase();
+  if (/\b(?:investment|mutual\s+fund|sip|stocks?|shares?|equity|redemption|sold\s+units?)\b/.test(text)) {
+    return /\b(?:redemption|sold\s+units?|proceeds?)\b/.test(text) ? 'transfer' : 'investment';
+  }
+  if (/\b(?:interest\s+(?:charge|fee|on\s+(?:loan|emi))|(?:loan|emi)\s+interest|(?:processing|service|late|annual|maintenance|brokerage)\s+fee|bank\s+charge|finance\s+charge)\b/.test(text)) {
+    return 'spend';
+  }
+  const nonIncomeMovement = /\b(?:refund(?:ed)?|chargeback|revers(?:al|ed)|cashback|reward|statement\s+credit|balance\s+adjustment|card\s+adjustment|gift|reimburse(?:ment|d)?|loan\s+(?:disbursement|credited)|salary\s+advance|cash\s+deposit|cash\s+withdrawal|wallet\s+(?:load|top[ -]?up)|top[ -]?up|self\s+transfer|own\s+account|transfer|credit\s+card\s+(?:bill\s+)?(?:payment|pmt)|card\s+bill\s+pay|loan\s+(?:payment|repayment)|emi)\b/.test(text);
+  if (!nonIncomeMovement
+      && /\b(?:salary|wages?|payroll|pension|interest\s+earned|dividend|rent\s+received|invoice\s+paid|business\s+(?:receipt|income))\b/.test(text)) {
+    return 'income';
+  }
+  if (nonIncomeMovement) {
+    return 'transfer';
+  }
+  return 'spend';
+}
+
 function calendarDate(value) {
   if (typeof value !== 'string') return false;
   const match = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(value);
@@ -219,7 +244,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
           userCardId,
           instrument: userCardId ? instrument : (transaction.instrument || instrument),
           amount: Number(transaction.amountInr),
-          entryKind: transaction.entryKind || 'spend',
+          entryKind: inferStatementEntryKind(transaction),
           occurred,
           categoryId: classification.categoryId,
           userCategoryId: classification.userCategoryId,
@@ -281,4 +306,4 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
   };
 }
 
-module.exports = { validateStatementImport, createStatementImportHandler, maskAccount };
+module.exports = { validateStatementImport, createStatementImportHandler, maskAccount, inferStatementEntryKind };

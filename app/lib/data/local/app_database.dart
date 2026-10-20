@@ -218,6 +218,14 @@ CREATE TABLE IF NOT EXISTS sync_state (
   last_server_seq INTEGER NOT NULL DEFAULT 0,
   last_synced_at INTEGER
 );
+
+-- Display name of the signed-in profile, cached synchronously so SMS capture
+-- (which runs in sync sqlite transactions and background isolates) can use it
+-- for own-name self-transfer matching without an async provider hop.
+CREATE TABLE IF NOT EXISTS profile_name_cache (
+  namespace TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL
+);
 ''';
 
 class AppDatabase {
@@ -403,6 +411,26 @@ class AppDatabase {
   /// must never be shared across isolates.
   static AppDatabase openFile(String path) =>
       AppDatabase._(sqlite3.open(path), filePath: path);
+
+  void saveProfileDisplayName(String namespace, String? displayName) {
+    if (displayName == null || displayName.trim().isEmpty) return;
+    db.execute(
+      'INSERT OR REPLACE INTO profile_name_cache(namespace, display_name) VALUES(?, ?)',
+      [namespace, displayName.trim()],
+    );
+  }
+
+  String? profileDisplayName(String namespace) {
+    try {
+      final rows = db.select(
+        'SELECT display_name FROM profile_name_cache WHERE namespace=? LIMIT 1',
+        [namespace],
+      );
+      return rows.isEmpty ? null : rows.single['display_name'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
 
   void close() => db.dispose();
 }

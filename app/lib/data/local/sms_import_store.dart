@@ -9,7 +9,9 @@ import 'sms_intake_repository.dart';
 /// and the Android background isolate. Upload is deliberately separate.
 class SmsImportStore {
   final FinancialStore store;
-  SmsImportStore(this.store);
+  // Drain profile name into the parser for own-name self-transfer matching.
+  final String? ownUserName;
+  SmsImportStore(this.store, {this.ownUserName});
   void captureBatch(String namespace, List<QueuedSms> messages) {
     store.batch(() {
       final db = store.database.db;
@@ -65,6 +67,7 @@ class SmsImportStore {
         body: message.body,
         receivedAt: message.receivedAt,
         cards: cards,
+        ownUserName: ownUserName ?? store.database.profileDisplayName(namespace),
       );
       if (observation != null) {
         store.saveObservation(namespace, key, {

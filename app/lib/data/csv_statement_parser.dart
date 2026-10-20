@@ -492,6 +492,10 @@ ParsedStatementLine? _parseRow(
   ]);
   final transfer =
       importedKind == 'transfer' ||
+      RegExp(
+        r'\b(?:self\s+transfer|own\s+account|transfer|repayment|emi|loan\s+(?:payment|repayment|disbursement)|salary\s+advance|credit\s+card\s+(?:bill\s+)?(?:payment|pmt)|card\s+bill\s+pay|wallet\s+(?:load|top[ -]?up)|top[ -]?up|cash\s+(?:withdrawal|deposit)|refund(?:ed)?|chargeback|revers(?:al|ed)|cashback|reward|statement\s+credit|balance\s+adjustment|card\s+adjustment|gift|reimburse(?:ment|d)?|investment\s+proceeds|redemption|fd\s+maturity|fixed\s+deposit\s+maturity)\b',
+        caseSensitive: false,
+      ).hasMatch(description) ||
       (expenseIndex >= 0 && expenseIndex < row.length
           ? _normalise(row[expenseIndex]) == 'no'
           : typeIndex != null &&

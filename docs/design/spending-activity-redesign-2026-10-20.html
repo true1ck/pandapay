@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PandaPay — Spending &amp; Activity redesign mockups (2026-10-20)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --slate:#2B313A; --slate-raised:#333A45; --slate-low:#262B33; --slate-hairline:#424956;
+    --lime:#CDF564; --jade:#12805C; --jade-tint:#E7F3EE; --clay:#E8623C; --clay-tint:#FDEEE9;
+    --amber:#D97706; --amber-tint:#FEF3E2; --indigo:#5A6FD6; --indigo-tint:#EDEFF9;
+    --cyan:#2B9DB7; --cyan-tint:#E7F3F6; --violet:#8064C7; --violet-tint:#F1EEF8;
+    --paper:#FFFFFF; --paper-muted:#F7F6F0; --hairline:rgba(43,49,58,.12);
+    --ink900:#2B313A; --ink700:#59636C; --ink500:#8B8F94;
+    --on-slate:#FBFAF5; --on-slate-muted:#8B9099; --on-slate-subtle:#B9BFC5;
+    --radius-lg:20px; --radius-md:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#F1EFE9; color:var(--ink900); font-family:'Outfit',sans-serif;
+    padding:40px 32px 72px;
+  }
+  h1{font-size:24px;letter-spacing:-.5px;margin-bottom:6px}
+  .sub{color:var(--ink700);font-size:14px;margin-bottom:8px;max-width:860px}
+  .legend{margin:18px 0 28px;display:flex;gap:10px;flex-wrap:wrap}
+  .badge{
+    display:inline-flex;align-items:center;gap:5px;border-radius:999px;
+    padding:3px 10px;font-size:11.5px;font-weight:600;
+  }
+  .b-bill{background:var(--indigo-tint);color:var(--indigo)}
+  .b-self{background:var(--cyan-tint);color:var(--cyan)}
+  .b-top{background:var(--amber-tint);color:var(--amber)}
+  .b-inv{background:var(--violet-tint);color:var(--violet)}
+  .b-spend{background:var(--clay-tint);color:var(--clay)}
+  .b-in{background:var(--jade-tint);color:var(--jade)}
+  .note{color:var(--ink500);font-size:13px;margin:26px 0 12px;max-width:720px}
+  .frames{display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start}
+  .phone{
+    width:375px;background:var(--paper);border-radius:46px;position:relative;
+    box-shadow:0 30px 60px rgba(43,49,58,.18),0 0 0 10px #14171C;
+    height:812px;overflow:hidden;flex:0 0 auto;
+    background:
+      radial-gradient(120% 90% at 100% 0%, #E4F2CF 0%, rgba(228,242,207,0) 55%),
+      radial-gradient(120% 90% at 0% 100%, #EFF3F6 0%, rgba(239,243,246,0) 55%),
+      var(--paper);
+  }
+  .statusbar{
+    height:44px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 24px;font-size:13px;font-weight:600;color:var(--ink900);
+  }
+  .screen-title{display:flex;align-items:center;gap:14px;padding:6px 20px 12px}
+  .screen-title .back{width:38px;height:38px;border-radius:14px;background:var(--paper-muted);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--ink900)}
+  .screen-title h2{font-size:23px;font-weight:700;letter-spacing:-.4px}
+  .title-chip{margin-left:auto;background:var(--paper-muted);border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:600;box-shadow:inset 0 0 0 1px var(--hairline)}
+  .scroll{padding:0 16px;height:722px;overflow:hidden}
+  .scroll.safe{height:690px}
+  .search{
+    display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.86);
+    border-radius:16px;padding:12px 14px;box-shadow:inset 0 0 0 1px var(--hairline);
+    color:var(--ink500);font-size:14px;margin-bottom:10px;
+  }
+  .chips{display:flex;gap:8px;overflow:hidden;padding-bottom:12px}
+  .chip{
+    border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:600;white-space:nowrap;
+    background:var(--paper-muted);box-shadow:inset 0 0 0 1px var(--hairline);
+  }
+  .chip.active{background:var(--slate);color:var(--on-slate);box-shadow:none}
+  .summary{
+    background:linear-gradient(150deg,var(--slate-raised),var(--slate) 55%,var(--slate-low));
+    border-radius:22px;padding:16px;color:var(--on-slate);margin-bottom:18px;
+  }
+  .summary .cap{font-size:12px;color:var(--on-slate-muted)}
+  .metrics{display:flex;margin-top:10px}
+  .metric{flex:1}
+  .metric .lbl{font-size:11.5px;color:var(--on-slate-muted)}
+  .metric .amt{font-family:'IBM Plex Sans',monospace;font-weight:700;font-size:22px;margin-top:3px;letter-spacing:-.3px}
+  .excluded{
+    margin-top:12px;padding-top:11px;border-top:1px solid var(--slate-hairline);
+    display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--on-slate-subtle)
+  }
+  .excluded .dot{width:22px;height:22px;border-radius:8px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .day{font-size:12.5px;font-weight:600;color:var(--ink700);margin:0 0 8px 2px}
+  .tile{
+    background:rgba(255,255,255,.9);border-radius:18px;padding:13px 14px;
+    box-shadow:0 0 0 1px var(--hairline);display:flex;gap:11px;margin-bottom:8px;align-items:center
+  }
+  .tile .ic{width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;font-size:16px}
+  .ic-spend{background:var(--clay-tint);color:var(--clay)}
+  .ic-in{background:var(--jade-tint);color:var(--jade)}
+  .ic-transfer{background:#EEF0F2;color:var(--ink700)}
+  .mid{flex:1;min-width:0}
+  .mid .name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mid .sub{color:var(--ink500);font-size:11.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .amt{font-family:'IBM Plex Sans',monospace;font-weight:700;font-size:14.5px;text-align:right}
+  .amt.in{color:var(--jade)} .amt.out{color:var(--clay)} .amt.neutral{color:var(--ink900)}
+  .tile-badge{font-size:9.5px;font-weight:700;letter-spacing:.3px;border-radius:6px;padding:2px 6px;text-transform:uppercase;margin-left:6px;vertical-align:2px}
+  .pend{color:var(--amber);font-size:11px;margin-left:5px}
+  .fab-hint{
+    position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+    color:var(--ink700);font-size:10.5px;font-weight:600;white-space:nowrap;
+    background:rgba(255,255,255,.9);padding:8px 14px;border-radius:999px;
+    box-shadow:0 0 0 1px var(--hairline),0 6px 16px rgba(43,49,58,.08)
+  }
+  /* detail */
+  .hero{text-align:center;padding:18px 0 6px}
+  .hero .ic-lg{width:64px;height:64px;border-radius:22px;margin:0 auto 12px;background:var(--indigo-tint);color:var(--indigo);display:flex;align-items:center;justify-content:center;font-size:26px}
+  .hero .amt-lg{font-family:'IBM Plex Sans',monospace;font-size:34px;font-weight:700;letter-spacing:-.5px}
+  .tagrow{margin-top:10px;display:flex;gap:7px;justify-content:center}
+  .tag{background:var(--paper-muted);border-radius:999px;padding:5px 10px;font-size:11px;color:var(--ink700);font-weight:500;box-shadow:inset 0 0 0 1px var(--hairline)}
+  .trace{margin-top:18px;background:var(--paper-muted);border-radius:18px;padding:4px 14px;box-shadow:inset 0 0 0 1px var(--hairline)}
+  .step{display:flex;gap:11px;padding:12px 0;align-items:flex-start}
+  .step+.step{border-top:1px dashed var(--hairline)}
+  .step .rail{display:flex;flex-direction:column;align-items:center;width:18px;flex:0 0 auto}
+  .step .dot{width:9px;height:9px;border-radius:50%;background:var(--slate);margin-top:5px}
+  .step .line{flex:1;width:2px;background:var(--hairline);margin-top:2px}
+  .step .what{font-size:12.5px;font-weight:600;color:var(--ink900)}
+  .step .when{font-size:11px;color:var(--ink500);margin-top:1px}
+  .step .step-amt{margin-left:auto;font-family:'IBM Plex Sans',monospace;font-size:12.5px;font-weight:700}
+  .verdict{margin-top:16px;background:linear-gradient(150deg,var(--slate-raised),var(--slate));border-radius:18px;padding:15px 16px;color:var(--on-slate)}
+  .verdict .v-cap{font-size:11.5px;color:var(--on-slate-muted)}
+  .verdict .v-amt{font-family:'IBM Plex Sans',monospace;font-size:24px;font-weight:700;color:var(--lime);margin-top:4px}
+  .verdict .v-note{font-size:11.5px;color:var(--on-slate-subtle);margin-top:4px}
+  .reclass{margin:14px auto 0;display:block;text-align:center;border:none;border-radius:14px;padding:13px;width:100%;font-family:'Outfit';font-size:14px;font-weight:700;background:var(--slate);color:var(--on-slate);box-shadow:none}
+  .reclass.ghost{background:transparent;color:var(--ink700);box-shadow:inset 0 0 0 1px var(--hairline);font-weight:600;font-size:13px;padding:11px}
+  /* reclassify screen */
+  .row{display:flex;gap:11px;padding:12px 14px;background:rgba(255,255,255,.92);border-radius:16px;box-shadow:0 0 0 1px var(--hairline);margin-bottom:8px;align-items:center}
+  .row .cbx{width:20px;height:20px;border-radius:6px;background:var(--jade);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;flex:0 0 auto}
+  .row .cbx.off{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink500)}
+  .kinds{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+  .kind{border-radius:999px;padding:4px 10px;font-size:10.5px;font-weight:600;box-shadow:inset 0 0 0 1px var(--hairline);color:var(--ink700)}
+  .kind.pick{color:#fff;box-shadow:none;border-radius:999px}
+  .k-bill{background:var(--indigo)} .k-self{background:var(--cyan)} .k-inv{background:var(--violet)} .k-spend{background:var(--slate)}
+  .cta{position:absolute;bottom:26px;left:16px;right:16px;border:none;border-radius:16px;padding:15px;font-family:'Outfit';font-size:15px;font-weight:700;background:var(--slate);color:var(--on-slate)}
+  .cap-slate{position:absolute;bottom:82px;left:16px;right:16px;color:var(--ink500);font-size:11.5px;text-align:center}
+  /* filter sheet */
+  .sheet-title{font-size:20px;font-weight:700;letter-spacing:-.3px;padding:2px 20px 6px}
+  .sheet-sub{color:var(--ink500);font-size:13px;padding:0 20px 14px}
+  .opt{display:flex;gap:11px;align-items:center;padding:0 20px;height:46px;align-items:center}
+  .opt .ico{color:var(--ink500);font-size:17px;width:24px}
+  .opt .lb{font-size:14px;font-weight:500}
+  .opt.sel .lb{font-weight:700;color:var(--jade)}
+  .opt .radio{margin-left:auto;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--ink500)}
+  .opt.sel .ico,.opt.sel .radio{color:var(--jade)}
+  .opt.sel .radio{background:var(--jade);box-shadow:none;position:relative}
+  .opt.sel .radio::after{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center/70% no-repeat}
+  .divider{height:1px;background:var(--hairline);margin:10px 20px}
+  .section-lbl{font-size:11px;font-weight:700;letter-spacing:.8px;color:var(--ink500);text-transform:uppercase;padding:6px 20px 2px}
+  .capt{
+    border-radius:16px;background:var(--slate);color:var(--on-slate);padding:15px;font-size:12.5px;color:var(--on-slate-muted);margin-top:10px
+  }
+  .capt b{color:var(--lime);font-weight:700}
+</style>
+</head>
+<body>
+<h1>PandaPay · Spending &amp; Activity redesign — prepared mockups</h1>
+<p class="sub">Bamboo Ink tokens (slate surfaces, lime on slate only, jade/clay money semantics). Movement badges proposed once, reused on every surface. Not implemented — for review.</p>
+<div class="legend">
+  <span class="badge b-spend">↑ Spending · clay</span>
+  <span class="badge b-in">↓ Money in · jade</span>
+  <span class="badge b-bill">⇄ Bill payment · indigo</span>
+  <span class="badge b-self">⇄ Self transfer · cyan</span>
+  <span class="badge b-top">⇄ Wallet top-up · amber</span>
+  <span class="badge b-inv">↗ Investment · violet</span>
+</div>
+<p class="note">Billing rule baked into all frames: only <b>spending</b> moves the spending number. Bill payments, self transfers and top-ups are shown, labelled and colour-coded — and labelled as excluded in the summary.</p>
+
+<div class="frames">
+
+  <!-- ============ FRAME A ============ -->
+  <div class="phone">
+    <div class="statusbar"><span>7:57</span><span>▮▮▮ ⚡ 51%</span></div>
+    <div class="screen-title">
+      <div class="back">←</div><h2>Activity</h2>
+      <div class="title-chip">📅 2026 ▾</div>
+    </div>
+    <div class="scroll">
+      <div class="search">🔍 <span>Search merchant or note</span></div>
+      <div class="chips">
+        <div class="chip">All activity</div>
+        <div class="chip active">Spending</div>
+        <div class="chip">Money in</div>
+        <div class="chip">Bill payments</div>
+        <div class="chip">Self transfers</div>
+        <div class="chip">Investments</div>
+        <div class="chip">Card</div>
+        <div class="chip">Category</div>
+      </div>
+      <div class="summary">
+        <div class="cap">This year · Jan 1 – Oct 20 · 202 transactions</div>
+        <div class="metrics">
+          <div class="metric"><div class="lbl">Spending</div><div class="amt" style="color:var(--on-slate)">−₹1,86,240</div></div>
+          <div class="metric"><div class="lbl">Money in</div><div class="amt" style="color:var(--lime)">+₹4,58,900</div></div>
+        </div>
+        <div class="excluded"><span class="dot">⇄</span> Excluded: ₹2,76,000 — 14 bill payments · 9 self transfers · 3 top-ups · 6 investments</div>
+      </div>
+      <div class="day">Today · 20 Oct</div>
+      <div class="tile">
+        <div class="ic ic-transfer">⇄</div>
+        <div class="mid">
+          <div class="name">Credit card bill payment</div>
+          <div class="sub">8:02 AM · Canara A/c 2626 → HDFC card 9080 · SMS
+            <span class="tile-badge" style="background:var(--indigo-tint);color:var(--indigo)">Bill payment</span></div>
+        </div>
+        <div class="amt neutral">₹80,000</div>
+      </div>
+      <div class="tile">
+        <div class="ic ic-spend">↑</div>
+        <div class="mid">
+          <div class="name">Swadisht agro foods</div>
+          <div class="sub">12:05 PM · Credit card 9080 · Dining · ⧗ pending</div>
+        </div>
+        <div class="amt out">−₹150</div>
+      </div>
+      <div class="tile">
+        <div class="ic ic-transfer">⇄</div>
+        <div class="mid">
+          <div class="name">PhonePe wallet</div>
+          <div class="sub">9:58 AM · Bank A/c 2626 · SMS
+            <span class="tile-badge" style="background:var(--amber-tint);color:var(--amber)">Top-up</span></div>
+        </div>
+        <div class="amt neutral">₹93.82</div>
+      </div>
+      <div class="day" style="margin-top:14px">Yesterday · 19 Oct</div>
+      <div class="tile">
+        <div class="ic ic-transfer">⇄</div>
+        <div class="mid">
+          <div class="name">HDFC A/c 9080</div>
+          <div class="sub">6:41 PM · Canara → HDFC · IMPS · SMS
+            <span class="tile-badge" style="background:var(--cyan-tint);color:var(--cyan)">Self transfer</span></div>
+        </div>
+        <div class="amt neutral">₹25,000</div>
+      </div>
+      <div class="tile">
+        <div class="ic ic-in">↓</div>
+        <div class="mid"><div class="name">Salary · Acme payroll</div><div class="sub">10:04 AM · Canara A/c 2626 · Credit</div></div>
+        <div class="amt in">+₹52,000</div>
+      </div>
+      <div class="tile">
+        <div class="ic" style="background:var(--violet-tint);color:var(--violet)">↗</div>
+        <div class="mid"><div class="name">Investment contribution<span class="tile-badge" style="background:var(--violet-tint);color:var(--violet)">Investment</span></div><div class="sub">8:15 AM · Groww · SIP debit · SMS</div></div>
+        <div class="amt neutral">₹10,000</div>
+      </div>
+    </div>
+    <div class="fab-hint">Spending number only moves when money is consumed — not when it moves.</div>
+  </div>
+
+  <!-- ============ FRAME B ============ -->
+  <div class="phone">
+    <div class="statusbar"><span>7:57</span><span>▮▮▮ ⚡ 51%</span></div>
+    <div class="screen-title"><div class="back">←</div><h2>Transaction</h2><div class="title-chip">Edit ▾</div></div>
+    <div class="scroll">
+      <div class="hero">
+        <div class="ic-lg">⇄</div>
+        <div style="font-weight:700;font-size:16px">Credit card bill payment</div>
+        <div class="amt-lg neutral" style="margin-top:8px">₹80,000.00</div>
+        <div class="tagrow">
+          <div class="tag">Transfer</div><div class="tag">Not spending</div><div class="tag">HDFC card 9080</div>
+        </div>
+      </div>
+      <div class="trace">
+        <div class="step"><div class="rail"><div class="dot"></div><div class="line"></div></div>
+          <div><div class="what">Laptop purchase · Flipkart</div><div class="when">3 Sep · credit card 9080 · counted as spending</div></div>
+          <div class="step-amt" style="color:var(--clay)">₹80,000</div></div>
+        <div class="step"><div class="rail"><div class="dot" style="background:var(--amber)"></div><div class="line"></div></div>
+          <div><div class="what">Statement generated · due 9 Oct</div><div class="when">18 Sep · reminder only — nothing logged</div></div>
+          <div class="step-amt" style="color:var(--ink500)">₹80,000</div></div>
+        <div class="step"><div class="rail"><div class="dot" style="background:var(--indigo)"></div></div>
+          <div><div class="what">Bill payment · from Canara A/c 2626</div><div class="when">20 Oct · settles the card — not counted</div></div>
+          <div class="step-amt" style="color:var(--indigo)">−₹80,000</div></div>
+      </div>
+      <div class="verdict">
+        <div class="v-cap">This cycle's spending</div>
+        <div class="v-amt">₹80,000</div>
+        <div class="v-note">The ₹80,000 bill payment is a transfer, not a second purchase. Without this rule the cycle would wrongly read ₹1,60,000.</div>
+      </div>
+      <button class="reclass">Change movement type</button>
+      <button class="reclass ghost">Wrongly imported? Fix it here — edits update card caps and points too</button>
+    </div>
+  </div>
+
+  <!-- ============ FRAME C ============ -->
+  <div class="phone">
+    <div class="statusbar"><span>7:57</span><span>▮▮▮ ⚡ 51%</span></div>
+    <div class="screen-title"><div class="back">←</div><h2>Looks like transfers</h2></div>
+    <div class="scroll">
+      <div class="capt">
+        <b>7 transactions</b> look like bill payments, self transfers or top-ups that were logged as spending. Confirm each — or leave it if it really was a purchase. Your earlier history is never rewritten silently.
+      </div>
+      <div style="height:14px"></div>
+      <div class="row">
+        <div class="cbx">✓</div>
+        <div class="mid">
+          <div class="name">Transfer to HDFC Bank <span style="font-weight:500;color:var(--ink500)">→</span> <span style="color:var(--cyan);font-weight:600">Self transfer</span></div>
+          <div class="sub">12 Sep · ₹51,000 · Canara → HDFC A/c 9080</div>
+          <div class="kinds">
+            <div class="kind">Personal expense</div>
+            <div class="kind pick k-self">Self transfer</div>
+            <div class="kind">Bill payment</div>
+            <div class="kind">Investment</div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="cbx">✓</div>
+        <div class="mid">
+          <div class="name">Bank transfer <span style="font-weight:500;color:var(--ink500)">→</span> <span style="color:var(--indigo);font-weight:600">Bill payment</span></div>
+          <div class="sub">7 Sep · ₹80,000 · towards HDFC card 9080</div>
+          <div class="kinds">
+            <div class="kind">Personal expense</div>
+            <div class="kind">Self transfer</div>
+            <div class="kind pick k-bill">Bill payment</div>
+            <div class="kind">Investment</div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="cbx off"></div>
+        <div class="mid">
+          <div class="name">MMT Giftshop <span style="font-weight:500;color:var(--ink500)">stays</span> <span style="font-weight:600">Voucher purchase</span></div>
+          <div class="sub">31 Aug · ₹1,200 · flagged by similarity only — you kept it</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="cbx">✓</div>
+        <div class="mid">
+          <div class="name">Paytm Wallet <span style="font-weight:500;color:var(--ink500)">→</span> <span style="color:var(--amber);font-weight:600">Top-up</span></div>
+          <div class="sub">28 Aug · ₹2,000 · add money to wallet</div>
+          <div class="kinds">
+            <div class="kind">Personal expense</div>
+            <div class="kind">Self transfer</div>
+            <div class="kind">Bill payment</div>
+            <div class="kind pick k-spend" style="background:var(--amber)">Top-up</div>
+          </div>
+        </div>
+      </div>
+      <div class="row" style="opacity:.55">
+        <div class="cbx off"></div>
+        <div class="mid"><div class="name">Zerodha India</div><div class="sub">26 Aug · ₹15,000 · classified investment already — no action</div></div>
+      </div>
+    </div>
+    <div class="cap-slate">Confirmed rows update spending history, card caps and points automatically.</div>
+    <button class="cta">Reclassify 3 transactions</button>
+  </div>
+
+  <!-- ============ FRAME D ============ -->
+  <div class="phone" style="background:
+      radial-gradient(120% 90% at 100% 0%, #E4F2CF 0%, rgba(228,242,207,0) 55%),
+      radial-gradient(120% 90% at 0% 100%, #EFF3F6 0%, rgba(239,243,246,0) 55%),
+      #FFFDF7">
+    <div class="statusbar"><span>7:57</span><span>▮▮▮ ⚡ 51%</span></div>
+    <div class="sheet-title">Track activity by time</div>
+    <div class="sheet-sub">Choose a quick period or set your own dates.</div>
+    <div class="opt"><span class="ico">⊙</span><span class="lb">Today</span><div class="radio"></div></div>
+    <div class="opt"><span class="ico">▦</span><span class="lb">This week</span><div class="radio"></div></div>
+    <div class="opt"><span class="ico">📅</span><span class="lb">This month</span><div class="radio"></div></div>
+    <div class="opt"><span class="ico">↩</span><span class="lb">Last month</span><div class="radio"></div></div>
+    <div class="opt"><span class="ico">⟳</span><span class="lb">Last 30 days</span><div class="radio"></div></div>
+    <div class="opt"><span class="ico">⟳</span><span class="lb">Last 90 days</span><div class="radio"></div></div>
+    <div class="opt sel"><span class="ico">🗓</span><span class="lb">This year (default)</span><div class="radio"></div></div>
+    <div class="divider"></div>
+    <div class="opt"><span class="ico">∞</span><span class="lb">All time</span><div class="radio"></div></div>
+    <div class="opt"><span class="ico">⚙</span><span class="lb">Custom range</span><div class="radio"></div></div>
+    <div class="section-lbl">Show</div>
+    <div class="opt"><span class="ico">⇄</span><span class="lb">Movement types</span><div class="radio" style="border-radius:6px"></div></div>
+    <div class="divider"></div>
+    <div class="section-lbl">Why this default?</div>    <div class="capt" style="background:var(--paper-muted);color:var(--ink700);box-shadow:inset 0 0 0 1px var(--hairline)">
+      Activity opens on the <b style="color:var(--ink900)">current year</b> so the summary describes a year, not a lifetime. The totals stay label-safe: spending excludes bill payments, self transfers and top-ups.
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

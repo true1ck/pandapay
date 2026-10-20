@@ -26,6 +26,9 @@ bool isInvestmentMovementDescription(String value) {
     caseSensitive: false,
   ).hasMatch(text);
   if (!explicitIntent && !brokerFunding) return false;
+  // A broker settlement payout is money vacating the investment account
+  // toward the bank, not funding. It must never register as a contribution.
+  if (isBrokerSettlementMessage(text)) return false;
 
   final feeOnly = RegExp(
     r'\b(?:fee|fees|charge|charges|commission|brokerage\s+fee|annual\s+maintenance)\b',
@@ -38,4 +41,23 @@ bool isInvestmentMovementDescription(String value) {
     return false;
   }
   return true;
+}
+
+/// True when a broker (Dhan, Zerodha, Groww, etc.) reports a settlement
+/// payout of trading balance into the user's own bank account. Money leaves
+/// the investment account and lands in the bank: an investment-proceeds
+/// movement — never earned income, never spending, never new funding. The
+/// phrase "add funds back to your [broker] account" is an instruction about
+/// the user's next step, not this transaction.
+bool isBrokerSettlementMessage(String value) {
+  final text = value.trim();
+  if (text.isEmpty) return false;
+  return RegExp(
+    r'\b(?:dhan|zerodha|groww|upstox|angel\s+one|5paisa|sharekhan|motilal\s+oswal|hdfc\s+securities|icici\s+direct|kotak\s+securities|paytm\s+money|iifl)\b',
+    caseSensitive: false,
+  ).hasMatch(text) &&
+      RegExp(
+    r'\b(?:running\s+account\s+settlement|quarterly\s+settlement|account\s+settlement|settlement\s+(?:payout|credit|dated)|payout|pay-?out|funds?\s+released)\b',
+    caseSensitive: false,
+  ).hasMatch(text);
 }

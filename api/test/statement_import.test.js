@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { validateStatementImport, createStatementImportHandler, maskAccount } = require('../src/statement_import');
+const { validateStatementImport, createStatementImportHandler, maskAccount, inferStatementEntryKind } = require('../src/statement_import');
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const cardId = '11111111-1111-4111-8111-111111111111';
 const categoryId = '22222222-2222-4222-8222-222222222222';
@@ -148,6 +148,25 @@ test('statement import forwards the transaction kind to the shared insert path',
   const run = harness();
   await run.call(body({ transactions: [{ ...body().transactions[0], entryKind: 'income' }] }));
   assert.equal(run.written[0].entryKind, 'income');
+});
+
+test('statement narration classification excludes settlements and preserves explicit kinds', () => {
+  assert.equal(inferStatementEntryKind({ merchantName: 'CREDIT CARD BILL PAYMENT' }), 'transfer');
+  assert.equal(inferStatementEntryKind({ merchantName: 'SELF TRANSFER TO HDFC ACCOUNT' }), 'transfer');
+  assert.equal(inferStatementEntryKind({ merchantName: 'MUTUAL FUND SIP' }), 'investment');
+  assert.equal(inferStatementEntryKind({ merchantName: 'MUTUAL FUND REDEMPTION PROCEEDS' }), 'transfer');
+  assert.equal(inferStatementEntryKind({ merchantName: 'SALARY CREDIT' }), 'income');
+  assert.equal(inferStatementEntryKind({ merchantName: 'AMAZON PURCHASE' }), 'spend');
+  assert.equal(inferStatementEntryKind({ entryKind: 'income', merchantName: 'REFUND' }), 'income');
+});
+
+test('statement adjustments and loan advances stay outside spending and earned income', () => {
+  assert.equal(inferStatementEntryKind({ merchantName: 'Card statement credit' }), 'transfer');
+  assert.equal(inferStatementEntryKind({ merchantName: 'Chargeback from merchant' }), 'transfer');
+  assert.equal(inferStatementEntryKind({ merchantName: 'Salary advance credited' }), 'transfer');
+  assert.equal(inferStatementEntryKind({ merchantName: 'Interest reversal credited' }), 'transfer');
+  assert.equal(inferStatementEntryKind({ merchantName: 'Dividend refund' }), 'transfer');
+  assert.equal(inferStatementEntryKind({ merchantName: 'EMI interest charge' }), 'spend');
 });
 
 test('reviewed category, subcategory, and note are saved as the selected assignment', async () => {

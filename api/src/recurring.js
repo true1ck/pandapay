@@ -13,6 +13,18 @@ const INVESTMENT_INTENT = /\b(?:sip|systematic\s+investment|mutual\s+fund|invest
 const MOVEMENT_VERB = /\b(?:debit(?:ed)?|paid|sent|transferred|withdrawn|invested|purchased|bought|credited|received|deposited|add(?:ing|ed)?|funded|top[ -]?up)\b/i;
 const FEE_ONLY = /\b(?:fee|fees|charge|charges|commission|brokerage\s+fee|annual\s+maintenance)\b/i;
 
+// A broker (Dhan, Zerodha, Groww, etc.) reporting a settlement payout of
+// trading balance into the user's own bank account. Money leaves the
+// investment account and lands in the bank — an investment-proceeds
+// movement: never earned income, never spending, never new funding. The
+// phrase "add funds back to your <broker> account" is an instruction about
+// the user's next step, not this transaction.
+function isBrokerSettlementMessage(value) {
+  const text = String(value || '');
+  return /\b(?:dhan|zerodha|groww|upstox|angel\s+one|5paisa|sharekhan|motilal\s+oswal|hdfc\s+securities|icici\s+direct|kotak\s+securities|paytm\s+money|iifl)\b/i.test(text)
+    && /\b(?:running\s+account\s+settlement|quarterly\s+settlement|account\s+settlement|settlement\s+(?:payout|credit|dated)|payout|pay-?out|funds?\s+released)\b/i.test(text);
+}
+
 /**
  * True when text describes money entering an investment/broker account or an
  * investment purchase. This is intentionally stricter than matching a broker
@@ -25,6 +37,9 @@ function isInvestmentFundingMessage(value) {
   const brokerFunding = FINANCIAL_PROVIDER.test(text) &&
     /\b(?:add(?:ing|ed)?|fund(?:s|ed|ing)?|top[ -]?up|debit(?:ed)?|paid|sent|transferred|credited|deposited)\b/i.test(text);
   if (!explicitInvestment && !brokerFunding) return false;
+  // A settlement payout is money vacating the investment account toward the
+  // bank, not funding. Must never register as an investment contribution.
+  if (isBrokerSettlementMessage(text)) return false;
   // Brokerage/maintenance fees are consumption, even though the provider is
   // financial. They must remain ordinary spend rows for later categorisation.
   if (FEE_ONLY.test(text) && !/\b(?:sip|mutual\s+fund|investment|invested|add(?:ed)?\s+(?:money|funds?))\b/i.test(text)) {
@@ -320,6 +335,7 @@ module.exports = {
   isDisplayableSubscriptionRecord,
   isInvestmentFundingMessage,
   isInvestmentMandateMessage,
+  isBrokerSettlementMessage,
   isNonSubscriptionFinancialName,
   MIN_OCCURRENCES,
   AMOUNT_TOLERANCE,
