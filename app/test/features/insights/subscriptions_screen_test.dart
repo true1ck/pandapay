@@ -210,4 +210,41 @@ void main() {
     expect(find.textContaining('No recent charge detected since'), findsOneWidget);
     expect(find.textContaining('Renews around'), findsNothing);
   });
+
+  testWidgets('never presents a past AutoPay date as an upcoming renewal', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recurringReportProvider.overrideWith((ref) async {
+            return RecurringReport(
+              series: [
+                RecurringSeries(
+                  id: 'past-autopay-date',
+                  displayName: 'Google Play',
+                  typicalAmount: Money.fromRupees(1850),
+                  cadenceDays: 30,
+                  occurrenceCount: 1,
+                  annualCost: Money.fromRupees(22508.33),
+                  nextExpectedOn: DateTime(2025, 7, 4),
+                  isMandate: true,
+                  detectionSource: 'mandate',
+                  autopayStatus: 'active',
+                ),
+              ],
+              totalAnnual: Money.fromRupees(22508.33),
+            );
+          }),
+        ],
+        child: const MaterialApp(home: SubscriptionsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Google Play'), findsOneWidget);
+    expect(find.text('Needs review'), findsOneWidget);
+    expect(find.text('Saved renewal date has passed; please review it'), findsOneWidget);
+    expect(find.textContaining('Renews around 4 Jul 2025'), findsNothing);
+  });
 }

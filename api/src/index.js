@@ -6694,7 +6694,9 @@ app.get('/recurring', requireAuth, async (req, res) => {
              first_seen_on = COALESCE(recurring_series.first_seen_on, EXCLUDED.first_seen_on),
              last_seen_on = EXCLUDED.last_seen_on,
              next_expected_on = CASE
-               WHEN recurring_series.user_edited THEN recurring_series.next_expected_on
+               WHEN recurring_series.user_edited
+                 AND recurring_series.next_expected_on >= CURRENT_DATE
+               THEN recurring_series.next_expected_on
                ELSE EXCLUDED.next_expected_on
              END,
              detection_source = CASE

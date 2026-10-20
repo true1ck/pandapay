@@ -834,15 +834,22 @@ class RecurringSeries {
       autopayStatus == 'active' ||
       (autopayStatus == 'unknown' && isMandate);
 
-  /// An observed series is stale when it has missed more than one normal
-  /// billing window. A mandate/manual row is not judged by charge recency:
-  /// an active mandate can exist before its first debit and a manual row has
-  /// no observed charge by definition.
+  bool get hasPastRenewal {
+    final next = nextExpectedOn;
+    if (next == null) return false;
+    final today = DateTime.now();
+    final dateOnly = DateTime(next.year, next.month, next.day);
+    return dateOnly.isBefore(DateTime(today.year, today.month, today.day));
+  }
+
+  /// A date before today is evidence that the saved schedule needs review;
+  /// it is never safe to render it as an upcoming renewal. A series with an
+  /// observed charge is also stale after more than one normal billing window.
+  /// Active mandates without a first charge remain valid and are not marked
+  /// stale because there is no charge timestamp to evaluate.
   bool get needsReview {
-    if ((detectionSource != 'observed' && detectionSource != 'local_cache') ||
-        lastSeenOn == null) {
-      return false;
-    }
+    if (hasPastRenewal) return true;
+    if (lastSeenOn == null) return false;
     final age = DateTime.now().difference(lastSeenOn!).inDays;
     return age > (cadenceDays * 1.5).round();
   }

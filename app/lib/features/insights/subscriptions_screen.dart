@@ -1075,7 +1075,9 @@ class _SeriesCard extends ConsumerWidget {
                 ],
               ),
             ],
-            if (series.needsReview && series.lastSeenOn != null) ...[
+            if (series.needsReview &&
+                !series.hasPastRenewal &&
+                series.lastSeenOn != null) ...[
               const SizedBox(height: AppSpace.xs),
               Row(
                 children: [
@@ -1088,6 +1090,29 @@ class _SeriesCard extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       'No recent charge detected since ${_formatDate(series.lastSeenOn!)}',
+                      style: BambooFonts.ui(
+                        12,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (series.needsReview && series.hasPastRenewal) ...[
+              const SizedBox(height: AppSpace.xs),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.event_busy_outlined,
+                    size: 16,
+                    color: Color(0xFF9B6500),
+                  ),
+                  const SizedBox(width: AppSpace.xs),
+                  Expanded(
+                    child: Text(
+                      'Saved renewal date has passed; please review it',
                       style: BambooFonts.ui(
                         12,
                         weight: FontWeight.w600,
