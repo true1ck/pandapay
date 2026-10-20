@@ -74,8 +74,9 @@ void addNeedsReviewSync(
   NeedsReviewItem item,
 ) {
   if (item.kind == NeedsReviewKind.transaction &&
-      LocalSmsParser.isNonTransactionNoise(item.sender, item.body))
+      LocalSmsParser.isNonTransactionNoise(item.sender, item.body)) {
     return;
+  }
   database.db.execute(
     'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
   );
