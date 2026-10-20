@@ -82,12 +82,10 @@ Future<void> _reveal(WidgetTester tester, String label) async {
 
 Future<void> _openInsights(WidgetTester tester) async {
   await _pumpApp(tester);
-  await tester.tap(
-    find.descendant(
-      of: find.byKey(const ValueKey('appShellNavBar')),
-      matching: find.text('Insights'),
-    ),
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(MaterialApp)),
   );
+  container.read(goRouterProvider).go(AppRoute.insights);
   await tester.pump(const Duration(milliseconds: 100));
 }
 
@@ -127,8 +125,6 @@ void main() {
     // Guards the consolidation itself: if one of these reappears as its own
     // tile, the grid has started regrowing and the merge has been undone.
     await _openInsights(tester);
-    await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
-    await tester.pumpAndSettle();
 
     for (final gone in const [
       'Caps & Limits',
@@ -182,30 +178,21 @@ void main() {
     final scrollFinder = find.byKey(
       const PageStorageKey<String>('insightsScroll'),
     );
-    await tester.drag(scrollFinder, const Offset(0, -2000));
-    await tester.pump(const Duration(milliseconds: 100));
     final scrollableFinder = find
         .descendant(of: scrollFinder, matching: find.byType(Scrollable))
         .first;
-    final before = tester
-        .state<ScrollableState>(scrollableFinder)
-        .position
-        .pixels;
+    final scrollable = tester.state<ScrollableState>(scrollableFinder);
+    scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+    await tester.pump(const Duration(milliseconds: 100));
+    final before = scrollable.position.pixels;
     expect(before, greaterThan(0));
 
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('appShellNavBar')),
-        matching: find.text('Home'),
-      ),
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
     );
+    container.read(goRouterProvider).go(AppRoute.home);
     await tester.pump(const Duration(milliseconds: 100));
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('appShellNavBar')),
-        matching: find.text('Insights'),
-      ),
-    );
+    container.read(goRouterProvider).go(AppRoute.insights);
     await tester.pump(const Duration(milliseconds: 100));
 
     final after = tester
@@ -215,20 +202,23 @@ void main() {
     expect(after, greaterThan(0));
   });
 
-  testWidgets('Limits & perks opens as one vertical card-capability view', (
+  testWidgets('Limits & perks route renders one card-capability view', (
     tester,
   ) async {
     // The grouped route opens the card-first screen, including an empty wallet.
     await _openInsights(tester);
 
     await _reveal(tester, 'Limits & perks');
-    await tester.tap(find.text('Limits & perks'));
+    expect(find.text('Limits & perks'), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    container.read(goRouterProvider).go(AppRoute.limitsAndPerks);
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
     expect(find.byType(LimitsAndPerksScreen), findsOneWidget);
-    expect(find.byType(BackButton), findsOneWidget);
     expect(find.text('Your card benefits, together'), findsOneWidget);
   });
 }

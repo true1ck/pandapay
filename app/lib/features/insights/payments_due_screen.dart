@@ -200,6 +200,12 @@ class _DueList extends StatelessWidget {
               child: _ComingUpRow(row: row),
             ),
           const SizedBox(height: AppSpace.lg),
+        ] else ...[
+          Text(
+            'No due dates set for your cards. Add a due day in Cards to see reminders.',
+            style: BambooFonts.ui(13, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: AppSpace.lg),
         ],
 
         // ── Section B: Upcoming bills & insurance commitments ─────────

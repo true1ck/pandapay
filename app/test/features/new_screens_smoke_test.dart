@@ -139,35 +139,31 @@ void main() {
       ],
     );
 
-    testWidgets('renders the hero, the coming-up list and the float card', (
+    testWidgets('shows saved card dates with an issuer verification warning', (
       tester,
     ) async {
       await pumpDue(tester);
-      // Depending on the day the suite runs, the nearest card is either due
-      // today or later in the month. Both are valid hero states.
-      expect(find.textContaining('DUE'), findsOneWidget);
-      expect(find.text('Coming up'), findsOneWidget);
-      expect(find.text('Free money, briefly'), findsOneWidget);
+      expect(find.text('Bills & commitments'), findsOneWidget);
+      expect(find.text('Credit cards'), findsOneWidget);
+      expect(find.text('HDFC Millennia'), findsOneWidget);
+      expect(find.textContaining('Check the issuer'), findsOneWidget);
     });
 
-    testWidgets('words each autopay state differently', (tester) async {
+    testWidgets('does not claim issuer AutoPay is verified', (tester) async {
       await pumpDue(tester);
-      expect(
-        find.textContaining('Autopay status not verified'),
-        findsNWidgets(3),
-      );
-      expect(find.textContaining('the rest carries interest'), findsNothing);
+      expect(find.textContaining('Check the issuer'), findsOneWidget);
+      expect(find.textContaining('Autopay active'), findsNothing);
     });
 
     testWidgets('never presents logged spend as the amount due', (
       tester,
     ) async {
       await pumpDue(tester);
-      expect(find.text('Logged on this card this cycle'), findsOneWidget);
       expect(
-        find.textContaining("issuer's statement may be higher"),
+        find.textContaining('Check the issuer for the amount'),
         findsOneWidget,
       );
+      expect(find.textContaining('₹2,500'), findsNothing);
     });
 
     testWidgets('prompts rather than guessing when no card has a due day', (
@@ -183,12 +179,15 @@ void main() {
           ),
         ],
       );
-      expect(find.text('No due dates set'), findsOneWidget);
+      expect(
+        find.textContaining('No due dates set for your cards'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('survives a 320x640 viewport', (tester) async {
       await pumpDue(tester, size: const Size(320, 640));
-      expect(find.textContaining('DUE'), findsOneWidget);
+      expect(find.text('Bills & commitments'), findsOneWidget);
     });
   });
 
