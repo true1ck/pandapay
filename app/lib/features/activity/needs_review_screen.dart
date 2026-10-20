@@ -639,7 +639,7 @@ class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
               style: FilledButton.styleFrom(
                 backgroundColor: BambooInk.slate,
                 foregroundColor: BambooInk.lime,
-                disabledBackgroundColor: BambooInk.ink100,
+                disabledBackgroundColor: BambooInk.paperMuted,
                 disabledForegroundColor: BambooInk.ink500,
                 minimumSize: const Size.fromHeight(52),
                 shape: RoundedRectangleBorder(

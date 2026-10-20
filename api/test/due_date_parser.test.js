@@ -1,7 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { extractDueDate, extractLast4 } = require('../src/due_date_parser');
+const {
+  extractDueDate,
+  extractLast4,
+  extractStatementDate,
+  isCreditCardStatementAlert,
+} = require('../src/due_date_parser');
 
 test('extracts a numeric payment due date and card suffix', () => {
   const result = extractDueDate(
@@ -111,4 +116,31 @@ test('does not interpret an ordinary transaction date as a due date', () => {
 
 test('rejects impossible dates', () => {
   assert.equal(extractDueDate('Payment due date: 31/02/2026.'), null);
+});
+
+test('learns statement day from a generated-statement SMS receive date', () => {
+  const body = 'Your statement for Axis Bank Credit Card no. XX7105 is generated. Due on: 02-11-26.';
+  const result = extractStatementDate(body, new Date('2026-09-05T18:30:00.000Z'));
+  assert.equal(isCreditCardStatementAlert(body), true);
+  assert.equal(result.day, 6); // 2026-09-06 in India, despite the UTC instant.
+  assert.equal(result.explicit, false);
+});
+
+test('prefers an explicit statement-generated date over the receive date', () => {
+  const result = extractStatementDate(
+    'Your credit card statement was generated on 05-Oct-2026. Due by 20-Oct-2026.',
+    new Date('2026-10-20T10:00:00.000Z'),
+  );
+  assert.equal(result.day, 5);
+  assert.equal(result.explicit, true);
+});
+
+test('does not learn a statement day from an ordinary card purchase', () => {
+  assert.equal(
+    extractStatementDate(
+      'INR 500 spent on your credit card ending 7105 on 02/09/2026.',
+      new Date('2026-09-05T10:00:00.000Z'),
+    ),
+    null,
+  );
 });

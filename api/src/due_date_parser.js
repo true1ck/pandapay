@@ -119,6 +119,67 @@ function extractDueDate(body) {
   return null;
 }
 
+/** Return true only for an alert about a credit-card statement/bill. */
+function isCreditCardStatementAlert(body) {
+  const text = String(body || '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return false;
+
+  const hasCardContext = /\bcredit\s+card\b/i.test(text)
+    || /\b(?:card|cc)\b[\s\S]{0,45}\b(?:ending|last\s*4|no\.?|number|xx|x{2,}|\*{2,})\s*[:#.-]?\s*\d{4}\b/i.test(text);
+  if (!hasCardContext) return false;
+
+  const generated = /\b(?:e[- ]?statement|statement|bill)\b[\s\S]{0,70}\b(?:generated|ready|available|issued|created|raised|prepared)\b/i.test(text);
+  const amountDue = /\b(?:total|minimum|amount|payment|bill)\s+(?:amount\s+)?due\b/i.test(text)
+    || /\b(?:statement|bill)\b[\s\S]{0,60}\b(?:payable|pay\s+by|due)\b/i.test(text);
+  return generated || amountDue;
+}
+
+function extractExplicitStatementDate(body) {
+  const text = String(body || '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text || !isCreditCardStatementAlert(text)) return null;
+  const patterns = [
+    new RegExp(`\\b(?:statement|e[- ]?statement|bill)\\b[\\s\\S]{0,45}?\\b(?:generated|issued|created|raised|prepared|dated|date)\\b\\s*(?:on|is|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
+    new RegExp(`\\b(?:generated|issued|created|raised|prepared|dated)\\s*(?:on|date|is|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
+    new RegExp(`\\b(?:statement|e[- ]?statement|bill)\\s+date\\s*(?:is|on|:|-)?\\s*(${DATE_TOKEN})`, 'i'),
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const parsed = parseDateToken(match[1]);
+    if (parsed) return { ...parsed, raw: match[1], explicit: true };
+  }
+  return null;
+}
+
+function observedCalendarDay(observedAt) {
+  if (!observedAt) return null;
+  const value = observedAt instanceof Date ? observedAt : new Date(observedAt);
+  if (Number.isNaN(value.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(value);
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const day = Number(parts.find((part) => part.type === 'day')?.value);
+  return [year, month, day].every(Number.isInteger) ? { year, month, day } : null;
+}
+
+/** Extract the recurring statement day, using SMS receive date as fallback. */
+function extractStatementDate(body, observedAt) {
+  if (!isCreditCardStatementAlert(body)) return null;
+  const explicit = extractExplicitStatementDate(body);
+  if (explicit) return explicit;
+  const observed = observedCalendarDay(observedAt);
+  if (!observed) return null;
+  return { ...observed, raw: null, explicit: false };
+}
+
 function extractLast4(text) {
   const value = String(text || '')
     .replace(/[\u200B-\u200D\uFEFF]/g, ' ')
@@ -132,4 +193,10 @@ function extractLast4(text) {
   return /^[0-9]{4}$/.test(last4) ? last4 : null;
 }
 
-module.exports = { extractDueDate, extractLast4 };
+module.exports = {
+  extractDueDate,
+  extractLast4,
+  isCreditCardStatementAlert,
+  extractExplicitStatementDate,
+  extractStatementDate,
+};
