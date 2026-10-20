@@ -455,9 +455,19 @@ class _PendingRecoveryCard extends ConsumerWidget {
                   'UPDATE sync_pending_changes SET attempts=0 WHERE namespace=? AND attempts>=5',
                   [namespace],
                 );
+                final duplicateOutbox = await ref.read(
+                  duplicateResolutionOutboxRepositoryProvider.future,
+                );
+                duplicateOutbox.resetBlocked();
+                final cardsRepository = ref.read(userCardsRepositoryProvider);
+                if (cardsRepository != null) {
+                  await duplicateOutbox.flush(cardsRepository);
+                }
                 await ref.read(syncEngineProvider).sync();
                 ref.invalidate(pendingRecoveryStatusProvider);
                 ref.invalidate(pendingSyncCountProvider);
+                ref.invalidate(pendingOutboxCountProvider);
+                ref.invalidate(duplicateCandidatesProvider);
               },
               child: const Text('Retry saved changes'),
             ),

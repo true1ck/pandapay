@@ -1588,10 +1588,9 @@ class UserCardsRepository {
 
   /// Task D-5 (ui-spec D5 Duplicate Review). Pending pairs only.
   Future<List<DuplicateCandidate>> fetchDuplicateCandidates() async {
-    final response = await _client.get(
-      Uri.parse('$apiBaseUrl/duplicate-candidates'),
-      headers: _headers,
-    );
+    final response = await _client
+        .get(Uri.parse('$apiBaseUrl/duplicate-candidates'), headers: _headers)
+        .timeout(_transactionRequestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'GET /duplicate-candidates failed: ${response.statusCode} ${response.body}',
@@ -1611,14 +1610,16 @@ class UserCardsRepository {
     required String resolution,
     String? keepTransactionId,
   }) async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/duplicate-candidates/$id/resolve'),
-      headers: _headers,
-      body: jsonEncode({
-        'resolution': resolution,
-        'keepTransactionId': ?keepTransactionId,
-      }),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/duplicate-candidates/$id/resolve'),
+          headers: _headers,
+          body: jsonEncode({
+            'resolution': resolution,
+            'keepTransactionId': ?keepTransactionId,
+          }),
+        )
+        .timeout(_transactionRequestTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'POST /duplicate-candidates/:id/resolve failed: ${response.statusCode} ${response.body}',

@@ -34,6 +34,7 @@ import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
 import '../data/local_sms_parser.dart';
 import '../data/local/sync_queue.dart';
+import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
 import '../data/local_user_cards_repository.dart';
@@ -102,7 +103,7 @@ final authenticatedHttpClientProvider = Provider<AuthenticatedHttpClient>((
     currentAccessToken: () => ref.read(accessTokenProvider),
     onSuccessfulMutation: (request) {
       if (RegExp(
-        r'/(?:transactions|user-cards|budgets|card-overrides|sync/push)(?:/|$)',
+        r'/(?:transactions|user-cards|budgets|card-overrides|duplicate-candidates|sync/push)(?:/|$)',
       ).hasMatch(request.url.path)) {
         ref
             .read(responseCacheProvider)
@@ -468,8 +469,8 @@ final syncQueueProvider = FutureProvider<SyncQueue>((ref) async {
 });
 
 /// Local edits not yet accepted by the server. Distinct from
-/// [pendingOutboxCountProvider], which counts B6 quick-adds that were never
-/// created server-side at all — these are edits to rows that already exist.
+/// [pendingOutboxCountProvider], which counts queued server mutations such as
+/// B6 quick-adds and duplicate-review resolutions.
 final pendingSyncCountProvider = FutureProvider<int>((ref) async {
   ref.watch(financialStoreRevisionProvider('transactions'));
   return (await ref.watch(syncQueueProvider.future)).pendingCount;
@@ -491,12 +492,17 @@ final pendingRecoveryStatusProvider = FutureProvider<Map<String, int>>((
           as int;
   return {
     'sms': count('sms_intake', 'namespace=?', [namespace]),
-    'blocked': count('sync_pending_changes', 'namespace=? AND attempts>=5', [
-      namespace,
-    ]),
+    'blocked':
+        count('sync_pending_changes', 'namespace=? AND attempts>=5', [
+          namespace,
+        ]) +
+        count('duplicate_resolution_outbox', 'namespace=? AND attempts>=5', [
+          namespace,
+        ]),
     'legacy':
         count('sync_pending_changes', "namespace='legacy'", []) +
         count('transaction_outbox_entries', "namespace='legacy'", []) +
+        count('duplicate_resolution_outbox', "namespace='legacy'", []) +
         count('sms_intake', "namespace='legacy'", []) +
         count('local_needs_review', "namespace='legacy'", []),
   };
@@ -513,6 +519,7 @@ Future<void> recoverLegacyPendingChanges(WidgetRef ref) async {
     for (final table in [
       'sync_pending_changes',
       'transaction_outbox_entries',
+      'duplicate_resolution_outbox',
       'local_needs_review',
     ]) {
       db.execute("UPDATE $table SET namespace=? WHERE namespace='legacy'", [
@@ -1986,6 +1993,16 @@ final outboxRepositoryProvider = FutureProvider<TransactionOutboxRepository>((
   return repository;
 });
 
+final duplicateResolutionOutboxRepositoryProvider =
+    FutureProvider<DuplicateResolutionOutboxRepository>((ref) async {
+      final namespace = ref.watch(cacheNamespaceProvider);
+      final cache = await ref.watch(responseCacheProvider.future);
+      return DuplicateResolutionOutboxRepository(
+        cache.financialStore.database,
+        namespace: namespace,
+      );
+    });
+
 final transactionAttachmentsRepositoryProvider =
     FutureProvider<TransactionAttachmentsRepository>((ref) async {
       return TransactionAttachmentsRepository(
@@ -2005,7 +2022,10 @@ final pendingOutboxCountProvider = FutureProvider<int>((ref) async {
   final items = await (await ref.watch(
     outboxRepositoryProvider.future,
   )).pending();
-  return items.length;
+  final duplicateOutbox = await ref.watch(
+    duplicateResolutionOutboxRepositoryProvider.future,
+  );
+  return items.length + duplicateOutbox.pendingCount;
 });
 
 /// Flushes the outbox the moment connectivity comes back — read once from
@@ -2024,13 +2044,20 @@ final outboxFlushProvider = Provider<void>((ref) {
       final outbox = await ref.read(outboxRepositoryProvider.future);
       if (disposed || outbox.namespace != namespace) return;
       final sent = await outbox.flush(repo);
+      final duplicateOutbox = await ref.read(
+        duplicateResolutionOutboxRepositoryProvider.future,
+      );
+      final duplicateSent = await duplicateOutbox.flush(repo);
       if (!disposed &&
           ref.read(cacheNamespaceProvider) == namespace &&
-          sent > 0) {
+          (sent > 0 || duplicateSent > 0)) {
         ref.invalidate(pendingOutboxCountProvider);
         ref.invalidate(transactionsProvider);
         ref.invalidate(utilizationTransactionsProvider);
         ref.invalidate(homeSummaryProvider);
+        ref.invalidate(duplicateCandidatesProvider);
+        ref.invalidate(userCardsProvider);
+        ref.invalidate(myCardsProvider);
       }
     } catch (_) {
       /* Durable entries remain queued. */
@@ -4123,7 +4150,10 @@ Future<SpendCategory?> addCustomCategory(WidgetRef ref, String name) async {
   return category;
 }
 
-Future<List<SpendCategory>> _readCustomCategories(Ref ref, String namespace) async {
+Future<List<SpendCategory>> _readCustomCategories(
+  Ref ref,
+  String namespace,
+) async {
   try {
     final cache = await ref.read(responseCacheProvider.future);
     final preferences = await SharedPreferences.getInstance();

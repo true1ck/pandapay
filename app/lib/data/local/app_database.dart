@@ -57,6 +57,24 @@ CREATE TABLE IF NOT EXISTS transaction_outbox_entries (
   last_error TEXT
 );
 
+-- Duplicate review is a multi-row server operation, so it has its own
+-- durable intent queue. It must not be represented as a generic field edit
+-- or as a new transaction insert: the server also updates observations,
+-- caps, milestones and points in one transaction.
+CREATE TABLE IF NOT EXISTS duplicate_resolution_outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  namespace TEXT NOT NULL DEFAULT 'legacy',
+  candidate_id TEXT NOT NULL,
+  resolution TEXT NOT NULL,
+  keep_transaction_id TEXT,
+  created_at INTEGER NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  UNIQUE(namespace, candidate_id)
+);
+CREATE INDEX IF NOT EXISTS idx_duplicate_resolution_outbox_pending
+  ON duplicate_resolution_outbox(namespace, created_at);
+
 -- Receipt/bill files are private device attachments by default. The database
 -- stores metadata and the application-documents path; raw files are never
 -- uploaded as a side effect of viewing or editing a transaction.

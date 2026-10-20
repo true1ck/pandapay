@@ -6,12 +6,13 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
-import '../../data/api_exception.dart';
+import '../../data/local/duplicate_resolution_outbox.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 
-/// D5 Duplicate Review. Recommended keep-side choices are local UI state until
-/// the user confirms the merge.
+/// D5 Duplicate Review. Recommended keep-side choices stay local until the
+/// user confirms; confirmed resolutions are persisted to the local outbox
+/// before the server mutation is attempted.
 class DuplicateReviewScreen extends ConsumerWidget {
   const DuplicateReviewScreen({super.key});
 
@@ -39,7 +40,8 @@ class DuplicateReviewScreen extends ConsumerWidget {
               return const EmptyState(
                 icon: Icons.content_copy_outlined,
                 title: 'No duplicates to review',
-                message: 'When the same spend seems to arrive from two channels, it shows up here.',
+                message:
+                    'When the same spend seems to arrive from two channels, it shows up here.',
               );
             }
             return _DuplicateReviewList(candidates: list);
@@ -59,10 +61,14 @@ class _DuplicateReviewList extends StatefulWidget {
 }
 
 class _DuplicateReviewListState extends State<_DuplicateReviewList> {
+  static const _maxConcurrentResolutions = 4;
+
   final Map<String, String> _keptTransactions = {};
   final Set<String> _keptBoth = {};
   String _filter = 'All';
   bool _busy = false;
+  int _completedResolutions = 0;
+  int _resolutionTotal = 0;
 
   @override
   void initState() {
@@ -73,31 +79,40 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
   void _autoSelectRecommended(List<DuplicateCandidate> candidates) {
     for (final candidate in candidates) {
       if (!_keptBoth.contains(candidate.id)) {
-        _keptTransactions.putIfAbsent(candidate.id, () => _recommendedTransaction(candidate).id);
+        _keptTransactions.putIfAbsent(
+          candidate.id,
+          () => _recommendedTransaction(candidate).id,
+        );
       }
     }
   }
 
-  DuplicateTransactionSummary _recommendedTransaction(DuplicateCandidate candidate) {
+  DuplicateTransactionSummary _recommendedTransaction(
+    DuplicateCandidate candidate,
+  ) {
     // Prefer the bank/statement record, which normally carries better data;
     // use the more complete side for other channel combinations.
     final aRank = _sourceRank(candidate.txnA.source);
     final bRank = _sourceRank(candidate.txnB.source);
     if (aRank != bRank) return aRank > bRank ? candidate.txnA : candidate.txnB;
-    final aCompleteness = (candidate.txnA.merchantName?.trim().isNotEmpty == true ? 1 : 0) +
+    final aCompleteness =
+        (candidate.txnA.merchantName?.trim().isNotEmpty == true ? 1 : 0) +
         (candidate.txnA.cardDisplayName?.trim().isNotEmpty == true ? 1 : 0);
-    final bCompleteness = (candidate.txnB.merchantName?.trim().isNotEmpty == true ? 1 : 0) +
+    final bCompleteness =
+        (candidate.txnB.merchantName?.trim().isNotEmpty == true ? 1 : 0) +
         (candidate.txnB.cardDisplayName?.trim().isNotEmpty == true ? 1 : 0);
-    if (aCompleteness != bCompleteness) return aCompleteness > bCompleteness ? candidate.txnA : candidate.txnB;
+    if (aCompleteness != bCompleteness) {
+      return aCompleteness > bCompleteness ? candidate.txnA : candidate.txnB;
+    }
     return candidate.txnA;
   }
 
   int _sourceRank(String source) => switch (source) {
-        'statement' || 'imported' => 3,
-        'email' => 2,
-        'sms' || 'sms_bulk' => 1,
-        _ => 0,
-      };
+    'statement' || 'imported' => 3,
+    'email' => 2,
+    'sms' || 'sms_bulk' => 1,
+    _ => 0,
+  };
 
   @override
   void didUpdateWidget(covariant _DuplicateReviewList oldWidget) {
@@ -114,7 +129,8 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
   bool _isCrossChannel(DuplicateCandidate candidate) =>
       candidate.txnA.source != candidate.txnB.source;
 
-  List<DuplicateCandidate> get _visibleCandidates => widget.candidates.where((candidate) {
+  List<DuplicateCandidate> get _visibleCandidates =>
+      widget.candidates.where((candidate) {
         return switch (_filter) {
           'Exact amount' => _isExactAmount(candidate),
           'Cross-channel' => _isCrossChannel(candidate),
@@ -123,9 +139,9 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
       }).toList();
 
   double get _overlap => widget.candidates.fold<double>(
-        0,
-        (sum, candidate) => sum + candidate.txnA.amount.rupees,
-      );
+    0,
+    (sum, candidate) => sum + candidate.txnA.amount.rupees,
+  );
 
   int get _resolvedCount => _keptTransactions.length + _keptBoth.length;
   bool get _allAutoSelected {
@@ -151,10 +167,12 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
         _keptBoth.clear();
         _keptTransactions
           ..clear()
-          ..addEntries(widget.candidates.map((candidate) => MapEntry(
-                candidate.id,
-                _recommendedTransaction(candidate).id,
-              )));
+          ..addEntries(
+            widget.candidates.map(
+              (candidate) =>
+                  MapEntry(candidate.id, _recommendedTransaction(candidate).id),
+            ),
+          );
       }
     });
   }
@@ -169,69 +187,118 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
           decoration: const BoxDecoration(
             color: BambooInk.glassFillOnPaper,
-            border: Border(bottom: BorderSide(color: BambooInk.hairlineOnPaper)),
+            border: Border(
+              bottom: BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Icon(Icons.hourglass_bottom_rounded, size: 14, color: Color(0xFF986300)),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(color: BambooInk.rankBadgeBg, borderRadius: BorderRadius.circular(8)),
-                child: Text('${widget.candidates.length} pairs', style: BambooFonts.ui(12, weight: FontWeight.w600, color: BambooInk.rankBadgeInk)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.hourglass_bottom_rounded,
+                    size: 14,
+                    color: Color(0xFF986300),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: BambooInk.rankBadgeBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${widget.candidates.length} ${widget.candidates.length == 1 ? 'pair' : 'pairs'}',
+                      style: BambooFonts.ui(
+                        12,
+                        weight: FontWeight.w600,
+                        color: BambooInk.rankBadgeInk,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ]),
-            const SizedBox(height: 5),
-            Text('₹${_overlap.toStringAsFixed(2)} potential overlap detected', style: BambooFonts.ui(13, color: BambooInk.ink500)),
-            const SizedBox(height: 12),
-            Semantics(
-              container: true,
-              button: true,
-              toggled: _allAutoSelected,
-              label: 'Auto-select recommended transactions',
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: _toggleAutoSelect,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(children: [
-                    Icon(
-                      _allAutoSelected
-                          ? Icons.check_box_rounded
-                          : Icons.check_box_outline_blank_rounded,
-                      size: 21,
-                      color: BambooInk.jade,
+              const SizedBox(height: 5),
+              Text(
+                '₹${_overlap.toStringAsFixed(2)} potential overlap detected',
+                style: BambooFonts.ui(13, color: BambooInk.ink500),
+              ),
+              const SizedBox(height: 12),
+              Semantics(
+                container: true,
+                button: true,
+                enabled: !_busy,
+                toggled: _allAutoSelected,
+                label: 'Auto-select recommended transactions',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: _busy ? null : _toggleAutoSelect,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _allAutoSelected
+                              ? Icons.check_box_rounded
+                              : Icons.check_box_outline_blank_rounded,
+                          size: 21,
+                          color: BambooInk.jade,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Auto-select recommended (${_keptTransactions.length})',
+                            style: BambooFonts.ui(14, weight: FontWeight.w600),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _busy ? null : _toggleAutoSelect,
+                          child: Text(
+                            _allAutoSelected
+                                ? 'Keep all separate'
+                                : 'Auto-select all',
+                            style: BambooFonts.ui(13, color: BambooInk.jade),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Auto-select recommended (${_keptTransactions.length})',
-                        style: BambooFonts.ui(14, weight: FontWeight.w600),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: _toggleAutoSelect,
-                      child: Text(
-                        _allAutoSelected ? 'Keep all separate' : 'Auto-select all',
-                        style: BambooFonts.ui(13, color: BambooInk.jade),
-                      ),
-                    ),
-                  ]),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 6),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(children: [
-                _FilterChip(label: 'All', count: widget.candidates.length, selected: _filter == 'All', onTap: () => setState(() => _filter = 'All')),
-                const SizedBox(width: 8),
-                _FilterChip(label: 'Exact amount', count: widget.candidates.where(_isExactAmount).length, selected: _filter == 'Exact amount', onTap: () => setState(() => _filter = 'Exact amount')),
-                const SizedBox(width: 8),
-                _FilterChip(label: 'Cross-channel', count: widget.candidates.where(_isCrossChannel).length, selected: _filter == 'Cross-channel', onTap: () => setState(() => _filter = 'Cross-channel')),
-              ]),
-            ),
-          ]),
+              const SizedBox(height: 6),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterChip(
+                      label: 'All',
+                      count: widget.candidates.length,
+                      selected: _filter == 'All',
+                      onTap: () => setState(() => _filter = 'All'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'Exact amount',
+                      count: widget.candidates.where(_isExactAmount).length,
+                      selected: _filter == 'Exact amount',
+                      onTap: () => setState(() => _filter = 'Exact amount'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'Cross-channel',
+                      count: widget.candidates.where(_isCrossChannel).length,
+                      selected: _filter == 'Cross-channel',
+                      onTap: () => setState(() => _filter = 'Cross-channel'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         Expanded(
           child: ListView.builder(
@@ -246,6 +313,7 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
                   candidate: candidate,
                   keptTransactionId: _keptTransactions[candidate.id],
                   keptBoth: _keptBoth.contains(candidate.id),
+                  enabled: !_busy,
                   onKeep: (id) => setState(() {
                     _keptTransactions[candidate.id] = id;
                     _keptBoth.remove(candidate.id);
@@ -264,7 +332,10 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
           resolved: _resolvedCount,
           mergeCount: _keptTransactions.length,
           overlap: _overlap,
-          onConfirm: _keptTransactions.isNotEmpty && !_busy
+          busy: _busy,
+          completedResolutions: _completedResolutions,
+          resolutionTotal: _resolutionTotal,
+          onConfirm: _resolvedCount > 0 && !_busy
               ? () => _confirmAndMerge(context)
               : null,
           onDismiss: _busy ? null : () => _dismissAll(context),
@@ -274,42 +345,63 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
   }
 
   Future<void> _confirmAndMerge(BuildContext context) async {
+    if (_busy || !mounted) return;
     final ref = ProviderScope.containerOf(context, listen: false);
-    final repository = ref.read(userCardsRepositoryProvider)!;
-    setState(() => _busy = true);
-    var alreadyResolved = 0;
-    try {
-      for (final candidate in widget.candidates) {
-        final keptId = _keptTransactions[candidate.id];
-        try {
-          if (keptId != null) {
-            await repository.resolveDuplicateCandidate(
-              candidate.id,
-              resolution: 'merged',
-              keepTransactionId: keptId,
-            );
-          } else if (_keptBoth.contains(candidate.id)) {
-            await repository.resolveDuplicateCandidate(
-              candidate.id,
-              resolution: 'kept_both',
-            );
-          }
-        } catch (error) {
-          if (_isAlreadyResolved(error)) {
-            alreadyResolved++;
-            continue;
-          }
-          rethrow;
-        }
+    final repository = ref.read(userCardsRepositoryProvider);
+    if (repository == null) {
+      if (context.mounted) {
+        await _showResolutionError(
+          context,
+          StateError(
+            'Your session is no longer available. Please sign in again.',
+          ),
+        );
       }
-      ref.invalidate(duplicateCandidatesProvider);
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(myCardsProvider);
+      return;
+    }
+
+    final requests = _resolutionRequests();
+    setState(() {
+      _busy = true;
+      _completedResolutions = 0;
+      _resolutionTotal = requests.length;
+    });
+
+    try {
+      final outbox = await ref.read(
+        duplicateResolutionOutboxRepositoryProvider.future,
+      );
+      for (final request in requests) {
+        outbox.enqueue(
+          candidateId: request.candidateId,
+          resolution: request.resolution,
+          keepTransactionId: request.keepTransactionId,
+        );
+      }
+      ref.invalidate(pendingOutboxCountProvider);
+      if (ref.read(isOnlineProvider).valueOrNull == false) {
+        if (context.mounted) {
+          await _showQueuedDialog(context, count: requests.length);
+        }
+        return;
+      }
+      final result = await _resolveRequests(
+        repository,
+        requests,
+        outbox: outbox,
+      );
+      _invalidateResolutionProviders(ref);
+      if (result.error != null) {
+        throw _DuplicateResolutionBatchException(
+          result.error!,
+          failedCount: result.failedCount,
+        );
+      }
       if (context.mounted) {
         await _showResolutionDialog(
           context,
-          alreadyResolved: alreadyResolved > 0,
-          count: alreadyResolved,
+          alreadyResolved: result.alreadyResolved > 0,
+          count: result.alreadyResolved,
         );
       }
     } catch (error) {
@@ -317,38 +409,82 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
         await _showResolutionError(context, error);
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _completedResolutions = 0;
+          _resolutionTotal = 0;
+        });
+      }
     }
   }
 
   Future<void> _dismissAll(BuildContext context) async {
+    if (_busy || !mounted) return;
     final ref = ProviderScope.containerOf(context, listen: false);
-    final repository = ref.read(userCardsRepositoryProvider)!;
-    setState(() => _busy = true);
-    var alreadyResolved = 0;
-    try {
-      for (final candidate in widget.candidates) {
-        try {
-          await repository.resolveDuplicateCandidate(
-            candidate.id,
-            resolution: 'kept_both',
-          );
-        } catch (error) {
-          if (_isAlreadyResolved(error)) {
-            alreadyResolved++;
-            continue;
-          }
-          rethrow;
-        }
+    final repository = ref.read(userCardsRepositoryProvider);
+    if (repository == null) {
+      if (context.mounted) {
+        await _showResolutionError(
+          context,
+          StateError(
+            'Your session is no longer available. Please sign in again.',
+          ),
+        );
       }
-      ref.invalidate(duplicateCandidatesProvider);
-      ref.invalidate(userCardsProvider);
-      ref.invalidate(myCardsProvider);
+      return;
+    }
+
+    final requests = widget.candidates
+        .map(
+          (candidate) => _DuplicateResolutionRequest(
+            candidateId: candidate.id,
+            resolution: 'kept_both',
+            transactionIds: {candidate.txnA.id, candidate.txnB.id},
+          ),
+        )
+        .toList(growable: false);
+    setState(() {
+      _busy = true;
+      _completedResolutions = 0;
+      _resolutionTotal = requests.length;
+    });
+
+    try {
+      final outbox = await ref.read(
+        duplicateResolutionOutboxRepositoryProvider.future,
+      );
+      for (final request in requests) {
+        outbox.enqueue(
+          candidateId: request.candidateId,
+          resolution: request.resolution,
+          keepTransactionId: request.keepTransactionId,
+        );
+      }
+      ref.invalidate(pendingOutboxCountProvider);
+      if (ref.read(isOnlineProvider).valueOrNull == false) {
+        if (context.mounted) {
+          await _showQueuedDialog(context, count: requests.length);
+        }
+        return;
+      }
+      final result = await _resolveRequests(
+        repository,
+        requests,
+        outbox: outbox,
+      );
+      _invalidateResolutionProviders(ref);
+      if (result.error != null) {
+        throw _DuplicateResolutionBatchException(
+          result.error!,
+          failedCount: result.failedCount,
+        );
+      }
       if (context.mounted) {
         await _showResolutionDialog(
           context,
-          alreadyResolved: alreadyResolved > 0,
-          count: alreadyResolved,
+          alreadyResolved: result.alreadyResolved > 0,
+          count: result.alreadyResolved,
         );
       }
     } catch (error) {
@@ -356,15 +492,128 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
         await _showResolutionError(context, error);
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _completedResolutions = 0;
+          _resolutionTotal = 0;
+        });
+      }
     }
   }
 
-  bool _isAlreadyResolved(Object error) {
-    if (error is! ApiException || error.statusCode != 409) return false;
-    final code = error.errorCode?.toLowerCase() ?? '';
-    return code.startsWith('already resolved') ||
-        error.userMessage.toLowerCase().contains('already resolved');
+  List<_DuplicateResolutionRequest> _resolutionRequests() {
+    final requests = <_DuplicateResolutionRequest>[];
+    for (final candidate in widget.candidates) {
+      final keptId = _keptTransactions[candidate.id];
+      if (keptId != null) {
+        requests.add(
+          _DuplicateResolutionRequest(
+            candidateId: candidate.id,
+            resolution: 'merged',
+            keepTransactionId: keptId,
+            transactionIds: {candidate.txnA.id, candidate.txnB.id},
+          ),
+        );
+      } else if (_keptBoth.contains(candidate.id)) {
+        requests.add(
+          _DuplicateResolutionRequest(
+            candidateId: candidate.id,
+            resolution: 'kept_both',
+            transactionIds: {candidate.txnA.id, candidate.txnB.id},
+          ),
+        );
+      }
+    }
+    return requests;
+  }
+
+  Future<_DuplicateResolutionBatchResult> _resolveRequests(
+    UserCardsRepository repository,
+    List<_DuplicateResolutionRequest> requests, {
+    required DuplicateResolutionOutboxRepository outbox,
+  }) async {
+    var alreadyResolved = 0;
+    var failedCount = 0;
+    Object? firstError;
+
+    final remaining = List<_DuplicateResolutionRequest>.of(requests);
+    while (remaining.isNotEmpty) {
+      final batch = <_DuplicateResolutionRequest>[];
+      final batchTransactionIds = <String>{};
+      for (final request in remaining) {
+        if (batch.length >= _maxConcurrentResolutions) break;
+        if (batchTransactionIds
+            .intersection(request.transactionIds)
+            .isNotEmpty) {
+          continue;
+        }
+        batch.add(request);
+        batchTransactionIds.addAll(request.transactionIds);
+      }
+      // A malformed/legacy candidate should not be able to stall the queue.
+      // It is still processed alone, preserving the old sequential behavior.
+      if (batch.isEmpty) batch.add(remaining.first);
+
+      final results = await Future.wait(
+        batch.map((request) async {
+          final result = await _resolveRequest(repository, request);
+          if (result.error == null) {
+            outbox.removeCandidate(request.candidateId);
+          }
+          if (mounted) {
+            // Report each completed request, not each internal batch, so the
+            // UI never exposes the concurrency strategy.
+            setState(() => _completedResolutions++);
+          }
+          return result;
+        }),
+      );
+      remaining.removeWhere(batch.contains);
+
+      for (final result in results) {
+        if (result.alreadyResolved) alreadyResolved++;
+        if (result.error != null) {
+          failedCount++;
+          firstError ??= result.error;
+        }
+      }
+    }
+
+    return _DuplicateResolutionBatchResult(
+      alreadyResolved: alreadyResolved,
+      failedCount: failedCount,
+      error: firstError,
+    );
+  }
+
+  Future<_DuplicateResolutionResult> _resolveRequest(
+    UserCardsRepository repository,
+    _DuplicateResolutionRequest request,
+  ) async {
+    try {
+      await repository.resolveDuplicateCandidate(
+        request.candidateId,
+        resolution: request.resolution,
+        keepTransactionId: request.keepTransactionId,
+      );
+      return const _DuplicateResolutionResult();
+    } catch (error) {
+      if (isDuplicateResolutionAlreadyHandled(error)) {
+        return const _DuplicateResolutionResult(alreadyResolved: true);
+      }
+      return _DuplicateResolutionResult(error: error);
+    }
+  }
+
+  void _invalidateResolutionProviders(ProviderContainer ref) {
+    ref.invalidate(pendingOutboxCountProvider);
+    ref.invalidate(duplicateCandidatesProvider);
+    ref.invalidate(transactionsProvider);
+    ref.invalidate(utilizationTransactionsProvider);
+    ref.invalidate(homeSummaryProvider);
+    ref.invalidate(userCardsProvider);
+    ref.invalidate(myCardsProvider);
   }
 
   Future<void> _showResolutionDialog(
@@ -396,16 +645,46 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
     );
   }
 
+  Future<void> _showQueuedDialog(
+    BuildContext context, {
+    required int count,
+  }) async {
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Saved offline'),
+        content: Text(
+          '$count ${count == 1 ? 'decision is' : 'decisions are'} saved on this device. '
+          'They will sync automatically when your connection returns.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showResolutionError(BuildContext context, Object error) async {
-    if (_isAlreadyResolved(error)) {
+    if (!context.mounted) return;
+    if (isDuplicateResolutionAlreadyHandled(error)) {
       await _showResolutionDialog(context, alreadyResolved: true, count: 1);
       return;
     }
+    final message = error is _DuplicateResolutionBatchException
+        ? '${error.failedCount} item${error.failedCount == 1 ? '' : 's'} could not be saved. '
+              'Completed items were kept. Failed items are saved locally and will retry when the connection returns.\n\n'
+              '${userFacingErrorMessage(error.cause)}'
+        : userFacingErrorMessage(error);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Could not save changes'),
-        content: Text(userFacingErrorMessage(error)),
+        content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -427,8 +706,56 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
   }
 }
 
+class _DuplicateResolutionRequest {
+  const _DuplicateResolutionRequest({
+    required this.candidateId,
+    required this.resolution,
+    required this.transactionIds,
+    this.keepTransactionId,
+  });
+
+  final String candidateId;
+  final String resolution;
+  final Set<String> transactionIds;
+  final String? keepTransactionId;
+}
+
+class _DuplicateResolutionResult {
+  const _DuplicateResolutionResult({this.alreadyResolved = false, this.error});
+
+  final bool alreadyResolved;
+  final Object? error;
+}
+
+class _DuplicateResolutionBatchResult {
+  const _DuplicateResolutionBatchResult({
+    required this.alreadyResolved,
+    required this.failedCount,
+    this.error,
+  });
+
+  final int alreadyResolved;
+  final int failedCount;
+  final Object? error;
+}
+
+class _DuplicateResolutionBatchException implements Exception {
+  const _DuplicateResolutionBatchException(
+    this.cause, {
+    required this.failedCount,
+  });
+
+  final Object cause;
+  final int failedCount;
+}
+
 class _FilterChip extends StatelessWidget {
-  const _FilterChip({required this.label, required this.count, required this.selected, required this.onTap});
+  const _FilterChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
   final String label;
   final int count;
   final bool selected;
@@ -436,20 +763,37 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ActionChip(
-        onPressed: onTap,
-        label: Text('$label ($count)', style: BambooFonts.ui(12.5, color: selected ? BambooInk.onSlate : BambooInk.ink700)),
-        backgroundColor: selected ? BambooInk.slate : BambooInk.paper,
-        side: BorderSide(color: selected ? BambooInk.slate : BambooInk.hairlineOnPaper),
-        shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      );
+    onPressed: onTap,
+    label: Text(
+      '$label ($count)',
+      style: BambooFonts.ui(
+        12.5,
+        color: selected ? BambooInk.onSlate : BambooInk.ink700,
+      ),
+    ),
+    backgroundColor: selected ? BambooInk.slate : BambooInk.paper,
+    side: BorderSide(
+      color: selected ? BambooInk.slate : BambooInk.hairlineOnPaper,
+    ),
+    shape: const StadiumBorder(),
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+  );
 }
 
 class _DuplicatePairCard extends StatelessWidget {
-  const _DuplicatePairCard({super.key, required this.candidate, required this.keptTransactionId, required this.keptBoth, required this.onKeep, required this.onKeepBoth});
+  const _DuplicatePairCard({
+    super.key,
+    required this.candidate,
+    required this.keptTransactionId,
+    required this.keptBoth,
+    required this.enabled,
+    required this.onKeep,
+    required this.onKeepBoth,
+  });
   final DuplicateCandidate candidate;
   final String? keptTransactionId;
   final bool keptBoth;
+  final bool enabled;
   final ValueChanged<String> onKeep;
   final VoidCallback onKeepBoth;
 
@@ -461,38 +805,98 @@ class _DuplicatePairCard extends StatelessWidget {
         color: BambooInk.glassFillOnPaper,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: BambooInk.hairlineOnPaper),
-        boxShadow: const [BoxShadow(color: Color(0x0A2B313A), blurRadius: 8, offset: Offset(0, 2))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A2B313A),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
-      child: Column(children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.info_rounded, size: 16, color: BambooInk.ink500),
-          const SizedBox(width: 8),
-          Expanded(child: Text(candidate.matchReason, style: BambooFonts.ui(12.5, color: BambooInk.ink700))),
-          const SizedBox(width: 8),
-          Text(keptBoth ? 'Not duplicate' : keptTransactionId == null ? 'Review' : 'Not duplicate', style: BambooFonts.ui(11.5, color: BambooInk.ink500)),
-        ]),
-        const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: BambooInk.hairlineOnPaper)),
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: _TxnCandidateCard(txn: candidate.txnA, label: 'CANDIDATE A', selected: keptTransactionId == candidate.txnA.id, onKeep: () => onKeep(candidate.txnA.id))),
-          const SizedBox(width: 10),
-          Expanded(child: _TxnCandidateCard(txn: candidate.txnB, label: 'CANDIDATE B', selected: keptTransactionId == candidate.txnB.id, onKeep: () => onKeep(candidate.txnB.id))),
-        ]),
-        const SizedBox(height: 10),
-        TextButton(
-          onPressed: onKeepBoth,
-          style: TextButton.styleFrom(foregroundColor: BambooInk.jade, padding: const EdgeInsets.symmetric(vertical: 8)),
-                child: Text(keptBoth ? '✓ Kept both — not actually duplicates' : 'Keep both — not actually duplicates', textAlign: TextAlign.center),
-        ),
-      ]),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.info_rounded, size: 16, color: BambooInk.ink500),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  candidate.matchReason,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                keptBoth
+                    ? 'Not duplicate'
+                    : keptTransactionId == null
+                    ? 'Review'
+                    : 'Will merge',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Divider(height: 1, color: BambooInk.hairlineOnPaper),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _TxnCandidateCard(
+                  txn: candidate.txnA,
+                  label: 'CANDIDATE A',
+                  selected: keptTransactionId == candidate.txnA.id,
+                  enabled: enabled,
+                  onKeep: () => onKeep(candidate.txnA.id),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TxnCandidateCard(
+                  txn: candidate.txnB,
+                  label: 'CANDIDATE B',
+                  selected: keptTransactionId == candidate.txnB.id,
+                  enabled: enabled,
+                  onKeep: () => onKeep(candidate.txnB.id),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: enabled ? onKeepBoth : null,
+            style: TextButton.styleFrom(
+              foregroundColor: BambooInk.jade,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+            ),
+            child: Text(
+              keptBoth
+                  ? '✓ Kept both — not actually duplicates'
+                  : 'Keep both — not actually duplicates',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _TxnCandidateCard extends StatelessWidget {
-  const _TxnCandidateCard({required this.txn, required this.label, required this.selected, required this.onKeep});
+  const _TxnCandidateCard({
+    required this.txn,
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onKeep,
+  });
   final DuplicateTransactionSummary txn;
   final String label;
   final bool selected;
+  final bool enabled;
   final VoidCallback onKeep;
 
   @override
@@ -500,10 +904,11 @@ class _TxnCandidateCard extends StatelessWidget {
     final border = selected ? BambooInk.jade : BambooInk.hairlineOnPaper;
     return Semantics(
       button: true,
+      enabled: enabled,
       selected: selected,
       label: '$label, ${selected ? 'selected' : 'not selected'}',
       child: InkWell(
-        onTap: onKeep,
+        onTap: enabled ? onKeep : null,
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(12),
@@ -512,81 +917,255 @@ class _TxnCandidateCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: border, width: selected ? 2 : 1),
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: Text(label, style: BambooFonts.ui(11.5, weight: FontWeight.w700, color: selected ? BambooInk.jade : BambooInk.ink500).copyWith(letterSpacing: 0.6))),
-          Icon(selected ? Icons.radio_button_checked : Icons.radio_button_unchecked, size: 19, color: selected ? BambooInk.jade : BambooInk.ink500),
-        ]),
-        const SizedBox(height: 9),
-        MoneyText(txn.amount, confidence: Confidence.estimated, style: BambooFonts.money(17)),
-        const SizedBox(height: 5),
-        Text(txn.merchantName ?? 'Spend', maxLines: 2, overflow: TextOverflow.ellipsis, style: BambooFonts.ui(13, weight: FontWeight.w600, color: BambooInk.ink900)),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(color: selected ? const Color(0xFFD9F6EA) : const Color(0xFFECEBE7), borderRadius: BorderRadius.circular(6)),
-          child: Text(_sourceLabel(txn.source), maxLines: 1, overflow: TextOverflow.ellipsis, style: BambooFonts.ui(10.5, weight: FontWeight.w600, color: selected ? const Color(0xFF005D45) : BambooInk.ink700)),
-        ),
-        const SizedBox(height: 6),
-        Text(txn.cardDisplayName ?? _formatDate(txn.occurredAt), maxLines: 1, overflow: TextOverflow.ellipsis, style: BambooFonts.ui(11, color: BambooInk.ink500)),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: selected
-              ? FilledButton.icon(onPressed: onKeep, icon: const Icon(Icons.check, size: 16), label: const Text('Keep this one ✓'), style: FilledButton.styleFrom(backgroundColor: BambooInk.jade, disabledBackgroundColor: BambooInk.jade, disabledForegroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), textStyle: BambooFonts.ui(11, weight: FontWeight.w700)))
-              : OutlinedButton(onPressed: onKeep, style: OutlinedButton.styleFrom(foregroundColor: BambooInk.ink900, side: const BorderSide(color: BambooInk.hairlineOnPaper), padding: const EdgeInsets.symmetric(vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: Text('Keep this one', style: BambooFonts.ui(11, weight: FontWeight.w600))),
-        ),
-          ]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: BambooFonts.ui(
+                        11.5,
+                        weight: FontWeight.w700,
+                        color: selected ? BambooInk.jade : BambooInk.ink500,
+                      ).copyWith(letterSpacing: 0.6),
+                    ),
+                  ),
+                  Icon(
+                    selected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    size: 19,
+                    color: selected ? BambooInk.jade : BambooInk.ink500,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 9),
+              MoneyText(
+                txn.amount,
+                confidence: Confidence.estimated,
+                style: BambooFonts.money(17),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                txn.merchantName ?? 'Spend',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(
+                  13,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? const Color(0xFFD9F6EA)
+                      : const Color(0xFFECEBE7),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  _sourceLabel(txn.source),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(
+                    10.5,
+                    weight: FontWeight.w600,
+                    color: selected
+                        ? const Color(0xFF005D45)
+                        : BambooInk.ink700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                txn.cardDisplayName ?? _formatDate(txn.occurredAt),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(11, color: BambooInk.ink500),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: selected
+                    ? FilledButton.icon(
+                        onPressed: enabled ? onKeep : null,
+                        icon: const Icon(Icons.check, size: 16),
+                        label: const Text('Keep this one ✓'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BambooInk.jade,
+                          disabledBackgroundColor: BambooInk.jade,
+                          disabledForegroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          textStyle: BambooFonts.ui(
+                            11,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                      )
+                    : OutlinedButton(
+                        onPressed: enabled ? onKeep : null,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: BambooInk.ink900,
+                          side: const BorderSide(
+                            color: BambooInk.hairlineOnPaper,
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text(
+                          'Keep this one',
+                          style: BambooFonts.ui(11, weight: FontWeight.w600),
+                        ),
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   static String _sourceLabel(String source) => switch (source) {
-        'manual' => 'Manual entry',
-        'sms' => 'SMS alert',
-        'email' => 'Email alert',
-        'statement' => 'Statement import',
-        'sms_bulk' => 'SMS backup import',
-        'imported' => 'Imported',
-        _ => source,
-      };
+    'manual' => 'Manual entry',
+    'sms' => 'SMS alert',
+    'email' => 'Email alert',
+    'statement' => 'Statement import',
+    'sms_bulk' => 'SMS backup import',
+    'imported' => 'Imported',
+    _ => source,
+  };
 
-  static String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
+  static String _formatDate(DateTime date) =>
+      '${date.day}/${date.month}/${date.year}';
 }
 
 class _ReviewFooter extends StatelessWidget {
-  const _ReviewFooter({required this.total, required this.resolved, required this.mergeCount, required this.overlap, required this.onConfirm, required this.onDismiss});
+  const _ReviewFooter({
+    required this.total,
+    required this.resolved,
+    required this.mergeCount,
+    required this.overlap,
+    required this.busy,
+    required this.completedResolutions,
+    required this.resolutionTotal,
+    required this.onConfirm,
+    required this.onDismiss,
+  });
   final int total;
   final int resolved;
   final int mergeCount;
   final double overlap;
+  final bool busy;
+  final int completedResolutions;
+  final int resolutionTotal;
   final VoidCallback? onConfirm;
   final VoidCallback? onDismiss;
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 8),
-        decoration: BoxDecoration(color: BambooInk.paper, border: const Border(top: BorderSide(color: BambooInk.hairlineOnPaper)), boxShadow: const [BoxShadow(color: Color(0x0D2B313A), blurRadius: 12, offset: Offset(0, -3))]),
-        child: SafeArea(
-          top: false,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Row(children: [
-              Icon(Icons.circle, size: 10, color: onConfirm == null ? BambooInk.ink500 : BambooInk.jade),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Ready to merge: $resolved of $total pairs resolved', style: BambooFonts.ui(12.5, color: BambooInk.ink900))),
-              Text('Overlaps: ₹${overlap.toStringAsFixed(2)}', style: BambooFonts.ui(12, color: BambooInk.ink500)),
-            ]),
-            const SizedBox(height: 10),
-            SizedBox(width: double.infinity, child: FilledButton.icon(
-              onPressed: onConfirm,
-              icon: const Icon(Icons.check, size: 19),
-              label: Text('Confirm & Merge $mergeCount Items'),
-              style: FilledButton.styleFrom(backgroundColor: BambooInk.jade, disabledBackgroundColor: BambooInk.ink500, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), textStyle: BambooFonts.ui(16, weight: FontWeight.w700)),
-            )),
-            TextButton(onPressed: onDismiss, child: Text('Dismiss & keep all as distinct expenses', style: BambooFonts.ui(13, color: BambooInk.ink500))),
-          ]),
+    padding: const EdgeInsets.fromLTRB(18, 10, 18, 8),
+    decoration: BoxDecoration(
+      color: BambooInk.paper,
+      border: const Border(top: BorderSide(color: BambooInk.hairlineOnPaper)),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x0D2B313A),
+          blurRadius: 12,
+          offset: Offset(0, -3),
         ),
-      );
-
+      ],
+    ),
+    child: SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.circle,
+                size: 10,
+                color: onConfirm == null ? BambooInk.ink500 : BambooInk.jade,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${mergeCount == resolved ? 'Ready to merge' : 'Ready to save'}: '
+                  '$resolved of $total ${total == 1 ? 'pair' : 'pairs'} resolved',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink900),
+                ),
+              ),
+              Text(
+                'Overlaps: ₹${overlap.toStringAsFixed(2)}',
+                style: BambooFonts.ui(12, color: BambooInk.ink500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onConfirm,
+              icon: busy
+                  ? const SizedBox.square(
+                      dimension: 19,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.check, size: 19),
+              label: Text(
+                busy
+                    ? 'Saving $completedResolutions of $resolutionTotal…'
+                    : mergeCount == resolved
+                    ? 'Confirm & Merge $resolved ${resolved == 1 ? 'Item' : 'Items'}'
+                    : 'Confirm $resolved Decision${resolved == 1 ? '' : 's'}',
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.jade,
+                disabledBackgroundColor: BambooInk.ink500,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                textStyle: BambooFonts.ui(16, weight: FontWeight.w700),
+              ),
+            ),
+          ),
+          if (busy) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: resolutionTotal == 0
+                    ? 0
+                    : completedResolutions / resolutionTotal,
+                minHeight: 4,
+                backgroundColor: BambooInk.hairlineOnPaper,
+                color: BambooInk.jade,
+              ),
+            ),
+          ],
+          TextButton(
+            onPressed: onDismiss,
+            child: Text(
+              'Dismiss & keep all as distinct expenses',
+              style: BambooFonts.ui(13, color: BambooInk.ink500),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
