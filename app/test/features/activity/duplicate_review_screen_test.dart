@@ -62,6 +62,8 @@ Future<void> _pump(
   WidgetTester tester, {
   required _FakeUserCardsRepository repo,
 }) async {
+  await tester.binding.setSurfaceSize(const Size(1000, 1000));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   final appDb = openInMemoryForTesting();
   addTearDown(appDb.close);
   final outbox = DuplicateResolutionOutboxRepository(appDb, namespace: 'test');
@@ -98,7 +100,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('SMS'), findsOneWidget);
+    expect(find.text('SMS alert'), findsOneWidget);
     expect(find.text('Statement import'), findsOneWidget);
     expect(find.text('Amazon'), findsNWidgets(2));
   });
@@ -108,7 +110,7 @@ void main() {
     (tester) async {
       await _pump(tester, repo: _FakeUserCardsRepository([_pair()]));
       expect(find.text('Auto-select recommended (1)'), findsOneWidget);
-      expect(find.text('Keeping this one'), findsOneWidget);
+      expect(find.text('Keep this one ✓'), findsOneWidget);
       expect(find.text('Ready to merge: 1 of 1 pair resolved'), findsOneWidget);
       final button = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Confirm & Merge 1 Item'),
@@ -123,7 +125,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Auto-select recommended (0)'), findsOneWidget);
     expect(find.text('Ready to save: 1 of 1 pair resolved'), findsOneWidget);
-    expect(find.text('Kept separate'), findsOneWidget);
+    expect(find.text('✓ Kept both — not actually duplicates'), findsOneWidget);
   });
 
   testWidgets('Keep this one waits for confirmation before resolving', (
@@ -132,11 +134,16 @@ void main() {
     final repo = _FakeUserCardsRepository([_pair()]);
     await _pump(tester, repo: repo);
 
+    await tester.ensureVisible(find.text('Keep this one').first);
     await tester.tap(find.text('Keep this one').first);
     await tester.pumpAndSettle();
     expect(repo.lastResolveArgs, isNull);
 
     await tester.tap(find.text('Confirm & Merge 1 Item'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Review resolved'), findsOneWidget);
+    await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
 
     expect(repo.lastResolveArgs?['id'], 'pair1');
@@ -150,11 +157,16 @@ void main() {
     final repo = _FakeUserCardsRepository([_pair()]);
     await _pump(tester, repo: repo);
 
+    await tester.ensureVisible(find.text('Keep both — not actually duplicates'));
     await tester.tap(find.text('Keep both — not actually duplicates'));
     await tester.pumpAndSettle();
     expect(repo.lastResolveArgs, isNull);
 
     await tester.tap(find.text('Confirm 1 Decision'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Review resolved'), findsOneWidget);
+    await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
 
     expect(repo.lastResolveArgs?['resolution'], 'kept_both');

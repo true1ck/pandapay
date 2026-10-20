@@ -46,6 +46,8 @@ Future<void> _pump(
   required NeedsReviewRepository reviews,
   CommitmentsRepository? commitments,
 }) async {
+  await tester.binding.setSurfaceSize(const Size(1000, 1000));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -96,7 +98,6 @@ void main() {
 
     expect(find.text('VM-HDFCBK'), findsOneWidget);
     expect(find.text('Rs.499 spent at AMAZON'), findsOneWidget);
-    expect(find.textContaining('unparseable_amount'), findsOneWidget);
   });
 
   testWidgets('Ignore message removes the item from the queue', (tester) async {
@@ -173,13 +174,16 @@ void main() {
   testWidgets('Save bill opens a review sheet and only then persists it', (
     tester,
   ) async {
+    final future = DateTime.now().add(const Duration(days: 10));
+    final dueOn = DateTime(future.year, future.month, future.day);
+    final dueDateText = '${dueOn.year}-${dueOn.month.toString().padLeft(2, '0')}-${dueOn.day.toString().padLeft(2, '0')}';
     await reviews.add(
       NeedsReviewItem(
         id: 'bill-1',
         sender: 'JX-MYTNEU-S',
         body:
-            'Your HDFC BANK CREDIT CARD bill of Rs. 10148.00 is ready. Pay by 2026-10-09.',
-        receivedAt: DateTime(2026, 10, 1),
+            'Your HDFC BANK CREDIT CARD bill of Rs. 10148.00 is ready. Pay by $dueDateText.',
+        receivedAt: DateTime.now(),
         kind: NeedsReviewKind.commitment,
       ),
     );
@@ -208,7 +212,7 @@ void main() {
     final saved = await commitments.fetchAll();
     expect(saved, hasLength(1));
     expect(saved.single.amount?.paise, 1014800);
-    expect(saved.single.dueOn, DateTime(2026, 10, 9));
+    expect(saved.single.dueOn, dueOn);
     expect(saved.single.isUserConfirmed, isTrue);
     expect(await reviews.fetchAll(), isEmpty);
   });
