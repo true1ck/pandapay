@@ -5,6 +5,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'investment_classifier.dart';
 import 'pdf_statement_parser.dart';
+import 'user_cards_repository.dart' show TxnInstrument;
 
 /// Excel commonly exports UTF-16 tab-separated text, while other apps use UTF-8.
 ParsedStatement parseDelimitedStatementBytes(
@@ -464,28 +465,40 @@ ParsedStatementLine? _parseRow(
   if (description.length < 2) return null;
   final accountIndex =
       options.columns[ImportColumn.account] ??
-      _headerIndex(headers, ['account', 'card']);
+      _headerIndex(headers, ['source account', 'paid with', 'account', 'card']);
   final expenseIndex = headers.indexOf('expense');
   final typeIndex = _headerIndex(headers, ['type', 'category']);
-  final categoryHintIndex = _headerIndex(headers, ['category', 'category name']);
-  final subcategoryHintIndex = _headerIndex(
-    headers,
-    [
-      'subcategory',
-      'sub category',
-      'subcategory name',
-      'tag',
-      'tags',
-      'label',
-      'labels',
-    ],
-  );
-  final transfer = expenseIndex >= 0 && expenseIndex < row.length
-      ? _normalise(row[expenseIndex]) == 'no'
-      : typeIndex != null &&
-            typeIndex < row.length &&
-            _normalise(row[typeIndex]) == 'transfer';
+  final kindIndex = _headerIndex(headers, [
+    'entry kind',
+    'transaction type',
+    'kind',
+  ]);
+  final importedKind = kindIndex != null && kindIndex < row.length
+      ? _normalise(row[kindIndex])
+      : '';
+  final categoryHintIndex = _headerIndex(headers, [
+    'category',
+    'category name',
+  ]);
+  final subcategoryHintIndex = _headerIndex(headers, [
+    'subcategory',
+    'sub category',
+    'subcategory name',
+  ]);
+  final tagNames = normalizeImportedTagNames([
+    for (var i = 0; i < headers.length && i < row.length; i++)
+      if (const ['tag', 'tags', 'label', 'labels', 'tag names'].contains(headers[i]))
+        ...parseImportedTagNames(row[i]),
+  ]);
+  final transfer =
+      importedKind == 'transfer' ||
+      (expenseIndex >= 0 && expenseIndex < row.length
+          ? _normalise(row[expenseIndex]) == 'no'
+          : typeIndex != null &&
+                typeIndex < row.length &&
+                _normalise(row[typeIndex]) == 'transfer');
   final investment =
+      importedKind == 'investment' ||
       (typeIndex != null &&
           typeIndex < row.length &&
           [
@@ -550,9 +563,52 @@ ParsedStatementLine? _parseRow(
         subcategoryHintIndex != null && subcategoryHintIndex < row.length
         ? row[subcategoryHintIndex].trim()
         : null,
+    tagNames: tagNames,
+    instrument: _parseInstrument(
+      _cellFor(headers, row, [
+        'instrument',
+        'payment instrument',
+        'paid using',
+        'paid with',
+      ]),
+    ),
+    rail: _parseRail(_cellFor(headers, row, ['rail', 'payment rail'])),
+    note: _cellFor(headers, row, ['note', 'notes', 'remarks note']),
     amount: Money.fromRupees(amountValue.abs()),
-    isCredit: isCredit,
+    isCredit: importedKind == 'income' || isCredit,
   );
+}
+
+String? _cellFor(List<String> headers, List<String> row, List<String> names) {
+  final index = _headerIndex(headers, names);
+  if (index == null || index < 0 || index >= row.length) return null;
+  final value = row[index].trim();
+  return value.isEmpty ? null : value;
+}
+
+TxnInstrument? _parseInstrument(String? value) {
+  if (value == null) return null;
+  final normalized = _normalise(value).replaceAll(' ', '_');
+  for (final instrument in TxnInstrument.values) {
+    if (instrument.wireValue == normalized) return instrument;
+  }
+  return null;
+}
+
+String? _parseRail(String? value) {
+  if (value == null) return null;
+  final normalized = _normalise(value).replaceAll(' ', '_');
+  return const {
+        'upi_qr',
+        'swipe',
+        'online',
+        'contactless',
+        'atm',
+        'emi',
+        'unknown',
+      }.contains(normalized)
+      ? normalized
+      : null;
 }
 
 int? _bestIndex(

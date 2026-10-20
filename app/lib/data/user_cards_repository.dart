@@ -622,6 +622,7 @@ class HomeSummary {
 class BankAccountSummary {
   final String accountLast4;
   final Money? availableBalance;
+
   /// Timestamp of the SMS that supplied [availableBalance]. This may be
   /// older than [latestSmsAt] when newer SMS messages omit a balance.
   final DateTime? latestBalanceSmsAt;
@@ -896,6 +897,11 @@ class UserCardsRepository {
   final String apiBaseUrl;
   final String accessToken;
   final http.Client _client;
+
+  /// The server accepted this stable manual mutation, including an outbox
+  /// retry. Local tag links can now move from local-outbox:<mutation> to id.
+  final void Function(String clientMutationId, String transactionId)?
+  onTransactionSaved;
   final Future<void> Function(SmsBatchMessage)? onSmsCaptured;
   final Future<void> Function(List<SmsBatchMessage>)? onSmsBatchCaptured;
   final Future<void> Function(
@@ -909,6 +915,7 @@ class UserCardsRepository {
     required this.apiBaseUrl,
     required this.accessToken,
     http.Client? client,
+    this.onTransactionSaved,
     this.onSmsCaptured,
     this.onSmsBatchCaptured,
     this.onSmsUploaded,
@@ -1138,11 +1145,13 @@ class UserCardsRepository {
     String? clientMutationId,
   }) async {
     final mutationId = clientMutationId ?? const Uuid().v4();
-    final customCategoryId = userCategoryId ??
+    final customCategoryId =
+        userCategoryId ??
         (categoryId != null && categoryId.startsWith('custom:')
             ? categoryId.substring('custom:'.length)
             : null);
-    final serverCategoryId = categoryId != null && categoryId.startsWith('custom:')
+    final serverCategoryId =
+        categoryId != null && categoryId.startsWith('custom:')
         ? null
         : categoryId;
     final response = await _client
@@ -1174,7 +1183,14 @@ class UserCardsRepository {
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return (body['transaction'] as Map<String, dynamic>)['id'] as String;
+    final id = (body['transaction'] as Map<String, dynamic>)['id'] as String;
+    try {
+      onTransactionSaved?.call(mutationId, id);
+    } catch (_) {
+      // A local follow-up cannot turn an accepted financial write into a
+      // failed transaction. The tag outbox still holds its resolvable alias.
+    }
+    return id;
   }
 
   /// Design 18 "Add a note". Its own endpoint rather than a field on
@@ -1446,7 +1462,8 @@ class UserCardsRepository {
       needsReview: (summary['needsReview'] as num?)?.toInt() ?? 0,
       errored: (summary['error'] as num?)?.toInt() ?? 0,
       dueDatesUpdated: (summary['dueDatesUpdated'] as num?)?.toInt() ?? 0,
-      statementDaysUpdated: (summary['statementDaysUpdated'] as num?)?.toInt() ?? 0,
+      statementDaysUpdated:
+          (summary['statementDaysUpdated'] as num?)?.toInt() ?? 0,
       // Indices are batch-relative; the caller maps them back to its own
       // list so callers can report genuinely unparsed messages without
       // turning successful cardless spends into a manual workflow.
@@ -1541,11 +1558,13 @@ class UserCardsRepository {
     TxnInstrument? instrument,
     TxnEntryKind? entryKind,
   }) async {
-    final customCategoryId = userCategoryId ??
+    final customCategoryId =
+        userCategoryId ??
         (categoryId != null && categoryId.startsWith('custom:')
             ? categoryId.substring('custom:'.length)
             : null);
-    final serverCategoryId = categoryId != null && categoryId.startsWith('custom:')
+    final serverCategoryId =
+        categoryId != null && categoryId.startsWith('custom:')
         ? null
         : categoryId;
     final body = <String, dynamic>{
@@ -1965,6 +1984,44 @@ class TransactionObservation {
   };
 }
 
+/// Account-private transaction context; archiving retains historical links.
+class TransactionTag {
+  final String id;
+  final String name;
+  final String? color;
+  final DateTime? archivedAt;
+  final DateTime? updatedAt;
+
+  const TransactionTag({
+    required this.id,
+    required this.name,
+    this.color,
+    this.archivedAt,
+    this.updatedAt,
+  });
+
+  bool get isArchived => archivedAt != null;
+
+  factory TransactionTag.fromJson(Map<String, dynamic> json) => TransactionTag(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    color: json['color'] as String?,
+    archivedAt: _date(json['archivedAt'] ?? json['archived_at']),
+    updatedAt: _date(json['updatedAt'] ?? json['updated_at']),
+  );
+
+  static DateTime? _date(dynamic value) =>
+      value == null ? null : DateTime.parse(value as String);
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'color': color,
+    'archivedAt': archivedAt?.toUtc().toIso8601String(),
+    'updatedAt': updatedAt?.toUtc().toIso8601String(),
+  };
+}
+
 class TransactionEntry {
   final String? sourceKey;
   final String id;
@@ -1972,6 +2029,7 @@ class TransactionEntry {
   final DateTime occurredAt;
   final String? merchantName;
   final String? categoryId;
+
   /// The reporting parent category. For a private subcategory, [categoryId]
   /// is the custom child id while this remains the built-in/user parent id.
   final String? parentCategoryId;
@@ -2004,11 +2062,16 @@ class TransactionEntry {
   final bool instrumentKnown;
   final TxnEntryKind entryKind;
   final String source;
+
   /// Privacy-safe records of the channels that reported this payment.
   final List<TransactionObservation> observations;
   final String status;
   final String rewardState;
   final String? note;
+
+  /// Optional display snapshot. The tags repository owns local assignment
+  /// intent (including removals) and takes precedence over stale snapshots.
+  final List<TransactionTag> tags;
 
   /// What this transaction actually earned — `transactions.expected_value_inr`,
   /// written at insert time by the same server-side helper that updates cap
@@ -2055,6 +2118,7 @@ class TransactionEntry {
     this.rewardState = 'estimated',
     this.note,
     this.rewardValue,
+    this.tags = const [],
   });
 
   String get categoryLabel => subcategoryName == null || categoryName == null
@@ -2066,8 +2130,8 @@ class TransactionEntry {
   /// the API as a transaction mutation.
   Map<String, dynamic> toJson() {
     final rawCategoryId = categoryId;
-    final customCategoryId = rawCategoryId != null &&
-        rawCategoryId.startsWith('custom:')
+    final customCategoryId =
+        rawCategoryId != null && rawCategoryId.startsWith('custom:')
         ? rawCategoryId.substring('custom:'.length)
         : null;
     return {
@@ -2091,11 +2155,14 @@ class TransactionEntry {
       'instrument': instrumentKnown ? instrument.wireValue : null,
       'entry_kind': entryKind.wireValue,
       'source': source,
-      'observations': observations.map((observation) => observation.toJson()).toList(),
+      'observations': observations
+          .map((observation) => observation.toJson())
+          .toList(),
       'status': status,
       'reward_state': rewardState,
       'note': note,
       'expected_value_inr': rewardValue?.rupees,
+      'tags': tags.map((tag) => tag.toJson()).toList(),
     };
   }
 
@@ -2122,12 +2189,16 @@ class TransactionEntry {
       amount: Money.fromRupees(_num(json['amount_inr'])),
       occurredAt: DateTime.parse(json['occurred_at'] as String),
       merchantName: json['merchant_name'] as String?,
-      categoryId: userCategoryId == null ? rawCategoryId : 'custom:$userCategoryId',
+      categoryId: userCategoryId == null
+          ? rawCategoryId
+          : 'custom:$userCategoryId',
       parentCategoryId: json['parent_category_id'] as String? ?? rawCategoryId,
       parentUserCategoryId: json['parent_user_category_id'] as String?,
       userCategoryId: userCategoryId,
       categoryName: _displayCategoryName(json['category_name'] as String?),
-      subcategoryName: _displayCategoryName(json['subcategory_name'] as String?),
+      subcategoryName: _displayCategoryName(
+        json['subcategory_name'] as String?,
+      ),
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
       cardLast4: json['card_last4'] as String?,
       accountLast4: json['account_last4'] as String?,
@@ -2138,7 +2209,10 @@ class TransactionEntry {
       entryKind: TxnEntryKind.fromJson(json['entry_kind'] as String?),
       source: json['source'] as String? ?? 'manual',
       observations: (json['observations'] as List? ?? const [])
-          .map((item) => TransactionObservation.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) =>
+                TransactionObservation.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
       status: json['status'] as String? ?? 'active',
       rewardState: json['reward_state'] as String? ?? 'estimated',
@@ -2146,6 +2220,9 @@ class TransactionEntry {
       rewardValue: json['expected_value_inr'] == null
           ? null
           : Money.fromRupees(_num(json['expected_value_inr'])),
+      tags: (json['tags'] as List? ?? const [])
+          .map((item) => TransactionTag.fromJson(item as Map<String, dynamic>))
+          .toList(),
     );
   }
 

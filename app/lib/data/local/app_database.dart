@@ -124,6 +124,59 @@ CREATE TABLE IF NOT EXISTS user_categories (
 CREATE INDEX IF NOT EXISTS idx_user_categories_namespace_name
   ON user_categories (namespace, name COLLATE NOCASE);
 
+-- Tags are account-owned context, independent of transaction/reward writes.
+-- Removed links remain as tombstones until a complete server snapshot is
+-- reconciled with the durable operation queue. A known empty assignment set
+-- must override tag metadata in an older transaction response.
+CREATE TABLE IF NOT EXISTS transaction_tags (
+  namespace TEXT NOT NULL,
+  id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  color TEXT,
+  archived_at TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(namespace, id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_tags_active_name
+  ON transaction_tags(namespace, normalized_name) WHERE archived_at IS NULL;
+CREATE TABLE IF NOT EXISTS transaction_tag_links (
+  namespace TEXT NOT NULL,
+  transaction_id TEXT NOT NULL,
+  tag_id TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  PRIMARY KEY(namespace, transaction_id, tag_id)
+);
+CREATE INDEX IF NOT EXISTS idx_transaction_tag_links_tag
+  ON transaction_tag_links(namespace, tag_id, deleted_at, transaction_id);
+CREATE TABLE IF NOT EXISTS transaction_tag_known_transactions (
+  namespace TEXT NOT NULL,
+  transaction_id TEXT NOT NULL,
+  PRIMARY KEY(namespace, transaction_id)
+);
+CREATE TABLE IF NOT EXISTS transaction_tag_aliases (
+  namespace TEXT NOT NULL,
+  local_id TEXT NOT NULL,
+  transaction_id TEXT NOT NULL,
+  PRIMARY KEY(namespace, local_id)
+);
+CREATE TABLE IF NOT EXISTS transaction_tag_sync_state (
+  namespace TEXT PRIMARY KEY,
+  downloaded_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS transaction_tag_outbox (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  namespace TEXT NOT NULL,
+  mutation_id TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  UNIQUE(namespace, mutation_id)
+);
+CREATE INDEX IF NOT EXISTS idx_transaction_tag_outbox_pending
+  ON transaction_tag_outbox(namespace, seq);
+
 -- Plan Phase 4 multi-device sync. One row per local edit that hasn't reached
 -- the server yet, plus the per-device cursor.
 --

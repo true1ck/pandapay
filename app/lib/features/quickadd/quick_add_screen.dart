@@ -15,6 +15,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/category_picker.dart';
 import '../../app/providers.dart';
+import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/receipt_parser.dart' show parseReceiptFields;
@@ -204,6 +205,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   final _merchantFocusNode = FocusNode();
   String? _selectedUserCardId;
   String? _selectedCategoryId;
+  Set<String> _selectedTagIds = {};
   DateTime? _date;
   final ImagePicker _imagePicker = ImagePicker();
   _PendingReceipt? _receipt;
@@ -681,6 +683,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     }
   }
 
+  void _selectParentCategory(SpendCategory category) {
+    setState(() => _selectedCategoryId = category.id);
+  }
+
+  void _selectSubcategory(String parentId, String? subcategoryId) {
+    setState(() => _selectedCategoryId = subcategoryId ?? parentId);
+  }
+
   Future<void> _save() async {
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
@@ -764,6 +774,16 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         clientMutationId: clientMutationId,
       );
       String? receiptError;
+      if (_selectedTagIds.isNotEmpty) {
+        try {
+          await ref.read(transactionTagsProvider)?.assign([
+            transactionId,
+          ], _selectedTagIds.toList());
+        } catch (error) {
+          receiptError =
+              'Transaction saved. Tags could not be saved: ${userFacingErrorMessage(error)}';
+        }
+      }
       if (_receipt != null) {
         try {
           await _saveReceipt(transactionId);
@@ -895,6 +915,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             clientMutationId: clientMutationId,
           );
           ref.invalidate(pendingOutboxCountProvider);
+          if (_selectedTagIds.isNotEmpty) {
+            await ref.read(transactionTagsProvider)?.assign([
+              'local-outbox:$clientMutationId',
+            ], _selectedTagIds.toList());
+          }
           if (mounted) {
             // Same "capture before pop" reasoning as the success path above —
             // ScaffoldMessenger.of(context) after pop() would attach to a
@@ -1007,6 +1032,13 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                                 _buildMerchantField(merchants),
                                 const _FormDivider(),
                                 _buildCategories(categories),
+                                const _FormDivider(),
+                                TransactionTagField(
+                                  selectedIds: _selectedTagIds,
+                                  enabled: !_saving,
+                                  onChanged: (ids) =>
+                                      setState(() => _selectedTagIds = ids),
+                                ),
                               ],
                             ),
                           ),
@@ -1039,7 +1071,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       ),
       bottomNavigationBar:
           _activePage == AddFlowPage.quickAdd ||
-          (_activePage == AddFlowPage.scanBill && _receipt != null)
+              (_activePage == AddFlowPage.scanBill && _receipt != null)
           ? _saveBar()
           : null,
     );
@@ -1702,30 +1734,116 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 style: BambooFonts.ui(12, color: BambooInk.ink500),
               );
             }
-            final selected = list
+            final selectedCategory = list
                 .where((item) => item.id == _selectedCategoryId)
                 .firstOrNull;
+            final selectedParent = selectedCategory == null
+                ? null
+                : selectedCategory.isSubcategory
+                ? list
+                      .where(
+                        (item) =>
+                            item.id == selectedCategory.parentCategoryId ||
+                            item.id == selectedCategory.parentUserCategoryId,
+                      )
+                      .firstOrNull
+                : selectedCategory;
+            final parents = list.where((item) => !item.isSubcategory).toList();
+            final visibleParents = parents.isEmpty ? list : parents;
+            final subcategories = selectedParent == null
+                ? const <SpendCategory>[]
+                : list
+                      .where(
+                        (item) =>
+                            item.isSubcategory &&
+                            (item.parentCategoryId == selectedParent.id ||
+                                item.parentUserCategoryId == selectedParent.id),
+                      )
+                      .toList();
+            final selectedSubcategoryId =
+                selectedCategory?.isSubcategory == true
+                ? selectedCategory!.id
+                : null;
             final textScale = MediaQuery.textScalerOf(context).scale(1);
-            return SizedBox(
-              height: 58 + 30 * textScale,
-              child: ListView.separated(
-                key: const ValueKey('quick-add-categories'),
-                scrollDirection: Axis.horizontal,
-                itemCount: list.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 6),
-                itemBuilder: (context, index) {
-                  final category = list[index];
-                  return SizedBox(
-                    width: 72,
-                    child: _CategoryChoice(
-                      category: category,
-                      selected: selected?.id == category.id,
-                      onTap: () =>
-                          setState(() => _selectedCategoryId = category.id),
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: 58 + 30 * textScale,
+                  child: ListView.separated(
+                    key: const ValueKey('quick-add-categories'),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: visibleParents.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 6),
+                    itemBuilder: (context, index) {
+                      final category = visibleParents[index];
+                      return SizedBox(
+                        width: 72,
+                        child: _CategoryChoice(
+                          category: category,
+                          selected: selectedParent?.id == category.id,
+                          onTap: () => _selectParentCategory(category),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                if (selectedParent != null && subcategories.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  const Divider(height: 1, color: BambooInk.hairlineOnPaper),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Subcategory',
+                          style: BambooFonts.ui(
+                            11,
+                            weight: FontWeight.w600,
+                            color: BambooInk.ink700,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Optional',
+                        style: BambooFonts.ui(10.5, color: BambooInk.ink500),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 36,
+                    child: ListView(
+                      key: const ValueKey('quick-add-subcategories'),
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        _SubcategoryChoice(
+                          key: const ValueKey('quick-add-subcategory-none'),
+                          label: 'None',
+                          selected: selectedSubcategoryId == null,
+                          onTap: () =>
+                              _selectSubcategory(selectedParent.id, null),
+                        ),
+                        for (final subcategory in subcategories)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: _SubcategoryChoice(
+                              key: ValueKey(
+                                'quick-add-subcategory-${subcategory.id}',
+                              ),
+                              label: subcategory.name,
+                              selected: selectedSubcategoryId == subcategory.id,
+                              onTap: () => _selectSubcategory(
+                                selectedParent.id,
+                                subcategory.id,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                  );
-                },
-              ),
+                  ),
+                ],
+              ],
             );
           },
         ),
@@ -2182,7 +2300,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                         const SizedBox(height: 12),
                         Text(
                           'Scan a receipt',
-                          style: BambooFonts.heading(19, color: BambooInk.ink900),
+                          style: BambooFonts.heading(
+                            19,
+                            color: BambooInk.ink900,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Padding(
@@ -2190,7 +2311,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                           child: Text(
                             'Take a clear photo of the full receipt. Text recognition runs on this device.',
                             textAlign: TextAlign.center,
-                            style: BambooFonts.ui(13, color: BambooInk.ink500, height: 1.45),
+                            style: BambooFonts.ui(
+                              13,
+                              color: BambooInk.ink500,
+                              height: 1.45,
+                            ),
                           ),
                         ),
                       ],
@@ -2201,7 +2326,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             FilledButton.icon(
               onPressed: _pickingReceipt ? null : () => _scanReceipt(),
               icon: const Icon(Icons.photo_camera_outlined),
-              label: Text(_scanningReceipt ? 'Scanning…' : 'Take receipt photo'),
+              label: Text(
+                _scanningReceipt ? 'Scanning…' : 'Take receipt photo',
+              ),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
                 backgroundColor: BambooInk.slate,
@@ -2234,7 +2361,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             const _ScanBillDivider(),
             Center(
               child: TextButton.icon(
-                onPressed: () => setState(() => _activePage = AddFlowPage.quickAdd),
+                onPressed: () =>
+                    setState(() => _activePage = AddFlowPage.quickAdd),
                 icon: const Icon(Icons.edit_note_rounded, size: 18),
                 label: const Text('Enter details manually'),
               ),
@@ -2283,6 +2411,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 _buildMerchantField(merchants),
                 const _FormDivider(),
                 _buildCategories(categories),
+                const SizedBox(height: 12),
+                TransactionTagField(
+                  selectedIds: _selectedTagIds,
+                  enabled: !_saving,
+                  onChanged: (ids) => setState(() => _selectedTagIds = ids),
+                ),
               ],
             ),
           ),
@@ -2639,6 +2773,52 @@ class _CategoryChoice extends StatelessWidget {
   );
 }
 
+class _SubcategoryChoice extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SubcategoryChoice({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    button: true,
+    child: Material(
+      color: selected
+          ? BambooInk.lime.withValues(alpha: 0.28)
+          : BambooInk.paperCool.withValues(alpha: 0.65),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? BambooInk.lime : BambooInk.hairlineOnPaper,
+            ),
+          ),
+          child: Text(
+            label,
+            style: BambooFonts.ui(
+              11,
+              weight: selected ? FontWeight.w600 : FontWeight.w500,
+              color: BambooInk.ink900,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class _ReceiptAction extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -2923,8 +3103,18 @@ class _ScanBillReceiptHero extends StatelessWidget {
   }
 
   static String _monthAbbr(int month) => const [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ][month - 1];
 }
 
@@ -2967,11 +3157,7 @@ class _OcrBadge extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: BambooFonts.ui(
-              12,
-              weight: FontWeight.w600,
-              color: fg,
-            ),
+            style: BambooFonts.ui(12, weight: FontWeight.w600, color: fg),
           ),
         ],
       ),
@@ -3028,10 +3214,7 @@ class _ScanBillDivider extends StatelessWidget {
         const Expanded(child: Divider(color: BambooInk.hairlineOnPaper)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            'or',
-            style: BambooFonts.ui(12, color: BambooInk.ink500),
-          ),
+          child: Text('or', style: BambooFonts.ui(12, color: BambooInk.ink500)),
         ),
         const Expanded(child: Divider(color: BambooInk.hairlineOnPaper)),
       ],

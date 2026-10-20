@@ -11,6 +11,7 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart';
+import '../../data/spending_selection.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../cards/card_summary.dart';
@@ -60,12 +61,14 @@ final spendPeriodTransactionsProvider =
 /// itself.
 class SpendTrendsScreen extends ConsumerStatefulWidget {
   final String? initialCategory;
+  final Set<String> initialTagIds;
   final Key? periodSelectorKey;
   final Key? overviewKey;
 
   const SpendTrendsScreen({
     super.key,
     this.initialCategory,
+    this.initialTagIds = const {},
     this.periodSelectorKey,
     this.overviewKey,
   });
@@ -77,6 +80,9 @@ class SpendTrendsScreen extends ConsumerStatefulWidget {
 class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
   final reportBodyKey = GlobalKey<_ReportBodyState>();
   bool _filtersActive = false;
+  late _SpendFilterSelection _savedFilters = _SpendFilterSelection(
+    tagIds: widget.initialTagIds,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +169,10 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
                     transactions: transactions.valueOrNull ?? const [],
                     transactionDetailsLoading: transactions.isLoading,
                     initialCategory: widget.initialCategory,
+                    initialTagIds: widget.initialTagIds,
+                    initialSelection: _savedFilters,
+                    onSelectionChanged: (selection) =>
+                        _savedFilters = selection,
                     overviewKey: widget.overviewKey,
                     onFiltersActiveChanged: (active) =>
                         setState(() => _filtersActive = active),
@@ -899,12 +909,15 @@ class _DateField extends StatelessWidget {
   }
 }
 
-class _ReportBody extends StatefulWidget {
+class _ReportBody extends ConsumerStatefulWidget {
   final SpendReportQuery query;
   final SpendReport report;
   final List<TransactionEntry> transactions;
   final bool transactionDetailsLoading;
   final String? initialCategory;
+  final Set<String> initialTagIds;
+  final _SpendFilterSelection initialSelection;
+  final ValueChanged<_SpendFilterSelection> onSelectionChanged;
   final Key? overviewKey;
   final ValueChanged<bool> onFiltersActiveChanged;
   final VoidCallback onRefresh;
@@ -915,13 +928,16 @@ class _ReportBody extends StatefulWidget {
     required this.transactions,
     required this.transactionDetailsLoading,
     this.initialCategory,
+    this.initialTagIds = const {},
+    required this.initialSelection,
+    required this.onSelectionChanged,
     this.overviewKey,
     required this.onFiltersActiveChanged,
     required this.onRefresh,
   });
 
   @override
-  State<_ReportBody> createState() => _ReportBodyState();
+  ConsumerState<_ReportBody> createState() => _ReportBodyState();
 }
 
 bool _spansMultipleCalendarMonths(SpendReportQuery query) {
@@ -939,26 +955,151 @@ bool _spansMultipleCalendarMonths(SpendReportQuery query) {
   }
 }
 
-class _ReportBodyState extends State<_ReportBody> {
+class _ReportBodyState extends ConsumerState<_ReportBody> {
   _SpendingTab _tab = _SpendingTab.categories;
   final _spendingTabsKey = GlobalKey();
-  TxnInstrument? _paymentFilter;
-  Set<String> _categoryFilters = <String>{};
-  String? _merchantFilter;
-  String? _cardFilter;
+  late TxnInstrument? _paymentFilter = widget.initialSelection.payment;
+  late Set<String> _categoryFilters = {...widget.initialSelection.categories};
+  late String? _merchantFilter = widget.initialSelection.merchant;
+  late String? _cardFilter = widget.initialSelection.card;
+  late Set<String> _tagFilters = {...widget.initialSelection.tagIds};
+  late bool _untagged = widget.initialSelection.untagged;
+
+  void _notifyFilters() {
+    widget.onSelectionChanged(
+      _SpendFilterSelection(
+        payment: _paymentFilter,
+        categories: {..._categoryFilters},
+        merchant: _merchantFilter,
+        card: _cardFilter,
+        tagIds: {..._tagFilters},
+        untagged: _untagged,
+      ),
+    );
+    widget.onFiltersActiveChanged(_filtersActive);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _notifyFilters();
+    });
+  }
+
+  List<TransactionTag> get _allTags =>
+      ref.read(transactionTagsProvider)?.allTags ??
+      [
+        ...{
+          for (final entry in _spendEntries)
+            for (final tag in entry.tags) tag.id: tag,
+        }.values,
+      ];
+
+  List<TransactionTag> _tagsFor(TransactionEntry entry) =>
+      ref
+          .read(transactionTagsProvider)
+          ?.tagsForTransaction(entry.id, fallback: entry.tags) ??
+      entry.tags;
+
+  List<TransactionTag> get _visibleTags {
+    final tags = <String, TransactionTag>{
+      for (final entry in _visibleEntries)
+        for (final tag in _tagsFor(entry)) tag.id: tag,
+    }.values.toList();
+    tags.sort((a, b) {
+      final aTotal = _sum(_entriesForTag(a.id));
+      final bTotal = _sum(_entriesForTag(b.id));
+      return bTotal.paise.compareTo(aTotal.paise);
+    });
+    return tags;
+  }
+
+  List<TransactionEntry> _entriesForTag(String tagId) => _visibleEntries
+      .where((entry) => _tagsFor(entry).any((tag) => tag.id == tagId))
+      .toList();
+
+  List<SpendBreakdownRow> _categoryRowsForTag(String tagId) {
+    final groups = <String, List<TransactionEntry>>{};
+    for (final entry in _entriesForTag(tagId)) {
+      final categoryId =
+          entry.categoryId ??
+          (entry.userCategoryId == null
+              ? null
+              : 'custom:${entry.userCategoryId}');
+      final identity =
+          categoryId ??
+          'label:${SpendingSelection.normalize(entry.categoryLabel)}';
+      groups
+          .putIfAbsent('$identity:${entry.categoryLabel}', () => [])
+          .add(entry);
+    }
+    final rows = groups.entries.map((group) {
+      final entries = group.value;
+      final first = entries.first;
+      return SpendBreakdownRow(
+        label: first.categoryLabel,
+        categoryId:
+            first.categoryId ??
+            (first.userCategoryId == null
+                ? null
+                : 'custom:${first.userCategoryId}'),
+        total: _sum(entries),
+        txnCount: entries.length,
+      );
+    }).toList();
+    rows.sort((a, b) => b.total.paise.compareTo(a.total.paise));
+    return rows;
+  }
+
+  void _openTagCategoryTransactions(
+    TransactionTag tag,
+    SpendBreakdownRow category,
+  ) {
+    DateTime day(DateTime value) =>
+        DateTime(value.year, value.month, value.day);
+    String dateParam(DateTime value) =>
+        '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+
+    final from = widget.query.isCustom
+        ? day(widget.query.from!)
+        : day(widget.report.periodStart.toLocal());
+    final to = widget.query.isCustom
+        ? day(widget.query.to!)
+        : day(
+            widget.report.periodEnd.subtract(const Duration(days: 1)).toLocal(),
+          );
+    final query = <String, String>{
+      'tag': tag.id,
+      'from': dateParam(from),
+      'to': dateParam(to),
+      'spendOnly': 'true',
+      if (category.categoryId != null) 'category': category.categoryId!,
+      if (category.categoryId == null) 'categoryLabel': category.label,
+    };
+    context.push(
+      Uri(path: AppRoute.activity, queryParameters: query).toString(),
+    );
+  }
 
   bool get _filtersActive =>
       _paymentFilter != null ||
       _categoryFilters.isNotEmpty ||
       _merchantFilter != null ||
-      _cardFilter != null;
+      _cardFilter != null ||
+      _tagFilters.isNotEmpty ||
+      _untagged;
 
-  List<TransactionEntry> get _spendEntries => widget.transactions
-      .where(
-        (entry) =>
-            entry.status == 'active' && entry.entryKind == TxnEntryKind.spend,
-      )
-      .toList();
+  List<TransactionEntry> get _spendEntries =>
+      {for (final entry in widget.transactions) entry.id: entry}.values
+          .where(
+            (entry) =>
+                entry.status == 'active' &&
+                entry.entryKind == TxnEntryKind.spend,
+          )
+          .toList();
 
   List<TransactionEntry> _entriesFor({
     TxnInstrument? payment,
@@ -966,29 +1107,22 @@ class _ReportBodyState extends State<_ReportBody> {
     String? merchant,
     String? card,
   }) {
-    final selectedCategories = categories ?? _categoryFilters;
-    final selectedPayment = payment ?? _paymentFilter;
-    final selectedMerchant = merchant ?? _merchantFilter;
-    final selectedCard = card ?? _cardFilter;
-    return _spendEntries.where((entry) {
-      if (selectedPayment != null && entry.instrument != selectedPayment) {
-        return false;
-      }
-      final category = _categoryName(entry).toLowerCase();
-      if (selectedCategories.isNotEmpty &&
-          !selectedCategories.contains(category)) {
-        return false;
-      }
-      if (selectedMerchant != null &&
-          _merchantKey(_merchantName(entry)) !=
-              _merchantKey(selectedMerchant)) {
-        return false;
-      }
-      if (selectedCard != null && _cardName(entry) != selectedCard) {
-        return false;
-      }
-      return true;
-    }).toList();
+    final selection = SpendingSelection(
+      payment: payment ?? _paymentFilter,
+      categories: categories ?? _categoryFilters,
+      merchant: merchant ?? _merchantFilter,
+      card: card ?? _cardFilter,
+      tagIds: _tagFilters,
+      untagged: _untagged,
+    );
+    return _spendEntries
+        .where(
+          (entry) => selection.matches(
+            entry,
+            tags: _tagsFor(entry).map((tag) => tag.id),
+          ),
+        )
+        .toList();
   }
 
   List<TransactionEntry> get _visibleEntries =>
@@ -1006,9 +1140,6 @@ class _ReportBodyState extends State<_ReportBody> {
       ? entry.merchantName!.trim()
       : 'Unknown merchant';
 
-  String _merchantKey(String merchant) =>
-      merchant.trim().toLowerCase().split(RegExp(r'\s+')).join(' ');
-
   String _cardName(TransactionEntry entry) =>
       entry.cardDisplayName?.trim().isNotEmpty == true
       ? entry.cardDisplayName!.trim()
@@ -1024,10 +1155,23 @@ class _ReportBodyState extends State<_ReportBody> {
     return result;
   }
 
-  List<String> get _categoryOptions => _distinct([
-    ...widget.report.byCategory.map((row) => row.label),
-    ..._spendEntries.map(_categoryName),
-  ]);
+  Map<String, String> get _categoryOptions => {
+    for (final row in widget.report.byCategory)
+      if (row.categoryId != null) row.categoryId!: row.label,
+    for (final entry in _spendEntries)
+      (entry.categoryId ??
+              (entry.userCategoryId == null
+                  ? 'label:${SpendingSelection.normalize(entry.categoryLabel)}'
+                  : 'custom:${entry.userCategoryId}')):
+          entry.categoryLabel,
+    for (final entry in _spendEntries)
+      if (entry.parentCategoryId != null)
+        entry.parentCategoryId!: entry.categoryName ?? 'Category',
+    for (final entry in _spendEntries)
+      if (entry.parentUserCategoryId != null)
+        'custom:${entry.parentUserCategoryId}':
+            entry.categoryName ?? 'Category',
+  };
 
   List<String> get _merchantOptions => _distinct([
     ...widget.report.byMerchant.map((row) => row.label),
@@ -1255,11 +1399,15 @@ class _ReportBodyState extends State<_ReportBody> {
         categories: _categoryOptions,
         merchants: _merchantOptions,
         cards: _cardOptions,
+        tags: _allTags,
+        tagsFor: _tagsFor,
         initial: _SpendFilterSelection(
           payment: _paymentFilter,
           categories: _categoryFilters,
           merchant: _merchantFilter,
           card: _cardFilter,
+          tagIds: _tagFilters,
+          untagged: _untagged,
         ),
       ),
     );
@@ -1269,8 +1417,10 @@ class _ReportBodyState extends State<_ReportBody> {
       _categoryFilters = selection.categories;
       _merchantFilter = selection.merchant;
       _cardFilter = selection.card;
+      _tagFilters = selection.tagIds;
+      _untagged = selection.untagged;
     });
-    widget.onFiltersActiveChanged(_filtersActive);
+    _notifyFilters();
   }
 
   void _showAllCategories() {
@@ -1290,6 +1440,7 @@ class _ReportBodyState extends State<_ReportBody> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(transactionTagsProvider);
     final report = widget.report;
     final categoryRows = _categoryRows();
     final merchantRows = _merchantRows();
@@ -1314,6 +1465,31 @@ class _ReportBodyState extends State<_ReportBody> {
           AppSpace.xl,
         ),
         children: [
+          if (_tagFilters.isNotEmpty || _untagged) ...[
+            Wrap(
+              spacing: 6,
+              children: [
+                if (_untagged)
+                  InputChip(
+                    label: const Text('Untagged'),
+                    onDeleted: () {
+                      setState(() => _untagged = false);
+                      _notifyFilters();
+                    },
+                  ),
+                for (final tag in _allTags)
+                  if (_tagFilters.contains(tag.id))
+                    InputChip(
+                      label: Text(tag.name),
+                      onDeleted: () {
+                        setState(() => _tagFilters.remove(tag.id));
+                        _notifyFilters();
+                      },
+                    ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.sm),
+          ],
           Column(
             key: widget.overviewKey,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1358,7 +1534,30 @@ class _ReportBodyState extends State<_ReportBody> {
               child: Center(child: CircularProgressIndicator()),
             )
           else ...[
-            if (_tab == _SpendingTab.categories && categoryRows.isNotEmpty) ...[
+            if (_tab == _SpendingTab.tags) ...[
+              const _SectionHeader('Tags'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.md),
+                child: Text(
+                  'A transaction can have several tags. Tag totals can overlap.',
+                  style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                ),
+              ),
+              for (final tag in _visibleTags)
+                _ExpandableTagRow(
+                  tag: tag,
+                  total: _sum(_entriesForTag(tag.id)),
+                  txnCount: _entriesForTag(tag.id).length,
+                  categories: _categoryRowsForTag(tag.id),
+                  onCategoryTap: (category) =>
+                      _openTagCategoryTransactions(tag, category),
+                ),
+              if (_visibleEntries.every((entry) => _tagsFor(entry).isEmpty))
+                const _EmptyTabState(
+                  message: 'No tags on these transactions yet.',
+                ),
+            ] else if (_tab == _SpendingTab.categories &&
+                categoryRows.isNotEmpty) ...[
               _SectionHeader('Categories'),
               for (final row in categoryRows)
                 _ExpandableCategoryRow(
@@ -1476,8 +1675,8 @@ class _ReportBodyState extends State<_ReportBody> {
           (sum, entry) => sum + (entry.rewardValue ?? const Money.zero()),
         ),
       ),
-      income: EntryKindTotals.zero,
-      investment: EntryKindTotals.zero,
+      income: _filteredKindTotals(TxnEntryKind.income),
+      investment: _filteredKindTotals(TxnEntryKind.investment),
       previousSpend: EntryKindTotals.zero,
       byCategory: _categoryRows(),
       byMerchant: _merchantRows(),
@@ -1486,9 +1685,221 @@ class _ReportBodyState extends State<_ReportBody> {
       series: _seriesFor(report),
     );
   }
+
+  EntryKindTotals _filteredKindTotals(TxnEntryKind kind) {
+    final selection = SpendingSelection(
+      payment: _paymentFilter,
+      categories: _categoryFilters,
+      merchant: _merchantFilter,
+      card: _cardFilter,
+      tagIds: _tagFilters,
+      untagged: _untagged,
+    );
+    final rows = {for (final row in widget.transactions) row.id: row}.values
+        .where(
+          (row) =>
+              row.status == 'active' &&
+              row.entryKind == kind &&
+              selection.matches(row, tags: _tagsFor(row).map((tag) => tag.id)),
+        )
+        .toList();
+    return EntryKindTotals(
+      total: _sum(rows),
+      txnCount: rows.length,
+      rewards: const Money.zero(),
+    );
+  }
 }
 
-enum _SpendingTab { categories, merchants, cards }
+enum _SpendingTab { categories, merchants, cards, tags }
+
+class _ExpandableTagRow extends StatefulWidget {
+  final TransactionTag tag;
+  final Money total;
+  final int txnCount;
+  final List<SpendBreakdownRow> categories;
+  final ValueChanged<SpendBreakdownRow> onCategoryTap;
+
+  const _ExpandableTagRow({
+    required this.tag,
+    required this.total,
+    required this.txnCount,
+    required this.categories,
+    required this.onCategoryTap,
+  });
+
+  @override
+  State<_ExpandableTagRow> createState() => _ExpandableTagRowState();
+}
+
+class _ExpandableTagRowState extends State<_ExpandableTagRow> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) => CardSummaryPanel(
+    padding: EdgeInsets.zero,
+    margin: const EdgeInsets.only(bottom: AppSpace.sm),
+    child: ExpansionTile(
+      key: PageStorageKey<String>('spending-tag-${widget.tag.id}'),
+      onExpansionChanged: (expanded) => setState(() => _expanded = expanded),
+      tilePadding: const EdgeInsets.fromLTRB(
+        AppSpace.md,
+        AppSpace.sm,
+        AppSpace.sm,
+        AppSpace.sm,
+      ),
+      childrenPadding: const EdgeInsets.fromLTRB(
+        AppSpace.md,
+        0,
+        AppSpace.md,
+        AppSpace.sm,
+      ),
+      shape: const Border(),
+      collapsedShape: const Border(),
+      leading: const _SpendingVisualBadge(
+        visual: SpendingVisual(
+          icon: Icons.sell_rounded,
+          accent: BambooChartColors.teal,
+        ),
+        size: 38,
+      ),
+      title: Text(
+        widget.tag.name,
+        style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        '${widget.txnCount} ${widget.txnCount == 1 ? 'transaction' : 'transactions'}',
+        style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          MoneyText(
+            widget.total,
+            confidence: Confidence.estimated,
+            style: BambooFonts.ui(
+              13.5,
+              weight: FontWeight.w600,
+              color: BambooInk.ink900,
+            ),
+          ),
+          const SizedBox(width: AppSpace.xs),
+          AnimatedRotation(
+            turns: _expanded ? 0.5 : 0,
+            duration: const Duration(milliseconds: 180),
+            child: const Icon(Icons.keyboard_arrow_down_rounded),
+          ),
+        ],
+      ),
+      children: [
+        if (widget.categories.isEmpty)
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(
+              AppSpace.xl,
+              AppSpace.sm,
+              AppSpace.md,
+              AppSpace.md,
+            ),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                'No category details for this tag yet.',
+                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              ),
+            ),
+          )
+        else
+          for (var i = 0; i < widget.categories.length; i++) ...[
+            if (i > 0)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                color: BambooInk.hairlineOnPaper,
+                indent: AppSpace.xl,
+                endIndent: AppSpace.sm,
+              ),
+            _TagCategoryRow(
+              key: ValueKey(
+                'tag-category-${widget.tag.id}-${widget.categories[i].categoryId ?? widget.categories[i].label}',
+              ),
+              category: widget.categories[i],
+              onTap: () => widget.onCategoryTap(widget.categories[i]),
+            ),
+          ],
+      ],
+    ),
+  );
+}
+
+class _TagCategoryRow extends StatelessWidget {
+  final SpendBreakdownRow category;
+  final VoidCallback onTap;
+
+  const _TagCategoryRow({
+    super.key,
+    required this.category,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(
+          AppSpace.xl,
+          AppSpace.sm,
+          AppSpace.sm,
+          AppSpace.sm,
+        ),
+        child: Row(
+          children: [
+            _SpendingVisualBadge(
+              visual: spendingCategoryVisual(category.label),
+              size: 34,
+            ),
+            const SizedBox(width: AppSpace.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    category.label,
+                    style: BambooFonts.ui(13, color: BambooInk.ink900),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${category.txnCount} ${category.txnCount == 1 ? 'transaction' : 'transactions'} · View transactions',
+                    style: BambooFonts.ui(11, color: BambooInk.ink500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpace.sm),
+            MoneyText(
+              category.total,
+              confidence: Confidence.estimated,
+              style: BambooFonts.ui(
+                12.5,
+                weight: FontWeight.w600,
+                color: BambooInk.ink900,
+              ),
+            ),
+            const SizedBox(width: AppSpace.xs),
+            const Icon(Icons.chevron_right_rounded, color: BambooInk.ink500),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 class _SpendBucket {
   Money total = const Money.zero();
@@ -1531,6 +1942,7 @@ class _SpendingTabs extends StatelessWidget {
                       _SpendingTab.categories => 'Categories',
                       _SpendingTab.merchants => 'Merchants',
                       _SpendingTab.cards => 'Cards',
+                      _SpendingTab.tags => 'Tags',
                     },
                     textAlign: TextAlign.center,
                     style: BambooFonts.ui(
@@ -1574,21 +1986,27 @@ class _SpendFilterSelection {
   final Set<String> categories;
   final String? merchant;
   final String? card;
+  final Set<String> tagIds;
+  final bool untagged;
 
   const _SpendFilterSelection({
     this.payment,
     this.categories = const <String>{},
     this.merchant,
     this.card,
+    this.tagIds = const {},
+    this.untagged = false,
   });
 }
 
 class _SpendFilterSheet extends StatefulWidget {
   final SpendReport report;
   final List<TransactionEntry> transactions;
-  final List<String> categories;
+  final Map<String, String> categories;
   final List<String> merchants;
   final List<String> cards;
+  final List<TransactionTag> tags;
+  final List<TransactionTag> Function(TransactionEntry) tagsFor;
   final _SpendFilterSelection initial;
 
   const _SpendFilterSheet({
@@ -1597,6 +2015,8 @@ class _SpendFilterSheet extends StatefulWidget {
     required this.categories,
     required this.merchants,
     required this.cards,
+    required this.tags,
+    required this.tagsFor,
     required this.initial,
   });
 
@@ -1609,35 +2029,27 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
   late Set<String> _categories = {...widget.initial.categories};
   late String? _merchant = widget.initial.merchant;
   late String? _card = widget.initial.card;
+  late Set<String> _tagIds = {...widget.initial.tagIds};
+  late bool _untagged = widget.initial.untagged;
 
-  String _category(TransactionEntry entry) => entry.categoryLabel;
-
-  String _merchantName(TransactionEntry entry) =>
-      entry.merchantName?.trim().isNotEmpty == true
-      ? entry.merchantName!.trim()
-      : 'Unknown merchant';
-
-  String _merchantKey(String merchant) =>
-      merchant.trim().toLowerCase().split(RegExp(r'\s+')).join(' ');
-
-  String _cardName(TransactionEntry entry) =>
-      entry.cardDisplayName?.trim().isNotEmpty == true
-      ? entry.cardDisplayName!.trim()
-      : entry.instrument.label;
-
-  List<TransactionEntry> get _matching => widget.transactions.where((entry) {
-    if (_payment != null && entry.instrument != _payment) return false;
-    if (_categories.isNotEmpty &&
-        !_categories.contains(_category(entry).toLowerCase())) {
-      return false;
-    }
-    if (_merchant != null &&
-        _merchantKey(_merchantName(entry)) != _merchantKey(_merchant!)) {
-      return false;
-    }
-    if (_card != null && _cardName(entry) != _card) return false;
-    return true;
-  }).toList();
+  List<TransactionEntry> get _matching {
+    final selection = SpendingSelection(
+      payment: _payment,
+      categories: _categories,
+      merchant: _merchant,
+      card: _card,
+      tagIds: _tagIds,
+      untagged: _untagged,
+    );
+    return widget.transactions
+        .where(
+          (entry) => selection.matches(
+            entry,
+            tags: widget.tagsFor(entry).map((tag) => tag.id),
+          ),
+        )
+        .toList();
+  }
 
   Money get _total => _matching.fold<Money>(
     const Money.zero(),
@@ -1690,6 +2102,8 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
                   categories: {..._categories},
                   merchant: _merchant,
                   card: _card,
+                  tagIds: {..._tagIds},
+                  untagged: _untagged,
                 ),
               ),
               style: FilledButton.styleFrom(
@@ -1746,6 +2160,8 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
                             _categories = {};
                             _merchant = null;
                             _card = null;
+                            _tagIds = {};
+                            _untagged = false;
                           }),
                           style: TextButton.styleFrom(
                             foregroundColor: BambooInk.jade,
@@ -1812,7 +2228,9 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
                       onTap: widget.categories.isEmpty
                           ? null
                           : () => _chooseCategory(),
-                      child: Row(
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
                           if (_categories.isNotEmpty)
                             ..._categories.map(
@@ -1826,7 +2244,6 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
                                 ),
                               ),
                             ),
-                          const Spacer(),
                           const Icon(
                             Icons.add_rounded,
                             color: BambooInk.jade,
@@ -1839,6 +2256,37 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
                           ),
                         ],
                       ),
+                    ),
+                    const SizedBox(height: AppSpace.xl),
+                    _FilterLabel('Tags'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        FilterChip(
+                          label: const Text('Untagged'),
+                          selected: _untagged,
+                          onSelected: (value) => setState(() {
+                            _untagged = value;
+                            if (value) _tagIds.clear();
+                          }),
+                        ),
+                        for (final tag in widget.tags)
+                          FilterChip(
+                            label: Text(tag.name),
+                            selected: _tagIds.contains(tag.id),
+                            onSelected: (value) => setState(() {
+                              _untagged = false;
+                              value
+                                  ? _tagIds.add(tag.id)
+                                  : _tagIds.remove(tag.id);
+                            }),
+                          ),
+                      ],
+                    ),
+                    Text(
+                      'Matches any selected tag across categories.',
+                      style: BambooFonts.ui(12, color: BambooInk.ink500),
                     ),
                     const SizedBox(height: AppSpace.xl),
                     _FilterLabel('Merchant'),
@@ -1908,10 +2356,7 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
         '${months[end.month - 1]} ${end.year}';
   }
 
-  String _displayCategory(String key) => widget.categories.firstWhere(
-    (category) => category.toLowerCase() == key,
-    orElse: () => key,
-  );
+  String _displayCategory(String key) => widget.categories[key] ?? key;
 
   Widget _selectionField({
     IconData? icon,
@@ -2011,12 +2456,24 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
       );
 
   Future<void> _chooseCategory() async {
-    final category = await _chooseOption(
-      title: 'Add category',
-      options: widget.categories,
+    final category = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final category in widget.categories.entries)
+              ListTile(
+                title: Text(category.value),
+                onTap: () => Navigator.pop(context, category.key),
+              ),
+          ],
+        ),
+      ),
     );
     if (!mounted || category == null) return;
-    setState(() => _categories.add(category.toLowerCase()));
+    setState(() => _categories.add(category));
   }
 
   Future<void> _chooseMerchant() async {
@@ -2718,6 +3175,7 @@ class _SpendingMixCard extends StatefulWidget {
 
 class _SpendingMixCardState extends State<_SpendingMixCard> {
   String? _selectedCategoryKey;
+  bool _showAllCategories = false;
 
   String _categoryKey(SpendBreakdownRow row) => row.categoryId ?? row.label;
 
@@ -2745,8 +3203,15 @@ class _SpendingMixCardState extends State<_SpendingMixCard> {
             (row) => _categoryKey(row) == _selectedCategoryKey,
           );
     final selectedIndex = matchedIndex < 0 ? null : matchedIndex;
-    final visibleRows = nonZeroRows.take(compact ? 5 : 4).toList();
-    final remaining = nonZeroRows.length - visibleRows.length;
+    final initialVisibleCount = compact ? 5 : 4;
+    final visibleRows = nonZeroRows
+        .take(
+          _showAllCategories && !compact
+              ? nonZeroRows.length
+              : initialVisibleCount,
+        )
+        .toList();
+    final remaining = nonZeroRows.length - initialVisibleCount;
 
     return CardSummaryPanel(
       padding: compact
@@ -2805,88 +3270,121 @@ class _SpendingMixCardState extends State<_SpendingMixCard> {
             ],
           ),
           SizedBox(height: compact ? 6 : AppSpace.lg),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final stack = !compact && constraints.maxWidth < 360;
-              final legend = Column(
-                children: [
-                  for (final row in visibleRows)
-                    _MixLegendRow(
-                      row: row,
-                      total: total,
-                      compact: compact,
-                      onTap: () => _selectCategory(nonZeroRows.indexOf(row)),
-                    ),
-                  if (remaining > 0)
-                    Padding(
-                      padding: EdgeInsets.only(top: compact ? 2 : AppSpace.xs),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: compact
-                            ? Semantics(
-                                button: true,
-                                label: 'View all $remaining smaller categories',
-                                child: InkWell(
-                                  key: const ValueKey('spending_mix_view_all'),
-                                  onTap: widget.onViewAll,
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 4,
+          AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final stack = !compact && constraints.maxWidth < 360;
+                final legend = Column(
+                  children: [
+                    for (final row in visibleRows)
+                      _MixLegendRow(
+                        row: row,
+                        total: total,
+                        compact: compact,
+                        onTap: () => _selectCategory(nonZeroRows.indexOf(row)),
+                      ),
+                    if (remaining > 0)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: compact ? 2 : AppSpace.xs,
+                        ),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: compact
+                              ? Semantics(
+                                  button: true,
+                                  label:
+                                      'View all $remaining smaller categories',
+                                  child: InkWell(
+                                    key: const ValueKey(
+                                      'spending_mix_view_all',
                                     ),
-                                    child: Text(
-                                      '$remaining smaller ${remaining == 1 ? 'category' : 'categories'} · View all  ›',
-                                      style: BambooFonts.ui(
-                                        9.5,
-                                        color: BambooChartColors.violet,
+                                    onTap: widget.onViewAll,
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      child: Text(
+                                        '$remaining smaller ${remaining == 1 ? 'category' : 'categories'} · View all  ›',
+                                        style: BambooFonts.ui(
+                                          9.5,
+                                          color: BambooChartColors.violet,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Semantics(
+                                  button: true,
+                                  label: _showAllCategories
+                                      ? 'Show fewer categories'
+                                      : 'Show all $remaining more ${remaining == 1 ? 'category' : 'categories'}',
+                                  child: InkWell(
+                                    key: const ValueKey(
+                                      'spending_mix_toggle_categories',
+                                    ),
+                                    onTap: () => setState(
+                                      () => _showAllCategories =
+                                          !_showAllCategories,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      child: Text(
+                                        _showAllCategories
+                                            ? 'Show fewer categories  ↑'
+                                            : '+$remaining more ${remaining == 1 ? 'category' : 'categories'} below',
+                                        style: BambooFonts.ui(
+                                          11.5,
+                                          color: BambooInk.ink500,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              )
-                            : Text(
-                                '+$remaining more ${remaining == 1 ? 'category' : 'categories'} below',
-                                style: BambooFonts.ui(
-                                  11.5,
-                                  color: BambooInk.ink500,
-                                ),
-                              ),
+                        ),
                       ),
-                    ),
-                ],
-              );
+                  ],
+                );
 
-              if (stack) {
-                return Column(
+                if (stack) {
+                  return Column(
+                    children: [
+                      SpendingDonut(
+                        rows: nonZeroRows,
+                        total: total,
+                        selectedIndex: selectedIndex,
+                        onSelected: _selectCategory,
+                      ),
+                      const SizedBox(height: AppSpace.lg),
+                      legend,
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     SpendingDonut(
                       rows: nonZeroRows,
                       total: total,
+                      size: compact ? 106 : 132,
+                      compact: compact,
                       selectedIndex: selectedIndex,
                       onSelected: _selectCategory,
                     ),
-                    const SizedBox(height: AppSpace.lg),
-                    legend,
+                    SizedBox(width: compact ? 7 : AppSpace.lg),
+                    Expanded(child: legend),
                   ],
                 );
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SpendingDonut(
-                    rows: nonZeroRows,
-                    total: total,
-                    size: compact ? 106 : 132,
-                    compact: compact,
-                    selectedIndex: selectedIndex,
-                    onSelected: _selectCategory,
-                  ),
-                  SizedBox(width: compact ? 7 : AppSpace.lg),
-                  Expanded(child: legend),
-                ],
-              );
-            },
+              },
+            ),
           ),
         ],
       ),
@@ -3567,7 +4065,12 @@ class _MerchantGroup extends StatelessWidget {
                   style: BambooFonts.ui(11.5, color: BambooInk.ink900),
                 ),
                 subtitle: Text(
-                  entry.cardDisplayName ?? entry.instrument.label,
+                  [
+                    if (entry.categoryName != null) entry.categoryLabel,
+                    entry.cardDisplayName ?? entry.instrument.label,
+                  ].join('\n'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: BambooFonts.ui(10.5, color: BambooInk.ink500),
                 ),
                 trailing: MoneyText(

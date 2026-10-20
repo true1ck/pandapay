@@ -346,7 +346,8 @@ class SpendReport {
           .cast<Map<String, dynamic>>()
           .map(
             (e) => SpendBreakdownRow(
-              label: '${_displayCategoryName(e['categoryName'] as String?)} · ${e['subcategoryName'] as String? ?? 'Subcategory'}',
+              label:
+                  '${_displayCategoryName(e['categoryName'] as String?)} · ${e['subcategoryName'] as String? ?? 'Subcategory'}',
               total: _money(e['totalInr']),
               txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,
               categoryId: e['subcategoryId'] as String?,
@@ -432,7 +433,8 @@ String _displayCategoryName(String? value) {
 enum BudgetScope {
   overall('overall', 'All spending'),
   category('category', 'A category'),
-  card('card', 'One card');
+  card('card', 'One card'),
+  tag('tag', 'One tag');
 
   final String wireValue;
   final String label;
@@ -848,8 +850,7 @@ class RecurringSeries {
   });
 
   bool get hasActiveAutoPay =>
-      autopayStatus == 'active' ||
-      (autopayStatus == 'unknown' && isMandate);
+      autopayStatus == 'active' || (autopayStatus == 'unknown' && isMandate);
 
   bool get hasPastRenewal {
     final next = nextExpectedOn;
@@ -908,7 +909,8 @@ class RecurringSeries {
             json['isMandate'] == true || json['detectionSource'] == 'mandate',
         isUserEdited: json['isUserEdited'] == true,
         lifecycleStatus: json['lifecycleStatus'] as String? ?? 'active',
-        autopayStatus: json['autopayStatus'] as String? ??
+        autopayStatus:
+            json['autopayStatus'] as String? ??
             ((json['isMandate'] == true || json['detectionSource'] == 'mandate')
                 ? 'active'
                 : 'unknown'),

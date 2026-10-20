@@ -6,9 +6,11 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/import_models.dart';
 import 'package:pandapay/data/import_repository.dart';
 import 'package:pandapay/data/transaction_import_pipeline.dart';
+import 'package:pandapay/data/user_cards_repository.dart' show TxnInstrument;
 import 'package:pandapay/features/import/import_mapping_dialog.dart';
 import 'package:pandapay/features/import/import_review_panel.dart';
 
@@ -42,6 +44,7 @@ void main() {
           userCardsProvider.overrideWith((ref) async => const []),
           userCardsRepositoryProvider.overrideWithValue(null),
           importRepositoryProvider.overrideWithValue(null),
+          categoriesProvider.overrideWith((ref) async => const []),
         ],
         child: MaterialApp(
           home: Scaffold(body: ImportReviewPanel(session: session)),
@@ -64,6 +67,107 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Check the original statement'), findsNothing);
   });
+
+  testWidgets(
+    'import preview exposes and saves editable category and metadata',
+    (tester) async {
+      const dining = SpendCategory(
+        id: 'dining-id',
+        slug: 'dining',
+        name: 'Dining',
+      );
+      const groceries = SpendCategory(
+        id: 'grocery-id',
+        slug: 'groceries',
+        name: 'Groceries',
+      );
+      final session = TransactionImportSession(
+        fileDigest: 'file',
+        importSource: 'json',
+        statement: ParsedStatement(
+          transactions: [
+            ParsedStatementLine(
+              date: DateTime(2026, 10, 2),
+              description: 'Cafe',
+              amount: Money.fromRupees(250),
+              sourceAccount: 'HDFC Credit Card',
+              bankReference: 'ABC123456',
+              categoryHint: 'Dining',
+              note: 'Team lunch',
+              instrument: TxnInstrument.creditCard,
+              rail: 'online',
+            ),
+          ],
+        ),
+      )..destinations['HDFC Credit Card'] = 'instrument:credit_card';
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userCardsProvider.overrideWith((ref) async => const []),
+            userCardsRepositoryProvider.overrideWithValue(null),
+            importRepositoryProvider.overrideWithValue(null),
+            categoriesProvider.overrideWith(
+              (ref) async => const [dining, groceries],
+            ),
+          ],
+          child: MaterialApp(
+            home: Scaffold(body: ImportReviewPanel(session: session)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.textContaining('Category from source: Dining'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Category from source: Dining'), findsOneWidget);
+      expect(session.reviewLocked, isFalse);
+      final editButton = find.byKey(
+        const ValueKey('import-edit-transaction'),
+      );
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      await tester.tap(editButton);
+      await tester.pumpAndSettle();
+
+      // The review card remains behind the edit dialog; the modal exposes the
+      // matching, editable PandaPay category as well.
+      expect(find.text('Category from source: Dining'), findsOneWidget);
+      expect(find.text('Team lunch'), findsOneWidget);
+      final categoryDropdown = find.byKey(
+        const ValueKey('import-edit-category'),
+      );
+      await tester.ensureVisible(categoryDropdown);
+      await tester.tap(categoryDropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Groceries').last);
+      await tester.pumpAndSettle();
+      final noteField = find.widgetWithText(
+        TextField,
+        'Note / remarks (optional)',
+      );
+      await tester.ensureVisible(noteField);
+      await tester.enterText(noteField, 'Weekly shop');
+      final referenceField = find.widgetWithText(
+        TextField,
+        'Bank reference (optional)',
+      );
+      await tester.ensureVisible(referenceField);
+      await tester.enterText(referenceField, 'XYZ987654');
+      await tester.tap(find.text('Save reviewed row'));
+      await tester.pumpAndSettle();
+
+      expect(session.rows.single.categoryId, 'grocery-id');
+      expect(session.rows.single.categoryHint, 'Groceries');
+      expect(session.rows.single.note, 'Weekly shop');
+      expect(session.rows.single.bankReference, 'XYZ987654');
+      expect(session.inputFor(0).categoryId, 'grocery-id');
+      expect(session.inputFor(0).instrument, TxnInstrument.creditCard);
+      expect(session.inputFor(0).rail, 'online');
+    },
+  );
 
   testWidgets(
     'a rejected first batch unlocks discrepancy rows for manual correction',
@@ -105,6 +209,7 @@ void main() {
             userCardsProvider.overrideWith((ref) async => const []),
             userCardsRepositoryProvider.overrideWithValue(null),
             importRepositoryProvider.overrideWithValue(repository),
+            categoriesProvider.overrideWith((ref) async => const []),
           ],
           child: MaterialApp(
             home: Scaffold(body: ImportReviewPanel(session: session)),
@@ -126,12 +231,16 @@ void main() {
         250,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.ensureVisible(edit);
+      await tester.pumpAndSettle();
       await tester.tap(edit);
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Date (YYYY-MM-DD, optional time)'),
-        '2026-06-11',
+      final dateField = find.widgetWithText(
+        TextField,
+        'Date (YYYY-MM-DD, optional time)',
       );
+      await tester.ensureVisible(dateField);
+      await tester.enterText(dateField, '2026-06-11');
       await tester.tap(find.text('Save reviewed row'));
       await tester.pumpAndSettle();
 
@@ -190,6 +299,7 @@ void main() {
           overrides: [
             userCardsProvider.overrideWith((ref) async => const []),
             importRepositoryProvider.overrideWithValue(repository),
+            categoriesProvider.overrideWith((ref) async => const []),
           ],
           child: MaterialApp(
             home: Scaffold(body: ImportReviewPanel(session: session)),

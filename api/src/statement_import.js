@@ -5,6 +5,7 @@ const INSTRUMENTS = new Set(['credit_card', 'debit_card', 'cash', 'upi_bank', 'w
 function maskAccount(value) { return value?.replace(/\d{6,}/g, (digits) => `****${digits.slice(-4)}`) || null; }
 const HASH = /^[a-f0-9]{64}$/i;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const { importTagNames } = require('./transaction_tags');
 
 function calendarDate(value) {
   if (typeof value !== 'string') return false;
@@ -51,6 +52,7 @@ function validateStatementImport(body) {
   for (const [index, row] of body.transactions.entries()) {
     const prefix = `transactions[${index}]`;
     if (!row || typeof row !== 'object' || Array.isArray(row)) return `${prefix} must be an object`;
+    if (row.tagNames != null && (!Array.isArray(row.tagNames) || row.tagNames.length > 30 || row.tagNames.some((name) => typeof name !== 'string' || !name.trim() || name.trim().length > 60))) return `${prefix}.tagNames is invalid`;
     if (row.entryKind != null && !ENTRY_KINDS.has(row.entryKind)) return `${prefix}.entryKind is invalid`;
     if (row.instrument != null && !INSTRUMENTS.has(row.instrument)) return `${prefix}.instrument is invalid`;
     if (!money(row.amountInr) || row.amountInr <= 0) return `${prefix}.amountInr must be positive INR with at most two decimals`;
@@ -63,6 +65,10 @@ function validateStatementImport(body) {
     for (const field of ['categoryHint', 'subcategoryHint']) {
       if (row[field] != null && (typeof row[field] !== 'string' || row[field].length > 120)) return `${prefix}.${field} is invalid`;
     }
+    for (const field of ['categoryId', 'userCategoryId']) {
+      if (row[field] != null && (typeof row[field] !== 'string' || !UUID.test(row[field]))) return `${prefix}.${field} is invalid`;
+    }
+    if (row.note != null && (typeof row.note !== 'string' || row.note.length > 500)) return `${prefix}.note is invalid`;
     if (row.bankReference != null && (typeof row.bankReference !== 'string' || !/^[a-z0-9-]{6,40}$/i.test(row.bankReference))) return `${prefix}.bankReference is invalid`;
     if (row.sourceAccount != null && (typeof row.sourceAccount !== 'string' || row.sourceAccount.length > 200)) return `${prefix}.sourceAccount is invalid`;
     if (row.rail != null && !RAILS.has(row.rail)) return `${prefix}.rail is invalid`;
@@ -107,6 +113,44 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
         );
         if (!card.rows.length) return { status: 404, error: 'user_card not found' };
         instrument = card.rows[0].card_type === 'credit' ? 'credit_card' : card.rows[0].card_type === 'debit' ? 'debit_card' : 'other';
+      }
+
+      // User-selected categories must be valid for this account before we
+      // create an import batch. Cache repeated assignments so large files
+      // with the same category do not add one lookup per row.
+      const explicitAssignments = new Map();
+      for (const transaction of structuredTransactions || []) {
+        if (!transaction.categoryId && !transaction.userCategoryId) continue;
+        const cacheKey = `${transaction.categoryId || ''}:${transaction.userCategoryId || ''}`;
+        if (explicitAssignments.has(cacheKey)) continue;
+        if (transaction.userCategoryId) {
+          const category = await client.query(
+            `SELECT id, parent_category_id
+               FROM user_categories
+              WHERE id = $1 AND profile_id = $2`,
+            [transaction.userCategoryId, req.userId]
+          );
+          const selected = category.rows[0];
+          if (!selected || (transaction.categoryId || null) !== (selected.parent_category_id || null)) {
+            return { status: 400, error: 'A selected private category is unavailable or does not match its parent.' };
+          }
+          explicitAssignments.set(cacheKey, {
+            categoryId: selected.parent_category_id || null,
+            userCategoryId: selected.id,
+          });
+        } else {
+          const category = await client.query(
+            'SELECT id FROM spend_categories WHERE id = $1',
+            [transaction.categoryId]
+          );
+          if (!category.rows.length) {
+            return { status: 400, error: 'A selected category is unavailable.' };
+          }
+          explicitAssignments.set(cacheKey, {
+            categoryId: category.rows[0].id,
+            userCategoryId: null,
+          });
+        }
       }
       const statementSourceKey = importKey
         ? clientMutationSourceKey(req.userId, 'statement', importKey)
@@ -153,7 +197,8 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
       for (const [index, transaction] of (structuredTransactions || []).entries()) {
         const occurred = new Date(transaction.occurredAt);
         const merchantName = transaction.merchantName?.trim() || null;
-        const classification = importResolvers.resolveCategoryAssignmentForImport
+        const explicitKey = `${transaction.categoryId || ''}:${transaction.userCategoryId || ''}`;
+        const classification = explicitAssignments.get(explicitKey) || (importResolvers.resolveCategoryAssignmentForImport
           ? await importResolvers.resolveCategoryAssignmentForImport(client, req.userId, {
               merchantName,
               categoryHint: transaction.categoryHint,
@@ -164,7 +209,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
                 merchantName,
               }),
               userCategoryId: null,
-            };
+            });
         const sourceKey = clientMutationSourceKey(
           req.userId,
           transactionSource,
@@ -180,6 +225,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
           userCategoryId: classification.userCategoryId,
           rail: transaction.rail || 'unknown',
           merchantName,
+          note: transaction.note || null,
           source: transactionSource,
           sourceKey,
           backfill: true,
@@ -189,6 +235,7 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
         if (outcome.status !== 200 && outcome.status !== 201) {
           throw new Error(`statement transaction ${index} failed: ${outcome.error || outcome.status}`);
         }
+        if (transaction.tagNames?.length) await importTagNames(client, req.userId, outcome.transaction.id, transaction.tagNames);
         if (['exact_retry', 'high_confidence'].includes(outcome.duplicateKind)) {
           exactRetries += 1;
           if (outcome.transaction?.status === 'active') reconciled += 1;

@@ -539,7 +539,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoute.activity,
         builder: (context, state) => Scaffold(
           appBar: AppBar(title: const Text('Activity')),
-          body: const ActivityScreen(),
+          body: ActivityScreen(
+            initialTagIds: {?state.uri.queryParameters['tag']},
+            initialCategoryId: state.uri.queryParameters['category'],
+            initialCategoryLabel: state.uri.queryParameters['categoryLabel'],
+            initialFrom: DateTime.tryParse(
+              state.uri.queryParameters['from'] ?? '',
+            ),
+            initialTo: DateTime.tryParse(state.uri.queryParameters['to'] ?? ''),
+            initialSpendOnly: state.uri.queryParameters['spendOnly'] == 'true',
+          ),
         ),
       ),
       // D2/D3 — deep-linkable per ui-spec §1 ("transaction detail" named

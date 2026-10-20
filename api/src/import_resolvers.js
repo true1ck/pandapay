@@ -435,8 +435,23 @@ async function resolveCategoryAssignmentForImport(client, userId, options) {
 }
 
 async function resolveCategoryForImport(client, userId, {
-  merchantName, vpa, mcc, messageText,
+  merchantName, vpa, mcc, messageText, categoryHint,
 }) {
+  // Explicit category names from a reviewed import/export are stronger than
+  // merchant inference. Match only this product's exact built-in label/slug;
+  // arbitrary source text still falls through to the existing resolver.
+  const normalizedHint = normalizeMerchant(categoryHint || '');
+  if (normalizedHint) {
+    const hinted = await client.query(
+      `SELECT id FROM spend_categories
+        WHERE regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = $1
+           OR regexp_replace(lower(slug), '[^a-z0-9]', '', 'g') = $1
+        LIMIT 1`,
+      [normalizedHint]
+    );
+    if (hinted.rows[0]) return hinted.rows[0].id;
+  }
+
   const merchantKey = normalizeMerchant(merchantName);
   const normalized = ['unknown', 'unknownmerchant', 'other', 'na', 'notavailable'].includes(merchantKey) ? '' : merchantKey;
 

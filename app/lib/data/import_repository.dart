@@ -20,6 +20,11 @@ class StatementTransactionInput {
   final String? bankReference;
   final String? categoryHint;
   final String? subcategoryHint;
+  final List<String> tagNames;
+  final String? categoryId;
+  final String? userCategoryId;
+  final String? rail;
+  final String? note;
   final TxnEntryKind entryKind;
   final TxnInstrument? instrument;
 
@@ -33,6 +38,11 @@ class StatementTransactionInput {
     this.bankReference,
     this.categoryHint,
     this.subcategoryHint,
+    this.tagNames = const [],
+    this.categoryId,
+    this.userCategoryId,
+    this.rail,
+    this.note,
     this.instrument,
   });
 
@@ -47,6 +57,11 @@ class StatementTransactionInput {
     if (bankReference != null) 'bankReference': bankReference,
     if (categoryHint != null) 'categoryHint': categoryHint,
     if (subcategoryHint != null) 'subcategoryHint': subcategoryHint,
+    if (tagNames.isNotEmpty) 'tagNames': tagNames,
+    if (categoryId != null) 'categoryId': categoryId,
+    if (userCategoryId != null) 'userCategoryId': userCategoryId,
+    if (rail != null) 'rail': rail,
+    if (note != null) 'note': note,
   };
 }
 

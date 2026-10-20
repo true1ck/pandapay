@@ -654,6 +654,10 @@ async function budgetSpend(client, userId, budget, { start, end }) {
   } else if (budget.scope === 'card') {
     params.push(budget.scope_ref_id);
     conditions.push(`user_card_id = $${params.length}`);
+  } else if (budget.scope === 'tag') {
+    params.push(budget.scope_ref_id);
+    conditions.push(`EXISTS(SELECT 1 FROM transaction_tag_links l WHERE l.profile_id=transactions.profile_id
+      AND l.transaction_id=transactions.id AND l.tag_id=$${params.length} AND l.deleted_at IS NULL)`);
   }
   const result = await client.query(
     `SELECT COALESCE(SUM(amount_inr), 0) AS total, COUNT(*) AS txn_count

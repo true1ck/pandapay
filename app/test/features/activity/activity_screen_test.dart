@@ -41,7 +41,34 @@ class _FakeUserCardsRepository implements UserCardsRepository {
       result = result.where((t) => t.userCardId == cardId).toList();
     }
     if (categoryId != null) {
-      result = result.where((t) => t.categoryId == categoryId).toList();
+      result = result
+          .where(
+            (t) =>
+                t.categoryId == categoryId || t.parentCategoryId == categoryId,
+          )
+          .toList();
+    }
+    if (from != null) {
+      final start = DateTime(from.year, from.month, from.day);
+      result = result.where((t) {
+        final date = DateTime(
+          t.occurredAt.year,
+          t.occurredAt.month,
+          t.occurredAt.day,
+        );
+        return !date.isBefore(start);
+      }).toList();
+    }
+    if (to != null) {
+      final endExclusive = DateTime(to.year, to.month, to.day + 1);
+      result = result.where((t) {
+        final date = DateTime(
+          t.occurredAt.year,
+          t.occurredAt.month,
+          t.occurredAt.day,
+        );
+        return date.isBefore(endExclusive);
+      }).toList();
     }
     return result;
   }
@@ -57,6 +84,7 @@ TransactionEntry _txn({
   String? merchantName,
   String? categoryId,
   String? categoryName,
+  List<TransactionTag> tags = const [],
   String userCardId = 'uc1',
   TxnEntryKind entryKind = TxnEntryKind.spend,
   String source = 'manual',
@@ -68,6 +96,7 @@ TransactionEntry _txn({
     merchantName: merchantName,
     categoryId: categoryId,
     categoryName: categoryName,
+    tags: tags,
     userCardId: userCardId,
     entryKind: entryKind,
     source: source,
@@ -79,13 +108,14 @@ Future<void> _pump(
   WidgetTester tester, {
   required _FakeUserCardsRepository repo,
   required List<UserCard> cards,
+  ActivityScreen activityScreen = const ActivityScreen(),
 }) async {
   final router = GoRouter(
     initialLocation: '/',
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) => const Scaffold(body: ActivityScreen()),
+        builder: (context, state) => Scaffold(body: activityScreen),
       ),
       GoRoute(
         path: '/activity/:id',
@@ -110,6 +140,73 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('initial tag/category drilldown only shows matching spending', (
+    tester,
+  ) async {
+    const trip = TransactionTag(id: 'trip', name: 'Thailand trip');
+    const office = TransactionTag(id: 'office', name: 'Office');
+    final repo = _FakeUserCardsRepository([
+      _txn(
+        id: 'match',
+        amount: Money.fromRupees(500),
+        occurredAt: DateTime(2026, 8, 10),
+        merchantName: 'Bangkok Cafe',
+        categoryId: 'dining',
+        categoryName: 'Dining',
+        tags: [trip],
+      ),
+      _txn(
+        id: 'wrong-tag',
+        amount: Money.fromRupees(250),
+        occurredAt: DateTime(2026, 8, 11),
+        merchantName: 'Office Cafe',
+        categoryId: 'dining',
+        categoryName: 'Dining',
+        tags: [office],
+      ),
+      _txn(
+        id: 'wrong-category',
+        amount: Money.fromRupees(1000),
+        occurredAt: DateTime(2026, 8, 12),
+        merchantName: 'Bangkok Taxi',
+        categoryId: 'travel',
+        categoryName: 'Travel',
+        tags: [trip],
+      ),
+      _txn(
+        id: 'income',
+        amount: Money.fromRupees(10000),
+        occurredAt: DateTime(2026, 8, 13),
+        merchantName: 'Cafe refund',
+        categoryId: 'dining',
+        categoryName: 'Dining',
+        tags: [trip],
+        entryKind: TxnEntryKind.income,
+      ),
+    ]);
+    await _pump(
+      tester,
+      repo: repo,
+      cards: const [],
+      activityScreen: ActivityScreen(
+        initialTagIds: {'trip'},
+        initialCategoryId: 'dining',
+        initialFrom: DateTime(2026, 8, 1),
+        initialTo: DateTime(2026, 8, 31),
+        initialSpendOnly: true,
+      ),
+    );
+
+    expect(find.text('Bangkok Cafe'), findsOneWidget);
+    expect(find.text('Office Cafe'), findsNothing);
+    expect(find.text('Bangkok Taxi'), findsNothing);
+    expect(find.text('Cafe refund'), findsNothing);
+    expect(find.text('Spending'), findsOneWidget);
+    expect(repo.lastFetchArgs?.single['categoryId'], 'dining');
+    expect(repo.lastFetchArgs?.single['from'], DateTime(2026, 8, 1));
+    expect(repo.lastFetchArgs?.single['to'], DateTime(2026, 8, 31));
+  });
+
   testWidgets('shows an empty state when there are no transactions', (
     tester,
   ) async {

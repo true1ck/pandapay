@@ -87,34 +87,26 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
         ),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      }
     }
   }
 
   List<int> _buildPdf(String csv) {
     final document = PdfDocument();
     final font = PdfStandardFont(PdfFontFamily.helvetica, 8);
-    var page = document.pages.add();
+    final page = document.pages.add();
     final size = page.getClientSize();
-    var y = 24.0;
-    for (final rawLine in csv.split('\n')) {
-      final line = rawLine.length > 150
-          ? '${rawLine.substring(0, 147)}…'
-          : rawLine;
-      if (y > size.height - 24) {
-        page = document.pages.add();
-        y = 24;
-      }
-      page.graphics.drawString(
-        line,
-        font,
-        bounds: Rect.fromLTWH(24, y, size.width - 48, 14),
-      );
-      y += 14;
-    }
+    // Keep every column and long note. PdfTextElement wraps long CSV rows and
+    // paginates the report instead of silently truncating content at 150 chars.
+    PdfTextElement(text: csv, font: font).draw(
+      page: page,
+      bounds: Rect.fromLTWH(24, 24, size.width - 48, size.height - 48),
+      format: PdfLayoutFormat(layoutType: PdfLayoutType.paginate),
+    );
     final bytes = document.saveSync();
     document.dispose();
     return bytes;
@@ -166,7 +158,7 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
               ),
               const SizedBox(height: AppSpace.sm),
               Text(
-                'Export a copy of your transactions and/or cards. Nothing here is shared with anyone else.',
+                'Export a copy of your transactions and/or cards. Transaction exports include category, subcategory, tags, type, payment method, and notes when available. Nothing here is shared with anyone else.',
                 style: BambooFonts.ui(13.5, color: BambooInk.ink500),
               ),
               const SizedBox(height: AppSpace.lg),
@@ -202,6 +194,17 @@ class _DataExportScreenState extends ConsumerState<DataExportScreen> {
                       onSelected: (_) => setState(() => _scope = s),
                     ),
                 ],
+              ),
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                _format == 'pdf'
+                    ? 'PDF is a readable report. Choose CSV or JSON if you plan to import the transactions back into PandaPay.'
+                    : _scope == 'cards'
+                    ? 'This export contains card details, not transaction rows, so it cannot be used as a transaction import.'
+                    : _scope == 'all' && _format == 'csv'
+                    ? 'The combined CSV keeps transactions and cards in separate sections. Import reads the transaction section; JSON is best for a complete structured backup.'
+                    : 'This format can be reviewed before importing. Categories, subcategories, and tags are kept separately. CSV tags use a JSON list to preserve every name.',
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),
               const SizedBox(height: AppSpace.lg),
               Text(

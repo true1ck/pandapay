@@ -53,6 +53,7 @@ import '../data/token_store.dart';
 import '../data/upi_payment_service.dart';
 import '../data/user_cards_repository.dart';
 import '../data/user_categories_repository.dart';
+import '../data/transaction_tags_repository.dart';
 import '../data/user_settings_api.dart';
 import '../features/geofence/geofence_monitor_service.dart';
 import '../features/geofence/background_alerts_controller.dart';
@@ -1155,6 +1156,12 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
     apiBaseUrl: _apiBaseUrl,
     accessToken: token,
     client: ref.read(authenticatedHttpClientProvider),
+    onTransactionSaved: (mutationId, transactionId) {
+      if (ref.read(cacheNamespaceProvider) != namespace) return;
+      ref
+          .read(transactionTagsProvider)
+          ?.remapTransaction('local-outbox:$mutationId', transactionId);
+    },
     onSmsCaptured: (message) async {
       if (ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError(
@@ -3367,6 +3374,31 @@ final responseCacheProvider = FutureProvider<ResponseCache>((ref) async {
   ref.onDispose(store.dispose);
   return cache;
 });
+
+final transactionTagsProvider =
+    ChangeNotifierProvider<TransactionTagsRepository?>((ref) {
+      final token = _stableSessionToken(ref);
+      if (token == null) return null;
+      final namespace = ref.watch(cacheNamespaceProvider);
+      final database = ref.watch(appDatabaseProvider).valueOrNull;
+      if (database == null) return null;
+      final repository = TransactionTagsRepository(
+        database: database,
+        namespace: namespace,
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: token,
+        client: ref.read(authenticatedHttpClientProvider),
+        onChanged: () {
+          ref
+              .read(responseCacheProvider)
+              .valueOrNull
+              ?.markAccountStale(namespace);
+          ref.invalidate(budgetsProvider);
+        },
+      );
+      Future.microtask(repository.sync);
+      return repository;
+    });
 
 /// Reactive entity commits, independent of token rotation and screen-specific
 /// invalidation lists. No initial event: opening a store is not a data change.

@@ -6,6 +6,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/category_picker.dart';
+import '../../app/transaction_tag_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
@@ -37,6 +38,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   final _merchantController = TextEditingController();
   String? _userCardId;
   String? _categoryId;
+  Set<String> _tagIds = {};
+  bool _tagsEdited = false;
+  TransactionEntry? _originalEntry;
   DateTime? _occurredAt;
   TxnInstrument _instrument = TxnInstrument.creditCard;
   TxnEntryKind _entryKind = TxnEntryKind.spend;
@@ -55,6 +59,14 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   void _initFrom(TransactionEntry entry) {
     if (_initialized) return;
     _initialized = true;
+    _originalEntry = entry;
+    _tagIds =
+        (ref
+                    .read(transactionTagsProvider)
+                    ?.tagsForTransaction(entry.id, fallback: entry.tags) ??
+                entry.tags)
+            .map((t) => t.id)
+            .toSet();
     _amountController.text = entry.amount.rupees.toStringAsFixed(2);
     _merchantController.text = entry.merchantName ?? '';
     _userCardId = entry.userCardId;
@@ -87,7 +99,28 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       _error = null;
     });
     try {
-      await _submitEdit(amount);
+      final original = _originalEntry;
+      final financialChanged =
+          original == null ||
+          original.amount != Money.fromRupees(amount) ||
+          original.categoryId != _categoryId ||
+          original.userCardId != _userCardId ||
+          original.occurredAt != _occurredAt ||
+          (original.merchantName ?? '') != _merchantController.text.trim() ||
+          original.instrument != _instrument ||
+          original.entryKind != _entryKind ||
+          original.rail != _rail;
+      if (_tagsEdited) {
+        final tags = ref.read(transactionTagsProvider);
+        if (tags == null)
+          throw StateError('Tags are still loading. Please retry.');
+        await tags.replace(
+          widget.transactionId,
+          _tagIds,
+          fallback: original?.tags ?? [],
+        );
+      }
+      if (financialChanged) await _submitEdit(amount);
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
       ref.invalidate(transactionsProvider);
@@ -189,6 +222,16 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tagRepository = ref.watch(transactionTagsProvider);
+    if (!_tagsEdited && _originalEntry != null && tagRepository != null) {
+      _tagIds = tagRepository
+          .tagsForTransaction(
+            widget.transactionId,
+            fallback: _originalEntry!.tags,
+          )
+          .map((tag) => tag.id)
+          .toSet();
+    }
     final txn = ref.watch(
       _editTransactionProvider((
         id: widget.transactionId,
@@ -429,6 +472,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                             setState(() => _occurredAt = picked);
                         },
                       ),
+                    ),
+                    const SizedBox(height: AppSpace.lg),
+                    TransactionTagField(
+                      selectedIds: _tagIds,
+                      enabled: !_saving,
+                      onChanged: (ids) => setState(() {
+                        _tagIds = ids;
+                        _tagsEdited = true;
+                      }),
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: AppSpace.md),

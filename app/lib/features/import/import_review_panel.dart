@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +8,8 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/catalogue_repository.dart'
+    show SpendCategory, categoryIdForServer, userCategoryIdForServer;
 import '../../data/import_models.dart';
 import '../../data/transaction_import_pipeline.dart';
 import '../../data/user_cards_repository.dart';
@@ -26,6 +30,11 @@ class ImportReviewPanel extends ConsumerStatefulWidget {
 }
 
 class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
+  late final _defaultTags = TextEditingController(
+    text: widget.session.defaultTagNames.isEmpty
+        ? ''
+        : jsonEncode(widget.session.defaultTagNames),
+  );
   bool _done = false;
   String _filter = 'All';
   List<TransactionEntry> _saved = [];
@@ -33,6 +42,47 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
   bool _savedCheckUnavailable = false;
   bool _destinationsSuggested = false;
   String? _duplicateError;
+
+  @override
+  void dispose() {
+    _defaultTags.dispose();
+    super.dispose();
+  }
+
+  Future<void> _tagSelected() async {
+    final controller = TextEditingController();
+    final names = await showDialog<List<String>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Tag ${session.selected.length} selected transactions'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Tags',
+            helperText: 'Separate names with semicolons, or paste a JSON list.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final names = parseImportedTagNames(controller.text);
+              if (names.any((name) => name.length > 80)) return;
+              Navigator.pop(context, names);
+            },
+            child: const Text('Apply tags'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (names == null || !mounted) return;
+    setState(() => session.applyTagsToSelected(names));
+  }
 
   @override
   void initState() {
@@ -95,6 +145,11 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       );
       setState(() {});
       await future;
+      try {
+        await ref.read(transactionTagsProvider)?.sync();
+      } catch (_) {
+        // The import already committed. The normal sync loop can retry tag reads.
+      }
       if (mounted) setState(() => _done = true);
     } catch (error) {
       if (mounted) {
@@ -114,6 +169,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       context: context,
       builder: (_) => _EditImportRow(
         row: row,
+        categories: ref.read(categoriesProvider).valueOrNull ?? const [],
         raw: rejected?.cells.join(' | '),
         reason: index == null
             ? rejected?.reason
@@ -169,6 +225,8 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       );
     }
     final cards = ref.watch(userCardsProvider);
+    final categories =
+        ref.watch(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
     final bankAccounts = ref.watch(bankAccountSummariesProvider);
     final bankDataResolved = bankAccounts.hasValue || bankAccounts.hasError;
     if (cards.hasValue && bankDataResolved && !_destinationsSuggested) {
@@ -289,6 +347,27 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                             ? null
                             : _checkDuplicates,
                         child: const Text('Recheck saved transactions'),
+                      ),
+                      TextField(
+                        key: const ValueKey('import-default-tags'),
+                        controller: _defaultTags,
+                        enabled: !locked,
+                        decoration: InputDecoration(
+                          labelText: 'Tags for entire import (optional)',
+                          helperText:
+                              'Added to every imported row alongside its source tags. Separate names with semicolons, or paste a JSON list.',
+                          helperMaxLines: 3,
+                          errorText: session.defaultTagsError,
+                        ),
+                        onChanged: (value) => setState(
+                          () => session.setDefaultTags(parseImportedTagNames(value)),
+                        ),
+                      ),
+                      TextButton.icon(
+                        key: const ValueKey('import-tag-selected'),
+                        onPressed: locked || selected.isEmpty ? null : _tagSelected,
+                        icon: const Icon(Icons.label_outline),
+                        label: Text('Tag ${selected.length} selected rows'),
                       ),
                       Wrap(
                         spacing: 6,
@@ -522,6 +601,14 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                 return _ImportTransactionCard(
                   key: ValueKey('import-row-$rowIndex'),
                   row: row,
+                  tagNames: normalizeImportedTagNames([
+                    ...row.tagNames,
+                    ...session.defaultTagNames,
+                  ]),
+                  categories: categories,
+                  instrument:
+                      row.instrument ??
+                      session.instruments[session.accountFor(row)],
                   amount: '₹${row.amount.rupees.toStringAsFixed(2)}',
                   date: DateFormat('d MMM').format(row.date),
                   sourceLabel: _sourceLabel(session.importSource),
@@ -625,8 +712,53 @@ String _sourceLabel(String source) {
   return source.isEmpty ? 'Imported statement' : source;
 }
 
+String _railLabel(String rail) => switch (rail) {
+  'upi_qr' => 'UPI QR',
+  'swipe' => 'Card swipe',
+  'online' => 'Online',
+  'contactless' => 'Contactless',
+  'atm' => 'ATM',
+  'emi' => 'EMI',
+  _ => 'Unknown rail',
+};
+
+String _rowCategoryLabel(
+  ParsedStatementLine row,
+  List<SpendCategory> categories,
+) {
+  final selectedId = row.userCategoryId == null
+      ? row.categoryId
+      : 'custom:${row.userCategoryId}';
+  final selected = categories.where((category) => category.id == selectedId);
+  if (selected.isNotEmpty) {
+    return _qualifiedCategoryName(selected.first, categories);
+  }
+  final parts = [row.categoryHint, row.subcategoryHint]
+      .whereType<String>()
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList();
+  if (parts.isNotEmpty) return 'Category from source: ${parts.join(' · ')}';
+  return 'Category: automatic classification during import';
+}
+
+String _qualifiedCategoryName(
+  SpendCategory category,
+  List<SpendCategory> categories,
+) {
+  if (!category.isSubcategory) return category.name;
+  final parentId = category.parentCategoryId ?? category.parentUserCategoryId;
+  final parent = categories.where((candidate) => candidate.id == parentId);
+  return parent.isEmpty
+      ? category.name
+      : '${parent.first.name} · ${category.name}';
+}
+
 class _ImportTransactionCard extends StatelessWidget {
   final ParsedStatementLine row;
+  final List<String> tagNames;
+  final List<SpendCategory> categories;
+  final TxnInstrument? instrument;
   final String amount, date, sourceLabel, accountLabel, sourceRow, kindLabel;
   final String? issue;
   final bool selected, canSelect, duplicate, locked;
@@ -636,6 +768,9 @@ class _ImportTransactionCard extends StatelessWidget {
   const _ImportTransactionCard({
     super.key,
     required this.row,
+    required this.tagNames,
+    required this.categories,
+    required this.instrument,
     required this.amount,
     required this.date,
     required this.sourceLabel,
@@ -782,6 +917,44 @@ class _ImportTransactionCard extends StatelessWidget {
                 ),
               ),
             Padding(
+              padding: const EdgeInsets.only(left: 42, top: 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.category_outlined, size: 15, color: muted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _rowCategoryLabel(row, categories),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(12.5, color: muted),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (row.note?.isNotEmpty == true)
+              Padding(
+                padding: const EdgeInsets.only(left: 42, top: 3),
+                child: Text(
+                  'Note: ${row.note}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(12, color: muted),
+                ),
+              ),
+            if (row.bankReference?.isNotEmpty == true)
+              Padding(
+                padding: const EdgeInsets.only(left: 42, top: 3),
+                child: Text(
+                  'Bank reference: ${row.bankReference}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.ui(12, color: muted),
+                ),
+              ),
+            Padding(
               padding: const EdgeInsets.only(left: 42, top: 8),
               child: Row(
                 children: [
@@ -808,10 +981,32 @@ class _ImportTransactionCard extends StatelessWidget {
                           background: const Color(0xFFF0F2FA),
                           icon: Icons.account_balance_wallet_outlined,
                         ),
+                        if (instrument != null)
+                          _ImportInfoChip(
+                            label: instrument!.label,
+                            foreground: BambooInk.ink700,
+                            background: const Color(0xFFF0F2FA),
+                            icon: Icons.credit_card_outlined,
+                          ),
+                        if (row.rail != null)
+                          _ImportInfoChip(
+                            label: _railLabel(row.rail!),
+                            foreground: BambooInk.ink700,
+                            background: const Color(0xFFF0F2FA),
+                            icon: Icons.payment_outlined,
+                          ),
+                        for (final tag in tagNames)
+                          _ImportInfoChip(
+                            label: tag,
+                            foreground: BambooInk.jade,
+                            background: BambooInk.paperMuted,
+                            icon: Icons.label_outline,
+                          ),
                       ],
                     ),
                   ),
                   IconButton(
+                    key: const ValueKey('import-edit-transaction'),
                     tooltip: 'Edit transaction',
                     onPressed: locked ? null : onEdit,
                     visualDensity: VisualDensity.compact,
@@ -868,9 +1063,15 @@ class _ImportInfoChip extends StatelessWidget {
 
 class _EditImportRow extends StatefulWidget {
   final ParsedStatementLine? row;
+  final List<SpendCategory> categories;
   final String? raw;
   final String? reason;
-  const _EditImportRow({this.row, this.raw, this.reason});
+  const _EditImportRow({
+    this.row,
+    this.categories = const [],
+    this.raw,
+    this.reason,
+  });
   @override
   State<_EditImportRow> createState() => _EditImportRowState();
 }
@@ -885,6 +1086,24 @@ class _EditImportRowState extends State<_EditImportRow> {
   late final _amount = TextEditingController(
     text: widget.row?.amount.rupees.toStringAsFixed(2) ?? '',
   );
+  late final _sourceAccount = TextEditingController(
+    text: widget.row?.sourceAccount ?? '',
+  );
+  late final _bankReference = TextEditingController(
+    text: widget.row?.bankReference ?? '',
+  );
+  late final _categoryHint = TextEditingController(
+    text: widget.row?.categoryHint ?? '',
+  );
+  late final _subcategoryHint = TextEditingController(
+    text: widget.row?.subcategoryHint ?? '',
+  );
+  late final _tags = TextEditingController(
+    text: widget.row?.tagNames.isNotEmpty == true
+        ? jsonEncode(widget.row!.tagNames)
+        : '',
+  );
+  late final _note = TextEditingController(text: widget.row?.note ?? '');
   late var _kind = widget.row?.isTransfer == true
       ? 'transfer'
       : widget.row?.isInvestment == true
@@ -892,12 +1111,79 @@ class _EditImportRowState extends State<_EditImportRow> {
       : widget.row?.isCredit == true
       ? 'income'
       : 'spend';
+  late String? _selectedCategoryId = _initialCategoryId();
+  late TxnInstrument? _instrument = widget.row?.instrument;
+  late String? _rail = widget.row?.rail;
   String? _error;
+
+  String? _initialCategoryId() {
+    final row = widget.row;
+    if (row == null) return null;
+    if (row.userCategoryId != null) return 'custom:${row.userCategoryId}';
+    if (row.categoryId != null) return row.categoryId;
+    final categoryHint = row.categoryHint?.trim().toLowerCase();
+    final subcategoryHint = row.subcategoryHint?.trim().toLowerCase();
+    if (subcategoryHint?.isNotEmpty == true) {
+      for (final category in widget.categories) {
+        if (!category.isSubcategory ||
+            category.name.toLowerCase() != subcategoryHint) {
+          continue;
+        }
+        final parentId =
+            category.parentCategoryId ?? category.parentUserCategoryId;
+        final parent = widget.categories.where((item) => item.id == parentId);
+        if (parent.isNotEmpty &&
+            parent.first.name.toLowerCase() == categoryHint) {
+          return category.id;
+        }
+      }
+    }
+    if (categoryHint?.isNotEmpty == true) {
+      for (final category in widget.categories) {
+        if (!category.isSubcategory &&
+            category.name.toLowerCase() == categoryHint) {
+          return category.id;
+        }
+      }
+    }
+    return null;
+  }
+
+  void _selectCategory(String? value) {
+    setState(() {
+      _selectedCategoryId = value;
+      if (value == null) {
+        _categoryHint.clear();
+        _subcategoryHint.clear();
+        return;
+      }
+      final match = widget.categories.where((category) => category.id == value);
+      if (match.isEmpty) return;
+      final category = match.first;
+      if (category.isSubcategory) {
+        final parentId =
+            category.parentCategoryId ?? category.parentUserCategoryId;
+        final parent = widget.categories.where((item) => item.id == parentId);
+        _categoryHint.text = parent.isEmpty ? '' : parent.first.name;
+        _subcategoryHint.text = category.name;
+      } else {
+        _categoryHint.text = category.name;
+        _subcategoryHint.clear();
+      }
+    });
+  }
+
   @override
   void dispose() {
     _date.dispose();
     _description.dispose();
     _amount.dispose();
+    _sourceAccount.dispose();
+    _bankReference.dispose();
+    _categoryHint.dispose();
+    _subcategoryHint.dispose();
+    _tags.dispose();
+    _note.dispose();
     super.dispose();
   }
 
@@ -924,6 +1210,10 @@ class _EditImportRowState extends State<_EditImportRow> {
       );
       return;
     }
+    final selectedCategory = widget.categories
+        .where((category) => category.id == _selectedCategoryId)
+        .firstOrNull;
+    final bankReference = _bankReference.text.trim();
     final row = ParsedStatementLine(
       date: date,
       description: _description.text.trim(),
@@ -931,10 +1221,26 @@ class _EditImportRowState extends State<_EditImportRow> {
       isCredit: _kind == 'income',
       isTransfer: _kind == 'transfer',
       isInvestment: _kind == 'investment',
-      sourceAccount: widget.row?.sourceAccount,
-      bankReference: widget.row?.bankReference,
-      categoryHint: widget.row?.categoryHint,
-      subcategoryHint: widget.row?.subcategoryHint,
+      sourceAccount: _sourceAccount.text.trim().isEmpty
+          ? null
+          : _sourceAccount.text.trim(),
+      bankReference: bankReference.isEmpty ? null : bankReference,
+      categoryHint: _categoryHint.text.trim().isEmpty
+          ? null
+          : _categoryHint.text.trim(),
+      subcategoryHint: _subcategoryHint.text.trim().isEmpty
+          ? null
+          : _subcategoryHint.text.trim(),
+      tagNames: parseImportedTagNames(_tags.text),
+      categoryId: selectedCategory == null
+          ? null
+          : categoryIdForServer(selectedCategory.id, widget.categories),
+      userCategoryId: selectedCategory == null
+          ? null
+          : userCategoryIdForServer(selectedCategory.id),
+      instrument: _instrument,
+      rail: _rail,
+      note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       sourceRowId: widget.row?.sourceRowId,
     );
     final error = validateImportedTransaction(row);
@@ -997,6 +1303,140 @@ class _EditImportRowState extends State<_EditImportRow> {
                 DropdownMenuItem(value: 'transfer', child: Text('Transfer')),
               ],
               onChanged: (v) => _kind = v!,
+            ),
+            TextField(
+              controller: _sourceAccount,
+              maxLength: 200,
+              decoration: const InputDecoration(
+                labelText: 'Source account / card label',
+                helperText: 'The account shown on the original statement.',
+              ),
+            ),
+            TextField(
+              controller: _bankReference,
+              maxLength: 40,
+              decoration: const InputDecoration(
+                labelText: 'Bank reference (optional)',
+                helperText: '6–40 letters, numbers, or hyphens.',
+              ),
+            ),
+            DropdownButtonFormField<String?>(
+              key: const ValueKey('import-edit-category'),
+              isExpanded: true,
+              initialValue: _selectedCategoryId,
+              decoration: const InputDecoration(
+                labelText: 'PandaPay category',
+                helperText:
+                    'Choose a category, or use automatic classification.',
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('Automatic classification'),
+                ),
+                for (final category in widget.categories)
+                  DropdownMenuItem<String?>(
+                    value: category.id,
+                    child: Text(
+                      _qualifiedCategoryName(category, widget.categories),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: _selectCategory,
+            ),
+            TextField(
+              controller: _categoryHint,
+              maxLength: 120,
+              onChanged: (_) {
+                if (_selectedCategoryId != null) {
+                  setState(() => _selectedCategoryId = null);
+                }
+              },
+              decoration: const InputDecoration(
+                labelText: 'Category from source (optional)',
+              ),
+            ),
+            TextField(
+              controller: _subcategoryHint,
+              maxLength: 120,
+              onChanged: (_) {
+                if (_selectedCategoryId != null) {
+                  setState(() => _selectedCategoryId = null);
+                }
+              },
+              decoration: const InputDecoration(
+                labelText: 'Subcategory from source (optional)',
+              ),
+            ),
+            TextField(
+              key: const ValueKey('import-edit-tags'),
+              controller: _tags,
+              decoration: const InputDecoration(
+                labelText: 'Tags (optional)',
+                helperText: 'Separate names with semicolons, or paste a JSON list.',
+                helperMaxLines: 2,
+              ),
+            ),
+            DropdownButtonFormField<TxnInstrument?>(
+              isExpanded: true,
+              initialValue: _instrument,
+              decoration: const InputDecoration(labelText: 'Paid with'),
+              items: [
+                const DropdownMenuItem<TxnInstrument?>(
+                  value: null,
+                  child: Text('Use account mapping'),
+                ),
+                for (final instrument in TxnInstrument.values)
+                  DropdownMenuItem<TxnInstrument?>(
+                    value: instrument,
+                    child: Text(instrument.label),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _instrument = value),
+            ),
+            DropdownButtonFormField<String?>(
+              isExpanded: true,
+              initialValue: _rail,
+              decoration: const InputDecoration(labelText: 'Payment rail'),
+              items: const [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('Not specified'),
+                ),
+                DropdownMenuItem<String?>(
+                  value: 'upi_qr',
+                  child: Text('UPI QR'),
+                ),
+                DropdownMenuItem<String?>(
+                  value: 'swipe',
+                  child: Text('Card swipe'),
+                ),
+                DropdownMenuItem<String?>(
+                  value: 'online',
+                  child: Text('Online'),
+                ),
+                DropdownMenuItem<String?>(
+                  value: 'contactless',
+                  child: Text('Contactless'),
+                ),
+                DropdownMenuItem<String?>(value: 'atm', child: Text('ATM')),
+                DropdownMenuItem<String?>(value: 'emi', child: Text('EMI')),
+                DropdownMenuItem<String?>(
+                  value: 'unknown',
+                  child: Text('Unknown'),
+                ),
+              ],
+              onChanged: (value) => setState(() => _rail = value),
+            ),
+            TextField(
+              controller: _note,
+              maxLength: 500,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Note / remarks (optional)',
+              ),
             ),
             if (_error != null) Text(_error!),
           ],

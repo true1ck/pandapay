@@ -525,4 +525,79 @@ void main() {
       expect(first.rowKey(0), second.rowKey(1));
     },
   );
+
+  test(
+    'PandaPay JSON exports round-trip transaction details into review rows',
+    () {
+      final json = jsonEncode({
+        'transactions': [
+          {
+            'id': 'old-transaction-id',
+            'source_account': 'MoneyBack Card •••• 8842',
+            'user_card_id': 'old-card-id',
+            'amount_inr': 275.50,
+            'occurred_at': '2026-10-02T10:30:00.000Z',
+            'merchant_name': 'Cafe Coffee Day',
+            'category_id': 'old-category-id',
+            'user_category_id': 'old-user-category-id',
+            'category_name': 'Dining',
+            'subcategory_name': 'Coffee',
+            'entry_kind': 'income',
+            'instrument': 'credit_card',
+            'rail': 'online',
+            'source': 'manual',
+            'note': 'Edited note',
+            'status': 'active',
+          },
+        ],
+        'cards': [
+          {'id': 'old-card-id', 'nickname': 'MoneyBack'},
+        ],
+      });
+      final document = ImportDocument.open(
+        Uint8List.fromList(utf8.encode(json)),
+        'pandapay-export-all.json',
+      );
+      final parsed = document.parse();
+
+      expect(parsed.transactions, hasLength(1));
+      final row = parsed.transactions.single;
+      expect(row.description, 'Cafe Coffee Day');
+      expect(row.amount.rupees, 275.5);
+      expect(row.isCredit, isTrue);
+      expect(row.categoryHint, 'Dining');
+      expect(row.subcategoryHint, 'Coffee');
+      expect(row.sourceAccount, 'MoneyBack Card •••• 8842');
+      expect(row.instrument, TxnInstrument.creditCard);
+      expect(row.rail, 'online');
+      expect(row.note, 'Edited note');
+      // Foreign database IDs are intentionally reviewed/remapped to the
+      // importing user's own category and card records.
+      expect(row.categoryId, isNull);
+      expect(row.userCategoryId, isNull);
+    },
+  );
+
+  test('combined PandaPay CSV imports its transaction section only', () {
+    final document = ImportDocument.open(
+      Uint8List.fromList(
+        utf8.encode('''# transactions
+occurred_at,amount_inr,merchant_name,category_name,subcategory_name,entry_kind,instrument,source_account,note
+2026-10-02T10:30:00.000Z,100.00,Coffee,Dining,Hot drinks,spend,credit_card,Card •••• 8842,Quick note
+
+# cards
+id,nickname
+card-id,MoneyBack
+'''),
+      ),
+      'pandapay-export-all.csv',
+    );
+    final parsed = document.parse();
+
+    expect(parsed.transactions, hasLength(1));
+    expect(parsed.transactions.single.categoryHint, 'Dining');
+    expect(parsed.transactions.single.subcategoryHint, 'Hot drinks');
+    expect(parsed.transactions.single.note, 'Quick note');
+    expect(parsed.warnings.join(' '), contains('combined data export'));
+  });
 }

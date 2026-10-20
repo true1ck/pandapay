@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 const { validateStatementImport, createStatementImportHandler, maskAccount } = require('../src/statement_import');
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const cardId = '11111111-1111-4111-8111-111111111111';
+const categoryId = '22222222-2222-4222-8222-222222222222';
+const userCategoryId = '33333333-3333-4333-8333-333333333333';
 function body(overrides = {}) {
   return { userCardId: null, statementFrom: '2026-10-02', statementTo: '2026-10-02',
     importSource: 'csv', importKey: hash('batch'), transactions: [{ amountInr: 123.45,
@@ -30,6 +32,11 @@ test('rejects invalid calendar dates, ranges, decimal precision, nonfinite value
     body({ userCardId: 'not-a-uuid' }), body({ closingBalanceInr: Infinity })]) {
     assert.ok(validateStatementImport(value));
   }
+  for (const field of ['categoryId', 'userCategoryId']) {
+    const invalidCategory = body();
+    invalidCategory.transactions[0][field] = 'not-a-uuid';
+    assert.match(validateStatementImport(invalidCategory), new RegExp(field));
+  }
   for (const amountInr of [0, -1, NaN, Infinity, '123', null, 1.001, 1.000001, 10000000000]) {
     const value = body(); value.transactions[0].amountInr = amountInr;
     assert.ok(validateStatementImport(value), `amount ${amountInr}`);
@@ -48,6 +55,8 @@ function harness({ cardType = 'credit', owned = true, automatic = false } = {}) 
   const client = { query: async (sql, params) => {
     databaseCalls++;
     if (sql.includes('SELECT cp.card_type')) return { rows: owned ? [{ card_type: cardType }] : [] };
+    if (sql.includes('FROM user_categories')) return { rows: [{ id: userCategoryId, parent_category_id: categoryId }] };
+    if (sql.includes('FROM spend_categories')) return { rows: [{ id: categoryId }] };
     if (sql.includes('INSERT INTO statement_imports')) {
       if (batches.has(params[9])) return { rowCount: 0, rows: [] };
       const row = { id: `batch-${batches.size}`, txn_count: params[6], reconciled_count: params[7] };
@@ -129,4 +138,32 @@ test('statement import forwards the transaction kind to the shared insert path',
   const run = harness();
   await run.call(body({ transactions: [{ ...body().transactions[0], entryKind: 'income' }] }));
   assert.equal(run.written[0].entryKind, 'income');
+});
+
+test('reviewed category, subcategory, and note are saved as the selected assignment', async () => {
+  const run = harness();
+  const input = body({
+    transactions: [{
+      ...body().transactions[0],
+      categoryId,
+      userCategoryId,
+      categoryHint: 'Dining',
+      subcategoryHint: 'Coffee',
+      note: 'Edited before import',
+    }],
+  });
+  const response = await run.call(input);
+  assert.equal(response.status, 201);
+  assert.equal(run.written[0].categoryId, categoryId);
+  assert.equal(run.written[0].userCategoryId, userCategoryId);
+  assert.equal(run.written[0].note, 'Edited before import');
+});
+
+test('reviewed private category must belong to the importing account and match its parent', async () => {
+  const mismatched = harness();
+  const wrongParent = body({
+    transactions: [{ ...body().transactions[0], categoryId: cardId, userCategoryId }],
+  });
+  assert.equal((await mismatched.call(wrongParent)).status, 400);
+  assert.equal(mismatched.written.length, 0);
 });

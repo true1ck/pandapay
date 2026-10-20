@@ -337,8 +337,8 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = ref.watch(categoriesProvider).valueOrNull ??
-        const <SpendCategory>[];
+    final categories =
+        ref.watch(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
 
     return SafeArea(
@@ -429,6 +429,22 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
                     ),
                 ],
                 onChanged: (v) => setState(() => _scopeRefId = v),
+              ),
+            ],
+            if (_scope == BudgetScope.tag) ...[
+              const SizedBox(height: AppSpace.md),
+              DropdownButtonFormField<String>(
+                initialValue: _scopeRefId,
+                decoration: const InputDecoration(
+                  labelText: 'Tag',
+                  prefixIcon: Icon(Icons.label_outline),
+                ),
+                items: [
+                  for (final tag
+                      in ref.watch(transactionTagsProvider)?.tags ?? [])
+                    DropdownMenuItem(value: tag.id, child: Text(tag.name)),
+                ],
+                onChanged: (value) => setState(() => _scopeRefId = value),
               ),
             ],
             if (_scope == BudgetScope.card) ...[
@@ -522,7 +538,11 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
     if (_scope != BudgetScope.overall && _scopeRefId == null) {
       setState(
         () => _error =
-            'Pick which ${_scope == BudgetScope.category ? 'category' : 'card'}.',
+            'Pick which ${_scope == BudgetScope.category
+                ? 'category'
+                : _scope == BudgetScope.tag
+                ? 'tag'
+                : 'card'}.',
       );
       return;
     }
@@ -554,6 +574,10 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
 
 SpendingVisual _visualForBudget(BudgetStatus budget) {
   return switch (budget.scope) {
+    BudgetScope.tag => const SpendingVisual(
+      icon: Icons.label_outline,
+      accent: BambooChartColors.teal,
+    ),
     BudgetScope.overall => const SpendingVisual(
       icon: Icons.pie_chart_rounded,
       accent: BambooChartColors.teal,
@@ -568,6 +592,10 @@ SpendingVisual _visualForBudget(BudgetStatus budget) {
 
 SpendingVisual _visualForScope(BudgetScope scope) {
   return switch (scope) {
+    BudgetScope.tag => const SpendingVisual(
+      icon: Icons.label_outline,
+      accent: BambooChartColors.teal,
+    ),
     BudgetScope.overall => const SpendingVisual(
       icon: Icons.pie_chart_rounded,
       accent: BambooChartColors.teal,
@@ -587,6 +615,7 @@ IconData _iconForScope(BudgetScope scope) => switch (scope) {
   BudgetScope.overall => Icons.pie_chart_rounded,
   BudgetScope.category => Icons.category_rounded,
   BudgetScope.card => Icons.credit_card_rounded,
+  BudgetScope.tag => Icons.label_outline,
 };
 
 String _budgetCategoryLabel(

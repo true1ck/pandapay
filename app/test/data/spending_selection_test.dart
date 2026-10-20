@@ -1,0 +1,80 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/spending_selection.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
+
+TransactionEntry expense(String id, {String? child}) => TransactionEntry(
+  id: id,
+  amount: Money.fromRupees(100),
+  occurredAt: DateTime(2026, 10, 20),
+  categoryId: child == null ? 'food' : 'custom:$child',
+  userCategoryId: child,
+  parentCategoryId: child == null ? null : 'food',
+  categoryName: 'Food',
+  subcategoryName: child == null ? null : 'Lunch',
+  merchantName: ' AMAZON  India ',
+  cardDisplayName: 'Travel card',
+  instrument: TxnInstrument.creditCard,
+  source: 'manual',
+  status: 'active',
+);
+
+void main() {
+  test('tag union counts each row once while combining other dimensions', () {
+    const selection = SpendingSelection(
+      categories: {'food'},
+      tagIds: {'trip', 'office'},
+      merchant: 'amazon india',
+      card: 'Travel card',
+      payment: TxnInstrument.creditCard,
+    );
+    final entries = [
+      expense('both', child: 'lunch'),
+      expense('trip'),
+      expense('none'),
+    ];
+    final tags = {
+      'both': ['trip', 'office'],
+      'trip': ['trip'],
+      'none': <String>[],
+    };
+    final matching = entries
+        .where((e) => selection.matches(e, tags: tags[e.id]!))
+        .toList();
+    expect(matching.map((e) => e.id), ['both', 'trip']);
+    expect(matching.fold<int>(0, (sum, e) => sum + e.amount.paise), 20000);
+    expect(
+      const SpendingSelection(
+        categories: {'fuel'},
+        tagIds: {'trip'},
+      ).matches(entries.first, tags: ['trip', 'office']),
+      isFalse,
+    );
+  });
+
+  test(
+    'parent includes children while a child selects only that subcategory',
+    () {
+      final child = expense('one', child: 'lunch');
+      final sibling = expense('two', child: 'dinner');
+      expect(
+        const SpendingSelection(categories: {'food'}).matches(child),
+        isTrue,
+      );
+      expect(
+        const SpendingSelection(categories: {'custom:lunch'}).matches(child),
+        isTrue,
+      );
+      expect(
+        const SpendingSelection(categories: {'custom:lunch'}).matches(sibling),
+        isFalse,
+      );
+    },
+  );
+
+  test('untagged includes categorized transactions with no tags', () {
+    const selection = SpendingSelection(untagged: true);
+    expect(selection.matches(expense('one'), tags: []), isTrue);
+    expect(selection.matches(expense('two'), tags: ['office']), isFalse);
+  });
+}

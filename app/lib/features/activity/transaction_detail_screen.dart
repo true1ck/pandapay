@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
 import '../../data/local/split_repository.dart';
 import '../../data/local/sms_intake_repository.dart';
@@ -23,6 +24,7 @@ import '../account/account_screen.dart' show AccountTile;
 import '../cards/card_summary.dart';
 import 'report_transaction_screen.dart';
 import '../sync/split_sync.dart';
+import '../insights/spend_trends_screen.dart';
 
 /// D2 Transaction Detail (ui-spec Group D). Deep-linkable at /activity/:id.
 /// Full record incl. source and reconciliation status. Actions: edit (D3),
@@ -726,6 +728,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
+    final tagRepository = ref.watch(transactionTagsProvider);
+    final tags =
+        tagRepository?.tagsForTransaction(entry.id, fallback: entry.tags) ??
+        entry.tags;
     final isActive = entry.status == 'active';
     final attachments = ref.watch(transactionAttachmentsProvider(entry.id));
 
@@ -788,6 +794,64 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   const SizedBox(height: AppSpace.xl),
                   _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
                   _DetailRow(label: 'Category', value: entry.categoryLabel),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        for (final tag in tags)
+                          ActionChip(
+                            label: Text(tag.name),
+                            avatar: Icon(
+                              Icons.label_rounded,
+                              size: 16,
+                              color: transactionTagColor(tag.color),
+                            ),
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    SpendTrendsScreen(initialTagIds: {tag.id}),
+                              ),
+                            ),
+                          ),
+                        if (tagRepository != null)
+                          ActionChip(
+                            label: Text(
+                              tags.isEmpty ? 'Add tags' : 'Edit tags',
+                            ),
+                            avatar: const Icon(Icons.add_rounded, size: 16),
+                            onPressed: () async {
+                              final selected = await showTransactionTagPicker(
+                                context,
+                                selectedIds: tags.map((t) => t.id).toSet(),
+                              );
+                              if (selected == null ||
+                                  !mounted ||
+                                  ref.read(transactionTagsProvider) !=
+                                      tagRepository)
+                                return;
+                              try {
+                                await tagRepository.replace(
+                                  entry.id,
+                                  selected,
+                                  fallback: entry.tags,
+                                );
+                              } catch (error) {
+                                if (context.mounted)
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        userFacingErrorMessage(error),
+                                      ),
+                                    ),
+                                  );
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
                   if (isActive &&
                       (entry.categoryName == null ||
                           [

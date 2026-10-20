@@ -1,8 +1,45 @@
+import 'dart:convert';
+
 import 'package:pandapay_domain/pandapay_domain.dart';
+
+import 'user_cards_repository.dart' show TxnInstrument;
 
 enum ImportDateOrder { dayFirst, monthFirst }
 
 enum ImportNumberFormat { decimalPoint, decimalComma }
+
+/// Preserve spelling while coalescing repeated names from a file or picker.
+List<String> normalizeImportedTagNames(Iterable<String> values) {
+  final names = <String, String>{};
+  for (final value in values) {
+    final name = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (name.isNotEmpty) names.putIfAbsent(name.toLowerCase(), () => name);
+  }
+  return List.unmodifiable(names.values);
+}
+
+/// JSON arrays make the export lossless even when names contain delimiters.
+/// Other apps commonly separate their tag/label columns with ;, |, or commas.
+List<String> parseImportedTagNames(String value) {
+  final text = value.trim();
+  if (text.isEmpty) return const [];
+  if (text.startsWith('[')) {
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is List) {
+        return normalizeImportedTagNames([
+          for (final item in decoded)
+            if (item is String) item
+            else if (item is Map && item['name'] is String)
+              item['name'] as String,
+        ]);
+      }
+    } on FormatException {
+      // A non-JSON source label remains an ordinary name below.
+    }
+  }
+  return normalizeImportedTagNames(text.split(RegExp(r'[;|,]')));
+}
 
 enum ImportColumn {
   date,
@@ -50,6 +87,17 @@ class ParsedStatementLine {
   final String? bankReference;
   final String? categoryHint;
   final String? subcategoryHint;
+  final List<String> tagNames;
+
+  /// Explicit, user-selected catalogue assignment. `categoryId` is a built-in
+  /// reporting category; `userCategoryId` is a private category/subcategory.
+  /// These are deliberately separate from imported name hints, which may not
+  /// belong to the signed-in account's taxonomy.
+  final String? categoryId;
+  final String? userCategoryId;
+  final TxnInstrument? instrument;
+  final String? rail;
+  final String? note;
   final bool isTransfer;
   final bool isInvestment;
   final String? sourceRowId;
@@ -63,6 +111,12 @@ class ParsedStatementLine {
     this.bankReference,
     this.categoryHint,
     this.subcategoryHint,
+    this.tagNames = const [],
+    this.categoryId,
+    this.userCategoryId,
+    this.instrument,
+    this.rail,
+    this.note,
     this.isTransfer = false,
     this.isInvestment = false,
     this.sourceRowId,
@@ -79,6 +133,7 @@ class ParsedStatementLine {
     String? sourceRowId,
     String? categoryHint,
     String? subcategoryHint,
+    List<String>? tagNames,
   }) => ParsedStatementLine(
     date: date ?? this.date,
     description: description ?? this.description,
@@ -90,6 +145,12 @@ class ParsedStatementLine {
     bankReference: bankReference,
     categoryHint: categoryHint ?? this.categoryHint,
     subcategoryHint: subcategoryHint ?? this.subcategoryHint,
+    tagNames: tagNames ?? this.tagNames,
+    categoryId: categoryId,
+    userCategoryId: userCategoryId,
+    instrument: instrument,
+    rail: rail,
+    note: note,
     sourceRowId: sourceRowId ?? this.sourceRowId,
     reviewReasons: const [],
   );
@@ -121,6 +182,21 @@ String? validateImportedTransaction(ParsedStatementLine row) {
   }
   if ((row.sourceAccount?.length ?? 0) > 200) {
     return 'Source account label is too long. Adjust the account column.';
+  }
+  if ((row.bankReference?.length ?? 0) > 40 ||
+      (row.bankReference?.isNotEmpty == true &&
+          !RegExp(r'^[a-zA-Z0-9-]{6,40}$').hasMatch(row.bankReference!))) {
+    return 'Bank reference must be 6–40 letters, numbers, or hyphens.';
+  }
+  if ((row.categoryHint?.length ?? 0) > 120 ||
+      (row.subcategoryHint?.length ?? 0) > 120) {
+    return 'Category names must be 120 characters or fewer.';
+  }
+  if ((row.note?.length ?? 0) > 500) {
+    return 'Note must be 500 characters or fewer.';
+  }
+  if (row.tagNames.length > 30 || row.tagNames.any((name) => name.trim().isEmpty || name.length > 60)) {
+    return 'Use up to 30 tags, each with 1–60 characters.';
   }
   if (row.reviewReasons.isNotEmpty) return row.reviewReasons.join(' ');
   return null;

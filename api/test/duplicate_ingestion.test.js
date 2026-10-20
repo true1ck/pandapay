@@ -23,13 +23,15 @@ test('uncertain match creates review record with incoming row suppressed', async
   assert.equal(calls[1].params[5],'new');
 });
 test('automatic ingestion links source alias and never applies card state', async () => {
-  const observations=[];const writes=[];
-  const writer=new Function('recordTransactionObservation','detectDuplicates','loadUserCardForState','applyTransactionState',`${extract('insertTransactionAndUpdateState','importParsedMessage')} return insertTransactionAndUpdateState;`)(
-    async(...args)=>observations.push(args),async()=>({automatic:true,duplicateOf:'old',transaction:existing}),async()=>({id:'card'}),async()=>{throw Error('must not apply state');});
+  const observations=[];const writes=[];const tagMerges=[];
+  const writer=new Function('recordTransactionObservation','detectDuplicates','loadUserCardForState','applyTransactionState','transactionTags',`${extract('insertTransactionAndUpdateState','importParsedMessage')} return insertTransactionAndUpdateState;`)(
+    async(...args)=>observations.push(args),async()=>({automatic:true,duplicateOf:'old',transaction:existing}),async()=>({id:'card'}),async()=>{throw Error('must not apply state');},
+    {mergeTransactionTags:async(...args)=>tagMerges.push(args)});
   const client={query:async(sql,params)=>{writes.push({sql,params});if(sql.includes('INSERT INTO transactions'))return {rowCount:1,rows:[{id:'new'}]};return {rows:[]};}};
   const result=await writer(client,'profile',{...incoming,sourceKey:'key',observationMetadata:{bankReference:incoming.bankReference}});
   assert.equal(result.duplicateKind,'high_confidence');
   assert.equal(result.transaction.id,'old');
   assert.equal(observations.at(-1)[2],'old');
+  assert.deepEqual(tagMerges.map((args)=>args.slice(1)),[['profile','new','old']]);
   assert.ok(writes.some(({sql})=>sql.includes("status = 'ignored'")));
 });

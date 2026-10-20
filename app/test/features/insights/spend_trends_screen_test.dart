@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/spend_reports_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -84,6 +85,8 @@ TransactionEntry _detailEntry({
   required String categoryName,
   required DateTime occurredAt,
   double reward = 0,
+  String? subcategoryName,
+  List<TransactionTag> tags = const [],
 }) => TransactionEntry(
   id: id,
   amount: Money.fromRupees(amount),
@@ -91,6 +94,8 @@ TransactionEntry _detailEntry({
   merchantName: merchant,
   categoryId: categoryId,
   categoryName: categoryName,
+  subcategoryName: subcategoryName,
+  tags: tags,
   cardDisplayName: 'HDFC Millennia',
   userCardId: 'uc-1',
   rail: TxnRail.swipe,
@@ -101,6 +106,213 @@ TransactionEntry _detailEntry({
 );
 
 void main() {
+  testWidgets('tag rows expand into categories and open scoped activity', (
+    tester,
+  ) async {
+    const trip = TransactionTag(id: 'trip', name: 'Thailand trip');
+    final rows = [
+      _detailEntry(
+        id: 'meal',
+        merchant: 'Bangkok Cafe',
+        amount: 500,
+        categoryId: 'dining',
+        categoryName: 'Dining',
+        occurredAt: DateTime(2026, 8, 10),
+        tags: [trip],
+      ),
+      _detailEntry(
+        id: 'taxi',
+        merchant: 'Bangkok Taxi',
+        amount: 1000,
+        categoryId: 'travel',
+        categoryName: 'Travel',
+        occurredAt: DateTime(2026, 8, 11),
+        tags: [trip],
+      ),
+    ];
+    final router = GoRouter(
+      initialLocation: '/spending',
+      routes: [
+        GoRoute(
+          path: '/spending',
+          builder: (context, state) => const SpendTrendsScreen(),
+        ),
+        GoRoute(
+          path: '/activity',
+          builder: (context, state) =>
+              Text(state.uri.toString(), key: const ValueKey('activity-uri')),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          transactionTagsProvider.overrideWith((ref) => null),
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+          ),
+          spendReportProvider.overrideWith(
+            (ref, query) async => _report(spend: 1500),
+          ),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => rows,
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Tags'));
+    await tester.tap(find.text('Tags'));
+    await tester.pumpAndSettle();
+    expect(find.text('TAGS'), findsOneWidget);
+    expect(find.text('Thailand trip'), findsOneWidget);
+    expect(
+      find.ancestor(
+        of: find.byKey(const PageStorageKey<String>('spending-tag-trip')),
+        matching: find.byType(CardSummaryPanel),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const PageStorageKey<String>('spending-tag-trip')),
+        matching: find.text('₹1,500.00'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Thailand trip'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dining'), findsOneWidget);
+    expect(find.text('Travel'), findsOneWidget);
+    expect(find.byIcon(Icons.sell_rounded), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('tag-category-trip-dining')),
+        matching: find.byIcon(Icons.restaurant_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('tag-category-trip-travel')),
+        matching: find.byIcon(Icons.flight_takeoff_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('tag-category-trip-dining')),
+        matching: find.text('₹500.00'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('tag-category-trip-travel')),
+        matching: find.text('₹1,000.00'),
+      ),
+      findsOneWidget,
+    );
+
+    final diningRow = find.byKey(const ValueKey('tag-category-trip-dining'));
+    await tester.ensureVisible(diningRow);
+    await tester.pumpAndSettle();
+    await tester.tap(diningRow);
+    await tester.pumpAndSettle();
+    final activityUri = Uri.parse(
+      tester.widget<Text>(find.byKey(const ValueKey('activity-uri'))).data!,
+    );
+    expect(activityUri.path, '/activity');
+    expect(activityUri.queryParameters['tag'], 'trip');
+    expect(activityUri.queryParameters['category'], 'dining');
+    expect(activityUri.queryParameters['from'], '2026-08-01');
+    expect(activityUri.queryParameters['to'], '2026-08-31');
+    expect(activityUri.queryParameters['spendOnly'], 'true');
+    expect(tester.takeException(), isNull);
+    router.dispose();
+  });
+
+  testWidgets('tag filters, preview and donut use one deduplicated selection', (
+    tester,
+  ) async {
+    const trip = TransactionTag(id: 'trip', name: 'Thailand trip');
+    const office = TransactionTag(id: 'office', name: 'Office');
+    final rows = [
+      _detailEntry(
+        id: 'one',
+        merchant: 'Cafe',
+        amount: 500,
+        categoryId: 'food',
+        categoryName: 'Dining',
+        occurredAt: DateTime(2026, 8, 10),
+        tags: [trip, office],
+      ),
+      _detailEntry(
+        id: 'two',
+        merchant: 'Taxi',
+        amount: 1000,
+        categoryId: 'travel',
+        categoryName: 'Travel',
+        occurredAt: DateTime(2026, 8, 11),
+        tags: [trip],
+      ),
+      _detailEntry(
+        id: 'three',
+        merchant: 'Shop',
+        amount: 250,
+        categoryId: 'online',
+        categoryName: 'Shopping',
+        occurredAt: DateTime(2026, 8, 12),
+      ),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          transactionTagsProvider.overrideWith((ref) => null),
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+          ),
+          spendReportProvider.overrideWith(
+            (ref, query) async => _report(spend: 1750),
+          ),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => rows,
+          ),
+        ],
+        child: const MaterialApp(
+          home: SpendTrendsScreen(initialTagIds: {'trip', 'office'}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1,500'), findsWidgets);
+    expect(find.textContaining('1,750'), findsNothing);
+    await tester.tap(find.text('Filters ·'));
+    await tester.pumpAndSettle();
+    final preview = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .map((w) => w.text.toPlainText())
+        .join('\n');
+    expect(preview, contains('2 matching transactions'));
+    expect(preview, contains('₹1,500'));
+    await tester.ensureVisible(find.widgetWithText(FilterChip, 'Untagged'));
+    await tester.tap(find.widgetWithText(FilterChip, 'Untagged'));
+    await tester.pumpAndSettle();
+    final untagged = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .map((w) => w.text.toPlainText())
+        .join('\n');
+    expect(untagged, contains('1 matching transaction'));
+    expect(untagged, contains('₹250'));
+    await tester.tap(find.text('Show results'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1,500'), findsNothing);
+    expect(find.textContaining('250'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'shows the period total and comparison in the spending mix card',
     (tester) async {
@@ -417,6 +629,7 @@ void main() {
         amount: 200,
         categoryId: 'dining',
         categoryName: 'Dining',
+        subcategoryName: 'Dinner',
         occurredAt: DateTime(2026, 8, 12),
         reward: 10,
       ),
@@ -465,6 +678,7 @@ void main() {
     expect(find.text('Cafe Central'), findsOneWidget);
     expect(find.textContaining('Rewards earned ₹'), findsNWidgets(2));
     expect(find.textContaining('12/08/2026'), findsOneWidget);
+    expect(find.text('Dining · Dinner\nHDFC Millennia'), findsOneWidget);
   });
 
   testWidgets(

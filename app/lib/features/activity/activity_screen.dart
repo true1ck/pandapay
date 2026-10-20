@@ -8,7 +8,9 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
+import '../../data/spending_selection.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
@@ -26,11 +28,149 @@ import '../auth/login_screen.dart';
 /// separate surface with its own screen). The optimality indicator (✓
 /// best / ⚠ better existed) depends on the shared historical-recompute
 /// calculator, built separately and not yet wired into this row.
-class ActivityScreen extends ConsumerWidget {
-  const ActivityScreen({super.key});
+class ActivityScreen extends ConsumerStatefulWidget {
+  final Set<String> initialTagIds;
+  final String? initialCategoryId;
+  final String? initialCategoryLabel;
+  final DateTime? initialFrom;
+  final DateTime? initialTo;
+  final bool initialSpendOnly;
+
+  const ActivityScreen({
+    super.key,
+    this.initialTagIds = const {},
+    this.initialCategoryId,
+    this.initialCategoryLabel,
+    this.initialFrom,
+    this.initialTo,
+    this.initialSpendOnly = false,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ActivityScreen> createState() => _ActivityScreenState();
+}
+
+class _ActivityScreenState extends ConsumerState<ActivityScreen> {
+  final Set<String> _selectedIds = {};
+  bool _selecting = false;
+  bool _changingTags = false;
+  late bool _initialFilterReady = !_hasInitialFilter;
+
+  bool get _hasInitialFilter =>
+      widget.initialTagIds.isNotEmpty ||
+      widget.initialCategoryId != null ||
+      widget.initialCategoryLabel != null ||
+      widget.initialFrom != null ||
+      widget.initialTo != null ||
+      widget.initialSpendOnly;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_hasInitialFilter) _applyInitialFilterAfterBuild();
+  }
+
+  @override
+  void didUpdateWidget(covariant ActivityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final tagsChanged =
+        oldWidget.initialTagIds.length != widget.initialTagIds.length ||
+        !oldWidget.initialTagIds.containsAll(widget.initialTagIds);
+    if (tagsChanged ||
+        oldWidget.initialCategoryId != widget.initialCategoryId ||
+        oldWidget.initialCategoryLabel != widget.initialCategoryLabel ||
+        oldWidget.initialFrom != widget.initialFrom ||
+        oldWidget.initialTo != widget.initialTo ||
+        oldWidget.initialSpendOnly != widget.initialSpendOnly) {
+      _initialFilterReady = !_hasInitialFilter;
+      if (_hasInitialFilter) {
+        _applyInitialFilterAfterBuild();
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ref.read(_activityFilterProvider.notifier).state =
+              const ActivityFilter();
+        });
+      }
+    }
+  }
+
+  void _applyInitialFilterAfterBuild() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(_activityFilterProvider.notifier).state = ActivityFilter(
+        tagIds: widget.initialTagIds,
+        categoryId: widget.initialCategoryId,
+        categoryLabel: widget.initialCategoryLabel,
+        from: widget.initialFrom,
+        to: widget.initialTo,
+        datePreset: widget.initialFrom != null || widget.initialTo != null
+            ? _ActivityDatePreset.custom
+            : _ActivityDatePreset.allTime,
+        type: widget.initialSpendOnly
+            ? _ActivityTypeFilter.spending
+            : _ActivityTypeFilter.all,
+      );
+      setState(() => _initialFilterReady = true);
+    });
+  }
+
+  Future<void> _changeTags(
+    List<TransactionEntry> visible, {
+    required bool remove,
+  }) async {
+    final repository = ref.read(transactionTagsProvider);
+    if (repository == null || _changingTags) return;
+    final ids = visible
+        .where((entry) => _selectedIds.contains(entry.id))
+        .map((entry) => entry.id)
+        .toList();
+    if (ids.isEmpty) return;
+    final chosen = await showTransactionTagPicker(
+      context,
+      title: remove
+          ? 'Remove tags from ${ids.length} transactions'
+          : 'Add tags to ${ids.length} transactions',
+    );
+    if (chosen == null ||
+        chosen.isEmpty ||
+        !mounted ||
+        ref.read(transactionTagsProvider) != repository)
+      return;
+    setState(() => _changingTags = true);
+    try {
+      if (remove) {
+        await repository.unassign(ids, chosen.toList());
+      } else {
+        await repository.assign(ids, chosen.toList());
+      }
+      if (mounted) {
+        setState(() {
+          _selectedIds.clear();
+          _selecting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Tags ${remove ? 'removed from' : 'added to'} ${ids.length} transactions',
+            ),
+          ),
+        );
+      }
+      // Local writes are durable; synchronization can retry while offline.
+      unawaited(repository.sync().catchError((Object _) {}));
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+    } finally {
+      if (mounted) setState(() => _changingTags = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final sessionInit = ref.watch(sessionInitProvider);
     if (sessionInit.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -38,9 +178,13 @@ class ActivityScreen extends ConsumerWidget {
 
     final token = ref.watch(accessTokenProvider);
     if (token == null) return const LoginScreen();
+    if (!_initialFilterReady) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     final filter = ref.watch(_activityFilterProvider);
     final transactions = ref.watch(activityTransactionsProvider);
+    final tagRepository = ref.watch(transactionTagsProvider);
 
     return AppBackground(
       child: Column(
@@ -57,6 +201,22 @@ class ActivityScreen extends ConsumerWidget {
                 const _SearchField(),
                 const SizedBox(height: AppSpace.sm),
                 _FilterRow(filter: filter),
+                if (tagRepository != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _changingTags
+                          ? null
+                          : () => setState(() {
+                              _selecting = !_selecting;
+                              _selectedIds.clear();
+                            }),
+                      icon: Icon(_selecting ? Icons.close : Icons.checklist),
+                      label: Text(
+                        _selecting ? 'Cancel selection' : 'Select transactions',
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -85,6 +245,9 @@ class ActivityScreen extends ConsumerWidget {
                   );
                 }
                 final grouped = _groupByDay(entries);
+                final visibleSelected = entries
+                    .where((e) => _selectedIds.contains(e.id))
+                    .length;
                 final incomingEntries = entries.where(_isMoneyInEntry).toList();
                 final outgoingEntries = entries
                     .where(_isMoneyOutEntry)
@@ -106,6 +269,46 @@ class ActivityScreen extends ConsumerWidget {
                     0,
                   ),
                   children: [
+                    if (_selecting) ...[
+                      Text('$visibleSelected selected'),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          TextButton(
+                            onPressed: _changingTags
+                                ? null
+                                : () => setState(() {
+                                    _selectedIds.clear();
+                                    if (visibleSelected != entries.length) {
+                                      _selectedIds.addAll(
+                                        entries.map((e) => e.id),
+                                      );
+                                    }
+                                  }),
+                            child: Text(
+                              visibleSelected == entries.length
+                                  ? 'Deselect all'
+                                  : 'Select all',
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: visibleSelected == 0 || _changingTags
+                                ? null
+                                : () => _changeTags(entries, remove: false),
+                            icon: const Icon(Icons.label_outline),
+                            label: const Text('Add tags'),
+                          ),
+                          TextButton.icon(
+                            onPressed: visibleSelected == 0 || _changingTags
+                                ? null
+                                : () => _changeTags(entries, remove: true),
+                            icon: const Icon(Icons.label_off_outlined),
+                            label: const Text('Remove tags'),
+                          ),
+                        ],
+                      ),
+                      if (_changingTags) const LinearProgressIndicator(),
+                    ],
                     _SummaryCard(
                       title: _summaryTitle(filter),
                       totalIncoming: totalIncoming,
@@ -127,12 +330,50 @@ class ActivityScreen extends ConsumerWidget {
                       for (final entry in group.entries)
                         Padding(
                           padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                          child: _TransactionTile(
-                            entry,
-                            onTap: () => context.push(
-                              '/activity/${entry.id}',
-                              extra: entry,
-                            ),
+                          child: Row(
+                            children: [
+                              if (_selecting)
+                                Checkbox(
+                                  key: ValueKey('activity-select-${entry.id}'),
+                                  value: _selectedIds.contains(entry.id),
+                                  onChanged: _changingTags
+                                      ? null
+                                      : (value) => setState(() {
+                                          if (value == true) {
+                                            _selectedIds.add(entry.id);
+                                          } else {
+                                            _selectedIds.remove(entry.id);
+                                          }
+                                        }),
+                                ),
+                              Expanded(
+                                child: _TransactionTile(
+                                  entry,
+                                  tagNames:
+                                      (tagRepository?.tagsForTransaction(
+                                                entry.id,
+                                                fallback: entry.tags,
+                                              ) ??
+                                              entry.tags)
+                                          .map((tag) => tag.name)
+                                          .toList(),
+                                  onTap: () {
+                                    if (_selecting) {
+                                      if (!_changingTags)
+                                        setState(() {
+                                          if (!_selectedIds.remove(entry.id))
+                                            _selectedIds.add(entry.id);
+                                        });
+                                    } else {
+                                      context.push(
+                                        '/activity/${entry.id}',
+                                        extra: entry,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       const SizedBox(height: AppSpace.sm),
@@ -220,7 +461,10 @@ class _DayGroup {
 class ActivityFilter {
   final String? cardId;
   final String? categoryId;
+  final String? categoryLabel;
   final String? subcategoryId;
+  final Set<String> tagIds;
+  final bool untagged;
   final DateTime? from;
   final DateTime? to;
 
@@ -236,7 +480,10 @@ class ActivityFilter {
   const ActivityFilter({
     this.cardId,
     this.categoryId,
+    this.categoryLabel,
     this.subcategoryId,
+    this.tagIds = const {},
+    this.untagged = false,
     this.from,
     this.to,
     this.query,
@@ -247,7 +494,10 @@ class ActivityFilter {
   bool get isActive =>
       cardId != null ||
       categoryId != null ||
+      categoryLabel != null ||
       subcategoryId != null ||
+      tagIds.isNotEmpty ||
+      untagged ||
       from != null ||
       to != null ||
       (query != null && query!.isNotEmpty) ||
@@ -258,7 +508,10 @@ class ActivityFilter {
   ActivityFilter copyWith({
     String? Function()? cardId,
     String? Function()? categoryId,
+    String? Function()? categoryLabel,
     String? Function()? subcategoryId,
+    Set<String>? tagIds,
+    bool? untagged,
     DateTime? Function()? from,
     DateTime? Function()? to,
     String? Function()? query,
@@ -268,9 +521,14 @@ class ActivityFilter {
     return ActivityFilter(
       cardId: cardId != null ? cardId() : this.cardId,
       categoryId: categoryId != null ? categoryId() : this.categoryId,
+      categoryLabel: categoryLabel != null
+          ? categoryLabel()
+          : this.categoryLabel,
       subcategoryId: subcategoryId != null
           ? subcategoryId()
           : this.subcategoryId,
+      tagIds: tagIds ?? this.tagIds,
+      untagged: untagged ?? this.untagged,
       from: from != null ? from() : this.from,
       to: to != null ? to() : this.to,
       query: query != null ? query() : this.query,
@@ -290,6 +548,7 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return const [];
   final filter = ref.watch(_activityFilterProvider);
+  final tags = ref.watch(transactionTagsProvider);
 
   // Keep the unfiltered Activity surface on the same provider as every
   // other transaction consumer. SMS reconciliation, quick-add, imports and
@@ -323,10 +582,37 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
           );
         })()
       : await ref.watch(transactionsProvider.future);
-  return entries.where((entry) => filter.type.matches(entry)).toList();
+  final selection = SpendingSelection(
+    tagIds: filter.tagIds,
+    untagged: filter.untagged,
+  );
+  final unique = {for (final entry in entries) entry.id: entry};
+  return unique.values
+      .where(
+        (entry) =>
+            filter.type.matches(entry) &&
+            (filter.categoryLabel == null ||
+                filter.categoryLabel!.trim().toLowerCase() ==
+                    entry.categoryLabel.trim().toLowerCase()) &&
+            selection.matches(
+              entry,
+              tags:
+                  (tags?.tagsForTransaction(entry.id, fallback: entry.tags) ??
+                          entry.tags)
+                      .map((tag) => tag.id),
+            ),
+      )
+      .toList();
 });
 
-enum _ActivityTypeFilter { all, moneyIn, moneyOut, transfers, investments }
+enum _ActivityTypeFilter {
+  all,
+  spending,
+  moneyIn,
+  moneyOut,
+  transfers,
+  investments,
+}
 
 enum _ActivityDatePreset {
   allTime,
@@ -389,6 +675,7 @@ extension on _ActivityDatePreset {
 extension on _ActivityTypeFilter {
   String get label => switch (this) {
     _ActivityTypeFilter.all => 'All activity',
+    _ActivityTypeFilter.spending => 'Spending',
     _ActivityTypeFilter.moneyIn => 'Money in',
     _ActivityTypeFilter.moneyOut => 'Money out',
     _ActivityTypeFilter.transfers => 'Transfers',
@@ -397,6 +684,7 @@ extension on _ActivityTypeFilter {
 
   bool matches(TransactionEntry entry) => switch (this) {
     _ActivityTypeFilter.all => true,
+    _ActivityTypeFilter.spending => entry.entryKind == TxnEntryKind.spend,
     _ActivityTypeFilter.moneyIn => entry.entryKind == TxnEntryKind.income,
     _ActivityTypeFilter.moneyOut =>
       entry.entryKind == TxnEntryKind.spend ||
@@ -409,6 +697,7 @@ extension on _ActivityTypeFilter {
 
 IconData _typeIcon(_ActivityTypeFilter type) => switch (type) {
   _ActivityTypeFilter.all => Icons.receipt_long_outlined,
+  _ActivityTypeFilter.spending => Icons.shopping_bag_outlined,
   _ActivityTypeFilter.moneyIn => Icons.arrow_downward_rounded,
   _ActivityTypeFilter.moneyOut => Icons.arrow_upward_rounded,
   _ActivityTypeFilter.transfers => Icons.swap_horiz_rounded,
@@ -503,236 +792,323 @@ class _FilterRow extends ConsumerWidget {
         .where((c) => !c.isSubcategory)
         .toList();
     final subcategories = categories.where((c) => c.isSubcategory).toList();
+    final tagRepository = ref.watch(transactionTagsProvider);
 
-    return SizedBox(
-      height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          _FilterChipButton(
-            label: filter.type.label,
-            active: filter.hasTypeFilter,
-            onTap: () async {
-              final picked = await showModalBottomSheet<_ActivityTypeFilter>(
-                context: context,
-                builder: (context) => ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final type in _ActivityTypeFilter.values)
-                      ListTile(
-                        leading: Icon(_typeIcon(type)),
-                        title: Text(type.label),
-                        selected: type == filter.type,
-                        onTap: () => Navigator.of(context).pop(type),
-                      ),
-                  ],
-                ),
-              );
-              if (picked != null) {
-                ref.read(_activityFilterProvider.notifier).state = filter
-                    .copyWith(type: picked);
-              }
-            },
-          ),
-          const SizedBox(width: AppSpace.xs),
-          _FilterChipButton(
-            label: filter.cardId == null
-                ? 'Card'
-                : (cards
-                          .where((c) => c.id == filter.cardId)
-                          .firstOrNull
-                          ?.nickname ??
-                      'Card'),
-            active: filter.cardId != null,
-            onTap: () async {
-              final picked = await showModalBottomSheet<String?>(
-                context: context,
-                builder: (context) => ListView(
-                  shrinkWrap: true,
-                  children: [
-                    const ListTile(title: Text('All cards')),
-                    for (final c in cards)
-                      ListTile(
-                        title: Text(
-                          c.nickname?.isNotEmpty == true
-                              ? c.nickname!
-                              : c.cardName,
-                        ),
-                        onTap: () => Navigator.of(context).pop(c.id),
-                      ),
-                  ],
-                ),
-              );
-              ref.read(_activityFilterProvider.notifier).state = filter
-                  .copyWith(cardId: () => picked);
-            },
-          ),
-          const SizedBox(width: AppSpace.xs),
-          _FilterChipButton(
-            label: filter.categoryId == null
-                ? 'Category'
-                : (categories
-                          .where((c) => c.id == filter.categoryId)
-                          .firstOrNull
-                          ?.name ??
-                      'Category'),
-            active: filter.categoryId != null,
-            onTap: () async {
-              final picked = await showModalBottomSheet<String?>(
-                context: context,
-                builder: (context) => ListView(
-                  shrinkWrap: true,
-                  children: [
-                    const ListTile(title: Text('All categories')),
-                    for (final c in topLevelCategories)
-                      ListTile(
-                        title: Text(c.name),
-                        onTap: () => Navigator.of(context).pop(c.id),
-                      ),
-                  ],
-                ),
-              );
-              ref.read(_activityFilterProvider.notifier).state = filter
-                  .copyWith(categoryId: () => picked);
-            },
-          ),
-          const SizedBox(width: AppSpace.xs),
-          _FilterChipButton(
-            label: filter.subcategoryId == null
-                ? 'Subcategory'
-                : (subcategories
-                          .where((c) => c.id == filter.subcategoryId)
-                          .firstOrNull
-                          ?.name ??
-                      'Subcategory'),
-            active: filter.subcategoryId != null,
-            onTap: () async {
-              final picked = await showModalBottomSheet<String?>(
-                context: context,
-                builder: (context) => ListView(
-                  shrinkWrap: true,
-                  children: [
-                    const ListTile(title: Text('All subcategories')),
-                    for (final c in subcategories)
-                      ListTile(
-                        title: Text(c.name),
-                        onTap: () => Navigator.of(context).pop(c.id),
-                      ),
-                  ],
-                ),
-              );
-              ref.read(_activityFilterProvider.notifier).state = filter
-                  .copyWith(subcategoryId: () => picked);
-            },
-          ),
-          const SizedBox(width: AppSpace.xs),
-          _FilterChipButton(
-            label: _dateFilterLabel(filter),
-            active: filter.from != null || filter.to != null,
-            onTap: () async {
-              final picked = await showModalBottomSheet<_ActivityDatePreset>(
-                context: context,
-                builder: (sheetContext) => SafeArea(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
-                    child: Column(
+    return Wrap(
+      spacing: AppSpace.xs,
+      runSpacing: AppSpace.xs,
+      children: [
+        _FilterChipButton(
+          label: filter.untagged
+              ? 'Untagged'
+              : filter.tagIds.isEmpty
+              ? 'Tags'
+              : 'Tags (${filter.tagIds.length})',
+          active: filter.untagged || filter.tagIds.isNotEmpty,
+          onTap: () async {
+            var ids = {...filter.tagIds};
+            var untagged = filter.untagged;
+            final result = await showDialog<({Set<String> ids, bool untagged})>(
+              context: context,
+              builder: (context) => StatefulBuilder(
+                builder: (context, setState) => AlertDialog(
+                  title: const Text('Filter by tags'),
+                  content: SizedBox(
+                    width: double.maxFinite,
+                    child: ListView(
+                      shrinkWrap: true,
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            AppSpace.lg,
-                            AppSpace.sm,
-                            AppSpace.lg,
-                            AppSpace.xs,
-                          ),
-                          child: Text(
-                            'Track activity by time',
-                            style: BambooFonts.heading(
-                              17,
-                              color: BambooInk.ink900,
-                            ),
-                          ),
+                        const Text('Match any selected tag across categories.'),
+                        CheckboxListTile(
+                          title: const Text('Untagged'),
+                          value: untagged,
+                          onChanged: (value) => setState(() {
+                            untagged = value == true;
+                            if (untagged) ids.clear();
+                          }),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            AppSpace.lg,
-                            0,
-                            AppSpace.lg,
-                            AppSpace.sm,
-                          ),
-                          child: Text(
-                            'Choose a quick period or set your own dates.',
-                            style: BambooFonts.ui(13, color: BambooInk.ink500),
-                          ),
-                        ),
-                        for (final preset in _ActivityDatePreset.values)
-                          ListTile(
-                            leading: Icon(
-                              _datePresetIcon(preset),
-                              color: preset == filter.datePreset
-                                  ? BambooInk.jade
-                                  : BambooInk.ink500,
-                            ),
-                            title: Text(
-                              preset.label,
-                              style: BambooFonts.ui(
-                                14,
-                                weight: FontWeight.w600,
-                                color: BambooInk.ink900,
-                              ),
-                            ),
-                            selected: preset == filter.datePreset,
-                            selectedTileColor: BambooInk.paperMuted,
-                            onTap: () => Navigator.of(sheetContext).pop(preset),
+                        for (final tag
+                            in tagRepository?.allTags ??
+                                const <TransactionTag>[])
+                          CheckboxListTile(
+                            title: Text(tag.name),
+                            subtitle: tag.archivedAt == null
+                                ? null
+                                : const Text('Archived'),
+                            value: ids.contains(tag.id),
+                            onChanged: (value) => setState(() {
+                              if (value == true) {
+                                untagged = false;
+                                ids.add(tag.id);
+                              } else {
+                                ids.remove(tag.id);
+                              }
+                            }),
                           ),
                       ],
                     ),
                   ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() {
+                        ids.clear();
+                        untagged = false;
+                      }),
+                      child: const Text('Reset'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context, (
+                        ids: ids,
+                        untagged: untagged,
+                      )),
+                      child: const Text('Apply'),
+                    ),
+                  ],
                 ),
-              );
-              if (picked == null) return;
-
-              if (picked == _ActivityDatePreset.custom) {
-                final range = await showDateRangePicker(
-                  context: context,
-                  firstDate: DateTime.now().subtract(
-                    const Duration(days: 365 * 3),
-                  ),
-                  lastDate: DateTime.now(),
-                  initialDateRange: filter.from != null && filter.to != null
-                      ? DateTimeRange(start: filter.from!, end: filter.to!)
-                      : null,
-                );
-                if (range != null) {
-                  ref.read(_activityFilterProvider.notifier).state = filter
-                      .copyWith(
-                        from: () => range.start,
-                        to: () => range.end,
-                        datePreset: _ActivityDatePreset.custom,
-                      );
-                }
-                return;
-              }
-
-              final range = picked.range(DateTime.now());
-              ref.read(_activityFilterProvider.notifier).state = filter
-                  .copyWith(
-                    from: () => range?.start,
-                    to: () => range?.end,
-                    datePreset: picked,
+              ),
+            );
+            if (result != null)
+              ref
+                  .read(_activityFilterProvider.notifier)
+                  .update(
+                    (current) => current.copyWith(
+                      tagIds: result.ids,
+                      untagged: result.untagged,
+                    ),
                   );
-            },
+          },
+        ),
+        const SizedBox(width: AppSpace.xs),
+        _FilterChipButton(
+          label: filter.type.label,
+          active: filter.hasTypeFilter,
+          onTap: () async {
+            final picked = await showModalBottomSheet<_ActivityTypeFilter>(
+              context: context,
+              builder: (context) => ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final type in _ActivityTypeFilter.values)
+                    ListTile(
+                      leading: Icon(_typeIcon(type)),
+                      title: Text(type.label),
+                      selected: type == filter.type,
+                      onTap: () => Navigator.of(context).pop(type),
+                    ),
+                ],
+              ),
+            );
+            if (picked != null) {
+              ref.read(_activityFilterProvider.notifier).state = filter
+                  .copyWith(type: picked);
+            }
+          },
+        ),
+        const SizedBox(width: AppSpace.xs),
+        _FilterChipButton(
+          label: filter.cardId == null
+              ? 'Card'
+              : (cards
+                        .where((c) => c.id == filter.cardId)
+                        .firstOrNull
+                        ?.nickname ??
+                    'Card'),
+          active: filter.cardId != null,
+          onTap: () async {
+            final picked = await showModalBottomSheet<String?>(
+              context: context,
+              builder: (context) => ListView(
+                shrinkWrap: true,
+                children: [
+                  const ListTile(title: Text('All cards')),
+                  for (final c in cards)
+                    ListTile(
+                      title: Text(
+                        c.nickname?.isNotEmpty == true
+                            ? c.nickname!
+                            : c.cardName,
+                      ),
+                      onTap: () => Navigator.of(context).pop(c.id),
+                    ),
+                ],
+              ),
+            );
+            ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
+              cardId: () => picked,
+            );
+          },
+        ),
+        const SizedBox(width: AppSpace.xs),
+        _FilterChipButton(
+          label: filter.categoryId == null
+              ? filter.categoryLabel ?? 'Category'
+              : (categories
+                        .where((c) => c.id == filter.categoryId)
+                        .firstOrNull
+                        ?.name ??
+                    'Category'),
+          active: filter.categoryId != null,
+          onTap: () async {
+            final picked = await showModalBottomSheet<String?>(
+              context: context,
+              builder: (context) => ListView(
+                shrinkWrap: true,
+                children: [
+                  const ListTile(title: Text('All categories')),
+                  for (final c in topLevelCategories)
+                    ListTile(
+                      title: Text(c.name),
+                      onTap: () => Navigator.of(context).pop(c.id),
+                    ),
+                ],
+              ),
+            );
+            ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
+              categoryId: () => picked,
+              categoryLabel: () => null,
+            );
+          },
+        ),
+        const SizedBox(width: AppSpace.xs),
+        _FilterChipButton(
+          label: filter.subcategoryId == null
+              ? 'Subcategory'
+              : (subcategories
+                        .where((c) => c.id == filter.subcategoryId)
+                        .firstOrNull
+                        ?.name ??
+                    'Subcategory'),
+          active: filter.subcategoryId != null,
+          onTap: () async {
+            final picked = await showModalBottomSheet<String?>(
+              context: context,
+              builder: (context) => ListView(
+                shrinkWrap: true,
+                children: [
+                  const ListTile(title: Text('All subcategories')),
+                  for (final c in subcategories)
+                    ListTile(
+                      title: Text(c.name),
+                      onTap: () => Navigator.of(context).pop(c.id),
+                    ),
+                ],
+              ),
+            );
+            ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
+              subcategoryId: () => picked,
+            );
+          },
+        ),
+        const SizedBox(width: AppSpace.xs),
+        _FilterChipButton(
+          label: _dateFilterLabel(filter),
+          active: filter.from != null || filter.to != null,
+          onTap: () async {
+            final picked = await showModalBottomSheet<_ActivityDatePreset>(
+              context: context,
+              builder: (sheetContext) => SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpace.lg,
+                          AppSpace.sm,
+                          AppSpace.lg,
+                          AppSpace.xs,
+                        ),
+                        child: Text(
+                          'Track activity by time',
+                          style: BambooFonts.heading(
+                            17,
+                            color: BambooInk.ink900,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpace.lg,
+                          0,
+                          AppSpace.lg,
+                          AppSpace.sm,
+                        ),
+                        child: Text(
+                          'Choose a quick period or set your own dates.',
+                          style: BambooFonts.ui(13, color: BambooInk.ink500),
+                        ),
+                      ),
+                      for (final preset in _ActivityDatePreset.values)
+                        ListTile(
+                          leading: Icon(
+                            _datePresetIcon(preset),
+                            color: preset == filter.datePreset
+                                ? BambooInk.jade
+                                : BambooInk.ink500,
+                          ),
+                          title: Text(
+                            preset.label,
+                            style: BambooFonts.ui(
+                              14,
+                              weight: FontWeight.w600,
+                              color: BambooInk.ink900,
+                            ),
+                          ),
+                          selected: preset == filter.datePreset,
+                          selectedTileColor: BambooInk.paperMuted,
+                          onTap: () => Navigator.of(sheetContext).pop(preset),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+            if (picked == null) return;
+
+            if (picked == _ActivityDatePreset.custom) {
+              final range = await showDateRangePicker(
+                context: context,
+                firstDate: DateTime.now().subtract(
+                  const Duration(days: 365 * 3),
+                ),
+                lastDate: DateTime.now(),
+                initialDateRange: filter.from != null && filter.to != null
+                    ? DateTimeRange(start: filter.from!, end: filter.to!)
+                    : null,
+              );
+              if (range != null) {
+                ref.read(_activityFilterProvider.notifier).state = filter
+                    .copyWith(
+                      from: () => range.start,
+                      to: () => range.end,
+                      datePreset: _ActivityDatePreset.custom,
+                    );
+              }
+              return;
+            }
+
+            final range = picked.range(DateTime.now());
+            ref.read(_activityFilterProvider.notifier).state = filter.copyWith(
+              from: () => range?.start,
+              to: () => range?.end,
+              datePreset: picked,
+            );
+          },
+        ),
+        if (filter.isActive) ...[
+          const SizedBox(width: AppSpace.xs),
+          _FilterChipButton(
+            label: 'Clear',
+            active: false,
+            onTap: () => ref.read(_activityFilterProvider.notifier).state =
+                const ActivityFilter(),
           ),
-          if (filter.isActive) ...[
-            const SizedBox(width: AppSpace.xs),
-            _FilterChipButton(
-              label: 'Clear',
-              active: false,
-              onTap: () => ref.read(_activityFilterProvider.notifier).state =
-                  const ActivityFilter(),
-            ),
-          ],
         ],
-      ),
+      ],
     );
   }
 }
@@ -937,7 +1313,12 @@ class _SummaryMetric extends StatelessWidget {
 class _TransactionTile extends StatelessWidget {
   final TransactionEntry entry;
   final VoidCallback onTap;
-  const _TransactionTile(this.entry, {required this.onTap});
+  final List<String> tagNames;
+  const _TransactionTile(
+    this.entry, {
+    required this.onTap,
+    this.tagNames = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -956,7 +1337,10 @@ class _TransactionTile extends StatelessWidget {
         : isMoneyOut
         ? BambooInk.clay
         : BambooInk.ink900;
-    final timeLabel = ActivityScreen._timeLabel(context, entry.occurredAt);
+    final timeLabel = _ActivityScreenState._timeLabel(
+      context,
+      entry.occurredAt,
+    );
     final isSmsImported = entry.source == 'sms' || entry.source == 'sms_bulk';
     final subtitleParts = <String>[
       isSmsImported ? '$timeLabel · SMS' : timeLabel,
@@ -1024,6 +1408,15 @@ class _TransactionTile extends StatelessWidget {
                     Text(
                       subtitleParts.join(' · '),
                       style: BambooFonts.ui(12, color: BambooInk.ink500),
+                    ),
+                  ],
+                  if (tagNames.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      tagNames.join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BambooFonts.ui(11.5, color: BambooInk.jade),
                     ),
                   ],
                 ],

@@ -20,6 +20,7 @@ import 'legal_screen.dart';
 import 'linked_devices_screen.dart';
 import 'notification_settings_screen.dart';
 import 'privacy_permissions_screen.dart';
+import 'transaction_tags_screen.dart';
 import 'whats_new_screen.dart';
 
 /// Design 20 "Settings & security" — one screen, grouped, reached from a
@@ -129,6 +130,12 @@ class SettingsHubScreen extends ConsumerWidget {
             const SizedBox(height: AppSpace.xxl),
 
             const _GroupHeader('Account'),
+            AccountTile(
+              icon: Icons.label_outline_rounded,
+              label: 'Manage tags',
+              onTap: () => open(const TransactionTagsScreen()),
+            ),
+            const SizedBox(height: AppSpace.sm),
             AccountTile(
               icon: Icons.alternate_email_rounded,
               label: 'Email & phone',

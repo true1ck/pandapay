@@ -85,12 +85,33 @@ class ImportDocument {
 
   Map<String, List<List<String>>> get tables => _tables ??= switch (kind) {
     ImportDocumentKind.spreadsheet => readSpreadsheetTables(bytes),
-    ImportDocumentKind.delimited => {
-      'table': readDelimitedRows(decodeStatementBytes(bytes)),
-    },
+    ImportDocumentKind.delimited => {'table': _delimitedRows()},
     ImportDocumentKind.json => {'json': _jsonRows(decodeStatementBytes(bytes))},
     ImportDocumentKind.pdf => {},
   };
+
+  List<List<String>> _delimitedRows() {
+    final rows = readDelimitedRows(decodeStatementBytes(bytes));
+    final sectionStart = rows.indexWhere(
+      (row) =>
+          row.length == 1 &&
+          row.single.trim().toLowerCase() == '# transactions',
+    );
+    if (sectionStart < 0) return rows;
+    var sectionEnd = rows.length;
+    for (var i = sectionStart + 1; i < rows.length; i++) {
+      if (rows[i].length == 1 && rows[i].single.trim().startsWith('# ')) {
+        sectionEnd = i;
+        break;
+      }
+    }
+    if (sectionEnd < rows.length) {
+      extractionWarnings.add(
+        'This is a combined data export. Transaction rows are imported; card records are retained in the file but are not transaction rows.',
+      );
+    }
+    return rows.sublist(sectionStart + 1, sectionEnd);
+  }
 
   ParsedStatement parse({
     StatementTableOptions options = const StatementTableOptions(),
@@ -121,7 +142,7 @@ class ImportDocument {
     return ParsedStatement(
       transactions: rows,
       rejectedRows: rejected,
-      warnings: warnings,
+      warnings: [...warnings, ...extractionWarnings],
     );
   }
 
@@ -157,7 +178,10 @@ List<List<String>> _jsonRows(String input) {
           row[key] == null
               ? ''
               : row[key] is Map || row[key] is List
-              ? ''
+              ? const ['tags', 'tagNames', 'tag_names', 'labels', 'tag', 'label']
+                        .contains(key)
+                    ? jsonEncode(row[key])
+                    : ''
               : row[key].toString(),
       ],
   ];
@@ -193,6 +217,31 @@ class TransactionImportSession {
   final Set<int> excluded = {};
   final Map<int, String> savedDuplicates = {};
   final Set<int> _confirmedSeparate = {};
+  List<String> _defaultTagNames = const [];
+
+  List<String> get defaultTagNames => _defaultTagNames;
+  String? get defaultTagsError =>
+      (_defaultTagNames.length > 30 || _defaultTagNames.any((name) => name.length > 60))
+      ? 'Use up to 30 tags, each with 1–60 characters.'
+      : null;
+
+  void setDefaultTags(Iterable<String> names) {
+    if (reviewLocked) {
+      throw StateError('Finish or retry this import before editing tags.');
+    }
+    _defaultTagNames = normalizeImportedTagNames(names);
+  }
+
+  void applyTagsToSelected(Iterable<String> names) {
+    if (reviewLocked) {
+      throw StateError('Finish or retry this import before editing tags.');
+    }
+    for (final index in selected) {
+      rows[index] = rows[index].reviewed(
+        tagNames: normalizeImportedTagNames([...rows[index].tagNames, ...names]),
+      );
+    }
+  }
 
   /// Candidates are deliberately described as possible matches, never proof.
   void checkSavedDuplicates(List<TransactionEntry> existing) {
@@ -283,6 +332,14 @@ class TransactionImportSession {
           isInvestment: row.isInvestment,
           sourceAccount: row.sourceAccount,
           bankReference: row.bankReference,
+          categoryHint: row.categoryHint,
+          subcategoryHint: row.subcategoryHint,
+          tagNames: row.tagNames,
+          categoryId: row.categoryId,
+          userCategoryId: row.userCategoryId,
+          instrument: row.instrument,
+          rail: row.rail,
+          note: row.note,
           sourceRowId: row.sourceRowId,
           reviewReasons: [
             ...row.reviewReasons,
@@ -424,6 +481,7 @@ class TransactionImportSession {
       selected.fold(0, (sum, i) => sum + rows[i].amount.paise);
   bool get ready =>
       selected.isNotEmpty &&
+      defaultTagsError == null &&
       selected.every((i) => destinations.containsKey(accountFor(rows[i])));
   String location(int index) => rows[index].sourceRowId ?? 'row:$index';
   String rowKey(int index) => sha256
@@ -440,7 +498,28 @@ class TransactionImportSession {
     if (reviewLocked) {
       throw StateError('Finish or retry this import before editing rows.');
     }
+    final previousAccount = accountFor(rows[index]);
+    final nextAccount = accountFor(row);
     rows[index] = row.reviewed(sourceRowId: location(index));
+    if (previousAccount != nextAccount &&
+        destinations.containsKey(previousAccount)) {
+      destinations.putIfAbsent(
+        nextAccount,
+        () => destinations[previousAccount]!,
+      );
+      if (instruments.containsKey(previousAccount)) {
+        instruments.putIfAbsent(
+          nextAccount,
+          () => instruments[previousAccount]!,
+        );
+      }
+      if (destinationNotes.containsKey(previousAccount)) {
+        destinationNotes.putIfAbsent(
+          nextAccount,
+          () => destinationNotes[previousAccount]!,
+        );
+      }
+    }
     if (eligible(index)) {
       excluded.remove(index);
     } else {
@@ -480,10 +559,18 @@ class TransactionImportSession {
         : rows[index].isCredit
         ? TxnEntryKind.income
         : TxnEntryKind.spend,
-    instrument: instruments[accountFor(rows[index])],
+    instrument: rows[index].instrument ?? instruments[accountFor(rows[index])],
     bankReference: rows[index].bankReference,
     categoryHint: rows[index].categoryHint,
     subcategoryHint: rows[index].subcategoryHint,
+    tagNames: normalizeImportedTagNames([
+      ...rows[index].tagNames,
+      ..._defaultTagNames,
+    ]),
+    categoryId: rows[index].categoryId,
+    userCategoryId: rows[index].userCategoryId,
+    rail: rows[index].rail,
+    note: rows[index].note,
     importRowKey: rowKey(index),
     sourceAccount: rows[index].sourceAccount?.replaceAllMapped(
       RegExp(r'\d{6,}'),

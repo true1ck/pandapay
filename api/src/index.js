@@ -24,6 +24,7 @@ const nearbyGoogle = require('./nearby_google');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const rewardMath = require('./reward_math');
 const { registerSplitRoutes } = require('./transaction_splits');
+const transactionTags = require('./transaction_tags');
 const { AMOUNT_TOLERANCE_INR, MAX_TIME_DISTANCE_MS, bestDuplicate } = require('./transaction_dedup');
 const { emailSourceKey } = require('./source_identity');
 const spendReports = require('./spend_reports');
@@ -3580,6 +3581,7 @@ async function insertTransactionAndUpdateState(client, userId, {
   // status='active', so this establishes the count-once invariant across all
   // existing consumers without teaching each feature its own dedupe rule.
   if (duplicates.automatic) {
+    await transactionTags.mergeTransactionTags(client, userId, txn.rows[0].id, duplicates.duplicateOf);
     await client.query(`UPDATE transactions SET status = 'ignored', note = $1 WHERE id = $2`,
       [`[automatically matched duplicate of ${duplicates.duplicateOf}]`, txn.rows[0].id]);
     await recordTransactionObservation(client, userId, duplicates.duplicateOf, {
@@ -3943,9 +3945,13 @@ async function repairSmsHistory(client, userId) {
       WHERE t.id = ranked.id
         AND ranked.id <> ranked.keep_id
         AND t.status = 'active'
-     RETURNING t.id` ,
+     RETURNING t.id, ranked.keep_id` ,
     [userId]
   );
+
+  for (const row of duplicateRows.rows) {
+    await transactionTags.mergeTransactionTags(client, userId, row.id, row.keep_id);
+  }
 
   // Older builds only had exact body-hash replay protection. Repair the
   // resulting double alerts with the same deliberately narrow notification
@@ -3994,9 +4000,13 @@ async function repairSmsHistory(client, userId) {
             note = trim(concat('[automatic SMS notification duplicate of ', pairs.keep_id::text, '] ', coalesce(t.note, '')))
        FROM pairs
       WHERE t.id = pairs.ignore_id AND t.status = 'active'
-     RETURNING t.id`,
+     RETURNING t.id, pairs.keep_id`,
     [userId]
   );
+
+  for (const row of notificationDuplicateRows.rows) {
+    await transactionTags.mergeTransactionTags(client, userId, row.id, row.keep_id);
+  }
 
   // A card can be added after its SMS history was imported. Keep those rows
   // as card transactions while they are unmatched, then attach them as soon
@@ -5486,6 +5496,9 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
  * a caller doesn't need to think about timezone-of-day edge cases.
  */
 app.get('/transactions', requireAuth, async (req, res) => {
+  let tagFilter;
+  try { tagFilter = transactionTags.readTagFilter(req.query); }
+  catch (error) { return res.status(400).json({ error: error.message }); }
   const { from, to, cardId, categoryId, userCategoryId, source, q } = req.query;
   // Keep transaction-list consumers aligned with spend reports even before a
   // background reconciliation has run. Only a unique archived -> active
@@ -5561,7 +5574,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
 
   try {
     const result = await withUserClient(req.userId, (client) =>
-      client.query(
+      transactionTags.tagQueryClient(client, req.userId, tagFilter).query(
         `WITH replacement_candidates AS (
           SELECT archived.id AS archived_card_id, active.id AS active_card_id
             FROM user_cards archived
@@ -5618,7 +5631,8 @@ app.get('/transactions', requireAuth, async (req, res) => {
         params
       )
     );
-    res.json({ transactions: result.rows });
+    const rows = await withUserClient(req.userId, (client) => transactionTags.attachTags(client, req.userId, result.rows));
+    res.json({ transactions: rows });
   } catch (err) {
     console.error('GET /transactions error', err);
     res.status(500).json({ error: 'internal_error' });
@@ -5702,7 +5716,8 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
       )
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'transaction not found' });
-    res.json({ transaction: result.rows[0] });
+    const [transaction] = await withUserClient(req.userId, (client) => transactionTags.attachTags(client, req.userId, result.rows));
+    res.json({ transaction });
   } catch (err) {
     console.error('GET /transactions/:id error', err);
     res.status(500).json({ error: 'internal_error' });
@@ -5864,6 +5879,7 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
           return { status: 400, error: 'keepTransactionId must be one of the pair' };
         }
         const dropId = keepTransactionId === txnA ? txnB : txnA;
+        await transactionTags.mergeTransactionTags(client, req.userId, dropId, keepTransactionId);
         await deactivateIfActive(dropId, keepTransactionId);
         await activateIfSuppressed(keepTransactionId);
 
@@ -6134,6 +6150,7 @@ app.patch('/transactions/:id/note', requireAuth, async (req, res) => {
  * faking the feature. These two routes close it.
  */
 registerSplitRoutes(app, { requireAuth, withUserClient });
+transactionTags.registerTagRoutes(app, { requireAuth, withUserClient });
 
 /**
  * POST /transactions/:id/ignore — Task C-0c (ui-spec D2 "mark ignored
@@ -6492,6 +6509,9 @@ app.get('/spend-by-category', requireAuth, async (req, res) => {
  * meaningful next to what last month was.
  */
 app.get('/spend-report', requireAuth, async (req, res) => {
+  let tagFilter;
+  try { tagFilter = transactionTags.readTagFilter(req.query); }
+  catch (error) { return res.status(400).json({ error: error.message }); }
   const period = req.query.period || 'month';
   if (!spendReports.PERIODS.includes(period)) {
     return res.status(400).json({ error: `period must be one of ${spendReports.PERIODS.join(', ')}` });
@@ -6516,7 +6536,8 @@ app.get('/spend-report', requireAuth, async (req, res) => {
     : 'Asia/Kolkata';
 
   try {
-    const payload = await withUserClient(req.userId, async (client) => {
+    const payload = await withUserClient(req.userId, async (rawClient) => {
+      const client = transactionTags.tagQueryClient(rawClient, req.userId, tagFilter);
       // Validate against Postgres' timezone catalogue before using the zone
       // for calendar boundaries. An invalid device setting should degrade to
       // the product default, not turn the whole Insights screen into a 500.
@@ -6579,6 +6600,9 @@ app.get('/spend-report', requireAuth, async (req, res) => {
  * spend. It returns no raw transaction, SMS, merchant, or card data.
  */
 app.get('/assistant/spending-summary', requireAuth, async (req, res) => {
+  let tagFilter;
+  try { tagFilter = transactionTags.readTagFilter(req.query); }
+  catch (error) { return res.status(400).json({ error: error.message }); }
   const period = req.query.period || 'month';
   if (!spendReports.PERIODS.includes(period) || period === 'custom') {
     return res.status(400).json({ error: `period must be one of ${spendReports.PERIODS.join(', ')}` });
@@ -6592,7 +6616,8 @@ app.get('/assistant/spending-summary', requireAuth, async (req, res) => {
     : 'Asia/Kolkata';
 
   try {
-    const summary = await withUserClient(req.userId, async (client) => {
+    const summary = await withUserClient(req.userId, async (rawClient) => {
+      const client = transactionTags.tagQueryClient(rawClient, req.userId, tagFilter);
       const tzOk = await client.query(
         `SELECT 1 FROM pg_timezone_names WHERE name = $1`,
         [requestedTimeZone]
@@ -6667,7 +6692,9 @@ app.get('/export/transactions.csv', requireAuth, async (req, res) => {
       'Date', 'Amount (INR)', 'Merchant', 'Category', 'Subcategory', 'Card',
       'Paid with', 'Kind', 'Rail', 'Source', 'Rewards (INR)', 'Note',
     ];
-    const body = rows.rows.map((r) => [
+    const taggedRows = await withUserClient(req.userId, (client) => transactionTags.attachTags(client, req.userId, rows.rows));
+    header.push('Tags');
+    const body = taggedRows.map((r) => [
       new Date(r.occurred_at).toISOString().slice(0, 10),
       Number(r.amount_inr).toFixed(2),
       r.merchant_name,
@@ -6680,6 +6707,7 @@ app.get('/export/transactions.csv', requireAuth, async (req, res) => {
       r.source,
       Number(r.expected_value_inr || 0).toFixed(2),
       r.note,
+      JSON.stringify(r.tags.map((tag) => tag.name)),
     ]);
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -6691,7 +6719,7 @@ app.get('/export/transactions.csv', requireAuth, async (req, res) => {
   }
 });
 
-const BUDGET_SCOPES = ['overall', 'category', 'card'];
+const BUDGET_SCOPES = ['overall', 'category', 'card', 'tag'];
 const BUDGET_PERIODS = ['weekly', 'monthly', 'quarterly', 'yearly'];
 
 /**
@@ -6716,8 +6744,10 @@ app.get('/budgets', requireAuth, async (req, res) => {
                 b.rollover, b.is_active,
                 COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
-                cp.name AS card_name, uc.nickname AS card_nickname
+                cp.name AS card_name, uc.nickname AS card_nickname,
+                tt.name AS tag_name
            FROM budgets b
+          LEFT JOIN transaction_tags tt ON b.scope = 'tag' AND tt.id=b.scope_ref_id AND tt.profile_id=b.profile_id
           LEFT JOIN spend_categories sc ON b.scope = 'category' AND sc.id = b.scope_ref_id
           LEFT JOIN user_categories ucat ON b.scope = 'category' AND ucat.id = b.scope_ref_id AND ucat.profile_id = b.profile_id
           LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
@@ -6746,7 +6776,7 @@ app.get('/budgets', requireAuth, async (req, res) => {
               ? (b.subcategory_name
                 ? `${b.category_name || 'Category'} · ${b.subcategory_name}`
                 : (b.category_name || 'Category'))
-              : (b.card_nickname || b.card_name || 'Card'),
+              : b.scope === 'tag' ? (b.tag_name || 'Tag') : (b.card_nickname || b.card_name || 'Card'),
           period: b.period,
           amountInr,
           startsOn: b.starts_on,
@@ -6816,6 +6846,9 @@ app.post('/budgets', requireAuth, async (req, res) => {
           [scopeRefId, req.userId],
         );
         if (found.rows.length === 0) return { status: 404, error: 'category not found' };
+      } else if (scope === 'tag') {
+        const found = await client.query('SELECT id FROM transaction_tags WHERE id=$1 AND profile_id=$2 AND archived_at IS NULL', [scopeRefId,req.userId]);
+        if (!found.rows.length) return { status:404,error:'tag not found' };
       } else if (scope === 'card') {
         const found = await client.query(
           `SELECT id FROM user_cards WHERE id = $1 AND profile_id = $2 AND is_archived = false`,
@@ -9537,12 +9570,17 @@ app.get('/export', requireAuth, async (req, res) => {
       const out = {};
       if (scope === 'transactions' || scope === 'all') {
         const txns = await client.query(
-          `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
+          `SELECT t.id,
+                  COALESCE(NULLIF(uc.nickname, ''), cp.name, t.instrument::text) ||
+                    CASE WHEN uc.last4 IS NOT NULL THEN ' •••• ' || uc.last4 ELSE '' END AS source_account,
+                  t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                   t.category_id, t.user_category_id,
                   COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
                   CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
-                  t.rail, t.status
+                  t.entry_kind, t.instrument, t.rail, t.source, t.expected_value_inr, t.note, t.status
              FROM transactions t
+             LEFT JOIN user_cards uc ON uc.id = t.user_card_id AND uc.profile_id = t.profile_id
+             LEFT JOIN card_products cp ON cp.id = uc.card_product_id
              LEFT JOIN spend_categories sc ON sc.id = t.category_id
              LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
              LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
@@ -9551,7 +9589,8 @@ app.get('/export', requireAuth, async (req, res) => {
             ORDER BY t.occurred_at DESC`,
           [req.userId]
         );
-        out.transactions = txns.rows;
+        out.transactions = await transactionTags.attachTags(client, req.userId, txns.rows);
+        out.tags = (await client.query('SELECT id,name,color,archived_at,updated_at FROM transaction_tags WHERE profile_id=$1', [req.userId])).rows;
       }
       if (scope === 'cards' || scope === 'all') {
         const cards = await client.query(

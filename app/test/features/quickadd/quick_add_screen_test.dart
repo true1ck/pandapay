@@ -59,6 +59,9 @@ class _ThrowingMerchantSearchRepository implements MerchantSearchRepository {
 /// In-memory stand-in for UserCardsRepository.logTransaction so the
 /// save+pop+Undo flow can be exercised without a real HTTP client.
 class _FakeUserCardsRepository extends UserCardsRepository {
+  String? savedCategoryId;
+  String? savedUserCategoryId;
+
   _FakeUserCardsRepository()
     : super(apiBaseUrl: 'http://localhost', accessToken: 't');
 
@@ -77,7 +80,11 @@ class _FakeUserCardsRepository extends UserCardsRepository {
     TxnInstrument instrument = TxnInstrument.creditCard,
     TxnEntryKind entryKind = TxnEntryKind.spend,
     String? clientMutationId,
-  }) async => 'fake-txn-id';
+  }) async {
+    savedCategoryId = categoryId;
+    savedUserCategoryId = userCategoryId;
+    return 'fake-txn-id';
+  }
 
   @override
   Future<void> ignoreTransaction(String id, {required String reason}) async {}
@@ -315,6 +322,69 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('choosing a subcategory saves its id with the transaction', (
+    tester,
+  ) async {
+    const card = UserCard(
+      id: 'card-1',
+      cardProductId: 'product-1',
+      cardName: 'Test Card',
+      isDefault: true,
+    );
+    final repository = _FakeUserCardsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          userCardsProvider.overrideWith((ref) async => const [card]),
+          userCardsRepositoryProvider.overrideWithValue(repository),
+          categoriesProvider.overrideWith(
+            (ref) async => const [
+              SpendCategory(id: 'food', slug: 'food', name: 'Food'),
+              SpendCategory(
+                id: 'dining-out',
+                slug: 'dining-out',
+                name: 'Dining out',
+                parentCategoryId: 'food',
+              ),
+            ],
+          ),
+          transactionsProvider.overrideWith((ref) async => const []),
+          merchantSearchRepositoryProvider.overrideWithValue(
+            _EmptyMerchantSearchRepository(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: QuickAddScreen(initialUserCardId: 'card-1', autofocus: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Food'));
+    await tester.tap(find.text('Food'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('quick-add-subcategories')),
+      findsOneWidget,
+    );
+    expect(find.text('Dining out'), findsOneWidget);
+
+    await tester.tap(find.text('Dining out'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_amountField, '25');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Cash'));
+    await tester.tap(find.text('Cash'));
+    await tester.pumpAndSettle();
+    final saveButton = await _saveButton(tester);
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    expect(repository.savedCategoryId, 'dining-out');
+    expect(repository.savedUserCategoryId, isNull);
+  });
 
   testWidgets('Save stays disabled until an amount and a card are both set', (
     tester,

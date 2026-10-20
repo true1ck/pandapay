@@ -89,6 +89,7 @@ class SyncEngine {
 
       final pushed = await _push(api, queue, deviceId);
       final (pulled, conflicts) = await _pullAndApply(api, queue, deviceId);
+      await _ref.read(transactionTagsProvider)?.sync();
 
       return SyncResult(
         pushed: pushed,
@@ -258,7 +259,11 @@ class SyncEngine {
       final categories = await api.fetchUserCategories();
       final categoriesRepository = const UserCategoriesRepository();
       for (final category in categories) {
-        categoriesRepository.upsertRemote(cache.financialStore.database, namespace, category);
+        categoriesRepository.upsertRemote(
+          cache.financialStore.database,
+          namespace,
+          category,
+        );
       }
       if (_ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError('Account changed during sync');
@@ -310,6 +315,7 @@ final unacknowledgedConflictsProvider = StateProvider<int>((ref) => 0);
 /// would be the right addition when one device needs to learn about another's
 /// change immediately, which no screen currently requires.
 final syncLifecycleProvider = Provider<void>((ref) {
+  ref.watch(transactionTagsProvider);
   ref.watch(splitSyncLifecycleProvider);
   ref.listen<String>(cacheNamespaceProvider, (previous, next) async {
     if (previous != next && next != 'signed-out') {

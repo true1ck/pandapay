@@ -212,6 +212,18 @@ test('category fallback recognises a fuel-station merchant when no rule exists',
   assert.deepEqual(client.calls[2].params, ['fuel']);
 });
 
+test('exact reviewed category hint is kept instead of reclassifying by merchant', async () => {
+  const client = fakeClient([[{ id: 'dining-category' }]]);
+  const result = await resolveCategoryForImport(client, 'user-1', {
+    merchantName: 'A merchant normally classified as groceries',
+    categoryHint: 'Dining',
+  });
+
+  assert.equal(result, 'dining-category');
+  assert.deepEqual(client.calls[0].params, ['dining']);
+  assert.match(client.calls[0].sql, /spend_categories/);
+});
+
 test('published VPA category outranks local history and keyword fallback', async () => {
   const client = fakeClient([[{ category_id: 'vpa-category' }]]);
   const result = await resolveCategoryForImport(client, 'user-1', {
