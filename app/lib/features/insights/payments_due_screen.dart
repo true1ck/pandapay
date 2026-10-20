@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
-import '../../app/router.dart' show AppRoute;
 import '../../data/api_exception.dart';
 import '../../data/commitments_repository.dart';
 import '../../data/user_cards_repository.dart';
-import '../../main.dart' show MoneyText;
-import 'billing_float_screen.dart' show assumedGracePeriodDays;
 
 // ---------------------------------------------------------------------------
 // Backward-compatible type aliases for existing test harnesses
@@ -182,9 +178,6 @@ class _DueList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final soonest = rows.isNotEmpty ? rows.first : null;
-    final rest = rows.length > 1 ? rows.skip(1).toList() : const <DuePayment>[];
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.lg,
@@ -193,97 +186,26 @@ class _DueList extends StatelessWidget {
         AppSpace.xxl,
       ),
       children: [
-        // ── Section A: Credit card dues (if any) ──────────────────────
         if (rows.isNotEmpty) ...[
-          _SectionHeader(label: 'Credit card dues', count: rows.length),
+          _SectionHeader(label: 'Credit cards', count: rows.length),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            'Dates are based on your saved card settings. Check the issuer for the amount and payment status.',
+            style: BambooFonts.ui(12, color: BambooInk.ink500),
+          ),
           const SizedBox(height: AppSpace.md),
-          if (soonest != null) _SoonestCard(row: soonest),
-          if (rest.isNotEmpty) ...[
-            const SizedBox(height: AppSpace.sm),
-            for (final row in rest)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                child: _ComingUpRow(row: row),
-              ),
-          ],
-          const SizedBox(height: AppSpace.xl),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpace.sm),
+              child: _ComingUpRow(row: row),
+            ),
+          const SizedBox(height: AppSpace.lg),
         ],
 
         // ── Section B: Upcoming bills & insurance commitments ─────────
         const _CommitmentsSection(),
         const SizedBox(height: AppSpace.xl),
-
-        // ── Section C: Subscriptions nudge ────────────────────────────
-        const _SubscriptionsNudge(),
-        const SizedBox(height: AppSpace.xl),
-
-        // ── Section D: Free money float tip (if cards exist) ──────────
-        if (rows.isNotEmpty) _FreeMoneyCard(rows: rows),
       ],
-    );
-  }
-}
-
-class _SoonestCard extends StatelessWidget {
-  final DuePayment row;
-  const _SoonestCard({required this.row});
-
-  @override
-  Widget build(BuildContext context) {
-    final card = row.card;
-    final urgent = row.daysUntilDue <= 5 && row.needsAttention;
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [BambooInk.slateRaised, BambooInk.slate, BambooInk.slateLow],
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      padding: const EdgeInsets.all(AppSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            row.daysUntilDue == 0
-                ? 'DUE TODAY'
-                : 'DUE IN ${row.daysUntilDue} ${row.daysUntilDue == 1 ? 'DAY' : 'DAYS'}',
-            style: BambooFonts.ui(
-              11,
-              weight: FontWeight.w700,
-              color: urgent ? BambooInk.lime : BambooInk.onSlateMuted,
-            ).copyWith(letterSpacing: 1.2),
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Text(
-            card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName,
-            style: BambooFonts.heading(20, color: BambooInk.onSlate),
-          ),
-          const SizedBox(height: AppSpace.md),
-          Text(
-            'Logged on this card this cycle',
-            style: BambooFonts.ui(12, color: BambooInk.onSlateMuted),
-          ),
-          const SizedBox(height: 2),
-          MoneyText(
-            row.loggedThisCycle,
-            confidence: Confidence.estimated,
-            style: BambooFonts.money(28, color: BambooInk.onSlate),
-            hidePaise: true,
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Text(
-            "Your issuer's statement may be higher — PandaPay only counts what it has seen.",
-            style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
-          ),
-          const SizedBox(height: AppSpace.md),
-          const Divider(height: 1, color: BambooInk.slateHairline),
-          const SizedBox(height: AppSpace.md),
-          const _AutopayLine(onSlate: true),
-        ],
-      ),
     );
   }
 }
@@ -344,83 +266,7 @@ class _ComingUpRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpace.sm),
-          MoneyText(
-            row.loggedThisCycle,
-            confidence: Confidence.estimated,
-            style: BambooFonts.money(15, color: BambooInk.ink900),
-            hidePaise: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AutopayLine extends StatelessWidget {
-  final bool onSlate;
-  const _AutopayLine({required this.onSlate});
-
-  @override
-  Widget build(BuildContext context) {
-    final text = 'Autopay status not verified — check your issuer app';
-    final color = onSlate ? BambooInk.onSlateSubtle : BambooInk.ink500;
-    return Text(text, style: BambooFonts.ui(12.5, color: color));
-  }
-}
-
-class _FreeMoneyCard extends ConsumerWidget {
-  final List<DuePayment> rows;
-  const _FreeMoneyCard({required this.rows});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final clock = ref.watch(clockProvider);
-
-    (UserCard, int)? best;
-    for (final row in rows) {
-      final statementDay = row.card.statementDay;
-      if (statementDay == null) continue;
-      final float = billingCycleFloat(
-        statementDay: statementDay,
-        gracePeriodDays: assumedGracePeriodDays,
-        clock: clock,
-      );
-      if (best == null || float.totalInterestFreeDays > best.$2) {
-        best = (row.card, float.totalInterestFreeDays);
-      }
-    }
-    if (best == null) return const SizedBox.shrink();
-
-    final (card, days) = best;
-    return Container(
-      decoration: BoxDecoration(
-        color: BambooInk.rankBadgeBg,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: BambooInk.rankBadgeBorder),
-      ),
-      padding: const EdgeInsets.all(AppSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Free money, briefly',
-            style: BambooFonts.ui(
-              12,
-              weight: FontWeight.w700,
-              color: BambooInk.rankBadgeInk,
-            ),
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Text(
-            'A big purchase on ${card.nickname?.isNotEmpty == true ? card.nickname! : card.cardName} '
-            'today holds the cash for up to $days interest-free days.',
-            style: BambooFonts.ui(13, color: BambooInk.ink900),
-          ),
-          const SizedBox(height: AppSpace.xs),
-          Text(
-            'Assumes a $assumedGracePeriodDays-day grace period — issuers vary.',
-            style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-          ),
+          const Icon(Icons.chevron_right_rounded, color: BambooInk.ink500),
         ],
       ),
     );
@@ -635,10 +481,9 @@ class _CommitmentRow extends ConsumerWidget {
         ),
       );
     }
-    if (commitment.status == CommitmentStatus.paymentNotDetected ||
-        commitment.isPastGrace(now)) {
+    if (daysUntil < 0) {
       return Text(
-        'Payment not detected · due ${DateFormat('d MMM').format(commitment.dueOn)}',
+        'Past due date · payment status unknown',
         style: BambooFonts.ui(12, color: BambooInk.clayInk),
       );
     }
@@ -678,28 +523,22 @@ class _CommitmentsSection extends ConsumerWidget {
 
     return commitmentsAsync.when(
       loading: () => const SkeletonList(count: 2),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       data: (commitments) {
-        // Progressive disclosure:
-        // 1. Unreviewed items route to Needs Review banner.
-        final unreviewed = commitments
-            .where(
-              (c) =>
-                  c.status != CommitmentStatus.dismissed &&
-                  (c.confidence < 0.85 ||
-                      c.status == CommitmentStatus.needsConfirmation),
-            )
-            .toList();
-        final active = commitments
-            .where(
-              (c) =>
-                  c.confidence >= 0.85 &&
-                  c.status != CommitmentStatus.needsConfirmation &&
-                  c.status != CommitmentStatus.dismissed &&
-                  !(c.status == CommitmentStatus.paid &&
-                      c.cadence == CommitmentCadence.oneTime),
-            )
-            .toList();
+        final today = ref.watch(clockProvider).now();
+        final startOfToday = DateTime(today.year, today.month, today.day);
+        final active =
+            commitments
+                .where(
+                  (c) =>
+                      c.confidence >= 0.85 &&
+                      c.status != CommitmentStatus.needsConfirmation &&
+                      c.status != CommitmentStatus.dismissed &&
+                      c.status != CommitmentStatus.paid &&
+                      c.dueOn.isAfter(startOfToday),
+                )
+                .toList()
+              ..sort((a, b) => a.dueOn.compareTo(b.dueOn));
 
         // 2. Hide empty categories (no placeholder zeroes).
         final utilities = active
@@ -723,12 +562,7 @@ class _CommitmentsSection extends ConsumerWidget {
             )
             .toList();
 
-        // This banner is specifically for commitment evidence. The existing
-        // transaction review queue has a different item type and must not
-        // inflate this count or promise that a bill can be reviewed there.
-        final totalUnreviewed = unreviewed.length;
-
-        if (active.isEmpty && totalUnreviewed == 0) {
+        if (active.isEmpty) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -751,7 +585,7 @@ class _CommitmentsSection extends ConsumerWidget {
                     const SizedBox(width: AppSpace.sm),
                     Expanded(
                       child: Text(
-                        'No upcoming bills detected yet. Tap + to add one.',
+                        'No verified future bills found. Add a bill with + if a reminder is missing.',
                         style: BambooFonts.ui(13, color: BambooInk.ink700),
                       ),
                     ),
@@ -765,12 +599,6 @@ class _CommitmentsSection extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Real Needs Review banner connected to queue ───────────
-            if (totalUnreviewed > 0) ...[
-              _NeedsReviewCommitmentsBanner(count: totalUnreviewed),
-              const SizedBox(height: AppSpace.lg),
-            ],
-
             // ── Utilities & telecom group ─────────────────────────────
             if (utilities.isNotEmpty) ...[
               _SectionHeader(label: 'Upcoming bills', count: utilities.length),
@@ -815,51 +643,6 @@ class _CommitmentsSection extends ConsumerWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _NeedsReviewCommitmentsBanner extends StatelessWidget {
-  final int count;
-  const _NeedsReviewCommitmentsBanner({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => context.push(AppRoute.needsReview),
-      child: Container(
-        decoration: BoxDecoration(
-          color: BambooInk.warningBg,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: BambooInk.warningBorder),
-        ),
-        padding: const EdgeInsets.all(AppSpace.md),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.help_outline_rounded,
-              color: BambooInk.clayInk,
-              size: 20,
-            ),
-            const SizedBox(width: AppSpace.md),
-            Expanded(
-              child: Text(
-                '$count ${count == 1 ? 'item needs' : 'items need'} review in queue · tap to review',
-                style: BambooFonts.ui(
-                  13,
-                  weight: FontWeight.w600,
-                  color: BambooInk.clayInk,
-                ),
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: BambooInk.clayInk,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -987,10 +770,10 @@ class _CommitmentDetailSheet extends ConsumerWidget {
               value: isPaid
                   ? 'Paid on ${commitment.paidOn != null ? DateFormat('d MMM').format(commitment.paidOn!) : 'record'}'
                   : commitment.status == CommitmentStatus.paymentNotDetected
-                  ? 'Payment not detected'
+                  ? 'Payment status unknown'
                   : inGrace
                   ? 'In grace window'
-                  : 'Upcoming due',
+                  : 'Due date recorded · payment status unknown',
             ),
             const SizedBox(height: AppSpace.md),
 
@@ -1012,7 +795,7 @@ class _CommitmentDetailSheet extends ConsumerWidget {
                     child: Text(
                       isPaid
                           ? 'This commitment has been marked as paid.'
-                          : 'Marking as paid records the payment date and automatically schedules the next recurring due date.',
+                          : 'Mark as paid only after checking your provider. A recurring bill then moves to its next cycle.',
                       style: BambooFonts.ui(12, color: BambooInk.ink700),
                     ),
                   ),
@@ -1469,58 +1252,6 @@ class _AddCommitmentSheetState extends ConsumerState<_AddCommitmentSheet> {
       label: Text(label),
       selected: selected,
       onSelected: (_) => setState(() => _cadence = cadence),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Subscriptions nudge — compact tap-through to SubscriptionsScreen
-// ---------------------------------------------------------------------------
-
-class _SubscriptionsNudge extends ConsumerWidget {
-  const _SubscriptionsNudge();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final report = ref.watch(recurringReportProvider);
-    final count = report.valueOrNull?.series
-        .where((s) => s.nextExpectedOn != null)
-        .length;
-
-    if (count == null || count == 0) return const SizedBox.shrink();
-
-    return GestureDetector(
-      onTap: () => context.push(AppRoute.subscriptions),
-      child: Container(
-        decoration: BoxDecoration(
-          color: BambooInk.rankBadgeBg,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: BambooInk.rankBadgeBorder),
-        ),
-        padding: const EdgeInsets.all(AppSpace.md),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.autorenew_rounded,
-              color: BambooInk.jade,
-              size: 20,
-            ),
-            const SizedBox(width: AppSpace.md),
-            Expanded(
-              child: Text(
-                '$count recurring '
-                '${count == 1 ? 'subscription' : 'subscriptions'} · tap to review',
-                style: BambooFonts.ui(13, color: BambooInk.rankBadgeInk),
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: BambooInk.rankBadgeInk,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

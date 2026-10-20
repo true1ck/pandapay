@@ -974,6 +974,8 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
     final cache = await ref.watch(responseCacheProvider.future);
     final ns = ref.watch(cacheNamespaceProvider);
     final observations = cache.financialStore.entities(ns, 'sms_observations');
+    final today = DateTime.now();
+    final startOfToday = DateTime(today.year, today.month, today.day);
 
     final detectedByIdentity = <String, Commitment>{};
     String identityFor(
@@ -1007,21 +1009,51 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
       final dueDateStr = obs['due_date'] as String?;
       if (dueDateStr == null) continue;
       final dueDate = DateTime.tryParse(dueDateStr);
-      if (dueDate == null) continue;
+      if (dueDate == null || !dueDate.isAfter(startOfToday)) continue;
 
       final sender = (obs['sender_bank'] as String? ?? 'Bill').trim();
       final biller = (obs['biller_name'] as String?)?.trim();
-      final title = biller == null || biller.isEmpty ? sender : biller;
+      final title = biller == null || biller.isEmpty
+          ? (sender.toUpperCase().contains('LIC') ? 'LIC policy' : sender)
+          : biller;
+      // Message fragments and amounts are not trustworthy biller names.
+      if (RegExp(
+            r'^(?:rs\.?|inr)?\s*[\d,./-]+\s*$',
+            caseSensitive: false,
+          ).hasMatch(title) ||
+          RegExp(
+            r'\b(?:a/c|account|towards|due|payment)\b',
+            caseSensitive: false,
+          ).hasMatch(title) ||
+          (biller == null &&
+              !RegExp(
+                r'LIC|ALEGRA|AIRTEL|JIO|BSNL|BESCOM|MSEDCL|HDFC|ICICI|AXIS|SBI',
+                caseSensitive: false,
+              ).hasMatch(sender))) {
+        continue;
+      }
       final amountPaise = (obs['amount_due_paise'] as num?)?.toInt();
       final account = obs['account_last4'] as String?;
       final category = CommitmentCategory.fromText('$title $sender');
+      // Credit-card statements belong to issuer cards, even if the SMS
+      // omitted the last four digits used by the card observation parser.
+      if (RegExp(
+        r'credit\s*card',
+        caseSensitive: false,
+      ).hasMatch('$title $sender')) {
+        continue;
+      }
       final identity = identityFor(category, title, account);
+      final confidence = (obs['confidence'] as num?)?.toDouble() ?? 0.55;
+      final identifiedLicPolicy =
+          category == CommitmentCategory.insurance &&
+          sender.toUpperCase().contains('LIC') &&
+          account != null;
+      if (confidence < 0.85 && !identifiedLicPolicy) continue;
       final cadenceHint = obs['cadence_hint'] as String?;
       final cadence = CommitmentCadence.values.firstWhere(
         (value) => value.name == cadenceHint,
-        orElse: () => category == CommitmentCategory.insurance
-            ? CommitmentCadence.annual
-            : CommitmentCadence.monthly,
+        orElse: () => CommitmentCadence.oneTime,
       );
 
       // Observations are evidence, not separate bills. Keep the newest
@@ -1042,7 +1074,9 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
         cadence: cadence,
         status: CommitmentStatus.due,
         source: CommitmentSource.sms,
-        confidence: (obs['confidence'] as num?)?.toDouble() ?? 0.55,
+        confidence: identifiedLicPolicy && confidence < 0.85
+            ? 0.85
+            : confidence,
       );
     }
 

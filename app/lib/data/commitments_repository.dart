@@ -400,11 +400,21 @@ class CommitmentsRepository {
       }
     } else {
       // Advance to next recurring period so recurring commitment lives on
-      final nextDue = _advanceCadence(
+      var nextDue = _advanceCadence(
         target.dueOn,
         target.cadence,
         target.anchorDay,
       );
+      final paidDay = DateTime(
+        paymentDate.year,
+        paymentDate.month,
+        paymentDate.day,
+      );
+      // An old reminder may be marked paid much later. Never leave its
+      // next cycle in the past after the user's confirmation.
+      while (!nextDue.isAfter(paidDay)) {
+        nextDue = _advanceCadence(nextDue, target.cadence, target.anchorDay);
+      }
       final rolledForward = target.copyWith(
         dueOn: nextDue,
         anchorDay: target.anchorDay ?? target.dueOn.day,

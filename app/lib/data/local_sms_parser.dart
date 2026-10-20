@@ -359,12 +359,26 @@ class LocalSmsParser {
         : _re(
             r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX-]*\s*(\d{4})\b',
           ).firstMatch(body)?.group(1);
+    final isInsuranceReminder = _re(
+      r'\b(?:lic|life insurance|policy|premium)\b',
+    ).hasMatch('$sender $body');
+    final policyLast4 = isInsuranceReminder
+        ? _re(
+            r'\b(?:policy|pol\.?)(?:\s*(?:no\.?|number|#))?\s*[:#-]?\s*(?:x{2,}|\*{2,})?(\d{4,})\b',
+          ).firstMatch(body)?.group(1)
+        : null;
     DateTime? due;
     for (final phrase in [
       r'\bdue\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
       r'\bpay\s+by\s*[:\-]?\s*',
       r'\b(?:payment|bill|amount)\s+due\s+date\b[\s\S]{0,120}?\b(?:is|on|by)\s*[:\-]?\s*',
       r'\b(?:renew(?:s|al|ing)?|expires?)\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
+      if (isInsuranceReminder)
+        r'\b(?:premium|policy)\b[\s\S]{0,90}?\b(?:due|payable|debit(?:ed)?|scheduled)\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
+      if (isInsuranceReminder)
+        r'\b(?:premium|policy)\b[\s\S]{0,90}?\b(?:on|by)\s*',
+      if (isInsuranceReminder)
+        r'\b(?:maintain|keep)\s+(?:sufficient|adequate)\s+(?:funds|balance)\b[\s\S]{0,100}?\b(?:on|by|before)\s*',
     ]) {
       final token = _re('$phrase($dateToken)').firstMatch(body)?.group(1);
       if (token != null) {
@@ -486,7 +500,11 @@ class LocalSmsParser {
     ]) => LocalSmsObservation(
       transaction: row,
       cardLast4: cardLast4,
-      accountLast4: accountLast4,
+      accountLast4: isInsuranceReminder
+          ? (policyLast4 == null
+                ? null
+                : policyLast4.substring(policyLast4.length - 4))
+          : accountLast4,
       billerName: billerName,
       cadenceHint: cadenceHint,
       dueDate: due,
@@ -516,7 +534,14 @@ class LocalSmsParser {
           : 1,
     );
     // Reminders and offers are observations, never purchases.
-    if (hasBillMarker && !autopaySetup && !hasCompletedMovement) {
+    final futureDebit =
+        isInsuranceReminder &&
+        _re(
+          r'\b(?:will|shall|to)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)\b',
+        ).hasMatch(body);
+    if (hasBillMarker &&
+        !autopaySetup &&
+        (!hasCompletedMovement || futureDebit)) {
       return observation(
         null,
         LocalSmsEventType.bill,

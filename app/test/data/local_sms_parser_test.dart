@@ -84,6 +84,35 @@ void main() {
     expect(result, isNotNull);
     expect(result!.accountLast4, isNull);
   });
+  test('LIC future debit reminders keep distinct policy identities', () {
+    LocalSmsObservation? parse(String policy) => LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VA-LICIND-S',
+      body:
+          'Please keep sufficient funds in your account for LIC policy no $policy premium Rs. 2500 which will be debited on 25-10-2026.',
+      receivedAt: DateTime(2026, 10, 20),
+    );
+    final first = parse('12345678');
+    final second = parse('87654321');
+    expect(first?.eventType, LocalSmsEventType.bill);
+    expect(first?.dueDate, DateTime(2026, 10, 25));
+    expect(first?.accountLast4, '5678');
+    expect(second?.accountLast4, '4321');
+    expect(first?.transaction, isNull);
+  });
+
+  test('LIC bank account digits are not mistaken for a policy number', () {
+    final reminder = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VA-LICIND-S',
+      body:
+          'Keep sufficient funds in bank account 1234 for LIC premium due on 25-10-2026.',
+      receivedAt: DateTime(2026, 10, 20),
+    );
+    expect(reminder?.eventType, LocalSmsEventType.bill);
+    expect(reminder?.accountLast4, isNull);
+  });
+
   final fixtures =
       jsonDecode(File('test/fixtures/local_sms_cases.json').readAsStringSync())
           as List;
