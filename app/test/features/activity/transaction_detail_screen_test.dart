@@ -463,4 +463,28 @@ void main() {
 
     expect(repo.lastIgnoreReason, 'refund');
   });
+
+  testWidgets('labels the transfer ignore option as delete transaction', (
+    tester,
+  ) async {
+    final repo = _FakeUserCardsRepository(
+      TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(750),
+        occurredAt: DateTime(2026, 3, 1),
+        userCardId: 'uc1',
+        source: 'manual',
+        status: 'active',
+      ),
+    );
+    await _pump(tester, repo: repo);
+
+    await tester.tap(
+      find.text('Mark as ignored (refund / reversal / transfer)'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete transaction'), findsOneWidget);
+    expect(find.text('Transfer (not really a spend)'), findsNothing);
+  });
 }
