@@ -66,6 +66,82 @@ void main() {
   });
 
   testWidgets(
+    'a rejected first batch unlocks discrepancy rows for manual correction',
+    (tester) async {
+      final repository = ImportRepository(
+        apiBaseUrl: 'https://example.test',
+        accessToken: 'token',
+        client: MockClient(
+          (_) async =>
+              http.Response(jsonEncode({'error': 'internal_error'}), 500),
+        ),
+      );
+      final session = TransactionImportSession(
+        fileDigest: 'file',
+        importSource: 'json',
+        statement: ParsedStatement(
+          transactions: [
+            ParsedStatementLine(
+              date: DateTime(2026, 6, 10),
+              description: 'Valid row',
+              amount: Money.fromRupees(25),
+            ),
+            ParsedStatementLine(
+              date: DateTime(2026, 6, 11),
+              description: 'Devaraj Enterprises',
+              amount: Money.fromRupees(11.06),
+              sourceRowId: 'json:row:72',
+              reviewReasons: const [
+                'This date has no year. Choose the export year in Formats, or edit the date.',
+              ],
+            ),
+          ],
+        ),
+      )..destinations[TransactionImportSession.unknownAccount] = 'instrument:other';
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userCardsProvider.overrideWith((ref) async => const []),
+            userCardsRepositoryProvider.overrideWithValue(null),
+            importRepositoryProvider.overrideWithValue(repository),
+          ],
+          child: MaterialApp(
+            home: Scaffold(body: ImportReviewPanel(session: session)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Import 1 transactions · skip 1'));
+      await tester.pumpAndSettle();
+
+      expect(session.progress.completedBatches, 0);
+      expect(session.reviewLocked, isFalse);
+      final edit = find.descendant(
+        of: find.byKey(const ValueKey('import-row-1')),
+        matching: find.byTooltip('Edit transaction'),
+      );
+      await tester.scrollUntilVisible(
+        edit,
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Date (YYYY-MM-DD, optional time)'),
+        '2026-06-11',
+      );
+      await tester.tap(find.text('Save reviewed row'));
+      await tester.pumpAndSettle();
+
+      expect(session.rows[1].reviewReasons, isEmpty);
+      expect(session.selected, [0, 1]);
+      expect(find.text('Import 2 transactions'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'unrecognized row can be corrected, validated and imported without a card',
     (tester) async {
       Map<String, dynamic>? payload;

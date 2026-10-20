@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 
+import 'api_exception.dart';
 import 'csv_statement_parser.dart';
 import 'import_models.dart';
 import 'import_repository.dart';
@@ -587,6 +588,18 @@ class TransactionImportSession {
         report();
       }
       return progress;
+    } catch (error) {
+      // A received HTTP error means the server rejected the request and its
+      // transaction was rolled back. If no earlier batch committed, let the
+      // user correct the preview instead of leaving every edit control locked.
+      // Keep the lock for transport failures/timeouts (the server may have
+      // committed without the response reaching the device) and partial imports.
+      if (_completed.isEmpty &&
+          error is ApiException &&
+          error.statusCode != null) {
+        _submissionStarted = false;
+      }
+      rethrow;
     } finally {
       submitting = false;
     }

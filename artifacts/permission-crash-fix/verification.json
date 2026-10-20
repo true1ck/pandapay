@@ -1,0 +1,39 @@
+{
+  "package": "app.pandapay.pandapay.dev2",
+  "checks": [
+    {
+      "action": "SMS Allow",
+      "pid": "12850",
+      "process_unchanged": true,
+      "fatal_errors": 0
+    },
+    {
+      "action": "Timely reminders Allow",
+      "pid": "12850",
+      "process_unchanged": true,
+      "fatal_errors": 0
+    },
+    {
+      "action": "Nearby merchants Allow",
+      "pid": "12850",
+      "process_unchanged": true,
+      "fatal_errors": 0
+    },
+    {
+      "action": "Scan, don\u2019t type Allow",
+      "pid": "12850",
+      "process_unchanged": true,
+      "fatal_errors": 0
+    },
+    {
+      "action": "Say it to Panda Allow",
+      "pid": "12850",
+      "process_unchanged": true,
+      "fatal_errors": 0
+    }
+  ],
+  "all_four_extra_rows_allowed": true,
+  "native_patch_in_apk": true,
+  "installed_apk_matches_build": true,
+  "apk_sha256": "b7a95211d0877ecc72ce0a17abddcf3954eb14c7bcdaf86607864d3addff5e1a"
+}

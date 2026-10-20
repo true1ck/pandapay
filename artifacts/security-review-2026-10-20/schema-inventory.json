@@ -1,0 +1,6556 @@
+{
+  "date": "2026-10-20",
+  "scope": "Local PostgreSQL metadata only; not production",
+  "databases": {
+    "pandapay": [
+      {
+        "table_name": "abuse_signals",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "device_hash",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "signal",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "detail",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "severity",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "is_blocked",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "detected_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "abuse_signals_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "acceptance_reports",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "merchant_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "network",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "rail",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "result",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "device_hash",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "submitted_on",
+            "type": "date",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "acceptance_reports_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "acceptance_summary",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "merchant_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "network",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "rail",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "accepted_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "declined_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "confidence_score",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "is_published",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "last_updated_on",
+            "type": "date",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "acceptance_summary_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "admin_audit_log",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "admin_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "action",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "entity",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "entity_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "before_value",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "after_value",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "reason",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "admin_audit_log_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE SET NULL"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "admin_users",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "email",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "role",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "admin_users_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 2
+      },
+      {
+        "table_name": "analytics_events",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "event",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "props",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "app_version",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "platform",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "occurred_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "analytics_admin_read",
+            "command": "SELECT",
+            "using": "pandapay.is_admin()",
+            "check": null
+          },
+          {
+            "name": "analytics_owner_insert",
+            "command": "INSERT",
+            "using": null,
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "anonymization_audit_runs",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "run_by",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "checks_total",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "checks_failed",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "findings",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "passed",
+            "type": "boolean",
+            "nullable": true
+          },
+          {
+            "name": "git_sha",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "ran_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "anonymization_audit_runs_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "app_status",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "min_supported_version",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "maintenance_mode",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "maintenance_message",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "sms_backup_import_enabled",
+            "type": "boolean",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "app_status_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "app_versions",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "platform",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "version",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "is_minimum_supported",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "is_latest",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "release_notes",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "released_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "app_versions_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "app_versions_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "backup_runs",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "kind",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "size_bytes",
+            "type": "bigint",
+            "nullable": true
+          },
+          {
+            "name": "location",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "error_text",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "ran_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "backup_runs_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "billing_cycle_rules",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "grace_period_days",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "cycle_notes",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "billing_cycle_rules_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "billing_cycle_rules_public_read",
+            "command": "SELECT",
+            "using": "(EXISTS ( SELECT 1\n   FROM card_products cp\n  WHERE ((cp.id = billing_cycle_rules.card_product_id) AND ((cp.status = 'published'::publish_status) OR pandapay.is_admin()))))",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "budget_periods",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "budget_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "period_start",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "period_end",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "budget_amount_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "actual_spend_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "closed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "budget_periods_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "budgets",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "scope",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "scope_ref_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "period",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "amount_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "starts_on",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "rollover",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "budgets_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "cap_rules",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "reward_rule_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "benefit_kind",
+            "type": "USER-DEFINED",
+            "nullable": true
+          },
+          {
+            "name": "label",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "measure",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "period",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "cap_value",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "post_cap_unit",
+            "type": "USER-DEFINED",
+            "nullable": true
+          },
+          {
+            "name": "post_cap_rate",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "resets_on_day",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "cap_rules_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "cap_rules_public_read",
+            "command": "SELECT",
+            "using": "(EXISTS ( SELECT 1\n   FROM card_products cp\n  WHERE ((cp.id = cap_rules.card_product_id) AND ((cp.status = 'published'::publish_status) OR pandapay.is_admin()))))",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE",
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id)",
+          "FOREIGN KEY (reward_rule_id) REFERENCES reward_rules(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "cap_states",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_card_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "cap_rule_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "period_start",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "period_end",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "consumed",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "cap_value_snapshot",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "cap_states_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (cap_rule_id) REFERENCES cap_rules(id) ON DELETE CASCADE",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (user_card_id) REFERENCES user_cards(id) ON DELETE CASCADE"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "card_benefits",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "kind",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "label",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "quota_count",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "quota_period",
+            "type": "USER-DEFINED",
+            "nullable": true
+          },
+          {
+            "name": "network_program",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "value_estimate_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "conditions",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "card_benefits_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "card_benefits_public_read",
+            "command": "SELECT",
+            "using": "(EXISTS ( SELECT 1\n   FROM card_products cp\n  WHERE ((cp.id = card_benefits.card_product_id) AND ((cp.status = 'published'::publish_status) OR pandapay.is_admin()))))",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "card_catalogue_changes",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "data_version_after",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "field_path",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "old_value",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "new_value",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "change_summary",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "is_user_visible",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "approved_by",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "policy_alert_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "card_catalogue_changes_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "card_catalogue_changes_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE",
+          "FOREIGN KEY (policy_alert_id) REFERENCES policy_change_alerts(id) ON DELETE SET NULL"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "card_overrides",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_card_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "scope",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "vpa",
+            "type": "USER-DEFINED",
+            "nullable": true
+          },
+          {
+            "name": "merchant_name",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "reason_note",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "is_enabled",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "card_overrides_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id)",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (user_card_id) REFERENCES user_cards(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "card_products",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "issuer_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "slug",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "network",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "card_type",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "joining_fee_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "annual_fee_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "fee_gst_applicable",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "is_upi_linkable",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "art_asset",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "art_primary_color",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "base_reward_unit",
+            "type": "USER-DEFINED",
+            "nullable": true
+          },
+          {
+            "name": "base_reward_rate",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "point_value_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "point_value_basis",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "positioning_notes",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "status",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "data_version",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "verified_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "verified_by",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "source_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "apply_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "extended_data",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "excluded_categories",
+            "type": "ARRAY",
+            "nullable": false
+          },
+          {
+            "name": "import_source_hash",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "import_source_run_id",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "imported_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "import_transform_version",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "card_products_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "card_products_public_read",
+            "command": "SELECT",
+            "using": "((status = 'published'::publish_status) OR pandapay.is_admin())",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (issuer_id) REFERENCES issuers(id) ON DELETE RESTRICT"
+        ],
+        "index_count": 4
+      },
+      {
+        "table_name": "card_requests",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "issuer_name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "product_name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "network_guess",
+            "type": "USER-DEFINED",
+            "nullable": true
+          },
+          {
+            "name": "image_path",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "request_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "fulfilled_card_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "card_requests_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "card_requests_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (fulfilled_card_id) REFERENCES card_products(id) ON DELETE SET NULL",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "change_log",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "device_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "entity",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "entity_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "op",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "payload",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "field_clocks",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "client_seq",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "server_seq",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "change_log_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (device_id) REFERENCES user_devices(id) ON DELETE SET NULL",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 4
+      },
+      {
+        "table_name": "changelog_entries",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "app_version",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "body_markdown",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "highlights_data_change",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "published_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "changelog_entries_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "changelog_entries_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "contribution_quotas",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "device_hash",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "quota_date",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "submission_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "rejected_count",
+            "type": "integer",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "contribution_quotas_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "contribution_salts",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "period_month",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "salt",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "data_error_reports",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "field_path",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "shown_value",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "claimed_value",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "source_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "attachment_path",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "alert_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "error_reports_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "error_reports_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (alert_id) REFERENCES policy_change_alerts(id) ON DELETE SET NULL",
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "duplicate_candidates",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "txn_a_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "txn_b_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "match_score",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "match_reason",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "resolution",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "resolved_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "detected_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "suppressed_txn_id",
+            "type": "uuid",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "duplicate_candidates_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (suppressed_txn_id) REFERENCES transactions(id) ON DELETE SET NULL",
+          "FOREIGN KEY (txn_a_id) REFERENCES transactions(id) ON DELETE CASCADE",
+          "FOREIGN KEY (txn_b_id) REFERENCES transactions(id) ON DELETE CASCADE"
+        ],
+        "index_count": 4
+      },
+      {
+        "table_name": "effective_rate_samples",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "period_month",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "spend_bucket_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "observed_reward_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "observed_rate",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "device_hash",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "submitted_on",
+            "type": "date",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "effective_rate_samples_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE",
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id)"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "effective_rate_summary",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "period_month",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "sample_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "distinct_devices",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "observed_rate_mean",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "observed_rate_p50",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "published_rate",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "divergence_pct",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "observed_cap_ceiling",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "published_cap_value",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "is_divergent",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "alert_raised_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "effective_rate_summary_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE",
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id)"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "extraction_proposals",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "snapshot_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "model_name",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "proposed_fields",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "model_confidence",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "evidence_excerpt",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "extraction_proposals_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE",
+          "FOREIGN KEY (snapshot_id) REFERENCES page_snapshots(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "feature_flags",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "key",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "is_enabled",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "rollout_percent",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "min_app_version",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "platforms",
+            "type": "ARRAY",
+            "nullable": false
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "updated_by",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "feature_flags_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "feature_flags_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (updated_by) REFERENCES admin_users(id) ON DELETE SET NULL"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "fee_waiver_rules",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "threshold_spend_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "period",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "waives_fee_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "excluded_categories",
+            "type": "ARRAY",
+            "nullable": true
+          },
+          {
+            "name": "notes",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "fee_waiver_rules_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "fee_waiver_rules_public_read",
+            "command": "SELECT",
+            "using": "(EXISTS ( SELECT 1\n   FROM card_products cp\n  WHERE ((cp.id = fee_waiver_rules.card_product_id) AND ((cp.status = 'published'::publish_status) OR pandapay.is_admin()))))",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "fee_waiver_states",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_card_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "fee_waiver_rule_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "period_start",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "period_end",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "qualified_spend",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "waived_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "fee_waiver_states_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (fee_waiver_rule_id) REFERENCES fee_waiver_rules(id) ON DELETE CASCADE",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (user_card_id) REFERENCES user_cards(id) ON DELETE CASCADE"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "forex_rules",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "markup_percent",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "gst_on_markup",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "waiver_notes",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "forex_rules_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "forex_rules_public_read",
+            "command": "SELECT",
+            "using": "(EXISTS ( SELECT 1\n   FROM card_products cp\n  WHERE ((cp.id = forex_rules.card_product_id) AND ((cp.status = 'published'::publish_status) OR pandapay.is_admin()))))",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "forwarding_addresses",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "local_part",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "verified_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "first_email_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "email_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "rotated_from",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "forwarding_addresses_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (rotated_from) REFERENCES forwarding_addresses(id)"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "fuel_surcharge_rules",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "surcharge_percent",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "waiver_percent",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "min_txn_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "max_txn_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "monthly_waiver_cap",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "fuel_surcharge_rules_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "fuel_surcharge_rules_public_read",
+            "command": "SELECT",
+            "using": "(EXISTS ( SELECT 1\n   FROM card_products cp\n  WHERE ((cp.id = fuel_surcharge_rules.card_product_id) AND ((cp.status = 'published'::publish_status) OR pandapay.is_admin()))))",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "imap_connections",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "email",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "app_password_encrypted",
+            "type": "bytea",
+            "nullable": false
+          },
+          {
+            "name": "imap_host",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "imap_port",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "sender_filter",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "verified_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "last_poll_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "last_poll_status",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "imap_connections_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "inbound_emails",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "forwarding_address_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "sender",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "subject",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "body_text",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "received_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "is_known_bank_sender",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "parsed_ok",
+            "type": "boolean",
+            "nullable": true
+          },
+          {
+            "name": "parser_pattern_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "produced_txn_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "policy_keyword_hit",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "purge_after",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "inbound_emails_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (forwarding_address_id) REFERENCES forwarding_addresses(id) ON DELETE CASCADE",
+          "FOREIGN KEY (produced_txn_id) REFERENCES transactions(id) ON DELETE SET NULL",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "issuer_emergency_contacts",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "issuer_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "label",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "phone",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "is_international",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "is_collect_call",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "block_procedure",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "sort_order",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "issuer_emergency_contacts_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "issuer_emergency_contacts_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (issuer_id) REFERENCES issuers(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "issuers",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "slug",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "short_name",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "logo_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "website_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "issuers_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "issuers_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 2
+      },
+      {
+        "table_name": "kill_switches",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "key",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "is_killed",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "reason",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "killed_by",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "killed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "kill_switches_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "kill_switches_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (killed_by) REFERENCES admin_users(id) ON DELETE SET NULL"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "lounge_usage",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_card_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "benefit_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "used_on",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "airport",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "logged_manually",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "lounge_usage_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (benefit_id) REFERENCES card_benefits(id) ON DELETE CASCADE",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (user_card_id) REFERENCES user_cards(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "mcc_categories",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "mcc",
+            "type": "character",
+            "nullable": false
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "is_p2p_indicator",
+            "type": "boolean",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "mcc_categories_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "mcc_categories_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id)"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "merchant_category_rules",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "pattern",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "priority",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "notes",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "merchant_category_rules_public_read",
+            "command": "SELECT",
+            "using": "is_active",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id) ON DELETE CASCADE"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "merchant_conflicts",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "merchant_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "field",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "competing_values",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "auto_resolved",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "resolved_value",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "resolved_by",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "resolved_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "detected_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "merchant_conflicts_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE",
+          "FOREIGN KEY (resolved_by) REFERENCES admin_users(id) ON DELETE SET NULL"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "merchant_contributions",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "kind",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "vpa",
+            "type": "USER-DEFINED",
+            "nullable": true
+          },
+          {
+            "name": "merchant_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "reported_name",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "reported_mcc",
+            "type": "character",
+            "nullable": true
+          },
+          {
+            "name": "reported_category_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "grid_lat",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "grid_lng",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "device_hash",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "app_version",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "submitted_on",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "is_counted",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "rejected_reason",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "merchant_contributions_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE",
+          "FOREIGN KEY (reported_category_id) REFERENCES spend_categories(id)"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "merchant_locations",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "merchant_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "grid_lat",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "grid_lng",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "geohash6",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "confirmation_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "osm_matched",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "osm_ref",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "first_seen_on",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "last_confirmed_on",
+            "type": "date",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "merchant_locations_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "merchant_locations_public_read",
+            "command": "SELECT",
+            "using": "(EXISTS ( SELECT 1\n   FROM merchants m\n  WHERE ((m.id = merchant_locations.merchant_id) AND ((m.is_published = true) OR pandapay.is_admin()))))",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE"
+        ],
+        "index_count": 4
+      },
+      {
+        "table_name": "merchants",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "vpa",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "display_name",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "mcc",
+            "type": "character",
+            "nullable": true
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "confidence",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "confidence_score",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "confirmation_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "distinct_device_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "is_p2p",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "is_published",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "operator_locked",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "first_seen_on",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "last_confirmed_on",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "merchants_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "merchants_public_read",
+            "command": "SELECT",
+            "using": "((is_published = true) OR pandapay.is_admin())",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id)"
+        ],
+        "index_count": 5
+      },
+      {
+        "table_name": "milestone_rules",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "label",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "period",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "threshold_spend_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "reward_description",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "reward_value_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "is_repeatable",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "max_repeats",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "anchor",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "milestone_rules_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "milestone_rules_public_read",
+            "command": "SELECT",
+            "using": "(EXISTS ( SELECT 1\n   FROM card_products cp\n  WHERE ((cp.id = milestone_rules.card_product_id) AND ((cp.status = 'published'::publish_status) OR pandapay.is_admin()))))",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "milestone_states",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_card_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "milestone_rule_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "period_start",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "period_end",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "qualified_spend",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "achieved_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "milestone_states_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (milestone_rule_id) REFERENCES milestone_rules(id) ON DELETE CASCADE",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (user_card_id) REFERENCES user_cards(id) ON DELETE CASCADE"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "monthly_reports",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "period_month",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "total_spend_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "rewards_earned_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "baseline_single_card_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "extra_earned_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "value_missed_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "breakdown",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "generated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "monthly_reports_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "needs_review_items",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "source",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "raw_text",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "sender",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "received_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "parse_error",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "parser_pattern_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "suggested_amount",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "suggested_merchant",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "suggested_card_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "resolved_txn_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "resolved_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "needs_review_items_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (resolved_txn_id) REFERENCES transactions(id) ON DELETE SET NULL",
+          "FOREIGN KEY (suggested_card_id) REFERENCES user_cards(id) ON DELETE SET NULL"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "notification_muted_merchants",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "merchant_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "muted_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "notification_muted_merchants_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "notification_preferences",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "category_location",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "category_caps",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "category_milestones",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "category_fee_waivers",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "category_bills",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "category_expiry",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "category_monthly_report",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "category_needs_review",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "quiet_hours_start",
+            "type": "time without time zone",
+            "nullable": true
+          },
+          {
+            "name": "quiet_hours_end",
+            "type": "time without time zone",
+            "nullable": true
+          },
+          {
+            "name": "daily_cap",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "category_budget_warning",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "category_budget_exceeded",
+            "type": "boolean",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "notification_preferences_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "notifications",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "category",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "severity",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "body",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "deep_link",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "dedupe_key",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "read_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "notifications_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 4
+      },
+      {
+        "table_name": "page_snapshots",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "source_page_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "scrape_run_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "content_hash",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "extracted_text",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "http_status",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "captured_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "page_snapshots_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (scrape_run_id) REFERENCES scrape_runs(id) ON DELETE SET NULL",
+          "FOREIGN KEY (source_page_id) REFERENCES source_pages(id) ON DELETE CASCADE"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "parser_failures",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "channel",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "issuer_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "sender_pattern",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "redacted_shape",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "app_version",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "occurrences",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "first_seen_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "last_seen_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "fixed_in_pattern_id",
+            "type": "uuid",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "parser_failures_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (fixed_in_pattern_id) REFERENCES parser_patterns(id) ON DELETE SET NULL",
+          "FOREIGN KEY (issuer_id) REFERENCES issuers(id) ON DELETE SET NULL"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "parser_patterns",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "issuer_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "channel",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "sender_pattern",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "regex",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "field_map",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "version",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "sample_text",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "success_count",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "failure_count",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "parser_patterns_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "parser_patterns_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (issuer_id) REFERENCES issuers(id) ON DELETE SET NULL"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "partner_clicks",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "partner_program_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "click_token",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "placement",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "clicked_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "partner_clicks_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE",
+          "FOREIGN KEY (partner_program_id) REFERENCES partner_programs(id) ON DELETE SET NULL",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 4
+      },
+      {
+        "table_name": "partner_conversions",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "click_token",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "partner_program_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "commission_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "external_ref",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "raw_payload",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "reported_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "partner_conversions_admin",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (partner_program_id) REFERENCES partner_programs(id) ON DELETE SET NULL"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "partner_programs",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "issuer_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "partner_name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "affiliate_id",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "token_param",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "payout_model",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "payout_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "notes",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "partner_programs_admin",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (issuer_id) REFERENCES issuers(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "points_ledger",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_card_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "transaction_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "delta_points",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "reason",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "expires_on",
+            "type": "date",
+            "nullable": true
+          },
+          {
+            "name": "occurred_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "points_ledger_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL",
+          "FOREIGN KEY (user_card_id) REFERENCES user_cards(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "policy_alert_evidence",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "alert_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "signal",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "snapshot_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "extraction_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "rate_summary_key",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "inbound_email_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "data_error_report_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "excerpt",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "weight",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "policy_alert_evidence_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (data_error_report_id) REFERENCES data_error_reports(id) ON DELETE SET NULL",
+          "FOREIGN KEY (alert_id) REFERENCES policy_change_alerts(id) ON DELETE CASCADE",
+          "FOREIGN KEY (extraction_id) REFERENCES extraction_proposals(id) ON DELETE SET NULL",
+          "FOREIGN KEY (inbound_email_id) REFERENCES inbound_emails(id) ON DELETE SET NULL",
+          "FOREIGN KEY (snapshot_id) REFERENCES page_snapshots(id) ON DELETE SET NULL"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "policy_change_alerts",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "field_path",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "field_label",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "current_value",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "proposed_value",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "signal_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "distinct_signal_kinds",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "corroboration_score",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "decided_by",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "decided_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "decision_note",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "published_change_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "force_sync",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "first_signal_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "last_signal_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "policy_change_alerts_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE",
+          "FOREIGN KEY (decided_by) REFERENCES admin_users(id) ON DELETE SET NULL",
+          "FOREIGN KEY (published_change_id) REFERENCES card_catalogue_changes(id) ON DELETE SET NULL"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "profiles",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "email",
+            "type": "USER-DEFINED",
+            "nullable": true
+          },
+          {
+            "name": "display_name",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "locale",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "currency",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "number_format",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "travel_mode_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "contributions_opt_in",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "onboarding_completed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "deletion_requested_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "deletion_due_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "phone_number",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "profiles_owner",
+            "command": "ALL",
+            "using": "(id = pandapay.uid())",
+            "check": "(id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "recurring_series",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "merchant_key",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "display_name",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "user_card_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "typical_amount_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "cadence_days",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "occurrence_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "first_seen_on",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "last_seen_on",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "next_expected_on",
+            "type": "date",
+            "nullable": true
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "dismissed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "detected_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "detection_source",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "payment_method",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "recurring_series_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id) ON DELETE SET NULL",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (user_card_id) REFERENCES user_cards(id) ON DELETE SET NULL"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "redemption_options",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "program_name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "method",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "value_per_point_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "min_points",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "last_checked_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "notes",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "redemption_options_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "redemption_options_public_read",
+            "command": "SELECT",
+            "using": "(EXISTS ( SELECT 1\n   FROM card_products cp\n  WHERE ((cp.id = redemption_options.card_product_id) AND ((cp.status = 'published'::publish_status) OR pandapay.is_admin()))))",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "referral_codes",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "code",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "referral_codes_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "referral_program",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "referrer_reward_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "referee_reward_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "qualifying_action",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "referral_program_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "referrals",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "referrer_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "referee_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "referee_label",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "reward_state",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "qualified_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "referrals_referrer",
+            "command": "ALL",
+            "using": "(referrer_id = pandapay.uid())",
+            "check": "(referrer_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (referee_id) REFERENCES profiles(id) ON DELETE SET NULL",
+          "FOREIGN KEY (referrer_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "remote_config",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "key",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "value",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "remote_config_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "remote_config_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "restore_drills",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "backup_run_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "restored_ok",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "row_count_delta",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "duration_seconds",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "notes",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "ran_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "restore_drills_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (backup_run_id) REFERENCES backup_runs(id) ON DELETE SET NULL"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "reward_rules",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "merchant_pattern",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "rail",
+            "type": "USER-DEFINED",
+            "nullable": true
+          },
+          {
+            "name": "unit",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "rate",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "min_txn_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "max_txn_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "priority",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "conditions",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "notes",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "effective_from",
+            "type": "date",
+            "nullable": true
+          },
+          {
+            "name": "effective_to",
+            "type": "date",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "excluded_categories",
+            "type": "ARRAY",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "reward_rules_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "reward_rules_public_read",
+            "command": "SELECT",
+            "using": "(EXISTS ( SELECT 1\n   FROM card_products cp\n  WHERE ((cp.id = reward_rules.card_product_id) AND ((cp.status = 'published'::publish_status) OR pandapay.is_admin()))))",
+            "check": null
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE",
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id)"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "schema_migrations",
+        "rls_enabled": false,
+        "columns": [
+          {
+            "name": "filename",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "applied_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [],
+        "foreign_keys": [],
+        "index_count": 1
+      },
+      {
+        "table_name": "scrape_runs",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "source_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "triggered_by",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "status",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "pages_fetched",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "pages_changed",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "started_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "finished_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "duration_ms",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "error_text",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "scrape_runs_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "sms_import_batches",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "message_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "parsed_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "failed_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "imported_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "sms_import_batches_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "source_pages",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "source_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "url",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "page_role",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "selector_hint",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "last_crawled_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "last_changed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "consecutive_failures",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "is_enabled",
+            "type": "boolean",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "source_pages_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE SET NULL",
+          "FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "sources",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "kind",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "issuer_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "base_url",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "robots_allows",
+            "type": "boolean",
+            "nullable": true
+          },
+          {
+            "name": "robots_checked_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "tos_reviewed",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "tos_note",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "crawl_frequency",
+            "type": "interval",
+            "nullable": false
+          },
+          {
+            "name": "is_enabled",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "sources_admin_only",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (issuer_id) REFERENCES issuers(id) ON DELETE SET NULL"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "spend_categories",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "slug",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "icon",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "is_primary_chip",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "sort_order",
+            "type": "integer",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "spend_categories_admin_write",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "spend_categories_public_read",
+            "command": "SELECT",
+            "using": "true",
+            "check": null
+          }
+        ],
+        "foreign_keys": [],
+        "index_count": 2
+      },
+      {
+        "table_name": "statement_imports",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_card_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "statement_from",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "statement_to",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "closing_balance_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "points_posted",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "txn_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "reconciled_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "issuer_format_id",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "imported_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "statement_imports_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (user_card_id) REFERENCES user_cards(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "support_tickets",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "kind",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "message",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "diagnostics",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "app_version",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "response",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "tickets_admin_all",
+            "command": "ALL",
+            "using": "pandapay.is_admin()",
+            "check": "pandapay.is_admin()"
+          },
+          {
+            "name": "tickets_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "sync_conflicts",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "entity",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "entity_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "field",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "local_value",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "server_value",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "chosen_value",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "strategy",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "device_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "user_acknowledged",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "sync_conflicts_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (device_id) REFERENCES user_devices(id) ON DELETE SET NULL",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "sync_cursors",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "device_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "last_server_seq",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "last_pushed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "last_pulled_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "sync_cursors_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (device_id) REFERENCES user_devices(id) ON DELETE CASCADE",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "transaction_observations",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "transaction_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "source",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "source_key",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "external_ref",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "observed_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "payload_hash",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "metadata",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "transaction_observations_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE"
+        ],
+        "index_count": 4
+      },
+      {
+        "table_name": "transaction_splits",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "transaction_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_card_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "amount_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "note",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "splits_owner",
+            "command": "ALL",
+            "using": "(EXISTS ( SELECT 1\n   FROM transactions t\n  WHERE ((t.id = transaction_splits.transaction_id) AND (t.profile_id = pandapay.uid()))))",
+            "check": "(EXISTS ( SELECT 1\n   FROM transactions t\n  WHERE ((t.id = transaction_splits.transaction_id) AND (t.profile_id = pandapay.uid()))))"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id)",
+          "FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE",
+          "FOREIGN KEY (user_card_id) REFERENCES user_cards(id) ON DELETE SET NULL"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "transactions",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_card_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "amount_inr",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "occurred_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "merchant_name",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "merchant_vpa",
+            "type": "USER-DEFINED",
+            "nullable": true
+          },
+          {
+            "name": "mcc",
+            "type": "character",
+            "nullable": true
+          },
+          {
+            "name": "category_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "rail",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "source",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "status",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "reward_state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "expected_points",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "expected_value_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "confirmed_points",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "confirmed_value_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "reconciled_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "statement_import_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "recommended_card_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "optimal_value_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "followed_recommendation",
+            "type": "boolean",
+            "nullable": true
+          },
+          {
+            "name": "dedupe_hash",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "is_split_parent",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "parent_txn_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "raw_source_ref",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "note",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "source_key",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "instrument",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "entry_kind",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "state_applied",
+            "type": "boolean",
+            "nullable": true
+          },
+          {
+            "name": "is_backfill",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "source_account_last4",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "transactions_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (category_id) REFERENCES spend_categories(id)",
+          "FOREIGN KEY (parent_txn_id) REFERENCES transactions(id) ON DELETE CASCADE",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+          "FOREIGN KEY (recommended_card_id) REFERENCES user_cards(id) ON DELETE SET NULL",
+          "FOREIGN KEY (user_card_id) REFERENCES user_cards(id) ON DELETE SET NULL"
+        ],
+        "index_count": 10
+      },
+      {
+        "table_name": "user_cards",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "card_product_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "nickname",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "credit_limit_inr",
+            "type": "numeric",
+            "nullable": true
+          },
+          {
+            "name": "statement_day",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "due_day",
+            "type": "integer",
+            "nullable": true
+          },
+          {
+            "name": "opened_on",
+            "type": "date",
+            "nullable": true
+          },
+          {
+            "name": "anniversary_on",
+            "type": "date",
+            "nullable": true
+          },
+          {
+            "name": "points_balance",
+            "type": "numeric",
+            "nullable": false
+          },
+          {
+            "name": "points_balance_state",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "sort_order",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "is_default",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "is_archived",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "archived_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "autopay_mode",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "last4",
+            "type": "character",
+            "nullable": true
+          },
+          {
+            "name": "annual_fee_override_inr",
+            "type": "numeric",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "user_cards_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE RESTRICT",
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 2
+      },
+      {
+        "table_name": "user_consents",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "purpose",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "policy_version",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "granted",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "granted_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "revoked_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "source_screen",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "ip_country",
+            "type": "text",
+            "nullable": true
+          }
+        ],
+        "policies": [
+          {
+            "name": "user_consents_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "user_devices",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "device_label",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "platform",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "app_version",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "os_version",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "push_token",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "last_seen_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "catalogue_version_seen",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "user_devices_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      },
+      {
+        "table_name": "user_settings",
+        "rls_enabled": true,
+        "columns": [
+          {
+            "name": "profile_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "settings",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "revision",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [
+          {
+            "name": "user_settings_owner",
+            "command": "ALL",
+            "using": "(profile_id = pandapay.uid())",
+            "check": "(profile_id = pandapay.uid())"
+          }
+        ],
+        "foreign_keys": [
+          "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        ],
+        "index_count": 1
+      }
+    ],
+    "pandapay_auth": [
+      {
+        "table_name": "auth_audit",
+        "rls_enabled": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "action",
+            "type": "character varying",
+            "nullable": false
+          },
+          {
+            "name": "status",
+            "type": "character varying",
+            "nullable": false
+          },
+          {
+            "name": "ip_address",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "user_agent",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "device_id",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "meta",
+            "type": "jsonb",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "risk_level",
+            "type": "character varying",
+            "nullable": true
+          }
+        ],
+        "policies": [],
+        "foreign_keys": [
+          "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL"
+        ],
+        "index_count": 6
+      },
+      {
+        "table_name": "oauth_accounts",
+        "rls_enabled": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "provider",
+            "type": "character varying",
+            "nullable": false
+          },
+          {
+            "name": "provider_user_id",
+            "type": "character varying",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [],
+        "foreign_keys": [
+          "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+        ],
+        "index_count": 3
+      },
+      {
+        "table_name": "otp_codes",
+        "rls_enabled": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "phone_number",
+            "type": "character varying",
+            "nullable": false
+          },
+          {
+            "name": "otp_hash",
+            "type": "character varying",
+            "nullable": false
+          },
+          {
+            "name": "expires_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "attempt_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [],
+        "foreign_keys": [],
+        "index_count": 3
+      },
+      {
+        "table_name": "otp_requests",
+        "rls_enabled": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "phone_number",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "email",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "type",
+            "type": "character varying",
+            "nullable": false
+          },
+          {
+            "name": "country_code",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "otp_hash",
+            "type": "character varying",
+            "nullable": false
+          },
+          {
+            "name": "expires_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "consumed_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "deleted",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "attempt_count",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [],
+        "foreign_keys": [],
+        "index_count": 4
+      },
+      {
+        "table_name": "refresh_tokens",
+        "rls_enabled": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "token_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "token_hash",
+            "type": "character varying",
+            "nullable": false
+          },
+          {
+            "name": "device_id",
+            "type": "character varying",
+            "nullable": false
+          },
+          {
+            "name": "user_agent",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "ip_address",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "expires_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "last_used_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "revoked_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "reuse_detected_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "rotated_from_id",
+            "type": "uuid",
+            "nullable": true
+          }
+        ],
+        "policies": [],
+        "foreign_keys": [
+          "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+          "FOREIGN KEY (rotated_from_id) REFERENCES refresh_tokens(id) ON DELETE SET NULL"
+        ],
+        "index_count": 6
+      },
+      {
+        "table_name": "user_devices",
+        "rls_enabled": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "device_identifier",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "device_platform",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "device_model",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "os_version",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "app_version",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "language_code",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "timezone",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "fcm_token",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "first_seen_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "last_seen_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "policies": [],
+        "foreign_keys": [
+          "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+        ],
+        "index_count": 6
+      },
+      {
+        "table_name": "users",
+        "rls_enabled": false,
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "phone_number",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "email",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "country_code",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "name",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "last_login_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "is_active",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "deleted",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "is_phone_verified",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "is_email_verified",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "role",
+            "type": "USER-DEFINED",
+            "nullable": false
+          },
+          {
+            "name": "token_version",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "avatar_url",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "language",
+            "type": "character varying",
+            "nullable": true
+          },
+          {
+            "name": "timezone",
+            "type": "character varying",
+            "nullable": true
+          }
+        ],
+        "policies": [],
+        "foreign_keys": [],
+        "index_count": 1
+      }
+    ]
+  },
+  "source_migration_files": 67,
+  "ledger_entries": 48,
+  "pending_migrations": [
+    "0013_cron_jobs.sql",
+    "0037_get_profile_by_forwarding_address.sql",
+    "0040_budgets_instruments_recurring.sql",
+    "0041_card_import_provenance.sql",
+    "0041_notification_budget_categories.sql",
+    "0042_card_network_unknown.sql",
+    "0043_card_product_network_variants.sql",
+    "0043_ensure_pgcrypto_extensions.sql",
+    "0044_card_upi_linkability_invariant.sql",
+    "0044_fix_dedupe_hash_extension_schema.sql",
+    "0045_grant_app_user_extensions_usage.sql",
+    "0045_remove_unenforceable_reward_triggers.sql",
+    "0047_recurring_user_edits.sql",
+    "20260908201228_statement_transactions_ingest.sql",
+    "20261007120000_allow_cardless_credit_card_sms.sql",
+    "20261014120000_dedupe_user_cards.sql",
+    "20261014173000_dedupe_catalogue_rules.sql",
+    "20261017120000_axis_flipkart_caps.sql",
+    "20261018120000_non_card_statement_imports.sql",
+    "20261019120000_merchant_mcc_verification.sql",
+    "20261019123000_add_emi_category.sql",
+    "20261019140000_user_categories_sync.sql",
+    "20261019143000_transaction_user_categories.sql",
+    "20261019144500_sync_user_category_field.sql",
+    "20261020120000_transaction_recorded_notifications.sql"
+  ]
+}

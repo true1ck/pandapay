@@ -1,0 +1,33 @@
+{
+  "app": "app.pandapay.pandapay.dev2",
+  "source": "Android native permission status on every initial load and resume",
+  "native_permissions": {
+    "READ_SMS": true,
+    "POST_NOTIFICATIONS": true,
+    "ACCESS_COARSE_LOCATION": true,
+    "ACCESS_FINE_LOCATION": false,
+    "CAMERA": true,
+    "RECORD_AUDIO": true
+  },
+  "onboarding_notification_round_trip": {
+    "revoked_in_android_settings": true,
+    "cold_launch_shows_disabled": true,
+    "restored_in_android_settings": true,
+    "enabled_on_resume": true,
+    "pid_before_restore": 14615,
+    "pid_after_restore": 14615
+  },
+  "privacy_camera_round_trip": {
+    "revoked_in_android_settings": true,
+    "fresh_page_shows_not_enabled": true,
+    "restored_in_android_settings": true,
+    "enabled_on_resume": true,
+    "pid_before_restore": 15354,
+    "pid_after_restore": 15354
+  },
+  "initial_privacy_rows_enabled": 5,
+  "approximate_location_reported_enabled": true,
+  "native_or_flutter_errors_during_review": 0,
+  "apk_sha256": "c20f31b59d4f3f1096bc1711614ea772d80d221286f8cb10c8c3b74a02358182",
+  "installed_apk_matches_build": true
+}

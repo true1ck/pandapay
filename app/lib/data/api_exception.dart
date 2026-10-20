@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 
 /// Shared HTTP-failure exception for every repository/API client in lib/data/.
 /// Carries a technical [debugMessage] (method, path, status, raw body — for
@@ -91,6 +94,19 @@ String userFacingErrorMessage(Object error) {
   if (error is CardAlreadyAddedException) return error.message;
   if (error is StateError) return error.message;
   return 'Something went wrong. Please check your connection and try again.';
+}
+
+/// Transport failures can happen while the device still has Wi-Fi or mobile
+/// data (for example, when the configured API is stopped or unreachable).
+/// Treat them as retryable for idempotent edits that have a durable sync
+/// queue, rather than relying only on connectivity_plus interface state.
+bool isTransientNetworkFailure(Object error) {
+  if (error is http.ClientException || error is TimeoutException) return true;
+  if (error is ApiException) {
+    final status = error.statusCode;
+    return status != null && status >= 500;
+  }
+  return false;
 }
 
 /// True when an authenticated read was rejected by the API rather than

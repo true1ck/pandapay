@@ -1,0 +1,34 @@
+[
+  {
+    "path": "app/assets/illustrations/panda_card_story.webp",
+    "width": 620,
+    "height": 930,
+    "frames": 77,
+    "bytes": 1151926,
+    "sha256": "6852d54577710a7b78f634d0e9374d88bf77fae4f8096abc438f1d33348623c2"
+  },
+  {
+    "path": "app/assets/illustrations/panda_mail.png",
+    "width": 1254,
+    "height": 1254,
+    "frames": 1,
+    "bytes": 950650,
+    "sha256": "1c245aa323a71c1c2ce136a7c8d2e2b05d570d0d7185e42116b61743a25919ee"
+  },
+  {
+    "path": "app/assets/illustrations/panda_peek.png",
+    "width": 1254,
+    "height": 1254,
+    "frames": 1,
+    "bytes": 822906,
+    "sha256": "c8fec61aaf0fd01c0b6a07156220e79b30a9d05e43c82aaa30cfe692e405d46d"
+  },
+  {
+    "path": "app/assets/illustrations/panda_spending_story.webp",
+    "width": 720,
+    "height": 950,
+    "frames": 84,
+    "bytes": 1376340,
+    "sha256": "4d5b5a72faf440060041941b4725bb2048fdd587d8d8b05022a50568a2a4c480"
+  }
+]

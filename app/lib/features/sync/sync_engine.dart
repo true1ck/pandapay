@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 
 import '../../app/providers.dart';
 import '../../data/local/sync_queue.dart';
@@ -328,4 +329,12 @@ final syncLifecycleProvider = Provider<void>((ref) {
       await ref.read(syncEngineProvider).sync();
     }
   });
+
+  // Interface state can stay "online" while the API itself is unavailable.
+  // Retry durable edits when the user returns to the app as well as on a
+  // connectivity transition.
+  final lifecycle = AppLifecycleListener(
+    onResume: () => unawaited(ref.read(syncEngineProvider).sync()),
+  );
+  ref.onDispose(lifecycle.dispose);
 });

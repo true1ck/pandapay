@@ -978,10 +978,12 @@ class UserCardsRepository {
   }
 
   Future<void> archiveCard(String userCardId) async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/user-cards/$userCardId/archive'),
-      headers: _headers,
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/user-cards/$userCardId/archive'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) {
       throw ApiException(
         'archive failed: ${response.statusCode} ${response.body}',

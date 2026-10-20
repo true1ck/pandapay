@@ -1,0 +1,1126 @@
+{
+  "date": "2026-10-20",
+  "limits": "Literal receiver/method call-site heuristic, not exhaustive Dart call-graph analysis. Auth/recovery helpers and inherited send/request headers require manual inspection.",
+  "calls": [
+    {
+      "source": "app/lib/data/acceptance_reports_repository.dart",
+      "line": 68,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/account_api.dart",
+      "line": 31,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/account_api.dart",
+      "line": 47,
+      "receiver": "_client",
+      "method": "DELETE",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/analytics.dart",
+      "line": 154,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/app_status_repository.dart",
+      "line": 72,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": false
+    },
+    {
+      "source": "app/lib/data/auth_api.dart",
+      "line": 39,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/auth_api.dart",
+      "line": 63,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/auth_api.dart",
+      "line": 89,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/auth_api.dart",
+      "line": 122,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/auth_api.dart",
+      "line": 156,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/auth_api.dart",
+      "line": 203,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/auth_api.dart",
+      "line": 228,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/authenticated_http_client.dart",
+      "line": 68,
+      "receiver": "_inner",
+      "method": "SEND",
+      "has_headers_argument": false
+    },
+    {
+      "source": "app/lib/data/authenticated_http_client.dart",
+      "line": 102,
+      "receiver": "_inner",
+      "method": "SEND",
+      "has_headers_argument": false
+    },
+    {
+      "source": "app/lib/data/card_feedback_repository.dart",
+      "line": 33,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/card_feedback_repository.dart",
+      "line": 50,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/card_overrides_repository.dart",
+      "line": 106,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/card_overrides_repository.dart",
+      "line": 130,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/card_overrides_repository.dart",
+      "line": 161,
+      "receiver": "_client",
+      "method": "PATCH",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/card_overrides_repository.dart",
+      "line": 174,
+      "receiver": "_client",
+      "method": "DELETE",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/card_requests_api.dart",
+      "line": 37,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/catalogue_repository.dart",
+      "line": 26,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": false
+    },
+    {
+      "source": "app/lib/data/catalogue_repository.dart",
+      "line": 89,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": false
+    },
+    {
+      "source": "app/lib/data/changelog_repository.dart",
+      "line": 48,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": false
+    },
+    {
+      "source": "app/lib/data/consents_api.dart",
+      "line": 61,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/consents_api.dart",
+      "line": 72,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/consents_api.dart",
+      "line": 90,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/devices_api.dart",
+      "line": 104,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/devices_api.dart",
+      "line": 121,
+      "receiver": "_client",
+      "method": "DELETE",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/emergency_contacts_repository.dart",
+      "line": 78,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": false
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 71,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 88,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 109,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 132,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 154,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 175,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 205,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 251,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 272,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 295,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 341,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 354,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 377,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/import_repository.dart",
+      "line": 401,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/merchant_search_repository.dart",
+      "line": 106,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": false
+    },
+    {
+      "source": "app/lib/data/merchant_search_repository.dart",
+      "line": 141,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": false
+    },
+    {
+      "source": "app/lib/data/notification_devices_api.dart",
+      "line": 27,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/notification_devices_api.dart",
+      "line": 65,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/notification_preferences_repository.dart",
+      "line": 110,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/notification_preferences_repository.dart",
+      "line": 122,
+      "receiver": "_client",
+      "method": "PUT",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/notification_preferences_repository.dart",
+      "line": 135,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/notification_preferences_repository.dart",
+      "line": 149,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/notification_preferences_repository.dart",
+      "line": 162,
+      "receiver": "_client",
+      "method": "DELETE",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/partner_apply_repository.dart",
+      "line": 34,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/recovery_api.dart",
+      "line": 92,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/recovery_api.dart",
+      "line": 113,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/recovery_api.dart",
+      "line": 132,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/spend_by_category_repository.dart",
+      "line": 62,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/spend_reports_repository.dart",
+      "line": 596,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/spend_reports_repository.dart",
+      "line": 609,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/spend_reports_repository.dart",
+      "line": 632,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/spend_reports_repository.dart",
+      "line": 664,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/spend_reports_repository.dart",
+      "line": 679,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/spend_reports_repository.dart",
+      "line": 702,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/spend_reports_repository.dart",
+      "line": 719,
+      "receiver": "_client",
+      "method": "PATCH",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/spend_reports_repository.dart",
+      "line": 735,
+      "receiver": "_client",
+      "method": "DELETE",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/support_api.dart",
+      "line": 40,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/sync_api.dart",
+      "line": 169,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/sync_api.dart",
+      "line": 191,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/sync_api.dart",
+      "line": 212,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/sync_api.dart",
+      "line": 220,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/sync_api.dart",
+      "line": 231,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/sync_api.dart",
+      "line": 243,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 928,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 951,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 974,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 989,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1003,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1017,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1059,
+      "receiver": "_client",
+      "method": "PATCH",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1080,
+      "receiver": "_client",
+      "method": "PATCH",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1139,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1176,
+      "receiver": "_client",
+      "method": "PATCH",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1197,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1230,
+      "receiver": "_client",
+      "method": "PUT",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1281,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1328,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1359,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1402,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1486,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1505,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1551,
+      "receiver": "_client",
+      "method": "PATCH",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1577,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1591,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1614,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1634,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1661,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1679,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1701,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1724,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1741,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1759,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1781,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1804,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1841,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1857,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1881,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1898,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_cards_repository.dart",
+      "line": 1914,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_settings_api.dart",
+      "line": 55,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/data/user_settings_api.dart",
+      "line": 67,
+      "receiver": "_client",
+      "method": "PUT",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/features/geofence/nearby_merchants_repository.dart",
+      "line": 260,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/features/import/gmail_discovery_service.dart",
+      "line": 150,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "app/lib/features/import/gmail_discovery_service.dart",
+      "line": 172,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/app/providers.dart",
+      "line": 150,
+      "receiver": "http",
+      "method": "GET",
+      "has_headers_argument": false
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 15,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 28,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 48,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 84,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 91,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 102,
+      "receiver": "_client",
+      "method": "PUT",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 116,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 143,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 160,
+      "receiver": "_client",
+      "method": "PUT",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 172,
+      "receiver": "_client",
+      "method": "DELETE",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 189,
+      "receiver": "_client",
+      "method": "PUT",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 202,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 215,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 227,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 236,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 246,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 258,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 267,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 275,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 300,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 311,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 326,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 343,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 356,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 366,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 379,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 389,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 408,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 420,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 435,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 464,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 480,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 492,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 503,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 515,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 537,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 554,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 579,
+      "receiver": "_client",
+      "method": "PUT",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 595,
+      "receiver": "_client",
+      "method": "DELETE",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 608,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 624,
+      "receiver": "_client",
+      "method": "POST",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 652,
+      "receiver": "_client",
+      "method": "PATCH",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 669,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 680,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    },
+    {
+      "source": "console/lib/data/admin_api.dart",
+      "line": 690,
+      "receiver": "_client",
+      "method": "GET",
+      "has_headers_argument": true
+    }
+  ]
+}

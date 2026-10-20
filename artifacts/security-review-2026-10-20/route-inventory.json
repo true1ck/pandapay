@@ -1,0 +1,2187 @@
+{
+  "source_commit": "c2e41d8",
+  "date": "2026-10-20",
+  "method": "Tree-sitter JavaScript AST; generated route families expanded; router mount guards manually resolved",
+  "summary": {
+    "api": {
+      "total": 170,
+      "access": {
+        "JWT (signature/issuer/audience/expiry only)": 94,
+        "JWT + product admin DB membership": 59,
+        "Anonymous write allowed / optional JWT": 1,
+        "Public read / optional JWT": 14,
+        "Shared webhook secret inside handler": 2
+      }
+    },
+    "auth": {
+      "total": 28,
+      "access": {
+        "JWT + security_admin (feature flag)": 2,
+        "Public legacy endpoint \u2014 review finding": 3,
+        "Google ID-token proof": 1,
+        "Refresh-token proof": 2,
+        "Public login: delivery/rate-limit checks": 2,
+        "Public token introspection (token in body)": 1,
+        "OTP proof + rate limit (no existing JWT)": 2,
+        "Public health/debug page": 4,
+        "JWT": 5,
+        "JWT + step-up": 4,
+        "JWT + recent recovery proof + rate limit": 2
+      }
+    }
+  },
+  "duplicate_method_path_registrations": {},
+  "routes": [
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/acceptance-reports",
+      "source": "api/src/index.js",
+      "line": 1948,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/account-summaries",
+      "source": "api/src/index.js",
+      "line": 5120,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "DELETE",
+      "path": "/account/delete-request",
+      "source": "api/src/index.js",
+      "line": 7633,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/account/delete-request",
+      "source": "api/src/index.js",
+      "line": 7615,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/abuse-signals",
+      "source": "api/src/index.js",
+      "line": 7986,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/abuse-signals/:id/block",
+      "source": "api/src/index.js",
+      "line": 8009,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/acceptance-summary",
+      "source": "api/src/index.js",
+      "line": 8057,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/acceptance-summary/:merchantId",
+      "source": "api/src/index.js",
+      "line": 8098,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/acceptance-summary/publish",
+      "source": "api/src/index.js",
+      "line": 8137,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/alerts",
+      "source": "api/src/index.js",
+      "line": 2293,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/alerts/:id",
+      "source": "api/src/index.js",
+      "line": 2319,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/alerts/:id/decide",
+      "source": "api/src/index.js",
+      "line": 2364,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/anonymization-audit-runs",
+      "source": "api/src/index.js",
+      "line": 8492,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/anonymization-audit-runs/latest",
+      "source": "api/src/index.js",
+      "line": 8509,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/anonymization-audit-runs/run",
+      "source": "api/src/index.js",
+      "line": 8528,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/admin/billing-cycle-rules/by-card/:cardProductId",
+      "source": "api/src/index.js",
+      "line": 618,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/cap-rules",
+      "source": "api/src/index.js",
+      "line": 519,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "DELETE",
+      "path": "/admin/cap-rules/:id",
+      "source": "api/src/index.js",
+      "line": 519,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/admin/cap-rules/:id",
+      "source": "api/src/index.js",
+      "line": 519,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/card-benefits",
+      "source": "api/src/index.js",
+      "line": 564,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "DELETE",
+      "path": "/admin/card-benefits/:id",
+      "source": "api/src/index.js",
+      "line": 564,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/admin/card-benefits/:id",
+      "source": "api/src/index.js",
+      "line": 564,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/card-requests",
+      "source": "api/src/index.js",
+      "line": 2066,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/card-requests/start-scraping",
+      "source": "api/src/index.js",
+      "line": 2100,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/cards",
+      "source": "api/src/index.js",
+      "line": 300,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/cards",
+      "source": "api/src/index.js",
+      "line": 388,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/cards/:id/status",
+      "source": "api/src/index.js",
+      "line": 841,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/data-quality-dashboard",
+      "source": "api/src/index.js",
+      "line": 8470,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/effective-rate-summary",
+      "source": "api/src/index.js",
+      "line": 8190,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/effective-rate-summary/:cardProductId/:categoryId/samples",
+      "source": "api/src/index.js",
+      "line": 8235,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/error-reports",
+      "source": "api/src/index.js",
+      "line": 2150,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/error-reports/:id/approve",
+      "source": "api/src/index.js",
+      "line": 2183,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/error-reports/:id/reject",
+      "source": "api/src/index.js",
+      "line": 2265,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/fee-waiver-rules",
+      "source": "api/src/index.js",
+      "line": 552,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "DELETE",
+      "path": "/admin/fee-waiver-rules/:id",
+      "source": "api/src/index.js",
+      "line": 552,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/admin/fee-waiver-rules/:id",
+      "source": "api/src/index.js",
+      "line": 552,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/admin/forex-rules/by-card/:cardProductId",
+      "source": "api/src/index.js",
+      "line": 592,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/admin/fuel-surcharge-rules/by-card/:cardProductId",
+      "source": "api/src/index.js",
+      "line": 604,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/issuers",
+      "source": "api/src/index.js",
+      "line": 323,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/me",
+      "source": "api/src/index.js",
+      "line": 283,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/merchant-conflicts",
+      "source": "api/src/index.js",
+      "line": 7899,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/merchant-conflicts/:id/resolve",
+      "source": "api/src/index.js",
+      "line": 7926,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/merchants",
+      "source": "api/src/index.js",
+      "line": 7715,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/merchants/:id",
+      "source": "api/src/index.js",
+      "line": 7770,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/merchants/:id/override",
+      "source": "api/src/index.js",
+      "line": 7819,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/merchants/:id/unpublish",
+      "source": "api/src/index.js",
+      "line": 7862,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/milestone-rules",
+      "source": "api/src/index.js",
+      "line": 536,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "DELETE",
+      "path": "/admin/milestone-rules/:id",
+      "source": "api/src/index.js",
+      "line": 536,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/admin/milestone-rules/:id",
+      "source": "api/src/index.js",
+      "line": 536,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/notifications/broadcast",
+      "source": "api/src/index.js",
+      "line": 7053,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/parser-patterns",
+      "source": "api/src/index.js",
+      "line": 638,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/parser-patterns",
+      "source": "api/src/index.js",
+      "line": 675,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "DELETE",
+      "path": "/admin/parser-patterns/:id",
+      "source": "api/src/index.js",
+      "line": 798,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/admin/parser-patterns/:id",
+      "source": "api/src/index.js",
+      "line": 723,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/redemption-options",
+      "source": "api/src/index.js",
+      "line": 579,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "DELETE",
+      "path": "/admin/redemption-options/:id",
+      "source": "api/src/index.js",
+      "line": 579,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/admin/redemption-options/:id",
+      "source": "api/src/index.js",
+      "line": 579,
+      "guards": [
+        "requireAdmin (factory)"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/admin/reward-rules/:id",
+      "source": "api/src/index.js",
+      "line": 458,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/scrape-runs",
+      "source": "api/src/index.js",
+      "line": 8409,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/source-pages/:id/snapshots",
+      "source": "api/src/index.js",
+      "line": 8436,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/sources",
+      "source": "api/src/index.js",
+      "line": 8286,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/admin/sources",
+      "source": "api/src/index.js",
+      "line": 8315,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "PATCH",
+      "path": "/admin/sources/:id",
+      "source": "api/src/index.js",
+      "line": 8359,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/admin/sources/:id/pages",
+      "source": "api/src/index.js",
+      "line": 8454,
+      "guards": [
+        "requireAdmin"
+      ],
+      "access": "JWT + product admin DB membership"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/analytics/events",
+      "source": "api/src/index.js",
+      "line": 1767,
+      "guards": [],
+      "access": "Anonymous write allowed / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/app-status",
+      "source": "api/src/index.js",
+      "line": 946,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/assistant/spending-summary",
+      "source": "api/src/index.js",
+      "line": 6264,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/backup-runs",
+      "source": "api/src/index.js",
+      "line": 9066,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/backup-status",
+      "source": "api/src/index.js",
+      "line": 9022,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/budgets",
+      "source": "api/src/index.js",
+      "line": 6388,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/budgets",
+      "source": "api/src/index.js",
+      "line": 6455,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "DELETE",
+      "path": "/budgets/:id",
+      "source": "api/src/index.js",
+      "line": 6522,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/card-discovery",
+      "source": "api/src/index.js",
+      "line": 6727,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/card-overrides",
+      "source": "api/src/index.js",
+      "line": 2878,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/card-overrides",
+      "source": "api/src/index.js",
+      "line": 2909,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "DELETE",
+      "path": "/card-overrides/:id",
+      "source": "api/src/index.js",
+      "line": 3016,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "PATCH",
+      "path": "/card-overrides/:id",
+      "source": "api/src/index.js",
+      "line": 2961,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/card-requests",
+      "source": "api/src/index.js",
+      "line": 1264,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/catalogue",
+      "source": "api/src/index.js",
+      "line": 239,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/categories",
+      "source": "api/src/index.js",
+      "line": 905,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/changelog",
+      "source": "api/src/index.js",
+      "line": 7687,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/consents",
+      "source": "api/src/index.js",
+      "line": 7290,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/consents",
+      "source": "api/src/index.js",
+      "line": 7336,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/consents/history",
+      "source": "api/src/index.js",
+      "line": 7312,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/data-error-reports",
+      "source": "api/src/index.js",
+      "line": 1325,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/duplicate-candidates",
+      "source": "api/src/index.js",
+      "line": 5416,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/duplicate-candidates/:id/resolve",
+      "source": "api/src/index.js",
+      "line": 5469,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/export",
+      "source": "api/src/index.js",
+      "line": 9096,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/export/transactions.csv",
+      "source": "api/src/index.js",
+      "line": 6324,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/forwarding-addresses",
+      "source": "api/src/index.js",
+      "line": 8582,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/forwarding-addresses/me",
+      "source": "api/src/index.js",
+      "line": 8616,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/forwarding-addresses/verification",
+      "source": "api/src/index.js",
+      "line": 8798,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/health",
+      "source": "api/src/index.js",
+      "line": 161,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/home-summary",
+      "source": "api/src/index.js",
+      "line": 7129,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/imap-connections",
+      "source": "api/src/index.js",
+      "line": 9174,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/imap-connections/:id/test",
+      "source": "api/src/index.js",
+      "line": 9246,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/imap-connections/me",
+      "source": "api/src/index.js",
+      "line": 9215,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/inbound-emails/:id/create-transaction",
+      "source": "api/src/index.js",
+      "line": 8867,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/inbound-emails/me",
+      "source": "api/src/index.js",
+      "line": 8841,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/inbound-emails/webhook",
+      "source": "api/src/index.js",
+      "line": 8657,
+      "guards": [],
+      "access": "Shared webhook secret inside handler"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/issuer-emergency-contacts",
+      "source": "api/src/index.js",
+      "line": 9310,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/lounge-usage",
+      "source": "api/src/index.js",
+      "line": 5896,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/lounge-usage",
+      "source": "api/src/index.js",
+      "line": 5914,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/merchants/nearby",
+      "source": "api/src/index.js",
+      "line": 987,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/merchants/nearby/discover",
+      "source": "api/src/index.js",
+      "line": 1155,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/merchants/nearby/discover",
+      "source": "api/src/index.js",
+      "line": 1156,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/merchants/nearby/google",
+      "source": "api/src/index.js",
+      "line": 1042,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/merchants/nearby/search",
+      "source": "api/src/index.js",
+      "line": 1249,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/merchants/nearby/search",
+      "source": "api/src/index.js",
+      "line": 1250,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/merchants/resolve",
+      "source": "api/src/index.js",
+      "line": 2031,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/merchants/search",
+      "source": "api/src/index.js",
+      "line": 1996,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/monthly-reports",
+      "source": "api/src/index.js",
+      "line": 5960,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/my-contributions",
+      "source": "api/src/index.js",
+      "line": 7219,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/notification-devices",
+      "source": "api/src/index.js",
+      "line": 1416,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/notification-preferences",
+      "source": "api/src/index.js",
+      "line": 7399,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/notification-preferences",
+      "source": "api/src/index.js",
+      "line": 7417,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/notification-preferences/muted-merchants",
+      "source": "api/src/index.js",
+      "line": 7451,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/notification-preferences/muted-merchants",
+      "source": "api/src/index.js",
+      "line": 7470,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "DELETE",
+      "path": "/notification-preferences/muted-merchants/:merchantId",
+      "source": "api/src/index.js",
+      "line": 7488,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/notifications",
+      "source": "api/src/index.js",
+      "line": 6902,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/notifications",
+      "source": "api/src/index.js",
+      "line": 6967,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/notifications/read",
+      "source": "api/src/index.js",
+      "line": 6930,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/notifications/test",
+      "source": "api/src/index.js",
+      "line": 1474,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/partner-clicks",
+      "source": "api/src/index.js",
+      "line": 1817,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/partner-conversions/webhook",
+      "source": "api/src/index.js",
+      "line": 1861,
+      "guards": [],
+      "access": "Shared webhook secret inside handler"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/profile",
+      "source": "api/src/index.js",
+      "line": 181,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/profile",
+      "source": "api/src/index.js",
+      "line": 200,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/profile/contributions-opt-in",
+      "source": "api/src/index.js",
+      "line": 7243,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/ready",
+      "source": "api/src/index.js",
+      "line": 166,
+      "guards": [],
+      "access": "Public read / optional JWT"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/recurring",
+      "source": "api/src/index.js",
+      "line": 6555,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "PATCH",
+      "path": "/recurring/:id",
+      "source": "api/src/index.js",
+      "line": 6658,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/recurring/:id/dismiss",
+      "source": "api/src/index.js",
+      "line": 6688,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/referrals",
+      "source": "api/src/index.js",
+      "line": 6836,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/sms-import-batches",
+      "source": "api/src/index.js",
+      "line": 8994,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/sms-import-batches",
+      "source": "api/src/index.js",
+      "line": 8976,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/spend-by-category",
+      "source": "api/src/index.js",
+      "line": 6124,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/spend-report",
+      "source": "api/src/index.js",
+      "line": 6179,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/statement-imports",
+      "source": "api/src/index.js",
+      "line": 8952,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/statement-imports",
+      "source": "api/src/index.js",
+      "line": 8947,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/support-tickets",
+      "source": "api/src/index.js",
+      "line": 7658,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/sync/ack",
+      "source": "api/src/index.js",
+      "line": 1709,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/sync/conflicts/:id/acknowledge",
+      "source": "api/src/index.js",
+      "line": 1726,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/sync/pull",
+      "source": "api/src/index.js",
+      "line": 1670,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/sync/push",
+      "source": "api/src/index.js",
+      "line": 1549,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/sync/register-device",
+      "source": "api/src/index.js",
+      "line": 1391,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/transactions",
+      "source": "api/src/index.js",
+      "line": 5220,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/transactions",
+      "source": "api/src/index.js",
+      "line": 4558,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/transactions/:id",
+      "source": "api/src/index.js",
+      "line": 5343,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "PATCH",
+      "path": "/transactions/:id",
+      "source": "api/src/index.js",
+      "line": 5613,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/transactions/:id/ignore",
+      "source": "api/src/index.js",
+      "line": 5844,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "PATCH",
+      "path": "/transactions/:id/note",
+      "source": "api/src/index.js",
+      "line": 5794,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/transactions/:id/splits",
+      "source": "api/src/transaction_splits.js",
+      "line": 54,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/transactions/:id/splits",
+      "source": "api/src/transaction_splits.js",
+      "line": 99,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/transactions/from-sms",
+      "source": "api/src/index.js",
+      "line": 4694,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/transactions/from-sms/batch",
+      "source": "api/src/index.js",
+      "line": 4895,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/transactions/reconcile-sms",
+      "source": "api/src/index.js",
+      "line": 5070,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/transactions/sms-import-state",
+      "source": "api/src/index.js",
+      "line": 5088,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/user-cards",
+      "source": "api/src/index.js",
+      "line": 2406,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/user-cards",
+      "source": "api/src/index.js",
+      "line": 2505,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "PATCH",
+      "path": "/user-cards/:id",
+      "source": "api/src/index.js",
+      "line": 3150,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/user-cards/:id/archive",
+      "source": "api/src/index.js",
+      "line": 2820,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/user-cards/:id/default",
+      "source": "api/src/index.js",
+      "line": 2848,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/user-cards/:id/points-adjustment",
+      "source": "api/src/index.js",
+      "line": 3265,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/user-cards/:id/points-ledger",
+      "source": "api/src/index.js",
+      "line": 3231,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/user-cards/:id/unarchive",
+      "source": "api/src/index.js",
+      "line": 3037,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/user-cards/import",
+      "source": "api/src/index.js",
+      "line": 2652,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "POST",
+      "path": "/user-cards/reorder",
+      "source": "api/src/index.js",
+      "line": 3099,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/user-categories",
+      "source": "api/src/index.js",
+      "line": 918,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "GET",
+      "path": "/user-settings",
+      "source": "api/src/index.js",
+      "line": 7513,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "api",
+      "method": "PUT",
+      "path": "/user-settings",
+      "source": "api/src/index.js",
+      "line": 7555,
+      "guards": [
+        "requireAuth"
+      ],
+      "access": "JWT (signature/issuer/audience/expiry only)"
+    },
+    {
+      "service": "auth",
+      "method": "GET",
+      "path": "/admin/security-dashboard",
+      "source": "auth/src/index.js",
+      "line": 166,
+      "guards": [
+        "authMiddleware",
+        "adminAuth"
+      ],
+      "access": "JWT + security_admin (feature flag)"
+    },
+    {
+      "service": "auth",
+      "method": "GET",
+      "path": "/admin/security-events",
+      "source": "auth/src/routes/adminRoutes.js",
+      "line": 53,
+      "guards": [],
+      "access": "JWT + security_admin (feature flag)"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/check-user",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 278,
+      "guards": [
+        "validateRequestOtpBody",
+        "// Reuse phone number validation"
+      ],
+      "access": "Public legacy endpoint \u2014 review finding"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/google",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 1104,
+      "guards": [
+        "validateGoogleLoginBody"
+      ],
+      "access": "Google ID-token proof"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/guest-login",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 370,
+      "guards": [],
+      "access": "Public legacy endpoint \u2014 review finding"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/logout",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 1405,
+      "guards": [
+        "auth",
+        "validateLogoutBody"
+      ],
+      "access": "Refresh-token proof"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/refresh",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 1237,
+      "guards": [
+        "validateRefreshTokenBody"
+      ],
+      "access": "Refresh-token proof"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/request-email-otp",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 764,
+      "guards": [
+        "validateRequestEmailOtpBody",
+        "checkActiveOtpForEmail",
+        "rateLimitRequestOtpByEmail",
+        "rateLimitRequestOtpByIp"
+      ],
+      "access": "Public login: delivery/rate-limit checks"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/request-otp",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 144,
+      "guards": [
+        "validateRequestOtpBody",
+        "checkActiveOtpForPhone",
+        "rateLimitRequestOtpByPhone",
+        "rateLimitRequestOtpByIp"
+      ],
+      "access": "Public login: delivery/rate-limit checks"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/signup",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 1460,
+      "guards": [
+        "validateSignupBody"
+      ],
+      "access": "Public legacy endpoint \u2014 review finding"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/validate-token",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 1894,
+      "guards": [],
+      "access": "Public token introspection (token in body)"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/verify-email-otp",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 879,
+      "guards": [
+        "validateVerifyEmailOtpBody",
+        "rateLimitVerifyOtpByEmail"
+      ],
+      "access": "OTP proof + rate limit (no existing JWT)"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/auth/verify-otp",
+      "source": "auth/src/routes/authRoutes.js",
+      "line": 450,
+      "guards": [
+        "validateVerifyOtpBody",
+        "rateLimitVerifyOtpByPhone"
+      ],
+      "access": "OTP proof + rate limit (no existing JWT)"
+    },
+    {
+      "service": "auth",
+      "method": "GET",
+      "path": "/health",
+      "source": "auth/src/index.js",
+      "line": 119,
+      "guards": [],
+      "access": "Public health/debug page"
+    },
+    {
+      "service": "auth",
+      "method": "GET",
+      "path": "/ready",
+      "source": "auth/src/index.js",
+      "line": 125,
+      "guards": [],
+      "access": "Public health/debug page"
+    },
+    {
+      "service": "auth",
+      "method": "GET",
+      "path": "/test",
+      "source": "auth/src/index.js",
+      "line": 111,
+      "guards": [],
+      "access": "Public health/debug page"
+    },
+    {
+      "service": "auth",
+      "method": "GET",
+      "path": "/testpage",
+      "source": "auth/src/index.js",
+      "line": 115,
+      "guards": [],
+      "access": "Public health/debug page"
+    },
+    {
+      "service": "auth",
+      "method": "GET",
+      "path": "/users/me",
+      "source": "auth/src/routes/userRoutes.js",
+      "line": 29,
+      "guards": [
+        "auth",
+        "userRateLimitRead"
+      ],
+      "access": "JWT"
+    },
+    {
+      "service": "auth",
+      "method": "PUT",
+      "path": "/users/me",
+      "source": "auth/src/routes/userRoutes.js",
+      "line": 184,
+      "guards": [
+        "auth",
+        "requireRecentOtpOrReauth"
+      ],
+      "access": "JWT + step-up"
+    },
+    {
+      "service": "auth",
+      "method": "PUT",
+      "path": "/users/me/device/fcm-token",
+      "source": "auth/src/routes/userRoutes.js",
+      "line": 425,
+      "guards": [
+        "auth",
+        "userRateLimitWrite"
+      ],
+      "access": "JWT"
+    },
+    {
+      "service": "auth",
+      "method": "GET",
+      "path": "/users/me/devices",
+      "source": "auth/src/routes/userRoutes.js",
+      "line": 227,
+      "guards": [
+        "auth",
+        "userRateLimitRead"
+      ],
+      "access": "JWT"
+    },
+    {
+      "service": "auth",
+      "method": "DELETE",
+      "path": "/users/me/devices/:device_id",
+      "source": "auth/src/routes/userRoutes.js",
+      "line": 259,
+      "guards": [
+        "auth",
+        "userRateLimitSensitive",
+        "requireRecentOtpOrReauth",
+        "validateDeviceIdParam"
+      ],
+      "access": "JWT + step-up"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/users/me/logout-all-devices",
+      "source": "auth/src/routes/userRoutes.js",
+      "line": 381,
+      "guards": [
+        "auth",
+        "userRateLimitSensitive",
+        "requireRecentOtpOrReauth"
+      ],
+      "access": "JWT + step-up"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/users/me/logout-all-other-devices",
+      "source": "auth/src/routes/userRoutes.js",
+      "line": 311,
+      "guards": [
+        "auth",
+        "userRateLimitSensitive",
+        "requireRecentOtpOrReauth",
+        "validateLogoutOthersBody"
+      ],
+      "access": "JWT + step-up"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/users/me/recovery-contact-check",
+      "source": "auth/src/routes/userRoutes.js",
+      "line": 142,
+      "guards": [
+        "auth",
+        "userRateLimitSensitive"
+      ],
+      "access": "JWT"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/users/me/recovery-contact/request",
+      "source": "auth/src/routes/recoveryContactRoutes.js",
+      "line": 58,
+      "guards": [],
+      "access": "JWT + recent recovery proof + rate limit"
+    },
+    {
+      "service": "auth",
+      "method": "POST",
+      "path": "/users/me/recovery-contact/verify",
+      "source": "auth/src/routes/recoveryContactRoutes.js",
+      "line": 92,
+      "guards": [],
+      "access": "JWT + recent recovery proof + rate limit"
+    },
+    {
+      "service": "auth",
+      "method": "GET",
+      "path": "/users/me/recovery-status",
+      "source": "auth/src/routes/userRoutes.js",
+      "line": 98,
+      "guards": [
+        "auth",
+        "userRateLimitRead"
+      ],
+      "access": "JWT"
+    }
+  ]
+}

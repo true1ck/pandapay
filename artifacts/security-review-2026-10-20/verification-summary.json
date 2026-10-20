@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-20",
+  "source_commit": "c2e41d8",
+  "source_scope": "Current working tree; concurrent user edits were present. Not a frozen release build.",
+  "tests_rerun": {
+    "api": {"command": "npm test", "passed": 436, "failed": 0},
+    "auth": {"command": "npm test", "passed": 38, "failed": 0},
+    "security_probes": {"command": "node artifacts/security-review-2026-10-20/security-probes.cjs", "conditions_reproduced": 8, "meaning": "Reproduced adverse conditions, not security passes"}
+  },
+  "local_read_only_database_observations": {
+    "product": {
+      "tables": 89,
+      "rls_enabled_tables": 88,
+      "cap_rules": {"duplicate_groups": 20, "extra_rows": 20},
+      "card_benefits": {"duplicate_groups": 2, "extra_rows": 4},
+      "reward_rules": {"duplicate_groups": 0, "extra_rows": 0},
+      "milestone_rules": {"duplicate_groups": 0, "extra_rows": 0},
+      "active_wallet_identity_duplicate_groups": 0,
+      "overlapping_index_pairs": [
+        ["idx_change_log_pull", "idx_change_log_profile_seq"],
+        ["partner_clicks_click_token_key", "idx_partner_clicks_token"]
+      ],
+      "migration_files_in_source": 67,
+      "migration_ledger_entries_including_seeds": 48,
+      "recorded_product_migrations": 42,
+      "pending_non_cron_files": 24,
+      "intentionally_skipped_cron_files": 1,
+      "app_user": {"superuser": false, "bypass_rls": false, "can_mutate_migration_ledger": true}
+    },
+    "auth": {
+      "tables": 7,
+      "rls_enabled_tables": 0,
+      "phone_only_users": 0,
+      "phone_only_plaintext_phone_users": 0,
+      "duplicate_normalized_email_groups": 0,
+      "users_indexes": ["users_pkey"],
+      "otp_requests": {"total": 24, "expired": 24},
+      "refresh_tokens": {"total": 146, "expired": 25, "revoked": 133, "note": "Expired and revoked sets overlap; revocation records may be required for replay detection"}
+    }
+  },
+  "not_performed": ["production inspection", "customer data export", "real OTP request", "database writes", "application-source changes", "dependency upgrades", "deployment", "full runtime penetration test", "new mobile build or full Flutter test rerun"]
+}

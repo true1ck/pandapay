@@ -660,7 +660,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Removed offline — will sync when you reconnect.'),
+        find.text(
+          'Card removed on this device. It will sync when the server is available.',
+        ),
         findsOneWidget,
       );
       final pending = queue.pending();

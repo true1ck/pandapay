@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +12,7 @@ import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../overrides/manual_overrides_screen.dart';
+import '../sync/sync_engine.dart';
 
 /// Design 23 "Card actions · freeze or remove" — everything you can do to
 /// one card that isn't editing its details.
@@ -103,7 +106,11 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
         }
       } catch (error) {
         final offline = ref.read(isOnlineProvider).valueOrNull == false;
-        if (!paused || repo == null || !offline) rethrow;
+        if (!paused ||
+            repo == null ||
+            !(offline || isTransientNetworkFailure(error))) {
+          rethrow;
+        }
         final queue = await ref.read(syncQueueProvider.future);
         queue.enqueueUpdate(
           entity: 'user_cards',
@@ -112,6 +119,7 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
         );
         queuedOffline = true;
         ref.invalidate(pendingSyncCountProvider);
+        unawaited(ref.read(syncEngineProvider).sync());
       }
 
       await applyUserCardArchiveToCache(
@@ -132,7 +140,7 @@ class _CardActionsScreenState extends ConsumerState<CardActionsScreen> {
         SnackBar(
           content: Text(
             queuedOffline
-                ? 'Removed offline — will sync when you reconnect.'
+                ? 'Card removed on this device. It will sync when the server is available.'
                 : paused
                 ? '$_displayName paused — it will not be ranked.'
                 : '$_displayName is back in the ranking.',

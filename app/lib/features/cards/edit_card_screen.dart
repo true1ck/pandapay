@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +14,7 @@ import '../../data/user_cards_repository.dart';
 import 'card_network_util.dart';
 import 'card_visual.dart';
 import '../insights/credit_utilization_ui.dart';
+import '../sync/sync_engine.dart';
 
 /// C4 Edit Card (ui-spec Group C, implementation-plan-group-c-d.md).
 ///
@@ -297,7 +300,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
       // ('user_cards') allows, so this queues the same way _save does above.
       final offline = ref.read(isOnlineProvider).valueOrNull == false;
       final repo = ref.read(userCardsRepositoryProvider);
-      if (offline && repo != null) {
+      if ((offline || isTransientNetworkFailure(e)) && repo != null) {
         final queue = await ref.read(syncQueueProvider.future);
         queue.enqueueUpdate(
           entity: 'user_cards',
@@ -310,10 +313,13 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
           archived: true,
         );
         ref.invalidate(pendingSyncCountProvider);
+        unawaited(ref.read(syncEngineProvider).sync());
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Removed offline — will sync when you reconnect.'),
+              content: Text(
+                'Card removed on this device. It will sync when the server is available.',
+              ),
             ),
           );
           context.go(AppRoute.cards);

@@ -1,0 +1,1100 @@
+{
+  "date": "2026-10-20",
+  "scope": "Source declarations only. No production inspection, database rows, secrets or device database files.",
+  "source_only_product_tables": [
+    {
+      "table_name": "card_product_network_variants",
+      "source": {
+        "path": "db/supabase/migrations/0043_card_product_network_variants.sql",
+        "line": 9
+      },
+      "description": "Verified alternative networks and network tiers for one card product; shares the parent product economics.",
+      "create_sql": "create table card_product_network_variants (\n  id                uuid primary key default gen_random_uuid(),\n  card_product_id   uuid not null references card_products(id) on delete cascade,\n  network           card_network not null,\n  network_tier      text not null default 'N/A',\n  label             text,\n  source_url        text,\n  evidence          text,\n  is_active         boolean not null default true,\n  created_at        timestamptz not null default now(),\n  updated_at        timestamptz not null default now(),\n  constraint card_network_variant_must_be_known check (network::text <> 'unknown'),\n  constraint card_network_variant_unique unique (card_product_id, network, network_tier)\n);",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "definition": "id uuid primary key default gen_random_uuid()"
+        },
+        {
+          "name": "card_product_id",
+          "type": "uuid",
+          "definition": "card_product_id uuid not null references card_products(id) on delete cascade"
+        },
+        {
+          "name": "network",
+          "type": "card_network",
+          "definition": "network card_network not null"
+        },
+        {
+          "name": "network_tier",
+          "type": "text",
+          "definition": "network_tier text not null default 'N/A'"
+        },
+        {
+          "name": "label",
+          "type": "text",
+          "definition": "label text"
+        },
+        {
+          "name": "source_url",
+          "type": "text",
+          "definition": "source_url text"
+        },
+        {
+          "name": "evidence",
+          "type": "text",
+          "definition": "evidence text"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "definition": "is_active boolean not null default true"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "definition": "created_at timestamptz not null default now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "definition": "updated_at timestamptz not null default now()"
+        }
+      ],
+      "constraints": [
+        "constraint card_network_variant_must_be_known check (network::text <> 'unknown')",
+        "constraint card_network_variant_unique unique (card_product_id, network, network_tier)"
+      ],
+      "foreign_keys": [
+        "FOREIGN KEY (card_product_id) REFERENCES card_products(id) ON DELETE CASCADE"
+      ],
+      "domain": "Card catalogue",
+      "status": "Present in source; absent from saved local PostgreSQL snapshot",
+      "pending_migration": "0043_card_product_network_variants.sql"
+    },
+    {
+      "table_name": "user_categories",
+      "source": {
+        "path": "db/supabase/migrations/20261019140000_user_categories_sync.sql",
+        "line": 4
+      },
+      "description": "Private account-owned custom categories synchronized across signed-in devices.",
+      "create_sql": "create table if not exists user_categories (\n  id         uuid primary key,\n  profile_id uuid not null references profiles(id) on delete cascade,\n  name       text not null check (length(trim(name)) between 1 and 40),\n  slug       text not null check (length(trim(slug)) between 1 and 80),\n  created_at timestamptz not null default now(),\n  updated_at timestamptz not null default now()\n);",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "definition": "id uuid primary key"
+        },
+        {
+          "name": "profile_id",
+          "type": "uuid",
+          "definition": "profile_id uuid not null references profiles(id) on delete cascade"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "definition": "name text not null check (length(trim(name)) between 1 and 40)"
+        },
+        {
+          "name": "slug",
+          "type": "text",
+          "definition": "slug text not null check (length(trim(slug)) between 1 and 80)"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "definition": "created_at timestamptz not null default now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "definition": "updated_at timestamptz not null default now()"
+        }
+      ],
+      "constraints": [],
+      "foreign_keys": [
+        "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+      ],
+      "domain": "User financial data",
+      "status": "Present in source; absent from saved local PostgreSQL snapshot",
+      "pending_migration": "20261019140000_user_categories_sync.sql"
+    }
+  ],
+  "flutter_sqlite": {
+    "scope": "Current Flutter Dart source declarations and guarded runtime ALTER operations, not a device-runtime schema snapshot. Tables can be initialized by feature repositories as needed.",
+    "table_count": 19,
+    "foreign_key_constraint_count": 0,
+    "tables": [
+      {
+        "table_name": "cached_responses",
+        "source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 32
+        },
+        "description": "Raw endpoint response cache for migration and server-derived display aggregates.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS cached_responses (\n  key TEXT PRIMARY KEY,\n  raw_json TEXT NOT NULL,\n  fetched_at INTEGER NOT NULL\n);",
+        "columns": [
+          {
+            "name": "key",
+            "type": "TEXT",
+            "definition": "key TEXT PRIMARY KEY"
+          },
+          {
+            "name": "raw_json",
+            "type": "TEXT",
+            "definition": "raw_json TEXT NOT NULL"
+          },
+          {
+            "name": "fetched_at",
+            "type": "INTEGER",
+            "definition": "fetched_at INTEGER NOT NULL"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Device cache, offline edits and guest wallet",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 3
+      },
+      {
+        "table_name": "local_needs_review",
+        "source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 38
+        },
+        "description": "Account-scoped local items awaiting review.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS local_needs_review (\n  namespace TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,\n  PRIMARY KEY(namespace,id)\n);",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL"
+          },
+          {
+            "name": "id",
+            "type": "TEXT",
+            "definition": "id TEXT NOT NULL"
+          },
+          {
+            "name": "payload",
+            "type": "TEXT",
+            "definition": "payload TEXT NOT NULL"
+          }
+        ],
+        "constraints": [
+          "PRIMARY KEY(namespace,id)"
+        ],
+        "foreign_keys": [],
+        "domain": "Device cache, offline edits and guest wallet",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 3
+      },
+      {
+        "table_name": "cache_refresh_requests",
+        "source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 42
+        },
+        "description": "Cache keys waiting to be refreshed.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS cache_refresh_requests (key TEXT PRIMARY KEY);",
+        "columns": [
+          {
+            "name": "key",
+            "type": "TEXT",
+            "definition": "key TEXT PRIMARY KEY"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Device cache, offline edits and guest wallet",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 1
+      },
+      {
+        "table_name": "transaction_outbox_entries",
+        "source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 44
+        },
+        "description": "Durable quick-add transaction queue with stable client mutation identifiers and paise amounts.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS transaction_outbox_entries (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  user_card_id TEXT,\n  client_mutation_id TEXT,\n  amount_paise INTEGER NOT NULL,\n  category_id TEXT,\n  user_category_id TEXT,\n  merchant_name TEXT,\n  occurred_at INTEGER,\n  note TEXT,\n  instrument TEXT NOT NULL DEFAULT 'credit_card',\n  entry_kind TEXT NOT NULL DEFAULT 'spend',\n  created_at INTEGER NOT NULL,\n  last_error TEXT\n);",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "definition": "id INTEGER PRIMARY KEY AUTOINCREMENT"
+          },
+          {
+            "name": "user_card_id",
+            "type": "TEXT",
+            "definition": "user_card_id TEXT"
+          },
+          {
+            "name": "client_mutation_id",
+            "type": "TEXT",
+            "definition": "client_mutation_id TEXT"
+          },
+          {
+            "name": "amount_paise",
+            "type": "INTEGER",
+            "definition": "amount_paise INTEGER NOT NULL"
+          },
+          {
+            "name": "category_id",
+            "type": "TEXT",
+            "definition": "category_id TEXT"
+          },
+          {
+            "name": "user_category_id",
+            "type": "TEXT",
+            "definition": "user_category_id TEXT"
+          },
+          {
+            "name": "merchant_name",
+            "type": "TEXT",
+            "definition": "merchant_name TEXT"
+          },
+          {
+            "name": "occurred_at",
+            "type": "INTEGER",
+            "definition": "occurred_at INTEGER"
+          },
+          {
+            "name": "note",
+            "type": "TEXT",
+            "definition": "note TEXT"
+          },
+          {
+            "name": "instrument",
+            "type": "TEXT",
+            "definition": "instrument TEXT NOT NULL DEFAULT 'credit_card'"
+          },
+          {
+            "name": "entry_kind",
+            "type": "TEXT",
+            "definition": "entry_kind TEXT NOT NULL DEFAULT 'spend'"
+          },
+          {
+            "name": "created_at",
+            "type": "INTEGER",
+            "definition": "created_at INTEGER NOT NULL"
+          },
+          {
+            "name": "last_error",
+            "type": "TEXT",
+            "definition": "last_error TEXT"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Device cache, offline edits and guest wallet",
+        "runtime_alter_columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL DEFAULT 'legacy'",
+            "source": {
+              "path": "app/lib/data/local/app_database.dart",
+              "line": 174
+            },
+            "note": "Added if absent; replacement-table rebuild also declares this column."
+          }
+        ],
+        "column_count_after_runtime_updates": 14
+      },
+      {
+        "table_name": "transaction_attachments",
+        "source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 63
+        },
+        "description": "Device-local receipt attachment metadata and local file paths.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS transaction_attachments (\n  id TEXT PRIMARY KEY,\n  transaction_id TEXT NOT NULL,\n  file_name TEXT NOT NULL,\n  local_path TEXT NOT NULL,\n  mime_type TEXT,\n  created_at INTEGER NOT NULL\n);",
+        "columns": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "definition": "id TEXT PRIMARY KEY"
+          },
+          {
+            "name": "transaction_id",
+            "type": "TEXT",
+            "definition": "transaction_id TEXT NOT NULL"
+          },
+          {
+            "name": "file_name",
+            "type": "TEXT",
+            "definition": "file_name TEXT NOT NULL"
+          },
+          {
+            "name": "local_path",
+            "type": "TEXT",
+            "definition": "local_path TEXT NOT NULL"
+          },
+          {
+            "name": "mime_type",
+            "type": "TEXT",
+            "definition": "mime_type TEXT"
+          },
+          {
+            "name": "created_at",
+            "type": "INTEGER",
+            "definition": "created_at INTEGER NOT NULL"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Device cache, offline edits and guest wallet",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 6
+      },
+      {
+        "table_name": "local_user_cards",
+        "source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 83
+        },
+        "description": "Guest wallet card ownership, ordering and archive/default flags.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS local_user_cards (\n  id TEXT PRIMARY KEY,\n  card_product_id TEXT NOT NULL,\n  nickname TEXT,\n  is_default INTEGER NOT NULL DEFAULT 0,\n  is_archived INTEGER NOT NULL DEFAULT 0,\n  sort_order REAL NOT NULL,\n  created_at INTEGER NOT NULL\n);",
+        "columns": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "definition": "id TEXT PRIMARY KEY"
+          },
+          {
+            "name": "card_product_id",
+            "type": "TEXT",
+            "definition": "card_product_id TEXT NOT NULL"
+          },
+          {
+            "name": "nickname",
+            "type": "TEXT",
+            "definition": "nickname TEXT"
+          },
+          {
+            "name": "is_default",
+            "type": "INTEGER",
+            "definition": "is_default INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "is_archived",
+            "type": "INTEGER",
+            "definition": "is_archived INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "sort_order",
+            "type": "REAL",
+            "definition": "sort_order REAL NOT NULL"
+          },
+          {
+            "name": "created_at",
+            "type": "INTEGER",
+            "definition": "created_at INTEGER NOT NULL"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Device cache, offline edits and guest wallet",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 7
+      },
+      {
+        "table_name": "user_categories",
+        "source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 93
+        },
+        "description": "Device-local account-scoped custom categories.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS user_categories (\n  namespace TEXT NOT NULL,\n  id TEXT NOT NULL,\n  name TEXT NOT NULL,\n  slug TEXT NOT NULL,\n  created_at INTEGER NOT NULL,\n  updated_at INTEGER NOT NULL,\n  PRIMARY KEY(namespace, id)\n);",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL"
+          },
+          {
+            "name": "id",
+            "type": "TEXT",
+            "definition": "id TEXT NOT NULL"
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "definition": "name TEXT NOT NULL"
+          },
+          {
+            "name": "slug",
+            "type": "TEXT",
+            "definition": "slug TEXT NOT NULL"
+          },
+          {
+            "name": "created_at",
+            "type": "INTEGER",
+            "definition": "created_at INTEGER NOT NULL"
+          },
+          {
+            "name": "updated_at",
+            "type": "INTEGER",
+            "definition": "updated_at INTEGER NOT NULL"
+          }
+        ],
+        "constraints": [
+          "PRIMARY KEY(namespace, id)"
+        ],
+        "foreign_keys": [],
+        "domain": "Device cache, offline edits and guest wallet",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 6
+      },
+      {
+        "table_name": "sync_pending_changes",
+        "source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 120
+        },
+        "description": "Coalescing queue of local entity changes awaiting server synchronization.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS sync_pending_changes (\n  client_seq INTEGER PRIMARY KEY AUTOINCREMENT,\n  entity TEXT NOT NULL,\n  entity_id TEXT NOT NULL,\n  op TEXT NOT NULL,\n  payload_json TEXT NOT NULL,\n  field_clocks_json TEXT NOT NULL,\n  created_at INTEGER NOT NULL,\n  attempts INTEGER NOT NULL DEFAULT 0,\n  last_error TEXT\n);",
+        "columns": [
+          {
+            "name": "client_seq",
+            "type": "INTEGER",
+            "definition": "client_seq INTEGER PRIMARY KEY AUTOINCREMENT"
+          },
+          {
+            "name": "entity",
+            "type": "TEXT",
+            "definition": "entity TEXT NOT NULL"
+          },
+          {
+            "name": "entity_id",
+            "type": "TEXT",
+            "definition": "entity_id TEXT NOT NULL"
+          },
+          {
+            "name": "op",
+            "type": "TEXT",
+            "definition": "op TEXT NOT NULL"
+          },
+          {
+            "name": "payload_json",
+            "type": "TEXT",
+            "definition": "payload_json TEXT NOT NULL"
+          },
+          {
+            "name": "field_clocks_json",
+            "type": "TEXT",
+            "definition": "field_clocks_json TEXT NOT NULL"
+          },
+          {
+            "name": "created_at",
+            "type": "INTEGER",
+            "definition": "created_at INTEGER NOT NULL"
+          },
+          {
+            "name": "attempts",
+            "type": "INTEGER",
+            "definition": "attempts INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "last_error",
+            "type": "TEXT",
+            "definition": "last_error TEXT"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Device cache, offline edits and guest wallet",
+        "runtime_alter_columns": [
+          {
+            "name": "in_flight",
+            "type": "INTEGER",
+            "definition": "in_flight INTEGER NOT NULL DEFAULT 0",
+            "source": {
+              "path": "app/lib/data/local/app_database.dart",
+              "line": 163
+            }
+          },
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL DEFAULT 'legacy'",
+            "source": {
+              "path": "app/lib/data/local/app_database.dart",
+              "line": 174
+            },
+            "additional_source": {
+              "path": "app/lib/data/local/sync_queue.dart",
+              "line": 28
+            },
+            "note": "Both paths guard with PRAGMA table_info before adding it."
+          }
+        ],
+        "column_count_after_runtime_updates": 11
+      },
+      {
+        "table_name": "sync_state",
+        "source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 140
+        },
+        "description": "Legacy singleton sync cursor retained by AppDatabase; account_sync_state supplies per-account state.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS sync_state (\n  id INTEGER PRIMARY KEY CHECK (id = 1),\n  device_id TEXT,\n  last_server_seq INTEGER NOT NULL DEFAULT 0,\n  last_synced_at INTEGER\n);",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "definition": "id INTEGER PRIMARY KEY CHECK (id = 1)"
+          },
+          {
+            "name": "device_id",
+            "type": "TEXT",
+            "definition": "device_id TEXT"
+          },
+          {
+            "name": "last_server_seq",
+            "type": "INTEGER",
+            "definition": "last_server_seq INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "last_synced_at",
+            "type": "INTEGER",
+            "definition": "last_synced_at INTEGER"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Device cache, offline edits and guest wallet",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 4
+      },
+      {
+        "table_name": "account_sync_state",
+        "source": {
+          "path": "app/lib/data/local/sync_queue.dart",
+          "line": 31
+        },
+        "description": "Account-scoped device registration and server change cursor.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS account_sync_state (\n      namespace TEXT PRIMARY KEY, device_id TEXT, last_server_seq INTEGER NOT NULL DEFAULT 0,\n      last_synced_at INTEGER)",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT PRIMARY KEY"
+          },
+          {
+            "name": "device_id",
+            "type": "TEXT",
+            "definition": "device_id TEXT"
+          },
+          {
+            "name": "last_server_seq",
+            "type": "INTEGER",
+            "definition": "last_server_seq INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "last_synced_at",
+            "type": "INTEGER",
+            "definition": "last_synced_at INTEGER"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Account-scoped synchronization cursor",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 4
+      },
+      {
+        "table_name": "financial_entities",
+        "source": {
+          "path": "app/lib/data/local/financial_store.dart",
+          "line": 149
+        },
+        "description": "Canonical account-scoped transaction/card entity cache, including pending local changes.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS financial_entities (\n        namespace TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL,\n        payload TEXT NOT NULL, observed_at INTEGER NOT NULL,\n        pending INTEGER NOT NULL DEFAULT 0, source_key TEXT,\n        occurred_at INTEGER, amount_paise INTEGER,\n        PRIMARY KEY(namespace, entity, id)\n      );",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL"
+          },
+          {
+            "name": "entity",
+            "type": "TEXT",
+            "definition": "entity TEXT NOT NULL"
+          },
+          {
+            "name": "id",
+            "type": "TEXT",
+            "definition": "id TEXT NOT NULL"
+          },
+          {
+            "name": "payload",
+            "type": "TEXT",
+            "definition": "payload TEXT NOT NULL"
+          },
+          {
+            "name": "observed_at",
+            "type": "INTEGER",
+            "definition": "observed_at INTEGER NOT NULL"
+          },
+          {
+            "name": "pending",
+            "type": "INTEGER",
+            "definition": "pending INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "source_key",
+            "type": "TEXT",
+            "definition": "source_key TEXT"
+          },
+          {
+            "name": "occurred_at",
+            "type": "INTEGER",
+            "definition": "occurred_at INTEGER"
+          },
+          {
+            "name": "amount_paise",
+            "type": "INTEGER",
+            "definition": "amount_paise INTEGER"
+          }
+        ],
+        "constraints": [
+          "PRIMARY KEY(namespace, entity, id)"
+        ],
+        "foreign_keys": [],
+        "domain": "Account-scoped canonical financial cache",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 9
+      },
+      {
+        "table_name": "financial_coverage",
+        "source": {
+          "path": "app/lib/data/local/financial_store.dart",
+          "line": 162
+        },
+        "description": "Per-account endpoint/query coverage timestamps for financial cache freshness.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS financial_coverage (\n        namespace TEXT NOT NULL, query_key TEXT NOT NULL, fetched_at INTEGER NOT NULL,\n        PRIMARY KEY(namespace, query_key)\n      );",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL"
+          },
+          {
+            "name": "query_key",
+            "type": "TEXT",
+            "definition": "query_key TEXT NOT NULL"
+          },
+          {
+            "name": "fetched_at",
+            "type": "INTEGER",
+            "definition": "fetched_at INTEGER NOT NULL"
+          }
+        ],
+        "constraints": [
+          "PRIMARY KEY(namespace, query_key)"
+        ],
+        "foreign_keys": [],
+        "domain": "Account-scoped canonical financial cache",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 3
+      },
+      {
+        "table_name": "financial_migrations",
+        "source": {
+          "path": "app/lib/data/local/financial_store.dart",
+          "line": 166
+        },
+        "description": "Per-account marker for financial cache migrations.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS financial_migrations (\n        namespace TEXT PRIMARY KEY\n      );",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT PRIMARY KEY"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Account-scoped canonical financial cache",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 1
+      },
+      {
+        "table_name": "financial_sync_status",
+        "source": {
+          "path": "app/lib/data/local/financial_store.dart",
+          "line": 169
+        },
+        "description": "Per-account financial synchronization status.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS financial_sync_status (\n        namespace TEXT PRIMARY KEY, state TEXT NOT NULL\n      );",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT PRIMARY KEY"
+          },
+          {
+            "name": "state",
+            "type": "TEXT",
+            "definition": "state TEXT NOT NULL"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Account-scoped canonical financial cache",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 2
+      },
+      {
+        "table_name": "financial_source_receipts",
+        "source": {
+          "path": "app/lib/data/local/financial_store.dart",
+          "line": 172
+        },
+        "description": "Per-account mapping from imported source keys to canonical transaction identifiers.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS financial_source_receipts (\n        namespace TEXT NOT NULL, source_key TEXT NOT NULL, transaction_id TEXT NOT NULL,\n        PRIMARY KEY(namespace,source_key)\n      );",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL"
+          },
+          {
+            "name": "source_key",
+            "type": "TEXT",
+            "definition": "source_key TEXT NOT NULL"
+          },
+          {
+            "name": "transaction_id",
+            "type": "TEXT",
+            "definition": "transaction_id TEXT NOT NULL"
+          }
+        ],
+        "constraints": [
+          "PRIMARY KEY(namespace,source_key)"
+        ],
+        "foreign_keys": [],
+        "domain": "Account-scoped canonical financial cache",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 3
+      },
+      {
+        "table_name": "split_documents",
+        "source": {
+          "path": "app/lib/data/local/split_repository.dart",
+          "line": 52
+        },
+        "description": "Transaction split document cache and coalescing durable outbox in one row.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS split_documents (\n      namespace TEXT NOT NULL, transaction_id TEXT NOT NULL,\n      document_json TEXT NOT NULL, pending INTEGER NOT NULL DEFAULT 0,\n      version INTEGER NOT NULL DEFAULT 0, fetched_at INTEGER NOT NULL,\n      error TEXT, blocked INTEGER NOT NULL DEFAULT 0,\n      attempts INTEGER NOT NULL DEFAULT 0, next_attempt INTEGER NOT NULL DEFAULT 0,\n      PRIMARY KEY(namespace, transaction_id)\n    )",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL"
+          },
+          {
+            "name": "transaction_id",
+            "type": "TEXT",
+            "definition": "transaction_id TEXT NOT NULL"
+          },
+          {
+            "name": "document_json",
+            "type": "TEXT",
+            "definition": "document_json TEXT NOT NULL"
+          },
+          {
+            "name": "pending",
+            "type": "INTEGER",
+            "definition": "pending INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "version",
+            "type": "INTEGER",
+            "definition": "version INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "fetched_at",
+            "type": "INTEGER",
+            "definition": "fetched_at INTEGER NOT NULL"
+          },
+          {
+            "name": "error",
+            "type": "TEXT",
+            "definition": "error TEXT"
+          },
+          {
+            "name": "blocked",
+            "type": "INTEGER",
+            "definition": "blocked INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "attempts",
+            "type": "INTEGER",
+            "definition": "attempts INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "next_attempt",
+            "type": "INTEGER",
+            "definition": "next_attempt INTEGER NOT NULL DEFAULT 0"
+          }
+        ],
+        "constraints": [
+          "PRIMARY KEY(namespace, transaction_id)"
+        ],
+        "foreign_keys": [],
+        "domain": "Transaction split cache and durable outbox",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 10
+      },
+      {
+        "table_name": "sms_intake",
+        "source": {
+          "path": "app/lib/data/local/sms_intake_repository.dart",
+          "line": 43
+        },
+        "description": "Account-scoped captured SMS retry queue.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS sms_intake (\n        namespace TEXT NOT NULL, id TEXT NOT NULL, sender TEXT NOT NULL,\n        body TEXT NOT NULL, received_at INTEGER NOT NULL,\n        attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT,\n        PRIMARY KEY(namespace, id)\n      );",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL"
+          },
+          {
+            "name": "id",
+            "type": "TEXT",
+            "definition": "id TEXT NOT NULL"
+          },
+          {
+            "name": "sender",
+            "type": "TEXT",
+            "definition": "sender TEXT NOT NULL"
+          },
+          {
+            "name": "body",
+            "type": "TEXT",
+            "definition": "body TEXT NOT NULL"
+          },
+          {
+            "name": "received_at",
+            "type": "INTEGER",
+            "definition": "received_at INTEGER NOT NULL"
+          },
+          {
+            "name": "attempts",
+            "type": "INTEGER",
+            "definition": "attempts INTEGER NOT NULL DEFAULT 0"
+          },
+          {
+            "name": "last_error",
+            "type": "TEXT",
+            "definition": "last_error TEXT"
+          }
+        ],
+        "constraints": [
+          "PRIMARY KEY(namespace, id)"
+        ],
+        "foreign_keys": [],
+        "domain": "Captured SMS and retry queue",
+        "runtime_alter_columns": [
+          {
+            "name": "next_attempt",
+            "type": "INTEGER",
+            "definition": "next_attempt INTEGER NOT NULL DEFAULT 0",
+            "source": {
+              "path": "app/lib/data/local/sms_intake_repository.dart",
+              "line": 62
+            }
+          }
+        ],
+        "column_count_after_runtime_updates": 8
+      },
+      {
+        "table_name": "sms_captured_messages",
+        "source": {
+          "path": "app/lib/data/local/sms_intake_repository.dart",
+          "line": 49
+        },
+        "description": "Account-scoped local SMS capture archive and processed marker.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS sms_captured_messages (\n        namespace TEXT NOT NULL, id TEXT NOT NULL, sender TEXT NOT NULL,\n        body TEXT NOT NULL, received_at INTEGER NOT NULL,\n        processed INTEGER NOT NULL DEFAULT 0,\n        PRIMARY KEY(namespace, id)\n      );",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL"
+          },
+          {
+            "name": "id",
+            "type": "TEXT",
+            "definition": "id TEXT NOT NULL"
+          },
+          {
+            "name": "sender",
+            "type": "TEXT",
+            "definition": "sender TEXT NOT NULL"
+          },
+          {
+            "name": "body",
+            "type": "TEXT",
+            "definition": "body TEXT NOT NULL"
+          },
+          {
+            "name": "received_at",
+            "type": "INTEGER",
+            "definition": "received_at INTEGER NOT NULL"
+          },
+          {
+            "name": "processed",
+            "type": "INTEGER",
+            "definition": "processed INTEGER NOT NULL DEFAULT 0"
+          }
+        ],
+        "constraints": [
+          "PRIMARY KEY(namespace, id)"
+        ],
+        "foreign_keys": [],
+        "domain": "Captured SMS and retry queue",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 6
+      },
+      {
+        "table_name": "sms_inbox_progress",
+        "source": {
+          "path": "app/lib/features/sms_import/sms_inbox_scanner.dart",
+          "line": 23
+        },
+        "description": "Account-scoped provider scan checkpoint and initial-scan completion marker.",
+        "create_sql": "CREATE TABLE IF NOT EXISTS sms_inbox_progress (\n        namespace TEXT PRIMARY KEY,\n        last_provider_id INTEGER NOT NULL,\n        initial_complete INTEGER NOT NULL DEFAULT 0\n      )",
+        "columns": [
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT PRIMARY KEY"
+          },
+          {
+            "name": "last_provider_id",
+            "type": "INTEGER",
+            "definition": "last_provider_id INTEGER NOT NULL"
+          },
+          {
+            "name": "initial_complete",
+            "type": "INTEGER",
+            "definition": "initial_complete INTEGER NOT NULL DEFAULT 0"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Paged SMS scan progress",
+        "runtime_alter_columns": [],
+        "column_count_after_runtime_updates": 3
+      }
+    ],
+    "transient_tables": [
+      {
+        "table_name": "transaction_outbox_entries_new",
+        "source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 201
+        },
+        "description": "Temporary table used while rebuilding transaction_outbox_entries. The prior outbox table is dropped and this replacement is renamed to transaction_outbox_entries in the same transaction. Excluded from active table count.",
+        "create_sql": "CREATE TABLE transaction_outbox_entries_new (\n            id INTEGER PRIMARY KEY AUTOINCREMENT,\n            namespace TEXT NOT NULL DEFAULT 'legacy',\n            user_card_id TEXT,\n            client_mutation_id TEXT,\n            amount_paise INTEGER NOT NULL,\n            category_id TEXT,\n            user_category_id TEXT,\n            merchant_name TEXT,\n            occurred_at INTEGER,\n            note TEXT,\n            instrument TEXT NOT NULL DEFAULT 'credit_card',\n            entry_kind TEXT NOT NULL DEFAULT 'spend',\n            created_at INTEGER NOT NULL,\n            last_error TEXT\n          )",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "definition": "id INTEGER PRIMARY KEY AUTOINCREMENT"
+          },
+          {
+            "name": "namespace",
+            "type": "TEXT",
+            "definition": "namespace TEXT NOT NULL DEFAULT 'legacy'"
+          },
+          {
+            "name": "user_card_id",
+            "type": "TEXT",
+            "definition": "user_card_id TEXT"
+          },
+          {
+            "name": "client_mutation_id",
+            "type": "TEXT",
+            "definition": "client_mutation_id TEXT"
+          },
+          {
+            "name": "amount_paise",
+            "type": "INTEGER",
+            "definition": "amount_paise INTEGER NOT NULL"
+          },
+          {
+            "name": "category_id",
+            "type": "TEXT",
+            "definition": "category_id TEXT"
+          },
+          {
+            "name": "user_category_id",
+            "type": "TEXT",
+            "definition": "user_category_id TEXT"
+          },
+          {
+            "name": "merchant_name",
+            "type": "TEXT",
+            "definition": "merchant_name TEXT"
+          },
+          {
+            "name": "occurred_at",
+            "type": "INTEGER",
+            "definition": "occurred_at INTEGER"
+          },
+          {
+            "name": "note",
+            "type": "TEXT",
+            "definition": "note TEXT"
+          },
+          {
+            "name": "instrument",
+            "type": "TEXT",
+            "definition": "instrument TEXT NOT NULL DEFAULT 'credit_card'"
+          },
+          {
+            "name": "entry_kind",
+            "type": "TEXT",
+            "definition": "entry_kind TEXT NOT NULL DEFAULT 'spend'"
+          },
+          {
+            "name": "created_at",
+            "type": "INTEGER",
+            "definition": "created_at INTEGER NOT NULL"
+          },
+          {
+            "name": "last_error",
+            "type": "TEXT",
+            "definition": "last_error TEXT"
+          }
+        ],
+        "constraints": [],
+        "foreign_keys": [],
+        "domain": "Device cache, offline edits and guest wallet",
+        "status": "Temporary replacement only",
+        "lifecycle_source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 199
+        },
+        "rename_source": {
+          "path": "app/lib/data/local/app_database.dart",
+          "line": 247
+        }
+      }
+    ],
+    "notes": [
+      "All 19 active persistent SQLite table names were found in app/lib source. transaction_outbox_entries_new is a temporary migration replacement and is excluded.",
+      "The declarations contain no REFERENCES or FOREIGN KEY clauses. Identifiers such as user_card_id and transaction_id are logical links enforced by application/server behavior rather than SQLite foreign-key constraints.",
+      "Columns added by guarded runtime ALTER statements are shown separately from the initial CREATE TABLE declaration; column_count_after_runtime_updates includes them.",
+      "sync_state remains declared, while account_sync_state provides the account-scoped cursor. No DROP of sync_state was found in the inspected local schema sources.",
+      "local_needs_review is also created defensively in app/lib/data/needs_review_repository.dart:68; it is one table, not an additional table.",
+      "Financial cache, sync and import queues share account namespaces; this is a device cache/outbox design rather than a relational copy of every server table."
+    ]
+  }
+}

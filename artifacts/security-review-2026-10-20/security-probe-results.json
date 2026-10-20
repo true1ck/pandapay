@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-20",
+  "scope": "isolated actual-source probes, synthetic records, no network or database",
+  "meaning": "reproduced=true confirms the audit condition exists; it does not mean the application is secure",
+  "results": [
+    {
+      "name": "Email OTP for a new email can authenticate a legacy phone-only account without phone OTP",
+      "reproduced": true
+    },
+    {
+      "name": "Public signup authenticates an incomplete account without OTP even when phone OTP is disabled",
+      "reproduced": true
+    },
+    {
+      "name": "Random-IV encrypted phone cannot match the equality lookup parameters",
+      "reproduced": true
+    },
+    {
+      "name": "A token revoked by auth token_version checks is still accepted by the product API guard",
+      "reproduced": true
+    },
+    {
+      "name": "Public guest-login can mint a JWT accepted by private product API guards",
+      "reproduced": true
+    },
+    {
+      "name": "Production OTP verification logging includes the supplied OTP",
+      "reproduced": true
+    },
+    {
+      "name": "Concurrent verification can consume the same email OTP successfully twice",
+      "reproduced": true
+    },
+    {
+      "name": "Enabling database access logging breaks queries through the db/logger circular dependency",
+      "reproduced": true
+    }
+  ]
+}

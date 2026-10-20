@@ -30,6 +30,7 @@ Production infrastructure, deployed role grants, real email/SMS delivery, produc
 | [Complete local database dictionary](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/artifacts/security-review-2026-10-20/schema-inventory.md) | All 96 tables, columns, nullable fields, foreign keys, RLS policies, index counts and pending migrations |
 | [Extended database metadata](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/artifacts/security-review-2026-10-20/schema-details.json) | Fresh local metadata for the HTML Database explorer: 96 tables, 934 columns, 139 foreign keys, keys/checks/defaults, indexes, policies, triggers, six views, 26 enums and 31 application-function signatures. Includes the later local `recurring_series.user_edited` column. No production records. |
 | [Source-only and device schemas](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/artifacts/security-review-2026-10-20/schema-source-supplement.json) | Two migration-defined tables absent locally, plus all 19 persistent Flutter SQLite tables, exact source declarations and guarded runtime column additions. Device source inventory, not a device-data snapshot. |
+| [Database optimization evidence](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/artifacts/security-review-2026-10-20/database-optimization-evidence.json) | Fresh local table counts/sizes, indexes, counter limits, literal source locations, database-routine mentions and payload/retention aggregates. No customer values or production records exported. |
 | [Reproduction results](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/artifacts/security-review-2026-10-20/security-probe-results.json) | Eight reproduced conditions; `reproduced: true` means a problem was demonstrated, not a security pass |
 | [Probe source](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/artifacts/security-review-2026-10-20/security-probes.cjs) | Reusable synthetic-only checks; no network/database connection |
 | [Dependency audit](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/artifacts/security-review-2026-10-20/dependency-audit.json) | Current npm advisory evidence for the installed API/auth dependency trees |
@@ -433,9 +434,455 @@ Suggested owner: the relevant service owner, with documentation maintained in th
 
 A proposed action, a passing old unit test or a changed comment does not close a finding. Record the reviewed implementation, relevant migration/configuration, regression result and target-environment verification. Mark source-only cleanup decisions separately from demonstrated security fixes. Keep remaining production validation visible; this plan makes no claim that production has already been repaired.
 
+## 10. Database optimization and table usage review
+
+**Conclusion:** the best improvements are lifecycle/retention controls, safe rule deduplication and consolidation of configuration responsibilities. Four tables are plausible retirement candidates, but no table has been proven safe to drop from production. A table count of 96 is not itself a performance problem. Some empty tables support features accessed through stored functions or generated routes.
+
+This follow-up inspected local PostgreSQL metadata, allocated sizes, exact row-count aggregates, routine definitions and active-source references on 20 October 2026. It did not retrieve customer records, access production, delete data, create/drop indexes, run migrations or change application logic. The optimization evidence is a newer observation than the initial audit; login/session activity can change local counts between snapshots. The original security work should remain ahead of cosmetic schema reduction.
+
+### Measured local footprint
+
+| Local database | Base tables | Empty tables | Database allocation | Interpretation |
+|---|---:|---:|---:|---|
+| pandapay | 89 | 49 | 23.76 MiB | Many features have no local records. Empty is not evidence of unnecessary design. |
+| pandapay_auth | 7 | 2 | 8.56 MiB | The empty tables are otp_codes and oauth_accounts; the active OTP path uses otp_requests. |
+| Combined | 96 | 51 | 32.32 MiB | Database allocation includes system/internal objects. Relation sizes below include allocated pages, indexes and TOAST where applicable; they are not a count of removable data. |
+
+The four retirement candidates together occupy only **80 KiB** locally. One redundant index from each of the two equivalent pairs occupies **16 KiB** combined. Retiring them could simplify maintenance, but it is not a meaningful storage-cost optimization at this local size. Reclamation of filesystem bytes is not guaranteed to equal these allocations. No measured production cost or latency improvement is claimed.
+
+Both databases report an unavailable statistics-reset timestamp. Scan counters are local cumulative observations with no established workload window; **zero index scans do not establish that an index is unused**. There are no invalid/unready indexes in this local capture. Dead-tuple counters are estimates and do not prove a bloat percentage. No VACUUM FULL, reindex, partitioning or database merge is recommended merely from these figures.
+
+### Table-retirement and configuration candidates
+
+| Database.schema.table | Evidence | Recommendation / condition |
+|---|---|---|
+| pandapay_auth.public.otp_codes | 0 local rows, 24 KiB allocated; no active auth-source or routine use found. otp_requests is the current challenge store. | Strongest legacy-table retirement candidate. Check external consumers, old deployments and schema upgrades; then remove only through a versioned auth migration with recovery coverage. |
+| pandapay_auth.public.oauth_accounts | 0 local rows, 24 KiB; no active auth-source use. The Google endpoint instead expects users.google_id, which the inspected schema lacks. | Decide B05 first: implement the provider-link model here, or retire it together with unsupported Google account login. Do not delete it while another developer is adopting it. |
+| pandapay.public.feature_flags | 0 local rows, 16 KiB; no read/write consumer found in active application source. app_status is the implemented application-gating path. | Give it an explicit owner and feature contract, or deprecate it after checking operational clients. Avoid maintaining a second unwired flag system. |
+| pandapay.public.app_versions | 0 local rows, 16 KiB; no active consumer found. GET /app-status already returns min_supported_version. | Consolidate supported-version policy around the actual endpoint, preserving historical release information only if it has a real consumer. Check supported older clients before retirement. |
+| pandapay.public.kill_switches | 3 local seed rows, 32 KiB; no active-source or local routine consumer found. The implemented SMS import toggle is stored in app_status instead. | This needs an ownership/control-effectiveness review, not automatic deletion. A row labeled a kill switch does not demonstrate that it disables a feature. Wire and test the intended switches end to end, or retire misleading controls. External consumers were not inspected. |
+| pandapay.public.remote_config | 5 local rows, 32 KiB; approve_policy_alert writes force_catalogue_sync_after, but no corresponding reader was identified in the reviewed app/API source. | Trace the urgent-refresh/defaults contract and implement a real consumer or remove the ineffective signal after compatibility review. Existing writes prevent labeling the table wholly unused. |
+
+Evidence: [active app-status handler](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:947), [platform-table definitions](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/db/supabase/migrations/0009_platform_ops.sql:3), [force-sync signal write](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/db/supabase/migrations/0010_functions_and_views.sql:167), [local optimization evidence](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/artifacts/security-review-2026-10-20/database-optimization-evidence.json).
+
+### Similar or empty tables that should not be merged blindly
+
+| Tables / data | Why they exist separately | Optimization boundary |
+|---|---|---|
+| Auth user_devices and product user_devices | Separate databases and responsibilities: auth session/device security versus product sync/push registration. | Keep the boundary; document lifecycle coordination and erase/revoke consistently. Matching names do not make them duplicates. |
+| change_log and changelog_entries | Per-user synchronization events versus user-visible release notes. | Keep both. Optimize synchronization retention using device cursors and a resnapshot policy; release-note retention has a separate contract. |
+| transactions, transaction_observations and transaction_splits | Canonical financial records, source/idempotency provenance and split allocations. The observations are read by current spend/account reports. | Preserve source identities and financial integrity. Prune optional metadata only after documenting which report/retry/reconciliation fields depend on it. The 829 observations are not 829 confirmed duplicate transactions. |
+| analytics_events | The API calls record_analytics_event; database views consume the resulting events. There is no literal JS INSERT into the table. | Keep the feature if analytics is intended; add purpose-based retention and minimize props. Missing direct table strings in JS are not proof of obsolescence. |
+| contribution_quotas, contribution_salts and partner_programs | Crowdsource quota/salt functions and record_partner_click use them even though they are empty locally. | Preserve abuse controls and attribution. Review their retention/security independently; never drop them based on local emptiness. |
+| cap_rules, milestones, fee waivers, benefits, redemption, forex, fuel and billing rules | Generated admin routes register tableName mappings, and different tables express different calculation/entitlement rules. | Remove equivalent rows, not whole rule families. A single generic JSON table would sacrifice typed constraints and make rule correctness harder to review without a demonstrated benefit. |
+| needs_review_items, duplicate_candidates, parser_failures and data_error_reports | User import decisions, duplicate resolution, aggregated parser triage and catalogue data complaints are different workflows. | Set lifecycle/status/retention for each. Avoid merging queues solely because they all represent things requiring review. |
+| notifications and notification_preferences | Delivered inbox entries versus delivery preferences, mute rules and consent-related settings. | Prune old inbox entries under policy; keep preferences intact. Their empty local state does not prove the notification feature is unused. |
+| monthly_reports, reward states and canonical transactions | Derived summaries/checkpoints versus source financial records. | Document which derived values can be rebuilt, version calculations and test reconciliation. Do not delete canonical history to save cache space. |
+| financial_entities, cached_responses and local_user_cards on device | Canonical account-scoped offline state, legacy/aggregate response cache and guest wallet storage. | Prune migrated redundant cache entries only after proving full coverage and successful upgrade; preserve pending edits, offline data and guest cards. |
+
+Evidence: [RPC analytics call](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:1781), [partner RPC call](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:1826), [generated rule registrations](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:522), [crowdsource quota/salt functions](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/db/supabase/migrations/0029_crowdsource_ingest.sql:74), [observation-backed report fields](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/spend_reports.js:342), [device legacy migration](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/lib/data/local/financial_store.dart:577).
+
+### Retention and unnecessary-data accumulation
+
+| Data store | What was found | Improvement and verification |
+|---|---|---|
+| otp_requests | All 24 local challenges expired; 18 remain unconsumed and 6 are older than 30 days. cleanupExpiredOtps only marks records consumed; no periodic caller/purge was found in active auth source. | Schedule bounded cleanup after the approved abuse/audit window; expiry must still be enforced during verification. Test that expired challenges cannot authenticate even when cleanup is delayed. Retain only metadata actually needed for abuse analysis. |
+| refresh_tokens and auth_audit | New capture: 164 refresh rows, 151 revoked, 25 expired, including 20 both expired and revoked. These categories overlap. No periodic purge was identified in the reviewed active auth source. | Define retention for rotation families/replay detection and security audit separately. Delete only records outside the agreed security window; keep enough evidence to detect token reuse. Test revocation/replay before and after cleanup. |
+| inbound_emails | purge_after exists, but the standard migration runner skips the cron file. Its purge also excludes policy_keyword_hit=true rows. This table is empty locally. | Install a monitored supported cleanup worker and an explicit bounded evidence-hold policy for flagged mail. Preserve required redacted evidence, rather than retaining full messages indefinitely. Verify both ordinary expiry and review-hold release; external production scheduling was not checked. |
+| SMS device intake/archive | capture stores sender/body in sms_intake and sms_captured_messages while pending. acknowledge removes only the pending copy and marks the archive processed. Namespace clear exists, but no age/size cap was found. | Separate retry state from a shared message body if worth the complexity, and cap processed raw-body retention. Keep compact processed-source identities needed to prevent replay duplicates. Never drop unsent SMS because of a cache quota. Test offline retries, old-message replay, account switch and explicit erasure. |
+| cached_responses and financial_entities | The migration imports old transaction/card snapshots into the canonical financial store and writes a completion marker; the old response-cache rows are not purged by that migration. Some cache blobs still serve derived displays. | Classify cache keys by owner and TTL, remove only migrated redundant canonical snapshots after coverage checks, and bound filter-key cache growth. Cold-start/offline/upgrade tests must prove no financial history or pending work is lost. |
+| change_log and sync_conflicts | Sync history and review state are live feature stores even when locally empty. No ordinary time-based cleanup worker was identified in this source review. | Use a safe cursor watermark, active-device policy and a full-resnapshot path for stale devices before pruning events. Close/expire resolved conflicts under a separate policy. A simple delete-older-than cutoff could break offline clients. |
+| parser_failures | 1,031 local rows; repeated shapes already aggregate through a unique shape key and occurrence counts. The migration's DELETE is dedupe, not a periodic retention job. | Keep aggregated shapes/counts while bounding stale resolved examples and any identifying content. Verify new failures remain visible and occurrence totals remain correct. Do not add another dedupe mechanism over the existing constraint. |
+| analytics, notifications, scrape snapshots and audit logs | These are append/history-oriented features; absence of local rows in some is not a retention policy. No comprehensive periodic retention workflow was identified for them. | Define per-purpose windows, optional aggregation/archival, and deletion/hold behavior. Monitor rows/bytes/oldest age. Preserve required audit/evidence records; do not prescribe one blanket TTL for financial, security and diagnostic data. |
+
+The exact OTP/token counts are dated local aggregates and are not a production-leak or account-compromise finding. Sources: [OTP cleanup](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/auth/src/services/otpService.js:349), [skipped cron migration](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/db/scripts/migrate.sh:44), [mail purge predicate](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/db/supabase/migrations/0013_cron_jobs.sql:3), [device SMS queue/archive](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/lib/data/local/sms_intake_repository.dart:43), [SMS acknowledge/clear](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/lib/data/local/sms_intake_repository.dart:145), [legacy cache migration](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/lib/data/local/financial_store.dart:577), [existing parser-shape dedupe](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/db/supabase/migrations/0033_parser_failure_ingest.sql:45).
+
+### Indexes, payloads and performance
+
+| Observation | Recommendation | Evidence needed before changing it |
+|---|---|---|
+| Two equivalent index pairs remain on change_log and partner_clicks. Each candidate redundant copy is currently 8 KiB. | Keep constraint-backed uniqueness, remove only a demonstrated redundant copy through the reviewed index procedure, and update schema bootstrap. | Dependency check, query plans, write/read measurements and a recreation path. See D03/D04. |
+| The strict catalog screen finds 92 product and 1 auth FK constraints without an unfiltered B-tree index beginning with the referencing columns. Partial indexes are deliberately excluded from this screen. | Treat these as review candidates, not 93 missing-index bugs. Prioritize high-volume account/card erasure and parent updates, then inspect existing partial/composite indexes and the real query predicates. | Representative data and actual role/RLS query plans. Small reference tables often do not warrant another index. The installed profile/card/time transaction index already exists; do not add it again. |
+| transactions has 832 rows, about 1.27 MiB total allocation and 0.76 MiB of indexes. Several indexes support distinct filters and unique source identities. | Measure import/write cost and report latency before considering overlapping specialized indexes. Preserve source-key/dedupe and integrity constraints. | A representative workload window including month-end jobs, imports, sync and reporting. Zero scans in this local sample cannot justify dropping an index. |
+| card_products is the largest local relation: 204 rows, about 4.70 MiB including 2.72 MiB of TOAST allocation. extended_data values total about 1.19 MiB stored / 2.31 MiB as JSON text; largest expanded value is about 24.4 KiB. | Preserve its reviewer/provenance purpose. The source already excludes extended_data from the public device catalogue. If admin-list payload size becomes costly, consider fetching full reviewer payload only on detail/export or separating cold provenance—after measuring. | Actual public/admin view contracts and response sizes; repeated import growth and storage analysis. Allocated TOAST minus current value sizes is not a measured reclaimable-bloat figure. |
+| Observation metadata for 829 rows totals only 5,134 stored value bytes in this sample. | This is not a sensible current storage target. Keep report/idempotency dependencies and minimize any future raw-content additions. | Document metadata keys/consumers and test duplicate handling and account/card reporting. |
+| Local dead-tuple estimates exist, notably parser_failures and auth session/device tables, but no reliable statistics window was established. | Observe normal autovacuum/analyze health, long transactions and workload before maintenance tuning. Avoid a blocking rebuild based only on estimates. | A known monitoring interval, actual growth/plan evidence and maintenance rehearsal. Do not claim a bloat percentage from n_dead_tup alone. |
+
+The measured allocation and source locations for every table are in the Database tab's **Table usage & size inventory** and the [downloadable evidence](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/artifacts/security-review-2026-10-20/database-optimization-evidence.json). The capture script uses only local read-only transactions with statement timeouts; source matches are discovery evidence that can include comments or dynamic mappings, not a complete proof of runtime use.
+
+PostgreSQL's documentation supports these limits: an FK does not automatically index its referencing columns, and the right index depends on the workload ([constraint guidance](https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-FK)). Live/dead tuple statistics are estimates and usage counters accumulate over a monitoring interval ([statistics reference](https://www.postgresql.org/docs/18/monitoring-stats.html)). Ordinary vacuum generally makes space reusable, while VACUUM FULL rewrites the table and requires an exclusive lock; it is not a routine response to an empty-table count ([maintenance guidance](https://www.postgresql.org/docs/18/routine-vacuuming.html)).
+
+### Recommended optimization backlog
+
+| Order | Proposed work | Done when |
+|---|---|---|
+| O01 — first | Repair identity/authorization and reproducible migrations from sections 8–9 before cleanup. | The security regression cases and schema-from-empty/upgrade checks pass under intended roles. |
+| O02 — first | Create a data-owner/retention register for auth, raw imports, device SMS, caches, sync and audit stores; install the missing supported cleanup jobs. | Bounded growth and age metrics exist; delayed/retried cleanup never loses unsent work, audit obligations or financial state. |
+| O03 — next | Decide the four table-retirement candidates and test config/kill-switch/urgent-refresh effects. | Supported consumers are mapped; every retained control actually changes intended behavior. Any removed table has a reviewed migration and recovery plan. |
+| O04 — next | Rehearse the 20-cap/4-benefit dedupe and the two redundant-index removals on a clone. | Rule IDs/references/state totals reconcile and query/uniqueness contracts remain intact. |
+| O05 — next | Bound processed SMS archive and legacy/filter-response caches. | Upgrade/offline/replay/account-switch tests preserve canonical history, guest data and queued edits while old optional copies disappear. |
+| O06 — measure before tuning | Capture privacy-preserving query fingerprints, duration/row counts and index/cascade plans for a representative workload. | A specific slow operation or write/storage cost justifies each new/dropped index or payload change. No hypothetical percentage saving is used as evidence. |
+
+No production table is approved for deletion by this review. Safe retirement requires verified consumers, foreign-key/view/trigger/routine dependencies, supported client compatibility, owner sign-off on retained data, clone migration and a tested recovery route. The review provides the evidence and conditions for that decision; it does not replace them with an empty-table count.
+
+## 11. Backend design brief and caching recommendations
+
+**Overall assessment:** the database architecture is reasonable, but it is not fully correct or ready for a security all-clear. Separate authentication and product databases are appropriate. The 96-table count is not itself a performance problem. The main work is to strengthen identity/ownership constraints, make session policy consistent, complete background data lifecycles and measure actual workloads before adding caches or indexes. This is a summary of the local review and proposed direction, not a production certification or completed implementation.
+
+### What to keep, improve, add or remove
+
+| Area | Recommendation |
+|---|---|
+| Authentication | Close the linking/signup gaps, repair encrypted-phone lookup and enforce consistent account-state and revocation decisions in both services. Keep verification bound to the account and action it proves. |
+| Database integrity | Add reviewed normalized-contact uniqueness and the missing relationship checks, such as a submitted card belonging to the caller. Keep canonical transactions, source observations and financial state distinct; reconcile their invariants through tests. |
+| Candidate removals | Investigate auth otp_codes/oauth_accounts and product feature_flags/app_versions. Confirm consumers, migrations and ownership first. oauth_accounts may instead become the correct supported Google-login model. Their combined local allocation is only about 80 KiB; simplicity is the main potential benefit. |
+| Configuration | Consolidate overlapping version/flag/config paths around explicit contracts. Every retained kill switch and urgent-refresh signal needs a tested read consumer; a stored setting is not proof that a control works. |
+| Background processing | Add an explicitly deployed, monitored worker/scheduler for cleanup, imports, erasure and maintenance. Use bounded retries, idempotency and narrowly scoped permissions. Durable financial work must not depend solely on a disposable cache. |
+| Operations | Version migrations for both databases, test fresh and upgrade paths, restore both databases, and monitor job failures, query latency and growth. Preserve account lifecycle consistency across the two stores. |
+| Maintainability and testing | Split the large API entrypoint into domain modules behind shared middleware. Add database-backed permission, ownership and financial-contract tests. Keep method/path/guard behavior explicit during refactoring. |
+
+### Enumerated caching plan
+
+Caching should improve a demonstrated read/latency problem. Each cache needs an owner, key scope, freshness policy, invalidation rule, size bound and behavior on a miss/outage. A cache hit must never bypass authorization.
+
+| Cache candidate | Key and contents | Freshness, invalidation and safety |
+|---|---|---|
+| 1 — published card catalogue and categories | Published projection keyed by catalogue/data version, response shape and any supported filters. Preserve the existing separation from admin-only reviewer payloads. | Use version invalidation and conditional requests such as ETags; add a bounded fallback TTL. Publishing changes must update the version/validators. Cached drafts or admin responses must never be served through the public cache. |
+| 2 — spending summaries and report aggregates | Only after measuring benefit; key by authenticated profile, period, filters and relevant calculation/schema version. Include timezone/currency when those affect results. | Invalidate or advance the account data version after transaction create/edit/delete, import, duplicate resolution and reward-rule recalculation. Define acceptable staleness and never reuse another account's result. The canonical ledger remains authoritative. |
+| 3 — per-request repeated lookups | Reuse an already verified catalogue/rule lookup within one request/job where practical; avoid repeating equivalent queries in loops. | Bound lifetime to that operation. Preserve transaction consistency and ownership checks; measure query counts before introducing a wider cache. |
+| 4 — existing device/offline storage | Keep canonical account-scoped financial state, guest wallet data and unsent outbox/sync work. Classify disposable cached_responses separately from durable pending changes. | Bound optional response-cache growth and remove proven-redundant migrated snapshots only after coverage checks. Test cold-start, upgrade, offline retry and account switch. A cache-clear action must not erase unsent financial work. |
+| 5 — app status, operational switches and version gating | Retain an explicit freshness contract for min-version, maintenance and feature controls. | Avoid long cache lifetimes that delay deliberate withdrawal of a feature. Use short bounded freshness and/or invalidation that meets the control's required response time; test the intended outage behavior. |
+| 6 — shared cache or abuse counters | A shared cache such as Redis can be useful when multiple API instances require coordinated caching or rate limits. This is an implementation choice to validate, not a requirement to cache every table. | Bound memory, select eviction/expiry by purpose and test outages. Abuse-control fallback must follow the security policy; it must not silently become an unlimited bypass. Keep durable work and source financial records in the authoritative store. |
+| 7 — session/revocation decisions | Prefer a consistent validation contract first. Any revocation/status cache must have an explicit maximum stale-access bound and reliable invalidation. | Do not use long-lived positive authorization results as a substitute for current account/device/session status. Test logout-all, disable/delete and validation outages against both services. Never cache raw OTPs or raw access/refresh tokens as ordinary response data. |
+
+No specific TTL, Redis deployment, new index or expected percentage speedup is justified by the local size snapshot alone. Select these from workload measurements and the feature's freshness requirements. Scope private cache keys by account and remove access on revocation/sign-out as required by the chosen design; a shared cache must not become another unbounded store of financial or personal data.
+
+### Recommended delivery sequence
+
+1. Fix security and integrity first, including supported account recovery and the known authorization cases.
+2. Make migrations, workers, retention, erasure and two-database recovery reliable.
+3. Measure slow queries, repeated calls, import/write cost and payload sizes under a representative workload.
+4. Apply justified query/index/payload changes and introduce scoped caching where the measurements show benefit.
+5. Retire confirmed-unused components and refactor incrementally, preserving supported clients and financial invariants.
+
+The detailed evidence, candidate-removal conditions and verification steps remain in sections 9–10 and the Database tab. No application/backend/database change has been performed by adding this brief.
+
+## 12. Additional system-design gaps and priorities
+
+The main missing layer is a defined, testable reliability contract: what survives a crash, how conflicting offline changes resolve, what happens when shared infrastructure fails, and how operators detect user-impacting failures. These recommendations extend the earlier security/database work. **Source-observed limitations are distinguished from design requirements that still need validation; this is not a new production penetration test.**
+
+Existing safeguards should be preserved: transaction-local user/RLS context, database statement deadlines, source-key/idempotency support, notification-provider retry keys, sync conflict records, request correlation, readiness endpoints, graceful shutdown and CI/deployment checks are already present. The recommendations below strengthen them rather than assume they do not exist.
+
+| Priority / area | Current evidence or uncertainty | Recommended addition and completion check |
+|---|---|---|
+| SD01 — durable delivery for important events | Source-observed: POST /notifications commits the inbox row, then starts a best-effort remote send. The provider client has bounded retries/idempotency, but no durable pending-delivery record was identified for this handoff. A crash between commit and send can leave the inbox correct while the push is never attempted. | If reminders/alerts require eventual delivery, persist an outbox event in the same transaction as the relevant inbox/business write. A worker claims due events with bounded retry/backoff and records terminal failures for investigation/replay. Consumers must tolerate repeated delivery. Test process termination after commit, provider acceptance followed by timeout, restart and duplicate delivery. Retain best-effort semantics where they are an explicit product choice. |
+| SD02 — clock-independent offline conflict policy | Source-observed and documented: field clocks use the device's wall time. An incorrectly dated phone can win/lose changes incorrectly; losing values are retained in the conflict log. | Use server revisions/optimistic concurrency with explicit conflict handling, or an appropriate logical-clock scheme. Preserve the current conflict visibility. Test future/past device clocks, concurrent edits, edit/delete races, duplicate pushes and long-offline re-entry. No phone timestamp alone should establish authoritative financial ordering. |
+| SD03 — consistent multi-instance abuse controls | Source-observed: auth supports Redis but falls back to per-process memory. That fallback does not provide one shared rate-limit budget across replicas or restarts. This is a scale/failure-policy gap, not proof that Redis is absent from production. | Define the supported deployment topology, atomic expiring counters, shared limits and security behavior during Redis failure. Couple account/challenge limits with correctly trusted client IPs. Test the same identity across two instances, restarts and shared-store outage; limits must match the documented policy without accidental unlimited admission. |
+| SD04 — measurable reliability and real operator alerts | Source-observed: request IDs/logs and health/readiness exist. The data-quality dashboard explicitly says historical trends and threshold alert delivery are not implemented. Deployed monitoring/on-call arrangements were not inspected. | Define service objectives for sign-in, import completion, sync lag, API latency/error rate, cleanup lag and backup age. Collect privacy-preserving metrics and connect actionable alerts to an owner/runbook. Test by injecting a failed job, growing backlog, provider outage and stale backup; verify an operator receives a useful signal. |
+| SD05 — backward-compatible API and schema contracts | CI, smoke/audit checks and deployment sequencing already exist. A complete machine-readable API contract, supported-client compatibility window and staged failure/load evidence were not established by this follow-up. | Version request/response schemas and error semantics; define pagination/batch bounds and idempotency behavior, including rejection of the same key with a different payload. Use additive database expansion/backfills before removing fields. Test supported older mobile/console clients against upgraded services and both migration baselines; define rollout recovery without restoring vulnerable behavior. |
+| SD06 — reproducible financial calculations | Reward math, Dart/Node parity fixtures and cap-state reconciliation already exist. A complete contract for reproducing every historical estimate after rule/parser changes was not established. | Record or reference the calculation/ruleset version and evidence needed to explain a result; distinguish estimates, confirmed values and recalculations. Run reconciliation with an auditable outcome instead of silently rewriting history. Test edits/refunds/duplicates, period boundaries, rule updates and reprocessing of the same import. |
+| SD07 — provider isolation and bounded work | Timeouts, retry logic, pools and an IMAP poller exist. Representative load/backlog tests and a documented per-provider/per-account capacity budget were not established. | Bound concurrency, batch sizes, queued work and total request/job time; prevent one slow mailbox, import or provider from exhausting shared API/DB resources. Define retryable versus permanent failures and graceful degraded responses. Test provider throttling, slow mailboxes, burst imports and pool exhaustion while ordinary account traffic continues. |
+| SD08 — operation-specific administrative authority | The product API's common requireAdmin boundary checks database membership. That does not by itself establish a complete policy for distinct reviewer/publisher/support/export powers or recent verification of high-impact actions. | Define permissions per sensitive operation, step-up requirements and an approval policy for changes that materially affect users. Preserve audit reasons and provenance. Test normal users, narrower operator roles, self-approval where separation is required, exports and account/security changes. Do not conflate an admin label with unrestricted authority. |
+
+Source evidence: [committed-inbox/best-effort send](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:7077), [provider timeout/idempotent retry](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/notification_service.js:45), [device-clock limitation](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/lib/data/sync_api.dart:8), [Redis/memory rate limiter](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/auth/src/middleware/userRateLimit.js:39), [missing dashboard trend/alert delivery](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:8311), [existing deployment gate](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/.github/workflows/deploy-prod.yml:31), [product admin guard](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:265).
+
+The proposed outbox follows the principle of committing state and its pending event together, then delivering with an idempotent consumer; it does not promise exactly-once external delivery ([transactional-outbox guidance](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html)). Operational monitoring should track user-visible latency, traffic, errors and saturation and lead to actionable responses, rather than stop at a healthy process or a log file ([Google SRE monitoring guidance](https://sre.google/sre-book/monitoring-distributed-systems/)). These references explain the patterns; PandaPay's specific gaps above come from local source review.
+
+### Practical next architecture step
+
+Keep the current product/auth separation and add a small, explicit worker/outbox capability where durable execution is required. Define the sync, shared-abuse-control, administrative and release contracts before adding more infrastructure. Prioritize existing identity/security blockers first, then important-event delivery and operational alerting, followed by clock-safe sync and failure/load verification. Additional databases or independently deployed services should have a measured need and a clear owner.
+
+All SD items are proposed work or verification requirements. No backend, deployed configuration, schema or permission change was performed by this follow-up.
+
+## 13. Scalability, low-RAM servers and storage plan
+
+**Recommendation:** retain PostgreSQL and the current product/auth separation. Before a large campaign, bound expensive work, isolate imports from sign-in, coordinate limits across replicas, verify email quotas and load-test a small horizontally scalable deployment. Buying more app servers alone will not fix a saturated database or an OTP provider that has stopped sending.
+
+**Scope:** these are recommended configurations and planning examples, as requested—not measurements of the live servers. Production RAM, vCPUs, disk, provider plan, traffic and connection limits were not inspected. No production load test, provisioning or configuration change was performed. The existing security blockers still need remediation; scaling does not resolve them.
+
+### What database and deployment does PandaPay actually use?
+
+| Component | Verified repository/local evidence | Capacity implication |
+|---|---|---|
+| Server database | PostgreSQL: a relational SQL database with foreign keys, indexes, JSONB and product row-level security. Locally, pandapay contains 89 public tables and pandapay_auth contains 7. | This is an appropriate starting technology for the application. The number of tables alone does not require a database rewrite, sharding or a NoSQL migration. |
+| Databases versus servers | The production environment template points the product database at postgres and authentication at pandapay_auth in the same Supabase project. The local product database is named pandapay instead. This template is not confirmation of live hosting. | Two logical databases can share one PostgreSQL server's RAM, CPU, disk and connection budget; they are not automatically two independently scalable database servers. Schemas are namespaces, not extra machines. |
+| Mobile storage | SQLite/offline stores and pending synchronization on the device. Receipt attachments are explicitly local-only today. | Device storage does not replace server capacity or backups. A cloud receipt vault would be additional functionality, with separate storage and privacy requirements. |
+| Production-shaped app stack | Compose defines one API container, one auth container, backup scheduling and a one-shot migration task. PostgreSQL is external to this compose file. No load balancer, Redis service, dedicated import worker, resource limits or automatic replicas are declared there. | Do not assume that these capabilities are already deployed. External infrastructure may exist, but was not verified. |
+| Local storage snapshot | About 23.76 MiB product database plus 8.56 MiB auth database; only 832 transactions and 829 observations in the inspected local sample. | Roughly 32.32 MiB locally is not evidence that production can onboard thousands of users or hold their imported histories within a small free quota. |
+
+Evidence: [production compose](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/docker-compose.prod.yml:1), [database connection template](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/.env.prod.example:39), [local-only receipts](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/lib/data/local/transaction_attachments_repository.dart:9), and the Database tab's measured inventory. The PostgreSQL version installed on this development machine must not be presented as the production version.
+
+### Twenty thousand users in a day is different from twenty thousand in ten minutes
+
+The following arithmetic assumes **15 backend HTTP requests per new user**, excluding history imports, retries, provider-internal traffic and static assets. That request count is a modeling assumption to replace with captured onboarding behavior, not an observed application average.
+
+| Arrival scenario | New users per second | Modeled average backend requests per second |
+|---|---|---|
+| 20,000 over 24 hours | 0.23 | 3.5 |
+| 20,000 over 1 hour | 5.56 | 83 |
+| 20,000 over 10 minutes | 33.33 | 500 |
+| 100,000 over 1 hour | 27.78 | 417 |
+
+These are averages within each window; a notification or influencer mention can create a sharper peak. At 500 requests/second and an assumed mean response time of 0.5 seconds, roughly 250 requests are in flight. That does not mean 250 database connections are required: requests reuse a bounded pool, and some should wait or be rejected with controlled backpressure.
+
+History ingestion can dominate the workload: **20,000 new users importing 500 distinct transactions each means up to 10 million canonical transactions**, plus observations, indexes and reward-state updates. Separate the sign-in/API traffic budget from the import-throughput budget. Staggering history ingestion can preserve a responsive first session while the backlog drains.
+
+### Recommended starting infrastructure—not a capacity guarantee
+
+| Stage | Suggested starting configuration | Conditions and tradeoffs |
+|---|---|---|
+| Existing very small host: approximately 1–2 GiB RAM | Restrict to a controlled pilot; keep PostgreSQL external. Avoid local image builds, a colocated database, large imports and restore drills competing with API/auth. | Set tested container limits, admission limits and alerts. Swap can cushion a transient peak but is not a substitute for adequate RAM. This is not a recommended untested marketing-launch topology. |
+| Budget pilot | One app VM with 2 vCPU / 4 GiB RAM and approximately 30–50 GiB SSD for OS, images and bounded logs; external PostgreSQL. | A reasonable configuration to benchmark, not a promise of a user count. It remains a single point of failure. Keep heavy background work separate or deliberately throttled. |
+| Proposed campaign baseline | **Two app VMs, each 2 vCPU / 4 GiB RAM**, behind a health-checked load balancer; one API/auth pair per VM. Managed PostgreSQL starting around **2 vCPU / 4–8 GiB RAM**. A separate bounded worker starting around **2 vCPU / 2–4 GiB RAM**. | Load-test before selecting the final sizes. Use equivalent provider offerings and colocate app/DB regionally. This baseline is not certified for 500 RPS; real query cost, OTP hashing and imports determine that. Verify database failover/recovery separately. |
+| Shared limits/cache | A small managed or separate Redis deployment, initially around **512 MiB–1 GiB provisioned RAM**, with an explicit lower application memory budget and monitoring. | Start with coordinated abuse controls and proven cache candidates, not a copy of every table. Protect security counters from eviction by disposable response caches; define conservative outage behavior. Redis is not the financial source of truth. |
+| Larger campaigns | Add app replicas within a fixed total DB connection budget; independently increase worker throughput. Upgrade database CPU/RAM/IOPS when measurements identify that bottleneck. | Prewarm capacity before the campaign. Extra app VMs do not increase the PostgreSQL writer's capacity. Read replicas require explicitly routed, stale-tolerant reads and measured benefit; they do not accelerate all writes. |
+
+For the 10-million-transaction storage example below, plan approximately **100 GiB or more of expandable database SSD as an initial candidate**, then include measured WAL, temporary-space and maintenance requirements before committing. This is not a universal minimum: lighter histories need less, and larger payloads or long WAL retention can need considerably more. App VM disk and database disk are different allocations.
+
+No Kubernetes migration or many new microservices is necessary for this first step. A small load-balanced deployment with explicit workers, managed storage and sound operational controls is simpler to operate. Two app VMs help availability only if the load balancer and database also have appropriate resilience. Rehearse the admitted load with one app VM unavailable; otherwise use a documented reduced-throughput mode during failure.
+
+### Proposed request and background-work separation
+
+```text
+Flutter app / admin console
+          |
+    TLS load balancer + bounded admission
+          |
+    API replicas          Auth replicas ----> quota-approved OTP email service
+          |                    |
+          +--- bounded pools --+----> PostgreSQL: product + auth databases
+          |
+    durable jobs / outbox ----> bounded import, IMAP and delivery workers
+
+Shared Redis: coordinated abuse limits + selected bounded caches
+Private object storage: off-host backups; future cloud receipts if implemented
+```
+
+This is a proposed evolution, not a diagram of confirmed running infrastructure. Keep authentication and account authorization on every relevant request and worker operation. Share signing/encryption configuration safely across replicas, and test OTP issuance on one replica followed by verification on another. Do not rely on sticky sessions to conceal inconsistent state.
+
+### Concrete changes required by the current code and deployment
+
+| Area | Source-observed issue or limit | Recommended change before a surge |
+|---|---|---|
+| Replica deployment | API/auth bind fixed host ports 4000/3210. The supplied compose file has no shared limiter configuration or replica routing. | Do not expect compose --scale alone to work on the same host with those port bindings. Use one pair per VM behind private upstream routing, or change service discovery/ports deliberately. Explicitly wire shared Redis and correct trusted-proxy settings; keep origin ports private. |
+| Host RAM during releases | The deployment script builds containers on the live host, even though CI already builds/tests images. Compose has no explicit memory/CPU budgets. | Deploy tested immutable image digests rather than compiling on a memory-constrained live host. Add resource limits after measuring startup/peak RSS; reserve RAM for OS, nginx, Docker, agents and backup peaks. Roll gradually with readiness and graceful draining. |
+| Whole-history reads | GET /transactions currently has an empty limitClause and retrieves full account history, including observation lookups. This was intentional to avoid incomplete client totals. | Add cursor pagination with explicit completeness/has-more semantics, incremental sync and accurate server aggregates. Update clients together. Do not silently return the last 50 transactions and break spending totals. Measure under real RLS roles and representative account histories. |
+| Import duration | Statement import accepts 1–5,000 rows and processes rows sequentially inside one withUserClient transaction. SMS import is capped at 200 messages but also holds a request transaction across its loop. | Keep small interactive batches bounded by both rows and bytes. Move large imports to durable, resumable jobs with per-account fairness and chunked transactions. Preserve dedupe, reward reconciliation and failure semantics; expose progress rather than an indefinitely spinning request. |
+| Request and query bounds | Product statement timeout defaults to 15 seconds per SQL statement. Both services use express.json() without a custom byte limit; the installed parser defaults to 100 KiB. nginx's API example allows 5 MiB. | A SQL statement timeout is not a total import/job deadline. Add total operation deadlines and bounded queue/pool waits. Align documented proxy/parser/client payload limits and test boundaries; a 5,000-row schema allowance is not proof that a request fits the parser. Do not blindly raise limits on a small host. |
+| IMAP polling | The poller selects all eligible connections and loops through them; its optional interval is not wired in production compose. Existing B01/B02 worker-role/advisory-lock issues remain. | Repair those correctness issues before enabling/scaling polling. Use scheduled, incremental account jobs, lease ownership, jitter and bounded provider concurrency. Do not start an all-mailboxes poller in every API replica. |
+| OTP and email | OTP hashing uses bcrypt cost 10; validity defaults to 120 seconds. SMTP sending is awaited; the transporter has no explicit pooled sending/concurrency setup. | Benchmark auth CPU and delivery separately. Bound concurrent sends and retries; use a quota-approved provider and accurate acceptance/failure responses. Do not weaken OTP hashing/security or bypass authentication to improve throughput. |
+| Cache and response size | Catalogue and summaries can create repeated reads; the current client also has offline data. | Apply the scoped caching plan in section 11. Cache only published public projections globally; scope financial summaries by account and invalidate correctly. Reduce redundant calls/payloads before raising DB pool sizes. |
+
+Source links: [fixed ports and environment wiring](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/docker-compose.prod.yml:48), [live-host builds](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/deploy/deploy.sh:167), [unbounded history query](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:5274), [statement import](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/statement_import.js:95), [SMS batch boundary](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:4874), [JSON parsing](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:156), [IMAP poller](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/imap_poller.js:146), [OTP lifetime/hash](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/auth/src/services/otpService.js:28), [SMTP sender](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/auth/src/services/emailService.js:9).
+
+### Database connections: scale the budget, not connections per user
+
+The compose default is **10 connections per API instance and 10 per auth instance**. Two app hosts can therefore open up to 40 application connections before workers, migrations, monitoring and provider services. More replicas multiply the potential total. Audit all pools and their maximum replica counts together, as recommended by [node-postgres pool-sizing guidance](https://node-postgres.com/guides/pool-sizing).
+
+```text
+For direct/session connections, budget:
+  API replicas × API pool max
++ auth replicas × auth pool max
++ worker pools + platform/maintenance/admin reserve
+<= the actual PostgreSQL connection budget
+
+With a transaction pooler, separately budget client connections
+and the actual backend connections opened by every pooler/direct client.
+```
+
+**Worked example only:** if a PostgreSQL instance allowed 60 total connections, reserving 20 for platform/maintenance/administration and using two API pools of 5, two auth pools of 5 and one worker pool of 5 totals 45 including the reserve, leaving 15 headroom. This is not the verified limit of the current server and not a proposed universal setting. Measure pool wait time and throughput; increasing max connections can worsen memory pressure and contention.
+
+If using Supabase, distinguish pooler client limits from PostgreSQL backend limits, and count platform connections in the same instance budget ([official pooling and limits](https://supabase.com/docs/guides/database/connecting-to-postgres/pooling-and-limits)). Transaction pooling needs compatibility verification: the product's transaction-local RLS context is a useful starting point, but session advisory locks such as B02 cannot simply be moved unchanged. Keep migrations, restores and session-dependent operations on appropriate direct/session connections. Verify support for the separate auth database and intended roles rather than just changing a port number.
+
+### OTP delivery may be the first launch bottleneck
+
+The environment template names Gmail SMTP; that is not proof of the live email provider. **If a consumer Gmail account is still being used**, it is not suitable for a 20,000-signup campaign: Google's documentation describes a sending limit around 500 messages/day and temporary sending blocks ([Gmail limits](https://support.google.com/mail/answer/22839)). More API RAM does not change that quota.
+
+For a modeled 20,000 email signups in ten minutes, even one code per user requires roughly 33 accepted sends/second. A planning allowance of two attempts per user raises that to approximately 67/second and 40,000 sends/day. Confirm an approved transactional-email quota above the chosen scenario—for example, at least 75 sends/second and 50,000/day for this assumed case—plus sender-domain verification, SPF/DKIM/DMARC, bounce/complaint handling and delivery monitoring. These are proposed requirements, not a provider capacity purchase or guarantee of inbox placement.
+
+Keep OTP delivery ahead of noncritical notifications. If moving it to a queue, enforce expiry-aware processing and bounded retries: a code arriving after its 120-second lifetime is not a successful sign-in experience. The current response reports SMTP acceptance, not final inbox delivery. An asynchronous design must introduce an honest pending/delivery-failure contract rather than immediately claiming that every queued code was sent. Never expose OTPs in monitoring, caches or ordinary logs.
+
+### Storage planning: ledger, files, logs and backups are separate
+
+For illustration, assume **3–6 KiB per imported transaction including its typical observation/index share**. This is an unvalidated planning range, not extrapolation from a representative production dataset. Other account data, WAL, temporary files, bloat, replicas, backups and receipt images are excluded. Replace it with measured bytes per successful import on a production-shaped staging dataset.
+
+| 20,000 users importing | Potential canonical transactions | Illustrative ledger/observation/index allocation |
+|---|---|---|
+| 100 distinct transactions each | 2 million | 5.72–11.44 GiB |
+| 500 distinct transactions each | 10 million | 28.61–57.22 GiB |
+| 1,000 distinct transactions each | 20 million | 57.22–114.44 GiB |
+
+Provision room for WAL generated during bursts, autovacuum, index maintenance and temporary query files. Start with an operational goal of at least 25–30% free space **plus separately sized maintenance/restore scratch requirements**; a full clone or index rebuild can exceed that reserve. Monitor growth rate and time-to-full, not only a percentage. Choose adequate SSD IOPS/throughput as well as capacity; leave autovacuum healthy and avoid long transactions that prevent cleanup.
+
+If the production database follows the Supabase template, check the actual plan before launch. Current documentation says a Free project can become read-only above a **500 MB database quota**, independently of the advertised disk allocation. Paid disk expansion also has conditions and cooldowns; do not rely on last-minute automatic growth during a major import ([database versus disk quotas](https://supabase.com/docs/guides/platform/database-size)). This is conditional provider guidance, not a claim that PandaPay is currently on that plan.
+
+| Storage class | Recommendation specific to this application |
+|---|---|
+| Financial/auth rows | Keep authoritative structured records in PostgreSQL, with tested retention for OTPs, sessions, raw imports, sync/change logs and operational history. Do not delete financial history merely to recover space. Review section 10's small retirement candidates for simplicity, not meaningful capacity savings. |
+| Receipt files | They are local-only today. If cloud receipts are added, use private object storage with authenticated signed access, bounded/compressed uploads, per-user quotas, lifecycle/erasure and DB metadata references—not base64 images in transaction rows or a single app VM's disk. As an example, 20,000 users × 10 receipts × 500 KiB is about 95.4 GiB of new objects, separate from the ledger. |
+| App disk and logs | Compose rotates container logs at 10 MB × 5 files per service. OS/nginx logs, image layers/build caches and predeployment dumps are separate; cap and monitor them too. Prebuilt images reduce live-host build space/CPU pressure. |
+| Backups | The scheduled backup currently targets the product DB and local Docker volume with 30-day retention. Extend verified recovery to auth as well, encrypt copies off-host and set a tested recovery-point/recovery-time objective. PITR is recommended where supported for an acceptable recovery window; logical dumps remain useful. |
+| Backup/restore overhead | The deploy script's predeploy dumps use a separate directory and are not covered by the nightly pandapay-*.dump cleanup pattern. Add an explicit successful-backup retention policy. The restore drill currently creates its temporary database on the source PostgreSQL instance; move substantial drills to an isolated restore environment so a full extra copy does not exhaust production disk/CPU. |
+
+Budget backup storage from **measured compressed dump size × retained copies**, plus auth, WAL/PITR and any replicated/off-site copies. For example, if the combined daily logical dumps later measured 20 GiB, 30 full copies would consume roughly 600 GiB before other copies—not 20 GiB. Do not assume a compression ratio or that a local Docker volume survives VM loss. Object-file recovery is separate: Supabase database backups, for example, do not include Storage API objects ([backup scope](https://supabase.com/docs/guides/platform/backups)).
+
+Evidence: [scheduled dump and retention](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/db/scripts/backup.sh:1), [predeployment dump path](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/deploy/deploy.sh:33), [restore drill](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/db/scripts/restore_drill.sh:74). A dump that can be listed is an initial integrity check; only an actual restore and application verification establishes useful recovery evidence.
+
+### Backpressure and graceful degradation on small servers
+
+1. Put bounded admission at the edge and within services: global capacity, correctly trusted IP limits, account/challenge limits and maximum in-flight expensive operations. Use controlled 429/503 responses and retry guidance; the mobile app needs bounded exponential backoff with jitter rather than a retry storm.
+2. Prioritize authentication, small financial writes and interactive reads. Queue resumable imports, mailbox catch-up and noncritical delivery with separate concurrency budgets and per-account fairness. Return a job ID only after the job is durably recorded; acknowledge completed financial work only after the relevant commit.
+3. Preserve the existing offline experience. Show clearly dated cached information when appropriate, retain pending edits safely and surface an honest processing state. Never display stale cached balances as newly confirmed server results or bypass authorization during an outage.
+4. Keep caches, queue length/age, request bodies, response pages and pool waits bounded. Establish what happens when any bound is reached. A longer in-memory queue on a 1–2 GiB server can turn a transient burst into an out-of-memory restart.
+5. Define Redis/provider failure policies explicitly. Abuse-control outages must not create unlimited OTP access; failed background work must remain recoverable without duplicating ledger effects. A dead-letter/review path and safe replay are needed for terminal failures.
+
+### What to monitor and when to add capacity
+
+These are **initial alert/scale thresholds to calibrate in testing**, not values measured on the current servers. Start with actionable user-impact metrics and avoid autoscaling solely from one instantaneous CPU reading.
+
+| Signal | Initial trigger or target | Response |
+|---|---|---|
+| App CPU and latency | Sustained CPU around 65–70% for 10 minutes, or rising p95 latency/pool wait at the accepted load. Track auth hashing and event-loop delay separately. | Investigate the bottleneck; add/prewarm app capacity if CPU-bound, or fix DB/provider waits if those dominate. |
+| RAM | Available host memory below roughly 20–25%, sustained container RSS near its tested cap, abnormal GC, or any OOM kill. | Reduce admitted concurrency/expensive work and increase RAM or replicas as appropriate. Account for native buffers/TLS, not only the JavaScript heap. Reserve capacity for a deploy/backup peak. |
+| PostgreSQL | Rising pool acquisition time, active connection pressure, slow query fingerprints, lock waits, CPU/IO saturation or overdue vacuum. | Shorten transactions, tune justified queries/indexes and throttle workers first; resize DB when capacity is genuinely exhausted. Never blindly multiply all pools. |
+| OTP | Provider rejection/throttling, acceptance latency and real delivery time. Proposed delivery objective: p95 below 30 seconds, safely inside the current 120-second validity. | Confirm quota/reputation and bound delivery concurrency. Expiry-aware retries and explicit failures; do not keep sending unusable old codes. |
+| Background work | Oldest job age, processing time, retries and per-account fairness—not queue length alone. | Add workers only within the shared DB/provider budget; separate slow providers and pause noncritical jobs during foreground overload. |
+| Disk and recovery | Start warnings near 70% and critical alerts near 80–85%, or sooner if forecast exhaustion precedes the next resize window. Track backup age/restore results and WAL growth. | Expand ahead of campaigns; resolve runaway WAL/retention/log growth. Restore readiness must be checked independently of available disk. |
+
+Define a tested maximum replica count so autoscaling cannot exhaust database connections or provider quota. Keep an explicit cost budget/alert for compute, database storage/IO, backups, object storage/egress and email volume. Pre-provision for announced campaigns; autoscaling may react after the initial spike has already arrived.
+
+### How to prove the launch capacity safely
+
+1. Build a staging environment with the intended production topology, RLS roles, connection limits and production-shaped histories/indexes. Use synthetic accounts and realistic data distributions, including large histories. Keep the load generator on a separate machine.
+2. Measure actual requests per onboarding session, query counts, payload sizes, import write amplification and bytes per imported record. Test sign-in, OTP verification, home summaries, recommendations, paged history, sync and concurrent imports—not only /health.
+3. Model arrival rates as well as active users. An open arrival model can maintain offered load when responses slow; a closed virtual-user loop can otherwise hide overload by sending less work ([k6 workload-model guidance](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/open-vs-closed/)). Calibrate scenario rates from observed flows rather than treating a virtual user as one request/second.
+4. Ramp through calibrated scenarios such as 20, 50, 100, 250 and 500 total RPS as appropriate; stop safely on saturation. Include a ten-minute spike, an hour of steady load and a longer soak, with bounded import backlog. These rates are test scenarios, not already supported capacity claims.
+5. Use a staging email sink and full secure test-account verification to exercise hashing/DB work without sending thousands of real emails. Run a small, separately approved delivery canary against the real provider to validate quota/acceptance/delivery; a sink cannot prove deliverability. Never enable a test OTP bypass on an internet-accessible production service.
+6. Exercise one app VM unavailable, process restarts, Redis failure, slow/unavailable SMTP, DB pressure and worker replay. Assert no cross-account reads, missing committed writes, duplicate financial effects, unbounded retries or lost durable jobs. Recheck RLS isolation across reused pooled connections.
+7. Record maximum admitted throughput at the chosen reliability targets, resource peaks, pool waits and backlog drain time. Draft targets for discussion: light interactive reads p95 under 1 second and fewer than 1% unexpected 5xx responses at admitted load, no OOM, and jobs recovering within a declared completion window. Report intentional admission rejections separately so a low 5xx rate cannot conceal rejected users. Confirm the degraded/failover target as well as the healthy target.
+
+No load test was run as part of this report update. Production load generation, provider-scale sends and infrastructure spending require a separate approved execution plan.
+
+### Recommended order before marketing
+
+1. **Correctness/security first:** resolve the existing identity/authorization findings, worker-role/lock issues and migration/recovery gaps. Do not amplify known vulnerabilities to a larger audience.
+2. **Protect the small server:** remove live-host builds, measure/cap memory and concurrency, align payload limits, bound history reads correctly and throttle imports. Confirm quota-approved OTP delivery and two-database off-host recovery.
+3. **Add the campaign topology:** health-checked load balancing, two app VMs, shared abuse controls and an explicit durable worker deployment. Set the aggregate connection budget and a maximum replica count before adding replicas.
+4. **Prove and reserve capacity:** production-shaped load/failure tests, operational alerts, cost limits, restore evidence and prewarmed resources. Publish a measured launch envelope and a controlled overload/runbook plan.
+5. **Scale further only where measured:** database CPU/RAM/IO upgrades, more bounded workers/app replicas, selective caching and possibly stale-tolerant read replicas. Partitioning, sharding and more independently deployed services need demonstrated volume/operational benefit; they are not prerequisites simply because 20,000 people may register.
+
+**Bottom line:** plan for burst arrivals and imported histories, not a registered-user count. The recommended baseline is two modest app servers, an independently sized PostgreSQL instance, bounded background workers, shared limits and a real OTP delivery budget. The exact safe throughput must be established by testing; none is certified by the current small local database or by this report.
+
+## 14. CDN, Redis and the supporting services PandaPay needs
+
+**Recommendation:** use a CDN selectively for public content; use Redis first for shared abuse controls, then for measured read hotspots; keep PostgreSQL authoritative; and use durable workers for slow work. These are different layers, not interchangeable solutions. A CDN will not fix an expensive uncached financial query, Redis will not increase an email provider's quota, and neither replaces the authentication repairs in this report.
+
+This section maps established scaling patterns to current PandaPay source and official infrastructure documentation. It is not a claim that every large application uses one particular stack. No live CDN/Redis deployment was inspected or changed, and no provider purchase or application implementation was performed.
+
+### Which layer handles which problem?
+
+| Layer | Job | Recommended PandaPay use |
+|---|---|---|
+| CDN / edge cache | Reuse identical public responses near users, reducing origin bandwidth and repeated requests. | Public catalogue/categories under explicit cache rules; public remote logos/assets and legal pages. Never a blanket cache-everything rule on API/auth hosts. |
+| WAF / edge abuse controls | Reject some unwanted traffic before it consumes app resources. This is distinct from response caching. | Protect API/auth hosts with API-compatible limits and origin protection, while leaving private responses uncached. Still enforce account/challenge policy in the backend. |
+| Load balancer | Route requests to healthy app replicas. | The two-app-server campaign topology from section 13, with readiness and connection draining. A CDN account is not automatically a configured multi-origin load balancer. |
+| Redis | Fast shared expiring state or reusable server-side results. | Coordinate OTP/account/IP limits across replicas. Consider versioned catalogue/summary caches only after measuring; keep security state separate from evictable caches. |
+| PostgreSQL + bounded pools | Authoritative financial/auth data, constraints and transactional changes. | Preserve the current two logical databases and RLS boundaries; optimize actual queries and enforce the total connection budget. |
+| Durable queue/outbox + workers | Keep slow/retryable work out of interactive requests without losing it on a crash. | Large imports, IMAP catch-up, notification delivery and cleanup. Persist jobs/events and make processing idempotent. |
+| Object storage | Durable files without tying them to one VM. | Off-host encrypted backups; future private cloud receipts. A CDN is a delivery layer, not the durable origin or backup. |
+| Device cache + observability | Avoid unnecessary network calls and establish whether the system works under load. | Preserve account-scoped SQLite/offline behavior; measure request volume, cache hits, invalidation, pool wait, queue age and user-visible latency. |
+
+### Exactly what should use a CDN?
+
+| Content / route | CDN decision | PandaPay-specific guardrail |
+|---|---|---|
+| GET /catalogue | **Yes, a strong initial candidate.** Current handler reads the same public export view for callers without user context. | Cache only the intentionally published device projection. Publication, corrections and withdrawal need bounded freshness and invalidation. Never substitute /admin/cards or a raw table dump. Resolve existing publication/security issues independently. |
+| GET /categories | **Yes.** Standard categories are public. | Keep this distinct from authenticated /user-categories. Include any future response-shaping locale/schema inputs in the key. |
+| Public bank/issuer logos and other remotely loaded shared artwork | **Yes, when PandaPay controls the licensed asset origin.** Home currently loads an issuer logo URL over the network. | Use optimized, versioned image paths and a managed asset domain. Do not proxy arbitrary user-provided URLs or copy third-party images without permission. Existing third-party CDN URLs may already be efficient. |
+| Card faces, bundled icons and installed Flutter assets | **No additional CDN just for these.** CardVisual currently draws the card face locally. | A CDN cannot speed up a CustomPaint operation or an asset already installed on the device. Avoid adding a remote dependency where none is needed. |
+| Public legal/help pages and a future public web front end's static files | **Yes.** nginx already serves /legal/ independently of the API container. | Use modest freshness for mutable legal HTML; hashed public web assets can use long freshness. Authenticated admin HTML/data, test tools and this sensitive audit report are not public-site assets. |
+| Profiles, wallets, user cards, transaction histories, balances, reward summaries and personalized recommendations | **No shared CDN response cache in the proposed design.** | Keep current authentication/authorization on origin requests. A profile ID in a query string or Vary: Authorization is not sufficient justification to publicly cache financial responses. |
+| OTP, login, verification, refresh, logout, recovery, admin APIs and incoming webhooks | **Bypass response caching.** | They can traverse an edge security proxy, but must retain correct method/body/auth semantics. Never cache tokens, OTPs, sensitive errors or Set-Cookie responses. |
+| Future receipt photos, bank statements and account exports | **Private object storage first; private CDN only if later justified.** Receipts are local-only today. | Authenticate ownership before issuing short-lived access. A private CDN must validate access even on a cache hit and prevent direct-origin bypass. Do not publish the bucket to improve cache hit rate. |
+| Database dumps, operational exports, logs and audit artifacts | **Never public CDN content.** | Private backup storage, restricted operator access and a retention/recovery policy instead. |
+
+Source evidence: [public catalogue handler](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:240), [public versus user categories](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/index.js:906), [network-loaded issuer logo](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/lib/features/home/home_screen.dart:2892), [locally drawn card visual](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/lib/features/cards/card_visual.dart:62), [legal-page origin](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/deploy/nginx/api.conf.example:55), [existing client catalogue cache](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/app/lib/app/providers.dart:3998). The HTTP catalogue repository fetches the full JSON response; surrounding providers already supply caching/fallback behavior, so its older no-offline comment is not an accurate description of the whole current app.
+
+### Safe cache policy and freshness contract
+
+Start with **default bypass on API/auth**, then explicitly allow only selected public GET/HEAD responses on exact routes. Require an eligible successful response, the expected content type, no credentials/cookies and no user-specific body. Preserve bypass for other methods, private paths and errors. Use path normalization and test encoded/suffix routes so an apparent .css extension cannot turn a private API response into a static asset.
+
+The following are **illustrative starting policies to validate**, not deployed headers or measured optimal TTLs:
+
+| Response class | Proposed policy | Freshness/invalidation contract |
+|---|---|---|
+| Sensitive API/auth responses | Cache-Control: private, no-store plus an explicit CDN bypass rule. | An edge rule must not override the bypass. The app's deliberate account-scoped offline storage is a separate lifecycle, not permission for an HTTP intermediary to retain these responses. |
+| Mutable public catalogue/categories | Example: Cache-Control: public, max-age=60, s-maxage=300, with a stable content validator. | A five-minute edge window is acceptable only if product policy permits it. Publishing/corrections/withdrawal should trigger purge or a version transition with retries and alerting. Do not promise instant withdrawal merely because a purge was requested. |
+| Content-hashed public images/JS/CSS | Example: Cache-Control: public, max-age=31536000, immutable. | Only for URLs whose bytes never change. A different file gets a different URL. Keep mutable HTML/version manifests short-lived or revalidated. |
+
+Cache eligibility and TTL behavior are provider-specific; these proposed policies must be tested on the chosen service. Cloudflare, for example, does not cache JSON/HTML by default, so merely enabling its proxy does not establish catalogue caching ([default cache behavior](https://developers.cloudflare.com/cache/concepts/default-cache-behavior/)). Its cache rules can override origin instructions, and no-cache means revalidation rather than no storage ([cache-control reference](https://developers.cloudflare.com/cache/concepts/cache-control/)).
+
+Use one explicit global catalogue publication revision that covers edits, dependent rule/category changes, deletions and withdrawals; do not assume the largest per-card version covers all changes. Include every legitimate response variant in the cache key, while rejecting/normalizing irrelevant query parameters to avoid unlimited variants. Never let untrusted forwarding headers choose another cache namespace or origin.
+
+ETags/304 responses reduce transferred bytes but do not automatically eliminate the database query needed to build the body. A precomputed publication snapshot/version can avoid repeated serialization/queries. The current HTTP repository expects status 200; introducing conditional requests needs supported 304 handling and a retained cached body, not just a new header. Update client compatibility and version invalidation together.
+
+For future private-file delivery, a normal object-store signed URL placed behind a generic public cache is not sufficient: the object store might never see a cache hit. Use a private-distribution access mechanism that verifies the request at the edge and restricts the origin. AWS documents this separation in its [signed-URL flow](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-signed-urls.html) and [private-origin controls](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-overview.html). Signed links are bearer access while valid; redact them from logs and acknowledge that expiry does not erase a file already downloaded.
+
+### Where Redis helps this application
+
+| Priority | Redis use | Design and failure behavior |
+|---|---|---|
+| First, before multiple auth replicas | Shared OTP/account/IP abuse counters and existing active-challenge tracking. | Use atomic expiring operations, purpose/challenge binding and the authoritative database's verification rules. Define restart/outage behavior so a replica or Redis restart cannot silently reset all security guarantees. Never store raw OTPs/tokens as an ordinary cache optimization. |
+| Next, only if still useful after CDN/client caching | Public published catalogue/category origin cache. | Shared versioned cache-aside: check Redis, load the allowed DB projection on a miss, then populate a bounded entry. A cache miss is not a release of authorization controls. Avoid maintaining another large stale copy if CDN/client hit rates already remove most work. |
+| After measuring summary-query cost | Account-scoped dashboard/spending aggregates. | Key by account, period, relevant filters and a data/calculation revision. Invalidate after successful financial mutations/import/reconciliation. A revisioned key helps prevent an old concurrent loader from repopulating the new generation; recheck versions/consistency when needed. No shared CDN cache for these results. |
+| Later, if provider requests across replicas are a measured hotspot | Selected public nearby-discovery provider results. | The existing discovery module already has local maps, in-flight dedupe and a rounded-location key. Preserve provider terms, bounds and location minimization if moving reusable results into Redis. Do not turn precise user-location histories or personalized results into a shared public cache. |
+| Not as a disposable cache | Canonical transactions, reward ledger, durable import job payloads or the only record of a session revocation. | Keep authoritative state and required financial idempotency in PostgreSQL. A queue product built on Redis needs an explicitly engineered persistence/recovery configuration, not the settings used for an evictable response cache. |
+
+Cache-aside is a standard pattern, but it needs invalidation and protection when many callers miss together. Use bounded single-flight loading, short owner-token leases where appropriate, TTL jitter and bounded waiting; do not release someone else's lease or let every timeout launch an unlimited fallback query. Redis describes these mechanics in its [Node cache-aside example](https://redis.io/docs/latest/develop/use-cases/cache-aside/nodejs/). These mechanisms protect cache population; they are not substitutes for database transactions or durable financial deduplication.
+
+### Redis details to fix or verify in the existing source
+
+1. **Wire it into the deployed topology.** Auth supports REDIS_URL, but production compose does not pass it and defines no Redis service. That is a deployment-source gap, not proof of Redis absence in production. Add private connectivity/TLS and scoped credentials through the deployment secret mechanism; never expose Redis to mobile clients or the public internet.
+2. **Make counter-plus-expiry atomic.** Both rate-limit helpers issue INCR and then EXPIRE as separate operations. Interruption between them can leave a counter without its intended TTL. Use a tested atomic script/function or equivalent algorithm and verify partial-failure/concurrency behavior. This exact failure pattern is discussed in the [Redis counter/rate-limiter reference](https://redis.io/docs/latest/commands/incr/).
+3. **Recover from connectivity failures deliberately.** The Redis client latches redisInitFailed and can return null without retrying; the host/port path also disables automatic reconnection. Define bounded reconnect/backoff and readiness/alerts, and test Redis recovery without restarting every app instance. Reconcile fallback policy across both services.
+4. **Separate security counters from disposable data.** Use independently budgeted instances or provider databases with genuinely independent resource/eviction settings—not just different prefixes or Redis SELECT database numbers on the same instance. An allkeys eviction policy can remove security limits; noeviction can instead reject new writes, which also needs a conservative failure policy. Size for abuse-driven key growth and expire identities/challenges appropriately.
+5. **Bound memory and cold-start load.** Set maxmemory below available RAM, allow room for overhead/persistence buffers, monitor evictions/OOM/latency and choose policy by purpose. Redis documents these tradeoffs in its [eviction guidance](https://redis.io/docs/latest/develop/reference/eviction/). Optional cache failure should cause bounded degradation, not a flood of replacement DB queries; security-store failure must not become unlimited admission.
+
+Evidence: [Redis connection/retry behavior](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/auth/src/services/redisClient.js:22), [OTP counter expiry operations](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/auth/src/middleware/rateLimitMiddleware.js:48), [user-route counter and fallback](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/auth/src/middleware/userRateLimit.js:39), [compose environment](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/docker-compose.prod.yml:81), [existing discovery cache](/Users/chandresh_kerkar/Documents/PandaPath/pandapay-docs/api/src/nearby_discovery.js:274). These are source-review recommendations, not newly reproduced production incidents or implemented fixes.
+
+### Other scalable-application building blocks: add selectively
+
+| Need | Recommendation now | What not to add without evidence |
+|---|---|---|
+| Durable import/IMAP/delivery work | Start with a PostgreSQL-backed job/outbox mechanism or one managed queue, with ownership leases, retries, dead-letter review and idempotent replay. The outbox addresses the commit-versus-send gap in SD01. | Kafka, multiple brokers and a Redis queue are not all required together. Do not rely on Pub/Sub or an in-memory array for work that must survive a crash. |
+| Database efficiency | Correct pagination/aggregates, justified indexes, short transactions and bounded pools; consider a compatible server-side pooler. | No automatic read-replica routing or write scalability just because a pooler/CDN exists. Sharding and a database-per-feature are premature without measured need. |
+| File handling | Private object storage and bounded uploads if cloud files are introduced; public asset delivery can use the CDN. | Do not route large files through the low-RAM API unnecessarily or store images/base64 in Redis. Keep private attachments separate from public logo buckets. |
+| Provider resilience | Independent concurrency/timeout/retry budgets for SMTP, push, discovery and IMAP; quota monitoring and circuit-break/degraded behavior. | A CDN is not an SMTP relay and cannot solve delayed OTP email. Keep provider failure from exhausting every DB connection. |
+| Visibility and operations | Central privacy-preserving logs, latency/error/saturation metrics, alerts, restore evidence, immutable releases and a tested maximum replica count. | Unbounded account-ID/email/merchant metric labels or full payload logging; avoid a monitoring stack that consumes most of a tiny VM. |
+
+The durable-commit/delivery distinction follows the [transactional-outbox pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html). For PandaPay, preserve the existing business transaction and authorization boundaries when adding the worker; an external queue does not make a database write and message publish atomic by itself.
+
+### Practical edge deployment choice
+
+A host-independent starting option is **Cloudflare for edge delivery/security**, with the existing API/auth origins behind it, exact public-cache rules, and private endpoints bypassed. An AWS-hosted alternative is CloudFront with the appropriate security/origin controls. Choose one initial edge platform based on supported features, region performance, quotas, cost and operational familiarity; neither is installed or selected by this review.
+
+Use verified TLS to origin, private/firewalled upstreams and an origin-authentication strategy so attackers cannot simply bypass the edge. Trust client-IP headers only through the configured proxy chain, or all users may share one apparent IP—or callers may spoof it. Keep webhook signature checks. Avoid browser-only JavaScript challenges on native Flutter JSON endpoints unless the app has a supported integration. Origin restrictions, monitoring and proxy controls are separate deployment tasks ([origin-protection guidance](https://developers.cloudflare.com/fundamentals/security/protect-your-origin-server/)).
+
+No CDN/WAF setting makes the app hacker-proof or repairs account-linking/RLS/session bugs. Edge TLS termination also introduces a processor of requests; keep secrets/financial payloads out of edge logs and review access/retention before routing them.
+
+### Acceptance tests and rollout order
+
+1. Establish no-store/bypass behavior first. Use two synthetic accounts and logged-out/invalid-token requests for the same private URL; verify bodies never cross accounts and shared-cache status is never a hit. Test query variants, encoded paths, misleading file suffixes, error statuses, Set-Cookie and every supported method. An Age header alone is not a complete cache-isolation test.
+2. Enable catalogue/categories caching in staging, verify a genuine cache hit and reduced origin requests, then publish/correct/withdraw a card. Check purge/version propagation, every supported app client's refresh path and the documented worst-case staleness. Test an edge miss and an unavailable origin.
+3. Exercise auth requests across two replicas, counter TTLs after partial failure, Redis outage/recovery and memory exhaustion. Confirm the intended shared limits and no unintended fail-open window.
+4. Test simultaneous cold-cache requests, mutation-versus-cache-population races, account switching and stale summary handling. Compare end-to-end p95 latency, DB query volume and origin bandwidth before/after; do not claim a fixed percentage saving in advance.
+5. Roll out one layer at a time with small traffic exposure and a rollback that bypasses the public cache without removing authentication. Keep campaign admission limits and DB connection budgets from section 13.
+
+**Priority for PandaPay:** security fixes and cache privacy policy first; then CDN for public reads/assets plus shared Redis abuse controls before multi-instance auth; durable workers for heavy onboarding work; account-summary caches only if measurement justifies them. More infrastructure should remove a demonstrated bottleneck, not become another store of unbounded private data.
+
 ### Skills used
 
-- **Graphify**: used the existing graph to locate related authentication/security/database code, expanding only from its vocabulary: `auth, security, token, jwt, api, route, database, user, validation, refresh, otp, admin`. The graph is older than the checkout, so findings were verified against current files and local metadata rather than accepted from the graph.
+- **Graphify**: used the existing graph to locate related authentication/security/database code, expanding only from its vocabulary: `auth, security, token, jwt, api, route, database, user, validation, refresh, otp, admin`. The CDN/Redis follow-up used `cache, catalogue, image, redis, static, version, queue, rate, limit` for orientation. The graph is older than the checkout and that broad traversal was truncated, so findings were verified against current files and local metadata rather than accepted from the graph; provider behavior was checked in official documentation.
 - **OWASP Mobile Security Checker**, installed under `/Users/chandresh_kerkar/.claude/skills/owasp-mobile-security-checker`: used its four scanners and mobile checklist. Manual triage removed false HTTP/temporary-file alarms and kept outdated packages distinct from verified vulnerabilities. Backend review was explicitly outside that skill's scope and was performed separately.
 
 No production write, destructive cleanup, application-source fix, dependency upgrade, deployment, or new credential installation was performed by this audit.

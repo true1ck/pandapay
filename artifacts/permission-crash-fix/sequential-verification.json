@@ -1,0 +1,34 @@
+{
+  "one_combined_action": true,
+  "individual_row_taps": 0,
+  "native_permission_prompts": [
+    {
+      "permission": "notifications",
+      "automatic_prompt": true,
+      "process_id": "13860",
+      "process_unchanged": true
+    },
+    {
+      "permission": "location",
+      "automatic_prompt": true,
+      "process_id": "13860",
+      "process_unchanged": true
+    },
+    {
+      "permission": "camera",
+      "automatic_prompt": true,
+      "process_id": "13860",
+      "process_unchanged": true
+    },
+    {
+      "permission": "microphone",
+      "automatic_prompt": true,
+      "process_id": "13860",
+      "process_unchanged": true
+    }
+  ],
+  "enabled_rows": 4,
+  "flutter_or_native_errors": 0,
+  "installed_apk_matches_build": true,
+  "apk_sha256": "1408a5335ecd37067a9209f98d564f8a6d6bb5149d8e87f13e7009053752ed75"
+}
