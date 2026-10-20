@@ -28,7 +28,7 @@ import '../insights/spend_trends_screen.dart';
 
 /// D2 Transaction Detail (ui-spec Group D). Deep-linkable at /activity/:id.
 /// Full record incl. source and reconciliation status. Actions: edit (D3),
-/// mark ignored (refund/reversal/transfer), plus design 18's own two rows:
+/// mark ignored (refund/reversal), delete a transaction, plus design 18's own two rows:
 /// **Add a note** and **Split this expense**.
 ///
 /// Both of those were previously flagged here as real gaps rather than
@@ -489,6 +489,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _markIgnored(String reason) async {
+    final deleting = reason == 'transfer';
     setState(() => _ignoring = true);
     try {
       await ref
@@ -501,9 +502,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       ref.invalidate(utilizationTransactionsProvider);
       ref.invalidate(homeSummaryProvider);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Marked as ignored.')));
+        if (deleting) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Transaction deleted.')));
+          context.pop(true);
+        } else {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Marked as ignored.')));
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -530,7 +538,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             Padding(
               padding: const EdgeInsets.all(AppSpace.lg),
               child: Text(
-                'Why is this being ignored?',
+                'Choose an action',
                 style: BambooFonts.heading(16, color: BambooInk.ink900),
               ),
             ),
@@ -552,7 +560,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   static String _reasonLabel(String r) => switch (r) {
     'refund' => 'Refund',
     'reversal' => 'Reversal',
-    'transfer' => 'Not a spend (transfer)',
+    'transfer' => 'Delete transaction',
     _ => r,
   };
 
@@ -1126,9 +1134,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.visibility_off_outlined),
-                label: const Text(
-                  'Mark as ignored (refund / reversal / transfer)',
-                ),
+                label: const Text('Refund, reversal, or delete transaction'),
               ),
             ),
           ),

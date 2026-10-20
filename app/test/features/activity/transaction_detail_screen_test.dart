@@ -184,7 +184,7 @@ void main() {
       expect(find.text('Groceries'), findsOneWidget);
       expect(find.text('SMS'), findsOneWidget);
       expect(
-        find.text('Mark as ignored (refund / reversal / transfer)'),
+        find.text('Refund, reversal, or delete transaction'),
         findsOneWidget,
       );
       expect(find.text('Edit transaction'), findsOneWidget);
@@ -410,7 +410,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text('Mark as ignored (refund / reversal / transfer)'),
+        find.text('Refund, reversal, or delete transaction'),
         findsNothing,
       );
     },
@@ -456,9 +456,7 @@ void main() {
     );
     await _pump(tester, repo: repo);
 
-    await tester.tap(
-      find.text('Mark as ignored (refund / reversal / transfer)'),
-    );
+    await tester.tap(find.text('Refund, reversal, or delete transaction'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Refund'));
     await tester.pumpAndSettle();
@@ -466,7 +464,7 @@ void main() {
     expect(repo.lastIgnoreReason, 'refund');
   });
 
-  testWidgets('labels the transfer ignore option as outside spending', (
+  testWidgets('labels the transfer action as delete transaction', (
     tester,
   ) async {
     final repo = _FakeUserCardsRepository(
@@ -481,12 +479,13 @@ void main() {
     );
     await _pump(tester, repo: repo);
 
-    await tester.tap(
-      find.text('Mark as ignored (refund / reversal / transfer)'),
-    );
+    await tester.tap(find.text('Refund, reversal, or delete transaction'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Not a spend (transfer)'), findsOneWidget);
-    expect(find.text('Delete transaction'), findsNothing);
+    expect(find.text('Delete transaction'), findsOneWidget);
+    await tester.tap(find.text('Delete transaction'));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastIgnoreReason, 'transfer');
   });
 }
