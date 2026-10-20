@@ -6,7 +6,6 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart'
     show
         accessTokenProvider,
-        notificationDevicesApiProvider,
         notificationPreferencesProvider,
         notificationPreferencesRepositoryProvider;
 import '../../data/api_exception.dart';
@@ -95,8 +94,6 @@ class _NotificationSettingsBody extends ConsumerStatefulWidget {
 
 class _NotificationSettingsBodyState
     extends ConsumerState<_NotificationSettingsBody> {
-  bool _sendingTest = false;
-
   Future<void> _update(
     BuildContext context,
     WidgetRef ref,
@@ -113,31 +110,6 @@ class _NotificationSettingsBodyState
           context,
         ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
-    }
-  }
-
-  Future<void> _sendTestNotification(BuildContext context) async {
-    final api = ref.read(notificationDevicesApiProvider);
-    if (api == null || _sendingTest) return;
-
-    setState(() => _sendingTest = true);
-    try {
-      await api.sendTestNotification();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Test push accepted — check your device shortly.'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
-      }
-    } finally {
-      if (mounted) setState(() => _sendingTest = false);
     }
   }
 
@@ -161,43 +133,6 @@ class _NotificationSettingsBodyState
         return ListView(
           padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
           children: [
-            _SectionHeader('Test delivery'),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
-              child: Text(
-                'Send one real push to the devices signed in to this account. The test never targets another user.',
-                style: BambooFonts.ui(13.5, color: BambooInk.ink500),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.lg,
-                AppSpace.sm,
-                AppSpace.lg,
-                AppSpace.md,
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _sendingTest
-                      ? null
-                      : () => _sendTestNotification(context),
-                  icon: _sendingTest
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.notifications_active_outlined),
-                  label: Text(
-                    _sendingTest
-                        ? 'Sending test push…'
-                        : 'Send test notification',
-                  ),
-                ),
-              ),
-            ),
-            const Divider(height: AppSpace.xl),
             _SectionHeader('Categories'),
             SwitchListTile(
               title: const Text('Location-based tips'),
