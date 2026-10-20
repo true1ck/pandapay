@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widget_previews.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,7 +17,8 @@ import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
-import '../../data/receipt_parser.dart' show parseReceiptLines;
+import '../../data/receipt_parser.dart' show parseReceiptFields;
+import '../../data/receipt_ocr.dart' show ReceiptOcr;
 import '../../data/import_models.dart' show ParsedStatementLine;
 import '../../data/user_cards_repository.dart'
     show TransactionEntry, TxnEntryKind, TxnInstrument, UserCard;
@@ -452,16 +452,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         imageQuality: 95,
       );
       if (image == null || !mounted) return;
-      final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      final ocr = ReceiptOcr();
       try {
-        final recognized = await recognizer.processImage(
-          InputImage.fromFilePath(image.path),
-        );
-        final lines = [
-          for (final block in recognized.blocks)
-            for (final line in block.lines) line.text,
-        ];
-        final parsed = parseReceiptLines(lines);
+        final lines = await ocr.recognize(image.path);
+        final scan = parseReceiptFields(lines);
+        final parsed = scan.parsedLine;
         if (!mounted) return;
         setState(() {
           _receipt = _PendingReceipt(
@@ -469,20 +464,25 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             path: image.path,
             mimeType: 'image/jpeg',
           );
-          _scannedReceipt = parsed?.firstOrNull;
-          _receiptScanMessage = _scannedReceipt == null
-              ? 'Receipt photo attached. We couldn’t confidently read every field, so enter the details below.'
-              : 'Check the suggested merchant, date and total against your receipt.';
-          if (_scannedReceipt != null) {
-            final row = _scannedReceipt!;
-            _merchantController.text = row.description;
-            _amountController.text = row.amount.rupees.toStringAsFixed(2);
-            _date = row.date;
+          _scannedReceipt = parsed;
+          _receiptScanMessage = !scan.looksLikeReceipt
+              ? 'Receipt photo attached. We couldn’t confidently identify the bill fields, so enter the details below.'
+              : _scannedReceipt != null
+              ? scan.reviewReasons.isEmpty
+                    ? 'Check the suggested merchant, date and total against your receipt.'
+                    : 'Check the suggested fields. ${scan.reviewReasons.first}'
+              : 'We found part of the receipt. Check the detected amount and complete any missing fields below.';
+          if (scan.merchant != null && scan.merchant!.isNotEmpty) {
+            _merchantController.text = scan.merchant!;
           }
+          if (scan.amountRupees != null) {
+            _amountController.text = scan.amountRupees!.toStringAsFixed(2);
+          }
+          if (scan.date != null) _date = scan.date;
           // Stay on Scan Bill so the user reviews OCR results inline.
         });
       } finally {
-        await recognizer.close();
+        await ocr.dispose();
       }
     } catch (_) {
       if (mounted) {

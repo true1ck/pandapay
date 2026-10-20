@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as img;
 
+import 'receipt_ocr.dart' show readingOrderLines;
 import 'spending_screenshot_parser.dart';
 
 Uint8List? _prepareImage(Uint8List bytes) {
@@ -31,7 +32,7 @@ class SpendingScreenshotOcr {
     final result = await _recognizer.processImage(
       InputImage.fromFilePath(path),
     );
-    final text = _readingOrder(result);
+    final text = readingOrderLines(result).join('\n');
     if (parseSpendingScreenshotText(text).transactions.isNotEmpty) return text;
     // Retry small, rotated or low-contrast photos without altering the source.
     final bytes = await compute(_prepareImage, await File(path).readAsBytes());
@@ -42,9 +43,9 @@ class SpendingScreenshotOcr {
     try {
       final file = File('${directory.path}/prepared.jpg');
       await file.writeAsBytes(bytes);
-      final retry = _readingOrder(
+      final retry = readingOrderLines(
         await _recognizer.processImage(InputImage.fromFilePath(file.path)),
-      );
+      ).join('\n');
       return parseSpendingScreenshotText(retry).transactions.isNotEmpty
           ? retry
           : text;
@@ -58,33 +59,4 @@ class SpendingScreenshotOcr {
   }
 
   Future<void> dispose() => _recognizer.close();
-}
-
-/// ML Kit groups columns into blocks. Rebuild visual rows so a total label
-/// and its right-aligned value are read together rather than block by block.
-String _readingOrder(RecognizedText text) {
-  final lines = [
-    for (final block in text.blocks) ...block.lines,
-  ]..sort((a, b) => a.boundingBox.center.dy.compareTo(b.boundingBox.center.dy));
-  final rows = <List<TextLine>>[];
-  for (final line in lines) {
-    if (rows.isEmpty ||
-        (line.boundingBox.center.dy - rows.last.first.boundingBox.center.dy)
-                .abs() >
-            math.min(
-                  line.boundingBox.height,
-                  rows.last.first.boundingBox.height,
-                ) *
-                .45) {
-      rows.add([line]);
-    } else {
-      rows.last.add(line);
-    }
-  }
-  return rows
-      .map((row) {
-        row.sort((a, b) => a.boundingBox.left.compareTo(b.boundingBox.left));
-        return row.map((line) => line.text).join(' ');
-      })
-      .join('\n');
 }
