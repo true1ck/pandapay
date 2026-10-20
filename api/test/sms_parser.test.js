@@ -322,6 +322,40 @@ test('offers and service notices never become transactions', () => {
   }).ok, true);
 });
 
+test('marketing appended to real alerts does not hide the event', () => {
+  const posted = parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'Your card XX1234 was debited Rs.500 at STORE. Get 5% cashback on your next purchase.',
+  });
+  assert.equal(posted.ok, true);
+  assert.equal(posted.fields.amountInr, 500);
+  assert.equal(parseSmsAgainstPatterns([], {
+    sender: 'BP-SBICRD-S',
+    body: 'You spent Rs.40016 on your SBI Credit Card and are eligible for conversion to Flexipay EMIs.',
+  }).reason, 'non_transaction_message');
+  assert.notEqual(parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'Your credit card bill of Rs.5000 is due on 25 Oct. Get cashback when you pay.',
+  }).reason, 'non_transaction_message');
+  const purchase = parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: 'Purchase of Rs.1200 at AMAZON completed. Offer valid for next order.',
+  });
+  assert.notEqual(purchase.reason, 'security_message');
+  assert.notEqual(purchase.reason, 'non_transaction_message');
+});
+
+test('email offers and unlabeled time-limited codes are screened', () => {
+  assert.equal(parseSmsAgainstPatterns([], {
+    sender: 'deals@example.com',
+    body: 'Apply now for a credit card and get a Rs.500 voucher.',
+  }).reason, 'non_transaction_message');
+  assert.equal(parseSmsAgainstPatterns([], {
+    sender: 'BANK',
+    body: '123456 valid for 10 minutes. Do not share this code.',
+  }).reason, 'security_message');
+});
+
 test('credit-limit and balance notices are not treated as incoming money', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'BANK',

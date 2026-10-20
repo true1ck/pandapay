@@ -28,11 +28,14 @@ function isSecurityOrOtpMessage(body) {
   const text = String(body || '').toLowerCase();
   return /\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b/.test(text)
     || /\b(?:do not|don't|never)\s+share\b/.test(text)
-    || /\bvalid\s+(?:for|till|until)\b/.test(text);
+    || /\b\d{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+\d+\s*(?:minutes?|mins?|seconds?|secs?)\b/.test(text);
 }
 
 function isNonTransactionNoise(sender, body) {
   const text = String(body || '').replace(/\s+/g, ' ');
+  if (/\b(?:payment|amount|minimum|total)\s+due\b|\bdue\s+date\b|\b(?:statement|bill|premium)\b[\s\S]{0,80}\b(?:generated|ready|available|due)\b/i.test(text)) return false;
+  if (/\b(?:eligible\s+for\s+conversion|convert(?:ion)?\s+(?:to|into)\s+(?:flexipay\s+)?emi|flexipay\s+emis?)\b/i.test(text)
+      && !/\b(?:your\s+)?(?:txn|transaction)\s+of\b/i.test(text)) return true;
   const completed = /\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase)\b[\s\S]{0,45}\b(?:successful|completed))/i.test(text);
   if (completed || (/\b(?:cashback|refund)\b/i.test(text) && /\b(?:credited|received|deposited)\b/i.test(text))) return false;
   return /\b(?:offer|sale|discount|cashback|voucher|coupon|rewarding|shop\s+at|grab|buy\s+now|apply\s+now|prices?\s+slashed|treat\s+yourself|festive\s+shopping|eligible\s+for\s+conversion|convert\s+(?:to|into)\s+emi|international\s+roaming\s+pack)\b|\b(?:get|earn|save)\b[\s\S]{0,45}\b(?:reward|cashback|off|free|voucher)\b/i.test(text)
@@ -51,6 +54,7 @@ function isRejectedTransaction(body) {
 function isNonTransactionAlert(body) {
   const text = String(body || '').toLowerCase();
   return /\b(?:payment|amount|minimum)\s+due\b/.test(text)
+    || /\b(?:statement|bill|premium)\b[\s\S]{0,80}\bdue\b/.test(text)
     || /\b(?:statement|bill)\b[\s\S]{0,40}\b(?:generated|ready|available)\b/.test(text)
     || /\b(?:new\s+)?pin\b[\s\S]{0,40}\b(?:generated|created|set)\b/.test(text)
     || /\b(?:card|credit\s+card)\b[\s\S]{0,50}\b(?:dispatched|delivered|activated)\b/.test(text)

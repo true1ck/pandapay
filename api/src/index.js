@@ -5672,6 +5672,15 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
                     AND o.source IN ('sms', 'sms_bulk')
                   ORDER BY o.observed_at DESC
                   LIMIT 1) AS card_last4,
+                (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                    'source', evidence.source,
+                    'source_key', evidence.source_key,
+                    'observed_at', evidence.observed_at,
+                    'reference', evidence.external_ref
+                  ) ORDER BY evidence.observed_at), '[]'::jsonb)
+                   FROM transaction_observations evidence
+                  WHERE evidence.transaction_id = t.id
+                    AND evidence.profile_id = t.profile_id) AS observations,
                 cp.name AS card_name, uc.nickname AS card_nickname
            FROM transactions t
            LEFT JOIN unique_replacements replacement ON replacement.archived_card_id = t.user_card_id
