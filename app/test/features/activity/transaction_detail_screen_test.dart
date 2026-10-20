@@ -10,12 +10,6 @@ import 'package:pandapay/features/activity/transaction_detail_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 class _FakeUserCardsRepository implements UserCardsRepository {
-  @override
-  Future<List<TransactionEntry>> fetchDeletedTransactions() async => const [];
-
-  @override
-  Future<void> restoreTransaction(String id) async {}
-
   TransactionEntry entry;
   final bool failFetch;
   final bool failSplits;
