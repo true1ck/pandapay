@@ -535,7 +535,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   static String _reasonLabel(String r) => switch (r) {
     'refund' => 'Refund',
     'reversal' => 'Reversal',
-    'transfer' => 'Delete transaction',
+    'transfer' => 'Not a spend (transfer)',
     _ => r,
   };
 

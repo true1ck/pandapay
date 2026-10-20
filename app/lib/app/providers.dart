@@ -1009,7 +1009,7 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
       final dueDateStr = obs['due_date'] as String?;
       if (dueDateStr == null) continue;
       final dueDate = DateTime.tryParse(dueDateStr);
-      if (dueDate == null || !dueDate.isAfter(startOfToday)) continue;
+      if (dueDate == null || dueDate.isBefore(startOfToday)) continue;
 
       final sender = (obs['sender_bank'] as String? ?? 'Bill').trim();
       final biller = (obs['biller_name'] as String?)?.trim();
@@ -4871,8 +4871,9 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
       }
     }
     if (changed || dueDayUpdated || statementDayUpdated) {
-      if (dueDayUpdated || statementDayUpdated)
+      if (dueDayUpdated || statementDayUpdated) {
         await _clearUserCardsCacheForRef(ref);
+      }
       ref.invalidate(needsReviewItemsProvider);
       ref.invalidate(needsReviewCountProvider);
       ref.invalidate(userCardsProvider);
@@ -5398,8 +5399,9 @@ class SmsAutoImportController {
             needsReview > 0 ||
             dueDatesUpdated > 0 ||
             statementDaysUpdated > 0)) {
-      if (dueDatesUpdated > 0 || statementDaysUpdated > 0)
+      if (dueDatesUpdated > 0 || statementDaysUpdated > 0) {
         await _clearUserCardsCacheForRef(_ref);
+      }
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(myCardsProvider);
       _ref.invalidate(transactionsProvider);

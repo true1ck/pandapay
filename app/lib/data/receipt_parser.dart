@@ -404,7 +404,12 @@ ReceiptScanResult parseReceiptFields(List<String> rawLines) {
   final text = lines.join('\n');
   if (lines.isEmpty) return const ReceiptScanResult(looksLikeReceipt: false);
 
-  final hasTotal = RegExp(r'\btotal\b', caseSensitive: false).hasMatch(text);
+  // A subtotal is enough to recognize a partial receipt, but it must not
+  // become the final amount when the payable total is missing.
+  final hasTotal = RegExp(
+    r'\b(?:sub\s*total|total)\b',
+    caseSensitive: false,
+  ).hasMatch(text);
   final hasMarker = _receiptMarkers.hasMatch(text);
   final hasDate = RegExp(
     r'\b\d{1,4}[./-]\d{1,2}[./-]\d{1,4}\b',

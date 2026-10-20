@@ -464,7 +464,7 @@ void main() {
     expect(repo.lastIgnoreReason, 'refund');
   });
 
-  testWidgets('labels the transfer ignore option as delete transaction', (
+  testWidgets('labels the transfer ignore option as outside spending', (
     tester,
   ) async {
     final repo = _FakeUserCardsRepository(
@@ -484,7 +484,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Delete transaction'), findsOneWidget);
-    expect(find.text('Transfer (not really a spend)'), findsNothing);
+    expect(find.text('Not a spend (transfer)'), findsOneWidget);
+    expect(find.text('Delete transaction'), findsNothing);
   });
 }

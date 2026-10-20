@@ -688,6 +688,13 @@ class LocalSmsParser {
     var merchant = _re(
       r'\b(?:at|to|for|from|by)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body)?.group(1)?.trim();
+    // "by Mob Bk" describes the banking channel, not the recipient.
+    if (merchant != null &&
+        _re(
+          r'^(?:mob(?:ile)?\s*(?:bk|banking)|net\s*(?:bk|banking)|internet\s*banking)$',
+        ).hasMatch(merchant)) {
+      merchant = null;
+    }
     if (bankDebit &&
         !credit &&
         !transfer &&

@@ -7061,11 +7061,11 @@ app.post('/recurring', requireAuth, async (req, res) => {
 
 app.patch('/recurring/:id', requireAuth, async (req, res) => {
   const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
-  const autopayStatus = req.body?.autopayStatus || 'unknown';
+  const autopayStatus = req.body?.autopayStatus;
   if (typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 80 ||
       !Number.isFinite(Number(typicalAmountInr)) || Number(typicalAmountInr) <= 0 || Number(typicalAmountInr) > 10000000 ||
       !Number.isInteger(Number(cadenceDays)) || Number(cadenceDays) < 1 || Number(cadenceDays) > 3650 ||
-      !['active', 'cancelled', 'unknown'].includes(autopayStatus) ||
+      (autopayStatus !== undefined && !['active', 'cancelled', 'unknown'].includes(autopayStatus)) ||
       typeof nextExpectedOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(nextExpectedOn) || Number.isNaN(Date.parse(`${nextExpectedOn}T00:00:00Z`))) {
     return res.status(400).json({ error: 'invalid_subscription' });
   }
@@ -7073,9 +7073,9 @@ app.patch('/recurring/:id', requireAuth, async (req, res) => {
     const result = await withUserClient(req.userId, (client) => client.query(
       `UPDATE recurring_series SET display_name = $1, typical_amount_inr = $2,
               cadence_days = $3, next_expected_on = $4,
-              autopay_status = $5, user_edited = true
+              autopay_status = COALESCE($5, autopay_status), user_edited = true
         WHERE id = $6 AND profile_id = $7 AND dismissed_at IS NULL RETURNING id`,
-      [displayName.trim(), Number(typicalAmountInr), Number(cadenceDays), nextExpectedOn, autopayStatus, req.params.id, req.userId]
+      [displayName.trim(), Number(typicalAmountInr), Number(cadenceDays), nextExpectedOn, autopayStatus ?? null, req.params.id, req.userId]
     ));
     if (!result.rows.length) return res.status(404).json({ error: 'not_found' });
     res.json({ ok: true });
