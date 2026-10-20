@@ -918,6 +918,7 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
     final catalogue = ref.read(catalogueProvider).valueOrNull;
     if (catalogue == null) return;
     final owned = ref.read(myCardsProvider).valueOrNull ?? const <UserCard>[];
+    String? scannedLast4;
     final picked = await Navigator.of(context).push<CardProduct>(
       MaterialPageRoute(
         builder: (_) => ScanCardScreen(
@@ -925,13 +926,19 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
           alreadyOwnedProductIds: owned
               .map((card) => card.cardProductId)
               .toSet(),
+          onScanComplete: (result) => scannedLast4 = result.last4,
         ),
       ),
     );
-    if (picked != null) await _addCards([picked.id]);
+    if (picked != null) {
+      await _addCards([picked.id], last4ByProductId: {picked.id: scannedLast4});
+    }
   }
 
-  Future<void> _addCards(List<String> cardProductIds) async {
+  Future<void> _addCards(
+    List<String> cardProductIds, {
+    Map<String, String?> last4ByProductId = const {},
+  }) async {
     setState(() => _busy = true);
     final failures = <String>[];
     final duplicateIds = <String>[];
@@ -949,13 +956,31 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
             )
           : ref.read(myCardsProvider).valueOrNull ?? const <UserCard>[];
       final plan = planCardAdds(cardProductIds, existing);
+      var enrichedExisting = false;
+
+      // A manual add may already have created a product-only wallet row.
+      // When a later two-sided scan finds its last four digits, enrich that
+      // existing row instead of silently discarding the safer matching key.
+      for (final id in cardProductIds.toSet()) {
+        final scannedLast4 = last4ByProductId[id];
+        final existingCard = existing
+            .where((card) => card.cardProductId == id)
+            .firstOrNull;
+        if (scannedLast4 == null || existingCard?.last4 != null) continue;
+        if (local != null) {
+          await local.updateCard(existingCard!.id, last4: scannedLast4);
+        } else {
+          await repo!.updateCard(existingCard!.id, last4: scannedLast4);
+        }
+        enrichedExisting = true;
+      }
 
       for (final id in plan.idsToAdd) {
         try {
           if (local != null) {
-            await local.addCard(id);
+            await local.addCard(id, last4: last4ByProductId[id]);
           } else {
-            await repo!.addCard(id);
+            await repo!.addCard(id, last4: last4ByProductId[id]);
           }
         } catch (e) {
           if (e is CardAlreadyAddedException ||
@@ -969,7 +994,7 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
 
       added = plan.idsToAdd.length - duplicateIds.length - failures.length;
       alreadyPresentCount = plan.alreadyPresent.length + duplicateIds.length;
-      if (added > 0) {
+      if (added > 0 || enrichedExisting) {
         await clearUserCardsCache(ref);
         ref.invalidate(myCardsProvider);
         ref.invalidate(userCardsProvider);

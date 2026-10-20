@@ -42,6 +42,7 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
   bool _showIntroduction = true;
   final _searchController = TextEditingController();
   final _selected = <String>{};
+  final _scannedLast4ByProductId = <String, String?>{};
   final _networkFilters = <CardNetwork>{};
   bool _adding = false;
   String? _error;
@@ -88,12 +89,18 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
         // by the on-device wallet instead of POST /user-cards.
         final local = await ref.read(localUserCardsRepositoryProvider.future);
         for (final id in _selected) {
-          final userCardId = await local.addCard(id);
+          final userCardId = await local.addCard(
+            id,
+            last4: _scannedLast4ByProductId[id],
+          );
           addedIds.add(userCardId);
         }
       } else {
         for (final id in _selected) {
-          final userCardId = await repo.addCard(id);
+          final userCardId = await repo.addCard(
+            id,
+            last4: _scannedLast4ByProductId[id],
+          );
           addedIds.add(userCardId);
         }
       }
@@ -144,10 +151,21 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
   /// already shipped for Wallet's own add-a-card flow (ScanCardScreen),
   /// not a new implementation.
   Future<void> _photographCard(List<CardProduct> catalogue) async {
+    String? scannedLast4;
     final picked = await Navigator.of(context).push<CardProduct>(
-      MaterialPageRoute(builder: (_) => ScanCardScreen(catalogue: catalogue)),
+      MaterialPageRoute(
+        builder: (_) => ScanCardScreen(
+          catalogue: catalogue,
+          onScanComplete: (result) => scannedLast4 = result.last4,
+        ),
+      ),
     );
-    if (picked != null && mounted) setState(() => _selected.add(picked.id));
+    if (picked != null && mounted) {
+      setState(() {
+        _selected.add(picked.id);
+        _scannedLast4ByProductId[picked.id] = scannedLast4;
+      });
+    }
   }
 
   /// Design 30's "I'll do this later" escape hatch — Home/Wallet already

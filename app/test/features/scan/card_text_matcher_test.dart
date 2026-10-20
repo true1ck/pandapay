@@ -7,12 +7,7 @@ CardProduct _product(
   String name,
   CardNetwork network, {
   String? issuerName,
-}) => CardProduct(
-  id: id,
-  name: name,
-  network: network,
-  issuerName: issuerName,
-);
+}) => CardProduct(id: id, name: name, network: network, issuerName: issuerName);
 
 void main() {
   group('detectNetworkFromText', () {
@@ -38,6 +33,10 @@ void main() {
 
     test('returns null when no digit group exists', () {
       expect(extractLastFourDigits('no digits here'), isNull);
+    });
+
+    test('prefers a PAN-shaped run over a later four-digit label', () {
+      expect(extractLastFourDigits('4111 1111 1111 2222 VALID 2026'), '2222');
     });
   });
 
@@ -79,11 +78,7 @@ void main() {
             'Tata Neu Plus HDFC Bank Credit Card',
             CardNetwork.rupay,
           ),
-          _product(
-            'axis-aura',
-            'Axis Bank Aura Credit Card',
-            CardNetwork.visa,
-          ),
+          _product('axis-aura', 'Axis Bank Aura Credit Card', CardNetwork.visa),
           _product(
             'axis-rewards',
             'Axis Bank REWARDS Credit Card',
@@ -239,7 +234,13 @@ void main() {
     test('normalizes the stylized Cashback logo lockup', () {
       final matches = matchCardText(
         const ExtractedCardText('CASIH B<CK SBI card'),
-        [_product('sbi-cashback', 'SBI Cashback Credit Card', CardNetwork.visa)],
+        [
+          _product(
+            'sbi-cashback',
+            'SBI Cashback Credit Card',
+            CardNetwork.visa,
+          ),
+        ],
       );
 
       expect(matches, isNotEmpty);

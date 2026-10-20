@@ -96,6 +96,19 @@ CardNetwork? detectNetworkFromText(String text) {
 /// this never stores a full card number, only whatever the last recognized
 /// digit group is).
 String? extractLastFourDigits(String text) {
+  // Prefer a PAN-shaped run over an unrelated four-digit label on the card
+  // artwork. OCR often inserts spaces or dashes between groups, so inspect
+  // the digit count only after locating the candidate. The complete candidate
+  // never leaves this function; only its suffix is returned.
+  final panCandidates = RegExp(
+    r'(?<!\d)(?:\d[\s-]?){13,19}(?!\d)',
+  ).allMatches(text);
+  for (final candidate in panCandidates.toList().reversed) {
+    final digits = candidate.group(0)!.replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 13 && digits.length <= 19) {
+      return digits.substring(digits.length - 4);
+    }
+  }
   final matches = RegExp(
     r'\d{4}',
   ).allMatches(text.replaceAll(RegExp(r'[\s-]'), ' '));

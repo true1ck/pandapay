@@ -21,17 +21,11 @@ import 'package:permission_handler/permission_handler.dart';
 ///
 /// ## What this reads, and why that's enough
 ///
-/// Two modes, front-of-card OCR primary and QR/barcode secondary. Neither
-/// asks the user to show the back of their card, and this is a deliberate
-/// design choice, not a scope cut: this screen (like the rest of the app —
-/// see `db/supabase/migrations/0004_user_domain.sql`'s "stores no PAN, not
-/// even last-4") never verifies card OWNERSHIP. It identifies which
-/// CATALOGUE PRODUCT a card is — issuer + name — so the matching row can be
-/// added to the wallet. Everything needed for that (issuer wordmark,
-/// product name, network logo) is on the front. The back carries the CVV
-/// and magnetic stripe, neither of which this app has any use for; asking
-/// for it would only invite the "why does this need my CVV" review
-/// question this codebase's whole design stance is built to avoid.
+/// Physical-card OCR is a two-pass flow: front first, then back. Product
+/// identity is usually on the front, while the PAN is often printed only on
+/// the back. The two OCR results are merged in memory for matching and for
+/// extracting a last-four matching key. The full PAN, CVV, expiry, and card
+/// photographs are never sent to the API or written to the wallet.
 ///
 /// ## What happens to the photo
 ///
@@ -73,6 +67,12 @@ class ScanCardScreen extends StatefulWidget {
   @visibleForTesting
   final Future<String?> Function(String path)? decodeBarcodeFromImage;
 
+  /// Called immediately before the legacy [CardProduct] navigation result is
+  /// returned. Keeping the navigation value backwards-compatible avoids
+  /// breaking callers that only need the catalogue product, while new wallet
+  /// flows can also receive the safely extracted last four digits.
+  final ValueChanged<ScannedCardResult>? onScanComplete;
+
   const ScanCardScreen({
     super.key,
     required this.catalogue,
@@ -80,19 +80,35 @@ class ScanCardScreen extends StatefulWidget {
     this.recognizerFactory,
     this.pickImagePath,
     this.decodeBarcodeFromImage,
+    this.onScanComplete,
   });
 
   @override
   State<ScanCardScreen> createState() => _ScanCardScreenState();
 }
 
+/// The only value a card scan is allowed to hand to a wallet flow in addition
+/// to the catalogue product. [last4] is nullable because some virtual or
+/// numberless cards cannot expose a physical PAN to OCR.
+class ScannedCardResult {
+  final CardProduct product;
+  final String? last4;
+
+  const ScannedCardResult({required this.product, this.last4});
+}
+
 enum _ScanMode { ocr, qr }
+
+enum _ScanSide { front, back }
 
 class _ScanCardScreenState extends State<ScanCardScreen>
     with WidgetsBindingObserver {
   _ScanMode _mode = _ScanMode.ocr;
 
   // ---- OCR (primary) state ----
+  _ScanSide _scanSide = _ScanSide.front;
+  ExtractedCardText? _frontExtracted;
+  ExtractedCardText? _backExtracted;
   CameraController? _cameraController;
   Future<void>? _cameraInitFuture;
   CardTextRecognizer? _recognizer;
@@ -302,11 +318,7 @@ class _ScanCardScreenState extends State<ScanCardScreen>
       });
       final extracted = await recognizer.recognizeText(file.path);
       if (!mounted) return;
-      setState(() {
-        _lastExtracted = extracted;
-        _resultIsFromOcr = true;
-        _matches = matchCardText(extracted, widget.catalogue);
-      });
+      await _acceptOcrSide(extracted, cameraFile: file.path);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -320,16 +332,66 @@ class _ScanCardScreenState extends State<ScanCardScreen>
     }
   }
 
+  Future<void> _acceptOcrSide(
+    ExtractedCardText extracted, {
+    String? cameraFile,
+  }) async {
+    if (!mounted) return;
+    final side = _scanSide;
+    if (side == _ScanSide.front) {
+      _frontExtracted = extracted;
+      setState(() => _scanSide = _ScanSide.back);
+      _showSnack(
+        'Front captured. Flip the card and scan the back so we can find the card number.',
+      );
+    } else {
+      _backExtracted = extracted;
+      final combined = _combinedExtracted;
+      setState(() {
+        _lastExtracted = combined;
+        _resultIsFromOcr = true;
+        _matches = matchCardText(combined, widget.catalogue);
+      });
+      // There is no reason to keep the camera open while the user reviews a
+      // match. The captured file is deleted below, so the result view falls
+      // back to a neutral confirmation surface instead of retaining a live
+      // camera texture.
+      await _teardownCamera();
+    }
+    // A camera capture is only an OCR input, never a persisted attachment.
+    // Delete it as soon as recognition completes rather than keeping a card
+    // photograph around until the screen is dismissed.
+    if (cameraFile != null) {
+      try {
+        await File(cameraFile).delete();
+      } catch (_) {}
+      if (cameraFile == _capturedImageFile?.path) {
+        _capturedImageFile = null;
+      }
+      if (mounted && _previewImageFile?.path == cameraFile) {
+        setState(() => _previewImageFile = null);
+      }
+    }
+  }
+
+  ExtractedCardText get _combinedExtracted => ExtractedCardText(
+    [
+      _frontExtracted?.rawText,
+      _backExtracted?.rawText,
+    ].whereType<String>().where((text) => text.trim().isNotEmpty).join('\n'),
+  );
+
   CardTextRecognizer _ensureRecognizer() => _recognizer ??=
       widget.recognizerFactory?.call() ?? MlKitCardTextRecognizer();
 
-  /// "Upload a photo instead": the card may not be in hand (a partner's
+  /// "Upload front/back photo": the card may not be in hand (a partner's
   /// card, a card mailer photographed earlier, a card in another room), and
   /// a still, well-lit photo also sidesteps the "try again with more light"
   /// failure the live view hits in poor lighting. Runs the same on-device
-  /// pipeline as the live paths — OCR in "Front of card" mode, QR decode in
-  /// "QR / barcode" mode — and feeds the same matcher. The picked file is
-  /// the user's own and is never deleted (see this file's doc-comment).
+  /// pipeline as the live paths — two OCR passes in "Card scan" mode, QR
+  /// decode in "QR / barcode" mode — and feeds the same matcher. The picked
+  /// file is the user's own and is never deleted (see this file's
+  /// doc-comment).
   Future<void> _pickImage() async {
     if (_processingImage || _capturing) return;
     setState(() => _processingImage = true);
@@ -357,23 +419,24 @@ class _ScanCardScreenState extends State<ScanCardScreen>
       }
       if (!mounted) return;
 
-      if (extracted.rawText.trim().isEmpty) {
-        _showSnack(
-          mode == _ScanMode.ocr
-              ? "Couldn't read a card in that photo — try a clearer, straight-on shot of the front."
-              : 'No QR code or barcode found in that image.',
-        );
+      if (extracted.rawText.trim().isEmpty && mode == _ScanMode.qr) {
+        _showSnack('No QR code or barcode found in that image.');
         return;
       }
-      setState(() {
-        _lastExtracted = extracted;
-        _resultIsFromOcr = mode == _ScanMode.ocr;
-        _matches = matchCardText(extracted, widget.catalogue);
+      if (mode == _ScanMode.ocr) {
+        await _acceptOcrSide(extracted);
+        if (!mounted) return;
         // Keep the uploaded card visible while the user verifies the match.
-        // Unlike [_capturedImageFile], this is the user's gallery file and is
+        // Unlike camera captures, this is the user's gallery file and is
         // intentionally not deleted when the screen is closed.
-        if (mode == _ScanMode.ocr) _previewImageFile = File(path!);
-      });
+        setState(() => _previewImageFile = File(path!));
+      } else {
+        setState(() {
+          _lastExtracted = extracted;
+          _resultIsFromOcr = false;
+          _matches = matchCardText(extracted, widget.catalogue);
+        });
+      }
     } catch (_) {
       if (mounted) {
         _showSnack(
@@ -425,6 +488,9 @@ class _ScanCardScreenState extends State<ScanCardScreen>
     setState(() {
       _lastExtracted = null;
       _matches = const [];
+      _frontExtracted = null;
+      _backExtracted = null;
+      _scanSide = _ScanSide.front;
       _previewImageFile = null;
       if (_capturedImageFile != null) {
         unawaited(
@@ -458,6 +524,9 @@ class _ScanCardScreenState extends State<ScanCardScreen>
       _mode = mode;
       _lastExtracted = null;
       _matches = const [];
+      _frontExtracted = null;
+      _backExtracted = null;
+      _scanSide = _ScanSide.front;
     });
     if (mode == _ScanMode.ocr &&
         _cameraController == null &&
@@ -485,17 +554,19 @@ class _ScanCardScreenState extends State<ScanCardScreen>
               child: _processingImage
                   ? const _BusyView()
                   : _mode == _ScanMode.ocr
-                  ? _OcrView(
-                      controller: _cameraController,
-                      initFuture: _cameraInitFuture,
-                      error: _cameraError,
-                      capturing: _capturing,
-                      // After capture: keep the frozen frame visible with the
-                      // guide overlay intact and a success badge on top.
-                      captured: _lastExtracted != null,
-                      previewImageFile: _previewImageFile,
-                      onCapture: _capture,
-                    )
+                  ? (_lastExtracted != null && _previewImageFile == null
+                        ? const _CapturedPreview()
+                        : _OcrView(
+                            controller: _cameraController,
+                            initFuture: _cameraInitFuture,
+                            error: _cameraError,
+                            capturing: _capturing,
+                            // After capture: keep the frozen frame visible with the
+                            // guide overlay intact and a success badge on top.
+                            captured: _lastExtracted != null,
+                            previewImageFile: _previewImageFile,
+                            onCapture: _capture,
+                          ))
                   : _lastExtracted != null
                   ? const _CapturedPreview()
                   : _QrView(controller: _qrController, onDetect: _onQrDetect),
@@ -507,6 +578,7 @@ class _ScanCardScreenState extends State<ScanCardScreen>
                 child: _lastExtracted == null
                     ? _IdleHint(
                         mode: _mode,
+                        side: _scanSide,
                         onPickImage: _processingImage ? null : _pickImage,
                       )
                     : ScanResultPanel(
@@ -514,8 +586,10 @@ class _ScanCardScreenState extends State<ScanCardScreen>
                         matches: _matches,
                         showRawText: !_resultIsFromOcr,
                         alreadyOwnedProductIds: widget.alreadyOwnedProductIds,
-                        onConfirm: (product) =>
-                            Navigator.of(context).pop(product),
+                        onConfirm: (result) {
+                          widget.onScanComplete?.call(result);
+                          Navigator.of(context).pop(result.product);
+                        },
                         onRescan: _rescan,
                       ),
               ),
@@ -539,7 +613,7 @@ class _ModeToggle extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Row(
         children: [
-          Expanded(child: _segment('Front of card', _ScanMode.ocr)),
+          Expanded(child: _segment('Card scan', _ScanMode.ocr)),
           const SizedBox(width: 8),
           Expanded(child: _segment('QR / barcode', _ScanMode.qr)),
         ],
@@ -908,31 +982,41 @@ class _BusyView extends StatelessWidget {
 
 class _IdleHint extends StatelessWidget {
   final _ScanMode mode;
+  final _ScanSide side;
 
   /// Null while a pick is already in flight (disables the button).
   final VoidCallback? onPickImage;
 
-  const _IdleHint({required this.mode, required this.onPickImage});
+  const _IdleHint({
+    required this.mode,
+    required this.side,
+    required this.onPickImage,
+  });
 
   @override
   Widget build(BuildContext context) {
     final (title, body) = switch (mode) {
-      _ScanMode.ocr => (
+      _ScanMode.ocr when side == _ScanSide.front => (
         'Frame the front of your card',
-        'PandaPay reads the issuer and card name printed on the front — '
-            'never the back, and never a full card number. That\'s enough to '
-            'find the right card in our catalogue; nothing about the card is '
-            'stored.',
+        'First we identify the issuer and card name. After this, PandaPay '
+            'will ask you to flip the card so it can find a number printed '
+            'only on the back. We keep only the last four digits.',
+      ),
+      _ScanMode.ocr => (
+        'Now scan the back of your card',
+        'Flip the card and keep the full back inside the frame. Some cards '
+            'print the number only here. PandaPay keeps only the last four '
+            'digits and never stores the full number, CVV, or expiry.',
       ),
       _ScanMode.qr => (
         'Point at a QR code or barcode',
         'Some card mailers and statements carry a scannable code. Full '
             'physical-card recognition isn\'t needed here — switch to '
-            '"Front of card" for that.',
+            '"Card scan" for that.',
       ),
     };
     final pickLabel = mode == _ScanMode.ocr
-        ? 'Upload a photo instead'
+        ? (side == _ScanSide.front ? 'Upload front photo' : 'Upload back photo')
         : 'Pick an image instead';
     return Center(
       child: SingleChildScrollView(
@@ -986,7 +1070,7 @@ class ScanResultPanel extends StatelessWidget {
   /// decision to allow it.
   final bool showRawText;
   final Set<String> alreadyOwnedProductIds;
-  final void Function(CardProduct) onConfirm;
+  final void Function(ScannedCardResult) onConfirm;
   final VoidCallback onRescan;
 
   const ScanResultPanel({
@@ -1010,6 +1094,7 @@ class ScanResultPanel extends StatelessWidget {
     final highConfidence = usableMatches
         .where((m) => m.confidence == MatchConfidence.high)
         .toList();
+    final last4 = extractLastFourDigits(extracted.rawText);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1033,6 +1118,29 @@ class ScanResultPanel extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
+          Row(
+            children: [
+              Icon(
+                last4 == null ? Icons.info_outline_rounded : Icons.lock_rounded,
+                size: 15,
+                color: last4 == null ? BambooInk.amber : BambooInk.jade,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  last4 == null
+                      ? 'No card number was readable. You can add the card, then enter the last four digits in Card details.'
+                      : 'Card number captured securely · •••• $last4',
+                  style: BambooFonts.ui(
+                    12,
+                    color: last4 == null ? BambooInk.amber : BambooInk.jade,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           if (usableMatches.isEmpty)
             Text(
               'No confident match in the catalogue — pick the card manually below.',
@@ -1103,7 +1211,12 @@ class ScanResultPanel extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      onPressed: () => onConfirm(match.product),
+                      onPressed: () => onConfirm(
+                        ScannedCardResult(
+                          product: match.product,
+                          last4: extractLastFourDigits(extracted.rawText),
+                        ),
+                      ),
                       child: Text(
                         alreadyOwnedProductIds.contains(match.product.id)
                             ? 'Done'

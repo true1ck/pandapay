@@ -100,10 +100,14 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
           : _nicknameController.text.trim();
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo == null) {
-        // Guest mode: only nickname has a local backing column — see
-        // LocalUserCardsRepository.updateCard's own doc comment.
+        // Guest mode has the same privacy-safe last-four backing column as
+        // the signed-in path; cap and points fields remain server-only.
         final local = await ref.read(localUserCardsRepositoryProvider.future);
-        await local.updateCard(widget.userCardId, nickname: nickname);
+        await local.updateCard(
+          widget.userCardId,
+          nickname: nickname,
+          last4: _last4Controller.text.trim(),
+        );
       } else {
         await repo.updateCard(
           widget.userCardId,

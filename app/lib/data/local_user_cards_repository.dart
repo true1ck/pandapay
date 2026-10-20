@@ -37,6 +37,7 @@ class LocalUserCardsRepository {
       id: row['id'] as String,
       cardProductId: cardProductId,
       nickname: row['nickname'] as String?,
+      last4: row['last4'] as String?,
       cardName: product?.name ?? (unresolved ? 'Unrecognized card' : 'Card'),
       isUnresolved: unresolved,
       isDefault: (row['is_default'] as int) != 0,
@@ -56,7 +57,18 @@ class LocalUserCardsRepository {
     return rows.map((r) => _rowToUserCard(r, catalogue)).toList();
   }
 
-  Future<String> addCard(String cardProductId, {String? nickname}) async {
+  Future<String> addCard(
+    String cardProductId, {
+    String? nickname,
+    String? last4,
+  }) async {
+    final normalizedLast4 = last4 == null || last4.trim().isEmpty
+        ? null
+        : last4.replaceAll(RegExp(r'\D'), '');
+    if (normalizedLast4 != null &&
+        !RegExp(r'^\d{4}$').hasMatch(normalizedLast4)) {
+      throw const FormatException('last4 must be exactly 4 digits');
+    }
     final existingRows = _raw.select(
       'SELECT id FROM local_user_cards WHERE card_product_id = ? AND is_archived = 0 LIMIT 1',
       [cardProductId],
@@ -85,12 +97,13 @@ class LocalUserCardsRepository {
     );
     final isFirstCard = (countRows.first['c'] as int) == 0;
     _raw.execute(
-      'INSERT INTO local_user_cards (id, card_product_id, nickname, is_default, is_archived, sort_order, created_at) '
-      'VALUES (?, ?, ?, ?, 0, ?, ?)',
+      'INSERT INTO local_user_cards (id, card_product_id, nickname, last4, is_default, is_archived, sort_order, created_at) '
+      'VALUES (?, ?, ?, ?, ?, 0, ?, ?)',
       [
         id,
         cardProductId,
         nickname,
+        normalizedLast4,
         isFirstCard ? 1 : 0,
         maxOrder + 1,
         DateTime.now().millisecondsSinceEpoch,
@@ -140,10 +153,10 @@ class LocalUserCardsRepository {
   }
 
   /// Matches [UserCardsRepository.updateCard]'s signature so call sites
-  /// don't need to branch, but only [nickname] is meaningful locally — a
-  /// guest card has no cap/points tracking for creditLimitInr/
-  /// statementDay/dueDay/pointsBalance to feed into, so those are silently
-  /// no-ops rather than persisted-but-unused columns.
+  /// don't need to branch. Nickname and the privacy-safe last four digits are
+  /// meaningful locally; a guest card has no cap/points tracking for
+  /// creditLimitInr/statementDay/dueDay/pointsBalance to feed into, so those
+  /// remain silent no-ops rather than persisted-but-unused columns.
   Future<void> updateCard(
     String userCardId, {
     String? nickname,
@@ -151,10 +164,23 @@ class LocalUserCardsRepository {
     int? statementDay,
     int? dueDay,
     double? pointsBalance,
+    String? last4,
   }) async {
     if (nickname != null) {
       _raw.execute('UPDATE local_user_cards SET nickname = ? WHERE id = ?', [
         nickname,
+        userCardId,
+      ]);
+    }
+    if (last4 != null) {
+      final normalized = last4.trim().isEmpty
+          ? null
+          : last4.replaceAll(RegExp(r'\D'), '');
+      if (normalized != null && !RegExp(r'^\d{4}$').hasMatch(normalized)) {
+        throw const FormatException('last4 must be exactly 4 digits');
+      }
+      _raw.execute('UPDATE local_user_cards SET last4 = ? WHERE id = ?', [
+        normalized,
         userCardId,
       ]);
     }
@@ -179,6 +205,7 @@ class LocalUserCardsRepository {
             'localId': r['id'] as String,
             'cardProductId': r['card_product_id'] as String,
             'nickname': r['nickname'] as String?,
+            'last4': r['last4'] as String?,
             'isDefault': (r['is_default'] as int) != 0,
             'isArchived': (r['is_archived'] as int) != 0,
           },

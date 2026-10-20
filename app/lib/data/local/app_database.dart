@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS local_user_cards (
   id TEXT PRIMARY KEY,
   card_product_id TEXT NOT NULL,
   nickname TEXT,
+  last4 TEXT,
   is_default INTEGER NOT NULL DEFAULT 0,
   is_archived INTEGER NOT NULL DEFAULT 0,
   sort_order REAL NOT NULL,
@@ -177,6 +178,7 @@ class AppDatabase {
     db.execute('PRAGMA journal_mode = WAL');
     db.execute(_schema);
     _ensureUserCategoriesSchema();
+    _ensureLocalUserCardsSchema();
     _ensureOutboxSchema();
     if (!db
         .select('PRAGMA table_info(sync_pending_changes)')
@@ -196,6 +198,16 @@ class AppDatabase {
           "ALTER TABLE $table ADD COLUMN namespace TEXT NOT NULL DEFAULT 'legacy'",
         );
       }
+    }
+  }
+
+  void _ensureLocalUserCardsSchema() {
+    final columns = db
+        .select('PRAGMA table_info(local_user_cards)')
+        .map((row) => row['name'] as String)
+        .toSet();
+    if (!columns.contains('last4')) {
+      db.execute('ALTER TABLE local_user_cards ADD COLUMN last4 TEXT');
     }
   }
 

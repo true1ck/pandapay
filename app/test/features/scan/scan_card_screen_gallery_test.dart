@@ -32,8 +32,29 @@ class _FakeRecognizer implements CardTextRecognizer {
   Future<void> dispose() async => disposed = true;
 }
 
+class _SequenceRecognizer implements CardTextRecognizer {
+  _SequenceRecognizer(this.texts);
+
+  final List<String> texts;
+  var _index = 0;
+
+  @override
+  Future<ExtractedCardText> recognizeText(String imagePath) async {
+    final text = texts[_index.clamp(0, texts.length - 1)];
+    _index++;
+    return ExtractedCardText(text);
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
 final _catalogue = [
-  const CardProduct(id: 'c1', name: 'HDFC Millennia', network: CardNetwork.visa),
+  const CardProduct(
+    id: 'c1',
+    name: 'HDFC Millennia',
+    network: CardNetwork.visa,
+  ),
   const CardProduct(id: 'c2', name: 'SBI Cashback', network: CardNetwork.rupay),
 ];
 
@@ -48,37 +69,47 @@ Future<void> _tick(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('OCR mode: picking a photo runs OCR and shows catalogue matches', (tester) async {
-    final recognizer = _FakeRecognizer('HDFC BANK MILLENNIA VISA');
-    await tester.pumpWidget(
-      _host(
-        ScanCardScreen(
-          catalogue: _catalogue,
-          recognizerFactory: () => recognizer,
-          pickImagePath: () async => '/tmp/fake-card.jpg',
+  testWidgets(
+    'OCR mode: picking a photo runs OCR and shows catalogue matches',
+    (tester) async {
+      final recognizer = _FakeRecognizer('HDFC BANK MILLENNIA VISA');
+      await tester.pumpWidget(
+        _host(
+          ScanCardScreen(
+            catalogue: _catalogue,
+            recognizerFactory: () => recognizer,
+            pickImagePath: () async => '/tmp/fake-card.jpg',
+          ),
         ),
-      ),
-    );
-    await _tick(tester);
+      );
+      await _tick(tester);
 
-    expect(find.text('Upload a photo instead'), findsOneWidget);
-    await tester.tap(find.text('Upload a photo instead'));
-    await _tick(tester);
+      expect(find.text('Upload front photo'), findsOneWidget);
+      await tester.tap(find.text('Upload front photo'));
+      await _tick(tester);
 
-    expect(recognizer.recognizeCalls, 1);
-    expect(recognizer.lastPath, '/tmp/fake-card.jpg');
-    expect(find.text('Detected card'), findsOneWidget);
-    expect(find.text('HDFC Millennia'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Use this'), findsOneWidget);
-    // The uploaded card remains visible behind the result panel instead of
-    // falling back to the camera-init spinner after the picker tears down the
-    // camera controller.
-    expect(find.byType(Image), findsOneWidget);
-    // OCR of a physical card face is never echoed back verbatim.
-    expect(find.text('Scanned text'), findsNothing);
-  });
+      expect(recognizer.recognizeCalls, 1);
+      expect(recognizer.lastPath, '/tmp/fake-card.jpg');
+      expect(find.text('Now scan the back of your card'), findsOneWidget);
+      await tester.tap(find.text('Upload back photo'));
+      await _tick(tester);
 
-  testWidgets('OCR mode: "Use this" returns the chosen product to the caller', (tester) async {
+      expect(recognizer.recognizeCalls, 2);
+      expect(find.text('Detected card'), findsOneWidget);
+      expect(find.text('HDFC Millennia'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Use this'), findsOneWidget);
+      // The uploaded card remains visible behind the result panel instead of
+      // falling back to the camera-init spinner after the picker tears down the
+      // camera controller.
+      expect(find.byType(Image), findsOneWidget);
+      // OCR of a physical card face is never echoed back verbatim.
+      expect(find.text('Scanned text'), findsNothing);
+    },
+  );
+
+  testWidgets('OCR mode: "Use this" returns the chosen product to the caller', (
+    tester,
+  ) async {
     CardProduct? popped;
 
     await tester.pumpWidget(
@@ -92,7 +123,8 @@ void main() {
                     MaterialPageRoute(
                       builder: (_) => ScanCardScreen(
                         catalogue: _catalogue,
-                        recognizerFactory: () => _FakeRecognizer('HDFC MILLENNIA VISA'),
+                        recognizerFactory: () =>
+                            _FakeRecognizer('HDFC MILLENNIA VISA'),
                         pickImagePath: () async => '/tmp/fake-card.jpg',
                       ),
                     ),
@@ -108,7 +140,9 @@ void main() {
     await tester.tap(find.text('open'));
     await _tick(tester);
 
-    await tester.tap(find.text('Upload a photo instead'));
+    await tester.tap(find.text('Upload front photo'));
+    await _tick(tester);
+    await tester.tap(find.text('Upload back photo'));
     await _tick(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Use this').first);
     await _tick(tester);
@@ -117,71 +151,107 @@ void main() {
     expect(popped!.id, 'c1');
   });
 
-  testWidgets('OCR mode: backing out of the picker leaves the idle hint untouched', (tester) async {
+  testWidgets('OCR merges front and back and returns only the last four', (
+    tester,
+  ) async {
+    ScannedCardResult? scan;
+    var pickCount = 0;
     await tester.pumpWidget(
       _host(
         ScanCardScreen(
           catalogue: _catalogue,
-          recognizerFactory: () => _FakeRecognizer('unused'),
-          pickImagePath: () async => null,
+          recognizerFactory: () =>
+              _SequenceRecognizer(['SBI CASHBACK VISA', '4111 1111 1111 2222']),
+          pickImagePath: () async => '/tmp/fake-card-${pickCount++}.jpg',
+          onScanComplete: (result) => scan = result,
         ),
       ),
     );
     await _tick(tester);
 
-    await tester.tap(find.text('Upload a photo instead'));
+    await tester.tap(find.text('Upload front photo'));
+    await _tick(tester);
+    await tester.tap(find.text('Upload back photo'));
+    await _tick(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Use this').first);
     await _tick(tester);
 
-    expect(find.text('Frame the front of your card'), findsOneWidget);
-    expect(find.text('Possible matches'), findsNothing);
-    expect(tester.takeException(), isNull);
+    expect(scan, isNotNull);
+    expect(scan!.product.id, 'c2');
+    expect(scan!.last4, '2222');
+    expect(find.textContaining('4111'), findsNothing);
   });
 
-  testWidgets('OCR mode: an unreadable photo shows a hint and stays on the picker', (tester) async {
-    await tester.pumpWidget(
-      _host(
-        ScanCardScreen(
-          catalogue: _catalogue,
-          recognizerFactory: () => _FakeRecognizer('   '),
-          pickImagePath: () async => '/tmp/blurry.jpg',
+  testWidgets(
+    'OCR mode: backing out of the picker leaves the idle hint untouched',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          ScanCardScreen(
+            catalogue: _catalogue,
+            recognizerFactory: () => _FakeRecognizer('unused'),
+            pickImagePath: () async => null,
+          ),
         ),
-      ),
-    );
-    await _tick(tester);
+      );
+      await _tick(tester);
 
-    await tester.tap(find.text('Upload a photo instead'));
-    await _tick(tester);
+      await tester.tap(find.text('Upload front photo'));
+      await _tick(tester);
 
-    expect(
-      find.textContaining("Couldn't read a card in that photo"),
-      findsOneWidget,
-    );
-    expect(find.text('Frame the front of your card'), findsOneWidget);
-  });
+      expect(find.text('Now scan the back of your card'), findsOneWidget);
+      expect(find.text('Possible matches'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('QR mode: picking an image decodes the barcode and shows the payload', (tester) async {
-    await tester.pumpWidget(
-      _host(
-        ScanCardScreen(
-          catalogue: _catalogue,
-          pickImagePath: () async => '/tmp/statement.png',
-          decodeBarcodeFromImage: (path) async => 'SBI CASHBACK RUPAY CARD',
+  testWidgets(
+    'OCR mode: an unreadable photo shows a hint and stays on the picker',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          ScanCardScreen(
+            catalogue: _catalogue,
+            recognizerFactory: () => _FakeRecognizer('   '),
+            pickImagePath: () async => '/tmp/blurry.jpg',
+          ),
         ),
-      ),
-    );
-    await _tick(tester);
+      );
+      await _tick(tester);
 
-    await tester.tap(find.text('QR / barcode'));
-    await _tick(tester);
-    expect(find.text('Pick an image instead'), findsOneWidget);
+      await tester.tap(find.text('Upload front photo'));
+      await _tick(tester);
 
-    await tester.tap(find.text('Pick an image instead'));
-    await _tick(tester);
+      expect(find.text('Now scan the back of your card'), findsOneWidget);
+    },
+  );
 
-    // QR payloads are shown verbatim (unlike OCR).
-    expect(find.text('Scanned text'), findsOneWidget);
-    expect(find.text('SBI Cashback'), findsOneWidget);
-  });
+  testWidgets(
+    'QR mode: picking an image decodes the barcode and shows the payload',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          ScanCardScreen(
+            catalogue: _catalogue,
+            pickImagePath: () async => '/tmp/statement.png',
+            decodeBarcodeFromImage: (path) async => 'SBI CASHBACK RUPAY CARD',
+          ),
+        ),
+      );
+      await _tick(tester);
+
+      await tester.tap(find.text('QR / barcode'));
+      await _tick(tester);
+      expect(find.text('Pick an image instead'), findsOneWidget);
+
+      await tester.tap(find.text('Pick an image instead'));
+      await _tick(tester);
+
+      // QR payloads are shown verbatim (unlike OCR).
+      expect(find.text('Scanned text'), findsOneWidget);
+      expect(find.text('SBI Cashback'), findsOneWidget);
+    },
+  );
 
   testWidgets('QR mode: an image with no code shows a hint', (tester) async {
     await tester.pumpWidget(
@@ -203,14 +273,17 @@ void main() {
     expect(find.textContaining('No QR code or barcode found'), findsOneWidget);
   });
 
-  testWidgets('privacy: a gallery-picked file is never deleted', (tester) async {
+  testWidgets('privacy: a gallery-picked file is never deleted', (
+    tester,
+  ) async {
     final dir = Directory.systemTemp.createTempSync('scan_card_gallery_test');
     addTearDown(() {
       try {
         dir.deleteSync(recursive: true);
       } catch (_) {}
     });
-    final photo = File('${dir.path}/my-card.jpg')..writeAsBytesSync([1, 2, 3, 4]);
+    final photo = File('${dir.path}/my-card.jpg')
+      ..writeAsBytesSync([1, 2, 3, 4]);
 
     await tester.pumpWidget(
       _host(
@@ -223,11 +296,15 @@ void main() {
     );
     await _tick(tester);
 
-    await tester.tap(find.text('Upload a photo instead'));
+    await tester.tap(find.text('Upload front photo'));
     await _tick(tester);
     await _tick(tester);
 
-    expect(photo.existsSync(), isTrue, reason: 'the user\'s own photo must be left alone');
+    expect(
+      photo.existsSync(),
+      isTrue,
+      reason: 'the user\'s own photo must be left alone',
+    );
   });
 
   testWidgets('the recognizer is disposed with the screen', (tester) async {
@@ -242,7 +319,7 @@ void main() {
       ),
     );
     await _tick(tester);
-    await tester.tap(find.text('Upload a photo instead'));
+    await tester.tap(find.text('Upload front photo'));
     await _tick(tester);
 
     await tester.pumpWidget(_host(const SizedBox.shrink()));
