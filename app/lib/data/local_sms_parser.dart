@@ -97,7 +97,7 @@ class LocalSmsParser {
   /// True only for a deposit/current/savings-bank alert. Account-shaped
   /// suffixes from insurance, demat, brokerage, investment, and card alerts
   /// must not create rows in Home's bank-account snapshot.
-  static bool isBankAccountMessage(String body) {
+  static bool isBankAccountMessage(String body, [String sender = '']) {
     final text = body.toLowerCase();
     if (text.trim().isEmpty ||
         RegExp(r'\b(?:credit|debit)\s+card\b').hasMatch(text)) {
@@ -111,6 +111,13 @@ class LocalSmsParser {
     final accountMarker = RegExp(
       r'\b(?:bank|a\/?c\.?|account|savings|current|upi|imps|neft|rtgs|atm)\b',
     ).hasMatch(text);
+    final bankIdentityMarker =
+        RegExp(
+          r'\b(?:bank|a\/?c\.?|savings|current|upi|imps|neft|rtgs|atm)\b',
+        ).hasMatch(text) ||
+        RegExp(
+          r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)',
+        ).hasMatch(sender.toLowerCase());
     final balanceMarker = RegExp(
       r'\b(?:available|avail|avl|current|closing)\s*(?:balance|bal)\b',
     ).hasMatch(text);
@@ -120,7 +127,9 @@ class LocalSmsParser {
     // A balance phrase alone is not enough: policy and investment alerts can
     // also contain balance wording. Require explicit account/bank language
     // alongside the balance or completed movement.
-    return accountMarker && (balanceMarker || movementMarker);
+    return accountMarker &&
+        bankIdentityMarker &&
+        (balanceMarker || movementMarker);
   }
 
   static bool _ownAccountTransfer(String body) => _re(

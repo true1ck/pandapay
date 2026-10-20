@@ -466,9 +466,14 @@ class FinancialStore {
       final sender = (row['sender_bank'] as String? ?? '').toLowerCase();
       // New captures carry an explicit classification. For pre-upgrade rows
       // there is no raw SMS left to inspect, so exclude the known non-bank
-      // sender families rather than re-surfacing LIC/brokerage accounts.
+      // sender families and require a bank-like sender before re-surfacing a
+      // legacy row. This keeps unknown investment/wallet senders out.
+      final legacyBankSender = RegExp(
+        r'(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)',
+      ).hasMatch(sender);
       final bankAccount = row['is_bank_account'] == true ||
           (row['is_bank_account'] == null &&
+              legacyBankSender &&
               !RegExp(
                 r'(lic|licind|dhan|dhanhq|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel|paytm\s*money)',
               ).hasMatch(sender));

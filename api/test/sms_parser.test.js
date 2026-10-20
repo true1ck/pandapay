@@ -5,6 +5,7 @@ const {
   parseSmsAgainstPatterns,
   parseConservativeBankSpend,
   redactSmsShape,
+  isBankAccountMessage,
 } = require('../src/sms_parser');
 
 // Realistic synthetic (not real customer) Indian bank SMS formats.
@@ -226,6 +227,49 @@ test('bank-account credits become incoming income entries', () => {
   assert.equal(result.fields.accountLast4, '1797');
   assert.equal(result.fields.merchant, 'Salary');
   assert.equal(result.fields.reference, '123456789012');
+});
+
+test('bank-account summary evidence excludes insurance and investment account suffixes', () => {
+  assert.equal(
+    isBankAccountMessage('Your Canara Bank A/c *5702 was credited with Rs.5000. Avl Bal Rs.12000.'),
+    true,
+  );
+  assert.equal(
+    isBankAccountMessage('PYTMBK: Your bank account *5702 was debited Rs.100. Available balance Rs.900.'),
+    true,
+  );
+  assert.equal(
+    isBankAccountMessage('Paytm Payments Bank A/c *5702: Available balance is Rs.900.'),
+    true,
+  );
+  assert.equal(
+    isBankAccountMessage('Your account *5702 was credited with Rs.5000. Avl Bal Rs.900.', 'HDFCBK'),
+    true,
+  );
+  assert.equal(
+    isBankAccountMessage('Your account *5702 was credited with Rs.5000. Avl Bal Rs.900.', 'UNKNOWN'),
+    false,
+  );
+  assert.equal(
+    isBankAccountMessage('LICIND: Premium of Rs.5000 debited from policy account ending 5702.'),
+    false,
+  );
+  assert.equal(
+    isBankAccountMessage('DHANHQ: Funds credited to trading account ending 5702.'),
+    false,
+  );
+  assert.equal(
+    isBankAccountMessage('Paytm Money demat account *5702 credited with units. Portfolio value Rs.900.'),
+    false,
+  );
+  assert.equal(
+    isBankAccountMessage('Rs.850 spent on your HDFC Bank Debit Card ending 5702. Avl Bal Rs.12000.'),
+    false,
+  );
+  assert.equal(
+    isBankAccountMessage('Avl Bal Rs.12000 for investment account ending 5702.'),
+    false,
+  );
 });
 
 test('refunds and cashbacks are incoming, while credit-card bill receipts stay transfers', () => {

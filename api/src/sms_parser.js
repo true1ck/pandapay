@@ -83,6 +83,30 @@ function extractAccountLast4(body) {
   return match ? match[1] : null;
 }
 
+// A four-digit account suffix is not enough to put an item in the Home
+// "bank accounts" section. Investment/insurance alerts also contain account
+// numbers, and some of them use the same debit/credit vocabulary as banks.
+// Keep this predicate deliberately conservative: the account card should only
+// represent a deposit/current/savings account, never a policy, demat,
+// brokerage, or card ledger.
+function isBankAccountMessage(body, sender = '') {
+  const text = String(body || '').toLowerCase();
+  if (!text || /\b(?:credit|debit)\s+card\b/.test(text)) return false;
+  if (/\b(?:lic|life\s+insurance|policy|premium|demat|trading|broker(?:age|ing)?|portfolio|holdings?|folio|dp\s*id|client\s*id|nav|units?|shares?|stocks?|equity|sip|mutual\s+fund|investment|zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money)\b/.test(text)) {
+    return false;
+  }
+
+  const accountMarker = /\b(?:bank|a\/?c\.?|account|savings|current|upi|imps|neft|rtgs|atm)\b/.test(text);
+  const bankIdentityMarker = /\b(?:bank|a\/?c\.?|savings|current|upi|imps|neft|rtgs|atm)\b/.test(text)
+    || /(?:bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)/.test(String(sender || '').toLowerCase());
+  const balanceMarker = /\b(?:available|avail|avl|current|closing)\s*(?:balance|bal)\b/.test(text);
+  const movementMarker = /\b(?:debited|debit|credited|credit|paid|spent|sent|transferred|withdrawn|received|deposited)\b/.test(text);
+  // The suffix must be accompanied by explicit account/bank language. A
+  // balance phrase by itself is not enough because investment and policy
+  // alerts can also contain "balance" wording.
+  return accountMarker && bankIdentityMarker && (balanceMarker || movementMarker);
+}
+
 // Only accept an explicitly labelled available/current balance. The spend
 // amount and the balance are often both present in one bank SMS; taking the
 // first or last currency value would silently turn the spend into a balance.
@@ -827,4 +851,5 @@ module.exports = {
   isAmbiguousAccountDebit,
   KNOWN_FIELDS,
   extractAvailableBalance,
+  isBankAccountMessage,
 };

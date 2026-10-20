@@ -78,7 +78,10 @@ class SmsImportStore {
           'account_last4': observation.accountLast4,
           'is_bank_account': observation.accountLast4 == null
               ? false
-              : LocalSmsParser.isBankAccountMessage(message.body),
+              : LocalSmsParser.isBankAccountMessage(
+                  message.body,
+                  message.sender,
+                ),
           'card_last4': observation.cardLast4,
           'biller_name': observation.billerName,
           'cadence_hint': observation.cadenceHint,

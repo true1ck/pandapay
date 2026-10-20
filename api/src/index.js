@@ -3667,7 +3667,7 @@ async function importParsedMessage(client, userId, {
       ? { availableBalanceInr: parsed.fields.availableBalanceInr }
       : {}),
     ...(parsed.fields.accountLast4
-      ? { isBankAccount: isBankAccountMessage(rawText) }
+      ? { isBankAccount: isBankAccountMessage(rawText, sender) }
       : {}),
     ...(parsed.fields.accountLast4 && sender
       ? { senderBank: sender }
@@ -5046,10 +5046,16 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
         const parts = new Intl.DateTimeFormat('en-CA', {
           timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
         }).formatToParts(occurred);
-        const year = Number(parts.find((part) => part.type === 'year')?.value);
-        const month = Number(parts.find((part) => part.type === 'month')?.value);
+        const year = detected.explicit
+          ? detected.date.getFullYear()
+          : Number(parts.find((part) => part.type === 'year')?.value);
+        const month = detected.explicit
+          ? detected.date.getMonth() + 1
+          : Number(parts.find((part) => part.type === 'month')?.value);
         const distance = nowMonthIndex - (year * 12 + month - 1);
-        statementCandidates.push({ index: i, distance });
+        if (distance === 1 || distance === 2) {
+          statementCandidates.push({ index: i, distance });
+        }
       }
       statementCandidates.sort((a, b) => {
         const rank = (distance) => distance === 1 ? 0
@@ -5333,6 +5339,11 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
                   AND lower(coalesce(o.metadata->>'senderBank', '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
                   AND lower(coalesce(oi.slug, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
                   AND lower(coalesce(oi.name, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
+                  AND (
+                    lower(coalesce(o.metadata->>'senderBank', '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
+                    OR lower(coalesce(oi.slug, '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
+                    OR lower(coalesce(oi.name, '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
+                  )
                 )
               )
          ), transaction_accounts AS (
@@ -5373,6 +5384,11 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
                        AND lower(coalesce(bo.metadata->>'senderBank', '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
                        AND lower(coalesce(bi.slug, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
                        AND lower(coalesce(bi.name, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
+                       AND (
+                         lower(coalesce(bo.metadata->>'senderBank', '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
+                         OR lower(coalesce(bi.slug, '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
+                         OR lower(coalesce(bi.name, '')) ~ '(bank|bnk|bk|upi|sbi|uco|axis|canara|canbnk|canbk|hdfc|kotak|union|equitas|eqt|pnb|icici|idbi|indus|yes|rbl|bob|boi|pytm|paytm|federal|aubank|citi|hsbc|dbs|scb)'
+                       )
                      )
                    )
               )
