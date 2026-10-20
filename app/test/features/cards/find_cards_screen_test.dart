@@ -83,12 +83,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('shows empty state with 1-tap options when no messages are scanned', (tester) async {
+  testWidgets('shows card discovery options when no messages are scanned', (tester) async {
     await pumpFindCardsScreen(tester, smsBodies: const []);
 
     expect(find.text('Find my cards'), findsOneWidget);
     expect(find.text('Auto-detect your cards'), findsOneWidget);
-    expect(find.text('Connect Gmail (1-Tap Auto Find)'), findsOneWidget);
+    expect(find.text('Connect Gmail (1-Tap Auto Find)'), findsNothing);
     expect(find.text('Search & pick from catalogue'), findsOneWidget);
     expect(find.text('PDF Statement · SMS Backup · Email Forwarding'), findsOneWidget);
   });

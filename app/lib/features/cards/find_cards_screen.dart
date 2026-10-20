@@ -14,9 +14,6 @@ import '../../data/card_discovery_filter.dart';
 import '../../data/user_cards_repository.dart'
     show CardDiscoveryResult, DiscoveredCard;
 import '../import/email_forwarding_screen.dart';
-import '../import/gmail_connect_screen.dart';
-import '../import/gmail_connect_service.dart';
-import '../import/gmail_discovery_service.dart';
 import '../import/statement_pdf_import_screen.dart';
 import '../sms_import/sms_backup_import_screen.dart';
 import '../sms_import/sms_listener_service.dart';
@@ -24,7 +21,7 @@ import 'card_network_util.dart';
 import 'card_picker_screen.dart';
 
 /// "Find my cards" — design 30's fastest add-a-card path, over **both**
-/// forwarded bank email, direct Gmail auto-detection, and (on Android) bank SMS.
+/// forwarded bank email and (on Android) bank SMS.
 ///
 /// Parsing is 100% on-device (LocalCardDiscoveryEngine) with zero raw email
 /// bodies uploaded to any server.
@@ -199,77 +196,6 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
       emailsScanned: 0,
       smsScanned: bodies.length,
     );
-  }
-
-  Future<void> _scanGmail() async {
-    // First: a fresh connect via the pre-consent screen. If Gmail is already
-    // connected on this device, try a silent token and skip straight to the
-    // scan; otherwise walk the user through the explanation + Google picker.
-    String? accessToken = await ref
-        .read(gmailConnectControllerProvider.notifier)
-        .silentToken();
-    if (accessToken == null) {
-      if (!mounted) return;
-      accessToken = await Navigator.of(context).push<String>(
-        MaterialPageRoute(builder: (_) => const GmailConnectScreen()),
-      );
-    }
-    if (accessToken == null || accessToken.isEmpty || !mounted) {
-      return; // cancelled or the screen was closed during account selection
-    }
-
-    setState(() {
-      _scanning = true;
-      _error = null;
-    });
-    try {
-      final catalogue = await ref.read(catalogueProvider.future);
-      if (!mounted) return;
-      final gmailService = ref.read(gmailDiscoveryServiceProvider);
-
-      final discovery = await gmailService.scanGmailForCards(
-        catalogue: catalogue,
-        accessToken: accessToken,
-      );
-
-      final repo = ref.read(userCardsRepositoryProvider);
-      final localRepo = await ref.read(localUserCardsRepositoryProvider.future);
-      final owned = repo != null
-          ? await repo.fetchUserCards()
-          : await localRepo.fetchUserCards(catalogue: catalogue);
-      final filtered = filterOwnedCardSuggestions(
-        suggestions: discovery.suggestions,
-        ownedCards: owned,
-        catalogue: catalogue,
-      );
-
-      await ref
-          .read(gmailConnectControllerProvider.notifier)
-          .recordScan(cardsFound: filtered.length);
-
-      if (mounted) {
-        setState(() {
-          _result = CardDiscoveryResult(
-            suggestions: filtered,
-            emailsScanned: discovery.emailsScanned,
-            smsScanned: _result?.smsScanned ?? 0,
-          );
-        });
-        if (filtered.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No new bank statement emails found in Gmail.'),
-            ),
-          );
-        }
-      }
-    } on GmailScanException catch (e) {
-      if (mounted) setState(() => _error = e.userMessage);
-    } catch (e) {
-      if (mounted) setState(() => _error = userFacingErrorMessage(e));
-    } finally {
-      if (mounted) setState(() => _scanning = false);
-    }
   }
 
   Future<void> _requestAndScanSms() async {
@@ -725,7 +651,6 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         scanning: _scanning,
         smsPermanentlyDenied: _smsPermanentlyDenied,
         scannedSummary: _scannedSummary(result),
-        onConnectGmail: _scanGmail,
         onScanSms: _requestAndScanSms,
         onOpenSmsSettings: _openSmsSettings,
         onPickFromCatalogue: _openCardPicker,
@@ -782,9 +707,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           isAndroid: _isAndroid,
           scanning: _scanning,
           smsAlreadyScanned: result.smsScanned > 0,
-          gmailAlreadyScanned: result.emailsScanned > 0,
           smsPermanentlyDenied: _smsPermanentlyDenied,
-          onConnectGmail: _scanGmail,
           onScanSms: _requestAndScanSms,
           onOpenSmsSettings: _openSmsSettings,
           onPickFromCatalogue: _openCardPicker,
@@ -1072,7 +995,6 @@ class _DiscoveryEmptyState extends StatelessWidget {
   final bool scanning;
   final bool smsPermanentlyDenied;
   final String scannedSummary;
-  final VoidCallback onConnectGmail;
   final VoidCallback onScanSms;
   final VoidCallback onOpenSmsSettings;
   final VoidCallback onPickFromCatalogue;
@@ -1085,7 +1007,6 @@ class _DiscoveryEmptyState extends StatelessWidget {
     required this.scanning,
     required this.smsPermanentlyDenied,
     required this.scannedSummary,
-    required this.onConnectGmail,
     required this.onScanSms,
     required this.onOpenSmsSettings,
     required this.onPickFromCatalogue,
@@ -1133,9 +1054,7 @@ class _DiscoveryEmptyState extends StatelessWidget {
             isAndroid: isAndroid,
             scanning: scanning,
             smsAlreadyScanned: result.smsScanned > 0,
-            gmailAlreadyScanned: result.emailsScanned > 0,
             smsPermanentlyDenied: smsPermanentlyDenied,
-            onConnectGmail: onConnectGmail,
             onScanSms: onScanSms,
             onOpenSmsSettings: onOpenSmsSettings,
             onPickFromCatalogue: onPickFromCatalogue,
@@ -1151,9 +1070,7 @@ class _DiscoveryActionButtons extends StatelessWidget {
   final bool isAndroid;
   final bool scanning;
   final bool smsAlreadyScanned;
-  final bool gmailAlreadyScanned;
   final bool smsPermanentlyDenied;
-  final VoidCallback onConnectGmail;
   final VoidCallback onScanSms;
   final VoidCallback onOpenSmsSettings;
   final VoidCallback onPickFromCatalogue;
@@ -1163,9 +1080,7 @@ class _DiscoveryActionButtons extends StatelessWidget {
     required this.isAndroid,
     required this.scanning,
     required this.smsAlreadyScanned,
-    required this.gmailAlreadyScanned,
     required this.smsPermanentlyDenied,
-    required this.onConnectGmail,
     required this.onScanSms,
     required this.onOpenSmsSettings,
     required this.onPickFromCatalogue,
@@ -1177,23 +1092,6 @@ class _DiscoveryActionButtons extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Primary: Connect Gmail
-        FilledButton.icon(
-          style: FilledButton.styleFrom(
-            backgroundColor: BambooInk.slate,
-            foregroundColor: BambooInk.lime,
-            minimumSize: const Size.fromHeight(50),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
-          ),
-          icon: const Icon(Icons.mail_outline_rounded, size: 20),
-          label: const Text('Connect Gmail (1-Tap Auto Find)'),
-          onPressed: scanning ? null : onConnectGmail,
-        ),
-        const SizedBox(height: AppSpace.md),
-
         // Secondary: Scan SMS (if Android). Once Android has permanently
         // denied the permission, the same slot becomes a jump to OS settings
         // — the only place it can be re-granted.
