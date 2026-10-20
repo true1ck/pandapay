@@ -700,6 +700,7 @@ class SpendReportsRepository {
     required double amountInr,
     required int cadenceDays,
     required DateTime nextExpectedOn,
+    String autopayStatus = 'unknown',
   }) async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/recurring'),
@@ -712,6 +713,7 @@ class SpendReportsRepository {
             '${nextExpectedOn.year.toString().padLeft(4, '0')}-'
             '${nextExpectedOn.month.toString().padLeft(2, '0')}-'
             '${nextExpectedOn.day.toString().padLeft(2, '0')}',
+        'autopayStatus': autopayStatus,
       }),
     );
     if (response.statusCode != 201) {
@@ -742,6 +744,7 @@ class SpendReportsRepository {
     required double amountInr,
     required int cadenceDays,
     required DateTime nextExpectedOn,
+    required String autopayStatus,
   }) async {
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/recurring/$seriesId'),
@@ -752,6 +755,7 @@ class SpendReportsRepository {
         'cadenceDays': cadenceDays,
         'nextExpectedOn':
             '${nextExpectedOn.year.toString().padLeft(4, '0')}-${nextExpectedOn.month.toString().padLeft(2, '0')}-${nextExpectedOn.day.toString().padLeft(2, '0')}',
+        'autopayStatus': autopayStatus,
       }),
     );
     if (response.statusCode != 200) {
@@ -791,6 +795,7 @@ class RecurringSeries {
   final int cadenceDays;
 
   final int occurrenceCount;
+  final DateTime? lastSeenOn;
   final DateTime? nextExpectedOn;
   final String? categoryName;
   final String? cardName;
@@ -798,6 +803,10 @@ class RecurringSeries {
   final String detectionSource;
   final bool isMandate;
   final bool isUserEdited;
+  final String lifecycleStatus;
+  final String autopayStatus;
+  final String? mandateReference;
+  final bool cadenceConfirmed;
   final Money annualCost;
 
   const RecurringSeries({
@@ -807,6 +816,7 @@ class RecurringSeries {
     required this.cadenceDays,
     required this.occurrenceCount,
     required this.annualCost,
+    this.lastSeenOn,
     this.nextExpectedOn,
     this.categoryName,
     this.cardName,
@@ -814,7 +824,28 @@ class RecurringSeries {
     this.detectionSource = 'observed',
     this.isMandate = false,
     this.isUserEdited = false,
+    this.lifecycleStatus = 'active',
+    this.autopayStatus = 'unknown',
+    this.mandateReference,
+    this.cadenceConfirmed = true,
   });
+
+  bool get hasActiveAutoPay =>
+      autopayStatus == 'active' ||
+      (autopayStatus == 'unknown' && isMandate);
+
+  /// An observed series is stale when it has missed more than one normal
+  /// billing window. A mandate/manual row is not judged by charge recency:
+  /// an active mandate can exist before its first debit and a manual row has
+  /// no observed charge by definition.
+  bool get needsReview {
+    if ((detectionSource != 'observed' && detectionSource != 'local_cache') ||
+        lastSeenOn == null) {
+      return false;
+    }
+    final age = DateTime.now().difference(lastSeenOn!).inDays;
+    return age > (cadenceDays * 1.5).round();
+  }
 
   /// Plain-language cadence. Approximate on purpose — "about every 5 weeks"
   /// is honest about a 33-day median in a way that "monthly" is not.
@@ -837,6 +868,9 @@ class RecurringSeries {
         cadenceDays: (json['cadenceDays'] as num?)?.toInt() ?? 30,
         occurrenceCount: (json['occurrenceCount'] as num?)?.toInt() ?? 0,
         annualCost: _money(json['annualCostInr']),
+        lastSeenOn: json['lastSeenOn'] == null
+            ? null
+            : DateTime.parse(json['lastSeenOn'] as String),
         nextExpectedOn: json['nextExpectedOn'] == null
             ? null
             : DateTime.parse(json['nextExpectedOn'] as String),
@@ -847,6 +881,13 @@ class RecurringSeries {
         isMandate:
             json['isMandate'] == true || json['detectionSource'] == 'mandate',
         isUserEdited: json['isUserEdited'] == true,
+        lifecycleStatus: json['lifecycleStatus'] as String? ?? 'active',
+        autopayStatus: json['autopayStatus'] as String? ??
+            ((json['isMandate'] == true || json['detectionSource'] == 'mandate')
+                ? 'active'
+                : 'unknown'),
+        mandateReference: json['mandateReference'] as String?,
+        cadenceConfirmed: json['cadenceConfirmed'] as bool? ?? true,
       );
 
   Map<String, dynamic> toJson() => {
@@ -855,6 +896,7 @@ class RecurringSeries {
     'typicalAmountInr': typicalAmount.rupees,
     'cadenceDays': cadenceDays,
     'occurrenceCount': occurrenceCount,
+    'lastSeenOn': lastSeenOn?.toIso8601String(),
     'annualCostInr': annualCost.rupees,
     'nextExpectedOn': nextExpectedOn?.toIso8601String(),
     'categoryName': categoryName,
@@ -863,6 +905,10 @@ class RecurringSeries {
     'detectionSource': detectionSource,
     'isMandate': isMandate,
     'isUserEdited': isUserEdited,
+    'lifecycleStatus': lifecycleStatus,
+    'autopayStatus': autopayStatus,
+    'mandateReference': mandateReference,
+    'cadenceConfirmed': cadenceConfirmed,
   };
 }
 

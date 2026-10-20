@@ -137,4 +137,77 @@ void main() {
       expect(find.text('Kavlekar petroleum'), findsNothing);
     },
   );
+
+  testWidgets('shows an active mandate without inventing renewal details', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recurringReportProvider.overrideWith((ref) async {
+            return RecurringReport(
+              series: [
+                RecurringSeries(
+                  id: 'incomplete-mandate',
+                  displayName: 'A service',
+                  typicalAmount: Money.zero(),
+                  cadenceDays: 30,
+                  occurrenceCount: 1,
+                  annualCost: Money.zero(),
+                  isMandate: true,
+                  detectionSource: 'mandate',
+                  autopayStatus: 'active',
+                  cadenceConfirmed: false,
+                ),
+              ],
+              totalAnnual: Money.zero(),
+            );
+          }),
+        ],
+        child: const MaterialApp(home: SubscriptionsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('A service'), findsOneWidget);
+    expect(find.text('AutoPay'), findsOneWidget);
+    expect(find.text('Cadence not confirmed'), findsOneWidget);
+    expect(find.text('Amount not stated in the AutoPay alert'), findsOneWidget);
+    expect(find.textContaining('Renews around'), findsNothing);
+  });
+
+  testWidgets('marks an old observed series for review instead of showing a renewal date', (
+    tester,
+  ) async {
+    final lastSeen = DateTime.now().subtract(const Duration(days: 100));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recurringReportProvider.overrideWith((ref) async {
+            return RecurringReport(
+              series: [
+                RecurringSeries(
+                  id: 'stale-observed',
+                  displayName: 'Old service',
+                  typicalAmount: Money.fromRupees(499),
+                  cadenceDays: 30,
+                  occurrenceCount: 4,
+                  annualCost: Money.fromRupees(5988),
+                  lastSeenOn: lastSeen,
+                  nextExpectedOn: DateTime.now().add(const Duration(days: 3)),
+                ),
+              ],
+              totalAnnual: Money.fromRupees(5988),
+            );
+          }),
+        ],
+        child: const MaterialApp(home: SubscriptionsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Needs review'), findsOneWidget);
+    expect(find.textContaining('No recent charge detected since'), findsOneWidget);
+    expect(find.textContaining('Renews around'), findsNothing);
+  });
 }

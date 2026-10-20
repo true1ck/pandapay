@@ -66,6 +66,7 @@ TnC apply.`,
   assert.equal(result.fields.instrument, 'card');
   assert.equal(result.fields.reference, 'YhygiWSayx');
   assert.equal(result.fields.cadenceDays, 30);
+  assert.equal(result.fields.cadenceExplicit, false);
 });
 
 test('parses AutoPay de-activation / cancellation SMS', () => {

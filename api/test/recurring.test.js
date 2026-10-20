@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { detectRecurringSeries, annualCost, isUsableSubscriptionName } = require('../src/recurring');
+const {
+  detectRecurringSeries,
+  annualCost,
+  isUsableSubscriptionName,
+  nextExpectedAfter,
+} = require('../src/recurring');
 
 /**
  * Subscription detection is deliberately conservative, and these tests are
@@ -48,10 +53,39 @@ test('two charges are not enough', () => {
 });
 
 test('the next charge is predicted one cadence after the last', () => {
-  const series = detectRecurringSeries(monthly('Spotify', 119, '2026-06-01', 4));
+  const series = detectRecurringSeries(monthly('Spotify', 119, '2026-06-01', 4), {
+    now: new Date('2026-07-01T00:00:00Z'),
+  });
   const last = new Date(series[0].lastSeenOn);
   const next = new Date(series[0].nextExpectedOn);
-  assert.strictEqual(Math.round((next - last) / 86400000), 30);
+  assert.ok(next > last);
+});
+
+test('an old series rolls its next date forward instead of returning a past date', () => {
+  const series = detectRecurringSeries(monthly('Old Service', 499, '2025-06-01', 4), {
+    now: new Date('2026-10-20T12:00:00Z'),
+  });
+  const next = new Date(series[0].nextExpectedOn);
+  assert.ok(next > new Date('2026-10-20T00:00:00Z'));
+  assert.equal(
+    next.toISOString().slice(0, 10),
+    nextExpectedAfter(
+      new Date('2025-08-30T00:00:00Z'),
+      30,
+      new Date('2026-10-20T00:00:00Z'),
+    ).toISOString().slice(0, 10),
+  );
+});
+
+test('monthly dates preserve the billing day instead of drifting by 30 days', () => {
+  assert.equal(
+    nextExpectedAfter(
+      new Date('2026-01-31T00:00:00Z'),
+      30,
+      new Date('2026-03-01T00:00:00Z'),
+    ).toISOString().slice(0, 10),
+    '2026-03-31',
+  );
 });
 
 test('billing that drifts by a day or two is still one series', () => {

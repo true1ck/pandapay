@@ -77,14 +77,17 @@ function isDisplayableSubscriptionRecord(record) {
   const amount = Number(record?.typicalAmountInr ?? record?.typical_amount_inr);
   const cadence = Number(record?.cadenceDays ?? record?.cadence_days);
   const next = record?.nextExpectedOn ?? record?.next_expected_on;
+  const detectionSource = record?.detectionSource ?? record?.detection_source;
+  const autopayStatus = record?.autopayStatus ?? record?.autopay_status;
+  const activeMandate = detectionSource === 'mandate' && autopayStatus === 'active';
   return (
     isUsableSubscriptionName(name) &&
     Number.isFinite(amount) &&
-    amount > 0 &&
+    (amount > 0 || activeMandate) &&
     Number.isInteger(cadence) &&
     cadence >= MIN_CADENCE_DAYS &&
     cadence <= MAX_CADENCE_DAYS &&
-    Boolean(next)
+    (Boolean(next) || activeMandate)
   );
 }
 
@@ -130,6 +133,45 @@ function daysBetween(a, b) {
 }
 
 /**
+ * Return the next scheduled occurrence after today.
+ *
+ * A recurring row can be read long after its last observed charge. Returning
+ * `last + cadence` forever leaves an obviously expired date on the card. We
+ * keep the cadence-based model, but roll the display date forward to the next
+ * cycle while leaving the last observed charge available to the UI for stale
+ * or missed-payment review.
+ */
+function nextExpectedAfter(date, cadenceDays, now = new Date()) {
+  let next = new Date(date);
+  next.setUTCHours(0, 0, 0, 0);
+  const anchorDay = next.getUTCDate();
+  const calendarMonthly = cadenceDays >= 26 && cadenceDays <= 32;
+  const calendarYearly = cadenceDays >= 350;
+  const advance = () => {
+    if (calendarYearly) {
+      const year = next.getUTCFullYear() + 1;
+      const month = next.getUTCMonth();
+      const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      next = new Date(Date.UTC(year, month, Math.min(anchorDay, lastDay)));
+      return;
+    }
+    if (calendarMonthly) {
+      const year = next.getUTCFullYear();
+      const month = next.getUTCMonth() + 1;
+      const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      next = new Date(Date.UTC(year, month, Math.min(anchorDay, lastDay)));
+      return;
+    }
+    next.setUTCDate(next.getUTCDate() + Math.round(cadenceDays));
+  };
+  advance();
+  const today = new Date(now);
+  today.setUTCHours(0, 0, 0, 0);
+  while (next <= today) advance();
+  return next;
+}
+
+/**
  * Groups transactions by normalized merchant and returns the groups that
  * look like a subscription.
  *
@@ -141,7 +183,7 @@ function daysBetween(a, b) {
  * alongside a monthly one, a refund-and-recharge) drags a mean far enough
  * to either invent a pattern or destroy a real one.
  */
-function detectRecurringSeries(rows) {
+function detectRecurringSeries(rows, { now = new Date() } = {}) {
   const byMerchant = new Map();
   for (const row of rows) {
     if (!isUsableSubscriptionName(row.merchant_name)) continue;
@@ -184,8 +226,7 @@ function detectRecurringSeries(rows) {
     if (!regular) continue;
 
     const last = dates[dates.length - 1];
-    const next = new Date(last);
-    next.setDate(next.getDate() + Math.round(cadence));
+    const next = nextExpectedAfter(last, cadence, now);
 
     const latest = consistent[consistent.length - 1];
     series.push({
@@ -225,6 +266,7 @@ module.exports = {
   detectRecurringSeries,
   merchantSeriesKey,
   annualCost,
+  nextExpectedAfter,
   isUsableSubscriptionName,
   isDisplayableSubscriptionRecord,
   MIN_OCCURRENCES,

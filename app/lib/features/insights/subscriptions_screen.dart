@@ -25,7 +25,9 @@ bool _isDisplayableSubscription(RecurringSeries series) {
   if (name.length < 2 || !RegExp(r'[A-Za-z]{2,}').hasMatch(name)) {
     return false;
   }
-  if (series.typicalAmount.paise <= 0 || series.nextExpectedOn == null) {
+  final incompleteActiveMandate = series.isMandate && series.hasActiveAutoPay;
+  if ((!incompleteActiveMandate && series.typicalAmount.paise <= 0) ||
+      (!incompleteActiveMandate && series.nextExpectedOn == null)) {
     return false;
   }
   // Raw UPI VPAs containing '@' are peer/merchant transfer handles, not subscriptions
@@ -134,8 +136,8 @@ class SubscriptionsScreen extends ConsumerWidget {
                 icon: Icons.autorenew_rounded,
                 title: 'No confirmed subscriptions found yet',
                 message:
-                    'PandaPay shows a service only when it has a real merchant name, '
-                    'amount, and a predictable renewal date.',
+                    'PandaPay shows recurring services with a real merchant name. '
+                    'Active AutoPay alerts may still be waiting for amount or cadence details.',
                 onRefresh: () async => ref.invalidate(recurringReportProvider),
               );
             }
@@ -173,7 +175,7 @@ class SubscriptionsScreen extends ConsumerWidget {
                         const SizedBox(width: AppSpace.sm),
                         Expanded(
                           child: Text(
-                            'Only confirmed services with a renewal date are shown.',
+                            'Renewal dates are shown only when the charge pattern or AutoPay alert confirms them.',
                             style: BambooFonts.ui(
                               11.5,
                               color: BambooInk.ink500,
@@ -213,6 +215,7 @@ class SubscriptionsScreen extends ConsumerWidget {
         amountInr: draft.amountInr,
         cadenceDays: draft.cadenceDays,
         nextExpectedOn: draft.nextExpectedOn,
+        autopayStatus: draft.autopayStatus,
       );
       ref.invalidate(recurringReportProvider);
       if (context.mounted) {
@@ -235,12 +238,14 @@ class _SubscriptionDraft {
   final double amountInr;
   final int cadenceDays;
   final DateTime nextExpectedOn;
+  final String autopayStatus;
 
   const _SubscriptionDraft({
     required this.displayName,
     required this.amountInr,
     required this.cadenceDays,
     required this.nextExpectedOn,
+    required this.autopayStatus,
   });
 }
 
@@ -256,6 +261,7 @@ class _AddSubscriptionDialogState extends State<_AddSubscriptionDialog> {
   final _nameController = TextEditingController();
   final _amountController = TextEditingController();
   int _cadenceDays = 30;
+  String _autopayStatus = 'unknown';
   DateTime _nextExpectedOn = _dateAfterCycle(30);
   bool _renewalDateEdited = false;
 
@@ -392,6 +398,16 @@ class _AddSubscriptionDialogState extends State<_AddSubscriptionDialog> {
                             _FormFieldGroup(
                               title: 'Next renewal',
                               child: _renewalDateField(),
+                            ),
+                            const SizedBox(height: AppSpace.md),
+                            _FormFieldGroup(
+                              title: 'AutoPay status',
+                              child: _AutoPaySelector(
+                                value: _autopayStatus,
+                                onChanged: (value) => setState(
+                                  () => _autopayStatus = value,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -558,6 +574,7 @@ class _AddSubscriptionDialogState extends State<_AddSubscriptionDialog> {
         amountInr: double.parse(_amountController.text.trim()),
         cadenceDays: _cadenceDays,
         nextExpectedOn: _nextExpectedOn,
+        autopayStatus: _autopayStatus,
       ),
     );
   }
@@ -689,6 +706,55 @@ class _CycleOption extends StatelessWidget {
         ),
       ),
     ),
+  );
+}
+
+class _AutoPaySelector extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _AutoPaySelector({required this.value, required this.onChanged});
+
+  static const _labels = <String, String>{
+    'unknown': 'Not confirmed',
+    'active': 'Active',
+    'cancelled': 'Cancelled',
+  };
+
+  @override
+  Widget build(BuildContext context) => DropdownButtonFormField<String>(
+    initialValue: _labels.containsKey(value) ? value : 'unknown',
+    isExpanded: true,
+    decoration: InputDecoration(
+      filled: true,
+      fillColor: BambooInk.slate.withValues(alpha: 0.035),
+      prefixIcon: const Icon(Icons.bolt_outlined, color: BambooInk.ink700),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: BambooInk.slate),
+      ),
+    ),
+    style: BambooFonts.ui(14, weight: FontWeight.w500, color: BambooInk.ink900),
+    items: _labels.entries
+        .map(
+          (entry) => DropdownMenuItem<String>(
+            value: entry.key,
+            child: Text(entry.value),
+          ),
+        )
+        .toList(),
+    onChanged: (next) {
+      if (next != null) onChanged(next);
+    },
   );
 }
 
@@ -865,6 +931,18 @@ class _SeriesCard extends ConsumerWidget {
     'Dec',
   ];
 
+  static String _formatDate(DateTime date) =>
+      '${date.day} ${_months[date.month - 1]} ${date.year}';
+
+  static DateTime _nextEditableDate(DateTime date, int cadenceDays) {
+    var next = DateUtils.dateOnly(date);
+    final today = DateUtils.dateOnly(DateTime.now());
+    while (next.isBefore(today)) {
+      next = next.add(Duration(days: cadenceDays));
+    }
+    return next;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final next = series.nextExpectedOn;
@@ -938,7 +1016,9 @@ class _SeriesCard extends ConsumerWidget {
               children: [
                 _InfoPill(
                   icon: Icons.schedule_rounded,
-                  label: series.cadenceLabel,
+                  label: series.cadenceConfirmed
+                      ? series.cadenceLabel
+                      : 'Cadence not confirmed',
                   color: _subscriptionAccent,
                   background: _subscriptionTint,
                 ),
@@ -949,12 +1029,19 @@ class _SeriesCard extends ConsumerWidget {
                     color: _subscriptionAccent,
                     background: _subscriptionTint,
                   ),
-                if (series.isMandate)
+                if (series.hasActiveAutoPay)
                   const _InfoPill(
                     icon: Icons.bolt_rounded,
                     label: 'AutoPay',
                     color: _subscriptionAccent,
                     background: _subscriptionTint,
+                  ),
+                if (series.needsReview)
+                  const _InfoPill(
+                    icon: Icons.warning_amber_rounded,
+                    label: 'Needs review',
+                    color: Color(0xFF9B6500),
+                    background: Color(0xFFFFF3D6),
                   ),
               ],
             ),
@@ -962,10 +1049,10 @@ class _SeriesCard extends ConsumerWidget {
             Text(
               series.typicalAmount.paise > 0
                   ? '${series.annualCost.format(hidePaise: true)} estimated per year'
-                  : 'Amount not stated in the SMS',
+                  : 'Amount not stated in the AutoPay alert',
               style: BambooFonts.ui(12, color: BambooInk.ink500),
             ),
-            if (next != null) ...[
+            if (next != null && !series.needsReview) ...[
               const SizedBox(height: AppSpace.xs),
               Row(
                 children: [
@@ -978,6 +1065,29 @@ class _SeriesCard extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       'Renews around ${next.day} ${_months[next.month - 1]} ${next.year}',
+                      style: BambooFonts.ui(
+                        12,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (series.needsReview && series.lastSeenOn != null) ...[
+              const SizedBox(height: AppSpace.xs),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.history_toggle_off_rounded,
+                    size: 16,
+                    color: Color(0xFF9B6500),
+                  ),
+                  const SizedBox(width: AppSpace.xs),
+                  Expanded(
+                    child: Text(
+                      'No recent charge detected since ${_formatDate(series.lastSeenOn!)}',
                       style: BambooFonts.ui(
                         12,
                         weight: FontWeight.w600,
@@ -1055,8 +1165,11 @@ class _SeriesCard extends ConsumerWidget {
       text: series.typicalAmount.rupees.toStringAsFixed(2),
     );
     final cadence = TextEditingController(text: series.cadenceDays.toString());
-    var next =
-        series.nextExpectedOn ?? DateTime.now().add(const Duration(days: 30));
+    var autopayStatus = series.hasActiveAutoPay ? 'active' : series.autopayStatus;
+    var next = _nextEditableDate(
+      series.nextExpectedOn ?? DateTime.now().add(const Duration(days: 30)),
+      series.cadenceDays,
+    );
     final formKey = GlobalKey<FormState>();
     final saved = await showDialog<bool>(
       context: context,
@@ -1119,20 +1232,39 @@ class _SeriesCard extends ConsumerWidget {
                       ),
                     ),
                     subtitle: Text(
-                      '${next.day} ${_months[next.month - 1]} ${next.year}',
+                      _formatDate(next),
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                     onTap: () async {
                       final picked = await showDatePicker(
                         context: context,
                         initialDate: next,
-                        firstDate: DateTime(2000),
+                        firstDate: DateUtils.dateOnly(DateTime.now()),
                         lastDate: DateTime(2100),
                       );
                       if (picked != null) {
                         setDialogState(() => next = picked);
                       }
                     },
+                  ),
+                  const SizedBox(height: AppSpace.sm),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'AutoPay status',
+                      style: BambooFonts.ui(
+                        13.5,
+                        weight: FontWeight.w600,
+                        color: BambooInk.ink900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.xs),
+                  _AutoPaySelector(
+                    value: autopayStatus,
+                    onChanged: (value) => setDialogState(
+                      () => autopayStatus = value,
+                    ),
                   ),
                 ],
               ),
@@ -1165,15 +1297,19 @@ class _SeriesCard extends ConsumerWidget {
               amountInr: double.parse(amount.text),
               cadenceDays: int.parse(cadence.text),
               nextExpectedOn: next,
+              autopayStatus: autopayStatus,
             );
+        if (!context.mounted) return;
         ref.invalidate(recurringReportProvider);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Subscription updated.')));
       } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+        }
       }
     }
     name.dispose();
@@ -1210,14 +1346,17 @@ class _SeriesCard extends ConsumerWidget {
       await ref
           .read(spendReportsRepositoryProvider)!
           .dismissRecurring(series.id);
+      if (!context.mounted) return;
       ref.invalidate(recurringReportProvider);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Subscription hidden.')));
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
+      }
     }
   }
 }

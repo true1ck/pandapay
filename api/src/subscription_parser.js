@@ -53,6 +53,10 @@ function cadenceDays(body) {
   return 30;
 }
 
+function hasExplicitCadence(body) {
+  return /weekly|every\s+week|fortnight|every\s+two\s+weeks|quarterly|every\s+quarter|three\s+months|half[-\s]?yearly|six\s+months|yearly|annual|every\s+year|12\s+months|monthly|every\s+month|30\s+days?/i.test(String(body || ''));
+}
+
 function merchantFromBody(body) {
   const text = String(body || '');
 
@@ -134,6 +138,7 @@ function parseSubscriptionMandate(sms) {
       merchant,
       amountInr: extractMandateAmount(body),
       cadenceDays: cadenceDays(body),
+      cadenceExplicit: hasExplicitCadence(body),
       instrument,
       ...(last4Match ? { last4: last4Match[1] } : {}),
       ...(extractVpa(body) ? { vpa: extractVpa(body) } : {}),

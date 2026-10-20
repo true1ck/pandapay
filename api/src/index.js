@@ -84,10 +84,16 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
       `UPDATE recurring_series
           SET is_active = false,
               dismissed_at = COALESCE(dismissed_at, now()),
+              lifecycle_status = 'cancelled',
+              autopay_status = 'cancelled',
+              mandate_reference = COALESCE($3, mandate_reference),
+              mandate_cancelled_at = now(),
               updated_at = now()
-        WHERE profile_id = $1 AND merchant_key = $2
+        WHERE profile_id = $1
+          AND merchant_key = $2
+          AND ($3::text IS NULL OR mandate_reference = $3 OR mandate_reference IS NULL)
         RETURNING id, detection_source`,
-      [userId, merchantKey]
+      [userId, merchantKey, fields.reference || null]
     );
     return result.rows[0] || null;
   }
@@ -106,14 +112,20 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
 
   const seenOn = new Date(occurred).toISOString().slice(0, 10);
   const cadenceDays = fields.cadenceDays || 30;
-  const nextExpected = new Date(new Date(occurred).getTime() + cadenceDays * 86400000).toISOString().slice(0, 10);
   const typicalAmount = fields.amountInr || 0;
+  const cadenceConfirmed = fields.cadenceExplicit !== false;
+  const nextExpected = cadenceConfirmed
+    ? new Date(new Date(occurred).getTime() + cadenceDays * 86400000).toISOString().slice(0, 10)
+    : null;
   const result = await client.query(
     `INSERT INTO recurring_series
        (profile_id, merchant_key, display_name, category_id, user_card_id,
         payment_method, typical_amount_inr, cadence_days, occurrence_count,
-        first_seen_on, last_seen_on, next_expected_on, detection_source)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9, $9, $10, 'mandate')
+        first_seen_on, last_seen_on, next_expected_on, detection_source,
+        lifecycle_status, autopay_status, mandate_reference, mandate_started_on,
+        cadence_confirmed)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9, $9, $10, 'mandate',
+             'active', 'active', $11, $9, $12)
      ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
        display_name = COALESCE(EXCLUDED.display_name, recurring_series.display_name),
        category_id = COALESCE(recurring_series.category_id, EXCLUDED.category_id),
@@ -131,6 +143,15 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
        last_seen_on = EXCLUDED.last_seen_on,
        next_expected_on = COALESCE(EXCLUDED.next_expected_on, recurring_series.next_expected_on),
        detection_source = 'mandate',
+       lifecycle_status = 'active',
+       autopay_status = 'active',
+       mandate_reference = COALESCE(EXCLUDED.mandate_reference, recurring_series.mandate_reference),
+       mandate_started_on = COALESCE(recurring_series.mandate_started_on, EXCLUDED.mandate_started_on),
+       mandate_cancelled_at = NULL,
+       cadence_confirmed = CASE
+         WHEN recurring_series.detection_source = 'observed' THEN recurring_series.cadence_confirmed
+         ELSE EXCLUDED.cadence_confirmed
+       END,
        is_active = true,
        dismissed_at = NULL,
        updated_at = now()
@@ -146,6 +167,8 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
       cadenceDays,
       seenOn,
       nextExpected,
+      fields.reference || null,
+      cadenceConfirmed,
     ],
   );
   return result.rows[0] || null;
@@ -4725,9 +4748,16 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
 
       const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
       const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
+      const statementDaySync = await importResolvers.syncStatementDayFromSms(client, req.userId, {
+        body,
+        patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
+        observedAt: occurred,
+        explicitUserCardId: userCardId,
+      });
       const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
         body,
         patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
+        explicitUserCardId: userCardId,
       });
       if (!parsed.ok) {
         // Limit alerts are not spend transactions, but an explicit credit
@@ -4765,6 +4795,8 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
           creditLimitUpdated: Boolean(limitSync?.updated),
           dueDateDetected: Boolean(dueDaySync),
           dueDayUpdated: Boolean(dueDaySync?.updated),
+          statementDateDetected: Boolean(statementDaySync),
+          statementDayUpdated: Boolean(statementDaySync?.updated),
           subscriptionMandateDetected: Boolean(mandateRow),
           subscriptionMandateId: mandateRow?.id || null,
           parserFailure: { id: failure.rows[0].id },
@@ -4832,6 +4864,8 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
           patternId: parsed.patternId,
           dueDateDetected: Boolean(dueDaySync),
           dueDayUpdated: Boolean(dueDaySync?.updated),
+          statementDateDetected: Boolean(statementDaySync),
+          statementDayUpdated: Boolean(statementDaySync?.updated),
         };
       }
 
@@ -4847,6 +4881,8 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
           patternId: parsed.patternId,
           dueDateDetected: Boolean(dueDaySync),
           dueDayUpdated: Boolean(dueDaySync?.updated),
+          statementDateDetected: Boolean(statementDaySync),
+          statementDayUpdated: Boolean(statementDaySync?.updated),
         };
       }
       if (inserted.status !== 201) return inserted;
@@ -4856,6 +4892,8 @@ app.post('/transactions/from-sms', requireAuth, async (req, res) => {
         patternId: parsed.patternId,
         dueDateDetected: Boolean(dueDaySync),
         dueDayUpdated: Boolean(dueDaySync?.updated),
+        statementDateDetected: Boolean(statementDaySync),
+        statementDayUpdated: Boolean(statementDaySync?.updated),
         ...inserted,
       };
     });
@@ -4913,6 +4951,57 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
 
       const results = [];
       let dueDatesUpdated = 0;
+      let statementDaysUpdated = 0;
+
+      // Spend uploads are intentionally current-month-first, but billing
+      // detection should prefer the previous statement cycle.  Otherwise an
+      // October alert can fill statement_day before the September history is
+      // examined.  Prefer September, then August, then the nearest older
+      // cycle; use the current month only when no history is present.
+      const now = new Date();
+      const nowParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(now);
+      const nowYear = Number(nowParts.find((part) => part.type === 'year')?.value);
+      const nowMonth = Number(nowParts.find((part) => part.type === 'month')?.value);
+      const nowMonthIndex = nowYear * 12 + nowMonth - 1;
+      const statementCandidates = [];
+      for (let i = 0; i < messages.length; i += 1) {
+        const message = messages[i] || {};
+        if (!message.body || typeof message.body !== 'string') continue;
+        const occurred = message.occurredAt ? new Date(message.occurredAt) : null;
+        if (!occurred || Number.isNaN(occurred.getTime())) continue;
+        const detected = importResolvers.extractStatementDate(message.body, occurred);
+        if (!detected) continue;
+        const parts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+        }).formatToParts(occurred);
+        const year = Number(parts.find((part) => part.type === 'year')?.value);
+        const month = Number(parts.find((part) => part.type === 'month')?.value);
+        const distance = nowMonthIndex - (year * 12 + month - 1);
+        statementCandidates.push({ index: i, distance });
+      }
+      statementCandidates.sort((a, b) => {
+        const rank = (distance) => distance === 1 ? 0
+          : distance === 2 ? 1
+            : distance >= 3 ? 2
+              : distance === 0 ? 3 : 4;
+        return rank(a.distance) - rank(b.distance)
+          || a.distance - b.distance
+          || a.index - b.index;
+      });
+      for (const candidate of statementCandidates) {
+        const message = messages[candidate.index];
+        const occurred = new Date(message.occurredAt);
+        const synced = await importResolvers.syncStatementDayFromSms(client, req.userId, {
+          body: message.body,
+          patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, message.sender),
+          observedAt: occurred,
+          explicitUserCardId: message.userCardId,
+        });
+        if (synced?.updated) statementDaysUpdated += 1;
+      }
+
       for (let i = 0; i < messages.length; i += 1) {
         const { sender, body, userCardId, occurredAt, categoryId, rail } = messages[i] || {};
         // userCardId is no longer required per message — see
@@ -4933,11 +5022,15 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           continue;
         }
 
+        const statementDateDetected = Boolean(
+          importResolvers.extractStatementDate(body, occurred),
+        );
         const parsed = parseSmsAgainstPatterns(patterns.rows, { sender, body });
         const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
         const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
           body,
           patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
+          explicitUserCardId: userCardId,
         });
         if (dueDaySync?.updated) dueDatesUpdated += 1;
         if (!parsed.ok) {
@@ -4964,6 +5057,8 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
             reason: parsed.reason,
             dueDateDetected: Boolean(dueDaySync),
             dueDayUpdated: Boolean(dueDaySync?.updated),
+            statementDateDetected,
+            statementDayUpdated: false,
             subscriptionMandateDetected: Boolean(mandateRow),
             subscriptionMandateId: mandateRow?.id || null,
           });
@@ -5012,6 +5107,8 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
             needsReviewItemId: inserted.needsReviewItemId,
             dueDateDetected: Boolean(dueDaySync),
             dueDayUpdated: Boolean(dueDaySync?.updated),
+            statementDateDetected,
+            statementDayUpdated: false,
           });
         } else if (inserted.status === 200 && inserted.duplicate) {
           results.push({
@@ -5021,6 +5118,8 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
             transaction: inserted.transaction,
             dueDateDetected: Boolean(dueDaySync),
             dueDayUpdated: Boolean(dueDaySync?.updated),
+            statementDateDetected,
+            statementDayUpdated: false,
           });
         } else if (inserted.status === 201) {
           results.push({
@@ -5029,6 +5128,8 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
             transactionId: inserted.transaction.id,
             dueDateDetected: Boolean(dueDaySync),
             dueDayUpdated: Boolean(dueDaySync?.updated),
+            statementDateDetected,
+            statementDayUpdated: false,
           });
         } else {
           results.push({
@@ -5051,6 +5152,7 @@ app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
           invalid: results.filter((r) => r.outcome === 'invalid').length,
           error: results.filter((r) => r.outcome === 'error').length,
           dueDatesUpdated,
+          statementDaysUpdated,
         },
       };
     });
@@ -6591,9 +6693,17 @@ app.get('/recurring', requireAuth, async (req, res) => {
              occurrence_count = EXCLUDED.occurrence_count,
              first_seen_on = COALESCE(recurring_series.first_seen_on, EXCLUDED.first_seen_on),
              last_seen_on = EXCLUDED.last_seen_on,
+             next_expected_on = CASE
+               WHEN recurring_series.user_edited THEN recurring_series.next_expected_on
+               ELSE EXCLUDED.next_expected_on
+             END,
              detection_source = CASE
                WHEN recurring_series.detection_source IN ('mandate', 'manual') THEN recurring_series.detection_source
                ELSE 'observed'
+             END,
+             autopay_status = CASE
+               WHEN recurring_series.detection_source = 'mandate' THEN recurring_series.autopay_status
+               ELSE COALESCE(recurring_series.autopay_status, 'unknown')
              END,
              is_active = CASE WHEN recurring_series.detection_source = 'mandate' AND recurring_series.is_active = false THEN false ELSE recurring_series.is_active END,
              updated_at = now()`,
@@ -6610,13 +6720,17 @@ app.get('/recurring', requireAuth, async (req, res) => {
                 rs.cadence_days, rs.occurrence_count, rs.first_seen_on, rs.last_seen_on,
                 TO_CHAR(rs.next_expected_on, 'YYYY-MM-DD') AS next_expected_on,
                 rs.category_id, rs.user_card_id, rs.payment_method,
-                rs.detection_source, rs.user_edited,
+                rs.detection_source, rs.user_edited, rs.lifecycle_status,
+                rs.autopay_status, rs.mandate_reference, rs.cadence_confirmed,
                 sc.name AS category_name, cp.name AS card_name, uc.nickname AS card_nickname
            FROM recurring_series rs
            LEFT JOIN spend_categories sc ON sc.id = rs.category_id
            LEFT JOIN user_cards uc ON uc.id = rs.user_card_id
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
-          WHERE rs.profile_id = $1 AND rs.is_active AND rs.dismissed_at IS NULL
+          WHERE rs.profile_id = $1
+            AND rs.is_active
+            AND rs.dismissed_at IS NULL
+            AND rs.lifecycle_status = 'active'
           ORDER BY (rs.typical_amount_inr * 365 / rs.cadence_days) DESC`,
         [req.userId]
       );
@@ -6643,6 +6757,10 @@ app.get('/recurring', requireAuth, async (req, res) => {
         detectionSource: r.detection_source || 'observed',
         isMandate: r.detection_source === 'mandate',
         isUserEdited: r.user_edited,
+        lifecycleStatus: r.lifecycle_status || 'active',
+        autopayStatus: r.autopay_status || (r.detection_source === 'mandate' ? 'active' : 'unknown'),
+        mandateReference: r.mandate_reference || null,
+        cadenceConfirmed: r.cadence_confirmed !== false,
         annualCostInr: annualCost({
           typicalAmountInr: Number(r.typical_amount_inr),
           cadenceDays: r.cadence_days,
@@ -6663,6 +6781,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
 
 app.post('/recurring', requireAuth, async (req, res) => {
   const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
+  const autopayStatus = req.body?.autopayStatus || 'unknown';
   const name = typeof displayName === 'string' ? displayName.trim() : '';
   const amount = Number(typicalAmountInr);
   const cadence = Number(cadenceDays);
@@ -6674,6 +6793,7 @@ app.post('/recurring', requireAuth, async (req, res) => {
   if (!isUsableSubscriptionName(name) || name.length > 80 ||
       !Number.isFinite(amount) || amount <= 0 || amount > 10000000 ||
       ![30, 365].includes(cadence) ||
+      !['active', 'cancelled', 'unknown'].includes(autopayStatus) ||
       !dateIsValid) {
     return res.status(400).json({ error: 'invalid_subscription' });
   }
@@ -6686,8 +6806,8 @@ app.post('/recurring', requireAuth, async (req, res) => {
       `INSERT INTO recurring_series
          (profile_id, merchant_key, display_name, typical_amount_inr,
           cadence_days, occurrence_count, first_seen_on, last_seen_on,
-          next_expected_on, detection_source, user_edited)
-       VALUES ($1, $2, $3, $4, $5, 0, NULL, NULL, $6, 'manual', true)
+          next_expected_on, detection_source, user_edited, autopay_status)
+       VALUES ($1, $2, $3, $4, $5, 0, NULL, NULL, $6, 'manual', true, $7)
        ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          typical_amount_inr = EXCLUDED.typical_amount_inr,
@@ -6695,11 +6815,16 @@ app.post('/recurring', requireAuth, async (req, res) => {
          next_expected_on = EXCLUDED.next_expected_on,
          detection_source = 'manual',
          user_edited = true,
+         lifecycle_status = 'active',
+         autopay_status = EXCLUDED.autopay_status,
+         mandate_reference = NULL,
+         mandate_started_on = NULL,
+         mandate_cancelled_at = NULL,
          is_active = true,
          dismissed_at = NULL,
          updated_at = now()
        RETURNING id`,
-      [req.userId, merchantKey, name, amount, cadence, nextExpectedOn]
+      [req.userId, merchantKey, name, amount, cadence, nextExpectedOn, autopayStatus]
     ));
     res.status(201).json({ id: result.rows[0].id });
   } catch (err) {
@@ -6710,18 +6835,21 @@ app.post('/recurring', requireAuth, async (req, res) => {
 
 app.patch('/recurring/:id', requireAuth, async (req, res) => {
   const { displayName, typicalAmountInr, cadenceDays, nextExpectedOn } = req.body || {};
+  const autopayStatus = req.body?.autopayStatus || 'unknown';
   if (typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 80 ||
       !Number.isFinite(Number(typicalAmountInr)) || Number(typicalAmountInr) <= 0 || Number(typicalAmountInr) > 10000000 ||
       !Number.isInteger(Number(cadenceDays)) || Number(cadenceDays) < 1 || Number(cadenceDays) > 3650 ||
+      !['active', 'cancelled', 'unknown'].includes(autopayStatus) ||
       typeof nextExpectedOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(nextExpectedOn) || Number.isNaN(Date.parse(`${nextExpectedOn}T00:00:00Z`))) {
     return res.status(400).json({ error: 'invalid_subscription' });
   }
   try {
     const result = await withUserClient(req.userId, (client) => client.query(
       `UPDATE recurring_series SET display_name = $1, typical_amount_inr = $2,
-              cadence_days = $3, next_expected_on = $4, user_edited = true
-        WHERE id = $5 AND profile_id = $6 AND dismissed_at IS NULL RETURNING id`,
-      [displayName.trim(), Number(typicalAmountInr), Number(cadenceDays), nextExpectedOn, req.params.id, req.userId]
+              cadence_days = $3, next_expected_on = $4,
+              autopay_status = $5, user_edited = true
+        WHERE id = $6 AND profile_id = $7 AND dismissed_at IS NULL RETURNING id`,
+      [displayName.trim(), Number(typicalAmountInr), Number(cadenceDays), nextExpectedOn, autopayStatus, req.params.id, req.userId]
     ));
     if (!result.rows.length) return res.status(404).json({ error: 'not_found' });
     res.json({ ok: true });
@@ -6742,7 +6870,8 @@ app.post('/recurring/:id/dismiss', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `UPDATE recurring_series SET dismissed_at = now(), is_active = false
+        `UPDATE recurring_series SET dismissed_at = now(), is_active = false,
+              lifecycle_status = 'hidden'
           WHERE id = $1 AND profile_id = $2
           RETURNING id`,
         [req.params.id, req.userId]

@@ -3,8 +3,8 @@ import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -3956,6 +3956,39 @@ int _medianInt(List<int> values) {
   return sorted[sorted.length ~/ 2];
 }
 
+DateTime _nextRecurringDateAfter(
+  DateTime lastSeen,
+  int cadenceDays, {
+  DateTime? now,
+}) {
+  var next = DateUtils.dateOnly(lastSeen);
+  final anchorDay = next.day;
+  final calendarMonthly = cadenceDays >= 26 && cadenceDays <= 32;
+  final calendarYearly = cadenceDays >= 350;
+
+  DateTime advance(DateTime value) {
+    if (calendarYearly) {
+      final year = value.year + 1;
+      final lastDay = DateTime(year, value.month + 2, 0).day;
+      return DateTime(year, value.month, anchorDay.clamp(1, lastDay));
+    }
+    if (calendarMonthly) {
+      final year = value.month == 12 ? value.year + 1 : value.year;
+      final month = value.month == 12 ? 1 : value.month + 1;
+      final lastDay = DateTime(year, month + 1, 0).day;
+      return DateTime(year, month, anchorDay.clamp(1, lastDay));
+    }
+    return value.add(Duration(days: cadenceDays));
+  }
+
+  next = advance(next);
+  final today = DateUtils.dateOnly(now ?? DateTime.now());
+  while (!next.isAfter(today)) {
+    next = advance(next);
+  }
+  return next;
+}
+
 Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
   final rows = await _cachedTransactionsForReports(ref);
   if (rows == null) return null;
@@ -4026,7 +4059,8 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
         cadenceDays: cadence,
         occurrenceCount: items.length,
         annualCost: annual,
-        nextExpectedOn: latest.occurredAt.add(Duration(days: cadence)),
+        lastSeenOn: latest.occurredAt,
+        nextExpectedOn: _nextRecurringDateAfter(latest.occurredAt, cadence),
         categoryName: latest.categoryName,
         cardName: latest.cardDisplayName,
         paymentMethod: latest.instrumentKnown ? latest.instrument.label : null,
