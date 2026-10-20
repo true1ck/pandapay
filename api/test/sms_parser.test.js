@@ -309,6 +309,19 @@ test('refunds and cashbacks are incoming, while credit-card bill receipts stay t
   assert.equal(cashback.fields.instrument, 'wallet');
 });
 
+test('offers and service notices never become transactions', () => {
+  for (const [sender, body] of [
+    ['TX-WAKFTT-P', 'Treat yourself to Wakefit sofa at just Rs.28,125. Grab offer now.'],
+    ['BP-SBICRD-S', 'Trxns. of combined value Rs.40016 are eligible for conversion to Flexipay EMIs.'],
+    ['VA-SBIBNK-S', 'YONO services is being blocked due to suspicious txns in your account. Visit nearest branch.'],
+  ]) {
+    assert.equal(parseSmsAgainstPatterns([], { sender, body }).reason, 'non_transaction_message');
+  }
+  assert.equal(parseSmsAgainstPatterns([], {
+    sender: 'BANK', body: 'Cashback of INR 80 credited to your wallet on 03-10-26.'
+  }).ok, true);
+});
+
 test('credit-limit and balance notices are not treated as incoming money', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'BANK',
