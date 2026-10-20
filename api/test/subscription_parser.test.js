@@ -132,3 +132,14 @@ test('parses UPI mandate alert with UMN and frequency', () => {
   assert.equal(result.fields.reference, '123456789');
 });
 
+test('does not turn an investment or broker funding mandate into a subscription', () => {
+  for (const body of [
+    'SIP mandate registered for Groww. Rs.5000 will be debited every month.',
+    'AutoPay activated for adding funds to Zerodha. Maximum limit INR 10000.',
+  ]) {
+    const result = parseSubscriptionMandate({ body });
+    assert.equal(result.ok, false, body);
+    assert.equal(result.reason, 'investment_mandate', body);
+  }
+});
+

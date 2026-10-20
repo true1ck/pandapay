@@ -1,5 +1,50 @@
 const { normalizeMerchant } = require('./reward_math');
 
+// Financial-account movements must not become subscriptions just because a
+// bank statement repeats them. Broker funding, SIPs, mutual-fund purchases,
+// and generic transfer labels are money movements, not recurring services.
+// Keep this separate from isUsableSubscriptionName: a user may still choose
+// to manually track a legitimate paid product whose name happens to contain
+// a broker brand.
+const FINANCIAL_MOVEMENT_NAME = /\b(?:bank\s+transfer|transfer\s+to|transfer\s+between|cash\s+withdrawal|credit\s+card\s+bill\s+payment|investment\s+contribution|money\s+received|salary|refund|cashback|dividend|zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|demat|trading|broker(?:age|ing)?|portfolio|mutual\s+fund|systematic\s+investment|sip|stocks?|shares?|equity|investment)\b/i;
+
+const FINANCIAL_PROVIDER = /\b(?:zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities|demat|trading|broker(?:age|ing)?|portfolio)\b/i;
+const INVESTMENT_INTENT = /\b(?:sip|systematic\s+investment|mutual\s+fund|investment|invested|invest(?:ment)?\s+account|add(?:ing|ed)?\s+(?:money|funds?)|funds?\s+(?:added|credited|transferred|deposited)|top[ -]?up|fund(?:ed|ing)|buy|bought|purchase(?:d)?|units?|stocks?|shares?|equity)\b/i;
+const MOVEMENT_VERB = /\b(?:debit(?:ed)?|paid|sent|transferred|withdrawn|invested|purchased|bought|credited|received|deposited|add(?:ing|ed)?|funded|top[ -]?up)\b/i;
+const FEE_ONLY = /\b(?:fee|fees|charge|charges|commission|brokerage\s+fee|annual\s+maintenance)\b/i;
+
+/**
+ * True when text describes money entering an investment/broker account or an
+ * investment purchase. This is intentionally stricter than matching a broker
+ * name: a broker can also send a genuine premium-product subscription alert.
+ */
+function isInvestmentFundingMessage(value) {
+  const text = String(value || '');
+  if (!text || !MOVEMENT_VERB.test(text)) return false;
+  const explicitInvestment = INVESTMENT_INTENT.test(text);
+  const brokerFunding = FINANCIAL_PROVIDER.test(text) &&
+    /\b(?:add(?:ing|ed)?|fund(?:s|ed|ing)?|top[ -]?up|debit(?:ed)?|paid|sent|transferred|credited|deposited)\b/i.test(text);
+  if (!explicitInvestment && !brokerFunding) return false;
+  // Brokerage/maintenance fees are consumption, even though the provider is
+  // financial. They must remain ordinary spend rows for later categorisation.
+  if (FEE_ONLY.test(text) && !/\b(?:sip|mutual\s+fund|investment|invested|add(?:ed)?\s+(?:money|funds?))\b/i.test(text)) {
+    return false;
+  }
+  return true;
+}
+
+function isInvestmentMandateMessage(value) {
+  const text = String(value || '');
+  return FINANCIAL_PROVIDER.test(text) &&
+    /\b(?:autopay|auto[- ]?pay|mandate|standing\s+instruction|sip)\b/i.test(text) &&
+    INVESTMENT_INTENT.test(text) &&
+    !FEE_ONLY.test(text);
+}
+
+function isNonSubscriptionFinancialName(value) {
+  return FINANCIAL_MOVEMENT_NAME.test(String(value || ''));
+}
+
 /**
  * Subscription detection: finding the charges that repeat, from the user's
  * own history.
@@ -82,6 +127,7 @@ function isDisplayableSubscriptionRecord(record) {
   const activeMandate = detectionSource === 'mandate' && autopayStatus === 'active';
   return (
     isUsableSubscriptionName(name) &&
+    !isNonSubscriptionFinancialName(name) &&
     Number.isFinite(amount) &&
     (amount > 0 || activeMandate) &&
     Number.isInteger(cadence) &&
@@ -186,7 +232,9 @@ function nextExpectedAfter(date, cadenceDays, now = new Date()) {
 function detectRecurringSeries(rows, { now = new Date() } = {}) {
   const byMerchant = new Map();
   for (const row of rows) {
+    if (row.entry_kind && row.entry_kind !== 'spend') continue;
     if (!isUsableSubscriptionName(row.merchant_name)) continue;
+    if (isNonSubscriptionFinancialName(row.merchant_name)) continue;
     const key = merchantSeriesKey(row.merchant_name);
     // A charge with no merchant name can't be grouped with anything — two
     // unnamed ₹499 charges are not evidence of a subscription.
@@ -270,6 +318,9 @@ module.exports = {
   nextExpectedAfter,
   isUsableSubscriptionName,
   isDisplayableSubscriptionRecord,
+  isInvestmentFundingMessage,
+  isInvestmentMandateMessage,
+  isNonSubscriptionFinancialName,
   MIN_OCCURRENCES,
   AMOUNT_TOLERANCE,
   CADENCE_TOLERANCE,

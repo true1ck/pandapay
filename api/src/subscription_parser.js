@@ -1,5 +1,9 @@
 const { extractVpa } = require('./merchant_category');
-const { isUsableSubscriptionName } = require('./recurring');
+const {
+  isUsableSubscriptionName,
+  isInvestmentFundingMessage,
+  isInvestmentMandateMessage,
+} = require('./recurring');
 
 // This parser handles subscription e-mandates, Standing Instructions (SI),
 // and AutoPay notifications across Indian issuers (Axis, HDFC, ICICI, SBI, Kotak, UPI).
@@ -109,6 +113,11 @@ function parseSubscriptionMandate(sms) {
   if (!body) return { ok: false, reason: 'empty_body' };
   if (body.length > 20000) return { ok: false, reason: 'body_too_long' };
   if (NON_MANDATE.test(body)) return { ok: false, reason: 'non_mandate_alert' };
+  // A SIP/investment mandate is not a consumer subscription. It must not
+  // create a renewal card or later be counted as recurring spend.
+  if (isInvestmentFundingMessage(body) || isInvestmentMandateMessage(body)) {
+    return { ok: false, reason: 'investment_mandate' };
+  }
   if (!MANDATE.test(body)) return { ok: false, reason: 'no_mandate_match' };
 
   const isCancelled = CANCELLATION.test(body);

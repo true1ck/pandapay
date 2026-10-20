@@ -19,6 +19,7 @@ const KNOWN_FIELDS = [
   'direction', 'mcc', 'availableBalance', 'balance',
 ];
 const MAX_MESSAGE_LENGTH = 20000;
+const { isInvestmentFundingMessage } = require('./recurring');
 
 // OTP/security alerts can contain the same words as a transaction alert
 // ("txn", "INR", "card ending") but must never become spending records.
@@ -440,8 +441,7 @@ function parseBuiltInNonSpendDebit(sms) {
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_non_spend_debit' };
   const cashWithdrawal = /\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn)\b/i.test(body);
   const investment = !cashWithdrawal
-    && /\b(?:sip|mutual\s+fund)\b/i.test(body)
-    && /\b(?:debited|paid|transferred|invested)\b/i.test(body);
+    && isInvestmentFundingMessage(body);
   if (!cashWithdrawal && !investment) return { ok: false, reason: 'no_non_spend_debit' };
   const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (!amountMatch) return { ok: false, reason: 'no_non_spend_amount' };
@@ -458,6 +458,49 @@ function parseBuiltInNonSpendDebit(sms) {
       ...(accountLast4 ? { accountLast4 } : {}),
       instrument: cashWithdrawal && last4Match ? 'debit_card' : 'upi_bank',
       entryKind: cashWithdrawal ? 'transfer' : 'investment',
+    }, body),
+  };
+}
+
+/** Broker acknowledgements are investment movements, not income or spend. */
+function parseBuiltInInvestmentMovement(sms) {
+  const body = String(sms?.body || '');
+  if (!isInvestmentFundingMessage(body)) {
+    return { ok: false, reason: 'no_investment_movement_match' };
+  }
+  if (/\b(?:autopay|auto[- ]?pay|mandate|standing\s+instruction)\b/i.test(body) &&
+      !/\b(?:debited|credited|paid|transferred|invested|purchased|bought|funds?\s+added|money\s+added)\b/i.test(body)) {
+    return { ok: false, reason: 'investment_mandate_setup' };
+  }
+  if (/\b(?:will|shall|would|to)\s+be\s+(?:added|credited|deposited|transferred)\b/i.test(body)) {
+    return { ok: false, reason: 'future_investment_movement' };
+  }
+  if (/\b(?:declined|failed|failure|cancelled|canceled|pending|processing|reversed|refund(?:ed)?)\b/i.test(body)) {
+    return { ok: false, reason: 'unsuccessful_investment_movement' };
+  }
+  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return { ok: false, reason: 'no_investment_amount' };
+  const amountInr = Number(amountMatch[1].replace(/,/g, ''));
+  if (!Number.isFinite(amountInr) || amountInr <= 0) {
+    return { ok: false, reason: 'no_investment_amount' };
+  }
+  const provider = body.match(/\b(?:zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money|indmoney|5paisa|motilal\s+oswal|icici\s+direct|hdfc\s+securities)\b/i)?.[0];
+  const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
+  const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?|utr)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
+  const accountLast4 = extractAccountLast4(body);
+  const bankInstrument = /\b(?:upi|imps|neft|rtgs|bank|a\/?c\.?)\b/i.test(body);
+  return {
+    ok: true,
+    patternId: null,
+    parserKind: 'builtin_investment_movement',
+    fields: withAvailableBalance({
+      amountInr,
+      merchant: provider || 'Investment contribution',
+      ...(accountLast4 ? { accountLast4 } : {}),
+      ...(dateMatch ? { date: dateMatch[1] } : {}),
+      ...(referenceMatch ? { reference: referenceMatch[1] } : {}),
+      instrument: bankInstrument ? 'upi_bank' : 'other',
+      entryKind: 'investment',
     }, body),
   };
 }
@@ -752,6 +795,8 @@ function parseSmsAgainstPatterns(patterns, sms) {
   // receipt is intentionally retained as a non-spend transfer.
   const billPayment = parseBuiltInCardBillPayment(sms);
   if (billPayment.ok) return billPayment;
+  const investmentMovement = parseBuiltInInvestmentMovement(sms);
+  if (investmentMovement.ok) return investmentMovement;
   const nonSpendDebit = parseBuiltInNonSpendDebit(sms);
   if (nonSpendDebit.ok) return nonSpendDebit;
   const accountCredit = parseBuiltInAccountCredit(sms);

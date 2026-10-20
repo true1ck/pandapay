@@ -226,3 +226,23 @@ test('annual cost converts any cadence to a yearly figure', () => {
   assert.strictEqual(Math.round(annualCost({ typicalAmountInr: 649, cadenceDays: 30 })), 7896);
   assert.strictEqual(Math.round(annualCost({ typicalAmountInr: 1499, cadenceDays: 365 })), 1499);
 });
+
+test('broker funding and generic transfers never become recurring subscriptions', () => {
+  const rows = [
+    txn('Bank transfer', 5000, '2026-05-01'),
+    txn('Bank transfer', 5000, '2026-05-31'),
+    txn('Bank transfer', 5000, '2026-06-30'),
+    txn('Groww', 5000, '2026-05-01'),
+    txn('Groww', 5000, '2026-05-31'),
+    txn('Groww', 5000, '2026-06-30'),
+  ];
+  assert.equal(detectRecurringSeries(rows).length, 0);
+});
+
+test('non-spend transaction kinds are rejected defensively by the detector', () => {
+  const rows = monthly('Netflix', 649, '2026-05-03', 3).map((row) => ({
+    ...row,
+    entry_kind: 'investment',
+  }));
+  assert.equal(detectRecurringSeries(rows).length, 0);
+});

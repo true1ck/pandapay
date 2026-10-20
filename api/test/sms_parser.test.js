@@ -471,6 +471,32 @@ test('a posted mutual fund SIP is an investment, not consumption', () => {
   assert.equal(result.fields.accountLast4, '1797');
 });
 
+test('broker funding debits are investments, not spend or subscriptions', () => {
+  const messages = [
+    'Your A/c *1797 is debited by Rs.5000 towards Groww. Ref 131234538577',
+    'INR 5000 transferred to Zerodha for adding funds from HDFC Bank A/c *1797.',
+    'Funds added to your Upstox trading account for Rs.2500. UTR 123456789012.',
+  ];
+  for (const body of messages) {
+    const result = parseSmsAgainstPatterns([], { sender: 'HDFCBK', body });
+    assert.equal(result.ok, true, body);
+    assert.equal(result.fields.entryKind, 'investment', body);
+    assert.notEqual(result.fields.entryKind, 'spend', body);
+    assert.notEqual(result.fields.merchant, 'Bank transfer', body);
+  }
+});
+
+test('broker fund acknowledgements are not incoming salary or income', () => {
+  const result = parseSmsAgainstPatterns([], {
+    sender: 'ZERODHA',
+    body: 'Funds credited to your Zerodha trading account: Rs.5000.00. Ref 123456789012.',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.parserKind, 'builtin_investment_movement');
+  assert.equal(result.fields.entryKind, 'investment');
+  assert.equal(result.fields.merchant, 'Zerodha');
+});
+
 test('explicit debit-card purchase alerts stay debit-card transactions', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'HDFCBK',
