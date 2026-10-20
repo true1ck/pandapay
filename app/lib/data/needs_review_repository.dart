@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'local/app_database.dart';
+import 'local_sms_parser.dart';
 
 enum NeedsReviewKind { transaction, commitment }
 
@@ -72,6 +73,9 @@ void addNeedsReviewSync(
   String namespace,
   NeedsReviewItem item,
 ) {
+  if (item.kind == NeedsReviewKind.transaction &&
+      LocalSmsParser.isNonTransactionNoise(item.sender, item.body))
+    return;
   database.db.execute(
     'CREATE TABLE IF NOT EXISTS local_needs_review(namespace TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,id))',
   );
@@ -132,7 +136,7 @@ class NeedsReviewRepository {
   Future<List<NeedsReviewItem>> fetchAll() async {
     if (loadDatabase != null) {
       final db = await _database();
-      return db.db
+      final items = db.db
           .select('SELECT payload FROM local_needs_review WHERE namespace=?', [
             namespace,
           ])
@@ -141,21 +145,32 @@ class NeedsReviewRepository {
               jsonDecode(r['payload'] as String) as Map<String, dynamic>,
             ),
           )
-          .toList()
+          .toList();
+      final noise = items.where(_isNoise).map((item) => item.id).toList();
+      if (noise.isNotEmpty) await removeAll(noise);
+      return items.where((item) => !_isNoise(item)).toList()
         ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
     }
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_needsReviewKey) ?? const [];
-    return raw
+    final items = raw
         .map(
           (s) =>
               NeedsReviewItem.fromJson(jsonDecode(s) as Map<String, dynamic>),
         )
-        .toList()
+        .toList();
+    final noise = items.where(_isNoise).map((item) => item.id).toList();
+    if (noise.isNotEmpty) await removeAll(noise);
+    return items.where((item) => !_isNoise(item)).toList()
       ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
   }
 
+  bool _isNoise(NeedsReviewItem item) =>
+      item.kind == NeedsReviewKind.transaction &&
+      LocalSmsParser.isNonTransactionNoise(item.sender, item.body);
+
   Future<void> add(NeedsReviewItem item) async {
+    if (_isNoise(item)) return;
     if (loadDatabase != null) {
       final db = await _database();
       final current = await fetchAll();

@@ -92,7 +92,35 @@ class LocalSmsReviewDraft {
 /// formats remain durable intake for server parsing; they never become guessed
 /// spending. Values are local observations until server reconciliation.
 class LocalSmsParser {
-  static const version = 4;
+  static const version = 5;
+
+  /// Messages with a quoted price or a card name are not necessarily a
+  /// payment. Apply this before either upload or manual review, including to
+  /// rows captured by an older app version.
+  static bool isNonTransactionNoise(String sender, String body) {
+    final text = body.replaceAll(RegExp(r'\s+'), ' ');
+    final completed = _re(
+      r'\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase)\b[\s\S]{0,45}\b(?:successful|completed))',
+    ).hasMatch(text);
+    if (completed ||
+        (_re(r'\b(?:cashback|refund)\b').hasMatch(text) &&
+            _re(r'\b(?:credited|received|deposited)\b').hasMatch(text))) {
+      return false;
+    }
+    final offer = _re(
+      r'\b(?:offer|sale|discount|cashback|voucher|coupon|rewarding|shop\s+at|grab|buy\s+now|apply\s+now|prices?\s+slashed|treat\s+yourself|festive\s+shopping|eligible\s+for\s+conversion|convert\s+(?:to|into)\s+emi|international\s+roaming\s+pack)\b|\b(?:get|earn|save)\b[\s\S]{0,45}\b(?:reward|cashback|off|free|voucher)\b',
+    ).hasMatch(text);
+    final serviceNotice = _re(
+      r'\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account)\b',
+    ).hasMatch(text);
+    final promotionalSender = _re(r'-p\s*$').hasMatch(sender);
+    return offer ||
+        serviceNotice ||
+        (promotionalSender &&
+            !_re(
+              r'\b(?:txn|transaction|debited|credited|spent|paid|charged|received|refund|statement|bill\s+due)\b',
+            ).hasMatch(text));
+  }
 
   /// True only for a deposit/current/savings-bank alert. Account-shaped
   /// suffixes from insurance, demat, brokerage, investment, and card alerts
@@ -545,6 +573,14 @@ class LocalSmsParser {
         _re(
           r'\b(?:will|shall|to)\s+be\s+(?:auto[- ]?)?(?:debited|deducted|charged)\b',
         ).hasMatch(body);
+    if (isNonTransactionNoise(sender, body)) {
+      return observation(
+        null,
+        LocalSmsEventType.promotion,
+        LocalSmsDisposition.localIgnore,
+        ['non_transaction_message'],
+      );
+    }
     if (hasBillMarker &&
         !autopaySetup &&
         (!hasCompletedMovement || futureDebit)) {

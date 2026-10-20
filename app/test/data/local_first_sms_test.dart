@@ -32,33 +32,35 @@ void main() {
     db.close();
   });
 
-  test(
-    'batch capture retains the first established due day across reminders',
-    () {
-      cache.financialStore.replaceCards('user:account-a', [
-        UserCard.fromJson({
-          'id': 'card',
-          'card_product_id': 'product',
-          'card_name': 'Card',
-          'last4': '7788',
-          'is_default': false,
-          'statement_day': 5,
-        }),
-      ]);
-      SmsImportStore(cache.financialStore).captureBatch('user:account-a', [
-        for (final day in [20, 21])
-          QueuedSms(
-            sender: 'VM-ICICIB',
-            body:
-                'Your credit card XX7788 payment due on $day-Oct-2026. Total amount due INR 3000.',
-            receivedAt: DateTime(2026, 10, 16),
-          ),
-      ]);
-      final cards = cache.financialStore.entities('user:account-a', 'cards');
-      expect(UserCard.fromJson(cards.single).dueDay, 20);
-      expect(SmsIntakeRepository(db).pending('user:account-a'), hasLength(2));
-    },
-  );
+  test('batch capture keeps both reminders without guessing a card due day', () {
+    cache.financialStore.replaceCards('user:account-a', [
+      UserCard.fromJson({
+        'id': 'card',
+        'card_product_id': 'product',
+        'card_name': 'Card',
+        'last4': '7788',
+        'is_default': false,
+        'statement_day': 5,
+      }),
+    ]);
+    SmsImportStore(cache.financialStore).captureBatch('user:account-a', [
+      for (final day in [20, 21])
+        QueuedSms(
+          sender: 'VM-ICICIB',
+          body:
+              'Your credit card XX7788 payment due on $day-Oct-2026. Total amount due INR 3000.',
+          receivedAt: DateTime(2026, 10, 16),
+        ),
+    ]);
+    final cards = cache.financialStore.entities('user:account-a', 'cards');
+    expect(UserCard.fromJson(cards.single).dueDay, isNull);
+    final observations = cache.financialStore.entities(
+      'user:account-a',
+      'sms_observations',
+    );
+    expect(observations, hasLength(2));
+    expect(SmsIntakeRepository(db).pending('user:account-a'), hasLength(2));
+  });
 
   test(
     'high-confidence promotion and AutoPay messages stop locally without spending',
@@ -271,7 +273,7 @@ void main() {
   );
 
   test(
-    'a locally captured reminder supplies due dates on a cold offline read',
+    'a locally captured reminder does not claim an unverified due day offline',
     () async {
       cache.financialStore.replaceCards('user:account-a', [
         UserCard.fromJson({
@@ -315,8 +317,9 @@ void main() {
       final due = await container
           .read(paymentsDueProvider.future)
           .timeout(const Duration(seconds: 5));
-      expect(due.single.card.dueDay, 20);
-      expect(due.single.loggedThisCycle.paise, 0);
+      expect(due, isEmpty);
+      final cards = cache.financialStore.entities('user:account-a', 'cards');
+      expect(UserCard.fromJson(cards.single).dueDay, isNull);
     },
   );
 }

@@ -133,7 +133,7 @@ class SmsIntakeRepository {
     return database.db
         .select(
           'SELECT * FROM sms_intake WHERE namespace=?${readyOnly ? ' AND next_attempt<=?' : ''} '
-        '${billingPriority ? "ORDER BY CASE WHEN received_at>=? AND received_at<? THEN 0 WHEN received_at>=? AND received_at<? THEN 1 ELSE 2 END, CASE WHEN lower(body) LIKE '%statement%generated%' OR lower(body) LIKE '%statement%ready%' OR lower(body) LIKE '%statement%available%' OR lower(body) LIKE '%bill%generated%' THEN 0 ELSE 1 END, received_at, id" : 'ORDER BY received_at, id'} LIMIT ?',
+          '${billingPriority ? "ORDER BY CASE WHEN received_at>=? AND received_at<? THEN 0 WHEN received_at>=? AND received_at<? THEN 1 WHEN received_at>=? THEN 2 ELSE 3 END, CASE WHEN lower(body) LIKE '%statement%generated%' OR lower(body) LIKE '%statement%ready%' OR lower(body) LIKE '%statement%available%' OR lower(body) LIKE '%bill%generated%' THEN 0 ELSE 1 END, received_at, id" : 'ORDER BY received_at, id'} LIMIT ?',
           [
             namespace,
             if (readyOnly) today.millisecondsSinceEpoch,
@@ -141,6 +141,7 @@ class SmsIntakeRepository {
             if (billingPriority) currentStart.millisecondsSinceEpoch,
             if (billingPriority) olderStart.millisecondsSinceEpoch,
             if (billingPriority) previousStart.millisecondsSinceEpoch,
+            if (billingPriority) currentStart.millisecondsSinceEpoch,
             limit,
           ],
         )

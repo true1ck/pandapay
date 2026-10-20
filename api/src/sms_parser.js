@@ -31,6 +31,15 @@ function isSecurityOrOtpMessage(body) {
     || /\bvalid\s+(?:for|till|until)\b/.test(text);
 }
 
+function isNonTransactionNoise(sender, body) {
+  const text = String(body || '').replace(/\s+/g, ' ');
+  const completed = /\b(?:your\s+(?:txn|transaction)\s+of|txn\s+(?:of|for)|(?:has\s+been|was|is)\s+(?:debited|credited|charged|paid)|(?:debited|credited|spent|paid|charged|transferred|withdrawn|received)\s*(?:₹|rs\.?|inr)|(?:recharge|payment|transaction|purchase)\b[\s\S]{0,45}\b(?:successful|completed))/i.test(text);
+  if (completed || (/\b(?:cashback|refund)\b/i.test(text) && /\b(?:credited|received|deposited)\b/i.test(text))) return false;
+  return /\b(?:offer|sale|discount|cashback|voucher|coupon|rewarding|shop\s+at|grab|buy\s+now|apply\s+now|prices?\s+slashed|treat\s+yourself|festive\s+shopping|eligible\s+for\s+conversion|convert\s+(?:to|into)\s+emi|international\s+roaming\s+pack)\b|\b(?:get|earn|save)\b[\s\S]{0,45}\b(?:reward|cashback|off|free|voucher)\b/i.test(text)
+    || /\b(?:services?\s+(?:is|are|has\s+been)\s+(?:blocked|suspended)|visit\s+(?:your\s+)?nearest\s+branch|suspicious\s+(?:txns?|transactions?)\s+in\s+your\s+account)\b/i.test(text)
+    || (/-p\s*$/i.test(String(sender || '')) && !/\b(?:txn|transaction|debited|credited|spent|paid|charged|received|refund|statement|bill\s+due)\b/i.test(text));
+}
+
 function isRejectedTransaction(body) {
   const text = String(body || '').toLowerCase();
   return /\b(?:declined|failed|failure|reversed|reversal|refund(?:ed)?|cancelled|canceled|credited)\b/.test(text);
@@ -731,6 +740,9 @@ function patternPriority(pattern, result) {
 function parseSmsAgainstPatterns(patterns, sms) {
   if (isSecurityOrOtpMessage(sms?.body)) {
     return { ok: false, reason: 'security_message' };
+  }
+  if (isNonTransactionNoise(sms?.sender, sms?.body)) {
+    return { ok: false, reason: 'non_transaction_message' };
   }
   // Run before the generic "credited" rejection: a positive card-payment
   // receipt is intentionally retained as a non-spend transfer.

@@ -198,6 +198,55 @@ void main() {
     expect(result?.disposition, LocalSmsDisposition.localIgnore);
   });
 
+  test(
+    'screens screenshot promotions and service notices without hiding real transactions',
+    () {
+      const ignored = <(String, String)>[
+        (
+          'TX-WAKFTT-P',
+          'Luxury on a budget? Treat yourself to Wakefit sofa at just Rs.28,125. Grab offer https://gs.im/x',
+        ),
+        (
+          'VA-LIFSTL-P',
+          'Make Festive Shopping More Rewarding! Shop at Lifestyle stores and get vouchers worth Rs.10,000.',
+        ),
+        (
+          'BP-SBICRD-S',
+          'Dear Cardholder, trxns. of combined value Rs.40016 are eligible for conversion to Flexipay EMIs. Click link.',
+        ),
+        (
+          'VA-SBIBNK-S',
+          'Dear SBI customer, RINB/YONO services is being blocked due to suspicious txns in your account. Visit nearest branch.',
+        ),
+        (
+          'AY-AIRTEL-P',
+          'Breaking news: 5-Din ka Airtel International Roaming pack. Payein sirf Rs.999.',
+        ),
+      ];
+      for (final (sender, body) in ignored) {
+        expect(
+          LocalSmsParser.isNonTransactionNoise(sender, body),
+          isTrue,
+          reason: body,
+        );
+      }
+      expect(
+        LocalSmsParser.isNonTransactionNoise(
+          'AD-FEDSCP-S',
+          'Your txn of ₹1,018.00 at 3 Rajdhani Parantha House on your credit card earned you 5% rewards!',
+        ),
+        isFalse,
+      );
+      expect(
+        LocalSmsParser.isNonTransactionNoise(
+          'VM-JIOINF-T',
+          'Recharge of Rs.349 successful. Get an additional recharge FREE.',
+        ),
+        isFalse,
+      );
+    },
+  );
+
   test('does not ignore a completed recharge that also contains an offer', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',

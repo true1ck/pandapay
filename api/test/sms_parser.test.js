@@ -669,6 +669,24 @@ test('synthetic live-SMS matrix auto-parses completed spend alerts and rejects n
   assert.equal(otp.reason, 'security_message');
 });
 
+test('promotional prices and service notices do not become transactions', () => {
+  const noise = [
+    ['TX-WAKFTT-P', 'Treat yourself to a sofa at just Rs.28,125. Grab offer today.'],
+    ['BP-SBICRD-S', 'Card trxns. of combined value Rs.40016 are eligible for conversion to EMIs.'],
+    ['VA-SBIBNK-S', 'YONO services is being blocked due to suspicious txns in your account. Visit nearest branch.'],
+  ];
+  for (const [sender, body] of noise) {
+    const result = parseSmsAgainstPatterns([], { sender, body });
+    assert.equal(result.ok, false, body);
+    assert.equal(result.reason, 'non_transaction_message', body);
+  }
+  const real = parseSmsAgainstPatterns([], {
+    sender: 'VM-JIOINF-T',
+    body: 'Recharge of Rs.349 successful. Get an additional recharge FREE.',
+  });
+  assert.notEqual(real.reason, 'non_transaction_message');
+});
+
 test('Slice UPI credit-card alerts remain card transactions, not bank-account UPI', () => {
   const result = parseSmsAgainstPatterns([], {
     sender: 'VM-SLCBNK-S',
