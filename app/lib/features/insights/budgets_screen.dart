@@ -423,14 +423,7 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
                             color: spendingCategoryVisual(c.name).accent,
                           ),
                           const SizedBox(width: AppSpace.sm),
-                          Text(
-                            c.isSubcategory
-                                ? '${categories.firstWhereOrNull((parent) =>
-                                      parent.id == c.parentCategoryId ||
-                                      parent.id == c.parentUserCategoryId,
-                                    )?.name ?? ''} · ${c.name}'
-                                : c.name,
-                          ),
+                          Text(_budgetCategoryLabel(c, categories)),
                         ],
                       ),
                     ),
@@ -595,6 +588,20 @@ IconData _iconForScope(BudgetScope scope) => switch (scope) {
   BudgetScope.category => Icons.category_rounded,
   BudgetScope.card => Icons.credit_card_rounded,
 };
+
+String _budgetCategoryLabel(
+  SpendCategory category,
+  List<SpendCategory> categories,
+) {
+  if (!category.isSubcategory) return category.name;
+  for (final parent in categories) {
+    if (parent.id == category.parentCategoryId ||
+        parent.id == category.parentUserCategoryId) {
+      return '${parent.name} · ${category.name}';
+    }
+  }
+  return category.name;
+}
 
 class _BudgetVisualBadge extends StatelessWidget {
   final SpendingVisual visual;
