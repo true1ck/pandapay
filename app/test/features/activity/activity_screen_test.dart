@@ -215,7 +215,7 @@ void main() {
       repo: _FakeUserCardsRepository(const []),
       cards: const [],
     );
-    expect(find.text('No activity yet'), findsOneWidget);
+    expect(find.text('No activity this month'), findsOneWidget);
   });
 
   testWidgets('groups transactions by day and shows a spend summary', (
@@ -346,15 +346,15 @@ void main() {
     ]);
     await _pump(tester, repo: repo, cards: const []);
 
-    await tester.tap(find.text('Date range'));
+    await tester.tap(find.text('This month').first);
     await tester.pumpAndSettle();
-    expect(find.text('This month'), findsOneWidget);
+    expect(find.text('This month').last, findsOneWidget);
     expect(find.text('Last month'), findsOneWidget);
     expect(find.text('Last 90 days'), findsOneWidget);
 
-    await tester.tap(find.text('This month'));
+    await tester.tap(find.text('Last month'));
     await tester.pumpAndSettle();
-    expect(find.text('This month'), findsOneWidget);
+    expect(find.text('Last month'), findsOneWidget);
     expect(repo.lastFetchArgs!.first['from'], isNotNull);
     expect(repo.lastFetchArgs!.first['to'], isNotNull);
   });

@@ -943,24 +943,56 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
       return false;
     }).toList();
 
-    InputDecoration inputDecoration(String label) => InputDecoration(
-      labelText: label,
-      labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
-      filled: true,
-      fillColor: BambooInk.glassFillOnPaper,
-      border: OutlineInputBorder(
+    final amountText = _amountController.text.trim().replaceAll(',', '');
+    final amount = double.tryParse(amountText);
+    final amountError =
+        amount == null ||
+            !amount.isFinite ||
+            amount <= 0 ||
+            amount > 9999999999.99
+        ? 'Enter a valid amount greater than zero.'
+        : null;
+    final selectedCardId = _cardId ?? matchingCard?.id;
+    final cardError =
+        _isPhysicalCardInstrument(_instrument) && selectedCardId == null
+        ? eligibleCards.isEmpty
+              ? 'Add a matching card or choose another payment method.'
+              : 'Choose the card used for this transaction.'
+        : null;
+
+    InputDecoration inputDecoration(String label, {String? errorText}) {
+      final border = OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
-      ),
-    );
+        borderSide: BorderSide(
+          color: errorText == null
+              ? BambooInk.hairlineOnPaper
+              : AppColors.error,
+          width: errorText == null ? 1 : 1.6,
+        ),
+      );
+      return InputDecoration(
+        labelText: label,
+        labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+        errorText: errorText,
+        errorStyle: BambooFonts.ui(12, color: AppColors.error),
+        filled: true,
+        fillColor: BambooInk.glassFillOnPaper,
+        border: border,
+        enabledBorder: border,
+        focusedBorder: border.copyWith(
+          borderSide: BorderSide(
+            color: errorText == null ? BambooInk.slate : AppColors.error,
+            width: 1.6,
+          ),
+        ),
+        errorBorder: border.copyWith(
+          borderSide: const BorderSide(color: AppColors.error, width: 1.6),
+        ),
+        focusedErrorBorder: border.copyWith(
+          borderSide: const BorderSide(color: AppColors.error, width: 1.8),
+        ),
+      );
+    }
 
     return Container(
       decoration: const BoxDecoration(
@@ -1004,11 +1036,12 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
             const SizedBox(height: AppSpace.lg),
             TextField(
               controller: _amountController,
+              onChanged: (_) => setState(() {}),
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-              decoration: inputDecoration('Amount (₹)'),
+              decoration: inputDecoration('Amount (₹)', errorText: amountError),
             ),
             const SizedBox(height: AppSpace.lg),
             TextField(
@@ -1082,6 +1115,7 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
                   _instrument == TxnInstrument.debitCard
                       ? 'Debit card'
                       : 'Credit card',
+                  errorText: cardError,
                 ),
                 items: [
                   for (final c in eligibleCards)
@@ -1117,10 +1151,17 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
               ),
               onPressed: () {
                 final amount = double.tryParse(_amountController.text.trim());
-                if (amount == null || amount <= 0) return;
+                if (amount == null ||
+                    !amount.isFinite ||
+                    amount <= 0 ||
+                    amount > 9999999999.99) {
+                  setState(() {});
+                  return;
+                }
                 final selectedCardId = _cardId ?? matchingCard?.id;
                 if (_isPhysicalCardInstrument(_instrument) &&
                     selectedCardId == null) {
+                  setState(() {});
                   return;
                 }
                 final merchant = _merchantController.text.trim();

@@ -15,4 +15,14 @@ void main() {
     );
     expect(ApiException('socket closed').statusCode, isNull);
   });
+
+  test('parses a safe server correlation id', () {
+    final error = ApiException(
+      'POST /statement-imports failed: 500 '
+      '{"error":"internal_error","requestId":"req-123"}',
+    );
+
+    expect(error.errorCode, 'internal_error');
+    expect(error.requestId, 'req-123');
+  });
 }

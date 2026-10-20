@@ -158,94 +158,153 @@ class _DocumentImportScreenState extends State<DocumentImportScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: BambooInk.paper,
-    appBar: AppBar(
-      title: Text(
-        widget.pdfEntry ? 'Import statement PDF' : 'Import spending history',
+  Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final importTheme = baseTheme.copyWith(
+      colorScheme: baseTheme.colorScheme.copyWith(
+        primary: BambooInk.slate,
+        onPrimary: BambooInk.lime,
+        secondary: BambooInk.jade,
+        onSecondary: Colors.white,
+        surface: BambooInk.paper,
+        onSurface: BambooInk.ink900,
+        onSurfaceVariant: BambooInk.ink500,
+        error: BambooInk.clayInk,
       ),
-    ),
-    body: AppBackground(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: switch (_step) {
-          _Step.pick => ImportFilePrompt(
-            icon: Icons.upload_file,
-            title: 'Bring your spending history',
-            message:
-                'Choose a PDF, CSV, TSV, Excel XLSX, or JSON export. Formats are detected on your device. You review and correct the data before importing.',
-            action: FilledButton(
-              onPressed: _pick,
-              child: const Text('Choose file'),
-            ),
+      scaffoldBackgroundColor: BambooInk.paper,
+      appBarTheme: baseTheme.appBarTheme.copyWith(
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: BambooFonts.heading(20, color: BambooInk.ink900),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: BambooInk.slate,
+          foregroundColor: BambooInk.lime,
+          disabledBackgroundColor: BambooInk.slate.withValues(alpha: .12),
+          disabledForegroundColor: BambooInk.ink500,
+          minimumSize: const Size.fromHeight(52),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
           ),
-          _Step.password => ListView(
-            children: [
-              Text(_document!.name),
-              if (_error != null) Text(_error!),
-              const Text(
-                'If this PDF is protected, enter its password. Leave blank otherwise. Files and passwords stay on this device.',
-              ),
-              TextField(
-                controller: _password,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Statement password (optional)',
-                ),
-              ),
-              FilledButton(
-                onPressed: _parse,
-                child: const Text('Unlock & parse'),
-              ),
-            ],
+          textStyle: BambooFonts.ui(16, weight: FontWeight.w600),
+        ),
+      ),
+      chipTheme: baseTheme.chipTheme.copyWith(
+        backgroundColor: BambooInk.paperMuted,
+        selectedColor: BambooInk.slate,
+        labelStyle: BambooFonts.ui(14, color: BambooInk.ink700),
+        secondaryLabelStyle: BambooFonts.ui(14, color: BambooInk.lime),
+        side: const BorderSide(color: BambooInk.hairlineOnPaper),
+      ),
+      inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
+        filled: true,
+        fillColor: BambooInk.paperMuted,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: BambooInk.jade, width: 1.5),
+        ),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: BambooInk.jade,
+        linearTrackColor: BambooInk.paperMuted,
+      ),
+    );
+    return Theme(
+      data: importTheme,
+      child: Scaffold(
+        backgroundColor: BambooInk.paper,
+        appBar: AppBar(
+          title: Text(
+            widget.pdfEntry
+                ? 'Import statement PDF'
+                : 'Import spending history',
           ),
-          _Step.parsing => const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                Text('Reading on-device…'),
-              ],
-            ),
-          ),
-          _Step.review => Column(
-            children: [
-              if (_session!.rows.isEmpty)
-                const Text(
-                  'No spending rows were recognized automatically. Use Columns and formats, or correct the unrecognized rows below. Summary-only documents cannot recreate transaction history.',
-                ),
-              Expanded(
-                child: ImportReviewPanel(
-                  key: ObjectKey(_session),
-                  session: _session!,
-                  configure: _configure,
-                  doneTitle: widget.pdfEntry
-                      ? 'Statement imported'
-                      : 'Import complete',
-                ),
-              ),
-            ],
-          ),
-          _Step.error => SingleChildScrollView(
-            child: Column(
-              children: [
-                Text(_error ?? 'Could not read this file.'),
-                if (_document?.kind == ImportDocumentKind.pdf)
-                  TextButton(
-                    onPressed: () => setState(() => _step = _Step.password),
-                    child: const Text('Try password again'),
-                  ),
-                FilledButton(
+        ),
+        body: AppBackground(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: switch (_step) {
+              _Step.pick => ImportFilePrompt(
+                icon: Icons.upload_file,
+                title: 'Bring your spending history',
+                message:
+                    'Choose a PDF, CSV, TSV, Excel XLSX, or JSON export. Formats are detected on your device. You review and correct the data before importing.',
+                action: FilledButton(
                   onPressed: _pick,
-                  child: const Text('Choose another file'),
+                  child: const Text('Choose file'),
                 ),
-              ],
-            ),
+              ),
+              _Step.password => ListView(
+                children: [
+                  Text(_document!.name),
+                  if (_error != null) Text(_error!),
+                  const Text(
+                    'If this PDF is protected, enter its password. Leave blank otherwise. Files and passwords stay on this device.',
+                  ),
+                  TextField(
+                    controller: _password,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Statement password (optional)',
+                    ),
+                  ),
+                  FilledButton(
+                    onPressed: _parse,
+                    child: const Text('Unlock & parse'),
+                  ),
+                ],
+              ),
+              _Step.parsing => const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    Text('Reading on-device…'),
+                  ],
+                ),
+              ),
+              _Step.review => Column(
+                children: [
+                  if (_session!.rows.isEmpty)
+                    const Text(
+                      'No spending rows were recognized automatically. Use Columns and formats, or correct the unrecognized rows below. Summary-only documents cannot recreate transaction history.',
+                    ),
+                  Expanded(
+                    child: ImportReviewPanel(
+                      key: ObjectKey(_session),
+                      session: _session!,
+                      configure: _configure,
+                      doneTitle: widget.pdfEntry
+                          ? 'Statement imported'
+                          : 'Import complete',
+                    ),
+                  ),
+                ],
+              ),
+              _Step.error => SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Text(_error ?? 'Could not read this file.'),
+                    if (_document?.kind == ImportDocumentKind.pdf)
+                      TextButton(
+                        onPressed: () => setState(() => _step = _Step.password),
+                        child: const Text('Try password again'),
+                      ),
+                    FilledButton(
+                      onPressed: _pick,
+                      child: const Text('Choose another file'),
+                    ),
+                  ],
+                ),
+              ),
+            },
           ),
-        },
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 ImportDocument _openDocument((Uint8List, String) data) {

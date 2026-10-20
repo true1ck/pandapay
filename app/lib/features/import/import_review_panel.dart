@@ -153,9 +153,13 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       if (mounted) setState(() => _done = true);
     } catch (error) {
       if (mounted) {
+        final message =
+            error is ApiException && error.errorCode == 'internal_error'
+            ? 'The server could not finish this import.${error.requestId == null ? '' : ' Reference: ${error.requestId}.'}'
+            : userFacingErrorMessage(error);
         setState(
           () => _error =
-              '${userFacingErrorMessage(error)} Your reviewed rows are retained. Retry continues safely.',
+              '$message Your reviewed rows are retained. Retry is safe.',
         );
       }
     } finally {
@@ -360,12 +364,16 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                           errorText: session.defaultTagsError,
                         ),
                         onChanged: (value) => setState(
-                          () => session.setDefaultTags(parseImportedTagNames(value)),
+                          () => session.setDefaultTags(
+                            parseImportedTagNames(value),
+                          ),
                         ),
                       ),
                       TextButton.icon(
                         key: const ValueKey('import-tag-selected'),
-                        onPressed: locked || selected.isEmpty ? null : _tagSelected,
+                        onPressed: locked || selected.isEmpty
+                            ? null
+                            : _tagSelected,
                         icon: const Icon(Icons.label_outline),
                         label: Text('Tag ${selected.length} selected rows'),
                       ),
@@ -817,11 +825,9 @@ class _ImportTransactionCard extends StatelessWidget {
                     width: 30,
                     height: 30,
                     decoration: BoxDecoration(
-                      color: selected
-                          ? const Color(0xFF00664F)
-                          : Colors.transparent,
+                      color: selected ? BambooInk.jade : Colors.transparent,
                       border: Border.all(
-                        color: selected ? const Color(0xFF00664F) : muted,
+                        color: selected ? BambooInk.jade : muted,
                         width: 2,
                       ),
                       borderRadius: BorderRadius.circular(3),
@@ -1115,6 +1121,128 @@ class _EditImportRowState extends State<_EditImportRow> {
   late TxnInstrument? _instrument = widget.row?.instrument;
   late String? _rail = widget.row?.rail;
   String? _error;
+  final Set<String> _confirmedReviewFields = {};
+
+  String? get _dateError {
+    final text = _date.text.trim();
+    final parts = RegExp(r'^(\d{4})-(\d{2})-(\d{2})(?:$|T| )').firstMatch(text);
+    final date = DateTime.tryParse(text);
+    if (date == null ||
+        parts == null ||
+        date.year != int.parse(parts.group(1)!) ||
+        date.month != int.parse(parts.group(2)!) ||
+        date.day != int.parse(parts.group(3)!) ||
+        date.year < 1900 ||
+        date.year > 2100) {
+      return 'Enter a real date between 1900 and 2100.';
+    }
+    return null;
+  }
+
+  String? get _amountError {
+    final text = _amount.text.trim();
+    final value = double.tryParse(text);
+    if (!RegExp(r'^\d+(?:\.\d{1,2})?$').hasMatch(text) ||
+        value == null ||
+        !value.isFinite ||
+        value <= 0 ||
+        value > 9999999999.99) {
+      return 'Enter a positive amount with up to two decimals.';
+    }
+    return null;
+  }
+
+  Map<String, String?> get _fieldErrors {
+    final reference = _bankReference.text.trim();
+    final tags = parseImportedTagNames(_tags.text);
+    final reviewHint = [
+      ...?widget.row?.reviewReasons,
+      if (widget.reason != null) widget.reason!,
+    ].join(' ').toLowerCase();
+    final dateNeedsReview =
+        reviewHint.contains('date') || reviewHint.contains('day/month');
+    final amountNeedsReview =
+        reviewHint.contains('amount') ||
+        reviewHint.contains('numeric column') ||
+        reviewHint.contains('payable');
+    final descriptionNeedsReview =
+        reviewHint.contains('description') ||
+        reviewHint.contains('merchant') ||
+        reviewHint.contains('narration');
+    return {
+      'date':
+          _dateError ??
+          (dateNeedsReview && !_confirmedReviewFields.contains('date')
+              ? 'Check this date against the source document.'
+              : null),
+      'description':
+          _description.text.trim().isEmpty || _description.text.length > 500
+          ? 'Enter a description with 1–500 characters.'
+          : descriptionNeedsReview &&
+                !_confirmedReviewFields.contains('description')
+          ? 'Check this description against the source document.'
+          : null,
+      'amount':
+          _amountError ??
+          (amountNeedsReview && !_confirmedReviewFields.contains('amount')
+              ? 'Check this amount against the source document.'
+              : null),
+      'sourceAccount': _sourceAccount.text.length > 200
+          ? 'Use 200 characters or fewer.'
+          : null,
+      'bankReference':
+          reference.isNotEmpty &&
+              !RegExp(r'^[a-zA-Z0-9-]{6,40}$').hasMatch(reference)
+          ? 'Use 6–40 letters, numbers, or hyphens.'
+          : null,
+      'categoryHint': _categoryHint.text.length > 120
+          ? 'Use 120 characters or fewer.'
+          : null,
+      'subcategoryHint': _subcategoryHint.text.length > 120
+          ? 'Use 120 characters or fewer.'
+          : null,
+      'tags': tags.length > 30 || tags.any((name) => name.length > 60)
+          ? 'Use up to 30 tags, each with 1–60 characters.'
+          : null,
+      'note': _note.text.length > 500 ? 'Use 500 characters or fewer.' : null,
+    };
+  }
+
+  InputDecoration _fieldDecoration(
+    String label, {
+    String? errorText,
+    String? helperText,
+    int? helperMaxLines,
+  }) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(
+        color: errorText == null ? BambooInk.hairlineOnPaper : AppColors.error,
+        width: errorText == null ? 1 : 1.6,
+      ),
+    );
+    return InputDecoration(
+      labelText: label,
+      helperText: helperText,
+      helperMaxLines: helperMaxLines,
+      errorText: errorText,
+      errorStyle: BambooFonts.ui(12, color: AppColors.error),
+      border: border,
+      enabledBorder: border,
+      focusedBorder: border.copyWith(
+        borderSide: BorderSide(
+          color: errorText == null ? BambooInk.slate : AppColors.error,
+          width: 1.6,
+        ),
+      ),
+      errorBorder: border.copyWith(
+        borderSide: const BorderSide(color: AppColors.error, width: 1.6),
+      ),
+      focusedErrorBorder: border.copyWith(
+        borderSide: const BorderSide(color: AppColors.error, width: 1.8),
+      ),
+    );
+  }
 
   String? _initialCategoryId() {
     final row = widget.row;
@@ -1188,28 +1316,16 @@ class _EditImportRowState extends State<_EditImportRow> {
   }
 
   void _save() {
-    final date = DateTime.tryParse(_date.text.trim());
-    final parts = RegExp(
-      r'^(\d{4})-(\d{2})-(\d{2})(?:$|T| )',
-    ).firstMatch(_date.text.trim());
-    final money = _amount.text.trim();
-    final value = double.tryParse(money);
-    if (date == null ||
-        parts == null ||
-        date.year != int.parse(parts.group(1)!) ||
-        date.month != int.parse(parts.group(2)!) ||
-        date.day != int.parse(parts.group(3)!) ||
-        !RegExp(r'^\d+(?:\.\d{1,2})?$').hasMatch(money) ||
-        value == null ||
-        !value.isFinite ||
-        value <= 0 ||
-        value > 9999999999.99) {
-      setState(
-        () => _error =
-            'Use a real YYYY-MM-DD date and a positive INR amount with up to two decimals.',
-      );
+    final fieldErrors = _fieldErrors;
+    final firstFieldError = fieldErrors.values.whereType<String>().firstOrNull;
+    if (firstFieldError != null) {
+      setState(() => _error = firstFieldError);
       return;
     }
+    final date = DateTime.tryParse(_date.text.trim());
+    final money = _amount.text.trim();
+    final value = double.tryParse(money);
+    if (date == null || value == null) return;
     final selectedCategory = widget.categories
         .where((category) => category.id == _selectedCategoryId)
         .firstOrNull;
@@ -1252,203 +1368,366 @@ class _EditImportRowState extends State<_EditImportRow> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Review transaction'),
-    content: ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.65,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (widget.reason != null) ...[
-              Text(
-                widget.reason!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final fieldErrors = _fieldErrors;
+    final maxDialogHeight = (media.size.height - media.viewInsets.bottom - 40)
+        .clamp(260.0, 760.0);
+    const fieldGap = SizedBox(height: 14);
+
+    return Dialog(
+      key: const ValueKey('import-edit-dialog'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      backgroundColor: BambooInk.paper,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: SizedBox(
+        key: const ValueKey('import-edit-dialog-panel'),
+        width: double.infinity,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxDialogHeight),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 16, 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Review transaction',
+                        style: BambooFonts.heading(21),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Check the original statement, correct any fields or transaction type, then save. The reviewed row is included automatically. A possible duplicate can also be kept or skipped.',
+              const Divider(height: 1),
+              Expanded(
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(24, 18, 24, 20),
+                  child: Column(
+                    children: [
+                      if (widget.reason != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: BambooInk.paperMuted,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.reason!,
+                                style: BambooFonts.ui(
+                                  14,
+                                  weight: FontWeight.w600,
+                                  color: BambooInk.clay,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Check the original statement, correct any fields or transaction type, then save. The reviewed row is included automatically.',
+                                style: BambooFonts.ui(
+                                  13,
+                                  color: BambooInk.ink500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        fieldGap,
+                      ],
+                      if (widget.raw != null) ...[
+                        SelectableText(widget.raw!),
+                        fieldGap,
+                      ],
+                      TextField(
+                        controller: _date,
+                        onChanged: (_) => setState(() {
+                          _confirmedReviewFields.add('date');
+                          _error = null;
+                        }),
+                        decoration: _fieldDecoration(
+                          'Date (YYYY-MM-DD, optional time)',
+                          errorText: fieldErrors['date'],
+                        ),
+                      ),
+                      fieldGap,
+                      TextField(
+                        controller: _description,
+                        onChanged: (_) => setState(() {
+                          _confirmedReviewFields.add('description');
+                          _error = null;
+                        }),
+                        decoration: _fieldDecoration(
+                          'Description',
+                          errorText: fieldErrors['description'],
+                        ),
+                      ),
+                      fieldGap,
+                      TextField(
+                        controller: _amount,
+                        onChanged: (_) => setState(() {
+                          _confirmedReviewFields.add('amount');
+                          _error = null;
+                        }),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: _fieldDecoration(
+                          'Amount (INR)',
+                          errorText: fieldErrors['amount'],
+                        ),
+                      ),
+                      fieldGap,
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        initialValue: _kind,
+                        decoration: const InputDecoration(
+                          labelText: 'Transaction type',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'spend',
+                            child: Text('Money out'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'income',
+                            child: Text('Money in'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'investment',
+                            child: Text('Investment'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'transfer',
+                            child: Text('Transfer'),
+                          ),
+                        ],
+                        onChanged: (value) => setState(() => _kind = value!),
+                      ),
+                      fieldGap,
+                      TextField(
+                        controller: _sourceAccount,
+                        maxLength: 200,
+                        onChanged: (_) => setState(() => _error = null),
+                        decoration: _fieldDecoration(
+                          'Source account / card label',
+                          helperText:
+                              'The account shown on the original statement.',
+                          helperMaxLines: 2,
+                          errorText: fieldErrors['sourceAccount'],
+                        ),
+                      ),
+                      fieldGap,
+                      TextField(
+                        controller: _bankReference,
+                        maxLength: 40,
+                        onChanged: (_) => setState(() => _error = null),
+                        decoration: _fieldDecoration(
+                          'Bank reference (optional)',
+                          helperText: '6–40 letters, numbers, or hyphens.',
+                          helperMaxLines: 2,
+                          errorText: fieldErrors['bankReference'],
+                        ),
+                      ),
+                      fieldGap,
+                      DropdownButtonFormField<String?>(
+                        key: const ValueKey('import-edit-category'),
+                        isExpanded: true,
+                        initialValue: _selectedCategoryId,
+                        decoration: const InputDecoration(
+                          labelText: 'PandaPay category',
+                          helperText:
+                              'Choose a category, or use automatic classification.',
+                          helperMaxLines: 2,
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Automatic classification'),
+                          ),
+                          for (final category in widget.categories)
+                            DropdownMenuItem<String?>(
+                              value: category.id,
+                              child: Text(
+                                _qualifiedCategoryName(
+                                  category,
+                                  widget.categories,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: _selectCategory,
+                      ),
+                      fieldGap,
+                      TextField(
+                        controller: _categoryHint,
+                        maxLength: 120,
+                        onChanged: (_) {
+                          if (_selectedCategoryId != null) {
+                            setState(() => _selectedCategoryId = null);
+                          } else {
+                            setState(() => _error = null);
+                          }
+                        },
+                        decoration: _fieldDecoration(
+                          'Category from source (optional)',
+                          errorText: fieldErrors['categoryHint'],
+                        ),
+                      ),
+                      fieldGap,
+                      TextField(
+                        controller: _subcategoryHint,
+                        maxLength: 120,
+                        onChanged: (_) {
+                          if (_selectedCategoryId != null) {
+                            setState(() => _selectedCategoryId = null);
+                          } else {
+                            setState(() => _error = null);
+                          }
+                        },
+                        decoration: _fieldDecoration(
+                          'Subcategory from source (optional)',
+                          errorText: fieldErrors['subcategoryHint'],
+                        ),
+                      ),
+                      fieldGap,
+                      TextField(
+                        key: const ValueKey('import-edit-tags'),
+                        controller: _tags,
+                        onChanged: (_) => setState(() => _error = null),
+                        decoration: _fieldDecoration(
+                          'Tags (optional)',
+                          helperText:
+                              'Separate names with semicolons, or paste a JSON list.',
+                          helperMaxLines: 2,
+                          errorText: fieldErrors['tags'],
+                        ),
+                      ),
+                      fieldGap,
+                      DropdownButtonFormField<TxnInstrument?>(
+                        isExpanded: true,
+                        initialValue: _instrument,
+                        decoration: const InputDecoration(
+                          labelText: 'Paid with',
+                        ),
+                        items: [
+                          const DropdownMenuItem<TxnInstrument?>(
+                            value: null,
+                            child: Text('Use account mapping'),
+                          ),
+                          for (final instrument in TxnInstrument.values)
+                            DropdownMenuItem<TxnInstrument?>(
+                              value: instrument,
+                              child: Text(instrument.label),
+                            ),
+                        ],
+                        onChanged: (value) =>
+                            setState(() => _instrument = value),
+                      ),
+                      fieldGap,
+                      DropdownButtonFormField<String?>(
+                        isExpanded: true,
+                        initialValue: _rail,
+                        decoration: const InputDecoration(
+                          labelText: 'Payment rail',
+                        ),
+                        items: const [
+                          DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Not specified'),
+                          ),
+                          DropdownMenuItem<String?>(
+                            value: 'upi_qr',
+                            child: Text('UPI QR'),
+                          ),
+                          DropdownMenuItem<String?>(
+                            value: 'swipe',
+                            child: Text('Card swipe'),
+                          ),
+                          DropdownMenuItem<String?>(
+                            value: 'online',
+                            child: Text('Online'),
+                          ),
+                          DropdownMenuItem<String?>(
+                            value: 'contactless',
+                            child: Text('Contactless'),
+                          ),
+                          DropdownMenuItem<String?>(
+                            value: 'atm',
+                            child: Text('ATM'),
+                          ),
+                          DropdownMenuItem<String?>(
+                            value: 'emi',
+                            child: Text('EMI'),
+                          ),
+                          DropdownMenuItem<String?>(
+                            value: 'unknown',
+                            child: Text('Unknown'),
+                          ),
+                        ],
+                        onChanged: (value) => setState(() => _rail = value),
+                      ),
+                      fieldGap,
+                      TextField(
+                        controller: _note,
+                        maxLength: 500,
+                        maxLines: 2,
+                        onChanged: (_) => setState(() => _error = null),
+                        decoration: _fieldDecoration(
+                          'Note / remarks (optional)',
+                          errorText: fieldErrors['note'],
+                        ),
+                      ),
+                      if (_error != null) ...[
+                        fieldGap,
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _error!,
+                            style: BambooFonts.ui(13, color: BambooInk.clay),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                child: Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _save,
+                        child: const Text('Save reviewed row'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
-            if (widget.raw != null) SelectableText(widget.raw!),
-            TextField(
-              controller: _date,
-              decoration: const InputDecoration(
-                labelText: 'Date (YYYY-MM-DD, optional time)',
-              ),
-            ),
-            TextField(
-              controller: _description,
-              decoration: const InputDecoration(labelText: 'Description'),
-            ),
-            TextField(
-              controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(labelText: 'Amount (INR)'),
-            ),
-            DropdownButtonFormField<String>(
-              isExpanded: true,
-              initialValue: _kind,
-              items: const [
-                DropdownMenuItem(value: 'spend', child: Text('Money out')),
-                DropdownMenuItem(value: 'income', child: Text('Money in')),
-                DropdownMenuItem(
-                  value: 'investment',
-                  child: Text('Investment'),
-                ),
-                DropdownMenuItem(value: 'transfer', child: Text('Transfer')),
-              ],
-              onChanged: (v) => _kind = v!,
-            ),
-            TextField(
-              controller: _sourceAccount,
-              maxLength: 200,
-              decoration: const InputDecoration(
-                labelText: 'Source account / card label',
-                helperText: 'The account shown on the original statement.',
-              ),
-            ),
-            TextField(
-              controller: _bankReference,
-              maxLength: 40,
-              decoration: const InputDecoration(
-                labelText: 'Bank reference (optional)',
-                helperText: '6–40 letters, numbers, or hyphens.',
-              ),
-            ),
-            DropdownButtonFormField<String?>(
-              key: const ValueKey('import-edit-category'),
-              isExpanded: true,
-              initialValue: _selectedCategoryId,
-              decoration: const InputDecoration(
-                labelText: 'PandaPay category',
-                helperText:
-                    'Choose a category, or use automatic classification.',
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('Automatic classification'),
-                ),
-                for (final category in widget.categories)
-                  DropdownMenuItem<String?>(
-                    value: category.id,
-                    child: Text(
-                      _qualifiedCategoryName(category, widget.categories),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-              onChanged: _selectCategory,
-            ),
-            TextField(
-              controller: _categoryHint,
-              maxLength: 120,
-              onChanged: (_) {
-                if (_selectedCategoryId != null) {
-                  setState(() => _selectedCategoryId = null);
-                }
-              },
-              decoration: const InputDecoration(
-                labelText: 'Category from source (optional)',
-              ),
-            ),
-            TextField(
-              controller: _subcategoryHint,
-              maxLength: 120,
-              onChanged: (_) {
-                if (_selectedCategoryId != null) {
-                  setState(() => _selectedCategoryId = null);
-                }
-              },
-              decoration: const InputDecoration(
-                labelText: 'Subcategory from source (optional)',
-              ),
-            ),
-            TextField(
-              key: const ValueKey('import-edit-tags'),
-              controller: _tags,
-              decoration: const InputDecoration(
-                labelText: 'Tags (optional)',
-                helperText: 'Separate names with semicolons, or paste a JSON list.',
-                helperMaxLines: 2,
-              ),
-            ),
-            DropdownButtonFormField<TxnInstrument?>(
-              isExpanded: true,
-              initialValue: _instrument,
-              decoration: const InputDecoration(labelText: 'Paid with'),
-              items: [
-                const DropdownMenuItem<TxnInstrument?>(
-                  value: null,
-                  child: Text('Use account mapping'),
-                ),
-                for (final instrument in TxnInstrument.values)
-                  DropdownMenuItem<TxnInstrument?>(
-                    value: instrument,
-                    child: Text(instrument.label),
-                  ),
-              ],
-              onChanged: (value) => setState(() => _instrument = value),
-            ),
-            DropdownButtonFormField<String?>(
-              isExpanded: true,
-              initialValue: _rail,
-              decoration: const InputDecoration(labelText: 'Payment rail'),
-              items: const [
-                DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('Not specified'),
-                ),
-                DropdownMenuItem<String?>(
-                  value: 'upi_qr',
-                  child: Text('UPI QR'),
-                ),
-                DropdownMenuItem<String?>(
-                  value: 'swipe',
-                  child: Text('Card swipe'),
-                ),
-                DropdownMenuItem<String?>(
-                  value: 'online',
-                  child: Text('Online'),
-                ),
-                DropdownMenuItem<String?>(
-                  value: 'contactless',
-                  child: Text('Contactless'),
-                ),
-                DropdownMenuItem<String?>(value: 'atm', child: Text('ATM')),
-                DropdownMenuItem<String?>(value: 'emi', child: Text('EMI')),
-                DropdownMenuItem<String?>(
-                  value: 'unknown',
-                  child: Text('Unknown'),
-                ),
-              ],
-              onChanged: (value) => setState(() => _rail = value),
-            ),
-            TextField(
-              controller: _note,
-              maxLength: 500,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Note / remarks (optional)',
-              ),
-            ),
-            if (_error != null) Text(_error!),
-          ],
+          ),
         ),
       ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(onPressed: _save, child: const Text('Save reviewed row')),
-    ],
-  );
+    );
+  }
 }

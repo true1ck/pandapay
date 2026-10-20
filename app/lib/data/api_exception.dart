@@ -23,6 +23,24 @@ class ApiException implements Exception {
     return match == null ? null : int.tryParse(match.group(1)!);
   }
 
+  /// Correlation id returned by the API when an operation fails. This lets
+  /// support find the redacted server log for a failure without exposing the
+  /// exception or query details to the user.
+  String? get requestId {
+    final jsonStart = debugMessage.indexOf('{');
+    if (jsonStart == -1) return null;
+    try {
+      final decoded = jsonDecode(debugMessage.substring(jsonStart));
+      if (decoded is Map && decoded['requestId'] is String) {
+        final value = (decoded['requestId'] as String).trim();
+        return value.isEmpty ? null : value;
+      }
+    } catch (_) {
+      // Not parseable JSON — there is no correlation id to show.
+    }
+    return null;
+  }
+
   /// Machine-readable API error code, when the response ended in JSON.
   /// Screens can use this for a specific recovery path without matching on
   /// human-facing copy.

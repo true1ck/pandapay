@@ -71,6 +71,11 @@ void main() {
   testWidgets(
     'import preview exposes and saves editable category and metadata',
     (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       const dining = SpendCategory(
         id: 'dining-id',
         slug: 'dining',
@@ -124,13 +129,34 @@ void main() {
       );
       expect(find.text('Category from source: Dining'), findsOneWidget);
       expect(session.reviewLocked, isFalse);
-      final editButton = find.byKey(
-        const ValueKey('import-edit-transaction'),
-      );
+      final editButton = find.byKey(const ValueKey('import-edit-transaction'));
       await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
       await tester.pumpAndSettle();
       await tester.tap(editButton);
       await tester.pumpAndSettle();
+
+      final editDialog = find.byKey(const ValueKey('import-edit-dialog'));
+      expect(editDialog, findsOneWidget);
+      final dialogPanel = find.byKey(
+        const ValueKey('import-edit-dialog-panel'),
+      );
+      expect(tester.getSize(dialogPanel).height, lessThanOrEqualTo(760));
+      expect(tester.takeException(), isNull);
+      final editFields = find.descendant(
+        of: editDialog,
+        matching: find.byType(TextField),
+      );
+      final fieldRects = [
+        for (var i = 0; i < editFields.evaluate().length; i++)
+          tester.getRect(editFields.at(i)),
+      ];
+      for (var i = 1; i < fieldRects.length; i++) {
+        expect(
+          fieldRects[i].top,
+          greaterThanOrEqualTo(fieldRects[i - 1].bottom),
+          reason: 'Edit fields should have clear vertical separation.',
+        );
+      }
 
       // The review card remains behind the edit dialog; the modal exposes the
       // matching, editable PandaPay category as well.
@@ -176,8 +202,13 @@ void main() {
         apiBaseUrl: 'https://example.test',
         accessToken: 'token',
         client: MockClient(
-          (_) async =>
-              http.Response(jsonEncode({'error': 'internal_error'}), 500),
+          (_) async => http.Response(
+            jsonEncode({
+              'error': 'internal_error',
+              'requestId': 'import-test-123',
+            }),
+            500,
+          ),
         ),
       );
       final session = TransactionImportSession(
@@ -220,6 +251,8 @@ void main() {
       await tester.tap(find.text('Import 1 transactions · skip 1'));
       await tester.pumpAndSettle();
 
+      expect(find.textContaining('internal_error'), findsNothing);
+      expect(find.textContaining('import-test-123'), findsOneWidget);
       expect(session.progress.completedBatches, 0);
       expect(session.reviewLocked, isFalse);
       final edit = find.descendant(
@@ -329,7 +362,10 @@ void main() {
       );
       await tester.tap(find.text('Save reviewed row'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Use a real YYYY-MM-DD'), findsOneWidget);
+      expect(
+        find.textContaining('Enter a real date between 1900 and 2100'),
+        findsNWidgets(2),
+      );
       await tester.enterText(
         find.widgetWithText(TextField, 'Date (YYYY-MM-DD, optional time)'),
         '2026-10-02',

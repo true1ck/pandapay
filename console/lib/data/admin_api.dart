@@ -22,6 +22,17 @@ class AuthApi {
     }
   }
 
+  Future<void> requestEmailOtp(String email) async {
+    final response = await _client.post(
+      Uri.parse('$authBaseUrl/auth/request-email-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('Email OTP request failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
   /// Returns both tokens — AD-0.3's session needs the refresh token too, to
   /// survive a page reload without asking for OTP again (Chunk 10).
   Future<AuthTokens> verifyOtp(String phoneNumber, String code, String deviceId) async {
@@ -32,6 +43,22 @@ class AuthApi {
     );
     if (response.statusCode != 200) {
       throw AdminApiException('OTP verify failed: ${response.statusCode} ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return AuthTokens(
+      accessToken: body['access_token'] as String,
+      refreshToken: body['refresh_token'] as String?,
+    );
+  }
+
+  Future<AuthTokens> verifyEmailOtp(String email, String code, String deviceId) async {
+    final response = await _client.post(
+      Uri.parse('$authBaseUrl/auth/verify-email-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'code': code, 'device_id': deviceId}),
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException('Email OTP verify failed: ${response.statusCode} ${response.body}');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return AuthTokens(

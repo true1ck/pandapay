@@ -269,8 +269,14 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
     });
     res.status(result.status).json(result);
   } catch (err) {
-    logger.error('POST /statement-imports error', err);
-    res.status(500).json({ error: 'internal_error' });
+    logger.error('POST /statement-imports error', {
+      requestId: req.requestId || null,
+      error: err,
+    });
+    res.status(500).json({
+      error: 'internal_error',
+      ...(req.requestId ? { requestId: req.requestId } : {}),
+    });
   }
   };
 }

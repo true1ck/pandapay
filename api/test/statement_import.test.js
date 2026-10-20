@@ -49,7 +49,7 @@ test('rejects invalid calendar dates, ranges, decimal precision, nonfinite value
   assert.ok(validateStatementImport(repeated));
 });
 
-function harness({ cardType = 'credit', owned = true, automatic = false } = {}) {
+function harness({ cardType = 'credit', owned = true, automatic = false, failOnInsert = false } = {}) {
   const batches = new Map(); const rows = new Map(); const written = []; const updates = [];
   let databaseCalls = 0;
   const client = { query: async (sql, params) => {
@@ -71,6 +71,7 @@ function harness({ cardType = 'credit', owned = true, automatic = false } = {}) 
     importResolvers: { resolveCategoryForImport: async () => 'category' },
     clientMutationSourceKey: (user, source, key) => hash(`${user}:${source}:${key}`),
     insertTransactionAndUpdateState: async (_, user, input) => {
+      if (failOnInsert) throw new Error('test database failure');
       written.push(input);
       if (automatic) return {status:200, duplicateKind:'high_confidence', transaction:{id:'canonical', status:'active'}};
       if (rows.has(input.sourceKey)) return { status: 200, duplicateKind: 'exact_retry', transaction: rows.get(input.sourceKey) };
@@ -80,10 +81,19 @@ function harness({ cardType = 'credit', owned = true, automatic = false } = {}) 
   });
   return { written, updates, get databaseCalls() { return databaseCalls; }, call: async (input) => {
     let status; let result;
-    await handler({ userId: 'profile', body: input }, { status(value) { status = value; return this; }, json(value) { result = value; return this; } });
+    await handler({ userId: 'profile', body: input, requestId: 'import-test-123' }, { status(value) { status = value; return this; }, json(value) { result = value; return this; } });
     return { status, result };
   } };
 }
+
+test('unexpected import failures return a correlation id without leaking server details', async () => {
+  const response = await harness({ failOnInsert: true }).call(body());
+  assert.equal(response.status, 500);
+  assert.deepEqual(response.result, {
+    error: 'internal_error',
+    requestId: 'import-test-123',
+  });
+});
 
 test('handler blocks bad requests before any database work and checks card ownership', async () => {
   const denied = harness({ owned: false });

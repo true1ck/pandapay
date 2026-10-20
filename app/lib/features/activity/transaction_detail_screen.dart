@@ -733,6 +733,15 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         tagRepository?.tagsForTransaction(entry.id, fallback: entry.tags) ??
         entry.tags;
     final isActive = entry.status == 'active';
+    final needsCategoryAssignment =
+        isActive &&
+        (entry.categoryName == null ||
+            [
+              'other',
+              'unknown',
+              'uncategorized',
+              'unclassified',
+            ].contains(entry.categoryName!.trim().toLowerCase()));
     final attachments = ref.watch(transactionAttachmentsProvider(entry.id));
 
     return Column(
@@ -793,78 +802,106 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   ),
                   const SizedBox(height: AppSpace.xl),
                   _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
-                  _DetailRow(label: 'Category', value: entry.categoryLabel),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        for (final tag in tags)
-                          ActionChip(
-                            label: Text(tag.name),
-                            avatar: Icon(
-                              Icons.label_rounded,
-                              size: 16,
-                              color: transactionTagColor(tag.color),
+                  _DetailRow(
+                    label: 'Category',
+                    value: entry.categoryLabel,
+                    trailing: needsCategoryAssignment
+                        ? TextButton.icon(
+                            onPressed: _openEdit,
+                            icon: const Icon(Icons.category_outlined, size: 18),
+                            label: const Text('Assign category'),
+                          )
+                        : null,
+                  ),
+                  _DetailRow(
+                    label: 'Tags',
+                    trailing: tags.isEmpty && tagRepository == null
+                        ? Text(
+                            'No tags',
+                            style: BambooFonts.ui(
+                              13.5,
+                              color: BambooInk.ink500,
                             ),
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    SpendTrendsScreen(initialTagIds: {tag.id}),
-                              ),
-                            ),
-                          ),
-                        if (tagRepository != null)
-                          ActionChip(
-                            label: Text(
-                              tags.isEmpty ? 'Add tags' : 'Edit tags',
-                            ),
-                            avatar: const Icon(Icons.add_rounded, size: 16),
-                            onPressed: () async {
-                              final selected = await showTransactionTagPicker(
-                                context,
-                                selectedIds: tags.map((t) => t.id).toSet(),
-                              );
-                              if (selected == null ||
-                                  !mounted ||
-                                  ref.read(transactionTagsProvider) !=
-                                      tagRepository)
-                                return;
-                              try {
-                                await tagRepository.replace(
-                                  entry.id,
-                                  selected,
-                                  fallback: entry.tags,
-                                );
-                              } catch (error) {
-                                if (context.mounted)
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        userFacingErrorMessage(error),
+                          )
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (
+                                  var index = 0;
+                                  index < tags.length;
+                                  index++
+                                ) ...[
+                                  if (index > 0)
+                                    const SizedBox(width: AppSpace.xs),
+                                  ActionChip(
+                                    label: Text(tags[index].name),
+                                    avatar: Icon(
+                                      Icons.label_rounded,
+                                      size: 16,
+                                      color: transactionTagColor(
+                                        tags[index].color,
                                       ),
                                     ),
-                                  );
-                              }
-                            },
+                                    onPressed: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => SpendTrendsScreen(
+                                          initialTagIds: {tags[index].id},
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                if (tagRepository != null) ...[
+                                  if (tags.isNotEmpty)
+                                    const SizedBox(width: AppSpace.xs),
+                                  TextButton.icon(
+                                    onPressed: () async {
+                                      final selected =
+                                          await showTransactionTagPicker(
+                                            context,
+                                            selectedIds: tags
+                                                .map((t) => t.id)
+                                                .toSet(),
+                                          );
+                                      if (selected == null ||
+                                          !mounted ||
+                                          ref.read(transactionTagsProvider) !=
+                                              tagRepository) {
+                                        return;
+                                      }
+                                      try {
+                                        await tagRepository.replace(
+                                          entry.id,
+                                          selected,
+                                          fallback: entry.tags,
+                                        );
+                                      } catch (error) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                userFacingErrorMessage(error),
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.add_rounded,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Add tag'),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
-                      ],
-                    ),
                   ),
-                  if (isActive &&
-                      (entry.categoryName == null ||
-                          [
-                            'other',
-                            'unknown',
-                            'uncategorized',
-                            'unclassified',
-                          ].contains(entry.categoryName!.trim().toLowerCase())))
-                    TextButton.icon(
-                      onPressed: _openEdit,
-                      icon: const Icon(Icons.category_outlined),
-                      label: const Text('Assign category'),
-                    ),
                   _DetailRow(
                     label: 'Date',
                     value: entry.occurredAt
@@ -924,6 +961,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         entry.status[0].toUpperCase() +
                         entry.status.substring(1),
                   ),
+                  if (_note != null && _note!.isNotEmpty)
+                    _DetailRow(label: 'Note', value: _note!),
                   if (entry.source == 'sms' ||
                       entry.source == 'sms_bulk' ||
                       entry.observations.any(
@@ -932,8 +971,23 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                             observation.source == 'sms_bulk',
                       ))
                     _SmsEvidenceSection(entry: entry),
-                  if (_note != null && _note!.isNotEmpty)
-                    _DetailRow(label: 'Note', value: _note!),
+                  attachments.when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => _ReceiptSection(
+                      attachments: const [],
+                      attaching: _attaching,
+                      onAdd: _addReceipt,
+                      onOpen: _openAttachment,
+                      onDelete: _deleteAttachment,
+                    ),
+                    data: (items) => _ReceiptSection(
+                      attachments: items,
+                      attaching: _attaching,
+                      onAdd: _addReceipt,
+                      onOpen: _openAttachment,
+                      onDelete: _deleteAttachment,
+                    ),
+                  ),
                   if (isActive) ...[
                     const SizedBox(height: AppSpace.lg),
                     FilledButton.icon(
@@ -955,23 +1009,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     ),
                   ],
                   const SizedBox(height: AppSpace.xl),
-                  attachments.when(
-                    loading: () => const SizedBox.shrink(),
-                    error: (_, __) => _ReceiptSection(
-                      attachments: const [],
-                      attaching: _attaching,
-                      onAdd: _addReceipt,
-                      onOpen: _openAttachment,
-                      onDelete: _deleteAttachment,
-                    ),
-                    data: (items) => _ReceiptSection(
-                      attachments: items,
-                      attaching: _attaching,
-                      onAdd: _addReceipt,
-                      onOpen: _openAttachment,
-                      onDelete: _deleteAttachment,
-                    ),
-                  ),
                   const SizedBox(height: AppSpace.md),
                   // Design 18's two action rows, both now backed by real routes:
                   // PATCH /transactions/:id/note and PUT /transactions/:id/splits.
@@ -1749,8 +1786,9 @@ class _SplitSheetState extends State<_SplitSheet> {
 
 class _DetailRow extends StatelessWidget {
   final String label;
-  final String value;
-  const _DetailRow({required this.label, required this.value});
+  final String? value;
+  final Widget? trailing;
+  const _DetailRow({required this.label, this.value, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -1767,9 +1805,18 @@ class _DetailRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Text(
-              value,
-              style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (value != null && value!.isNotEmpty)
+                  Text(
+                    value!,
+                    style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                  ),
+                if (value != null && value!.isNotEmpty && trailing != null)
+                  const SizedBox(height: AppSpace.xs),
+                if (trailing != null) trailing!,
+              ],
             ),
           ),
         ],

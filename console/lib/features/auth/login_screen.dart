@@ -3,11 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 
-/// AD-0.3.1: email+password in the plan; this build uses the same OTP flow
-/// as the user app instead, since that's what auth/ actually implements —
-/// whether the resulting session is an operator is decided entirely by
-/// api/'s requireAdmin server-side (see providers.dart isAdminProvider),
-/// there is no separate admin login path or elevated trust client-side.
+/// Sign-in uses the existing phone or email OTP routes. Whether the resulting
+/// session is an operator is decided by api/'s requireAdmin server-side, not
+/// by any client-side role flag.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -16,7 +14,9 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _codeController = TextEditingController();
+  bool _useEmail = true;
   bool _otpRequested = false;
   bool _loading = false;
   String? _error;
@@ -27,7 +27,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
     try {
-      await ref.read(authApiProvider).requestOtp(_phoneController.text.trim());
+      if (_useEmail) {
+        await ref.read(authApiProvider).requestEmailOtp(_emailController.text.trim());
+      } else {
+        await ref.read(authApiProvider).requestOtp(_phoneController.text.trim());
+      }
       setState(() => _otpRequested = true);
     } catch (e) {
       setState(() => _error = e.toString());
@@ -42,11 +46,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
     try {
-      final tokens = await ref.read(authApiProvider).verifyOtp(
-            _phoneController.text.trim(),
-            _codeController.text.trim(),
-            'console-web',
-          );
+      final authApi = ref.read(authApiProvider);
+      final tokens = _useEmail
+          ? await authApi.verifyEmailOtp(
+              _emailController.text.trim(),
+              _codeController.text.trim(),
+              'console-web',
+            )
+          : await authApi.verifyOtp(
+              _phoneController.text.trim(),
+              _codeController.text.trim(),
+              'console-web',
+            );
       final store = await ref.read(tokenStoreProvider.future);
       await store.save(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
       ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
@@ -73,16 +84,47 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const Text('Internal only. No public signup path exists.',
                     style: TextStyle(fontSize: 12, color: Colors.grey)),
                 const SizedBox(height: 24),
+                if (!_otpRequested)
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: true, label: Text('Email')),
+                      ButtonSegment(value: false, label: Text('Phone')),
+                    ],
+                    selected: {_useEmail},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _useEmail = selection.first),
+                  ),
+                if (!_otpRequested) const SizedBox(height: 12),
                 TextField(
-                  controller: _phoneController,
+                  controller: _useEmail ? _emailController : _phoneController,
                   enabled: !_otpRequested,
-                  decoration: const InputDecoration(labelText: 'Phone number', hintText: '+91XXXXXXXXXX'),
+                  keyboardType: _useEmail
+                      ? TextInputType.emailAddress
+                      : TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: _useEmail ? 'Account email' : 'Phone number',
+                    hintText: _useEmail ? 'you@example.com' : '+91XXXXXXXXXX',
+                  ),
                 ),
                 if (_otpRequested) ...[
                   const SizedBox(height: 12),
+                  Text(
+                    'Enter the code sent to your ${_useEmail ? 'email' : 'phone'}.',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                   TextField(
                     controller: _codeController,
                     decoration: const InputDecoration(labelText: 'OTP code'),
+                  ),
+                  TextButton(
+                    onPressed: _loading
+                        ? null
+                        : () => setState(() {
+                              _otpRequested = false;
+                              _codeController.clear();
+                              _error = null;
+                            }),
+                    child: const Text('Use a different account'),
                   ),
                 ],
                 if (_error != null) ...[
@@ -100,5 +142,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _emailController.dispose();
+    _codeController.dispose();
+    super.dispose();
   }
 }
