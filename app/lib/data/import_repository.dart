@@ -18,6 +18,8 @@ class StatementTransactionInput {
   final String? importRowKey;
   final String? sourceAccount;
   final String? bankReference;
+  final String? categoryHint;
+  final String? subcategoryHint;
   final TxnEntryKind entryKind;
   final TxnInstrument? instrument;
 
@@ -29,6 +31,8 @@ class StatementTransactionInput {
     this.importRowKey,
     this.sourceAccount,
     this.bankReference,
+    this.categoryHint,
+    this.subcategoryHint,
     this.instrument,
   });
 
@@ -41,6 +45,8 @@ class StatementTransactionInput {
     if (importRowKey != null) 'importRowKey': importRowKey,
     if (sourceAccount != null) 'sourceAccount': sourceAccount,
     if (bankReference != null) 'bankReference': bankReference,
+    if (categoryHint != null) 'categoryHint': categoryHint,
+    if (subcategoryHint != null) 'subcategoryHint': subcategoryHint,
   };
 }
 

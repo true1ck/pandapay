@@ -205,6 +205,7 @@ class _DayGroup {
 class ActivityFilter {
   final String? cardId;
   final String? categoryId;
+  final String? subcategoryId;
   final DateTime? from;
   final DateTime? to;
 
@@ -219,6 +220,7 @@ class ActivityFilter {
   const ActivityFilter({
     this.cardId,
     this.categoryId,
+    this.subcategoryId,
     this.from,
     this.to,
     this.query,
@@ -228,6 +230,7 @@ class ActivityFilter {
   bool get isActive =>
       cardId != null ||
       categoryId != null ||
+      subcategoryId != null ||
       from != null ||
       to != null ||
       (query != null && query!.isNotEmpty) ||
@@ -238,6 +241,7 @@ class ActivityFilter {
   ActivityFilter copyWith({
     String? Function()? cardId,
     String? Function()? categoryId,
+    String? Function()? subcategoryId,
     DateTime? Function()? from,
     DateTime? Function()? to,
     String? Function()? query,
@@ -246,6 +250,7 @@ class ActivityFilter {
     return ActivityFilter(
       cardId: cardId != null ? cardId() : this.cardId,
       categoryId: categoryId != null ? categoryId() : this.categoryId,
+      subcategoryId: subcategoryId != null ? subcategoryId() : this.subcategoryId,
       from: from != null ? from() : this.from,
       to: to != null ? to() : this.to,
       query: query != null ? query() : this.query,
@@ -276,6 +281,7 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
       filter.to != null ||
       filter.cardId != null ||
       filter.categoryId != null ||
+      filter.subcategoryId != null ||
       (filter.query != null && filter.query!.trim().isNotEmpty);
   final entries = hasServerFilter
       ? await (() {
@@ -291,6 +297,7 @@ final activityTransactionsProvider = FutureProvider<List<TransactionEntry>>((
             to: filter.to,
             cardId: filter.cardId,
             categoryId: filter.categoryId,
+            userCategoryId: filter.subcategoryId,
             query: filter.query,
           );
         })()
@@ -411,6 +418,8 @@ class _FilterRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final topLevelCategories = categories.where((c) => !c.isSubcategory).toList();
+    final subcategories = categories.where((c) => c.isSubcategory).toList();
 
     return SizedBox(
       height: 40,
@@ -492,7 +501,7 @@ class _FilterRow extends ConsumerWidget {
                   shrinkWrap: true,
                   children: [
                     const ListTile(title: Text('All categories')),
-                    for (final c in categories)
+                    for (final c in topLevelCategories)
                       ListTile(
                         title: Text(c.name),
                         onTap: () => Navigator.of(context).pop(c.id),
@@ -502,6 +511,35 @@ class _FilterRow extends ConsumerWidget {
               );
               ref.read(_activityFilterProvider.notifier).state = filter
                   .copyWith(categoryId: () => picked);
+            },
+          ),
+          const SizedBox(width: AppSpace.xs),
+          _FilterChipButton(
+            label: filter.subcategoryId == null
+                ? 'Subcategory'
+                : (subcategories
+                          .where((c) => c.id == filter.subcategoryId)
+                          .firstOrNull
+                          ?.name ??
+                      'Subcategory'),
+            active: filter.subcategoryId != null,
+            onTap: () async {
+              final picked = await showModalBottomSheet<String?>(
+                context: context,
+                builder: (context) => ListView(
+                  shrinkWrap: true,
+                  children: [
+                    const ListTile(title: Text('All subcategories')),
+                    for (final c in subcategories)
+                      ListTile(
+                        title: Text(c.name),
+                        onTap: () => Navigator.of(context).pop(c.id),
+                      ),
+                  ],
+                ),
+              );
+              ref.read(_activityFilterProvider.notifier).state = filter
+                  .copyWith(subcategoryId: () => picked);
             },
           ),
           const SizedBox(width: AppSpace.xs),
@@ -714,7 +752,7 @@ class _TransactionTile extends StatelessWidget {
           entry.rewardState == 'estimated' &&
           (entry.source == 'sms' || entry.source == 'sms_bulk'))
         'Pending confirmation',
-      if (entry.categoryName != null) entry.categoryName!,
+      if (entry.categoryName != null) entry.categoryLabel,
     ];
     // See account_screen.dart's _AccountTile for why Pressable, not InkWell.
     return Pressable(

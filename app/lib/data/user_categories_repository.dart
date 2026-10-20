@@ -40,7 +40,10 @@ class UserCategoriesRepository {
 
   List<SpendCategory> readLocal(AppDatabase database, String namespace) {
     final rows = database.db.select(
-      'SELECT id, name, slug FROM user_categories WHERE namespace=? ORDER BY created_at, name COLLATE NOCASE',
+      '''SELECT id, name, slug, parent_category_id, parent_user_category_id,
+                match_terms_json
+           FROM user_categories WHERE namespace=?
+          ORDER BY created_at, name COLLATE NOCASE''',
       [namespace],
     );
     return rows
@@ -50,6 +53,9 @@ class UserCategoriesRepository {
             slug: row['slug'] as String,
             name: row['name'] as String,
             isCustom: true,
+            parentCategoryId: row['parent_category_id'] as String?,
+            parentUserCategoryId: row['parent_user_category_id'] as String?,
+            matchTerms: _terms(row['match_terms_json'] as String?),
           ),
         )
         .toList();
@@ -86,6 +92,8 @@ class UserCategoriesRepository {
     required SyncQueue queue,
     required String namespace,
     required String name,
+    String? parentId,
+    List<String> matchTerms = const [],
   }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) throw ArgumentError('Category name is required');
@@ -94,7 +102,14 @@ class UserCategoriesRepository {
     }
     final existing = readLocal(database, namespace);
     final match = existing.where(
-      (category) => category.name.toLowerCase() == trimmed.toLowerCase(),
+      (category) =>
+          category.name.toLowerCase() == trimmed.toLowerCase() &&
+          category.parentCategoryId ==
+              (parentId != null && !isCustomCategoryId(parentId)
+                  ? parentId
+                  : null) &&
+          category.parentUserCategoryId ==
+              (parentId != null && isCustomCategoryId(parentId) ? parentId : null),
     );
     if (match.isNotEmpty) return match.first;
 
@@ -104,12 +119,36 @@ class UserCategoriesRepository {
       slug: 'custom:${trimmed.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}',
       name: trimmed,
       isCustom: true,
+      parentCategoryId: parentId != null && !isCustomCategoryId(parentId)
+          ? parentId
+          : null,
+      parentUserCategoryId: parentId != null && isCustomCategoryId(parentId)
+          ? parentId
+          : null,
+      matchTerms: _normaliseTerms(matchTerms),
     );
-    _insertLocal(database, namespace, category.id, category.name, category.slug);
+    _insertLocal(
+      database,
+      namespace,
+      category.id,
+      category.name,
+      category.slug,
+      parentCategoryId: category.parentCategoryId,
+      parentUserCategoryId: category.parentUserCategoryId,
+      matchTerms: category.matchTerms,
+    );
     queue.enqueueInsert(
       entity: 'user_categories',
       entityId: id,
-      fields: {'name': category.name, 'slug': category.slug},
+      fields: {
+        'name': category.name,
+        'slug': category.slug,
+        'parent_category_id': category.parentCategoryId,
+        'parent_user_category_id': userCategoryIdForServer(
+          category.parentUserCategoryId,
+        ),
+        'match_terms': category.matchTerms,
+      },
     );
     return category;
   }
@@ -125,6 +164,11 @@ class UserCategoriesRepository {
       'custom:${category.id}',
       category.name,
       category.slug,
+      parentCategoryId: category.parentCategoryId,
+      parentUserCategoryId: category.parentUserCategoryId == null
+          ? null
+          : 'custom:${category.parentUserCategoryId}',
+      matchTerms: category.matchTerms,
     );
   }
 
@@ -134,13 +178,51 @@ class UserCategoriesRepository {
     String id,
     String name,
     String slug,
+    {
+    String? parentCategoryId,
+    String? parentUserCategoryId,
+    List<String> matchTerms = const [],
+    }
   ) {
     final now = DateTime.now().millisecondsSinceEpoch;
     database.db.execute(
-      '''INSERT INTO user_categories(namespace,id,name,slug,created_at,updated_at)
-         VALUES(?,?,?,?,?,?)
-         ON CONFLICT(namespace,id) DO UPDATE SET name=excluded.name, slug=excluded.slug, updated_at=excluded.updated_at''',
-      [namespace, id, name, slug, now, now],
+      '''INSERT INTO user_categories(
+           namespace,id,name,slug,parent_category_id,parent_user_category_id,
+           match_terms_json,created_at,updated_at)
+         VALUES(?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(namespace,id) DO UPDATE SET
+           name=excluded.name, slug=excluded.slug,
+           parent_category_id=excluded.parent_category_id,
+           parent_user_category_id=excluded.parent_user_category_id,
+           match_terms_json=excluded.match_terms_json,
+           updated_at=excluded.updated_at''',
+      [
+        namespace,
+        id,
+        name,
+        slug,
+        parentCategoryId,
+        parentUserCategoryId,
+        jsonEncode(matchTerms),
+        now,
+        now,
+      ],
     );
+  }
+
+  static List<String> _normaliseTerms(Iterable<String> values) => values
+      .map((value) => value.trim().toLowerCase())
+      .where((value) => value.length >= 2)
+      .take(20)
+      .toSet()
+      .toList();
+
+  static List<String> _terms(String? value) {
+    if (value == null) return const [];
+    try {
+      return _normaliseTerms((jsonDecode(value) as List).whereType<String>());
+    } catch (_) {
+      return const [];
+    }
   }
 }

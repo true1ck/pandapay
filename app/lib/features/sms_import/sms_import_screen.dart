@@ -120,6 +120,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
             ? 'No transaction SMS found in the device inbox.'
             : 'Scanned ${summary.scanned} SMS · ${summary.imported} new spends'
                 '${summary.dueDatesUpdated == 0 ? '' : ' · ${summary.dueDatesUpdated} due dates learned'} · '
+                '${summary.statementDaysUpdated == 0 ? '' : ' · ${summary.statementDaysUpdated} billing dates learned'} · '
                 '${summary.duplicates} already tracked'
                 '${summary.needsReview == 0 ? '' : ' · ${summary.needsReview} need review'}';
       });

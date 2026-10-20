@@ -2599,6 +2599,16 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
               <TransactionEntry>[])
         if (transaction.cardLast4 != null) transaction.cardLast4!,
     };
+    bool isNonBankAccount(BankAccountSummary account) {
+      final label = [
+        account.issuerSlug,
+        account.issuerShortName,
+        account.issuerName,
+      ].whereType<String>().join(' ').toLowerCase();
+      return RegExp(
+        r'\b(?:lic|licind|dhan|dhanhq|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel|paytm\s+money)\b',
+      ).hasMatch(label);
+    }
     // Keep the issuer in the identity. Two different banks can legitimately
     // have accounts ending in the same four digits; keying only by suffix
     // silently dropped one account and produced an incorrect total.
@@ -2607,6 +2617,7 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
             .where(
               (account) =>
                   RegExp(r'^\d{4}$').hasMatch(account.accountLast4) &&
+                  !isNonBankAccount(account) &&
                   !cardSuffixes.contains(account.accountLast4),
             )
             .toList()
@@ -2774,13 +2785,13 @@ class _HomeAccountSnapshotState extends ConsumerState<_HomeAccountSnapshot> {
             ),
             const SizedBox(height: AppSpace.xs),
             Text(
-              'Detected from imported bank SMS. A balance appears only when the SMS includes one.',
+              'Detected from bank SMS only. Balances come from the latest SMS that reported one.',
               style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
             ),
             if (hasBalances) ...[
               const SizedBox(height: 3),
               Text(
-                'Balance shown is the latest one found in SMS, not a live bank balance.',
+                'Shown amounts are SMS snapshots, not live bank balances.',
                 style: BambooFonts.ui(11.5, color: BambooInk.onSlateSubtle),
               ),
             ],
@@ -2840,6 +2851,8 @@ class _HomeBankAccountRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final issuer = summary?.issuerShortName ?? summary?.issuerName;
     final balance = summary?.availableBalance;
+    final balanceAt = summary?.latestBalanceSmsAt;
+    final latestSmsAt = summary?.latestSmsAt;
     final logoLabel = issuer == null || issuer.trim().isEmpty ? 'Bank' : issuer;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.sm),
@@ -2866,30 +2879,50 @@ class _HomeBankAccountRow extends StatelessWidget {
               ],
             ),
           ),
-          if (balance == null)
-            Text(
-              'No balance in SMS',
-              style: BambooFonts.ui(11, color: BambooInk.onSlateMuted),
-              textAlign: TextAlign.end,
-            )
-          else if (!revealed)
-            const Icon(
-              Icons.lock_outline_rounded,
-              size: 17,
-              color: BambooInk.onSlateMuted,
-            )
-          else
-            MoneyText(
-              balance,
-              confidence: Confidence.estimated,
-              style: BambooFonts.ui(
-                13,
-                weight: FontWeight.w700,
-                color: BambooInk.lime,
-              ),
-              hidePaise: true,
-              showConfidenceIcon: false,
+          SizedBox(
+            width: 132,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (balance == null)
+                  Text(
+                    'No balance reported',
+                    style: BambooFonts.ui(11, color: BambooInk.onSlateMuted),
+                    textAlign: TextAlign.end,
+                  )
+                else if (!revealed)
+                  const Icon(
+                    Icons.lock_outline_rounded,
+                    size: 17,
+                    color: BambooInk.onSlateMuted,
+                  )
+                else
+                  MoneyText(
+                    balance,
+                    confidence: Confidence.estimated,
+                    style: BambooFonts.ui(
+                      13,
+                      weight: FontWeight.w700,
+                      color: BambooInk.lime,
+                    ),
+                    hidePaise: true,
+                    showConfidenceIcon: false,
+                  ),
+                if (balanceAt != null)
+                  Text(
+                    'As of ${DateFormat('dd MMM, h:mm a').format(balanceAt.toLocal())}',
+                    style: BambooFonts.ui(9.5, color: BambooInk.onSlateMuted),
+                    textAlign: TextAlign.end,
+                  )
+                else if (latestSmsAt != null)
+                  Text(
+                    'Latest SMS ${DateFormat('dd MMM, h:mm a').format(latestSmsAt.toLocal())}',
+                    style: BambooFonts.ui(9.5, color: BambooInk.onSlateMuted),
+                    textAlign: TextAlign.end,
+                  ),
+              ],
             ),
+          ),
         ],
       ),
     );
@@ -3072,7 +3105,9 @@ List<CategorySpend> _categorySpendFromTransactions(
         transaction.entryKind != TxnEntryKind.spend) {
       continue;
     }
-    final label = transaction.categoryName ?? 'Other spending';
+    final label = transaction.categoryLabel == 'Other'
+        ? 'Other spending'
+        : transaction.categoryLabel;
     totals[label] = (totals[label] ?? const Money.zero()) + transaction.amount;
     counts[label] = (counts[label] ?? 0) + 1;
   }

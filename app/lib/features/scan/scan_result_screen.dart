@@ -255,6 +255,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     );
     final selectedCategoryForRanking = categoryIdForServer(
       activeCategoryId ?? localInferredCategoryId,
+      categoryList,
     );
 
     // ui-spec B1 says "No cards → CTA to add one". B3 has no rule of its own,

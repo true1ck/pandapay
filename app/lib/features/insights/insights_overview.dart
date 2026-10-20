@@ -281,7 +281,7 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
     final reward = txn.rewardValue;
     if (reward != null && !reward.isNegative) {
       earned += reward;
-      final categoryLabel = txn.categoryName ?? 'Other';
+      final categoryLabel = txn.categoryLabel;
       byCategory[categoryLabel] =
           (byCategory[categoryLabel] ?? const Money.zero()) + reward;
       final cardLabel = txn.cardDisplayName;

@@ -622,6 +622,9 @@ class HomeSummary {
 class BankAccountSummary {
   final String accountLast4;
   final Money? availableBalance;
+  /// Timestamp of the SMS that supplied [availableBalance]. This may be
+  /// older than [latestSmsAt] when newer SMS messages omit a balance.
+  final DateTime? latestBalanceSmsAt;
   final DateTime? latestSmsAt;
   final int smsCount;
   final String? issuerSlug;
@@ -632,6 +635,7 @@ class BankAccountSummary {
   const BankAccountSummary({
     required this.accountLast4,
     required this.availableBalance,
+    this.latestBalanceSmsAt,
     required this.latestSmsAt,
     required this.smsCount,
     this.issuerSlug,
@@ -646,6 +650,9 @@ class BankAccountSummary {
       availableBalance: json['availableBalanceInr'] == null
           ? null
           : Money.fromRupees(_num(json['availableBalanceInr'])),
+      latestBalanceSmsAt: json['latestBalanceSmsAt'] == null
+          ? null
+          : DateTime.parse(json['latestBalanceSmsAt'] as String),
       latestSmsAt: json['latestSmsAt'] == null
           ? null
           : DateTime.parse(json['latestSmsAt'] as String),
@@ -1318,6 +1325,7 @@ class UserCardsRepository {
       needsReview: json['needsReview'] == true,
       categoryId: json['resolvedCategoryId'] as String?,
       dueDayUpdated: json['dueDayUpdated'] == true,
+      statementDayUpdated: json['statementDayUpdated'] == true,
     );
   }
 
@@ -1436,6 +1444,7 @@ class UserCardsRepository {
       needsReview: (summary['needsReview'] as num?)?.toInt() ?? 0,
       errored: (summary['error'] as num?)?.toInt() ?? 0,
       dueDatesUpdated: (summary['dueDatesUpdated'] as num?)?.toInt() ?? 0,
+      statementDaysUpdated: (summary['statementDaysUpdated'] as num?)?.toInt() ?? 0,
       // Indices are batch-relative; the caller maps them back to its own
       // list so callers can report genuinely unparsed messages without
       // turning successful cardless spends into a manual workflow.
@@ -1932,8 +1941,13 @@ class TransactionEntry {
   final DateTime occurredAt;
   final String? merchantName;
   final String? categoryId;
+  /// The reporting parent category. For a private subcategory, [categoryId]
+  /// is the custom child id while this remains the built-in/user parent id.
+  final String? parentCategoryId;
+  final String? parentUserCategoryId;
   final String? userCategoryId;
   final String? categoryName;
+  final String? subcategoryName;
   final String? cardDisplayName; // nickname if set, else the card's own name
   /// Last four digits extracted from a card SMS when the saved card is not
   /// linked yet. This is masked evidence only, never a full card number.
@@ -1989,8 +2003,11 @@ class TransactionEntry {
     required this.occurredAt,
     this.merchantName,
     this.categoryId,
+    this.parentCategoryId,
+    this.parentUserCategoryId,
     this.userCategoryId,
     this.categoryName,
+    this.subcategoryName,
     this.cardDisplayName,
     this.cardLast4,
     this.accountLast4,
@@ -2005,6 +2022,10 @@ class TransactionEntry {
     this.note,
     this.rewardValue,
   });
+
+  String get categoryLabel => subcategoryName == null || categoryName == null
+      ? (categoryName ?? 'Other')
+      : '$categoryName · $subcategoryName';
 
   /// Local snapshot form. This intentionally mirrors only the fields needed
   /// by [fromJson]; it is not a write payload and must never be sent back to
@@ -2022,8 +2043,11 @@ class TransactionEntry {
       'occurred_at': occurredAt.toIso8601String(),
       'merchant_name': merchantName,
       'category_id': customCategoryId == null ? categoryId : null,
+      'parent_category_id': parentCategoryId,
+      'parent_user_category_id': parentUserCategoryId,
       'user_category_id': userCategoryId ?? customCategoryId,
       'category_name': categoryName,
+      'subcategory_name': subcategoryName,
       'card_name': cardDisplayName,
       'card_nickname': null,
       'card_last4': cardLast4,
@@ -2055,17 +2079,20 @@ class TransactionEntry {
   factory TransactionEntry.fromJson(Map<String, dynamic> json) {
     final nickname = json['card_nickname'] as String?;
     final cardName = json['card_name'] as String?;
+    final rawCategoryId = json['category_id'] as String?;
+    final userCategoryId = json['user_category_id'] as String?;
     return TransactionEntry(
       sourceKey: json['source_key'] as String?,
       id: json['id'] as String,
       amount: Money.fromRupees(_num(json['amount_inr'])),
       occurredAt: DateTime.parse(json['occurred_at'] as String),
       merchantName: json['merchant_name'] as String?,
-      categoryId: json['user_category_id'] == null
-          ? json['category_id'] as String?
-          : 'custom:${json['user_category_id']}',
-      userCategoryId: json['user_category_id'] as String?,
+      categoryId: userCategoryId == null ? rawCategoryId : 'custom:$userCategoryId',
+      parentCategoryId: json['parent_category_id'] as String? ?? rawCategoryId,
+      parentUserCategoryId: json['parent_user_category_id'] as String?,
+      userCategoryId: userCategoryId,
       categoryName: _displayCategoryName(json['category_name'] as String?),
+      subcategoryName: _displayCategoryName(json['subcategory_name'] as String?),
       cardDisplayName: (nickname?.isNotEmpty == true) ? nickname : cardName,
       cardLast4: json['card_last4'] as String?,
       accountLast4: json['account_last4'] as String?,
@@ -2137,6 +2164,7 @@ class SmsImportResult {
   /// the matched card. This can happen for a bill reminder that is not a
   /// purchase, so it must be propagated separately from [parsed].
   final bool dueDayUpdated;
+  final bool statementDayUpdated;
 
   const SmsImportResult({
     required this.parsed,
@@ -2145,6 +2173,7 @@ class SmsImportResult {
     this.needsReview = false,
     this.categoryId,
     this.dueDayUpdated = false,
+    this.statementDayUpdated = false,
   });
 }
 
@@ -2218,6 +2247,7 @@ class SmsBatchImportResult {
   final int needsReview;
   final int errored;
   final int dueDatesUpdated;
+  final int statementDaysUpdated;
   final List<int> unparsedIndices;
   final Map<int, String> reasonByIndex;
 
@@ -2229,6 +2259,7 @@ class SmsBatchImportResult {
     this.needsReview = 0,
     required this.errored,
     this.dueDatesUpdated = 0,
+    this.statementDaysUpdated = 0,
     this.unparsedIndices = const [],
     this.reasonByIndex = const {},
   });

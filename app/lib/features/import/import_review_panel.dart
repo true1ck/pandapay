@@ -933,6 +933,8 @@ class _EditImportRowState extends State<_EditImportRow> {
       isInvestment: _kind == 'investment',
       sourceAccount: widget.row?.sourceAccount,
       bankReference: widget.row?.bankReference,
+      categoryHint: widget.row?.categoryHint,
+      subcategoryHint: widget.row?.subcategoryHint,
       sourceRowId: widget.row?.sourceRowId,
     );
     final error = validateImportedTransaction(row);

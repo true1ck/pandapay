@@ -2853,9 +2853,7 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
       final incomingAt = incoming.latestSmsAt;
       final incomingIsNewer =
           existingAt == null ||
-          (incomingAt != null &&
-              existingAt != null &&
-              incomingAt.isAfter(existingAt));
+          (incomingAt != null && incomingAt.isAfter(existingAt));
       final primary = incomingIsNewer ? incoming : existing;
       final secondary = incomingIsNewer ? existing : incoming;
       final latestAt = existingAt == null
@@ -2863,10 +2861,26 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
           : incomingAt == null
           ? existingAt
           : (incomingAt.isAfter(existingAt) ? incomingAt : existingAt);
+      final existingBalanceAt = existing.latestBalanceSmsAt;
+      final incomingBalanceAt = incoming.latestBalanceSmsAt;
+      final balanceFromIncoming =
+          existingBalanceAt == null ||
+          (incomingBalanceAt != null &&
+              incomingBalanceAt.isAfter(existingBalanceAt));
+      final balancePrimary = balanceFromIncoming ? incoming : existing;
+      final balanceSecondary = balanceFromIncoming ? existing : incoming;
+      final latestBalanceAt = existingBalanceAt == null
+          ? incomingBalanceAt
+          : incomingBalanceAt == null
+          ? existingBalanceAt
+          : (incomingBalanceAt.isAfter(existingBalanceAt)
+                ? incomingBalanceAt
+                : existingBalanceAt);
       merged[index] = BankAccountSummary(
         accountLast4: primary.accountLast4,
-        availableBalance:
-            primary.availableBalance ?? secondary.availableBalance,
+        availableBalance: balancePrimary.availableBalance ??
+            balanceSecondary.availableBalance,
+        latestBalanceSmsAt: latestBalanceAt,
         latestSmsAt: latestAt,
         smsCount: existing.smsCount > incoming.smsCount
             ? existing.smsCount
@@ -2898,6 +2912,8 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
                 (account) => {
                   'accountLast4': account.accountLast4,
                   'availableBalanceInr': account.availableBalance?.rupees,
+                  'latestBalanceSmsAt':
+                      account.latestBalanceSmsAt?.toIso8601String(),
                   'latestSmsAt': account.latestSmsAt?.toIso8601String(),
                   'smsCount': account.smsCount,
                   'issuerSlug': account.issuerSlug,
@@ -4062,6 +4078,7 @@ Future<RecurringReport?> _buildLocalRecurringReport(Ref ref) async {
         lastSeenOn: latest.occurredAt,
         nextExpectedOn: _nextRecurringDateAfter(latest.occurredAt, cadence),
         categoryName: latest.categoryName,
+        subcategoryName: latest.subcategoryName,
         cardName: latest.cardDisplayName,
         paymentMethod: latest.instrumentKnown ? latest.instrument.label : null,
         detectionSource: 'local_cache',
@@ -4090,6 +4107,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
   DateTime? to,
   String? cardId,
   String? categoryId,
+  String? userCategoryId,
   String? source,
   String? query,
   bool preferCached = false,
@@ -4106,6 +4124,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
     to: to,
     cardId: cardId,
     categoryId: categoryId,
+    userCategoryId: userCategoryId,
     source: source,
     query: query,
   );
@@ -4123,6 +4142,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
         to: to,
         cardId: cardId,
         categoryId: categoryId,
+        userCategoryId: userCategoryId,
         source: source,
         query: query,
       );
@@ -4336,7 +4356,12 @@ final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
 /// Adds a category for the current account and refreshes every category
 /// picker. The account namespace prevents one user's local categories from
 /// appearing after another user signs in on the same device.
-Future<SpendCategory?> addCustomCategory(WidgetRef ref, String name) async {
+Future<SpendCategory?> addCustomCategory(
+  WidgetRef ref,
+  String name, {
+  String? parentId,
+  List<String> matchTerms = const [],
+}) async {
   final namespace = ref.read(cacheNamespaceProvider);
   if (namespace == 'signed-out') return null;
   final cache = await ref.read(responseCacheProvider.future);
@@ -4346,6 +4371,8 @@ Future<SpendCategory?> addCustomCategory(WidgetRef ref, String name) async {
     queue: queue,
     namespace: namespace,
     name: name,
+    parentId: parentId,
+    matchTerms: matchTerms,
   );
   ref.invalidate(categoriesProvider);
   unawaited(ref.read(syncEngineProvider).sync());
@@ -4499,8 +4526,18 @@ AsyncValue<List<Recommendation>> _rankRecommendations(
           (category) => category.slug == categorySlug,
         )
       : categoryList.firstWhereOrNull((category) => category.id == categoryId);
-  final resolvedCategoryId = categoryId ?? resolvedCategory?.id;
-  final resolvedCategorySlug = categorySlug ?? resolvedCategory?.slug;
+  final requestedCategoryId = categoryId ?? resolvedCategory?.id;
+  // Private subcategories are transaction labels, not published reward-rule
+  // categories. Rank against their built-in parent while retaining the child
+  // id separately in the transaction form.
+  final resolvedCategoryId = categoryIdForServer(
+    requestedCategoryId,
+    categoryList,
+  );
+  final resolvedCategorySlug = categoryList
+      .where((category) => category.id == resolvedCategoryId)
+      .firstOrNull
+      ?.slug ?? categorySlug;
 
   final cards = ownedCardType == null && wallet.isEmpty
       ? allCards
@@ -4753,7 +4790,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
 
   Future<int> flush() async {
     final summary = await ref.read(smsAutoImportProvider).syncPendingMessages();
-    return summary.imported + summary.needsReview + summary.dueDatesUpdated;
+    return summary.imported + summary.needsReview + summary.dueDatesUpdated + summary.statementDaysUpdated;
   }
 
   // Parser improvements must also help messages that were already placed in
@@ -4769,6 +4806,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
     final items = await reviewRepo.fetchAll();
     var changed = false;
     var dueDayUpdated = false;
+    var statementDayUpdated = false;
     for (final item in items) {
       try {
         final result = await repo.logTransactionFromSms(
@@ -4777,6 +4815,7 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
           occurredAt: item.receivedAt,
         );
         dueDayUpdated = dueDayUpdated || result.dueDayUpdated;
+        statementDayUpdated = statementDayUpdated || result.statementDayUpdated;
         final canRemove =
             (result.parsed && !result.needsReview) ||
             _isIgnorableSmsResult(result);
@@ -4791,8 +4830,8 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         break;
       }
     }
-    if (changed || dueDayUpdated) {
-      if (dueDayUpdated) await _clearUserCardsCacheForRef(ref);
+    if (changed || dueDayUpdated || statementDayUpdated) {
+      if (dueDayUpdated || statementDayUpdated) await _clearUserCardsCacheForRef(ref);
       ref.invalidate(needsReviewItemsProvider);
       ref.invalidate(needsReviewCountProvider);
       ref.invalidate(userCardsProvider);
@@ -4944,6 +4983,7 @@ class SmsInboxSyncSummary {
   final int ignored;
   final int needsReview;
   final int dueDatesUpdated;
+  final int statementDaysUpdated;
 
   const SmsInboxSyncSummary({
     required this.scanned,
@@ -4952,6 +4992,7 @@ class SmsInboxSyncSummary {
     required this.ignored,
     this.needsReview = 0,
     this.dueDatesUpdated = 0,
+    this.statementDaysUpdated = 0,
   });
 }
 
@@ -5220,7 +5261,8 @@ class SmsAutoImportController {
         duplicates = 0,
         ignored = 0,
         needsReview = 0,
-        dueDatesUpdated = 0;
+        dueDatesUpdated = 0,
+        statementDaysUpdated = 0;
     final repo = _ref.read(userCardsRepositoryProvider);
     if (repo == null) {
       return SmsInboxSyncSummary(
@@ -5252,7 +5294,11 @@ class SmsAutoImportController {
       final pending = intake.pending(namespace, readyOnly: true);
       if (pending.isEmpty) break;
       try {
-        for (final backfill in [false, true]) {
+        // Historical statement alerts must reach the server before the
+        // current-month fallback. Otherwise a current reminder can fill
+        // statement_day before September/August history gets a chance to
+        // establish the recurring billing day.
+        for (final backfill in [true, false]) {
           final messages = [
             for (final entry in pending)
               if ((DateTime(
@@ -5281,6 +5327,7 @@ class SmsAutoImportController {
           ignored += result.unparsed + result.invalid + result.errored;
           needsReview += result.needsReview;
           dueDatesUpdated += result.dueDatesUpdated;
+          statementDaysUpdated += result.statementDaysUpdated;
         }
       } catch (_) {
         // Local capture/progress is already durable. Retry only this outbox.
@@ -5302,8 +5349,8 @@ class SmsAutoImportController {
       await Future<void>.delayed(Duration.zero);
     }
     if (_ref.read(cacheNamespaceProvider) == namespace &&
-        (imported > 0 || needsReview > 0 || dueDatesUpdated > 0)) {
-      if (dueDatesUpdated > 0) await _clearUserCardsCacheForRef(_ref);
+        (imported > 0 || needsReview > 0 || dueDatesUpdated > 0 || statementDaysUpdated > 0)) {
+      if (dueDatesUpdated > 0 || statementDaysUpdated > 0) await _clearUserCardsCacheForRef(_ref);
       _ref.invalidate(userCardsProvider);
       _ref.invalidate(myCardsProvider);
       _ref.invalidate(transactionsProvider);
@@ -5321,6 +5368,7 @@ class SmsAutoImportController {
       ignored: ignored,
       needsReview: needsReview,
       dueDatesUpdated: dueDatesUpdated,
+      statementDaysUpdated: statementDaysUpdated,
     );
   }
 

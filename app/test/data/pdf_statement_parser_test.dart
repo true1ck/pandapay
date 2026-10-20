@@ -7,6 +7,15 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 void main() {
   group('parseStatementText', () {
+    test('separates a bank statement card repayment from a card purchase', () {
+      final result = parseStatementText('''
+12/10/2026  PAYMENT TO AXIS BANK FLIPKART CREDIT CARD  80,000.00 DR
+13/10/2026  FLIPKART INTERNET  80,000.00 DR
+''');
+      expect(result.transactions, hasLength(2));
+      expect(result.transactions.first.isTransfer, isTrue);
+      expect(result.transactions.last.isTransfer, isFalse);
+    });
     test('extracts a well-formed transaction line', () {
       final result = parseStatementText(
         '12/05/2026  AMAZON PAY INDIA PVT LTD MUM   1,234.50',

@@ -43,6 +43,7 @@ class LocalSmsObservation {
   final String? billerName;
   final String? cadenceHint;
   final DateTime? dueDate;
+  final DateTime? statementDate;
   final Money? availableBalance, amountDue, minimumDue, autopayLimit;
   final LocalSmsEventType eventType;
   final LocalSmsDisposition disposition;
@@ -55,6 +56,7 @@ class LocalSmsObservation {
     this.billerName,
     this.cadenceHint,
     this.dueDate,
+    this.statementDate,
     this.availableBalance,
     this.amountDue,
     this.minimumDue,
@@ -91,6 +93,39 @@ class LocalSmsReviewDraft {
 /// spending. Values are local observations until server reconciliation.
 class LocalSmsParser {
   static const version = 4;
+
+  /// True only for a deposit/current/savings-bank alert. Account-shaped
+  /// suffixes from insurance, demat, brokerage, investment, and card alerts
+  /// must not create rows in Home's bank-account snapshot.
+  static bool isBankAccountMessage(String body) {
+    final text = body.toLowerCase();
+    if (text.trim().isEmpty ||
+        RegExp(r'\b(?:credit|debit)\s+card\b').hasMatch(text)) {
+      return false;
+    }
+    if (RegExp(
+      r'\b(?:lic|life\s+insurance|policy|premium|demat|trading|broker(?:age|ing)?|portfolio|holdings?|folio|dp\s*id|client\s*id|nav|units?|shares?|stocks?|equity|sip|mutual\s+fund|investment|zerodha|groww|upstox|angel\s+one|dhan|paytm\s+money)\b',
+    ).hasMatch(text)) {
+      return false;
+    }
+    final accountMarker = RegExp(
+      r'\b(?:bank|a\/?c\.?|account|savings|current|upi|imps|neft|rtgs|atm)\b',
+    ).hasMatch(text);
+    final balanceMarker = RegExp(
+      r'\b(?:available|avail|avl|current|closing)\s*(?:balance|bal)\b',
+    ).hasMatch(text);
+    final movementMarker = RegExp(
+      r'\b(?:debited|debit|credited|credit|paid|spent|sent|transferred|withdrawn|received|deposited)\b',
+    ).hasMatch(text);
+    // A balance phrase alone is not enough: policy and investment alerts can
+    // also contain balance wording. Require explicit account/bank language
+    // alongside the balance or completed movement.
+    return accountMarker && (balanceMarker || movementMarker);
+  }
+
+  static bool _ownAccountTransfer(String body) => _re(
+    r'\b(?:self[ -]?transfer|own\s+(?:bank\s+)?account|between\s+(?:my|your)\s+(?:bank\s+)?accounts)\b|\bfrom\s+your\b[\s\S]{0,100}\bto\s+your\b[\s\S]{0,80}\b(?:a\/?c\.?|account)\b',
+  ).hasMatch(body);
   static bool sensitive(String body) => RegExp(
     r"\b(?:otp|one[-\s]?time password|verification code|security code|cvv|pin)\b|\b(?:do not|don't|never)\s+share\b|\bvalid\s+(?:for|till|until)\b",
     caseSensitive: false,
@@ -282,9 +317,7 @@ class LocalSmsParser {
           r'\b(?:credited|received|deposited|refund(?:ed)?|reversed)\b',
         ).hasMatch(body)
         ? TxnEntryKind.income
-        : _re(
-            r'\bfrom\b[\s\S]{0,80}\b(?:a/c|account)\b[\s\S]{0,80}\bto\b',
-          ).hasMatch(body)
+        : _ownAccountTransfer(body)
         ? TxnEntryKind.transfer
         : TxnEntryKind.spend;
 
@@ -314,14 +347,22 @@ class LocalSmsParser {
           r'\b(?:credit|debit)\s+card\s+(\d{4})\b',
         ).firstMatch(body)?.group(1);
     // Credit-card account references identify a card ledger, not a bank account.
+    final destinationAccountLast4 = _re(
+      r'\bto\s+your\b[\s\S]{0,70}\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*[*xX-]*\s*(\d{4})\b',
+    ).firstMatch(body)?.group(1);
     final accountLast4 = _re(r'\bcredit\s+card\b').hasMatch(body)
         ? null
+        : _ownAccountTransfer(body) &&
+              _re(r'\b(?:credited|received|deposited)\b').hasMatch(body) &&
+              destinationAccountLast4 != null
+        ? destinationAccountLast4
         : _re(
             r'\b(?:a\/?c\.?|account)\s*(?:no\.?|number)?\s*(?:(?:ending(?:\s+with)?|last\s*4)\s*)?[*xX-]*\s*(\d{4})\b',
           ).firstMatch(body)?.group(1);
     DateTime? due;
     for (final phrase in [
       r'\bdue\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
+      r'\bpay\s+by\s*[:\-]?\s*',
       r'\b(?:payment|bill|amount)\s+due\s+date\b[\s\S]{0,120}?\b(?:is|on|by)\s*[:\-]?\s*',
       r'\b(?:renew(?:s|al|ing)?|expires?)\s*(?:date\s*)?(?:is|on|by)?\s*[:\-]?\s*',
     ]) {
@@ -330,6 +371,33 @@ class LocalSmsParser {
         due = parseDate(token);
         if (due != null) break;
       }
+    }
+    DateTime? statementDate;
+    final statementAlert =
+        _re(
+          r'\b(?:credit\s+card|card\b[\s\S]{0,45}\b(?:ending|last\s*4|no\.?|number|xx|x{2,}|\*{2,})\s*[:#.-]?\s*\d{4})\b',
+        ).hasMatch(body) &&
+        (_re(
+              r'\b(?:e[- ]?statement|statement|bill)\b[\s\S]{0,70}\b(?:generated|ready|available|issued|created|raised|prepared)\b',
+            ).hasMatch(body) ||
+            _re(
+              r'\b(?:total|minimum|amount|payment|bill)\s+(?:amount\s+)?due\b|\b(?:statement|bill)\b[\s\S]{0,60}\b(?:payable|pay\s+by|due)\b',
+            ).hasMatch(body));
+    if (statementAlert) {
+      for (final phrase in [
+        r'\b(?:statement|e[- ]?statement|bill)\b[\s\S]{0,45}?\b(?:generated|issued|created|raised|prepared|dated|date)\b\s*(?:on|is|:|-)?\s*',
+        r'\b(?:generated|issued|created|raised|prepared|dated)\s*(?:on|date|is|:|-)?\s*',
+        r'\b(?:statement|e[- ]?statement|bill)\s+date\s*(?:is|on|:|-)?\s*',
+      ]) {
+        final token = _re('$phrase($dateToken)').firstMatch(body)?.group(1);
+        if (token != null) {
+          statementDate = parseDate(token);
+          if (statementDate != null) break;
+        }
+      }
+      // Most issuers omit the generated date from the body. The SMS receive
+      // date is then the best available statement-day observation.
+      statementDate ??= receivedAt;
     }
     final balanceText = _re(
       r'\b(?:available|avail|avl|current|closing)\s*(?:balance|bal)\s*(?:is|:|-)?\s*(?:₹|rs\.?|inr)?\s*:?\s*([\d,]+(?:\.\d{1,2})?)',
@@ -404,8 +472,9 @@ class LocalSmsParser {
         ).hasMatch(body);
     final hasCompletedMovement =
         _re(
-          r'\b(?:spent|debited|debit|paid|purchase|purchased|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed)\b',
+          r'\b(?:spent|debited|debit|paid|charged|withdrawn|sent|transferred|credited|received|deposited|refunded|reversed)\b',
         ).hasMatch(body) ||
+        (!failed && _re(r'\b(?:purchase|purchased)\b').hasMatch(body)) ||
         _re(
           r'\b(?:recharge|payment|transaction|purchase|debit|spent|paid|charged|withdrawn|sent|transferred)\b[\s\S]{0,40}\b(?:successful|successfully|completed)\b',
         ).hasMatch(body);
@@ -421,6 +490,7 @@ class LocalSmsParser {
       billerName: billerName,
       cadenceHint: cadenceHint,
       dueDate: due,
+      statementDate: statementDate,
       availableBalance: balance,
       amountDue: amountDue ?? billAmount,
       minimumDue: minimumDue,
@@ -438,6 +508,7 @@ class LocalSmsParser {
           ? (0.55 +
                     (billerName == null ? 0 : 0.2) +
                     (due == null ? 0 : 0.2) +
+                    (statementDate == null ? 0 : 0.05) +
                     ((amountDue ?? billAmount) == null ? 0 : 0.1) +
                     (accountLast4 == null ? 0 : 0.05))
                 .clamp(0, 0.95)
@@ -519,9 +590,24 @@ class LocalSmsParser {
             _re(
               r'\b(?:money|amount|payment|funds?)\b[\s\S]{0,40}\b(?:received|credited|deposited)\b',
             ).hasMatch(body));
-    final billPayment = _re(
-      r'\b(?:payment|paid|debited|debit|amount)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\b(?:your\s+)?credit\s+card\b|\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid)\b',
+    final billPaymentCandidate = _re(
+      r'\b(?:payment|paid|debited|debit|amount)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\b(?:your\s+)?credit\s+card\b|\bcredit\s+card\s+(?:bill|payment)\b[\s\S]{0,90}\b(?:received|credited|debited|paid|successful|completed)\b|\b(?:paid|payment|debited)\b[\s\S]{0,90}\b(?:to|for)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card(?:\s+bill)?\b|\b(?:payment|bill)\b[\s\S]{0,60}\b(?:for|on|of)\s+(?:(?:your|the|axis|hdfc|icici|sbi|bank|flipkart)\s+){0,5}credit\s+card\b[\s\S]{0,90}\b(?:paid|received|successful|completed)\b',
     ).hasMatch(body);
+    final billPayment =
+        billPaymentCandidate &&
+        (!_re(
+              r'\b(?:payment|amount|minimum)\s+due\b|\bdue\s+on\b',
+            ).hasMatch(body) ||
+            _re(
+              r'\b(?:paid|payment)\s+(?:successfully|completed)\b|\bpayment\s+received\b',
+            ).hasMatch(body));
+    final cashWithdrawal = _re(
+      r'\b(?:cash\s+withdrawal|withdrawn\s+from\b[\s\S]{0,50}\bcard|withdrawn\s+(?:from|at)\s+(?:an?\s+)?atm|atm\b[\s\S]{0,60}\bwithdrawn)\b',
+    ).hasMatch(body);
+    final investmentDebit =
+        !cashWithdrawal &&
+        _re(r'\b(?:sip|mutual\s+fund)\b').hasMatch(body) &&
+        _re(r'\b(?:debited|paid|transferred|invested)\b').hasMatch(body);
     if (!credit &&
         !billPayment &&
         !_re(
@@ -554,10 +640,16 @@ class LocalSmsParser {
     if (instrument == null) return observation();
     final transfer =
         billPayment ||
-        _re(
-          r'\bfrom\b[\s\S]{0,80}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}\s+to\s+[A-Za-z]',
-        ).hasMatch(body);
+        cashWithdrawal ||
+        (_ownAccountTransfer(body) &&
+            _re(
+              r'\bfrom\b[\s\S]{0,80}\b(?:a\/?c\.?|account)\s*[*xX-]*\s*\d{4}\s+to\s+[A-Za-z]',
+            ).hasMatch(body));
     final kind = transfer
+        ? TxnEntryKind.transfer
+        : investmentDebit
+        ? TxnEntryKind.investment
+        : credit && _ownAccountTransfer(body)
         ? TxnEntryKind.transfer
         : credit
         ? TxnEntryKind.income
@@ -565,8 +657,24 @@ class LocalSmsParser {
     var merchant = _re(
       r'\b(?:at|to|for|from|by)\s+([A-Za-z_][A-Za-z0-9 ._&@*\x27/-]{1,80}?)(?=\s+(?:from|on|via|upi|ref(?:erence)?|txn|transaction|bal(?:ance)?|avl|available|if\s+not|call|sms\s+block)\b|\s*\(|[.,;]|$)',
     ).firstMatch(body)?.group(1)?.trim();
+    if (bankDebit &&
+        !credit &&
+        !transfer &&
+        !investmentDebit &&
+        merchant == null) {
+      return observation(
+        null,
+        LocalSmsEventType.unknown,
+        LocalSmsDisposition.review,
+        ['ambiguous_account_debit'],
+      );
+    }
     if (billPayment) {
       merchant = 'Credit card bill payment';
+    } else if (cashWithdrawal) {
+      merchant = 'Cash withdrawal';
+    } else if (investmentDebit) {
+      merchant = 'Investment contribution';
     } else if (credit && _re(r'\bsalary\b').hasMatch(body)) {
       merchant = 'Salary';
     } else if (credit) {

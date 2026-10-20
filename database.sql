@@ -1852,6 +1852,9 @@ CREATE TABLE user_categories (
   profile_id TEXT NOT NULL,
   slug TEXT NOT NULL,
   name TEXT NOT NULL,
+  parent_category_id TEXT,
+  parent_user_category_id TEXT,
+  match_terms TEXT NOT NULL DEFAULT '[]',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );

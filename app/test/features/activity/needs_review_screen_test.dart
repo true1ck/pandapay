@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/needs_review_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/commitments_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/needs_review_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,6 +44,7 @@ Future<void> _pump(
   WidgetTester tester, {
   required _FakeUserCardsRepository repo,
   required NeedsReviewRepository reviews,
+  CommitmentsRepository? commitments,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -51,6 +53,8 @@ Future<void> _pump(
         userCardsProvider.overrideWith((ref) async => const []),
         categoriesProvider.overrideWith((ref) async => const []),
         needsReviewRepositoryProvider.overrideWithValue(reviews),
+        if (commitments != null)
+          commitmentsRepositoryProvider.overrideWithValue(commitments),
       ],
       child: const MaterialApp(home: NeedsReviewScreen()),
     ),
@@ -95,9 +99,7 @@ void main() {
     expect(find.textContaining('unparseable_amount'), findsOneWidget);
   });
 
-  testWidgets('"Not a transaction" removes the item from the queue', (
-    tester,
-  ) async {
+  testWidgets('Ignore message removes the item from the queue', (tester) async {
     await reviews.add(
       NeedsReviewItem(
         id: '1',
@@ -108,11 +110,38 @@ void main() {
     );
     await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
 
-    await tester.tap(find.text('Not a transaction'));
+    await tester.tap(find.text('Ignore message'));
     await tester.pumpAndSettle();
 
     expect(find.text('Nothing needs review'), findsOneWidget);
     expect(await reviews.fetchAll(), isEmpty);
+  });
+
+  testWidgets('Review transaction opens a clear bottom-sheet review form', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'txn-review-1',
+        sender: 'VM-HDFCBK',
+        body: 'Rs.499 spent at AMAZON',
+        reason: 'no_transaction_match',
+        receivedAt: DateTime(2026, 10, 1),
+      ),
+    );
+    await _pump(tester, repo: _FakeUserCardsRepository(), reviews: reviews);
+
+    await tester.tap(find.text('Review transaction'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review this transaction'), findsOneWidget);
+    expect(
+      find.textContaining('possible transaction in this message'),
+      findsOneWidget,
+    );
+    expect(find.text('Save transaction'), findsOneWidget);
+    expect(find.text('Amount (₹)'), findsOneWidget);
+    expect(find.text('Merchant or sender'), findsOneWidget);
   });
 
   testWidgets('Dismiss all clears every queued item at once', (tester) async {
@@ -139,5 +168,76 @@ void main() {
 
     expect(find.text('Nothing needs review'), findsOneWidget);
     expect(await reviews.fetchAll(), isEmpty);
+  });
+
+  testWidgets('Save bill opens a review sheet and only then persists it', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'bill-1',
+        sender: 'JX-MYTNEU-S',
+        body:
+            'Your HDFC BANK CREDIT CARD bill of Rs. 10148.00 is ready. Pay by 2026-10-09.',
+        receivedAt: DateTime(2026, 10, 1),
+        kind: NeedsReviewKind.commitment,
+      ),
+    );
+    final commitments = CommitmentsRepository(namespace: 'user:test');
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(),
+      reviews: reviews,
+      commitments: commitments,
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Save bill'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review bill details'), findsOneWidget);
+    expect(
+      find.textContaining('Nothing is saved until you tap Save bill.'),
+      findsOneWidget,
+    );
+    expect(await commitments.fetchAll(), isEmpty);
+
+    final sheetSave = find.widgetWithText(FilledButton, 'Save bill');
+    await tester.tap(sheetSave.last);
+    await tester.pumpAndSettle();
+
+    final saved = await commitments.fetchAll();
+    expect(saved, hasLength(1));
+    expect(saved.single.amount?.paise, 1014800);
+    expect(saved.single.dueOn, DateTime(2026, 10, 9));
+    expect(saved.single.isUserConfirmed, isTrue);
+    expect(await reviews.fetchAll(), isEmpty);
+  });
+
+  testWidgets('a commitment can be dismissed from its own close action', (
+    tester,
+  ) async {
+    await reviews.add(
+      NeedsReviewItem(
+        id: 'bill-2',
+        sender: 'VZ-VICARE-S',
+        body: 'Your mobile invoice is ready for download.',
+        receivedAt: DateTime(2026, 10, 1),
+        kind: NeedsReviewKind.commitment,
+      ),
+    );
+    final commitments = CommitmentsRepository(namespace: 'user:test');
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(),
+      reviews: reviews,
+      commitments: commitments,
+    );
+
+    await tester.tap(find.byTooltip('Dismiss message'));
+    await tester.pumpAndSettle();
+
+    expect(await reviews.fetchAll(), isEmpty);
+    final tombstones = await commitments.fetchAll();
+    expect(tombstones.single.status, CommitmentStatus.dismissed);
   });
 }

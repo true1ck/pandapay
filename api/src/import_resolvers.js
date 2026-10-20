@@ -1,7 +1,11 @@
 const { normalizeMerchant } = require('./reward_math');
 const { inferBuiltinCategory } = require('./merchant_category');
 const { extractCreditLimit } = require('./card_limit_parser');
-const { extractDueDate, extractLast4 } = require('./due_date_parser');
+const {
+  extractDueDate,
+  extractLast4,
+  extractStatementDate,
+} = require('./due_date_parser');
 
 /**
  * Resolving the two things a parsed bank message does NOT tell us: which of
@@ -210,16 +214,24 @@ async function syncCreditLimitFromSms(client, userId, { body, patternIssuerId })
  * phrase and an unambiguous card match. Existing user-entered data is not
  * overwritten by a later alert.
  */
-async function syncDueDayFromSms(client, userId, { body, patternIssuerId }) {
+async function syncDueDayFromSms(client, userId, {
+  body,
+  patternIssuerId,
+  explicitUserCardId,
+}) {
   const detected = extractDueDate(body);
   if (!detected) return null;
 
-  const card = await resolveUserCardForImport(client, userId, {
-    last4: extractLast4(body),
-    patternIssuerId,
-    instrument: 'credit_card',
-    messageText: body,
-  });
+  const card = explicitUserCardId
+    ? (await userCardMatchesInstrument(client, userId, explicitUserCardId, 'credit_card')
+      ? { userCardId: explicitUserCardId, basis: 'explicit-user-card' }
+      : null)
+    : await resolveUserCardForImport(client, userId, {
+        last4: extractLast4(body),
+        patternIssuerId,
+        instrument: 'credit_card',
+        messageText: body,
+      });
   if (!card) return { detected, updated: false, reason: 'card_not_unambiguous' };
 
   const updated = await client.query(
@@ -229,6 +241,47 @@ async function syncDueDayFromSms(client, userId, { body, patternIssuerId }) {
         AND profile_id = $3
         AND is_archived = false
         AND due_day IS NULL
+      RETURNING id`,
+    [detected.day, card.userCardId, userId],
+  );
+
+  return {
+    detected,
+    updated: updated.rowCount > 0,
+    userCardId: card.userCardId,
+    basis: card.basis,
+  };
+}
+
+/** Learn the recurring statement day from a card-bill SMS. */
+async function syncStatementDayFromSms(client, userId, {
+  body,
+  patternIssuerId,
+  observedAt,
+  explicitUserCardId,
+}) {
+  const detected = extractStatementDate(body, observedAt);
+  if (!detected) return null;
+
+  const card = explicitUserCardId
+    ? (await userCardMatchesInstrument(client, userId, explicitUserCardId, 'credit_card')
+      ? { userCardId: explicitUserCardId, basis: 'explicit-user-card' }
+      : null)
+    : await resolveUserCardForImport(client, userId, {
+        last4: extractLast4(body),
+        patternIssuerId,
+        instrument: 'credit_card',
+        messageText: body,
+      });
+  if (!card) return { detected, updated: false, reason: 'card_not_unambiguous' };
+
+  const updated = await client.query(
+    `UPDATE user_cards
+        SET statement_day = $1
+      WHERE id = $2
+        AND profile_id = $3
+        AND is_archived = false
+        AND statement_day IS NULL
       RETURNING id`,
     [detected.day, card.userCardId, userId],
   );
@@ -263,7 +316,91 @@ async function syncDueDayFromSms(client, userId, { body, patternIssuerId }) {
  * it is better to show honest "Other" than to show an empty category or to
  * invent a specific category.
  */
-async function resolveCategoryForImport(client, userId, { merchantName, vpa, mcc, messageText }) {
+function normalizedImportText(...values) {
+  return values
+    .filter((value) => typeof value === 'string' && value.trim())
+    .map((value) => String(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function importTermMatches(text, term) {
+  const normalizedTerm = String(term || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (!normalizedTerm || normalizedTerm.length < 2) return false;
+  if (normalizedTerm.includes(' ')) return text.includes(normalizedTerm);
+  return text.split(' ').includes(normalizedTerm);
+}
+
+/** Resolve a private category/subcategory before public merchant rules. */
+async function resolveUserCategoryForImport(client, userId, {
+  merchantName,
+  messageText,
+  categoryHint,
+  subcategoryHint,
+}) {
+  const text = normalizedImportText(
+    merchantName,
+    messageText,
+    categoryHint,
+    subcategoryHint,
+  );
+  if (!text) return null;
+
+  const rows = await client.query(
+    `SELECT uc.id, uc.name, uc.slug, uc.parent_category_id,
+            uc.parent_user_category_id, uc.match_terms,
+            sc.name AS parent_category_name,
+            puc.name AS parent_user_category_name
+       FROM user_categories uc
+       LEFT JOIN spend_categories sc ON sc.id = uc.parent_category_id
+       LEFT JOIN user_categories puc ON puc.id = uc.parent_user_category_id
+      WHERE uc.profile_id = $1
+      ORDER BY uc.created_at, uc.name`,
+    [userId],
+  );
+  if (!rows.rows.length) return null;
+
+  const hintedSubcategory = normalizeMerchant(subcategoryHint || '');
+  const hintedCategory = normalizeMerchant(categoryHint || '');
+  const candidates = rows.rows
+    .map((row) => {
+      const name = normalizeMerchant(row.name);
+      const slug = normalizeMerchant(String(row.slug || '').replace(/^custom[:_-]?/i, ''));
+      const terms = Array.isArray(row.match_terms) ? row.match_terms : [];
+      let score = 0;
+      if (hintedSubcategory && (hintedSubcategory === name || hintedSubcategory === slug)) score += 1000;
+      if (hintedCategory && (hintedCategory === name || hintedCategory === slug)) score += 900;
+      if (terms.some((term) => importTermMatches(text, term))) score += 600;
+      if (importTermMatches(text, row.name) || importTermMatches(text, slug)) score += 400;
+      if (score === 0) return null;
+      return { row, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || a.row.id.localeCompare(b.row.id));
+
+  const match = candidates[0]?.row;
+  if (!match) return null;
+  return {
+    categoryId: match.parent_category_id || null,
+    userCategoryId: match.id,
+    categoryName: match.parent_category_name || match.parent_user_category_name || null,
+    userCategoryName: match.name,
+  };
+}
+
+/** Returns both the reward/reporting parent and the private child. */
+async function resolveCategoryAssignmentForImport(client, userId, options) {
+  const userCategory = await resolveUserCategoryForImport(client, userId, options);
+  if (userCategory) return userCategory;
+  return {
+    categoryId: await resolveCategoryForImport(client, userId, options),
+    userCategoryId: null,
+  };
+}
+
+async function resolveCategoryForImport(client, userId, {
+  merchantName, vpa, mcc, messageText,
+}) {
   const merchantKey = normalizeMerchant(merchantName);
   const normalized = ['unknown', 'unknownmerchant', 'other', 'na', 'notavailable'].includes(merchantKey) ? '' : merchantKey;
 
@@ -402,6 +539,10 @@ module.exports = {
   userCardMatchesInstrument,
   syncCreditLimitFromSms,
   syncDueDayFromSms,
+  syncStatementDayFromSms,
+  extractStatementDate,
+  resolveUserCategoryForImport,
+  resolveCategoryAssignmentForImport,
   resolveCategoryForImport,
   fileForReview,
 };

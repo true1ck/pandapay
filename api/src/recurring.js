@@ -242,6 +242,7 @@ function detectRecurringSeries(rows, { now = new Date() } = {}) {
       lastSeenOn: last,
       nextExpectedOn: next,
       categoryId: latest.category_id || null,
+      userCategoryId: latest.user_category_id || null,
       userCardId: latest.user_card_id || null,
       paymentMethod: latest.instrument || null,
     });

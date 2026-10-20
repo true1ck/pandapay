@@ -76,6 +76,9 @@ class SmsImportStore {
           'parser_version': LocalSmsParser.version,
           'received_at': message.receivedAt.toUtc().toIso8601String(),
           'account_last4': observation.accountLast4,
+          'is_bank_account': observation.accountLast4 == null
+              ? false
+              : LocalSmsParser.isBankAccountMessage(message.body),
           'card_last4': observation.cardLast4,
           'biller_name': observation.billerName,
           'cadence_hint': observation.cadenceHint,
@@ -84,6 +87,7 @@ class SmsImportStore {
           'minimum_due_paise': observation.minimumDue?.paise,
           'autopay_limit_paise': observation.autopayLimit?.paise,
           'due_date': observation.dueDate?.toIso8601String(),
+          'statement_date': observation.statementDate?.toIso8601String(),
           'event_type': observation.eventType.wireValue,
           'disposition': observation.disposition.wireValue,
           'reason_codes': observation.reasonCodes,
@@ -129,6 +133,22 @@ class SmsImportStore {
               'due_day': observation.dueDate!.day,
             });
             // Later messages in this same batch must see the established day.
+            cards[cards.indexWhere((card) => card.id == updated.id)] = updated;
+            store.replaceCards(namespace, [
+              for (final card in cards.where((c) => !c.isArchived))
+                if (card.id == updated.id) updated else card,
+            ]);
+          }
+        }
+        if (observation.statementDate != null && observation.cardLast4 != null) {
+          final matching = cards
+              .where((c) => !c.isArchived && c.last4 == observation.cardLast4)
+              .toList();
+          if (matching.length == 1 && matching.single.statementDay == null) {
+            final updated = UserCard.fromJson({
+              ...matching.single.toJson(),
+              'statement_day': observation.statementDate!.day,
+            });
             cards[cards.indexWhere((card) => card.id == updated.id)] = updated;
             store.replaceCards(namespace, [
               for (final card in cards.where((c) => !c.isArchived))

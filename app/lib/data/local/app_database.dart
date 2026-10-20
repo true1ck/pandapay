@@ -113,6 +113,9 @@ CREATE TABLE IF NOT EXISTS user_categories (
   id TEXT NOT NULL,
   name TEXT NOT NULL,
   slug TEXT NOT NULL,
+  parent_category_id TEXT,
+  parent_user_category_id TEXT,
+  match_terms_json TEXT NOT NULL DEFAULT '[]',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   PRIMARY KEY(namespace, id)
@@ -173,6 +176,7 @@ class AppDatabase {
     db.execute('PRAGMA busy_timeout = 5000');
     db.execute('PRAGMA journal_mode = WAL');
     db.execute(_schema);
+    _ensureUserCategoriesSchema();
     _ensureOutboxSchema();
     if (!db
         .select('PRAGMA table_info(sync_pending_changes)')
@@ -192,6 +196,24 @@ class AppDatabase {
           "ALTER TABLE $table ADD COLUMN namespace TEXT NOT NULL DEFAULT 'legacy'",
         );
       }
+    }
+  }
+
+  void _ensureUserCategoriesSchema() {
+    final columns = db
+        .select('PRAGMA table_info(user_categories)')
+        .map((row) => row['name'] as String)
+        .toSet();
+    for (final column in [
+      'parent_category_id',
+      'parent_user_category_id',
+      'match_terms_json',
+    ]) {
+      if (columns.contains(column)) continue;
+      final definition = column == 'match_terms_json'
+          ? 'TEXT NOT NULL DEFAULT \'[]\''
+          : 'TEXT';
+      db.execute('ALTER TABLE user_categories ADD COLUMN $column $definition');
     }
   }
 

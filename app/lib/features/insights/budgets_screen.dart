@@ -337,10 +337,8 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = (ref.watch(categoriesProvider).valueOrNull ??
-            const <SpendCategory>[])
-        .where((category) => !category.isCustom)
-        .toList();
+    final categories = ref.watch(categoriesProvider).valueOrNull ??
+        const <SpendCategory>[];
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
 
     return SafeArea(
@@ -425,7 +423,14 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
                             color: spendingCategoryVisual(c.name).accent,
                           ),
                           const SizedBox(width: AppSpace.sm),
-                          Text(c.name),
+                          Text(
+                            c.isSubcategory
+                                ? '${categories.firstWhereOrNull((parent) =>
+                                      parent.id == c.parentCategoryId ||
+                                      parent.id == c.parentUserCategoryId,
+                                    )?.name ?? ''} · ${c.name}'
+                                : c.name,
+                          ),
                         ],
                       ),
                     ),

@@ -254,6 +254,7 @@ class SpendReport {
   final EntryKindTotals previousSpend;
 
   final List<SpendBreakdownRow> byCategory;
+  final List<SpendBreakdownRow> bySubcategory;
   final List<SpendBreakdownRow> byMerchant;
   final List<CardSpendRow> byCard;
   final List<InstrumentSpendRow> byInstrument;
@@ -270,6 +271,7 @@ class SpendReport {
     required this.investment,
     required this.previousSpend,
     required this.byCategory,
+    this.bySubcategory = const [],
     required this.byMerchant,
     required this.byCard,
     required this.byInstrument,
@@ -337,6 +339,17 @@ class SpendReport {
               total: _money(e['totalInr']),
               txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,
               categoryId: e['categoryId'] as String?,
+            ),
+          )
+          .toList(),
+      bySubcategory: ((json['bySubcategory'] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()
+          .map(
+            (e) => SpendBreakdownRow(
+              label: '${_displayCategoryName(e['categoryName'] as String?)} · ${e['subcategoryName'] as String? ?? 'Subcategory'}',
+              total: _money(e['totalInr']),
+              txnCount: (e['txnCount'] as num?)?.toInt() ?? 0,
+              categoryId: e['subcategoryId'] as String?,
             ),
           )
           .toList(),
@@ -797,7 +810,9 @@ class RecurringSeries {
   final int occurrenceCount;
   final DateTime? lastSeenOn;
   final DateTime? nextExpectedOn;
+  final String? userCategoryId;
   final String? categoryName;
+  final String? subcategoryName;
   final String? cardName;
   final String? paymentMethod;
   final String detectionSource;
@@ -818,7 +833,9 @@ class RecurringSeries {
     required this.annualCost,
     this.lastSeenOn,
     this.nextExpectedOn,
+    this.userCategoryId,
     this.categoryName,
+    this.subcategoryName,
     this.cardName,
     this.paymentMethod,
     this.detectionSource = 'observed',
@@ -881,7 +898,9 @@ class RecurringSeries {
         nextExpectedOn: json['nextExpectedOn'] == null
             ? null
             : DateTime.parse(json['nextExpectedOn'] as String),
+        userCategoryId: json['userCategoryId'] as String?,
         categoryName: json['categoryName'] as String?,
+        subcategoryName: json['subcategoryName'] as String?,
         cardName: json['cardName'] as String?,
         paymentMethod: json['paymentMethod'] as String?,
         detectionSource: json['detectionSource'] as String? ?? 'observed',
@@ -906,7 +925,9 @@ class RecurringSeries {
     'lastSeenOn': lastSeenOn?.toIso8601String(),
     'annualCostInr': annualCost.rupees,
     'nextExpectedOn': nextExpectedOn?.toIso8601String(),
+    'userCategoryId': userCategoryId,
     'categoryName': categoryName,
+    'subcategoryName': subcategoryName,
     'cardName': cardName,
     'paymentMethod': paymentMethod,
     'detectionSource': detectionSource,

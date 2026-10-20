@@ -255,12 +255,12 @@ class _MissedOpportunityTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      entry.merchantName ?? entry.categoryName ?? 'Spend',
+                      entry.merchantName ?? entry.categoryLabel,
                       style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      entry.categoryName ?? 'Other',
+                      entry.categoryLabel,
                       style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                     ),
                   ],

@@ -998,10 +998,7 @@ class _ReportBodyState extends State<_ReportBody> {
     (sum, entry) => sum + entry.amount,
   );
 
-  String _categoryName(TransactionEntry entry) =>
-      entry.categoryName?.trim().isNotEmpty == true
-      ? entry.categoryName!.trim()
-      : 'Other';
+  String _categoryName(TransactionEntry entry) => entry.categoryLabel;
 
   String _merchantName(TransactionEntry entry) =>
       entry.merchantName?.trim().isNotEmpty == true
@@ -1231,7 +1228,11 @@ class _ReportBodyState extends State<_ReportBody> {
 
   List<TransactionEntry> _transactionsForCategory(SpendBreakdownRow row) {
     return _visibleEntries.where((entry) {
-      if (row.categoryId != null) return entry.categoryId == row.categoryId;
+      if (row.categoryId != null) {
+        return entry.categoryId == row.categoryId ||
+            entry.userCategoryId == row.categoryId ||
+            entry.parentUserCategoryId == row.categoryId;
+      }
       return _categoryName(entry).toLowerCase() == row.label.toLowerCase();
     }).toList();
   }
@@ -1589,10 +1590,7 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
   late String? _merchant = widget.initial.merchant;
   late String? _card = widget.initial.card;
 
-  String _category(TransactionEntry entry) =>
-      entry.categoryName?.trim().isNotEmpty == true
-      ? entry.categoryName!.trim()
-      : 'Other';
+  String _category(TransactionEntry entry) => entry.categoryLabel;
 
   String _merchantName(TransactionEntry entry) =>
       entry.merchantName?.trim().isNotEmpty == true

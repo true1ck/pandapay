@@ -59,6 +59,11 @@ final _closingBalanceLine = RegExp(
   r'\b(?:closing|ending)\s+balance\b',
   caseSensitive: false,
 );
+
+bool _isRepaymentOrTransfer(String description) => RegExp(
+  r'\b(?:TRANSFER|REPAYMENT|CREDIT\s+CARD\s+(?:BILL\s+)?PAYMENT|(?:PAYMENT|PAID)\s+(?:TO|FOR)\s+(?:(?:AXIS|HDFC|ICICI|SBI|BANK|FLIPKART)\s+){0,5}CREDIT\s+CARD)\b',
+  caseSensitive: false,
+).hasMatch(description);
 final _monthNames = <String, int>{
   'jan': 1,
   'january': 1,
@@ -218,10 +223,7 @@ ParsedStatementLine? _parseTransactionBlock(
       reviewReasons: reasons,
       isTransfer: account != null
           ? account.group(2)!.toLowerCase() == 'no'
-          : RegExp(
-              r'\b(?:TRANSFER|CREDIT CARD BILL PAYMENT|REPAYMENT)\b',
-              caseSensitive: false,
-            ).hasMatch(description),
+          : _isRepaymentOrTransfer(description),
       isInvestment: RegExp(
         r'\b(?:MUTUAL FUND|SIP|INVESTMENT)\b',
         caseSensitive: false,
@@ -254,6 +256,7 @@ ParsedStatementLine? _parseTransactionBlock(
     description: description,
     amount: amount,
     isCredit: isCredit,
+    isTransfer: _isRepaymentOrTransfer(description),
     isInvestment: RegExp(
       r'\b(?:MUTUAL FUND|SIP|INVESTMENT)\b',
       caseSensitive: false,

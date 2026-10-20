@@ -769,7 +769,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
                   _DetailRow(
                     label: 'Category',
-                    value: entry.categoryName ?? 'Other',
+                    value: entry.categoryLabel,
                   ),
                   if (isActive &&
                       (entry.categoryName == null ||

@@ -60,6 +60,9 @@ function validateStatementImport(body) {
     const time = Date.parse(row.occurredAt);
     if (time < Date.parse(body.statementFrom) - 14 * 3600000 || time >= Date.parse(body.statementTo) + 38 * 3600000) return `${prefix} falls outside the statement period`;
     if (row.merchantName != null && (typeof row.merchantName !== 'string' || !row.merchantName.trim() || row.merchantName.length > 500)) return `${prefix}.merchantName is invalid`;
+    for (const field of ['categoryHint', 'subcategoryHint']) {
+      if (row[field] != null && (typeof row[field] !== 'string' || row[field].length > 120)) return `${prefix}.${field} is invalid`;
+    }
     if (row.bankReference != null && (typeof row.bankReference !== 'string' || !/^[a-z0-9-]{6,40}$/i.test(row.bankReference))) return `${prefix}.bankReference is invalid`;
     if (row.sourceAccount != null && (typeof row.sourceAccount !== 'string' || row.sourceAccount.length > 200)) return `${prefix}.sourceAccount is invalid`;
     if (row.rail != null && !RAILS.has(row.rail)) return `${prefix}.rail is invalid`;
@@ -150,9 +153,18 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
       for (const [index, transaction] of (structuredTransactions || []).entries()) {
         const occurred = new Date(transaction.occurredAt);
         const merchantName = transaction.merchantName?.trim() || null;
-        const categoryId = await importResolvers.resolveCategoryForImport(client, req.userId, {
-          merchantName,
-        });
+        const classification = importResolvers.resolveCategoryAssignmentForImport
+          ? await importResolvers.resolveCategoryAssignmentForImport(client, req.userId, {
+              merchantName,
+              categoryHint: transaction.categoryHint,
+              subcategoryHint: transaction.subcategoryHint,
+            })
+          : {
+              categoryId: await importResolvers.resolveCategoryForImport(client, req.userId, {
+                merchantName,
+              }),
+              userCategoryId: null,
+            };
         const sourceKey = clientMutationSourceKey(
           req.userId,
           transactionSource,
@@ -164,7 +176,8 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
           amount: Number(transaction.amountInr),
           entryKind: transaction.entryKind || 'spend',
           occurred,
-          categoryId,
+          categoryId: classification.categoryId,
+          userCategoryId: classification.userCategoryId,
           rail: transaction.rail || 'unknown',
           merchantName,
           source: transactionSource,

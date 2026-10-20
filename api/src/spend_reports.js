@@ -247,13 +247,20 @@ async function periodTotals(client, userId, { start, end }) {
 /** Spend split by category, biggest first. */
 async function spendByCategory(client, userId, { start, end }) {
   const result = await client.query(
-    `SELECT t.category_id, sc.slug AS category_slug, sc.name AS category_name,
+    `SELECT COALESCE(t.category_id, ucat.parent_user_category_id, t.user_category_id) AS category_id,
+            COALESCE(sc.slug, parent_uc.slug, ucat.slug) AS category_slug,
+            COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
             COALESCE(SUM(t.amount_inr), 0) AS total, COUNT(*) AS txn_count
        FROM transactions t
        LEFT JOIN spend_categories sc ON sc.id = t.category_id
+       LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+       LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
+       LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
       WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
         AND t.occurred_at >= $2 AND t.occurred_at < $3
-      GROUP BY t.category_id, sc.slug, sc.name
+      GROUP BY COALESCE(t.category_id, ucat.parent_user_category_id, t.user_category_id),
+               COALESCE(sc.slug, parent_uc.slug, ucat.slug),
+               COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name)
       ORDER BY total DESC`,
     [userId, start, end]
   );
@@ -269,6 +276,37 @@ async function spendByCategory(client, userId, { start, end }) {
     categoryName: ['uncategorized', 'unclassified'].includes(
       String(r.category_name || '').trim().toLowerCase(),
     ) ? 'Other' : (r.category_name || 'Other'),
+    totalInr: Number(r.total),
+    txnCount: Number(r.txn_count),
+  }));
+}
+
+/** Spend split by private subcategory, preserving the published parent. */
+async function spendBySubcategory(client, userId, { start, end }) {
+  const result = await client.query(
+    `SELECT t.user_category_id AS subcategory_id,
+            COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
+            ucat.name AS subcategory_name,
+            COALESCE(SUM(t.amount_inr), 0) AS total, COUNT(*) AS txn_count
+       FROM transactions t
+       JOIN user_categories ucat
+         ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+       LEFT JOIN spend_categories sc ON sc.id = t.category_id
+       LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
+       LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
+      WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
+        AND (ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL)
+        AND t.occurred_at >= $2 AND t.occurred_at < $3
+      GROUP BY t.user_category_id,
+               COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name),
+               ucat.name
+      ORDER BY total DESC`,
+    [userId, start, end]
+  );
+  return result.rows.map((r) => ({
+    subcategoryId: r.subcategory_id,
+    categoryName: r.category_name || 'Other',
+    subcategoryName: r.subcategory_name || 'Subcategory',
     totalInr: Number(r.total),
     txnCount: Number(r.txn_count),
   }));
@@ -452,7 +490,8 @@ async function spendByCardCategory(client, userId, { start, end }) {
        SELECT COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
               t.instrument,
               cp.name AS card_name, uc.nickname AS card_nickname,
-              sc.id AS category_id, sc.name AS category_name,
+              COALESCE(t.category_id, ucat.parent_user_category_id, t.user_category_id) AS category_id,
+              COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
               t.amount_inr,
               COALESCE(t.source_account_last4,
                 (SELECT o.metadata->>'accountLast4'
@@ -476,6 +515,9 @@ async function spendByCardCategory(client, userId, { start, end }) {
            ON uc.id = COALESCE(replacement.active_card_id, t.user_card_id)
          LEFT JOIN card_products cp ON cp.id = uc.card_product_id
          LEFT JOIN spend_categories sc ON sc.id = t.category_id
+         LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+         LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
+         LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
         WHERE t.profile_id = $1 AND t.status = 'active' AND t.entry_kind = 'spend'
           AND t.occurred_at >= $2 AND t.occurred_at < $3
      )
@@ -598,7 +640,17 @@ async function budgetSpend(client, userId, budget, { start, end }) {
   const params = [userId, start, end];
   if (budget.scope === 'category') {
     params.push(budget.scope_ref_id);
-    conditions.push(`category_id = $${params.length}`);
+    conditions.push(`(
+      category_id = $${params.length}
+      OR user_category_id = $${params.length}
+      OR EXISTS (
+        SELECT 1
+          FROM user_categories child_category
+         WHERE child_category.id = transactions.user_category_id
+           AND child_category.parent_user_category_id = $${params.length}
+           AND child_category.profile_id = transactions.profile_id
+      )
+    )`);
   } else if (budget.scope === 'card') {
     params.push(budget.scope_ref_id);
     conditions.push(`user_card_id = $${params.length}`);
@@ -656,6 +708,7 @@ module.exports = {
   previousPeriodBounds,
   periodTotals,
   spendByCategory,
+  spendBySubcategory,
   spendByMerchant,
   spendByCard,
   spendByInstrument,

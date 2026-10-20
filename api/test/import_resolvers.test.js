@@ -3,8 +3,10 @@ const assert = require('node:assert/strict');
 
 const {
   resolveUserCardForImport,
+  resolveCategoryAssignmentForImport,
   resolveCategoryForImport,
   syncDueDayFromSms,
+  syncStatementDayFromSms,
 } = require('../src/import_resolvers');
 
 function fakeClient(rowsByCall) {
@@ -124,6 +126,35 @@ test('uses a distinctive MoneyBack product name when a historical alert has no s
   assert.deepEqual(client.calls[1].params, [16, 'moneyback-card', 'user-1']);
 });
 
+test('syncs statement day from the historical statement alert date', async () => {
+  const body = 'Your statement for HDFC Bank Credit Card ending XX8708 is generated. Due on: 20/10/2026.';
+  const client = fakeClient([[{ id: 'hdfc-8708' }]]);
+  client.query = async (sql, params) => {
+    client.calls.push({ sql, params });
+    if (client.calls.length === 1) return { rows: [{ id: 'hdfc-8708' }] };
+    return { rows: [{ id: 'hdfc-8708' }], rowCount: 1 };
+  };
+
+  const result = await syncStatementDayFromSms(client, 'user-1', {
+    body,
+    observedAt: new Date('2026-09-05T10:00:00.000Z'),
+    patternIssuerId: null,
+  });
+
+  assert.equal(result.updated, true);
+  assert.equal(result.detected.day, 5);
+  assert.deepEqual(client.calls[1].params, [5, 'hdfc-8708', 'user-1']);
+  assert.match(client.calls[1].sql, /SET statement_day = \$1/);
+});
+
+test('does not learn statement day from a purchase SMS', async () => {
+  const result = await syncStatementDayFromSms({ query: async () => { throw new Error('should not query'); } }, 'user-1', {
+    body: 'INR 500 spent on your credit card ending 8708 at SHOP on 05/09/2026.',
+    observedAt: new Date('2026-09-05T10:00:00.000Z'),
+  });
+  assert.equal(result, null);
+});
+
 test('category fallback recognises a fuel-station merchant when no rule exists', async () => {
   const client = fakeClient([[], [], [{ id: 'fuel-category' }]]);
   const result = await resolveCategoryForImport(client, 'user-1', {
@@ -207,4 +238,31 @@ test('placeholder merchant names never inherit a category from unrelated unknown
   assert.equal(result, 'other-category');
   assert.equal(client.calls.length, 1);
   assert.match(client.calls[0].sql, /slug = 'other'/);
+});
+
+test('private subcategory terms win over built-in import classification', async () => {
+  const client = fakeClient([[
+    {
+      id: 'subcategory-office',
+      name: 'Office',
+      slug: 'office',
+      parent_category_id: 'travel-category',
+      parent_user_category_id: null,
+      match_terms: ['cab', 'uber'],
+      parent_category_name: 'Travel',
+      parent_user_category_name: null,
+    },
+  ]]);
+  const result = await resolveCategoryAssignmentForImport(client, 'user-1', {
+    merchantName: 'Uber trip to office',
+    messageText: 'UPI payment to Uber',
+  });
+
+  assert.deepEqual(result, {
+    categoryId: 'travel-category',
+    userCategoryId: 'subcategory-office',
+    categoryName: 'Travel',
+    userCategoryName: 'Office',
+  });
+  assert.deepEqual(client.calls[0].params, ['user-1']);
 });

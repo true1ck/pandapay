@@ -466,6 +466,19 @@ ParsedStatementLine? _parseRow(
       _headerIndex(headers, ['account', 'card']);
   final expenseIndex = headers.indexOf('expense');
   final typeIndex = _headerIndex(headers, ['type', 'category']);
+  final categoryHintIndex = _headerIndex(headers, ['category', 'category name']);
+  final subcategoryHintIndex = _headerIndex(
+    headers,
+    [
+      'subcategory',
+      'sub category',
+      'subcategory name',
+      'tag',
+      'tags',
+      'label',
+      'labels',
+    ],
+  );
   final transfer = expenseIndex >= 0 && expenseIndex < row.length
       ? _normalise(row[expenseIndex]) == 'no'
       : typeIndex != null &&
@@ -527,6 +540,13 @@ ParsedStatementLine? _parseRow(
     bankReference:
         reference != null && RegExp(r'^[a-zA-Z0-9-]{6,40}$').hasMatch(reference)
         ? reference
+        : null,
+    categoryHint: categoryHintIndex != null && categoryHintIndex < row.length
+        ? row[categoryHintIndex].trim()
+        : null,
+    subcategoryHint:
+        subcategoryHintIndex != null && subcategoryHintIndex < row.length
+        ? row[subcategoryHintIndex].trim()
         : null,
     amount: Money.fromRupees(amountValue.abs()),
     isCredit: isCredit,

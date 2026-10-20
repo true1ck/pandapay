@@ -8,12 +8,13 @@ import 'app_database.dart';
 /// One query contract for online fetches, local reads and coverage tracking.
 class TransactionQuery {
   final DateTime? from, to;
-  final String? cardId, categoryId, source, query;
+  final String? cardId, categoryId, userCategoryId, source, query;
   const TransactionQuery({
     this.from,
     this.to,
     this.cardId,
     this.categoryId,
+    this.userCategoryId,
     this.source,
     this.query,
   });
@@ -23,6 +24,7 @@ class TransactionQuery {
       to == null &&
       cardId == null &&
       categoryId == null &&
+      userCategoryId == null &&
       source == null &&
       (query?.trim().isEmpty ?? true);
   String get key => jsonEncode([
@@ -30,6 +32,7 @@ class TransactionQuery {
     to?.toIso8601String(),
     cardId,
     categoryId,
+    userCategoryId,
     source,
     query == null || query!.trim().isEmpty ? null : query!.trim().toLowerCase(),
   ]);
@@ -40,8 +43,9 @@ class TransactionQuery {
       to: parts[1] == null ? null : DateTime.parse(parts[1] as String),
       cardId: parts[2] as String?,
       categoryId: parts[3] as String?,
-      source: parts[4] as String?,
-      query: parts[5] as String?,
+      userCategoryId: parts.length > 6 ? parts[4] as String? : null,
+      source: parts.length > 6 ? parts[5] as String? : parts[4] as String?,
+      query: parts.length > 6 ? parts[6] as String? : parts[5] as String?,
     );
   }
   bool covers(TransactionQuery other) =>
@@ -49,6 +53,7 @@ class TransactionQuery {
       (to == null || other.to != null && !to!.isBefore(other.to!)) &&
       (cardId == null || cardId == other.cardId) &&
       (categoryId == null || categoryId == other.categoryId) &&
+      (userCategoryId == null || userCategoryId == other.userCategoryId) &&
       (source == null || source == other.source) &&
       ((query?.trim().isEmpty ?? true) ||
           query!.trim().toLowerCase() == other.query?.trim().toLowerCase());
@@ -60,7 +65,16 @@ class TransactionQuery {
       return false;
     }
     if (cardId != null && row.userCardId != cardId) return false;
-    if (categoryId != null && row.categoryId != categoryId) return false;
+    if (categoryId != null &&
+        row.categoryId != categoryId &&
+        row.parentCategoryId != categoryId) {
+      return false;
+    }
+    if (userCategoryId != null &&
+        row.userCategoryId != userCategoryId &&
+        row.parentUserCategoryId != userCategoryId) {
+      return false;
+    }
     if (source != null && row.source != source) return false;
     final needle = query?.trim().toLowerCase();
     return needle == null ||
@@ -449,8 +463,18 @@ class FinancialStore {
     final byAccount = <String, List<Map<String, dynamic>>>{};
     for (final row in observations) {
       final account = row['account_last4'] as String?;
+      final sender = (row['sender_bank'] as String? ?? '').toLowerCase();
+      // New captures carry an explicit classification. For pre-upgrade rows
+      // there is no raw SMS left to inspect, so exclude the known non-bank
+      // sender families rather than re-surfacing LIC/brokerage accounts.
+      final bankAccount = row['is_bank_account'] == true ||
+          (row['is_bank_account'] == null &&
+              !RegExp(
+                r'(lic|licind|dhan|dhanhq|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel|paytm\s*money)',
+              ).hasMatch(sender));
       if (account != null &&
           RegExp(r'^\d{4}$').hasMatch(account) &&
+          bankAccount &&
           !cardSuffixes.contains(account)) {
         byAccount
             .putIfAbsent(
@@ -459,6 +483,14 @@ class FinancialStore {
             )
             .add(row);
       }
+    }
+    DateTime? latestBalanceAt(List<Map<String, dynamic>> rows) {
+      for (final row in rows) {
+        if (row['balance_paise'] != null) {
+          return DateTime.parse(row['received_at'] as String);
+        }
+      }
+      return null;
     }
     return [
       for (final entry in byAccount.entries)
@@ -475,6 +507,7 @@ class FinancialStore {
                       )['balance_paise']
                       as int,
                 ),
+          latestBalanceSmsAt: latestBalanceAt(entry.value),
           latestSmsAt: DateTime.parse(
             entry.value.first['received_at'] as String,
           ),

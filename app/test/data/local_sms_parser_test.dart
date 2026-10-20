@@ -6,6 +6,73 @@ import 'package:pandapay/data/user_cards_repository.dart' show TxnEntryKind;
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
 void main() {
+  test('both legs of an explicit own-bank transfer stay out of spending and income', () {
+    final debit = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'HDFCBK',
+      body: 'Sent Rs.5000.00 From your HDFC Bank A/C *1797 To your Canara Bank A/C *5702 On 13/10/26 Ref 131234538577',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    final credit = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'CANARA',
+      body: 'Your Canara Bank account *5702 was credited with Rs.5000 from your HDFC Bank account *1797 to your Canara Bank account *5702. Ref 131234538577',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(debit?.transaction?.entryKind, TxnEntryKind.transfer);
+    expect(debit?.transaction?.accountLast4, '1797');
+    expect(credit?.transaction?.entryKind, TxnEntryKind.transfer);
+    expect(credit?.transaction?.accountLast4, '5702');
+  });
+
+  test('an unclear bank debit needs review, while a named recipient is spending', () {
+    final unclear = LocalSmsParser.parse(
+      namespace: 'user:test', sender: 'BANK',
+      body: 'A/c *8565 Debited for Rs:2.00 on 08-07-2025 by Mob Bk ref no 4987654321',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    final person = LocalSmsParser.parse(
+      namespace: 'user:test', sender: 'BANK',
+      body: 'Sent Rs.5000.00 From HDFC Bank A/C *1797 To ANOTHER PERSON On 13/10/26 Ref 131234538577',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(unclear?.transaction, isNull);
+    expect(unclear?.disposition, LocalSmsDisposition.review);
+    expect(person?.transaction?.entryKind, TxnEntryKind.spend);
+  });
+
+  test('cash withdrawal and SIP debit are not spending', () {
+    final withdrawal = LocalSmsParser.parse(
+      namespace: 'user:test', sender: 'HDFCBK',
+      body: 'Rs.20000 withdrawn from HDFC Bank Card x8406 at ATM on 13/10/26.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    final sip = LocalSmsParser.parse(
+      namespace: 'user:test', sender: 'HDFCBK',
+      body: 'Your HDFC Bank A/c *1797 was debited by Rs.5000 for Mutual Fund SIP on 13/10/26.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(withdrawal?.transaction?.entryKind, TxnEntryKind.transfer);
+    expect(sip?.transaction?.entryKind, TxnEntryKind.investment);
+  });
+  test('card bill repayment is a transfer, card purchase is spending', () {
+    final payment = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'AXISBK',
+      body:
+          'Rs. 80000 debited from your account for Axis Bank Flipkart Credit Card ending 2006.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    final purchase = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'AXISBK',
+      body:
+          'Rs. 80000 spent on your Axis Bank Flipkart Credit Card ending 2006 at FLIPKART INTERNET.',
+      receivedAt: DateTime(2026, 10, 18),
+    );
+    expect(payment?.transaction?.entryKind, TxnEntryKind.transfer);
+    expect(purchase?.transaction?.entryKind, TxnEntryKind.spend);
+  });
   test('credit card account references never establish bank accounts', () {
     final result = LocalSmsParser.parse(
       namespace: 'user:test',
@@ -164,6 +231,19 @@ void main() {
     expect(result?.eventType, LocalSmsEventType.bill);
     expect(result?.disposition, LocalSmsDisposition.localObservation);
     expect(result?.amountDue?.rupees, 3000);
+    expect(result?.dueDate?.day, 20);
+  });
+
+  test('keeps the statement-generation day separately from the due date', () {
+    final result = LocalSmsParser.parse(
+      namespace: 'user:test',
+      sender: 'VM-HDFCBK',
+      body:
+          'Your statement for HDFC Bank Credit Card ending XX8708 is generated. Due on: 20-Oct-2026.',
+      receivedAt: DateTime(2026, 9, 5),
+    );
+    expect(result?.eventType, LocalSmsEventType.bill);
+    expect(result?.statementDate?.day, 5);
     expect(result?.dueDate?.day, 20);
   });
 

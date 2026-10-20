@@ -481,6 +481,8 @@ class TransactionImportSession {
         : TxnEntryKind.spend,
     instrument: instruments[accountFor(rows[index])],
     bankReference: rows[index].bankReference,
+    categoryHint: rows[index].categoryHint,
+    subcategoryHint: rows[index].subcategoryHint,
     importRowKey: rowKey(index),
     sourceAccount: rows[index].sourceAccount?.replaceAllMapped(
       RegExp(r'\d{6,}'),

@@ -226,7 +226,10 @@ class _BigPurchaseCalculatorScreenState
         .where((c) => wallet.any((w) => w.cardProductId == c.id))
         .toList();
 
-    final effectiveCategoryId = categoryIdForServer(_categoryId);
+    final effectiveCategoryId = categoryIdForServer(
+      _categoryId,
+      categories.valueOrNull ?? const <SpendCategory>[],
+    );
     final categorySlug = effectiveCategoryId == null
         ? null
         : categories.valueOrNull

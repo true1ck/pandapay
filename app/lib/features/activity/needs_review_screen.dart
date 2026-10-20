@@ -30,9 +30,7 @@ TxnInstrument _instrumentFromReviewText(String body) {
   if (RegExp(r'\bcredit\s+card\b|\bcard\b').hasMatch(text)) {
     return TxnInstrument.creditCard;
   }
-  // Keep older card-shaped messages useful when their body omitted the words
-  // "credit card".
-  return TxnInstrument.creditCard;
+  return TxnInstrument.other;
 }
 
 bool _isPhysicalCardInstrument(TxnInstrument instrument) =>
@@ -48,6 +46,24 @@ String _reviewInstrumentLabel(TxnInstrument instrument) => switch (instrument) {
   TxnInstrument.other => 'Other payment',
 };
 
+String _reviewTypeLabel(String body) {
+  final instrument = _instrumentFromReviewText(body);
+  return instrument == TxnInstrument.other
+      ? 'Possible transaction'
+      : _reviewInstrumentLabel(instrument);
+}
+
+String _reviewReasonLabel(String? reason) => switch (reason) {
+  'no_transaction_match' => 'We could not match this message to a transaction.',
+  'unparseable_amount' => 'The amount in this message is unclear.',
+  'ambiguous_account_debit' =>
+    'We could not tell which account or payment method was used.',
+  'not_a_successful_spend' =>
+    'This message may not describe a completed payment.',
+  null => 'Please check the message before adding it.',
+  _ => 'Please check the message before adding it.',
+};
+
 Future<void> _persistCommitmentDismissal(
   WidgetRef ref,
   NeedsReviewItem item,
@@ -58,13 +74,11 @@ Future<void> _persistCommitmentDismissal(
     body: item.body,
     receivedAt: item.receivedAt,
   );
-  if (parsed?.dueDate == null) return;
-
-  final title = parsed!.billerName?.trim().isNotEmpty == true
-      ? parsed.billerName!.trim()
+  final title = parsed?.billerName?.trim().isNotEmpty == true
+      ? parsed!.billerName!.trim()
       : item.sender;
   final category = CommitmentCategory.fromText('$title ${item.sender}');
-  final account = parsed.accountLast4;
+  final account = parsed?.accountLast4 ?? parsed?.cardLast4;
   // Keep a tombstone so an explicitly rejected observation cannot recreate a
   // low-confidence commitment after the review item is removed.
   await ref
@@ -74,8 +88,11 @@ Future<void> _persistCommitmentDismissal(
           id: 'review-dismissed-${item.id}',
           title: title,
           category: category,
-          amount: parsed.amountDue,
-          dueOn: parsed.dueDate!,
+          amount: parsed?.amountDue,
+          // A dismissal is useful even when the SMS did not contain a due
+          // date. The received date is only a tombstone anchor; dismissed
+          // commitments are never shown as actionable bills.
+          dueOn: parsed?.dueDate ?? item.receivedAt,
           identifier: account == null ? null : '••••$account',
           source: CommitmentSource.sms,
           status: CommitmentStatus.dismissed,
@@ -84,6 +101,15 @@ Future<void> _persistCommitmentDismissal(
         ),
       );
 }
+
+typedef _BillReviewResult = ({
+  String title,
+  Money? amount,
+  DateTime dueOn,
+  CommitmentCategory category,
+  CommitmentCadence cadence,
+  String? identifier,
+});
 
 /// D4 Needs Review Queue (ui-spec Group D) — unparsed SMS messages with
 /// raw text shown for context (kept on-device only; see
@@ -196,53 +222,20 @@ class _CommitmentNeedsReviewTileState
     }
   }
 
-  Future<void> _saveCommitment() async {
+  Future<void> _saveCommitment(_BillReviewResult result) async {
     setState(() => _busy = true);
     try {
-      final parsed = _parse();
-      final dueOn = parsed?.dueDate;
-      if (parsed == null || dueOn == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'This message does not contain a usable due date yet.',
-              ),
-            ),
-          );
-        }
-        return;
-      }
-      final title = parsed.billerName?.trim().isNotEmpty == true
-          ? parsed.billerName!.trim()
-          : widget.item.sender;
-      final category = CommitmentCategory.fromText(
-        '$title ${widget.item.sender}',
-      );
-      final body = widget.item.body.toLowerCase();
-      final cadence = body.contains('monthly')
-          ? CommitmentCadence.monthly
-          : body.contains('quarterly')
-          ? CommitmentCadence.quarterly
-          : body.contains('half-yearly') || body.contains('half yearly')
-          ? CommitmentCadence.halfYearly
-          : body.contains('annual') || body.contains('yearly')
-          ? CommitmentCadence.annual
-          : category == CommitmentCategory.insurance
-          ? CommitmentCadence.annual
-          : CommitmentCadence.monthly;
-      final account = parsed.accountLast4;
       await ref
           .read(commitmentsRepositoryProvider)
           .save(
             Commitment(
               id: 'review-${widget.item.id}',
-              title: title,
-              category: category,
-              amount: parsed.amountDue,
-              dueOn: dueOn,
-              identifier: account == null ? null : '••••$account',
-              cadence: cadence,
+              title: result.title,
+              category: result.category,
+              amount: result.amount,
+              dueOn: result.dueOn,
+              identifier: result.identifier,
+              cadence: result.cadence,
               source: CommitmentSource.sms,
               isUserConfirmed: true,
               confidence: 1,
@@ -260,6 +253,21 @@ class _CommitmentNeedsReviewTileState
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _reviewAndSaveCommitment() async {
+    final result = await showModalBottomSheet<_BillReviewResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => _ReviewBillSheet(
+        item: widget.item,
+        parsed: _parse(),
+        onDiscard: _dismiss,
+      ),
+    );
+    if (result == null || !mounted) return;
+    await _saveCommitment(result);
   }
 
   @override
@@ -284,6 +292,13 @@ class _CommitmentNeedsReviewTileState
                   'Possible bill or renewal',
                   style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                 ),
+              ),
+              IconButton(
+                tooltip: 'Dismiss message',
+                onPressed: _busy ? null : _dismiss,
+                icon: const Icon(Icons.close_rounded),
+                color: BambooInk.ink500,
+                visualDensity: VisualDensity.compact,
               ),
             ],
           ),
@@ -341,7 +356,7 @@ class _CommitmentNeedsReviewTileState
                     ),
                     textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
                   ),
-                  onPressed: _busy ? null : _saveCommitment,
+                  onPressed: _busy ? null : _reviewAndSaveCommitment,
                   child: _busy
                       ? const SizedBox(
                           width: 16,
@@ -362,6 +377,294 @@ class _CommitmentNeedsReviewTileState
   }
 }
 
+class _ReviewBillSheet extends ConsumerStatefulWidget {
+  final NeedsReviewItem item;
+  final LocalSmsObservation? parsed;
+  final Future<void> Function() onDiscard;
+
+  const _ReviewBillSheet({
+    required this.item,
+    required this.parsed,
+    required this.onDiscard,
+  });
+
+  @override
+  ConsumerState<_ReviewBillSheet> createState() => _ReviewBillSheetState();
+}
+
+class _ReviewBillSheetState extends ConsumerState<_ReviewBillSheet> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _amountController;
+  late final TextEditingController _identifierController;
+  late CommitmentCategory _category;
+  late CommitmentCadence _cadence;
+  DateTime? _dueOn;
+
+  @override
+  void initState() {
+    super.initState();
+    final parsed = widget.parsed;
+    final suggestedTitle = parsed?.billerName?.trim();
+    _titleController = TextEditingController(
+      text: suggestedTitle?.isNotEmpty == true
+          ? suggestedTitle
+          : widget.item.sender,
+    );
+    _amountController = TextEditingController(
+      text: parsed?.amountDue == null
+          ? ''
+          : (parsed!.amountDue!.paise / 100).toStringAsFixed(2),
+    );
+    final identifier = parsed?.accountLast4 ?? parsed?.cardLast4;
+    _identifierController = TextEditingController(
+      text: identifier == null ? '' : '••••$identifier',
+    );
+    _category = CommitmentCategory.fromText(
+      '${_titleController.text} ${widget.item.sender}',
+    );
+    _cadence = switch (parsed?.cadenceHint) {
+      'quarterly' => CommitmentCadence.quarterly,
+      'halfYearly' => CommitmentCadence.halfYearly,
+      'annual' => CommitmentCadence.annual,
+      _ =>
+        _category == CommitmentCategory.insurance
+            ? CommitmentCadence.annual
+            : CommitmentCadence.monthly,
+    };
+    _dueOn = parsed?.dueDate;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _amountController.dispose();
+    _identifierController.dispose();
+    super.dispose();
+  }
+
+  InputDecoration _inputDecoration(String label) => InputDecoration(
+    labelText: label,
+    labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+    filled: true,
+    fillColor: BambooInk.glassFillOnPaper,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
+    ),
+  );
+
+  String _dateLabel(DateTime? date) {
+    if (date == null) return 'Select due date';
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  Future<void> _pickDueDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueOn ?? now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _dueOn = picked);
+  }
+
+  void _save() {
+    final title = _titleController.text.trim();
+    final dueOn = _dueOn;
+    final amountText = _amountController.text.trim().replaceAll(',', '');
+    final amountValue = amountText.isEmpty ? null : double.tryParse(amountText);
+    if (title.isEmpty ||
+        dueOn == null ||
+        (amountValue != null && amountValue <= 0)) {
+      return;
+    }
+    final identifier = _identifierController.text.trim();
+    Navigator.of(context).pop((
+      title: title,
+      amount: amountValue == null ? null : Money.fromRupees(amountValue),
+      dueOn: dueOn,
+      category: _category,
+      cadence: _cadence,
+      identifier: identifier.isEmpty ? null : identifier,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final amountText = _amountController.text.trim().replaceAll(',', '');
+    final amountValue = amountText.isEmpty ? null : double.tryParse(amountText);
+    final canSave =
+        _titleController.text.trim().isNotEmpty &&
+        _dueOn != null &&
+        (amountValue == null || amountValue > 0);
+    return Container(
+      decoration: const BoxDecoration(
+        color: BambooInk.paper,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      padding: EdgeInsets.only(
+        left: AppSpace.lg,
+        right: AppSpace.lg,
+        top: AppSpace.lg,
+        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.lg,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.receipt_long_outlined, color: BambooInk.jade),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    'Review bill details',
+                    style: BambooFonts.heading(17, color: BambooInk.ink900),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            Text(
+              'Check the suggestions from this SMS. Nothing is saved until you tap Save bill.',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Container(
+              padding: const EdgeInsets.all(AppSpace.sm),
+              decoration: BoxDecoration(
+                color: BambooInk.paperMuted,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Text(
+                widget.item.body,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            TextField(
+              controller: _titleController,
+              textCapitalization: TextCapitalization.words,
+              onChanged: (_) => setState(() {}),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: _inputDecoration('Bill or payee name'),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            TextField(
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onChanged: (_) => setState(() {}),
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: _inputDecoration('Amount due (optional)'),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            InkWell(
+              onTap: _pickDueDate,
+              borderRadius: BorderRadius.circular(16),
+              child: InputDecorator(
+                decoration: _inputDecoration('Due date'),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _dateLabel(_dueOn),
+                        style: BambooFonts.ui(
+                          14.5,
+                          color: _dueOn == null
+                              ? BambooInk.ink500
+                              : BambooInk.ink900,
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.calendar_today_outlined, size: 19),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            DropdownButtonFormField<CommitmentCategory>(
+              initialValue: _category,
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: _inputDecoration('Category'),
+              items: [
+                for (final category in CommitmentCategory.values)
+                  DropdownMenuItem(
+                    value: category,
+                    child: Text(category.label),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _category = value);
+              },
+            ),
+            const SizedBox(height: AppSpace.lg),
+            DropdownButtonFormField<CommitmentCadence>(
+              initialValue: _cadence,
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: _inputDecoration('Repeats'),
+              items: [
+                for (final cadence in CommitmentCadence.values)
+                  DropdownMenuItem(value: cadence, child: Text(cadence.label)),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _cadence = value);
+              },
+            ),
+            const SizedBox(height: AppSpace.lg),
+            TextField(
+              controller: _identifierController,
+              style: BambooFonts.ui(14.5, color: BambooInk.ink900),
+              decoration: _inputDecoration('Account or card (optional)'),
+            ),
+            const SizedBox(height: AppSpace.xl),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: BambooInk.slate,
+                foregroundColor: BambooInk.lime,
+                disabledBackgroundColor: BambooInk.ink200,
+                disabledForegroundColor: BambooInk.ink500,
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+              ),
+              onPressed: canSave ? _save : null,
+              child: const Text('Save bill'),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await widget.onDiscard();
+              },
+              child: const Text('Discard message — not a bill'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _NeedsReviewTile extends ConsumerStatefulWidget {
   final NeedsReviewItem item;
   const _NeedsReviewTile(this.item);
@@ -375,8 +678,18 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
 
   Future<void> _dismissNotATransaction() async {
     setState(() => _busy = true);
-    await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
-    ref.invalidate(needsReviewItemsProvider);
+    try {
+      await ref.read(needsReviewRepositoryProvider).remove(widget.item.id);
+      ref.invalidate(needsReviewItemsProvider);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _fillManually() async {
@@ -438,9 +751,22 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            item.sender,
-            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  item.sender,
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Dismiss message',
+                onPressed: _busy ? null : _dismissNotATransaction,
+                icon: const Icon(Icons.close_rounded),
+                color: BambooInk.ink500,
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ),
           const SizedBox(height: AppSpace.xs),
           Container(
@@ -456,7 +782,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           ),
           const SizedBox(height: AppSpace.sm),
           Text(
-            _reviewInstrumentLabel(_instrumentFromReviewText(item.body)),
+            _reviewTypeLabel(item.body),
             style: BambooFonts.ui(
               12.5,
               weight: FontWeight.w700,
@@ -469,7 +795,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
           if (item.reason != null) ...[
             const SizedBox(height: AppSpace.xs),
             Text(
-              'Reason: ${humanizeIdentifier(item.reason)} (${item.reason})',
+              _reviewReasonLabel(item.reason),
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],
@@ -488,7 +814,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                     textStyle: BambooFonts.ui(13.5, weight: FontWeight.w700),
                   ),
                   onPressed: _busy ? null : _dismissNotATransaction,
-                  child: const Text('Not a transaction'),
+                  child: const Text('Ignore message'),
                 ),
               ),
               const SizedBox(width: AppSpace.sm),
@@ -513,7 +839,7 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
                             color: BambooInk.lime,
                           ),
                         )
-                      : const Text('Fill in fields'),
+                      : const Text('Review transaction'),
                 ),
               ),
             ],
@@ -653,12 +979,12 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Fill in the missing fields',
+              'Review this transaction',
               style: BambooFonts.heading(17, color: BambooInk.ink900),
             ),
             const SizedBox(height: AppSpace.sm),
             Text(
-              'Review the suggestions from this SMS before saving.',
+              'We found a possible transaction in this message. Check the details before saving it.',
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
             const SizedBox(height: AppSpace.md),
@@ -689,13 +1015,13 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
               controller: _merchantController,
               textCapitalization: TextCapitalization.words,
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-              decoration: inputDecoration('Merchant or payee'),
+              decoration: inputDecoration('Merchant or sender'),
             ),
             const SizedBox(height: AppSpace.lg),
             DropdownButtonFormField<TxnEntryKind>(
               initialValue: _entryKind,
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-              decoration: inputDecoration('Entry type'),
+              decoration: inputDecoration('What happened?'),
               items: [
                 for (final kind in TxnEntryKind.values)
                   DropdownMenuItem(value: kind, child: Text(kind.label)),
@@ -726,7 +1052,7 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
             DropdownButtonFormField<TxnInstrument>(
               initialValue: _instrument,
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-              decoration: inputDecoration('Payment type'),
+              decoration: inputDecoration('How was it paid?'),
               items: [
                 for (final instrument in const [
                   TxnInstrument.creditCard,
@@ -808,7 +1134,7 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
                   entryKind: _entryKind,
                 ));
               },
-              child: const Text('Log transaction'),
+              child: const Text('Save transaction'),
             ),
           ],
         ),

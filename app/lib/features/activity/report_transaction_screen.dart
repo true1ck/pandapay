@@ -217,7 +217,7 @@ class _TransactionContextCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final merchant = entry.merchantName ?? entry.categoryName ?? 'Payment';
+    final merchant = entry.merchantName ?? entry.categoryLabel;
     return Container(
       decoration: BoxDecoration(
         color: BambooInk.glassFillOnPaper,

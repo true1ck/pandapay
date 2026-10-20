@@ -48,6 +48,8 @@ class ParsedStatementLine {
   final bool isCredit;
   final String? sourceAccount;
   final String? bankReference;
+  final String? categoryHint;
+  final String? subcategoryHint;
   final bool isTransfer;
   final bool isInvestment;
   final String? sourceRowId;
@@ -59,6 +61,8 @@ class ParsedStatementLine {
     this.isCredit = false,
     this.sourceAccount,
     this.bankReference,
+    this.categoryHint,
+    this.subcategoryHint,
     this.isTransfer = false,
     this.isInvestment = false,
     this.sourceRowId,
@@ -73,6 +77,8 @@ class ParsedStatementLine {
     bool? isTransfer,
     bool? isInvestment,
     String? sourceRowId,
+    String? categoryHint,
+    String? subcategoryHint,
   }) => ParsedStatementLine(
     date: date ?? this.date,
     description: description ?? this.description,
@@ -82,6 +88,8 @@ class ParsedStatementLine {
     isInvestment: isInvestment ?? this.isInvestment,
     sourceAccount: sourceAccount,
     bankReference: bankReference,
+    categoryHint: categoryHint ?? this.categoryHint,
+    subcategoryHint: subcategoryHint ?? this.subcategoryHint,
     sourceRowId: sourceRowId ?? this.sourceRowId,
     reviewReasons: const [],
   );

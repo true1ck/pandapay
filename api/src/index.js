@@ -8,7 +8,13 @@ const { withUserClient, pool } = require('./db');
 const { optionalAuth, requireAuth } = require('./auth');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 const { replayCurrentCapConsumption } = require('./card_state_reconciliation');
-const { parseSmsAgainstPatterns, redactSmsShape, senderMatches, parseTransactionDate } = require('./sms_parser');
+const {
+  parseSmsAgainstPatterns,
+  redactSmsShape,
+  senderMatches,
+  parseTransactionDate,
+  isBankAccountMessage,
+} = require('./sms_parser');
 const { parseSubscriptionMandate } = require('./subscription_parser');
 const importResolvers = require('./import_resolvers');
 const { testImapLogin } = require('./imap_test');
@@ -103,12 +109,32 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
     patternIssuerId,
     instrument: fields.instrument || 'credit_card',
   });
-  const categoryId = await importResolvers.resolveCategoryForImport(client, userId, {
-    merchantName: fields.merchant,
-    vpa: fields.vpa || extractVpa(body),
-    mcc: extractMcc(body),
-    messageText: body,
-  });
+  const classification = importResolvers.resolveCategoryAssignmentForImport
+    ? await importResolvers.resolveCategoryAssignmentForImport(client, userId, {
+      merchantName: fields.merchant,
+      vpa: fields.vpa || extractVpa(body),
+      mcc: extractMcc(body),
+      messageText: body,
+    })
+    : {
+      categoryId: await importResolvers.resolveCategoryForImport(client, userId, {
+        merchantName: fields.merchant,
+        vpa: fields.vpa || extractVpa(body),
+        mcc: extractMcc(body),
+        messageText: body,
+      }),
+      userCategoryId: null,
+    };
+  const categoryId = classification.categoryId;
+  const userCategoryId = classification.userCategoryId;
+
+  /*
+   * The subscription row carries both IDs for the same reason transactions
+   * do: category_id is the built-in reporting/reward parent, while the
+   * private ID is the user's own classification. Older databases can run
+   * the API before this migration is applied, so deployment order still
+   * matters; the migration is intentionally small and additive.
+   */
 
   const seenOn = new Date(occurred).toISOString().slice(0, 10);
   const cadenceDays = fields.cadenceDays || 30;
@@ -119,16 +145,17 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
     : null;
   const result = await client.query(
     `INSERT INTO recurring_series
-       (profile_id, merchant_key, display_name, category_id, user_card_id,
+       (profile_id, merchant_key, display_name, category_id, user_category_id, user_card_id,
         payment_method, typical_amount_inr, cadence_days, occurrence_count,
         first_seen_on, last_seen_on, next_expected_on, detection_source,
         lifecycle_status, autopay_status, mandate_reference, mandate_started_on,
         cadence_confirmed)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9, $9, $10, 'mandate',
-             'active', 'active', $11, $9, $12)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $10, $11, 'mandate',
+             'active', 'active', $12, $10, $13)
      ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
        display_name = COALESCE(EXCLUDED.display_name, recurring_series.display_name),
        category_id = COALESCE(recurring_series.category_id, EXCLUDED.category_id),
+       user_category_id = COALESCE(EXCLUDED.user_category_id, recurring_series.user_category_id),
        user_card_id = COALESCE(recurring_series.user_card_id, EXCLUDED.user_card_id),
        payment_method = COALESCE(EXCLUDED.payment_method, recurring_series.payment_method),
        typical_amount_inr = CASE
@@ -161,6 +188,7 @@ async function persistSubscriptionMandate(client, userId, { parsed, body, occurr
       merchantKey,
       fields.merchant,
       categoryId,
+      userCategoryId,
       card?.userCardId || null,
       fields.instrument || null,
       typicalAmount,
@@ -943,7 +971,8 @@ app.get('/user-categories', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
       client.query(
-        `SELECT id, slug, name
+        `SELECT id, slug, name, parent_category_id AS "parentCategoryId",
+                parent_user_category_id AS "parentUserCategoryId", match_terms AS "matchTerms"
            FROM user_categories
           WHERE profile_id = $1
           ORDER BY created_at, name COLLATE "C"`,
@@ -1596,13 +1625,17 @@ app.post('/sync/push', requireAuth, async (req, res) => {
           if (entity === 'user_categories' && op === 'insert') {
             const categoryResult = await client.query(
               `SELECT out_applied, out_reason
-                 FROM pandapay.sync_insert_user_category($1, $2, $3, $4, $5, $6::jsonb, $7)`,
+                 FROM pandapay.sync_insert_user_category(
+                   $1, $2, $3, $4, $5, $6::uuid, $7::uuid, $8::text[], $9::jsonb, $10)`,
               [
                 req.userId,
                 deviceId,
                 entityId,
                 typeof payload?.name === 'string' ? payload.name : null,
                 typeof payload?.slug === 'string' ? payload.slug : null,
+                typeof payload?.parent_category_id === 'string' ? payload.parent_category_id : null,
+                typeof payload?.parent_user_category_id === 'string' ? payload.parent_user_category_id : null,
+                Array.isArray(payload?.match_terms) ? payload.match_terms.filter((term) => typeof term === 'string') : [],
                 JSON.stringify(fieldClocks || {}),
                 Number.isFinite(clientSeq) ? clientSeq : 0,
               ]
@@ -3619,6 +3652,9 @@ async function importParsedMessage(client, userId, {
 }) {
   const parsedVpa = vpa || extractVpa(parsed.fields.merchant) || extractVpa(rawText);
   const parsedMcc = mcc || parsed.fields.mcc || extractMcc(rawText);
+  const accountIdentity = parsed.fields.accountLast4
+    ? `${patternIssuerId || String(sender || '').toUpperCase() || 'legacy'}:${parsed.fields.accountLast4}`
+    : null;
   const importMetadata = {
     ...(observationMetadata || {}),
     // A bank-account suffix is masked evidence for grouping only. It is not a
@@ -3630,6 +3666,13 @@ async function importParsedMessage(client, userId, {
     ...(parsed.fields.accountLast4 && parsed.fields.availableBalanceInr != null
       ? { availableBalanceInr: parsed.fields.availableBalanceInr }
       : {}),
+    ...(parsed.fields.accountLast4
+      ? { isBankAccount: isBankAccountMessage(rawText) }
+      : {}),
+    ...(parsed.fields.accountLast4 && sender
+      ? { senderBank: sender }
+      : {}),
+    ...(accountIdentity ? { accountIdentity } : {}),
   };
   // A QR payment can produce either a credit-card alert or a bank-account
   // UPI debit alert. Account-number suffixes are not card last-4 digits and
@@ -3693,19 +3736,32 @@ async function importParsedMessage(client, userId, {
   // emptied Insights ("Uncategorized" for the entire history) and priced
   // every import at the card's base rate, because reward matching is by
   // category and a null category can only ever match the base rule.
-  const categoryId = explicitCategoryId
-    || (await importResolvers.resolveCategoryForImport(client, userId, {
-      merchantName: parsed.fields.merchant,
-      vpa: parsedVpa,
-      mcc: parsedMcc,
-      messageText: rawText,
-    }));
+  const classification = explicitCategoryId
+    ? { categoryId: explicitCategoryId, userCategoryId: null }
+    : (importResolvers.resolveCategoryAssignmentForImport
+      ? await importResolvers.resolveCategoryAssignmentForImport(client, userId, {
+          merchantName: parsed.fields.merchant,
+          vpa: parsedVpa,
+          mcc: parsedMcc,
+          messageText: rawText,
+        })
+      : {
+          categoryId: await importResolvers.resolveCategoryForImport(client, userId, {
+            merchantName: parsed.fields.merchant,
+            vpa: parsedVpa,
+            mcc: parsedMcc,
+            messageText: rawText,
+          }),
+          userCategoryId: null,
+        });
+  const categoryId = classification.categoryId;
 
   const inserted = await insertTransactionAndUpdateState(client, userId, {
     userCardId,
     amount: parsed.fields.amountInr,
     occurred,
     categoryId,
+    userCategoryId: classification.userCategoryId,
     // A bank-account instrument is not automatically a UPI-QR payment.
     // Mobile-banking/IMPS/NEFT alerts must stay on the unknown rail so card
     // reward rules cannot be applied to them by inference.
@@ -4648,35 +4704,49 @@ app.post('/transactions', requireAuth, async (req, res) => {
           };
         }
       }
+      let userCategoryParentId = null;
       if (userCategoryId) {
         const category = await client.query(
-          'SELECT 1 FROM user_categories WHERE id = $1 AND profile_id = $2',
+          'SELECT parent_category_id FROM user_categories WHERE id = $1 AND profile_id = $2',
           [userCategoryId, req.userId],
         );
         if (category.rows.length === 0) {
           return { status: 400, error: 'user category not found' };
         }
+        userCategoryParentId = category.rows[0].parent_category_id;
       }
       // QR/manual payments often arrive with a merchant name but without an
       // explicit category selection. Reuse the same conservative resolver as
       // SMS import so a known merchant is categorized before rewards and
       // spending reports are updated. An explicit category still wins.
-      const resolvedCategoryId = userCategoryId
-        ? null
-        : categoryId || await importResolvers.resolveCategoryForImport(client, req.userId, {
-            merchantName,
-            vpa: merchantVpa || null,
-            mcc: mcc || null,
-            messageText: null,
-          });
+      const classification = userCategoryId
+        ? { categoryId: categoryId || userCategoryParentId, userCategoryId }
+        : categoryId
+        ? { categoryId, userCategoryId: null }
+        : (importResolvers.resolveCategoryAssignmentForImport
+            ? await importResolvers.resolveCategoryAssignmentForImport(client, req.userId, {
+                merchantName,
+                vpa: merchantVpa || null,
+                mcc: mcc || null,
+                messageText: null,
+              })
+            : {
+                categoryId: await importResolvers.resolveCategoryForImport(client, req.userId, {
+                  merchantName,
+                  vpa: merchantVpa || null,
+                  mcc: mcc || null,
+                  messageText: null,
+                }),
+                userCategoryId: null,
+              });
       return insertTransactionAndUpdateState(client, req.userId, {
         userCardId: instrument === 'credit_card' || instrument === 'debit_card'
           ? userCardId
           : null,
         amount,
         occurred,
-        categoryId: resolvedCategoryId,
-        userCategoryId: userCategoryId || null,
+        categoryId: classification.categoryId,
+        userCategoryId: classification.userCategoryId,
         rail,
         merchantName,
         merchantVpa: merchantVpa || null,
@@ -5213,12 +5283,15 @@ app.get('/transactions/sms-import-state', requireAuth, async (req, res) => {
 
 /**
  * GET /account-summaries — masked bank accounts observed in SMS imports or
- * persisted on categorized cardless transactions.
+ * persisted on categorized cardless transactions. Only observations marked
+ * as deposit/current/savings-bank evidence are eligible; an account-shaped
+ * suffix from LIC, brokerage, demat, investment, or card alerts is not a
+ * bank-account row.
  *
  * Account balances are only returned when an SMS explicitly included an
- * available/current balance. They are therefore latest-known snapshots, not
- * live bank balances; accounts with no balance-bearing SMS remain visible
- * with a null balance.
+ * available/current balance. The balance timestamp is selected independently
+ * from the latest SMS timestamp, so a newer transaction without a balance
+ * cannot erase the last known balance snapshot.
  */
 app.get('/account-summaries', requireAuth, async (req, res) => {
   try {
@@ -5227,6 +5300,13 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
         `WITH account_observations AS (
            SELECT o.metadata->>'accountLast4' AS account_last4,
                   o.metadata->>'patternIssuerId' AS issuer_id,
+                  COALESCE(
+                    o.metadata->>'accountIdentity',
+                    o.metadata->>'patternIssuerId',
+                    NULLIF(lower(o.metadata->>'senderBank'), ''),
+                    'legacy:' || (o.metadata->>'accountLast4')
+                  ) AS account_identity,
+                  NULLIF(o.metadata->>'senderBank', '') AS sender_bank,
                   CASE
                     WHEN o.metadata->>'availableBalanceInr' ~ '^[0-9]+(\\.[0-9]+)?$'
                     THEN (o.metadata->>'availableBalanceInr')::numeric
@@ -5235,45 +5315,102 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
                   o.observed_at,
                   'sms' AS source_kind
              FROM transaction_observations o
+             JOIN transactions t
+               ON t.id = o.transaction_id
+              AND t.profile_id = o.profile_id
+             LEFT JOIN issuers oi
+               ON oi.id::text = o.metadata->>'patternIssuerId'
             WHERE o.profile_id = $1
               AND o.source IN ('sms', 'sms_bulk')
               AND o.metadata->>'accountLast4' ~ '^[0-9]{4}$'
+              AND t.instrument = 'upi_bank'
+              AND t.entry_kind <> 'investment'
+              AND COALESCE(o.metadata->>'isBankAccount', 'legacy') <> 'false'
+              AND (
+                o.metadata->>'isBankAccount' = 'true'
+                OR (
+                  o.metadata->>'isBankAccount' IS NULL
+                  AND lower(coalesce(o.metadata->>'senderBank', '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
+                  AND lower(coalesce(oi.slug, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
+                  AND lower(coalesce(oi.name, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
+                )
+              )
          ), transaction_accounts AS (
            SELECT t.source_account_last4 AS account_last4,
                   NULL::text AS issuer_id,
+                  ('legacy:' || t.source_account_last4) AS account_identity,
+                  NULL::text AS sender_bank,
                   NULL::numeric AS available_balance_inr,
                   NULL::timestamptz AS observed_at,
                   'transaction' AS source_kind
              FROM transactions t
             WHERE t.profile_id = $1
               AND t.status = 'active'
+              AND t.instrument = 'upi_bank'
+              AND t.entry_kind <> 'investment'
               AND t.source_account_last4 ~ '^[0-9]{4}$'
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM transaction_observations existing_o
+                 WHERE existing_o.profile_id = t.profile_id
+                   AND existing_o.transaction_id = t.id
+                   AND existing_o.metadata->>'accountLast4' = t.source_account_last4
+              )
+              AND EXISTS (
+                SELECT 1
+                  FROM transaction_observations bo
+                  LEFT JOIN issuers bi
+                    ON bi.id::text = bo.metadata->>'patternIssuerId'
+                 WHERE bo.profile_id = t.profile_id
+                   AND bo.transaction_id = t.id
+                   AND bo.source IN ('sms', 'sms_bulk')
+                   AND bo.metadata->>'accountLast4' = t.source_account_last4
+                   AND COALESCE(bo.metadata->>'isBankAccount', 'legacy') <> 'false'
+                   AND (
+                     bo.metadata->>'isBankAccount' = 'true'
+                     OR (
+                       bo.metadata->>'isBankAccount' IS NULL
+                       AND lower(coalesce(bo.metadata->>'senderBank', '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
+                       AND lower(coalesce(bi.slug, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
+                       AND lower(coalesce(bi.name, '')) !~ '(lic|licind|dhan|dhanhq|paytm[-_ ]*money|trading|demat|broker|mutual|investment|portfolio|groww|zerodha|upstox|angel)'
+                     )
+                   )
+              )
             GROUP BY t.source_account_last4
          ), account_sources AS (
-           SELECT account_last4, issuer_id, available_balance_inr, observed_at, source_kind
+           SELECT account_last4, issuer_id, account_identity, sender_bank,
+                  available_balance_inr, observed_at, source_kind
              FROM account_observations
            UNION ALL
-           SELECT account_last4, issuer_id, available_balance_inr, observed_at, source_kind
+           SELECT account_last4, issuer_id, account_identity, sender_bank,
+                  available_balance_inr, observed_at, source_kind
              FROM transaction_accounts
          ), account_rollup AS (
            SELECT account_last4,
+                  account_identity,
                   (array_agg(issuer_id ORDER BY observed_at DESC)
                     FILTER (WHERE issuer_id IS NOT NULL))[1] AS issuer_id,
+                  (array_agg(sender_bank ORDER BY observed_at DESC)
+                    FILTER (WHERE sender_bank IS NOT NULL))[1] AS sender_bank,
                   (array_agg(available_balance_inr ORDER BY observed_at DESC)
                     FILTER (WHERE available_balance_inr IS NOT NULL))[1]
                     AS available_balance_inr,
+                  (array_agg(observed_at ORDER BY observed_at DESC)
+                    FILTER (WHERE available_balance_inr IS NOT NULL))[1]
+                    AS latest_balance_sms_at,
                   MAX(observed_at) FILTER (WHERE source_kind = 'sms') AS latest_sms_at,
                   COUNT(*) FILTER (WHERE source_kind = 'sms') AS sms_count
              FROM account_sources
-            GROUP BY account_last4
+            GROUP BY account_last4, account_identity
          )
          SELECT r.account_last4,
                 r.available_balance_inr,
+                r.latest_balance_sms_at,
                 r.latest_sms_at,
                 r.sms_count,
                 i.slug AS issuer_slug,
                 i.name AS issuer_name,
-                i.short_name AS issuer_short_name,
+                COALESCE(i.short_name, r.sender_bank) AS issuer_short_name,
                 i.logo_url AS issuer_logo_url
            FROM account_rollup r
            LEFT JOIN issuers i ON i.id::text = r.issuer_id
@@ -5287,7 +5424,7 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
                  AND card_o.source IN ('sms', 'sms_bulk')
                  AND card_o.metadata->>'cardLast4' = r.account_last4
             )
-          ORDER BY r.account_last4`,
+          ORDER BY r.account_last4, r.account_identity`,
         [req.userId],
       ),
     );
@@ -5297,6 +5434,7 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
         availableBalanceInr: row.available_balance_inr == null
           ? null
           : Number(row.available_balance_inr),
+        latestBalanceSmsAt: row.latest_balance_sms_at,
         latestSmsAt: row.latest_sms_at,
         smsCount: Number(row.sms_count ?? 0),
         issuerSlug: row.issuer_slug,
@@ -5359,11 +5497,30 @@ app.get('/transactions', requireAuth, async (req, res) => {
   // queue, D4's territory), so it isn't one of this route's params.
   if (categoryId) {
     params.push(categoryId);
-    conditions.push(`t.category_id = $${params.length}`);
+    conditions.push(`(
+      t.category_id = $${params.length}
+      OR t.user_category_id = $${params.length}
+      OR EXISTS (
+        SELECT 1
+          FROM user_categories child_category
+         WHERE child_category.id = t.user_category_id
+           AND child_category.parent_user_category_id = $${params.length}
+           AND child_category.profile_id = t.profile_id
+      )
+    )`);
   }
   if (userCategoryId) {
     params.push(userCategoryId);
-    conditions.push(`t.user_category_id = $${params.length}`);
+    conditions.push(`(
+      t.user_category_id = $${params.length}
+      OR EXISTS (
+        SELECT 1
+          FROM user_categories child_category
+         WHERE child_category.id = t.user_category_id
+           AND child_category.parent_user_category_id = $${params.length}
+           AND child_category.profile_id = t.profile_id
+      )
+    )`);
   }
   if (source) {
     params.push(source);
@@ -5401,7 +5558,10 @@ app.get('/transactions', requireAuth, async (req, res) => {
         )
         SELECT t.id, t.source_key, ${canonicalCardId} AS user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, t.user_category_id,
-                COALESCE(ucat.name, sc.name) AS category_name, t.rail, t.status, t.source, t.note,
+                ucat.parent_user_category_id AS parent_user_category_id,
+                COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
+                CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
+                t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
                 COALESCE(t.source_account_last4,
@@ -5424,6 +5584,8 @@ app.get('/transactions', requireAuth, async (req, res) => {
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
            LEFT JOIN spend_categories sc ON sc.id = t.category_id
            LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+           LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
+           LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
           WHERE ${conditions.join(' AND ')}
           ORDER BY t.occurred_at DESC ${limitClause}`,
         params
@@ -5471,7 +5633,10 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
         SELECT t.id, COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
                t.amount_inr, t.occurred_at, t.merchant_name,
                 t.category_id, t.user_category_id,
-                COALESCE(ucat.name, sc.name) AS category_name, t.rail, t.status, t.source, t.note,
+                ucat.parent_user_category_id AS parent_user_category_id,
+                COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
+                CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
+                t.rail, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
                 COALESCE(t.source_account_last4,
@@ -5494,6 +5659,8 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
            LEFT JOIN spend_categories sc ON sc.id = t.category_id
            LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+           LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
+           LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
           WHERE t.id = $1 AND t.profile_id = $2`,
         [req.params.id, req.userId]
       )
@@ -5766,14 +5933,16 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         }
       }
 
+      let userCategoryParentId = null;
       if (userCategoryId !== undefined && userCategoryId !== null) {
         const category = await client.query(
-          'SELECT 1 FROM user_categories WHERE id = $1 AND profile_id = $2',
+          'SELECT parent_category_id FROM user_categories WHERE id = $1 AND profile_id = $2',
           [userCategoryId, req.userId],
         );
         if (category.rows.length === 0) {
           return { status: 400, error: 'user category not found' };
         }
+        userCategoryParentId = category.rows[0].parent_category_id;
       }
 
       const oldMovesCardState = old.instrument === 'credit_card'
@@ -5822,7 +5991,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         amount: amountInr !== undefined ? Number(amountInr) : Number(old.amount_inr),
         occurred: occurredAt !== undefined ? new Date(occurredAt) : old.occurred_at,
         categoryId: userCategoryId !== undefined && userCategoryId !== null
-          ? null
+          ? (categoryId || userCategoryParentId)
           : categoryId !== undefined ? categoryId : old.category_id,
         userCategoryId: userCategoryId !== undefined ? userCategoryId : old.user_category_id,
         rail: rail ?? old.rail,
@@ -6234,14 +6403,21 @@ app.get('/spend-by-category', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const rows = await client.query(
-        `SELECT sc.id AS category_id, sc.slug AS category_slug, sc.name AS category_name,
+        `SELECT COALESCE(t.category_id, ucat.parent_user_category_id, t.user_category_id) AS category_id,
+                COALESCE(sc.slug, parent_uc.slug, ucat.slug) AS category_slug,
+                COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
                 COALESCE(SUM(t.amount_inr), 0) AS total_spend_inr, COUNT(*) AS txn_count
            FROM transactions t
            LEFT JOIN spend_categories sc ON sc.id = t.category_id
+           LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+           LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
+           LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
           WHERE t.profile_id = $1 AND t.status = 'active'
             AND t.entry_kind = 'spend'
             AND t.occurred_at >= now() - ($2 || ' months')::interval
-          GROUP BY sc.id, sc.slug, sc.name
+          GROUP BY COALESCE(t.category_id, ucat.parent_user_category_id, t.user_category_id),
+                   COALESCE(sc.slug, parent_uc.slug, ucat.slug),
+                   COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name)
           ORDER BY total_spend_inr DESC`,
         [req.userId, months]
       );
@@ -6318,10 +6494,11 @@ app.get('/spend-report', requireAuth, async (req, res) => {
         ? spendReports.previousCustomPeriodBounds(current)
         : spendReports.previousPeriodBounds(period, anchor, calendarOptions);
 
-      const [totals, previousTotals, byCategory, byMerchant, byCard, byInstrument, byCardCategory, series] = await Promise.all([
+      const [totals, previousTotals, byCategory, bySubcategory, byMerchant, byCard, byInstrument, byCardCategory, series] = await Promise.all([
         spendReports.periodTotals(client, req.userId, current),
         spendReports.periodTotals(client, req.userId, previous),
         spendReports.spendByCategory(client, req.userId, current),
+        spendReports.spendBySubcategory(client, req.userId, current),
         spendReports.spendByMerchant(client, req.userId, current),
         spendReports.spendByCard(client, req.userId, current),
         spendReports.spendByInstrument(client, req.userId, current),
@@ -6342,6 +6519,7 @@ app.get('/spend-report', requireAuth, async (req, res) => {
         totals,
         previousTotals,
         byCategory,
+        bySubcategory,
         byMerchant,
         byCard,
         byInstrument,
@@ -6429,13 +6607,18 @@ app.get('/export/transactions.csv', requireAuth, async (req, res) => {
   try {
     const rows = await withUserClient(req.userId, (client) =>
       client.query(
-        `SELECT t.occurred_at, t.amount_inr, t.merchant_name, sc.name AS category_name,
+        `SELECT t.occurred_at, t.amount_inr, t.merchant_name,
+                COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
+                CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
                 cp.name AS card_name, uc.nickname AS card_nickname,
                 t.instrument, t.entry_kind, t.rail, t.source, t.expected_value_inr, t.note
            FROM transactions t
            LEFT JOIN user_cards uc ON uc.id = t.user_card_id
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
            LEFT JOIN spend_categories sc ON sc.id = t.category_id
+          LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+          LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
+          LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
           WHERE t.profile_id = $1 AND t.status = 'active'
             AND ($2::date IS NULL OR t.occurred_at >= $2::date)
             AND ($3::date IS NULL OR t.occurred_at < ($3::date + interval '1 day'))
@@ -6445,7 +6628,7 @@ app.get('/export/transactions.csv', requireAuth, async (req, res) => {
     );
 
     const header = [
-      'Date', 'Amount (INR)', 'Merchant', 'Category', 'Card',
+      'Date', 'Amount (INR)', 'Merchant', 'Category', 'Subcategory', 'Card',
       'Paid with', 'Kind', 'Rail', 'Source', 'Rewards (INR)', 'Note',
     ];
     const body = rows.rows.map((r) => [
@@ -6453,6 +6636,7 @@ app.get('/export/transactions.csv', requireAuth, async (req, res) => {
       Number(r.amount_inr).toFixed(2),
       r.merchant_name,
       r.category_name,
+      r.subcategory_name,
       r.card_nickname || r.card_name,
       r.instrument,
       r.entry_kind,
@@ -6494,9 +6678,14 @@ app.get('/budgets', requireAuth, async (req, res) => {
       const budgets = await client.query(
         `SELECT b.id, b.scope, b.scope_ref_id, b.period, b.amount_inr, b.starts_on,
                 b.rollover, b.is_active,
-                sc.name AS category_name, cp.name AS card_name, uc.nickname AS card_nickname
+                COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
+                CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
+                cp.name AS card_name, uc.nickname AS card_nickname
            FROM budgets b
-           LEFT JOIN spend_categories sc ON b.scope = 'category' AND sc.id = b.scope_ref_id
+          LEFT JOIN spend_categories sc ON b.scope = 'category' AND sc.id = b.scope_ref_id
+          LEFT JOIN user_categories ucat ON b.scope = 'category' AND ucat.id = b.scope_ref_id AND ucat.profile_id = b.profile_id
+          LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
+          LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = b.profile_id
            LEFT JOIN user_cards uc ON b.scope = 'card' AND uc.id = b.scope_ref_id
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
           WHERE b.profile_id = $1 AND b.is_active
@@ -6518,7 +6707,9 @@ app.get('/budgets', requireAuth, async (req, res) => {
           label: b.scope === 'overall'
             ? 'All spending'
             : b.scope === 'category'
-              ? (b.category_name || 'Category')
+              ? (b.subcategory_name
+                ? `${b.category_name || 'Category'} · ${b.subcategory_name}`
+                : (b.category_name || 'Category'))
               : (b.card_nickname || b.card_name || 'Card'),
           period: b.period,
           amountInr,
@@ -6582,7 +6773,12 @@ app.post('/budgets', requireAuth, async (req, res) => {
       // thing standing between a typo and a budget that can never match
       // any spend.
       if (scope === 'category') {
-        const found = await client.query(`SELECT id FROM spend_categories WHERE id = $1`, [scopeRefId]);
+        const found = await client.query(
+          `SELECT id FROM spend_categories WHERE id = $1
+           UNION ALL
+           SELECT id FROM user_categories WHERE id = $1 AND profile_id = $2`,
+          [scopeRefId, req.userId],
+        );
         if (found.rows.length === 0) return { status: 404, error: 'category not found' };
       } else if (scope === 'card') {
         const found = await client.query(
@@ -6659,7 +6855,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
   try {
     const payload = await withUserClient(req.userId, async (client) => {
       const history = await client.query(
-        `SELECT merchant_name, amount_inr, occurred_at, category_id, user_card_id, instrument
+        `SELECT merchant_name, amount_inr, occurred_at, category_id, user_category_id, user_card_id, instrument
            FROM transactions
           WHERE profile_id = $1 AND status = 'active' AND entry_kind = 'spend'
             AND occurred_at >= now() - interval '24 months'
@@ -6679,13 +6875,14 @@ app.get('/recurring', requireAuth, async (req, res) => {
         if (dismissedKeys.has(s.merchantKey)) continue;
         await client.query(
           `INSERT INTO recurring_series
-             (profile_id, merchant_key, display_name, category_id, user_card_id,
+             (profile_id, merchant_key, display_name, category_id, user_category_id, user_card_id,
               payment_method, typical_amount_inr, cadence_days, occurrence_count,
               first_seen_on, last_seen_on, next_expected_on)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
            ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
              display_name = CASE WHEN recurring_series.user_edited THEN recurring_series.display_name ELSE EXCLUDED.display_name END,
              category_id = EXCLUDED.category_id,
+             user_category_id = EXCLUDED.user_category_id,
              user_card_id = EXCLUDED.user_card_id,
              payment_method = COALESCE(EXCLUDED.payment_method, recurring_series.payment_method),
              typical_amount_inr = CASE WHEN recurring_series.user_edited THEN recurring_series.typical_amount_inr ELSE EXCLUDED.typical_amount_inr END,
@@ -6710,7 +6907,7 @@ app.get('/recurring', requireAuth, async (req, res) => {
              is_active = CASE WHEN recurring_series.detection_source = 'mandate' AND recurring_series.is_active = false THEN false ELSE recurring_series.is_active END,
              updated_at = now()`,
           [
-            req.userId, s.merchantKey, s.displayName, s.categoryId, s.userCardId,
+            req.userId, s.merchantKey, s.displayName, s.categoryId, s.userCategoryId || null, s.userCardId,
             s.paymentMethod || null, s.typicalAmountInr, s.cadenceDays, s.occurrenceCount,
             s.firstSeenOn, s.lastSeenOn, s.nextExpectedOn,
           ]
@@ -6721,12 +6918,17 @@ app.get('/recurring', requireAuth, async (req, res) => {
         `SELECT rs.id, rs.merchant_key, rs.display_name, rs.typical_amount_inr,
                 rs.cadence_days, rs.occurrence_count, rs.first_seen_on, rs.last_seen_on,
                 TO_CHAR(rs.next_expected_on, 'YYYY-MM-DD') AS next_expected_on,
-                rs.category_id, rs.user_card_id, rs.payment_method,
+                rs.category_id, rs.user_category_id, rs.user_card_id, rs.payment_method,
                 rs.detection_source, rs.user_edited, rs.lifecycle_status,
                 rs.autopay_status, rs.mandate_reference, rs.cadence_confirmed,
-                sc.name AS category_name, cp.name AS card_name, uc.nickname AS card_nickname
+                COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
+                CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
+                cp.name AS card_name, uc.nickname AS card_nickname
            FROM recurring_series rs
            LEFT JOIN spend_categories sc ON sc.id = rs.category_id
+           LEFT JOIN user_categories ucat ON ucat.id = rs.user_category_id AND ucat.profile_id = rs.profile_id
+           LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
+           LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = rs.profile_id
            LEFT JOIN user_cards uc ON uc.id = rs.user_card_id
            LEFT JOIN card_products cp ON cp.id = uc.card_product_id
           WHERE rs.profile_id = $1
@@ -6752,7 +6954,9 @@ app.get('/recurring', requireAuth, async (req, res) => {
         lastSeenOn: r.last_seen_on,
         nextExpectedOn: r.next_expected_on,
         categoryId: r.category_id,
+        userCategoryId: r.user_category_id,
         categoryName: r.category_name,
+        subcategoryName: r.subcategory_name,
         cardId: r.user_card_id,
         paymentMethod: r.payment_method,
         cardName: r.card_nickname || r.card_name,
@@ -9298,9 +9502,15 @@ app.get('/export', requireAuth, async (req, res) => {
       if (scope === 'transactions' || scope === 'all') {
         const txns = await client.query(
           `SELECT t.id, t.user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
-                  sc.name AS category_name, t.rail, t.status
+                  t.category_id, t.user_category_id,
+                  COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
+                  CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
+                  t.rail, t.status
              FROM transactions t
              LEFT JOIN spend_categories sc ON sc.id = t.category_id
+             LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
+             LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
+             LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
             WHERE t.profile_id = $1
             ORDER BY t.occurred_at DESC`,
           [req.userId]

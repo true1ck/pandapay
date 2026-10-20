@@ -41,12 +41,27 @@ class SpendCategory {
   final String slug;
   final String name;
   final bool isCustom;
+  final String? parentCategoryId;
+  final String? parentUserCategoryId;
+  final List<String> matchTerms;
   const SpendCategory({
     required this.id,
     required this.slug,
     required this.name,
     this.isCustom = false,
+    this.parentCategoryId,
+    this.parentUserCategoryId,
+    this.matchTerms = const [],
   });
+
+  bool get isSubcategory =>
+      parentCategoryId != null || parentUserCategoryId != null;
+
+  String get displayName => isSubcategory ? '$parentName · $name' : name;
+
+  // The picker fills this from its sibling list when it needs a fully
+  // qualified label. Keeping the raw name here preserves existing callers.
+  String get parentName => parentCategoryId ?? parentUserCategoryId ?? '';
 
   factory SpendCategory.fromJson(Map<String, dynamic> json) =>
       SpendCategory(
@@ -54,6 +69,15 @@ class SpendCategory {
         slug: json['slug'] as String,
         name: json['name'] as String,
         isCustom: json['isCustom'] == true || json['is_custom'] == true,
+        parentCategoryId: json['parentCategoryId'] as String? ??
+            json['parent_category_id'] as String?,
+        parentUserCategoryId: json['parentUserCategoryId'] as String? ??
+            json['parent_user_category_id'] as String?,
+        matchTerms: ((json['matchTerms'] as List?) ??
+                (json['match_terms'] as List?) ??
+                const [])
+            .whereType<String>()
+            .toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -61,12 +85,23 @@ class SpendCategory {
     'slug': slug,
     'name': name,
     if (isCustom) 'isCustom': true,
+    if (parentCategoryId != null) 'parentCategoryId': parentCategoryId,
+    if (parentUserCategoryId != null)
+      'parentUserCategoryId': parentUserCategoryId,
+    if (matchTerms.isNotEmpty) 'matchTerms': matchTerms,
   };
 }
 
 bool isCustomCategoryId(String? id) => id?.startsWith('custom:') == true;
 
-String? categoryIdForServer(String? id) => isCustomCategoryId(id) ? null : id;
+String? categoryIdForServer(
+  String? id, [
+  Iterable<SpendCategory> categories = const <SpendCategory>[],
+]) {
+  if (!isCustomCategoryId(id)) return id;
+  final selected = categories.where((category) => category.id == id).firstOrNull;
+  return selected?.parentCategoryId;
+}
 
 String? userCategoryIdForServer(String? id) {
   if (!isCustomCategoryId(id)) return null;

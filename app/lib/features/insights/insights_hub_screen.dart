@@ -1115,8 +1115,7 @@ class _MissedPreview extends StatelessWidget {
                       children: [
                         Text(
                           row.entry.merchantName ??
-                              row.entry.categoryName ??
-                              'Payment',
+                              row.entry.categoryLabel,
                           style: BambooFonts.ui(
                             14,
                             weight: FontWeight.w600,
